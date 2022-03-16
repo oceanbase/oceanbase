@@ -31,6 +31,37 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtcTimestamp);
 };
 
+class ObExprUtcTime : public ObFuncExprOperator {
+public:
+  explicit  ObExprUtcTime(common::ObIAllocator &alloc);
+  virtual ~ObExprUtcTime();
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result0(common::ObObj &result, common::ObExprCtx &expr_ctx) const;
+  static int eval_utc_time(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprUtcTime);
+};
+
+class ObExprUtcDate : public ObFuncExprOperator {
+public:
+  explicit  ObExprUtcDate(common::ObIAllocator &alloc);
+  virtual ~ObExprUtcDate();
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result0(common::ObObj &result, common::ObExprCtx &expr_ctx) const;
+  static int eval_utc_date(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprUtcDate);
+};
+
 class ObExprCurTimestamp : public ObFuncExprOperator {
 public:
   explicit ObExprCurTimestamp(common::ObIAllocator& alloc);

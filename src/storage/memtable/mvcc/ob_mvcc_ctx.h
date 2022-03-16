@@ -49,6 +49,7 @@ public:
         lock_start_time_(0),
         row_purge_version_(0),
         redo_log_timestamp_(0),
+        redo_log_id_(0),
         trx_lock_timeout_(-1),
         lock_wait_start_ts_(0),
         multi_version_range_(),
@@ -273,9 +274,17 @@ public:
   {
     redo_log_timestamp_ = redo_log_timestamp;
   }
+  inline void set_redo_log_id(const int64_t redo_log_id)
+  {
+    redo_log_id_ = redo_log_id;
+  }
   inline int64_t get_redo_log_timestamp() const
   {
     return redo_log_timestamp_;
+  }
+  inline int64_t get_redo_log_id() const
+  {
+    return redo_log_id_;
   }
   inline int64_t get_callback_list_length() const
   {
@@ -348,6 +357,7 @@ public:
     lock_start_time_ = 0;
     row_purge_version_ = 0;
     redo_log_timestamp_ = 0;
+    redo_log_id_ = 0;
     multi_version_range_.reset();
     multi_version_range_.base_version_ = common::ObVersionRange::MIN_VERSION;  // TODO: remove it
     lock_wait_start_ts_ = 0;
@@ -408,6 +418,9 @@ public:
   ObMvccTransNode* alloc_trans_node();
   int append_callback(ObITransCallback* cb);
 
+private:
+  void check_row_callback_registration_between_stmt_();
+
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;
@@ -426,6 +439,7 @@ protected:
   int64_t lock_start_time_;
   int64_t row_purge_version_;
   int64_t redo_log_timestamp_;
+  int64_t redo_log_id_;
   int64_t trx_lock_timeout_;
   int64_t lock_wait_start_ts_;
   common::ObVersionRange multi_version_range_;

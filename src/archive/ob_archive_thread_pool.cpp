@@ -97,6 +97,15 @@ void ObArchiveThreadPool::run1()
   } else {
     while (!has_set_stop() && !Thread::current().has_set_stop()) {
       do_thread_task_();
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+        ARCHIVE_LOG(INFO,
+            "ObArchiveThreadPool is running",
+            "thread_index",
+            get_thread_idx(),
+            K(thread_name_),
+            "is_prohibit",
+            is_archive_prohibit());
+      }
     }
   }
 }
@@ -105,7 +114,10 @@ void ObArchiveThreadPool::do_thread_task_()
 {
   int ret = OB_SUCCESS;
   void* data = NULL;
-  ObArchiveTaskStatus* task_status = NULL;
+
+  if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+    ARCHIVE_LOG(INFO, "ObArchiveThreadPool is running", "thread_index", get_thread_idx(), K(thread_name_));
+  }
 
   if (OB_FAIL(task_queue_.pop(data, MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT))) {
     // no task exist, just skip
@@ -114,11 +126,11 @@ void ObArchiveThreadPool::do_thread_task_()
     }
   } else if (OB_ISNULL(data)) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "task_status is NULL", KR(ret), K(data));
+    ARCHIVE_LOG(ERROR, "data is NULL", KR(ret), K(data));
   } else {
-    task_status = static_cast<ObArchiveTaskStatus*>(data);
-    if (OB_FAIL(handle_task_list(task_status))) {
-      ARCHIVE_LOG(WARN, "handle_task_list fail", KR(ret), KPC(task_status));
+    if (OB_FAIL(handle_task_list(data))) {
+      // data will lose refrence protect in handle_task_list function
+      ARCHIVE_LOG(WARN, "handle_task_list fail", KR(ret));
     }
   }
 }

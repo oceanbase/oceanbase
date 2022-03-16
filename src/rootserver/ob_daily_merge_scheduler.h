@@ -266,15 +266,15 @@ public:
   void wakeup();
   int reset_merger_warm_up_duration_time(const int64_t merger_warm_up_duration_time);
 
-  void stop();
-  virtual int blocking_run()
+  void stop() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
 
   virtual int manual_start_merge(const common::ObZone& zone);
 
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
 
 private:
   // return OB_CANCELED if stopped.

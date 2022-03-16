@@ -109,7 +109,7 @@ private:
 
 public:
   int unblock_channels(int64_t data_channel_idx);
-  void add_last_data_list(ObDtlChannel* ch);
+  void add_last_data_list(ObDtlChannel* ch) override;
   virtual void remove_data_list(ObDtlChannel* ch, bool force) override;
   void add(ObDtlChannel* prev, ObDtlChannel* node, ObDtlChannel* next);
   virtual void set_first_no_data(ObDtlChannel* ch) override

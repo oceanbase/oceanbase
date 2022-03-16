@@ -28,10 +28,14 @@ public:
   static bool is_valid_mysql41_passwd(const common::ObString& str);
 
 private:
-  int resolve_oracle_password_strength(
-      common::ObString& user_name, common::ObString& hostname, common::ObString& password);
-
+  int resolve_require_node(const ParseNode &require_info, const common::ObString &user_name,
+    const common::ObString &host_name, share::schema::ObSSLType &ssl_type, ObString *infos);
+  int resolve_resource_option_node(const ParseNode &resource_options, const common::ObString &user_name,
+    const common::ObString &host_name, share::schema::ObSSLType &ssl_type, ObString *infos);
+  int resolve_oracle_password_strength(common::ObString &user_name,
+    common::ObString &hostname, common::ObString &password);
 private:
+  const static uint64_t MAX_CONNECTIONS = 4294967295;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordResolver);
 };

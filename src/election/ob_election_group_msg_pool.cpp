@@ -25,7 +25,7 @@ void ObEGVoteMsgPool::reset()
 }
 
 template <typename T>
-int ObEGVoteMsgPool::do_store_(const T& msg, ObElectionVoteMsgArray<T>& array)
+int ObEGVoteMsgPool::do_store_(const T &msg, ObElectionVoteMsgArray<T> &array)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
@@ -59,9 +59,9 @@ int ObEGVoteMsgPool::do_store_(const T& msg, ObElectionVoteMsgArray<T>& array)
   return ret;
 }
 
-int ObEGVoteMsgPool::check_eg_centralized_majority(common::ObAddr& cur_leader, common::ObAddr& new_leader,
-    const bool is_all_part_merged_in, bool& is_eg_majority, ObPartStateArray& part_state_array,
-    const common::ObPartitionArray& partition_array, const int64_t self_version, const int64_t replica_num,
+int ObEGVoteMsgPool::check_eg_centralized_majority(common::ObAddr &cur_leader, common::ObAddr &new_leader,
+    const bool is_all_part_merged_in, bool &is_eg_majority, ObPartStateArray &part_state_array,
+    const common::ObPartitionArray &partition_array, const int64_t self_version, const int64_t replica_num,
     const int64_t t1, const uint64_t eg_hash, const int64_t cur_ts)
 {
   int ret = OB_SUCCESS;
@@ -106,7 +106,7 @@ int ObEGVoteMsgPool::check_eg_centralized_majority(common::ObAddr& cur_leader, c
   return ret;
 }
 
-int ObEGVoteMsgPool::store(const ObElectionMsg& msg)
+int ObEGVoteMsgPool::store(const ObElectionMsg &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -116,9 +116,9 @@ int ObEGVoteMsgPool::store(const ObElectionMsg& msg)
   } else {
     const int msg_type = msg.get_msg_type();
     if (msg_type == OB_ELECTION_EG_VOTE_PREPARE) {
-      ret = store_(static_cast<const ObElectionMsgEGPrepare&>(msg));
+      ret = store_(static_cast<const ObElectionMsgEGPrepare &>(msg));
     } else if (msg_type == OB_ELECTION_EG_VOTE_VOTE) {
-      ret = store_(static_cast<const ObElectionMsgEGVote4Store&>(msg));
+      ret = store_(static_cast<const ObElectionMsgEGVote4Store &>(msg));
     } else {
       ret = OB_ERR_UNEXPECTED;
     }
@@ -127,7 +127,7 @@ int ObEGVoteMsgPool::store(const ObElectionMsg& msg)
   return ret;
 }
 
-int ObEGVoteMsgPool::store_(const ObElectionMsgEGPrepare& msg)
+int ObEGVoteMsgPool::store_(const ObElectionMsgEGPrepare &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -142,7 +142,7 @@ int ObEGVoteMsgPool::store_(const ObElectionMsgEGPrepare& msg)
   return ret;
 }
 
-int ObEGVoteMsgPool::store_(const ObElectionMsgEGVote4Store& msg)
+int ObEGVoteMsgPool::store_(const ObElectionMsgEGVote4Store &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -157,7 +157,7 @@ int ObEGVoteMsgPool::store_(const ObElectionMsgEGVote4Store& msg)
   return ret;
 }
 
-int ObEGVoteMsgPool::get_eg_centralized_candidate(ObAddr& cur_leader, ObAddr& new_leader, const int64_t t1)
+int ObEGVoteMsgPool::get_eg_centralized_candidate(ObAddr &cur_leader, ObAddr &new_leader, const int64_t t1)
 {
   int ret = OB_SUCCESS;
   int count = 0;
@@ -199,7 +199,7 @@ int ObEGVoteMsgPool::get_eg_centralized_candidate(ObAddr& cur_leader, ObAddr& ne
 }
 
 bool ObEGVoteMsgPool::is_pkey_exist_(
-    const common::ObPartitionKey& pkey, const common::ObPartitionArray& partition_array, int64_t& idx) const
+    const common::ObPartitionKey &pkey, const common::ObPartitionArray &partition_array, int64_t &idx) const
 {
   bool bool_ret = false;
   idx = -1;
@@ -213,8 +213,8 @@ bool ObEGVoteMsgPool::is_pkey_exist_(
   return bool_ret;
 }
 
-int ObEGVoteMsgPool::count_ticket_(const common::ObPartitionArray& msg_part_array,
-    const common::ObPartitionArray& partition_array, ObPartStateArray& part_state_array)
+int ObEGVoteMsgPool::count_ticket_(const common::ObPartitionArray &msg_part_array,
+    const common::ObPartitionArray &partition_array, ObPartStateArray &part_state_array)
 {
   int ret = OB_SUCCESS;
 
@@ -236,7 +236,7 @@ int ObEGVoteMsgPool::count_ticket_(const common::ObPartitionArray& msg_part_arra
 }
 
 int ObEGVoteMsgPool::process_vote_cnt_(const int64_t eg_vote_cnt, const int64_t replica_num,
-    ObPartStateArray& part_state_array, bool& is_eg_majority, const int64_t cur_ts)
+    ObPartStateArray &part_state_array, bool &is_eg_majority, const int64_t cur_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -257,9 +257,9 @@ int ObEGVoteMsgPool::process_vote_cnt_(const int64_t eg_vote_cnt, const int64_t 
   return ret;
 }
 
-int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, common::ObAddr& new_leader,
-    const bool is_all_part_merged_in, bool& is_eg_majority, ObPartStateArray& part_state_array,
-    const common::ObPartitionArray& partition_array, const int64_t self_version, const int64_t replica_num,
+int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr &cur_leader, common::ObAddr &new_leader,
+    const bool is_all_part_merged_in, bool &is_eg_majority, ObPartStateArray &part_state_array,
+    const common::ObPartitionArray &partition_array, const int64_t self_version, const int64_t replica_num,
     const int64_t t1, const uint64_t hash, const int64_t cur_ts)
 {
   int ret = OB_SUCCESS;
@@ -276,7 +276,7 @@ int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, co
       ELECT_ASYNC_LOG(WARN, "message t1 timestamp not match", K(i), K(hash), K(t1), K(msg), K(msg_cnt));
       // yes, continue
     } else {
-      int64_t ticket = 0;       // totle ticket
+      int64_t ticket = 0;       // total ticket
       int64_t eg_vote_cnt = 0;  // the ticket in same version
       bool is_leader_sender = false;
       tmp_cur_leader = msg.get_cur_leader();
@@ -313,7 +313,7 @@ int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, co
         if (eg_vote_cnt > replica_num / 2) {
           if (false == is_all_part_merged_in) {  // first merge-in, need check lease of every election
             process_vote_cnt_(eg_vote_cnt, replica_num, part_state_array, is_eg_majority, cur_ts);
-          } else {  // already in merge-in state, no need to check lease of singal election, cause that lease is not
+          } else {  // already in merge-in state, no need to check lease of single election, cause that lease is not
                     // maintained anymore
             is_eg_majority = true;
           }

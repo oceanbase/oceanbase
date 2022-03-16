@@ -45,9 +45,18 @@ enum ObDateUnitType {
   DATE_UNIT_MAX
 };
 
+enum ObGetFormatUnitType
+{
+  GET_FORMAT_DATE = 0,
+  GET_FORMAT_TIME = 1,
+  GET_FORMAT_DATETIME = 2,
+  GET_FORMAT_MAX = 3,
+};
+
 const char* ob_date_unit_type_str(enum ObDateUnitType type);
 const char* ob_date_unit_type_str_upper(enum ObDateUnitType type);
 const char* ob_date_unit_type_num_str(enum ObDateUnitType type);
+const char* ob_get_format_unit_type_str(enum ObGetFormatUnitType type);
 
 #ifdef __cplusplus
 }

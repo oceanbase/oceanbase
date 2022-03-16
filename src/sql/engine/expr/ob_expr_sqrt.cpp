@@ -74,7 +74,7 @@ int ObExprSqrt::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ct
       double value = obj.get_double();
       if (value < 0) {
         ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
-      } else if (value == -0) {
+      } else if (std::fpclassify(value) == FP_ZERO) {
         result.set_double(-0);
       } else {
         result.set_double(sqrt(value));
@@ -83,7 +83,7 @@ int ObExprSqrt::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ct
       float value = obj.get_float();
       if (value < 0) {
         ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
-      } else if (value == -0) {
+      } else if (std::fpclassify(value) == FP_ZERO) {
         result.set_float(-0);
       } else {
         result.set_float(sqrtf(value));

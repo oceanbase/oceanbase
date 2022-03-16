@@ -92,7 +92,6 @@ public:
 
   // leader or follower
   MOCK_CONST_METHOD1(get_role, int(common::ObRole& role));
-  MOCK_CONST_METHOD1(get_role_for_partition_table, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_role_unsafe, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_leader_curr_member_list, int(common::ObMemberList& member_list));
   MOCK_CONST_METHOD1(get_leader, int(common::ObAddr& addr));
@@ -250,6 +249,7 @@ public:
   MOCK_METHOD1(get_checkpoint, int(int64_t& checkpoint));
   MOCK_METHOD1(update_last_checkpoint, int(const int64_t checkpoint));
   MOCK_METHOD1(set_replay_checkpoint, int(const int64_t checkpoint));
+  MOCK_METHOD2(update_max_majority_log, int(const uint64_t log_id, const int64_t log_ts));
   //  MOCK_METHOD1(get_replay_checkpoint, int(int64_t &checkpoint));
   int get_replay_checkpoint(int64_t& checkpoint)
   {
@@ -303,7 +303,6 @@ public:
     return common::OB_SUCCESS;
   }
   MOCK_METHOD0(get_min_replayed_log_id, uint64_t());
-  MOCK_METHOD2(get_min_replayed_log, void(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_METHOD2(get_min_replayed_log_with_keepalive, int(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_CONST_METHOD1(get_table_store_cnt, int(int64_t& table_cnt));
   MOCK_METHOD4(
@@ -376,11 +375,12 @@ public:
   MOCK_CONST_METHOD1(get_meta_block_list, int(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list));
   MOCK_METHOD1(get_all_tables, int(ObTablesHandle& tables_handle));
   MOCK_METHOD2(recycle_unused_sstables, int(const int64_t max_recycle_cnt, int64_t& recycled_cnt));
+  MOCK_METHOD1(recycle_sstable, int(const ObITable::TableKey &table_key));
   MOCK_METHOD1(check_can_free, int(bool& can_free));
   MOCK_METHOD0(clear, void());
   MOCK_METHOD1(get_merge_log_ts, int(int64_t& merge_log_ts));
   MOCK_METHOD2(check_ready_for_split, int(const ObPartitionArray& src_pkeys, bool& is_ready));
-  MOCK_METHOD1(clear_trans_after_restore_log, int(const uint64_t last_restore_log_id));
+  MOCK_METHOD2(clear_trans_after_restore_log, int(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts));
   MOCK_METHOD0(reset_for_replay, int());
   MOCK_METHOD2(inc_pending_batch_commit_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));
   MOCK_METHOD2(inc_pending_elr_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));

@@ -109,6 +109,20 @@ ObPsCache* ObPlanCacheManager::get_ps_cache(const uint64_t tenant_id)
   return ps_cache;
 }
 
+int ObPlanCacheManager::validate_plan_cache(const uint64_t& tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  ObPlanCache* plan_cache = get_plan_cache(tenant_id);
+  if (OB_ISNULL(plan_cache)) {
+    // do nothing, and others will create this later.
+  } else {
+    plan_cache->set_valid(true);
+  }
+
+  return ret;
+}
+
 //  maybe get plan_cache = NULL;
 //    this thread                    other thread
 //
@@ -251,7 +265,7 @@ int ObPlanCacheManager::revert_plan_cache(const uint64_t& tenant_id)
   int ret = OB_SUCCESS;
   ObPlanCache* ppc = NULL;
   observer::ObReqTimeGuard req_timeinfo_guard;
-  int tmp_ret = pcm_.erase_refactored(tenant_id, &ppc);
+  int tmp_ret = pcm_.get_refactored(tenant_id, ppc);
   if (OB_SUCCESS == tmp_ret && NULL != ppc) {
     SQL_PC_LOG(INFO, "plan_cache_manager revert plan cache", "pc ref_count", ppc->get_ref_count(), K(tenant_id));
     // cancel scheduled task
@@ -567,8 +581,8 @@ int ObPlanCacheManager::revert_ps_cache(const uint64_t& tenant_id)
   if (OB_SUCCESS == tmp_ret && NULL != ppc) {
     SQL_PC_LOG(INFO, "plan_cache_manager revert ps plan cache", "pc ref_count", ppc->get_ref_count(), K(tenant_id));
     // cancel scheduled task
-    ppc->set_valid(false);
     ppc->dec_ref_count();
+    ppc->set_valid(false);
   } else if (OB_HASH_NOT_EXIST == tmp_ret) {  // maybe erase by other thread
     SQL_PC_LOG(INFO, "PS Plan Cache not exist", K(tenant_id));
   } else {

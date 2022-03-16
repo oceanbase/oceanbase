@@ -72,6 +72,38 @@ extern "C" {
 /* A helper macros for "need at least n bytes" */
 #define OB_CS_ERR_TOOSMALLN(n) (-100 - (n))
 
+/* Flags for strxfrm */
+#define OB_STRXFRM_LEVEL1          0x00000001 /* for primary weights   */
+#define OB_STRXFRM_LEVEL2          0x00000002 /* for secondary weights */
+#define OB_STRXFRM_LEVEL3          0x00000004 /* for tertiary weights  */
+#define OB_STRXFRM_LEVEL4          0x00000008 /* fourth level weights  */
+#define OB_STRXFRM_LEVEL5          0x00000010 /* fifth level weights   */
+#define OB_STRXFRM_LEVEL6          0x00000020 /* sixth level weights   */
+#define OB_STRXFRM_LEVEL_ALL       0x0000003F /* Bit OR for the above six */
+#define OB_STRXFRM_NLEVELS         6          /* Number of possible levels*/
+
+#define OB_STRXFRM_PAD_WITH_SPACE  0x00000040 /* if pad result with spaces */
+#define OB_STRXFRM_PAD_TO_MAXLEN   0x00000080 /* if pad tail(for filesort) */
+
+#define OB_STRXFRM_DESC_LEVEL1     0x00000100 /* if desc order for level1 */
+#define OB_STRXFRM_DESC_LEVEL2     0x00000200 /* if desc order for level2 */
+#define OB_STRXFRM_DESC_LEVEL3     0x00000300 /* if desc order for level3 */
+#define OB_STRXFRM_DESC_LEVEL4     0x00000800 /* if desc order for level4 */
+#define OB_STRXFRM_DESC_LEVEL5     0x00001000 /* if desc order for level5 */
+#define OB_STRXFRM_DESC_LEVEL6     0x00002000 /* if desc order for level6 */
+#define OB_STRXFRM_DESC_SHIFT      8
+
+#define OB_STRXFRM_UNUSED_00004000 0x00004000 /* for future extensions     */
+#define OB_STRXFRM_UNUSED_00008000 0x00008000 /* for future extensions     */
+
+#define OB_STRXFRM_REVERSE_LEVEL1  0x00010000 /* if reverse order for level1 */
+#define OB_STRXFRM_REVERSE_LEVEL2  0x00020000 /* if reverse order for level2 */
+#define OB_STRXFRM_REVERSE_LEVEL3  0x00040000 /* if reverse order for level3 */
+#define OB_STRXFRM_REVERSE_LEVEL4  0x00080000 /* if reverse order for level4 */
+#define OB_STRXFRM_REVERSE_LEVEL5  0x00100000 /* if reverse order for level5 */
+#define OB_STRXFRM_REVERSE_LEVEL6  0x00200000 /* if reverse order for level6 */
+#define OB_STRXFRM_REVERSE_SHIFT   16
+
 #define _MY_U 01    /* Upper case */
 #define _MY_L 02    /* Lower case */
 #define _MY_NMR 04  /* Numeral (digit) */
@@ -99,6 +131,8 @@ extern "C" {
   ((s)->ctype != NULL ? ((s)->ctype + 1)[(uchar)(c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR | _MY_B) : 0)
 #define ob_isgraph(s, c) ((s)->ctype != NULL ? ((s)->ctype + 1)[(uchar)(c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR) : 0)
 #define ob_iscntrl(s, c) ((s)->ctype != NULL ? ((s)->ctype + 1)[(uchar)(c)] & _MY_CTR : 0)
+
+extern void right_to_die_or_duty_to_live_c();
 
 #define ob_charset_assert(condition)  \
   if (!(condition)) {                 \
@@ -207,8 +241,9 @@ typedef struct ObCollationHandler {
   // strnxfrm()    - makes a sort key suitable for memcmp() corresponding
   //                 to the given string
   size_t (*strnxfrm)(const struct ObCharsetInfo*, unsigned char* dst, size_t dst_len, uint32_t nweights,
-      const unsigned char* src, size_t srclen, int* is_valid_unicode);
-
+      const unsigned char* src, size_t srclen, unsigned int flags ,int* is_valid_unicode);
+  // strnxfrmlen() - get the length of the result of weight_string() 
+  size_t (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
   // like_range()  - creates a LIKE range, for optimizer
   int (*like_range)(const struct ObCharsetInfo* cs, const char* str, size_t str_len, int w_prefix, int w_one,
       int w_many, size_t res_length, char* min_str, char* max_str, size_t* min_len, size_t* max_len);
@@ -286,7 +321,12 @@ size_t ob_scan_8bit(const char* str, const char* end, int sq);
 /* For 8-bit character set */
 int ob_like_range_simple(const ObCharsetInfo* cs, const char* str, size_t str_len, int escape, int w_one, int w_many,
     size_t res_length, char* min_str, char* max_str, size_t* min_length, size_t* max_length);
+void ob_strxfrm_desc_and_reverse(unsigned char *str, unsigned char *end,
+                                 unsigned int flags, unsigned int level);
 
+size_t ob_strxfrm_pad_desc_and_reverse(const ObCharsetInfo *cs,
+                                       unsigned char *str, unsigned char *frm_str_ptr, unsigned char *end,
+                                       unsigned int nweights, unsigned int flags, unsigned int level);
 int64_t ob_strntoll(const char* str, size_t str_len, int base, char** end, int* err);
 int64_t ob_strntoull(const char* str, size_t str_len, int base, char** end, int* err);
 
@@ -331,13 +371,19 @@ uint32_t ob_convert(char* to, uint32_t to_length, const ObCharsetInfo* to_cs, co
     const ObCharsetInfo* from_cs, uint32_t* errors);
 
 size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo* cs, unsigned char* dst, size_t dstlen, uint32_t nweights,
-    const unsigned char* src, size_t srclen, int* is_valid_unicode);
+    const unsigned char* src, size_t srclen, unsigned int flags , int* is_valid_unicode);
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo* cs, unsigned char* dst, size_t dstlen, uint32_t nweights,
-    const unsigned char* src, size_t src_len, int* is_valid_unicode);
+    const unsigned char* src, size_t src_len, unsigned int flags , int* is_valid_unicode);
 
 int ob_wildcmp_unicode(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
     const char* wildend, int escape, int w_one, int w_many, uint32_t** weights);
+
+size_t ob_strnxfrmlen_simple(const struct ObCharsetInfo *, size_t);
+
+size_t ob_strnxfrmlen_unicode_full_bin(const struct ObCharsetInfo *, size_t);
+
+size_t ob_strnxfrmlen_utf8mb4(const struct ObCharsetInfo *, size_t);
 
 extern void right_to_die_or_duty_to_live_c();
 

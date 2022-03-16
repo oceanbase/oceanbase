@@ -37,12 +37,12 @@ public:
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual int extract_value_exprs();
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual int extract_value_exprs() override;
   virtual int inner_replace_generated_agg_expr(
       const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs) override;
 
-  const char* get_name() const;
+  const char* get_name() const override;
   const common::ObIArray<RawExprArray>& get_multi_value_exprs() const
   {
     return multi_value_exprs_;
@@ -103,7 +103,7 @@ public:
   int remove_const_expr(const common::ObIArray<ObRawExpr*>& old_exprs, common::ObIArray<ObRawExpr*>& new_exprs) const;
 
 protected:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
   int is_insert_table_id(uint64_t table_id, bool& is_true) const;
 

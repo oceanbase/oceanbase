@@ -17,7 +17,6 @@
 #include "lib/atomic/ob_atomic.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_local_file_system.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_micro_block_index_mgr.h"
 #include "share/ob_unit_getter.h"
 #include "share/ob_thread_mgr.h"
@@ -362,6 +361,7 @@ public:
   int drop_disk(const common::ObString& diskgroup_name, const common::ObString& alias_name);
   int is_free_block(const int64_t block_index, bool& is_free);
   int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage);
+  int validate_datafile_size(const char* config_data_file_size);
 
 private:
   friend class ObStoreFileGCTask;
@@ -432,6 +432,8 @@ private:
   bool is_mark_sweep_enabled_;
   bool is_doing_mark_sweep_;
   ObThreadCond cond_;  // for mark sweep
+  bool is_fs_support_punch_hole_;
+  int block_file_fd_;
 };
 
 OB_INLINE bool ObStoreFile::is_valid(const MacroBlockId macro_id)

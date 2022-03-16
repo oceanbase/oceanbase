@@ -22,6 +22,8 @@
 #include "lib/rowid/ob_urowid.h"
 #include "ob_datum.h"
 #include "ob_datum_util.h"
+#include "lib/json_type/ob_json_base.h" // for ObIJsonBase
+#include "lib/json_type/ob_json_bin.h" // for ObJsonBin
 
 namespace oceanbase {
 namespace common {
@@ -392,6 +394,31 @@ struct ObDatumStrCmpCore {
         static_cast<int64_t>(datum2.len_),
         calc_with_end_space);
     return cmp_res > 0 ? 1 : (cmp_res < 0 ? -1 : 0);
+  }
+};
+
+template <>
+struct ObDatumCmpHelperByType<ObJsonType, ObJsonType>
+{
+  constexpr static bool defined_ = true; 
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int result = 0;
+    ObJsonBin j_bin_l(l.ptr_, l.len_);
+    ObJsonBin j_bin_r(r.ptr_, r.len_);
+    ObIJsonBase *j_base_l = &j_bin_l;
+    ObIJsonBase *j_base_r = &j_bin_r;
+
+    if (OB_FAIL(j_bin_l.reset_iter())) {
+      COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l.len_));
+    } else if (OB_FAIL(j_bin_r.reset_iter())) {
+      COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r.len_));
+    } else if (OB_FAIL(j_base_l->compare(*j_base_r, result))) {
+      COMMON_LOG(WARN, "fail to compare json", K(ret), K(*j_base_l), K(*j_base_r));
+    }
+
+    return result;
   }
 };
 

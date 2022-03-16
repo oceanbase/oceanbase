@@ -169,7 +169,7 @@ public:
       const share::schema::ObTableSchema& schema, const share::schema::ObColumnSchemaV2& gen_col,
       const common::ObIArray<share::schema::ObColDesc>& col_ids, common::ObIAllocator& allocator,
       common::ObISqlExpression*& expression, const bool make_column_expression);
-  static int make_default_expr_context(ObIAllocator& allocator, ObExprCtx& expr_ctx);
+  static int make_default_expr_context(uint64_t tenant_id, ObIAllocator& allocator, ObExprCtx& expr_ctx);
   static int calc_sql_expression(const ObISqlExpression* expr, const share::schema::ObTableSchema& schema,
       const ObIArray<share::schema::ObColDesc>& col_ids, const ObNewRow& row, ObIAllocator& allocator,
       ObExprCtx& expr_ctx, ObObj& result);
@@ -216,6 +216,7 @@ public:
   static int filter_hint_in_query_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& sql, common::ObString& param_sql);
   static int filter_head_space(ObString& sql);
+  static char find_first_empty_char(const ObString &sql);
   static int construct_outline_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& outline_content, const common::ObString& orig_sql, bool is_need_filter_hint,
       common::ObString& outline_sql);
@@ -331,6 +332,7 @@ public:
 
   static int print_identifier(char* buf, const int64_t buf_len, int64_t& pos,
       common::ObCollationType connection_collation, const common::ObString& identifier_name);
+  static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString& name,
@@ -492,6 +494,7 @@ struct ObSqlTraits {
   bool is_modify_tenant_stmt_;
   bool is_cause_implicit_commit_;
   bool is_commit_stmt_;
+  bool has_weight_string_func_stmt_; // sql中是否包含weight_string函数
   ObItemType stmt_type_;
 
   ObSqlTraits();
@@ -502,10 +505,11 @@ struct ObSqlTraits {
     is_modify_tenant_stmt_ = false;
     is_cause_implicit_commit_ = false;
     is_commit_stmt_ = false;
+    has_weight_string_func_stmt_ = false;
     stmt_type_ = T_INVALID;
   }
   TO_STRING_KV(
-      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_), K(stmt_type_));
+      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_),K(has_weight_string_func_stmt_), K(stmt_type_));
 };
 
 template <typename ValueType>

@@ -27,7 +27,7 @@ class ObPartitionInfo;
 namespace schema {
 class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTenantSchema;
 }  // namespace schema
 }  // namespace share
@@ -127,7 +127,7 @@ private:
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& is_finished);
   int process_single_table(share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObTableSchema& table_schema, const share::schema::ObTenantSchema& tenant_schema,
+      const share::schema::ObSimpleTableSchemaV2& table_schema, const share::schema::ObTenantSchema& tenant_schema,
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& null_locality_table_finished, bool& table_locality_finished);
   int process_single_binding_tablegroup(share::schema::ObSchemaGetterGuard& schema_guard,
@@ -143,7 +143,8 @@ private:
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& tablegroup_locality_finished);
   int process_single_table_under_new_tablegroup(share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObTableSchema& table_schema, const share::schema::ObTablegroupSchema& tablegroup_schema,
+      const share::schema::ObSimpleTableSchemaV2& table_schema,
+      const share::schema::ObTablegroupSchema& tablegroup_schema,
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& table_locality_finished);
   int check_stop();

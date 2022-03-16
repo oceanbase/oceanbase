@@ -211,7 +211,7 @@ int ObExprOracleInstr::calc(ObObj& result, const ObObj& haystack, const ObObj& n
         }
       } else {
         if (OB_FAIL(slow_reverse_search(*(expr_ctx.calc_buf_), calc_cs_type, str1, str2, pos, occ, idx))) {
-          LOG_WARN("slow_reverse_search failed", K(ret), K(str1), K(str2), K(pow), K(occ));
+          LOG_WARN("slow_reverse_search failed", K(ret), K(str1), K(str2), K(occ));
         }
       }
       if (OB_SUCC(ret)) {

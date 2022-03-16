@@ -29,7 +29,7 @@ class ObIlogAccessor;
 // The InfoBlock of the ilog file records each partition_key and its min_log_id, max_log_id,
 // min_submit_timestamp, max_submit_timestamp in this ilog file,
 //
-// For version after 2.1(include 2.1), it's only recore the start_offset of the first ilog of
+// For version after 2.1(include 2.1), it's only record the start_offset of the first ilog of
 // this partition in the ilog file.
 //
 // For version before 2.1, the start_offset corresponds to the start_offset_index of the first
@@ -415,7 +415,7 @@ public:
 
 private:
   int purge_(const bool is_front_end, IPurgeChecker& checker, bool& empty);
-  int purge_preceding_items_(const common::ObPartitionKey& pkey, const Log2File& last_item);
+  int purge_preceding_items_(const ObPartitionKey& pkey, const Log2File& last_item);
   // The caller guarantees that the function will not be executed concurrently
   int prepare_container_();
   int move_item_to_seg_array_(common::ObISegArray<Log2File>* tmp_container_ptr) const;
@@ -462,10 +462,10 @@ public:
   {
     return ATOMIC_LOAD(&next_can_purge_log2file_timestamp_);
   }
-  int get_clog_base_pos(const common::ObPartitionKey& pkey, file_id_t& file_id, offset_t& offset) const;
+  int get_clog_base_pos(const ObPartitionKey& pkey, file_id_t& file_id, offset_t& offset) const;
   // Attention: this interface doesn't consider the format of version which before 2.1
   int get_cursor_from_file(
-      const common::ObPartitionKey& pkey, const uint64_t log_id, const Log2File& item, ObLogCursorExt& log_cursor);
+      const ObPartitionKey& pkey, const uint64_t log_id, const Log2File& item, ObLogCursorExt& log_cursor);
 
 private:
   class AppendInfoFunctor {

@@ -22,10 +22,10 @@ public:
   explicit ObExprTimeStampDiff(common::ObIAllocator& alloc);
   virtual ~ObExprTimeStampDiff();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& unit, ObExprResType& left, ObExprResType& right,
-      common::ObExprTypeCtx& type_ctx) const;
+      common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result3(common::ObObj& result, const common::ObObj& unit, const common::ObObj& left,
-      const common::ObObj& right, common::ObExprCtx& expr_ctx) const;
-  virtual common::ObCastMode get_cast_mode() const
+      const common::ObObj& right, common::ObExprCtx& expr_ctx) const override;
+  virtual common::ObCastMode get_cast_mode() const override
   {
     return CM_NULL_ON_WARN;
   }

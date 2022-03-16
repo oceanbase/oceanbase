@@ -126,7 +126,7 @@ void CoRoutine::__start(transfer_t from)
   routine.set_run_status(RunStatus::RUNNING);
   routine.at_create();
   int ret = OB_SUCCESS;
-  MemoryContext** mem_context = GET_TSI0(MemoryContext*);
+  MemoryContext* mem_context = GET_TSI0(MemoryContext);
   // Thread has ensured the thread-local mem_context is created successfully
   assert(mem_context != nullptr && *mem_context != nullptr);
   WITH_CONTEXT(*mem_context)
@@ -144,13 +144,13 @@ void CoRoutine::__start(transfer_t from)
 
 int CoRoutine::at_create()
 {
-  CVC.at_routine_create();
+  CVC.at_routine_create(get_crls_buffer());
   return OB_SUCCESS;
 }
 
 void CoRoutine::at_exit()
 {
-  CVC.at_routine_exit();
+  CVC.at_routine_exit(get_crls_buffer());
   return;
 }
 
@@ -188,6 +188,11 @@ void CoMainRoutine::start()
   CoSched::active_routine_ = nullptr;
   at_exit();
   free_coidx(idx_);
+}
+
+void CoMainRoutine::at_exit()
+{
+  CoRoutine::at_exit();
 }
 
 void CoMainRoutine::destroy()

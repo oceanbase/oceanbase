@@ -40,7 +40,7 @@ int ObExprTime::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObE
   int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
   int16_t scale = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
   type.set_scale(scale);
-  UNUSED(type_ctx);
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
 
@@ -103,7 +103,11 @@ static int ob_expr_convert_to_dt_or_time(
   int ret = OB_SUCCESS;
   if (with_date) {
     ObTime ot1;
-    if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot1, is_dayofmonth))) {
+    if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("session or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+    } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot1,
+                    get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), is_dayofmonth))) {
       LOG_WARN("convert to obtime failed", K(ret));
     } else {
       ot = ot1;
@@ -386,7 +390,7 @@ int ObExprMonthName::calc_month_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   // NOTE: the last param should be true otherwise '2020-09-00' will not work
   if (OB_FAIL(calc(expr, ctx, expr_datum, DT_MON, true, true))) {
     LOG_WARN("eval month in monthname failed", K(ret), K(expr));
-  } else {
+  } else if (!expr_datum.is_null()) {
     int32_t mon = expr_datum.get_int32();
     if (mon < 1 || mon > 12) {
       LOG_WARN("invalid month value", K(ret), K(expr));
@@ -402,23 +406,19 @@ int ObExprMonthName::calc_month_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
 
 int ObExprMonthName::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
 {
+  ObCollationType cs_type = type_ctx.get_coll_type();
   type.set_varchar();
-  type1.set_calc_type(common::ObVarcharType);
+  type.set_collation_type(cs_type);
+  type.set_collation_level(CS_LEVEL_IMPLICIT);
 
-  // get collation type from session and set it in type for passing following
-  // collation checking
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(type_ctx.get_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
-  } else {
-    ObCollationType cs_type = type_ctx.get_coll_type();
-    type.set_collation_type(cs_type);
-    type.set_collation_level(CS_LEVEL_IMPLICIT);
-    type1.set_calc_collation_type(cs_type);
+  common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
+  if (ob_is_enumset_tc(type1.get_type())) {
+    type1.set_calc_type(common::ObVarcharType);
+  } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+    type1.set_calc_type(common::ObIntType);
   }
 
-  return ret;
+  return OB_SUCCESS;
 }
 
 }  // namespace sql

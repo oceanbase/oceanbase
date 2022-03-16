@@ -19,6 +19,7 @@
 #include "rootserver/ob_thread_idling.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/backup/ob_partition_validate.h"
+#include "rootserver/ob_i_backup_scheduler.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_validate_task_updater.h"
 #include "share/backup/ob_tenant_validate_task_updater.h"
@@ -49,7 +50,7 @@ public:
   virtual int64_t get_idle_interval_us() override;
 };
 
-class ObRootValidate : public ObRsReentrantThread {
+class ObRootValidate : public ObIBackupScheduler {
   friend class ObTenantValidate;
 
 public:
@@ -58,12 +59,12 @@ public:
   int init(common::ObServerConfig& config, common::ObMySQLProxy& sql_proxy, ObRootBalancer& root_balancer,
       ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_mgr, obrpc::ObSrvRpcProxy& rpc_proxy,
       share::ObIBackupLeaseService& backup_lease_service);
-  int start();
+  int start() override;
   int idle();
   void wakeup();
-  void stop();
+  void stop() override;
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -71,6 +72,7 @@ public:
   {
     return is_working_;
   }
+  virtual int force_cancel(const uint64_t tenant_id);
   void update_prepare_flag(const bool is_prepare);
   bool get_prepare_flag() const;
 
@@ -152,6 +154,7 @@ private:
   ObPartitionValidate pg_validate_;
   share::ObIBackupLeaseService* backup_lease_service_;
   mutable ObRootValidateIdling idling_;
+  share::ObBackupInnerTableVersion inner_table_version_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootValidate);
@@ -190,7 +193,7 @@ public:
   int cancel_doing_pg_tasks(const share::ObTenantValidateTaskInfo& task_info);
 
   int fetch_all_pg_list(const share::ObClusterBackupDest& backup_dest, const int64_t log_archive_round,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
+      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, const int64_t backup_snapshot_version,
       const share::ObTenantValidateTaskInfo& tenant_task_info, common::ObIArray<common::ObPartitionKey>& normal_pkeys);
 
 private:

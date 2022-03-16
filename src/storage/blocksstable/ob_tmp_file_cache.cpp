@@ -13,12 +13,15 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_smart_var.h"
+#include "storage/ob_file_system_router.h"
+#include "share/ob_task_define.h"
 #include "ob_tmp_file_cache.h"
 #include "ob_tmp_file.h"
 #include "ob_tmp_file_store.h"
 #include "ob_store_file.h"
 
 using namespace oceanbase::storage;
+using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace blocksstable {
@@ -103,13 +106,12 @@ int ObTmpPageCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
-int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInfo& info, ObTmpFileIOHandle& handle,
-    ObMacroBlockHandle& mb_handle)
+int ObTmpPageCache::prefetch(const ObTmpPageCacheKey &key, const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!key.is_valid() || !handle.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(key), K(handle));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(key));
   } else {
     // fill the callback
     ObTmpPageIOCallback callback;
@@ -122,7 +124,7 @@ int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInf
       if (mb_handle.get_io_handle().is_empty()) {
         // TODO: After the continuous IO has been optimized, this should
         // not happen.
-        if (OB_FAIL(handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
+        if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
           STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
         } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
           STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
@@ -135,13 +137,13 @@ int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInf
   return ret;
 }
 
-int ObTmpPageCache::prefetch(const ObTmpBlockIOInfo& info, const common::ObIArray<ObTmpPageIOInfo>& page_io_infos,
-    ObTmpFileIOHandle& handle, ObMacroBlockHandle& mb_handle)
+int ObTmpPageCache::prefetch(
+    const ObTmpBlockIOInfo &info, const common::ObIArray<ObTmpPageIOInfo> &page_io_infos, ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(page_io_infos.count() <= 0 || !handle.is_valid())) {
+  if (OB_UNLIKELY(page_io_infos.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(page_io_infos.count()), K(info), K(handle));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(page_io_infos.count()), K(info));
   } else {
     ObTmpMultiPageIOCallback callback;
     callback.cache_ = this;
@@ -159,7 +161,7 @@ int ObTmpPageCache::prefetch(const ObTmpBlockIOInfo& info, const common::ObIArra
         if (mb_handle.get_io_handle().is_empty()) {
           // TODO: After the continuous IO has been optimized, this should
           // not happen.
-          if (OB_FAIL(handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
+          if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
             STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
           } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
             STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
@@ -168,6 +170,9 @@ int ObTmpPageCache::prefetch(const ObTmpBlockIOInfo& info, const common::ObIArra
           STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
         }
       }
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+      allocator_.free(buf);
     }
   }
   return ret;
@@ -733,6 +738,8 @@ int ObTmpTenantMemBlockManager::free_macro_block(const int64_t block_id)
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
     STORAGE_LOG(WARN, "fail to erase tmp macro block", K(ret));
+  } else {
+    free_page_nums_ -= mblk_page_nums_;
   }
   return ret;
 }
@@ -756,7 +763,7 @@ int ObTmpTenantMemBlockManager::alloc_extent(const int64_t dir_id, const uint64_
       }
     }
   } else if (OB_FAIL(t_mblk_map_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(INFO, "the tmp macro block has been washed", K(ret), K(block_id));
+    STORAGE_LOG(DEBUG, "the tmp macro block has been washed", K(ret), K(block_id));
     if (OB_FAIL(get_macro_block(dir_id, tenant_id, page_nums, t_mblk, free_blocks))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get macro block", K(ret));
@@ -922,7 +929,7 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id, con
     if (OB_FAIL(t_mblk_map_.get_refactored(block_id, dir_mblk))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = dir_to_blk_map_.set_refactored(dir_id, t_mblk->get_block_id(), 1);
-        STORAGE_LOG(INFO, "the tmp macro block has been removed or washed", K(ret), K(block_id));
+        STORAGE_LOG(DEBUG, "the tmp macro block has been removed or washed", K(ret), K(block_id));
       } else {
         STORAGE_LOG(WARN, "fail to get block", K(ret), K(block_id));
       }
@@ -960,12 +967,10 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
   } else if (NULL == wash_block) {
     STORAGE_LOG(WARN, "The washing block is null", K(ret));
   } else {
-    int64_t free_page_nums = wash_block->get_free_page_nums();
     bool is_all_close = false;
     if (OB_FAIL(wash_block->close(is_all_close))) {
       STORAGE_LOG(WARN, "fail to close the wash block", K(ret));
     } else if (is_all_close) {
-      free_page_nums_ = free_page_nums_ + wash_block->get_free_page_nums() - free_page_nums;
       if (wash_block->is_empty()) {
         // this block don't need to wash.
         if (OB_FAIL(refresh_dir_to_blk_map(wash_block->get_dir_id(), wash_block))) {
@@ -995,6 +1000,7 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
           if (OB_FAIL(t_mblk_map_.erase_refactored(wash_block->get_block_id(), &wash_block))) {
             STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret));
           } else {
+            ObTaskController::get().allow_next_syslog();
             STORAGE_LOG(INFO, "succeed to wash a block", K(*wash_block));
           }
         }
@@ -1051,6 +1057,8 @@ int ObTmpTenantMemBlockManager::write_io(const ObTmpBlockIOInfo& io_info, ObMacr
     full_meta.schema_ = &macro_schema;
     if (OB_FAIL(build_macro_meta(io_info.tenant_id_, full_meta))) {
       STORAGE_LOG(WARN, "fail to build macro meta", K(ret));
+    } else if (OB_FAIL(OB_STORE_FILE.check_disk_full(OB_FILE_SYSTEM.get_macro_block_size()))) {
+      STORAGE_LOG(WARN, "fail to check space full", K(ret));
     } else {
       write_info.io_desc_ = io_info.io_desc_;
       write_info.meta_ = full_meta;

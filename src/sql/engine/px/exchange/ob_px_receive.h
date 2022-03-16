@@ -120,8 +120,8 @@ public:
     {
       if (0 == ts_cnt_ % 1000) {
         ts_ = common::ObTimeUtility::current_time();
-        ++ts_cnt_;
       }
+      ++ts_cnt_;
       return ts_;
     }
     ObPxTaskChSet& get_ch_set()
@@ -180,6 +180,7 @@ protected:
       ObPxTaskChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   int get_sqc_id(ObExecContext& ctx, int64_t& sqc_id) const;
 
+  int erase_dtl_interm_result(ObExecContext &ctx) const;
 private:
   /* functions */
   /* variables */

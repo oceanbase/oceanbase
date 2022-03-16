@@ -21,9 +21,9 @@ namespace oceanbase {
 namespace lib {
 RLOCAL(bool, ContextTLOptGuard::enable_tl_opt);
 
-MemoryContext& MemoryContext::root()
+__MemoryContext__& __MemoryContext__::root()
 {
-  static MemoryContext* root = nullptr;
+  static __MemoryContext__ *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {
     static lib::ObMutex mutex;
     lib::ObMutexGuard guard(mutex);
@@ -32,9 +32,10 @@ MemoryContext& MemoryContext::root()
       param.set_properties(ADD_CHILD_THREAD_SAFE | ALLOC_THREAD_SAFE)
           .set_parallel(4)
           .set_mem_attr(OB_SERVER_TENANT_ID, ObModIds::OB_ROOT_CONTEXT, ObCtxIds::DEFAULT_CTX_ID);
-      // ObMallocAllocator to design a non-destroy mode
-      const static int static_id = StaticInfos::get_instance().add(__FILENAME__, __LINE__, __FUNCTION__);
-      MemoryContext* tmp = new (std::nothrow) MemoryContext(false, DynamicInfo(), nullptr, param, static_id);
+      // root_context相对底层，被其他static对象依赖，而static对象之间析构顺序又是不确定的,
+      // So here is modeled on ObMallocAllocator to design a non-destroy mode
+      static StaticInfo static_info{__FILENAME__, __LINE__, __FUNCTION__};
+      __MemoryContext__ *tmp = new (std::nothrow) __MemoryContext__(false, DynamicInfo(), nullptr, param, &static_info);
       abort_unless(tmp != nullptr);
       int ret = tmp->init();
       abort_unless(OB_SUCCESS == ret);
@@ -44,5 +45,11 @@ MemoryContext& MemoryContext::root()
   return *root;
 }
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+MemoryContext &MemoryContext::root()
+{
+  static MemoryContext root(&__MemoryContext__::root());
+  return root;
+}
+
+} // end of namespace lib
+} // end of namespace oceanbase

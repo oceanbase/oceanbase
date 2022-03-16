@@ -629,22 +629,6 @@ int ObVirtualRpcProtocolProcessor::decode_net_rpc_packet(
         // decode packet header fail
         pkt = NULL;
         LOG_WARN("decode packet fail, close connection", K(ret));
-      } else if (INVALID_CLUSTER_ID != ObRpcNetHandler::CLUSTER_ID && INVALID_CLUSTER_ID != pkt->get_dst_cluster_id() &&
-                 ObRpcNetHandler::CLUSTER_ID != pkt->get_dst_cluster_id()) {
-        // The verification is turned on locally and does not match the received pkt dst_cluster_id
-        ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
-        if (REACH_TIME_INTERVAL(500 * 1000)) {
-          LOG_WARN("packet dst_cluster_id not match",
-              K(ret),
-              "self.dst_cluster_id",
-              ObRpcNetHandler::CLUSTER_ID,
-              "pkt.dst_cluster_id",
-              pkt->get_dst_cluster_id(),
-              "pkt",
-              *pkt);
-        }
-        pkt = NULL;  // If the verification fails, you need to set the packet to NULL, so that io/easy_connection.c can
-                     // be sensed
       }
       timeguard.click();
     }
@@ -719,24 +703,6 @@ int ObVirtualRpcProtocolProcessor::decode_raw_net_rpc_packet(
             if (OB_FAIL(pkt->decode(pbuf, plen))) {
               // decode packet header fail
               LOG_WARN("decode packet fail, close connection", K(ret), "ms status", ms->status);
-            } else if (INVALID_CLUSTER_ID != ObRpcNetHandler::CLUSTER_ID &&
-                       INVALID_CLUSTER_ID != pkt->get_dst_cluster_id() &&
-                       ObRpcNetHandler::CLUSTER_ID != pkt->get_dst_cluster_id()) {
-              // The verification is turned on locally and does not match the received pkt dst_cluster_id
-              ms->status = EASY_ERROR;
-              ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
-              if (REACH_TIME_INTERVAL(500 * 1000)) {
-                LOG_WARN("packet dst_cluster_id not match",
-                    K(ret),
-                    "self.dst_cluster_id",
-                    ObRpcNetHandler::CLUSTER_ID,
-                    "pkt.dst_cluster_id",
-                    pkt->get_dst_cluster_id(),
-                    "pkt",
-                    *pkt);
-              }
-              pkt = NULL;  // If the verification fails, you need to set the packet to NULL, so that
-                           // io/easy_connection.c can be sensed
             }
             in_data += full_demanded_len;
 

@@ -108,6 +108,7 @@ protected:
   {
     return common::OB_SUCCESS;
   }
+  virtual int check_cluster_id();
   virtual int deserialize() = 0;
   virtual int serialize() = 0;
 

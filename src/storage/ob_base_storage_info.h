@@ -96,6 +96,7 @@ public:
   {
     return curr_member_list_;
   }
+  int try_update_member_list_info(const ObBaseStorageInfo& base_storage_info);
   int try_update_member_list(const uint64_t ms_log_id, const int64_t mc_timestamp, const int64_t replica_num,
       const common::ObMemberList& mlist, const common::ObProposalID& ms_proposal_id);
   int standby_force_update_member_list(const uint64_t ms_log_id, const int64_t mc_timestamp, const int64_t replica_num,

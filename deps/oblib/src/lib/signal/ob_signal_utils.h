@@ -21,8 +21,6 @@
 #include <poll.h>
 #include <sys/syscall.h>
 #include <fcntl.h>
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/safe_snprintf.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -33,8 +31,6 @@
 namespace oceanbase {
 namespace common {
 void safe_sleep_micros(int64_t usec);
-int safe_backtrace(unw_context_t& context, char* buf, int64_t len, int64_t& pos);
-int safe_backtrace(char* buf, int64_t len, int64_t& pos);
 
 struct DLogLevel {
   enum DLogLevelEnum { DEBUG, INFO, WARN, ERROR };

@@ -120,13 +120,14 @@ int ObMergeStmtPrinter::print_update_clause(const ObMergeStmt& merge_stmt)
     }
     DATA_PRINTF(" update set ");
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.assignments_.count(); ++i) {
-      ObColumnRefRawExpr* column = assigns.assignments_.at(i).column_expr_;
-      ObRawExpr* value = assigns.assignments_.at(i).expr_;
-      ObRawExpr* real_value = NULL;
+      const ObAssignment &assign = assigns.assignments_.at(i);
+      ObColumnRefRawExpr *column = assign.column_expr_;
+      ObRawExpr *value = assign.expr_;
+      ObRawExpr *real_value = NULL;
       if (OB_ISNULL(column) || OB_ISNULL(value)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column assign", K(ret));
-      } else if (!column->is_generated_column()) {
+      } else if (!assign.is_implicit_) {
         if (!first_assign) {
           DATA_PRINTF(", ");
         } else {

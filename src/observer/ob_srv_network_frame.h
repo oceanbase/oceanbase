@@ -52,7 +52,11 @@ public:
 
   int reload_config();
   int reload_ssl_config();
-  static uint64_t get_ssl_file_hash(bool& file_exist);
+  static int extract_expired_time(const char *const cert_file, int64_t &expired_time);
+  static uint64_t get_ssl_file_hash(const char *ca_cert_file,
+      const char *ssl_cert_file,
+      const char *ssl_key_file,
+      bool &file_exist);
   ObSrvDeliver& get_deliver()
   {
     return deliver_;

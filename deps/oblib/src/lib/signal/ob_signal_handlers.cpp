@@ -16,6 +16,7 @@
 #include <sys/prctl.h>
 #include "lib/profile/ob_trace_id.h"
 #include "lib/utility/utility.h"
+#include "lib/signal/ob_libunwind.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_memory_cutter.h"
@@ -25,7 +26,7 @@ namespace oceanbase {
 namespace common {
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
 
-static inline void handler(int sig, siginfo_t* s, void* p)
+static inline void handler(int sig, siginfo_t *s, void *p)
 {
   if (tl_handler != nullptr) {
     tl_handler(sig, s, p);
@@ -65,7 +66,7 @@ void ob_signal_handler(int sig, siginfo_t* si, void*)
 void coredump_cb(int sig, siginfo_t* si)
 {
   send_request_and_wait(VERB_LEVEL_2, syscall(SYS_gettid) /*exclude_id*/);
-#define MINICORE 1
+#define MINICORE 0
 #if MINICORE
   int pid = 0;
   if ((pid = fork()) != 0) {
@@ -80,7 +81,7 @@ void coredump_cb(int sig, siginfo_t* si)
     // backtrace
     char bt[256];
     int64_t len = 0;
-    safe_backtrace(bt, sizeof(bt) - 1, len);
+    safe_backtrace(bt, sizeof(bt) - 1, &len);
     bt[len++] = '\0';
     // trace_id
     const uint64_t* trace_id = ObCurTraceId::get();
@@ -107,6 +108,7 @@ void coredump_cb(int sig, siginfo_t* si)
 #if MINICORE
   } else {
     // child
+    prctl(PR_SET_NAME, "minicoredump");
     int64_t total_size = 0;
     if (lib::g_mem_cutter != nullptr) {
       lib::g_mem_cutter->cut(total_size);

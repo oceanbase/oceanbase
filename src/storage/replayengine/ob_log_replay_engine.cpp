@@ -20,6 +20,7 @@
 #include "share/ob_thread_mgr.h"
 #include "storage/ob_partition_service.h"
 #include "share/allocator/ob_memstore_allocator_mgr.h"
+#include "storage/ob_pg_storage.h"
 #include "storage/ob_replay_status.h"
 #include "storage/transaction/ob_trans_service.h"
 #include "share/ob_multi_cluster_util.h"
@@ -823,7 +824,6 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
     const int64_t replay_queue_index, int64_t& table_version)
 {
   int ret = OB_SUCCESS;
-  UNUSED(table_version);
   ObReplayStatus* replay_status = NULL;
   if (OB_ISNULL(replay_task)) {
     ret = OB_INVALID_ARGUMENT;
@@ -842,14 +842,21 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
 
     ObStorageLogType log_type = replay_task->log_type_;
     if (replay_status->need_filter_trans_log()) {
-      // Log replica only needs to replay add_partition_to_pg and remove_partition_to_pg logs and offline logs
-      if (ObStorageLogTypeChecker::is_add_partition_to_pg_log(log_type)) {
+      // replaying of non_transaction logs need to consider filtering of physical restore
+      bool need_replay = true;
+      if (OB_FAIL(check_need_replay_with_physical_restore_(partition, replay_task, need_replay))) {
+        REPLAY_LOG(WARN, "faild to check_need_replay_with_physical_restore_", KR(ret), "replay_task", *replay_task);
+      } else if (!need_replay) {
+        REPLAY_LOG(INFO, "just skip when restoring", "replay_task", *replay_task);
+      } else if (ObStorageLogTypeChecker::is_add_partition_to_pg_log(log_type)) {
+        // Log replica only needs to replay add_partition_to_pg and remove_partition_to_pg logs and offline logs
         REPLAY_LOG(INFO, "start to replay add partition to pg log", "replay_task", *replay_task);
         if (OB_FAIL(partition_service_->replay(replay_task->pk_,
                 replay_task->log_buf_,
                 replay_task->log_size_,
                 replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
+                replay_task->log_submit_timestamp_,
+                table_version))) {
           EVENT_INC(CLOG_FAIL_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
         } else {
           EVENT_INC(CLOG_SUCC_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
@@ -861,7 +868,8 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
                 replay_task->log_buf_,
                 replay_task->log_size_,
                 replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
+                replay_task->log_submit_timestamp_,
+                table_version))) {
           EVENT_INC(CLOG_FAIL_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
         } else {
           EVENT_INC(CLOG_SUCC_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
@@ -873,7 +881,8 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
                 replay_task->log_buf_,
                 replay_task->log_size_,
                 replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
+                replay_task->log_submit_timestamp_,
+                table_version))) {
           EVENT_INC(CLOG_SUCC_REPLAY_OFFLINE_COUNT);
           REPLAY_LOG(INFO, "succ to replay offline partition log", K(ret), K(*replay_task));
         } else {
@@ -924,79 +933,6 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
         }
         // reset to -1
         get_replay_queue_index() = -1;
-      } else if (ObStorageLogTypeChecker::is_partition_meta_log(log_type)) {
-        REPLAY_LOG(INFO, "begin to replay partition meta log", K(ret), K(*replay_task));
-        if (OB_SUCC(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-          EVENT_INC(CLOG_SUCC_REPLAY_META_LOG_COUNT);
-          REPLAY_LOG(INFO, "succ to replay partition meta log", K(ret), K(*replay_task));
-        } else {
-          REPLAY_LOG(WARN, "failed to replay partition meta log", K(ret), K(*replay_task));
-          EVENT_INC(CLOG_FAIL_REPLAY_META_LOG_COUNT);
-        }
-      } else if (ObStorageLogTypeChecker::is_add_partition_to_pg_log(log_type)) {
-        REPLAY_LOG(INFO, "start to replay add partition to pg log", "replay_task", *replay_task);
-        if (OB_FAIL(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-          EVENT_INC(CLOG_FAIL_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
-        } else {
-          EVENT_INC(CLOG_SUCC_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
-          REPLAY_LOG(INFO, "add partition to pg log replay succ", "replay_task", *replay_task);
-        }
-      } else if (ObStorageLogTypeChecker::is_remove_partition_from_pg_log(log_type)) {
-        REPLAY_LOG(INFO, "start to replay remove partition from pg log", "replay_task", *replay_task);
-        if (OB_FAIL(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-          EVENT_INC(CLOG_FAIL_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
-        } else {
-          EVENT_INC(CLOG_SUCC_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
-          REPLAY_LOG(INFO, "remove partition from pg log replay succ", "replay_task", *replay_task);
-        }
-      } else if (OB_LOG_OFFLINE_PARTITION == log_type || OB_LOG_OFFLINE_PARTITION_V2 == log_type) {
-        REPLAY_LOG(INFO, "start to replay offline partition log", "replay_task", *replay_task);
-        if (OB_SUCC(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-          EVENT_INC(CLOG_SUCC_REPLAY_OFFLINE_COUNT);
-          REPLAY_LOG(INFO, "succ to replay offline partition log", K(ret), K(*replay_task));
-        } else {
-          EVENT_INC(CLOG_FAIL_REPLAY_OFFLINE_COUNT);
-          REPLAY_LOG(WARN, "failed to replay offline partition log", K(ret), K(*replay_task));
-        }
-      } else if (ObStorageLogTypeChecker::is_schema_version_change_log(log_type)) {
-        REPLAY_LOG(INFO, "start to replay partition schema version change log", "replay_task", *replay_task);
-        if (OB_FAIL(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-        } else {
-          REPLAY_LOG(INFO, "replay partition schema version change log success", "replay_task", *replay_task);
-        }
-      } else if (ObStorageLogTypeChecker::is_split_log(log_type)) {
-        REPLAY_LOG(INFO, "start to replay split log", K(ret), K(*replay_task));
-        if (OB_SUCC(partition_service_->replay(replay_task->pk_,
-                replay_task->log_buf_,
-                replay_task->log_size_,
-                replay_task->log_id_,
-                replay_task->log_submit_timestamp_))) {
-          EVENT_INC(CLOG_SUCC_REPLAY_SPLIT_LOG_COUNT);
-          REPLAY_LOG(INFO, "succ to replay split log", K(ret), K(*replay_task));
-        } else {
-          EVENT_INC(CLOG_FAIL_REPLAY_SPLIT_LOG_COUNT);
-          REPLAY_LOG(WARN, "failed to replay split log", K(ret), K(*replay_task));
-        }
       } else if (OB_LOG_TRANS_CHECKPOINT == log_type) {
         if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
           REPLAY_LOG(INFO, "start to replay trans checkpoint log", "replay_task", *replay_task);
@@ -1012,26 +948,113 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
             REPLAY_LOG(INFO, "succ to replay trans checkpoint log", "replay_task", *replay_task);
           }
         }
-      } else if (ObStorageLogTypeChecker::is_start_membership_log(log_type)) {
-        REPLAY_LOG(INFO, "start to replay start membership log", "replay_task", *replay_task);
-        const int64_t trans_replay_start_time = common::ObTimeUtility::fast_current_time();
-        if (OB_FAIL(trans_replay_service_->replay_start_working_log(
-                replay_task->pk_, replay_task->log_submit_timestamp_, replay_task->log_id_))) {
-          REPLAY_LOG(WARN, "start membership log replay fail", "replay_task", *replay_task);
-          EVENT_INC(CLOG_FAIL_REPLAY_START_MEMBERSHIP_LOG_COUNT);
-          EVENT_ADD(CLOG_FAIL_REPLAY_START_MEMBERSHIP_LOG_TIME,
-              common::ObTimeUtility::fast_current_time() - trans_replay_start_time);
-        } else {
-          REPLAY_LOG(INFO, "start membership log replay succ", "replay_task", *replay_task);
-          EVENT_INC(CLOG_SUCC_REPLAY_START_MEMBERSHIP_LOG_COUNT);
-          EVENT_ADD(CLOG_SUCC_REPLAY_START_MEMBERSHIP_LOG_TIME,
-              common::ObTimeUtility::fast_current_time() - trans_replay_start_time);
-        }
-      } else if (ObStorageLogTypeChecker::is_test_log(log_type) || ObStorageLogTypeChecker::is_freeze_log(log_type)) {
-        // do nothing
       } else {
-        ret = OB_INVALID_LOG;
-        REPLAY_LOG(ERROR, "invalid log type", K(log_type), "replay_task", *replay_task, KR(ret));
+        //非事务日志的回放需考虑物理恢复的过滤机制
+        bool need_replay = true;
+        if (OB_FAIL(check_need_replay_with_physical_restore_(partition, replay_task, need_replay))) {
+          REPLAY_LOG(WARN, "faild to check_need_replay_with_physical_restore_", KR(ret), "replay_task", *replay_task);
+        } else if (!need_replay) {
+          REPLAY_LOG(INFO, "just skip when restoring", "replay_task", *replay_task);
+        } else if (ObStorageLogTypeChecker::is_partition_meta_log(log_type)) {
+          REPLAY_LOG(INFO, "begin to replay partition meta log", K(ret), K(*replay_task));
+          if (OB_SUCC(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+            EVENT_INC(CLOG_SUCC_REPLAY_META_LOG_COUNT);
+            REPLAY_LOG(INFO, "succ to replay partition meta log", K(ret), K(*replay_task));
+          } else {
+            REPLAY_LOG(WARN, "faild to replay partition meta log", K(ret), K(*replay_task));
+            EVENT_INC(CLOG_FAIL_REPLAY_META_LOG_COUNT);
+          }
+        } else if (ObStorageLogTypeChecker::is_add_partition_to_pg_log(log_type)) {
+          REPLAY_LOG(INFO, "start to replay add partition to pg log", "replay_task", *replay_task);
+          if (OB_FAIL(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+            EVENT_INC(CLOG_FAIL_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
+          } else {
+            EVENT_INC(CLOG_SUCC_REPLAY_ADD_PARTITION_TO_PG_LOG_COUNT);
+            REPLAY_LOG(INFO, "add partition to pg log replay succ", "replay_task", *replay_task);
+          }
+        } else if (ObStorageLogTypeChecker::is_remove_partition_from_pg_log(log_type)) {
+          REPLAY_LOG(INFO, "start to replay remove partition from pg log", "replay_task", *replay_task);
+          if (OB_FAIL(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+            EVENT_INC(CLOG_FAIL_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
+          } else {
+            EVENT_INC(CLOG_SUCC_REPLAY_REMOVE_PG_PARTITION_LOG_COUNT);
+            REPLAY_LOG(INFO, "remove partition from pg log replay succ", "replay_task", *replay_task);
+          }
+        } else if (OB_LOG_OFFLINE_PARTITION == log_type || OB_LOG_OFFLINE_PARTITION_V2 == log_type) {
+          REPLAY_LOG(INFO, "start to replay offline partition log", "replay_task", *replay_task);
+          if (OB_SUCC(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+            EVENT_INC(CLOG_SUCC_REPLAY_OFFLINE_COUNT);
+            REPLAY_LOG(INFO, "succ to replay offline partition log", K(ret), K(*replay_task));
+          } else {
+            EVENT_INC(CLOG_FAIL_REPLAY_OFFLINE_COUNT);
+            REPLAY_LOG(WARN, "faild to replay offline partition log", K(ret), K(*replay_task));
+          }
+        } else if (ObStorageLogTypeChecker::is_schema_version_change_log(log_type)) {
+          REPLAY_LOG(INFO, "start to replay partition schema version change log", "replay_task", *replay_task);
+          if (OB_FAIL(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+          } else {
+            REPLAY_LOG(INFO, "replay partition schema version change log success", "replay_task", *replay_task);
+          }
+        } else if (ObStorageLogTypeChecker::is_split_log(log_type)) {
+          REPLAY_LOG(INFO, "start to replay split log", K(ret), K(*replay_task));
+          if (OB_SUCC(partition_service_->replay(replay_task->pk_,
+                  replay_task->log_buf_,
+                  replay_task->log_size_,
+                  replay_task->log_id_,
+                  replay_task->log_submit_timestamp_,
+                  table_version))) {
+            EVENT_INC(CLOG_SUCC_REPLAY_SPLIT_LOG_COUNT);
+            REPLAY_LOG(INFO, "succ to replay split log", K(ret), K(*replay_task));
+          } else {
+            EVENT_INC(CLOG_FAIL_REPLAY_SPLIT_LOG_COUNT);
+            REPLAY_LOG(WARN, "failed to replay split log", K(ret), K(*replay_task));
+          }
+        } else if (ObStorageLogTypeChecker::is_start_membership_log(log_type)) {
+          REPLAY_LOG(INFO, "start to replay start membership log", "replay_task", *replay_task);
+          const int64_t trans_replay_start_time = common::ObTimeUtility::fast_current_time();
+          if (OB_FAIL(trans_replay_service_->replay_start_working_log(
+                  replay_task->pk_, replay_task->log_submit_timestamp_, replay_task->log_id_))) {
+            REPLAY_LOG(WARN, "start membership log replay fail", "replay_task", *replay_task);
+            EVENT_INC(CLOG_FAIL_REPLAY_START_MEMBERSHIP_LOG_COUNT);
+            EVENT_ADD(CLOG_FAIL_REPLAY_START_MEMBERSHIP_LOG_TIME,
+                common::ObTimeUtility::fast_current_time() - trans_replay_start_time);
+          } else {
+            REPLAY_LOG(INFO, "start membership log replay succ", "replay_task", *replay_task);
+            EVENT_INC(CLOG_SUCC_REPLAY_START_MEMBERSHIP_LOG_COUNT);
+            EVENT_ADD(CLOG_SUCC_REPLAY_START_MEMBERSHIP_LOG_TIME,
+                common::ObTimeUtility::fast_current_time() - trans_replay_start_time);
+          }
+        } else if (ObStorageLogTypeChecker::is_test_log(log_type) || ObStorageLogTypeChecker::is_freeze_log(log_type)) {
+          // do nothing
+        } else {
+          ret = OB_INVALID_LOG;
+          REPLAY_LOG(ERROR, "invalid log type", K(log_type), "replay_task", *replay_task, KR(ret));
+        }
       }
     }
 
@@ -1821,23 +1844,24 @@ int ObLogReplayEngine::fetch_and_submit_single_log_(const ObPartitionKey& pkey, 
         CLOG_LOG(WARN, "log_engine get_cursor failed", K(ret), K(pkey), K(log_id));
       }
     } else {
-      uint32_t clog_min_using_file_id = log_engine->get_clog_min_using_file_id();
-      if (log_cursor_ext.get_file_id() <= clog_min_using_file_id) {
-        bool need_block_receive_log = false;
-        if (OB_FAIL(log_engine->check_need_block_log(need_block_receive_log))) {
-          REPLAY_LOG(WARN, "failed to check_need_block_log ", K(ret), K(pkey), K(log_id));
-        } else if (need_block_receive_log) {
+      bool need_block_receive_log = false;
+      if (OB_FAIL(log_engine->check_need_block_log(log_cursor_ext.get_file_id(), need_block_receive_log))) {
+        REPLAY_LOG(WARN, "failed to check_need_block_log", K(ret), K(pkey), K(log_id), K(log_cursor_ext));
+      } else if (need_block_receive_log) {
+        if (replay_status.can_receive_log()) {
           // mark replay status
           replay_status.set_can_receive_log(false);
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            REPLAY_LOG(
-                WARN, "can not receive log now", K(log_cursor_ext), K(pkey), K(clog_min_using_file_id), K(log_id));
-          }
+          REPLAY_LOG(ERROR, "can not receive log now", K(pkey), K(log_cursor_ext), K(log_id));
         } else {
-          replay_status.set_can_receive_log(true);
+          if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+            REPLAY_LOG(WARN, "receiving log has been blocked", K(pkey), K(log_cursor_ext), K(log_id));
+          }
         }
       } else {
-        replay_status.set_can_receive_log(true);
+        if (!replay_status.can_receive_log()) {
+          replay_status.set_can_receive_log(true);
+          REPLAY_LOG(INFO, "can receive log now", K(pkey), K(log_cursor_ext), K(log_id));
+        }
       }
 
       if (OB_SUCC(ret)) {
@@ -2383,6 +2407,31 @@ int ObLogReplayEngine::get_throttle_end_time_(
       } else { /*do nothing*/
       }
     }
+  }
+  return ret;
+}
+
+int ObLogReplayEngine::check_need_replay_with_physical_restore_(
+    storage::ObIPartitionGroup* partition, ObReplayLogTask* replay_task, bool& need_replay) const
+{
+  int ret = OB_SUCCESS;
+  need_replay = true;
+  uint64_t last_restore_log_id = OB_INVALID_ID;
+  int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
+  int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
+  if (OB_ISNULL(partition) || OB_ISNULL(replay_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    REPLAY_LOG(ERROR, "get partition failed when check tells need replay", KP(partition), KP(replay_task), KR(ret));
+  } else if (OB_FAIL(partition->get_pg_storage().get_restore_replay_info(
+                 last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
+    STORAGE_LOG(WARN, "fail to get_restore_replay_info", KR(ret), "replay_task", *replay_task);
+  } else if (OB_INVALID_TIMESTAMP == restore_snapshot_version) {
+    need_replay = true;
+  } else if (replay_task->log_submit_timestamp_ <= restore_snapshot_version) {
+    need_replay = true;
+  } else {
+    need_replay =
+        ((OB_INVALID_ID == last_restore_log_id) ? false : (replay_task->log_id_ <= last_restore_log_id ? false : true));
   }
   return ret;
 }

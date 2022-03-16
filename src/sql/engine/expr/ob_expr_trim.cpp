@@ -370,10 +370,15 @@ inline int ObExprTrim::deduce_result_type(
   if (lib::is_oracle_mode() && type_ctx.get_session()->use_static_typing_engine()) {
     auto str_params = make_const_carray(str_type);
     LOG_DEBUG("str_type is", K(str_type));
-    OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params, type, true));  // prefer varchar
-    OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
-    if (NULL != pattern_type) {
-      pattern_type->set_calc_meta(type);
+    if (str_type->is_null()) {
+      type.set_meta(*str_type);
+    } else {
+      OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), str_params,
+                                                  type, true)); // prefer varchar
+      OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
+      if (OB_SUCC(ret) && NULL != pattern_type) {
+        pattern_type->set_calc_meta(type);
+      }
     }
   } else {
     if (str_type->is_lob()) {
@@ -389,6 +394,8 @@ inline int ObExprTrim::deduce_result_type(
       if (NULL != pattern_type) {
         pattern_type->set_calc_type(ObVarcharType);
       }
+    } else if (str_type->is_null()) {
+      type.set_meta(*str_type);
     } else {
       const common::ObLengthSemantics default_length_semantics =
           (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()

@@ -167,7 +167,20 @@ int ObExprChar::calc_result_type(ObExprResType& type, ObExprResType& type1) cons
     LOG_WARN("invalid type", K(type1), K(ret));
   } else {
     type.set_varchar();
-    type.set_collation_type(type1.get_collation_type());
+    if (type1.is_literal()) {
+      ObString charset_str = type1.get_param().get_string();
+      ObCharsetType charset_type = ObCharset::charset_type(charset_str);
+      if (CHARSET_INVALID == charset_type) {
+        ret = OB_ERR_UNKNOWN_CHARSET;
+        LOG_WARN("invalid character set", K(charset_str), K(ret));
+        LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset_str.length(), charset_str.ptr());
+      } else {
+        type.set_collation_type(ObCharset::get_default_collation(charset_type));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid type", K(type1), K(ret));
+    }
     type.set_collation_level(CS_LEVEL_COERCIBLE);
   }
   return ret;

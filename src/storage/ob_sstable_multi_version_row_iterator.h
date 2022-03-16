@@ -25,7 +25,7 @@ class ObSSTableMultiVersionRowIterator : public ObISSTableRowIterator {
 public:
   ObSSTableMultiVersionRowIterator();
   virtual ~ObSSTableMultiVersionRowIterator();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
 
 protected:
@@ -33,8 +33,8 @@ protected:
       const void* query_range) = 0;
   virtual int inner_get_next_row(const ObStoreRow*& row) = 0;
   template <typename T>
-  int new_iterator(common::ObArenaAllocator& allocator);
-  int get_not_exist_row(const common::ObStoreRowkey& rowkey, const ObStoreRow*& row);
+  int new_iterator(common::ObIAllocator &allocator);
+  int get_not_exist_row(const common::ObStoreRowkey &rowkey, const ObStoreRow *&row);
 
 protected:
   const ObTableIterParam* iter_param_;

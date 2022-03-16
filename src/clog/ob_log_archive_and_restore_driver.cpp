@@ -82,7 +82,7 @@ void ObLogArchiveAndRestoreDriver::run1()
   lib::set_thread_name("LogArchiveDri");
   ObCurTraceId::init(GCONF.self_addr_);
   state_driver_loop();
-  CLOG_LOG(INFO, "ob_log_archvie_and_restore_driver will stop");
+  CLOG_LOG(INFO, "ob_log_archive_and_restore_driver will stop");
 }
 
 void ObLogArchiveAndRestoreDriver::state_driver_loop()
@@ -170,7 +170,9 @@ void ObLogArchiveAndRestoreDriver::state_driver_loop()
           if (!is_restore && update_flag_for_archive_checkpoint && is_backup_info_valid && need_archive_checkpoint) {
             const bool enable_log_archive = common::ObServerConfig::get_instance().enable_log_archive;
             if (enable_log_archive) {
-              const int64_t archive_checkpoint_interval = GCONF.log_archive_checkpoint_interval;
+              int64_t archive_checkpoint_interval =
+                  ObBackupInfoMgr::get_instance().get_log_archive_checkpoint_interval() / 2;
+
               if (OB_SUCCESS != (tmp_ret = pls->archive_checkpoint(archive_checkpoint_interval))) {
                 if (OB_ENTRY_NOT_EXIST == tmp_ret || OB_LOG_ARCHIVE_NOT_RUNNING == tmp_ret || OB_EAGAIN == ret) {
                   if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
@@ -219,7 +221,7 @@ void ObLogArchiveAndRestoreDriver::state_driver_loop()
     }
 
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;
-    int32_t sleep_ts = ARCHVIE_AND_RESTORE_STATE_DRIVER_INTERVAL - static_cast<const int32_t>(round_cost_time);
+    int32_t sleep_ts = ARCHIVE_AND_RESTORE_STATE_DRIVER_INTERVAL - static_cast<const int32_t>(round_cost_time);
     if (sleep_ts < 0) {
       sleep_ts = 0;
     }

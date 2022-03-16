@@ -264,8 +264,10 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator* inner_allocator)
       dep_objs_(NULL),
       dep_objs_cnt_(0),
       ps_item_(NULL),
+      is_expired_evicted_(false), 
       allocator_(inner_allocator),
-      external_allocator_(NULL)
+      external_allocator_(NULL),
+      is_sensitive_sql_(false)
 
 {}
 
@@ -286,8 +288,10 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator* inner_allocator, ObIAllocator* external
       ps_item_(NULL),
       tenant_version_(OB_INVALID_VERSION),
       is_expired_(false),
+      is_expired_evicted_(false), 
       allocator_(inner_allocator),
-      external_allocator_(external_allocator)
+      external_allocator_(external_allocator),
+      is_sensitive_sql_(false)
 {}
 
 bool ObPsStmtInfo::is_valid() const
@@ -306,12 +310,14 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo& other)
     ps_stmt_checksum_ = other.ps_stmt_checksum_;
     db_id_ = other.db_id_;
     question_mark_count_ = other.question_mark_count_;
+    is_sensitive_sql_ = other.is_sensitive_sql_;
     can_direct_use_param_ = other.can_direct_use_param();
     has_complex_argument_ = other.has_complex_argument();
     item_and_info_size_ = other.item_and_info_size_;
     ps_item_ = other.ps_item_;
     tenant_version_ = other.tenant_version_;
     is_expired_ = other.is_expired_;
+    is_expired_evicted_ = other.is_expired_evicted_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion*>(

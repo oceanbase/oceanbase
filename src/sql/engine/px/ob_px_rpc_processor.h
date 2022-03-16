@@ -101,34 +101,43 @@ public:
   {}
   ~ObFastInitSqcReportQCMessageCall() = default;
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
-
 private:
   ObPxSqcMeta* sqc_;
 };
 
-class ObDealWithRpcTimeoutCall {
+class ObDealWithRpcTimeoutCall
+{
 public:
-  ObDealWithRpcTimeoutCall(
-      common::ObAddr addr, ObQueryRetryInfo* retry_info, int64_t timeout_ts, common::ObCurTraceId::TraceId& trace_id)
-      : addr_(addr), retry_info_(retry_info), timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT)
-  {}
+  ObDealWithRpcTimeoutCall(common::ObAddr addr,
+      ObQueryRetryInfo *retry_info,
+      int64_t timeout_ts,
+      common::ObCurTraceId::TraceId &trace_id) : addr_(addr), retry_info_(retry_info),
+      timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT) {}
   ~ObDealWithRpcTimeoutCall() = default;
-  void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
+  void operator() (hash::HashMapPair<ObInterruptibleTaskID,
+      ObInterruptCheckerNode *> &entry);
   void deal_with_rpc_timeout_err();
-
 public:
   common::ObAddr addr_;
-  ObQueryRetryInfo* retry_info_;
+  ObQueryRetryInfo *retry_info_;
   int64_t timeout_ts_;
   common::ObCurTraceId::TraceId trace_id_;
   int ret_;
 };
 
-class ObFastInitSqcCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_FAST_INIT_SQC> {
+class ObFastInitSqcCB
+      : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_FAST_INIT_SQC>
+{
 public:
-  ObFastInitSqcCB(const common::ObAddr& server, const common::ObCurTraceId::TraceId& trace_id,
-      ObQueryRetryInfo* retry_info, int64_t timeout_ts, ObInterruptibleTaskID tid, ObPxSqcMeta* sqc)
-      : addr_(server), retry_info_(retry_info), timeout_ts_(timeout_ts), interrupt_id_(tid), sqc_(sqc)
+    ObFastInitSqcCB(const common::ObAddr &server,
+                    const common::ObCurTraceId::TraceId &trace_id,
+                    ObQueryRetryInfo *retry_info,
+                    int64_t timeout_ts,
+                    ObInterruptibleTaskID tid,
+                    ObPxSqcMeta *sqc)
+        : addr_(server), retry_info_(retry_info),
+          timeout_ts_(timeout_ts), interrupt_id_(tid),
+          sqc_(sqc)
   {
     trace_id_.set(trace_id);
   }
@@ -149,10 +158,7 @@ public:
     }
     return newcb;
   }
-  virtual void set_args(const Request& arg)
-  {
-    UNUSED(arg);
-  }
+  virtual void set_args(const Request &arg) { UNUSED(arg); }
   int deal_with_rpc_timeout_err_safely();
   void interrupt_qc(int err);
 

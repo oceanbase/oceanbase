@@ -1,0 +1,30 @@
+ob_error 1
+ob_error 13
+ob_error 200
+ob_error 600
+ob_error 1017
+ob_error 5858
+ob_error 4001
+ob_error 20000
+ob_error 24761
+ob_error 5727
+ob_error 5133
+ob_error 1210
+ob_error 5794
+ob_error 5870
+ob_error 5871
+ob_error 4228
+ob_error 700 -a 1000
+ob_error my 6000
+ob_error my 4000
+ob_error my 5133
+ob_error my 1210
+ob_error ora 00051
+ob_error ora 900
+ob_error ora 600 -a 5858
+ob_error ora 600 -a 5727
+ob_error -a 100 ora 600
+ob_error ora -a 100 600
+ob_error ora 600 -a 100
+ob_error pls 100
+ob_error pls 201

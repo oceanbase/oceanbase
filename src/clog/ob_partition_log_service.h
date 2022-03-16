@@ -226,7 +226,7 @@ public:
       storage::ObPartitionService* partition_service, ObILogCallbackEngine* cb_engine,
       common::ObILogAllocator* alloc_mgr, ObLogEventScheduler* event_scheduler, const common::ObAddr& self,
       const common::ObVersion& data_version, const common::ObPartitionKey& parition_key,
-      const common::ObReplicaType replica_type, const common::ObReplicaProperty replia_property,
+      const common::ObReplicaType replica_type, const common::ObReplicaProperty replica_property,
       const common::ObBaseStorageInfo& base_storage_info, const int16_t archive_restore_state,
       const bool need_skip_mlist_check, ObRemoteLogQueryEngine* remote_log_query_engine,
       archive::ObArchiveMgr* archive_mgr, archive::ObArchiveRestoreEngine* archive_restore_engine,
@@ -249,14 +249,13 @@ public:
   virtual common::ObPartitionKey get_partition_key() const = 0;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const = 0;
   virtual int get_leader(common::ObAddr& leader) const = 0;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const = 0;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const = 0;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) = 0;
   virtual int change_restore_leader(const common::ObAddr& leader) = 0;
   virtual int check_and_set_restore_progress() = 0;
   virtual int set_restore_fetch_log_finished(ObArchiveFetchLogResult fetch_log_result) = 0;
   virtual int try_update_next_replay_log_ts_in_restore(const int64_t new_ts) = 0;
   virtual int get_role(common::ObRole& role) const = 0;
-  virtual int get_role_for_partition_table(common::ObRole& role) const = 0;
   virtual int get_role_unsafe(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const = 0;
   virtual int get_role_unlock(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const = 0;
   virtual int get_role_and_last_leader_active_time(common::ObRole& role, int64_t& timestamp) const = 0;
@@ -273,7 +272,8 @@ public:
       const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type) = 0;
   virtual int receive_renew_ms_log(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id,
       const ObProposalID& proposal_id, const ReceiveLogType type) = 0;
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed) = 0;
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed) = 0;
   virtual int ack_log(const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id) = 0;
   virtual int standby_ack_log(
       const ObAddr& server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID& proposal_id) = 0;
@@ -281,6 +281,8 @@ public:
   virtual int ack_renew_ms_log(const ObAddr& server, const uint64_t log_id, const int64_t submit_timestamp,
       const ObProposalID& ms_proposal_id) = 0;
   virtual int fake_receive_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id) = 0;
+  virtual int process_restore_check_req(
+      const common::ObAddr& server, const int64_t cluster_id, const ObRestoreCheckType restore_type) = 0;
   virtual int get_log(const common::ObAddr& server, const uint64_t log_id, const int64_t log_num,
       const ObFetchLogType fetch_type, const common::ObProposalID& proposal_id, const int64_t cluster_id,
       const common::ObReplicaType replica_type, const int64_t network_limit, const uint64_t max_confirmed_log_id) = 0;
@@ -317,6 +319,7 @@ public:
   virtual int leader_keepalive(const int64_t keepalive_interval) = 0;
   virtual int sync_log_archive_progress() = 0;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) = 0;
+  virtual int check_log_exist(const uint64_t log_id, bool& exist) = 0;
   virtual int check_cascading_state() = 0;
   virtual int archive_checkpoint(const int64_t interval) = 0;
   virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum) = 0;
@@ -344,7 +347,8 @@ public:
       const share::ObCascadMemberList& candidate_list, const int32_t msg_type) = 0;
   virtual int replace_sick_child(
       const common::ObAddr& sender, const int64_t cluster_id, const common::ObAddr& sick_child) = 0;
-  virtual int process_reject_msg(const common::ObAddr& server, const int32_t msg_type, const int64_t timestamp) = 0;
+  virtual int process_reject_msg(
+      const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type, const int64_t timestamp) = 0;
   virtual int process_reregister_msg(
       const common::ObAddr& src_server, const share::ObCascadMember& new_leader, const int64_t send_ts) = 0;
   virtual int process_restore_alive_msg(const common::ObAddr& server, const uint64_t start_log_id) = 0;
@@ -379,7 +383,6 @@ public:
   virtual int force_set_parent(const common::ObAddr& new_parent) = 0;
   virtual int force_reset_parent() = 0;
   virtual int force_set_server_list(const obrpc::ObServerList& server_list, const int64_t replica_num) = 0;
-  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts) = 0;
   virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts) = 0;
   virtual uint64_t get_next_index_log_id() const = 0;
   virtual int get_pls_epoch(int64_t& pls_epoch) const = 0;
@@ -469,10 +472,11 @@ public:
   virtual int check_if_start_log_task_empty(bool& is_empty) = 0;
   virtual bool has_valid_member_list() const = 0;
   virtual int get_last_archived_log_id(
-      const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id) = 0;
+      const int64_t incarnation, const int64_t archive_round, uint64_t& last_archived_log_id) = 0;
   virtual int process_check_rebuild_req(
       const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) = 0;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const = 0;
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts) = 0;
   virtual int set_archive_restore_state(const int16_t archive_restore_state) = 0;
   virtual uint64_t get_max_confirmed_log_id() const = 0;
   virtual bool is_archive_restoring() const = 0;
@@ -482,6 +486,7 @@ public:
   virtual int check_and_try_leader_revoke(const election::ObElection::RevokeType& revoke_type) = 0;
   virtual int renew_ms_log_flush_cb(const storage::ObMsInfoTask& task) = 0;
   virtual int try_update_leader_from_loc_cache() = 0;
+  virtual int process_query_restore_end_id_resp(const common::ObAddr& server, const uint64_t last_restore_log_id) = 0;
 };
 
 class ObPartitionLogService : public ObIPartitionLogService {
@@ -519,7 +524,7 @@ public:
   virtual common::ObPartitionKey get_partition_key() const override;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const override;
   virtual int get_leader(common::ObAddr& addr) const override;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const override;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) override;
   virtual int change_restore_leader(const common::ObAddr& leader) override;
   virtual int check_and_set_restore_progress() override;
@@ -527,11 +532,8 @@ public:
   virtual int process_restore_takeover_msg(const int64_t send_ts) override;
   virtual int try_update_next_replay_log_ts_in_restore(const int64_t new_ts) override;
   virtual int get_role(common::ObRole& role) const override;
-  virtual int get_role_for_partition_table(common::ObRole& role) const override;
   virtual int get_role_unsafe(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const override;
   virtual int get_role_unlock(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const override;
-  virtual int get_role_for_partition_table_unlock(
-      int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const;
   virtual int get_role_and_last_leader_active_time(common::ObRole& role, int64_t& timestamp) const override;
   virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch) override;
   virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch, int64_t& takeover_time) override;
@@ -546,7 +548,8 @@ public:
       const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type) override;
   virtual int receive_renew_ms_log(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id,
       const ObProposalID& proposal_id, const ReceiveLogType type) override;
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed) override;
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed) override;
   virtual int ack_log(
       const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id) override;
   virtual int standby_ack_log(
@@ -555,6 +558,8 @@ public:
   virtual int ack_renew_ms_log(const ObAddr& server, const uint64_t log_id, const int64_t submit_timestamp,
       const ObProposalID& ms_proposal_id) override;
   virtual int fake_receive_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id) override;
+  virtual int process_restore_check_req(
+      const common::ObAddr& server, const int64_t cluster_id, const ObRestoreCheckType restore_type) override;
   virtual int get_log(const common::ObAddr& server, const uint64_t log_id, const int64_t log_num,
       const ObFetchLogType fetch_type, const common::ObProposalID& proposal_id, const int64_t cluster_id,
       const common::ObReplicaType replica_type, const int64_t network_limit,
@@ -594,6 +599,7 @@ public:
   virtual int leader_keepalive(const int64_t keepalive_interval) override;
   virtual int sync_log_archive_progress() override;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) override;
+  virtual int check_log_exist(const uint64_t log_id, bool& exist);
   virtual int check_cascading_state() override;
   virtual int archive_checkpoint(const int64_t interval) override;
   virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum) override;
@@ -661,7 +667,6 @@ public:
   virtual int flush_cb(const ObLogFlushCbArg& arg) override;
   virtual int on_get_election_priority(election::ObElectionPriority& priority) override;
   virtual int on_change_leader_retry(const common::ObAddr& server, ObTsWindows& changing_leader_windows) override;
-  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts) override;
   virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts) override;
   virtual uint64_t get_next_index_log_id() const override
   {
@@ -696,6 +701,7 @@ public:
   virtual int process_check_rebuild_req(
       const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) override;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const override;
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts) override;
   virtual uint64_t get_max_confirmed_log_id() const override;
 
 public:
@@ -731,7 +737,7 @@ public:
   virtual int set_member_list(const ObMemberList& member_list, const int64_t replica_num,
       const common::ObAddr& assigned_leader, const int64_t lease_start) override;
   int get_last_archived_log_id(
-      const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id) override;
+      const int64_t incarnation, const int64_t archive_round, uint64_t& last_archived_log_id) override;
   virtual int try_freeze_aggre_buffer() override;
   int set_archive_restore_state(const int16_t archive_restore_state) override;
   /*return values:
@@ -746,6 +752,8 @@ public:
   virtual int restore_leader_try_confirm_log() override;
   virtual bool is_standby_restore_state() const override;
   virtual int check_and_try_leader_revoke(const election::ObElection::RevokeType& revoke_type) override;
+  virtual int process_query_restore_end_id_resp(
+      const common::ObAddr& server, const uint64_t last_restore_log_id) override;
 
 private:
   enum { DEFAULT_TIMEOUT = 10 * 1000 * 1000 };
@@ -787,7 +795,8 @@ private:
   int64_t get_zone_priority() const;
   int response_sliding_window_info_(const common::ObAddr& server, const bool is_leader);
   int process_replica_type_change_();
-  int process_reject_msg(const common::ObAddr& server, const int32_t msg_type, const int64_t timestamp) override;
+  int process_reject_msg(
+      const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type, const int64_t timestamp) override;
   int process_reregister_msg(
       const common::ObAddr& src_server, const share::ObCascadMember& new_leader, const int64_t send_ts) override;
   int process_restore_alive_msg(const common::ObAddr& server, const uint64_t start_log_id) override;
@@ -815,6 +824,7 @@ private:
       const int64_t switchover_epoch, const uint64_t leader_max_log_id, const int64_t leader_next_log_ts) const;
   int send_max_log_msg_to_mlist_(
       const int64_t switchover_epoch, const uint64_t leader_max_log_id, const int64_t leader_next_log_ts) const;
+  int process_query_restore_end_id_req_(const common::ObAddr& server, const int64_t cluster_id);
   bool is_paxos_offline_replica_() const;
   bool is_no_update_next_replay_log_id_info_too_long_() const;
   int check_state_();
@@ -854,6 +864,7 @@ private:
   bool is_primary_need_sync_to_standby_() const;
   bool is_tenant_out_of_memory_() const;
   int get_role_and_leader_epoch_unlock_(common::ObRole& role, int64_t& leader_epoch, int64_t& takeover_time);
+  int report_physical_restore_unexpected_error_();
 
 private:
   typedef common::RWLock RWLock;
@@ -863,8 +874,6 @@ private:
   typedef RWLock::WLockGuardWithRetry WLockGuardWithRetry;
   typedef common::ObSEArray<common::ObAddr, 16> ServerArray;
   static const int64_t REBUILD_REPLICA_INTERVAL = 2l * 60l * 1000l * 1000l;
-  static const int64_t STANDBY_CHECK_RESTORE_STATE_INTERVAL = 15l * 1000l * 1000l;
-  static const int64_t STANDBY_CHECK_MS_INTERVAL = 60l * 1000l * 1000l;
   static const int64_t WRLOCK_TIMEOUT_US = 100 * 1000;  // 100ms
 
   bool is_inited_;
@@ -892,8 +901,6 @@ private:
   uint64_t zone_priority_;
   bool is_candidate_;
   int64_t last_rebuild_time_;
-  int64_t last_check_restore_state_time_;
-  int64_t last_check_standby_ms_time_;
   mutable int64_t ack_log_time_;
   mutable int64_t recv_child_next_ilog_ts_time_;
   mutable int64_t submit_log_mc_time_;

@@ -394,6 +394,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigPartitionBalanceStrategyFuncChecker);
 };
 
+class ObDataStorageErrorToleranceTimeChecker : public ObConfigChecker {
+public:
+  ObDataStorageErrorToleranceTimeChecker()
+  {}
+  virtual ~ObDataStorageErrorToleranceTimeChecker()
+  {}
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISABLE_COPY_ASSIGN(ObDataStorageErrorToleranceTimeChecker);
+};
+
 // config item container
 class ObConfigStringKey {
 public:
@@ -526,6 +538,10 @@ private:
     TIME_DAY = 24 * 60 * 60 * 1000 * 1000UL,
   };
   DISALLOW_COPY_AND_ASSIGN(ObConfigTimeParser);
+};
+
+struct ObConfigBoolParser {
+  static bool get(const char* str, bool& valid);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey, ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;

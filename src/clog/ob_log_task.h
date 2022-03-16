@@ -46,7 +46,7 @@ public:
   TO_STRING_KV(K_(val));
 
 private:
-  uint16_t val_;
+  uint32_t val_;
 };
 
 class ObLogTask : public ObILogExtRingBufferData {
@@ -67,6 +67,7 @@ class ObLogTask : public ObILogExtRingBufferData {
     IS_TRANS_LOG = 13,
     STANDBY_MAJORITY_FINISHED = 14,
     ALREADY_SEND_TO_STANDBY = 15,  // whether it has been send to standby cluster
+    WITH_ARCHIVE_ACCUM_CHECKSUM = 16,  // used for accum_checksum_ check during physical restoring
   };
 
 public:
@@ -87,6 +88,7 @@ public:
   int set_replica_num(const int64_t replica_num);
   void set_log_confirmed();
   void set_confirmed_info(const ObConfirmedInfo& confirmed_info);
+  void set_archive_accum_checksum(const int64_t accum_checksum);
   void set_flush_local_finished();
   void set_on_success_cb_called();
   void set_on_finished_cb_called();
@@ -116,6 +118,7 @@ public:
   bool is_submit_log_body_exist() const;
   bool is_index_log_submitted() const;
   bool is_confirmed_info_exist() const;
+  bool is_archive_accum_checksum_exist() const;
   bool need_replay() const;
   bool is_batch_committed() const;
   bool is_pinned() const;

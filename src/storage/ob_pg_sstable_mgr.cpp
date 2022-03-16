@@ -655,6 +655,57 @@ int ObPGSSTableMgr::recycle_unused_sstables(const int64_t max_recycle_cnt, int64
   return ret;
 }
 
+int ObPGSSTableMgr::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPGSSTableMgr has not been inited", K(ret));
+  } else if (!enable_write_log_) {
+    LOG_INFO("do not recycle unused sstable now");
+  } else if (OB_UNLIKELY(!table_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_key));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, table_key.hash());
+    ObITable *sstable = NULL;
+    if (OB_FAIL(table_map_.get(table_key, sstable))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // maybe this sstable has be removed.
+      } else {
+        LOG_WARN("fail to get sstable", K(ret), K(table_key));
+      }
+    } else if (OB_ISNULL(sstable)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys, table must not be null", K(ret), KP(sstable));
+    } else if (OB_UNLIKELY(sstable->get_ref() > 0)) {
+      // do nothing.
+    } else {
+      int64_t lsn = 0;
+      if (OB_FAIL(SLOGGER.begin(OB_LOG_TABLE_MGR))) {
+        LOG_WARN("fail to begin transaction", K(ret));
+      } else if (OB_FAIL(write_remove_sstable_log(sstable->get_key()))) {
+        LOG_WARN("fail to write remove sstable log", K(ret), K(sstable->get_key()));
+      } else if (OB_FAIL(SLOGGER.commit(lsn))) {
+        LOG_WARN("fail to commit slog", K(ret));
+      } else if (OB_FAIL(table_map_.erase(sstable->get_key()))) {
+        LOG_WARN("fail to erase from table map", K(ret), K(sstable->get_key()));
+        abort();
+      } else {
+        free_sstable(static_cast<ObSSTable *>(sstable));
+      }
+
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = SLOGGER.abort())) {
+          LOG_WARN("fail to abort slog", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObPGSSTableMgr::get_serialize_size()
 {
   int ret = OB_SUCCESS;
@@ -882,50 +933,6 @@ int ObPGSSTableMgr::alloc_sstable(const int64_t tenant_id, ObSSTable*& sstable)
   if (OB_ISNULL(sstable = OB_NEW_ALIGN32(ObSSTable, memattr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc table", K(ret), K(memattr), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObPGSSTableMgr::replay_add_old_sstable(ObOldSSTable& sstable)
-{
-  int ret = OB_SUCCESS;
-  ObSSTable* new_sstable = nullptr;
-  TableNode* table_node = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPGSSTableMgr has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!sstable.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(sstable));
-  } else if (OB_FAIL(alloc_sstable(sstable.get_key().get_tenant_id(), new_sstable))) {
-    LOG_WARN("fail to alloc sstable", K(ret));
-  } else if (OB_FAIL(new_sstable->set_storage_file_handle(file_handle_))) {
-    LOG_WARN("fail to set pg file", K(ret));
-  } else if (OB_FAIL(new_sstable->convert_from_old_sstable(sstable))) {
-    LOG_WARN("fail to set sstable", K(ret));
-  } else if (OB_UNLIKELY(!new_sstable->is_valid())) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, sstable must not be null", K(ret));
-  } else if (OB_ISNULL(table_node = table_map_.alloc_node(*new_sstable))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(table_map_.put(*table_node))) {
-    if (OB_HASH_EXIST != ret) {
-      LOG_WARN("fail to put node", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    if (nullptr != table_node) {
-      table_map_.free_node(table_node);
-      table_node = nullptr;
-    }
-    if (nullptr != new_sstable) {
-      free_sstable(new_sstable);
-      new_sstable = nullptr;
-    }
   }
   return ret;
 }

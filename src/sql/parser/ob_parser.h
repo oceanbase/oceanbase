@@ -53,10 +53,18 @@ public:
   bool is_single_stmt(const common::ObString& stmt);
   int split_multiple_stmt(const common::ObString& stmt, common::ObIArray<common::ObString>& queries,
       ObMPParseStat& parse_fail, bool is_ret_first_stmt = false);
-  int parse_sql(const common::ObString& stmt, ParseResult& parse_result);
+  //@param:
+  //  no_throw_parser_error is used to mark not throw parser error. in the split multi stmt
+  //  situation we will try find ';' delimiter to parser part of string in case of save memory,
+  //  but this maybe parser error and throw error info. However, we will still try parser remain
+  //  string when parse part of string failed, if we throw parse part error info, maybe will let
+  //  someone misunderstand have bug, So, we introduce this mark to decide to throw parser erorr.
+  //  eg: select '123;' from dual; select '123' from dual;
+  int parse_sql(const common::ObString& stmt, ParseResult& parse_result,
+      const bool no_throw_parser_error = false);
 
   virtual int parse(const common::ObString& stmt, ParseResult& parse_result, ParseMode mode = STD_MODE,
-      const bool is_batched_multi_stmt_split_on = false);
+      const bool is_batched_multi_stmt_split_on = false, const bool no_throw_parser_error = false);
 
   virtual void free_result(ParseResult& parse_result);
   /**

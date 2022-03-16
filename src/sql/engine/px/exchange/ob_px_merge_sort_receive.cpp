@@ -204,6 +204,12 @@ int ObPxMergeSortReceive::inner_close(ObExecContext& ctx) const
     if (release_merge_sort_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", K(release_merge_sort_ret));
     }
+    
+    // must erase after unlink channel
+    release_channel_ret = erase_dtl_interm_result(ctx);
+    if (release_channel_ret != common::OB_SUCCESS) {
+      LOG_TRACE("release interm result failed", KR(release_channel_ret));
+    }
   }
   return ret;
 }

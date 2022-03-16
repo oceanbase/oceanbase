@@ -100,7 +100,7 @@ OB_DEF_DESERIALIZE(ObExpr)
       expr_ctx_id_);
   if (OB_SUCC(ret)) {
     if (ObExprExtraInfoFactory::is_registered(type_)) {
-      if (OB_FAIL(ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT.get_arena_allocator(), type_, extra_info_))) {
+      if (OB_FAIL(ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(), type_, extra_info_))) {
         LOG_WARN("fail to alloc expr extra info", K(ret), K(type_));
       } else if (OB_NOT_NULL(extra_info_)) {
         if (OB_FAIL(extra_info_->deserialize(buf, data_len, pos))) {
@@ -165,6 +165,7 @@ ObExpr::ObExpr()
       obj_meta_(),
       max_length_(UINT32_MAX),
       obj_datum_map_(OBJ_DATUM_NULL),
+      is_boolean_(0),
       eval_func_(NULL),
       inner_functions_(NULL),
       inner_func_cnt_(0),

@@ -411,7 +411,7 @@ int ObPwjComparer::is_sub_partition_logically_equal(const PwjTable& l_table, con
   } else {
     ObPartition* l_part = NULL;
     ObPartition* r_part = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_id_map_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_equal && i < part_id_map_.count(); ++i) {
       int64_t l_part_index = part_index_map_.at(i).first;
       int64_t r_part_index = part_index_map_.at(i).second;
       l_used_partition_indexes.reuse();

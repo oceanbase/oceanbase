@@ -73,6 +73,10 @@ struct ObDataStoreDesc {
   // major_working_cluster_version_ == 0 means upgrade from old cluster
   // which still use freezeinfo without cluster version
   int64_t major_working_cluster_version_;
+  bool iter_complement_;
+  bool is_unique_index_;
+  common::ObArenaAllocator allocator_;
+  
   ObDataStoreDesc()
   {
     reset();
@@ -100,7 +104,7 @@ struct ObDataStoreDesc {
       K_(store_micro_block_column_checksum), K_(snapshot_version), K_(need_calc_physical_checksum), K_(need_index_tree),
       K_(need_prebuild_bloomfilter), K_(bloomfilter_rowkey_prefix), KP_(rowkey_helper), "column_types",
       common::ObArrayWrap<common::ObObjMeta>(column_types_, row_column_count_), K_(pg_key), K_(file_handle),
-      K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version));
+      K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version), K_(iter_complement), K_(is_unique_index));
 
 private:
   int cal_row_store_type(const share::schema::ObTableSchema& table_schema, const storage::ObMergeType merge_type);
@@ -235,7 +239,7 @@ private:
   ObIRowReader* row_reader_;
   ObFlatRowReader flat_row_reader_;
   ObSparseRowReader sparse_row_reader_;
-  ObSelfBufferWriter data_;  // micro header + data blocks;
+  ObSelfBufferWriter data_;  // macro header + data blocks;
   ObMicroBlockIndexWriter index_;
   ObSSTableMacroBlockHeader* header_;  // macro header store in head of data_;
   uint16_t* column_ids_;

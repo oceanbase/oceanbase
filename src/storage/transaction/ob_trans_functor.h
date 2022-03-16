@@ -186,7 +186,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(trans_id), "ctx", OB_P(ctx_base));
       tmp_ret = common::OB_INVALID_ARGUMENT;
     } else {
-      if (OB_FAIL(ctx_base->kill(arg_, cb_array_))) {
+      if (OB_SUCC(ctx_base->kill(arg_, cb_array_))) {
         TRANS_LOG(INFO, "kill transaction success", K(trans_id), K_(arg));
       } else if (common::OB_TRANS_CANNOT_BE_KILLED == ret) {
         TRANS_LOG(INFO, "transaction can not be killed", K(trans_id), "context", *ctx_base);
@@ -199,7 +199,7 @@ public:
         if (OB_SUCCESS != (tmp_ret = ctx_base->reset_trans_audit_record())) {
           TRANS_LOG(WARN, "reset trans audot record failed", KR(tmp_ret));
         }
-        ctx_base->get_record_mgr_guard().destroy();
+        // ctx_base->get_record_mgr_guard().destroy();
       }
     }
 
@@ -671,17 +671,17 @@ public:
   }
 };
 
-class IterateTransStatFunctor {
+class IterateTransStatForKeyFunctor {
 public:
-  explicit IterateTransStatFunctor(ObTransStatIterator& trans_stat_iter) : trans_stat_iter_(trans_stat_iter)
+  explicit IterateTransStatForKeyFunctor(ObTransStatIterator& trans_stat_iter) : trans_stat_iter_(trans_stat_iter)
   {}
-  bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
+  bool operator()(const ObTransKey& trans_key, ObTransCtx* ctx_base)
   {
     int tmp_ret = common::OB_SUCCESS;
     bool bool_ret = false;
 
-    if (!trans_id.is_valid() || OB_ISNULL(ctx_base)) {
-      TRANS_LOG(WARN, "invalid argument", K(trans_id), "ctx", OB_P(ctx_base));
+    if (!trans_key.is_valid() || OB_ISNULL(ctx_base)) {
+      TRANS_LOG(WARN, "invalid argument", K(trans_key), "ctx", OB_P(ctx_base));
       tmp_ret = OB_INVALID_ARGUMENT;
       // If you encounter a situation where part_ctx has not been init yet,
       // skip it directly, there will be a background thread retry
@@ -747,7 +747,7 @@ public:
         if (OB_SUCCESS != (tmp_ret = part_ctx->get_participants_copy(participants_arr))) {
           TRANS_LOG(WARN, "ObTransStat get participants copy error", K(tmp_ret));
         } else if (OB_SUCCESS != (tmp_ret = trans_stat.init(part_ctx->addr_,
-                                      trans_id,
+                                      trans_key.get_trans_id(),
                                       part_ctx->tenant_id_,
                                       part_ctx->is_exiting_,
                                       part_ctx->is_readonly_,
@@ -777,7 +777,7 @@ public:
               "ObTransStat init error",
               K(tmp_ret),
               K(has_decided),
-              K(trans_id),
+              K(trans_key.get_trans_id()),
               "addr",
               part_ctx->addr_,
               "tenant_id",
@@ -885,8 +885,10 @@ public:
 
         if (OB_ISNULL(part_ctx = dynamic_cast<ObPartTransCtx*>(ctx_base))) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (!part_ctx->is_dirty_trans()) {
-          // do nothing
+        } else if (!part_ctx->is_dirty_trans() || !part_ctx->has_synced_log()) {
+          if (part_ctx->is_dirty_trans() && !part_ctx->has_synced_log()) {
+            TRANS_LOG(INFO, "We donot dump the dirty trans with no synced log", K(*part_ctx));
+          }
           clean_trx_cnt_++;
         } else if (OB_FAIL(part_ctx->get_trans_sstable_durable_ctx_info(end_log_ts_, ctx_info))) {
           TRANS_LOG(WARN, "failed to get trans table status info", K(ret));
@@ -897,7 +899,7 @@ public:
             allocator_.reuse();
             if (OB_ISNULL(tmp_buf_ = static_cast<char*>(allocator_.alloc(serialize_size)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
-              STORAGE_LOG(WARN, "failed to allocate memory", K(serialize_size));
+              TRANS_LOG(WARN, "failed to allocate memory", K(serialize_size));
             }
           } else {
             tmp_buf_ = buf_;
@@ -1820,11 +1822,12 @@ private:
 // use this interface to garbage collect unfinished transactions
 class ObClearTransAfterRestoreLog {
 public:
-  explicit ObClearTransAfterRestoreLog(
-      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t fake_terminate_log_ts)
+  explicit ObClearTransAfterRestoreLog(const int64_t restore_snapshot_version, const uint64_t last_restore_log_id,
+      const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
       : ret_(OB_SUCCESS),
         restore_snapshot_version_(restore_snapshot_version),
         last_restore_log_id_(last_restore_log_id),
+        last_restore_log_ts_(last_restore_log_ts),
         fake_terminate_log_ts_(fake_terminate_log_ts)
   {}
   int get_ret() const
@@ -1843,9 +1846,10 @@ public:
           K(ret),
           K_(restore_snapshot_version),
           K_(last_restore_log_id),
+          K_(last_restore_log_ts),
           K_(fake_terminate_log_ts));
     } else if (OB_FAIL(ctx->clear_trans_after_restore(
-                   restore_snapshot_version_, last_restore_log_id_, fake_terminate_log_ts_))) {
+                   restore_snapshot_version_, last_restore_log_id_, last_restore_log_ts_, fake_terminate_log_ts_))) {
       TRANS_LOG(WARN, "failed to clear trans after restore", K(ret), K(*ctx));
     }
 
@@ -1855,7 +1859,8 @@ public:
 private:
   int ret_;
   int64_t restore_snapshot_version_;
-  uint64_t last_restore_log_id_;
+  uint64_t last_restore_log_id_;   // the last log id in restore phase
+  int64_t last_restore_log_ts_;    // the last log ts in restore phase
   int64_t fake_terminate_log_ts_;  // fake terminate log ts for killing transaction
 };
 

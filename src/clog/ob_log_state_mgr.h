@@ -525,7 +525,6 @@ public:
   bool has_valid_member_list() const override;
   virtual int try_renew_sync_standby_location() override;
   int standby_update_protection_level();
-  int standby_leader_check_protection_level();
   int handle_sync_start_id_resp(
       const ObAddr& server, const int64_t cluster_id, const int64_t original_send_ts, const uint64_t sync_start_id);
   int get_standby_protection_level(uint32_t& protection_level) const;
@@ -588,7 +587,7 @@ private:
 
   bool check_leader_sliding_window_not_slide_(bool& need_switch_leader_to_self);
   void check_and_try_fetch_log_();
-  bool need_update_leader_();
+  bool need_update_leader_(share::ObCascadMember& new_leader);
   bool follower_need_update_role_(share::ObCascadMember& new_leader, common::ObAddr& elect_real_leader,
       common::ObAddr& previous_leader, int64_t& new_leader_epoch);
   void set_leader_and_epoch_(const share::ObCascadMember& new_leader, const int64_t new_leader_epoch);
@@ -611,6 +610,9 @@ private:
       const uint64_t start_id, bool& is_waiting_standby_ack, bool& need_switch_leader_to_self);
   bool need_fetch_log_() const;
   void reset_fetch_state_();
+  int standby_leader_check_protection_level_();
+  int standby_leader_check_renew_ms_log_state_();
+  int standby_follower_try_trigger_restore_();
 
 private:
   typedef common::SpinRWLock RWLock;
@@ -620,6 +622,8 @@ private:
   static const int64_t START_PARTITION_WARN_INTERVAL = 1 * 1000;
   static const int64_t BUF_SIZE = 2048;
   static const int64_t STANDBY_CHECK_SYNC_START_ID_INTERVAL = 3l * 1000l * 1000l;
+  static const int64_t STANDBY_CHECK_MS_INTERVAL = 60l * 1000l * 1000l;
+  static const int64_t CHECK_STANDBY_RESTORE_STATE_INTERVAL = 2l * 1000l * 1000l;
 
   ObILogSWForStateMgr* sw_;
   ObILogReconfirm* reconfirm_;
@@ -650,6 +654,7 @@ private:
   common::ObRegion region_;
   common::ObIDC idc_;
   int64_t leader_epoch_;
+  int64_t prev_leader_epoch_;
   common::ObAddr self_;
   mutable common::ObSpinLock lock_;  // protect freeze_version_;
   mutable RWLock region_lock_;
@@ -659,6 +664,8 @@ private:
 
   uint64_t last_check_start_id_;
   int64_t last_check_start_id_time_;
+  int64_t last_check_restore_state_time_;
+  int64_t last_check_standby_ms_time_;
 
   // congestion control
   mutable common::ObSpinLock fetch_state_lock_;

@@ -691,7 +691,7 @@ int ObTenantFileMgr::remove_pg(const ObTenantFileKey& file_key, const ObPGKey& p
   } else {
     if (file_value->file_info_.is_empty_file()) {
       file_value->file_info_.tenant_file_super_block_.status_ = TENANT_FILE_DELETING;
-      LOG_INFO("mark file deleting", K(file_key));
+      FLOG_INFO("mark file deleting", K(file_key));
     }
   }
   return ret;

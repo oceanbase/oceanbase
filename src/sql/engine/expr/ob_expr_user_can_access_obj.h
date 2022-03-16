@@ -25,10 +25,10 @@ public:
   explicit ObExprUserCanAccessObj(common::ObIAllocator& alloc);
   virtual ~ObExprUserCanAccessObj();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& arg1, ObExprResType& arg2, ObExprResType& arg3,
-      common::ObExprTypeCtx& type_ctx) const;
+      common::ObExprTypeCtx& type_ctx) const override;
 
   virtual int calc_result3(common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2,
-      const common::ObObj& arg3, common::ObExprCtx& expr_ctx) const;
+      const common::ObObj& arg3, common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 

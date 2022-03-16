@@ -278,6 +278,11 @@ public:
         // index
         || stmt_type == stmt::T_CREATE_INDEX ||
         stmt_type == stmt::T_DROP_INDEX
+        // flashback
+        || stmt_type == stmt::T_FLASHBACK_TENANT
+        || stmt_type == stmt::T_FLASHBACK_DATABASE
+        || stmt_type == stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN
+        || stmt_type == stmt::T_FLASHBACK_INDEX
         // purge
         || stmt_type == stmt::T_PURGE_RECYCLEBIN || stmt_type == stmt::T_PURGE_TENANT ||
         stmt_type == stmt::T_PURGE_DATABASE || stmt_type == stmt::T_PURGE_TABLE ||
@@ -351,6 +356,11 @@ public:
         || stmt_type == stmt::T_DROP_VIEW
         // index
         || stmt_type == stmt::T_DROP_INDEX
+        // flashback
+        || stmt_type == stmt::T_FLASHBACK_TENANT		
+        || stmt_type == stmt::T_FLASHBACK_DATABASE		
+        || stmt_type == stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN		
+        || stmt_type == stmt::T_FLASHBACK_INDEX
         // purge
         || stmt_type == stmt::T_PURGE_RECYCLEBIN || stmt_type == stmt::T_PURGE_TENANT ||
         stmt_type == stmt::T_PURGE_DATABASE || stmt_type == stmt::T_PURGE_TABLE ||
@@ -594,17 +604,7 @@ public:
     return ret;
   }
 
-  inline int free_stmt(ObSelectStmt* stmt)
-  {
-    int ret = common::OB_SUCCESS;
-    if (OB_UNLIKELY(NULL == stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "unexpected null");
-    } else if (OB_FAIL(free_list_.store_obj(stmt))) {
-      SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
-    }
-    return ret;
-  }
+  int free_stmt(ObSelectStmt *stmt);
 
   void destory();
   /**
@@ -627,6 +627,9 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStmtFactory);
 };
+
+template <>
+int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt*& stmt);
 }  // namespace sql
 }  // namespace oceanbase
 

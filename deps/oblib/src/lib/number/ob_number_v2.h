@@ -184,6 +184,24 @@ public:
   // v2: algorithmic optimization edition
   // v3: engineering optimization edition
 
+  int sanity_check()
+  {
+    int ret = OB_SUCCESS;
+    if (d_.len_ > OB_MAX_DECIMAL_DIGIT) {
+      ret = OB_ERR_UNEXPECTED;
+      _OB_LOG(WARN, "Invalid digit len %u", d_.len_);
+    } else if (d_.len_ > 0 && digits_ != nullptr) {
+      for (auto i = 0; OB_SUCC(ret) && i < d_.len_; i++) {
+        if (digits_[i] >= BASE) {
+          ret = OB_ERR_UNEXPECTED;
+          _OB_LOG(WARN, "Invalid value %u", digits_[i]);
+        } else {
+          _OB_LOG(DEBUG, "Digit value %u", digits_[i]);
+        }
+      }
+    }
+    return ret;
+  }
   template <class T>
   int from(const int64_t value, T& allocator);
   template <class T>
@@ -425,6 +443,7 @@ public:
   bool is_int_parts_valid_int64(int64_t& int_parts, int64_t& decimal_parts) const;
   int extract_valid_int64_with_trunc(int64_t& value) const;
   int extract_valid_uint64_with_trunc(uint64_t& value) const;
+  int extract_valid_int64_with_round(int64_t &value) const;
   static int64_t get_decode_exp(const uint32_t desc) __attribute__((always_inline));
   void set_digits(uint32_t* digits)
   {
@@ -542,6 +561,9 @@ protected:
   inline static bool is_lt_1_(const Desc d) __attribute__((always_inline));
   inline static int exp_check_(const ObNumber::Desc& desc, const bool is_oracle_mode = false)
       __attribute__((always_inline));
+  inline static bool is_valid_sci_tail_(const char *str, 
+                                        const int64_t length, 
+                                        const int64_t e_pos) __attribute__((always_inline));
 
 public:
   bool is_int64() const;

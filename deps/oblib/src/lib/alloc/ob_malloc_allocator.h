@@ -32,14 +32,12 @@ public:
   ObMallocAllocator();
   virtual ~ObMallocAllocator();
 
-  int init();
-
   void* alloc(const int64_t size);
   void* alloc(const int64_t size, const ObMemAttr& attr);
   void* realloc(const void* ptr, const int64_t size, const ObMemAttr& attr);
   void free(void* ptr);
 
-  int set_root_allocator(ObTenantCtxAllocator* allocator);
+  void set_root_allocator();
   static ObMallocAllocator* get_instance();
 
   ObTenantCtxAllocator* get_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id = 0) const;
@@ -57,6 +55,7 @@ public:
   static int set_tenant_limit(uint64_t tenant_id, int64_t bytes);
   static int64_t get_tenant_limit(uint64_t tenant_id);
   static int64_t get_tenant_hold(uint64_t tenant_id);
+  static int64_t get_tenant_remain(uint64_t tenant_id);
   static int64_t get_tenant_rpc_hold(uint64_t tenant_id);
   int64_t get_tenant_ctx_hold(const uint64_t tenant_id, const uint64_t ctx_id) const;
   void get_tenant_mod_usage(uint64_t tenant_id, int mod_id, common::ObModItem& item) const;
@@ -66,6 +65,8 @@ public:
   int set_tenant_ctx_idle(
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
   int get_chunks(AChunk** chunks, int cap, int& cnt);
+  static uint64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
+  static bool is_inited_;
 
 private:
   using InvokeFunc = std::function<int(ObTenantMemoryMgr*)>;
@@ -79,8 +80,7 @@ private:
   ObTenantCtxAllocator* allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
   int64_t reserved_;
   int64_t urgent_;
-
-  static ObMallocAllocator* instance_;
+  static uint64_t max_used_tenant_id_;
 };  // end of class ObMallocAllocator
 
 }  // end of namespace lib

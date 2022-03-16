@@ -373,7 +373,7 @@ public:
 
   protected:
     ObExecContext& exec_ctx_;
-    lib::MemoryContext* calc_mem_;
+    lib::MemoryContext calc_mem_;
     common::ObArenaAllocator* calc_buf_;
     common::ObNewRow cur_row_;
     common::ObNewRow* cur_rows_;
@@ -829,6 +829,7 @@ public:
     return op_schema_objs_;
   }
 
+  int init_op_schema_obj(int64_t count);
 private:
   static const int64_t CHECK_STATUS_MASK = 0x3FF;  // check_status for each 1024 rows
 protected:
@@ -856,8 +857,7 @@ protected:
   bool is_exact_rows_;
   ObPhyOperatorType type_;  // for GDB debug purpose, no need to serialize
   int32_t plan_depth_;      // for plan cache explain
-  common::ObSEArray<ObOpSchemaObj, 8> op_schema_objs_;
-
+  common::ObFixedArray<ObOpSchemaObj, common::ObIAllocator> op_schema_objs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyOperator);
 };
@@ -899,7 +899,7 @@ inline int ObPhyOperator::ObPhyOperatorCtx::init_base(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_SQL_EXPR_CALC, common::ObCtxIds::DEFAULT_CTX_ID);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(calc_mem_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(calc_mem_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else {
       calc_buf_ = &calc_mem_->get_arena_allocator();

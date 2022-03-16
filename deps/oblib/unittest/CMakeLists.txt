@@ -5,7 +5,7 @@ target_link_libraries(oblib_testbase INTERFACE -lgmock -lgtest)
 function(oblib_addtest mainfile)
   get_filename_component(testname ${mainfile} NAME_WE)
   add_executable(${testname} ${ARGV})
-  target_link_libraries(${testname} PRIVATE oblib oblib_testbase -static-libgcc -static-libstdc++)
+  target_link_libraries(${testname} PRIVATE easy aio -L${DEP_DIR}/lib/mariadb mariadb oblib oblib_testbase -static-libgcc -static-libstdc++)
 endfunction()
 
 add_subdirectory(lib)

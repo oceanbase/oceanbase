@@ -246,6 +246,12 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void* pkt)
 }
 
 template <class pcodeStruct>
+int ObRpcProxy::AsyncCB<pcodeStruct>::get_rcode()
+{
+  return rcode_.rcode_;
+}
+
+template <class pcodeStruct>
 void ObRpcProxy::AsyncCB<pcodeStruct>::check_request_rt(const bool force_print)
 {
   if (force_print || req_->client_send_time - req_->client_start_time > REQUEST_ITEM_COST_RT ||

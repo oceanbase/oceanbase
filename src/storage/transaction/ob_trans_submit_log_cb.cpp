@@ -58,7 +58,7 @@ void ObTransSubmitLogCb::reset()
   submit_timestamp_ = 0;
   ctx_ = NULL;
   have_prev_trans_ = false;
-  is_callbacking_ = false;
+  is_commit_log_callbacking_ = false;
 }
 
 int ObTransSubmitLogCb::set_log_type(const int64_t log_type)
@@ -152,7 +152,6 @@ int ObTransSubmitLogCb::on_success(const ObPartitionKey& partition_key, const cl
     if (OB_FAIL(part_ctx->get_partition_mgr()->acquire_ctx_ref(trans_id))) {
       TRANS_LOG(WARN, "get transaction context from hashmap error", K(ret), K(trans_id));
     } else {
-      is_callbacking_ = true;
       get_ctx = ObTimeUtility::fast_current_time();
       // batch_commit don't support transaction dependency
       const bool batch_commit = (have_prev_trans_ ? false : batch_committed);
@@ -185,7 +184,9 @@ int ObTransSubmitLogCb::on_success(const ObPartitionKey& partition_key, const cl
           }
         }
       }
-      // need acquire ref before callback
+      if (OB_LOG_TRANS_COMMIT == log_type && part_ctx->is_enable_new_1pc()) {
+        is_commit_log_callbacking_ = true;
+      }
       if (part_ctx->need_to_post_redo_sync_task(log_type)) {
         // duplicated table need all lease avaiable replica sync and replay log
         if (OB_FAIL(part_ctx->retry_redo_sync_task(log_id, log_type, timestamp, true))) {
@@ -197,11 +198,11 @@ int ObTransSubmitLogCb::on_success(const ObPartitionKey& partition_key, const cl
         if (OB_SUCCESS != (tmp_ret = part_ctx->handle_2pc_local_msg_response(partition, trans_id, log_type))) {
           TRANS_LOG(WARN, "handle 2pc local msg response error", K(tmp_ret), K(partition), K(trans_id), K(log_type));
         }
+        is_commit_log_callbacking_ = false;
       } else {
         // do nothing
       }
       callback = ObTimeUtility::fast_current_time();
-      is_callbacking_ = false;
       if (OB_SUCCESS != (tmp_ret = part_ctx->get_partition_mgr()->release_ctx_ref(part_ctx))) {
         TRANS_LOG(WARN, "revert transaction context error", "ret", tmp_ret, K(partition), K(trans_id));
         ret = tmp_ret;

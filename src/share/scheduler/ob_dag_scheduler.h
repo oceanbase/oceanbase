@@ -86,6 +86,9 @@ public:
     TASK_TYPE_RESTORE_TAILORED_PREPARE = 40,
     TASK_TYPE_RESTORE_TAILORED_PROCESS = 41,
     TASK_TYPE_RESTORE_TAILORED_FINISH = 42,
+    TASK_TYPE_BACKUP_BACKUPSET = 43,
+    TASK_TYPE_BACKUP_ARCHIVELOG = 44,
+
     TASK_TYPE_MAX,
   };
 
@@ -211,22 +214,23 @@ public:
     DAG_PRIO_CREATE_INDEX,
     DAG_PRIO_SSTABLE_SPLIT,
     DAG_PRIO_VALIDATE,
+    /* add new item in ObIDagPriorityStr */
     DAG_PRIO_MAX,
   };
-  const static common::ObString ObIDagPriorityStr[DAG_PRIO_MAX]; /* = {
-     "DAG_PRIO_TRANS_TABLE_MERGE",
-     "DAG_PRIO_SSTABLE_MINI_MERGE",
-     "DAG_PRIO_SSTABLE_MINOR_MERGE",
-     "DAG_PRIO_GROUP_MIGRATE",
-     "DAG_PRIO_MIGRATE_HIGH",
-     "DAG_PRIO_MIGRATE_MID",
-     "DAG_PRIO_SSTABLE_MAJOR_MERGE",
-     "DAG_PRIO_BACKUP",
-     "DAG_PRIO_MIGRATE_LOW",
-     "DAG_PRIO_CREATE_INDEX",
-     "DAG_PRIO_SSTABLE_SPLIT",
-     "DAG_PRIO_VALIDATE"
-   };*/
+  const static char *ObIDagPriorityStr[DAG_PRIO_MAX]; /* = {
+    "DAG_PRIO_TRANS_TABLE_MERGE",
+    "DAG_PRIO_SSTABLE_MINI_MERGE",
+    "DAG_PRIO_SSTABLE_MINOR_MERGE",
+    "DAG_PRIO_GROUP_MIGRATE",
+    "DAG_PRIO_MIGRATE_HIGH",
+    "DAG_PRIO_MIGRATE_MID",
+    "DAG_PRIO_SSTABLE_MAJOR_MERGE",
+    "DAG_PRIO_BACKUP",
+    "DAG_PRIO_MIGRATE_LOW",
+    "DAG_PRIO_CREATE_INDEX",
+    "DAG_PRIO_SSTABLE_SPLIT",
+    "DAG_PRIO_VALIDATE",
+  };*/
 
   // We limit the max concurrency of tasks by UpLimitType (ult for short)
   // why not simply use Priority? since several priorities may share one UpLimitType
@@ -243,18 +247,19 @@ public:
     DAG_ULT_CREATE_INDEX = 5,
     DAG_ULT_SPLIT = 6,
     DAG_ULT_BACKUP = 7,
+    /* add new item in ObIDagUpLimitTypeStr */
     DAG_ULT_MAX,
   };
-  const static common::ObString ObIDagUpLimitTypeStr[DAG_ULT_MAX]; /* = {
-     "DAG_ULT_MINI_MERGE",
-     "DAG_ULT_MINOR_MERGE",
-     "DAG_ULT_GROUP_MIGRATE",
-     "DAG_ULT_MIGRATE",
-     "DAG_ULT_MAJOR_MERGE",
-     "DAG_ULT_CREATE_INDEX",
-     "DAG_ULT_SPLIT",
-     "DAG_ULT_BACKUP"
-   };*/
+  const static char *ObIDagUpLimitTypeStr[DAG_ULT_MAX]; /* = {
+    "DAG_ULT_MINI_MERGE",
+    "DAG_ULT_MINOR_MERGE",
+    "DAG_ULT_GROUP_MIGRATE",
+    "DAG_ULT_MIGRATE",
+    "DAG_ULT_MAJOR_MERGE",
+    "DAG_ULT_CREATE_INDEX",
+    "DAG_ULT_SPLIT",
+    "DAG_ULT_BACKUP",};*/
+
   enum ObIDagType {
     DAG_TYPE_UT = 0,
     DAG_TYPE_SSTABLE_MINOR_MERGE = 1,
@@ -274,10 +279,54 @@ public:
     DAG_TYPE_SERVER_PREPROCESS = 15,
     DAG_TYPE_FAST_RECOVERY = 16,
     DAG_TYPE_VALIDATE = 17,
+    DAG_TYPE_BACKUP_BACKUPSET = 18,
+    DAG_TYPE_BACKUP_ARCHIVELOG = 19,
+    /* add new item in ObIDagTypeStr and ObIDagModuleStr*/
     DAG_TYPE_MAX,
   };
 
-  const static char* ObIDagTypeStr[DAG_TYPE_MAX];
+  const static char *ObIDagTypeStr[DAG_TYPE_MAX]; /* = {
+    "DAG_UT",
+    "DAG_MINOR_MERGE",
+    "DAG_MAJOR_MERGE",
+    "DAG_CREATE_INDEX",
+    "DAG_SSTABLE_SPLIT",
+    "DAG_UNIQUE_CHECKING",
+    "DAG_MIGRATE",
+    "DAG_MAJOR_FINISH",
+    "DAG_GROUP_MIGRATE",
+    "DAG_BUILD_INDEX",
+    "DAG_MINI_MERGE",
+    "DAG_TRANS_MERGE",
+    "DAG_RECOVERY_SPLIT",
+    "DAG_RECOVERY_RECOVER",
+    "DAG_TYPE_BACKUP",
+    "DAG_SERVER_PREPROCESS",
+    "DAG_FAST_RECOVERY",
+    "DAG_TYPE_VALIDATE",
+    "DAG_TYPE_BACKUP_BACKUPSET",
+    "DAG_TYPE_BACKUP_ARCHIVELOG",
+   };*/
+
+  const static char *ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX]; /* = {
+   "EMPTY",
+   "COMPACTION",
+   "COMPACTION",
+   "INDEX",
+   "SPLIT",
+   "OTHER",
+   "MIGRATE",
+   "COMPACTION",
+   "MIGRATE",
+   "INDEX",
+   "COMPACTION",
+   "TRANS_TABLE_MERGE",
+   "FAST_RECOVERY",
+   "FAST_RECOVERY",
+   "BACKUP",
+   "OTHER",
+   "OTHER",
+   "OTHER",};*/
 
   enum ObDagStatus {
     DAG_STATUS_INITING = 0,
@@ -316,10 +365,10 @@ public:
   {
     return type_;
   }
-  const char* get_name() const
-  {
-    return ObIDagTypeStr[type_];
-  }
+  static const char *get_dag_type_str(enum ObIDagType type);
+  static const char *get_dag_prio_str(enum ObIDagPriority prio);
+  static const char *get_dag_module_str(enum ObIDagType type);
+  static const char *get_dag_uplimit_type_str(enum ObIDagUpLimitType uplimit_type);
   bool has_set_stop()
   {
     return is_stop_;

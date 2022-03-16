@@ -108,6 +108,52 @@ int ObPhysicalRestoreTableOperator::update_restore_option(
   return ret;
 }
 
+struct ObColumnStatisticRowKey {
+  ObColumnStatisticRowKey();
+  void reset();
+  void reuse();
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(column_id));
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  int64_t partition_id_;
+  int64_t column_id_;
+};
+
+struct ObColumnStatistic {
+  ObColumnStatistic();
+  TO_STRING_KV(K_(row_key), K_(version));
+  ObColumnStatisticRowKey row_key_;
+  int64_t num_distinct_;
+  int64_t num_null_;
+  int64_t llc_bitmap_size_;
+  int64_t version_;
+  int64_t last_rebuild_version_;
+};
+
+// __all_column_statistic
+class ObColumnStatisticOperator {
+public:
+  ObColumnStatisticOperator();
+  virtual ~ObColumnStatisticOperator() = default;
+  int init(common::ObISQLClient *sql_client);
+  int update_column_statistic_version(const uint64_t tenant_id, const int64_t version);
+
+private:
+  int get_next_end_key_for_update_(
+      const uint64_t tenant_id, const ObColumnStatisticRowKey &prev_row_key, ObColumnStatisticRowKey &next_row_key);
+  int get_batch_end_key_for_update_(const uint64_t tenant_id, common::ObIArray<ObColumnStatisticRowKey> &row_key_list);
+  int batch_update_column_statistic_version_(const uint64_t tenant_id, const int64_t version,
+      const ObColumnStatisticRowKey &left_row_key, const ObColumnStatisticRowKey &right_row_key);
+  int get_column_statistic_items_(
+      const uint64_t tenant_id, const common::ObSqlString &sql, common::ObIArray<ObColumnStatistic> &stat_list);
+  int extract_stat_item_(sqlclient::ObMySQLResult *result, ObColumnStatistic &item);
+
+private:
+  bool is_inited_;
+  common::ObISQLClient *sql_client_;
+  DISALLOW_COPY_AND_ASSIGN(ObColumnStatisticOperator);
+};
+
 }  // end namespace share
 }  // end namespace oceanbase
 

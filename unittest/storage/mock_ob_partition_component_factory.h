@@ -35,13 +35,9 @@ public:
   MOCK_METHOD0(get_base_data_meta_ob_reader, ObPhysicalBaseMetaReader*());
   MOCK_METHOD0(get_macro_block_ob_reader, ObPartitionMacroBlockObReader*());
   MOCK_METHOD0(get_part_group_migration_task, ObPartGroupMigrationTask*());
-  MOCK_METHOD0(get_base_data_meta_restore_reader, ObPhysicalBaseMetaRestoreReader*());
-  MOCK_METHOD0(get_macro_block_restore_reader, ObPartitionMacroBlockRestoreReader*());
   MOCK_METHOD0(get_meta_restore_reader, ObPartitionBaseDataMetaRestoreReader*());
   MOCK_METHOD0(get_old_rpc_base_data_meta_reader, ObPartitionBaseDataMetaObReader*());
   MOCK_METHOD0(get_pg_info_reader, ObPGPartitionBaseDataMetaObReader*());
-  MOCK_METHOD0(get_pg_info_restore_reader, ObPGPartitionBaseDataMetaRestorReader*());
-  MOCK_METHOD0(get_partition_group_meta_restore_reader, ObPartitionGroupMetaRestoreReader*());
   MOCK_METHOD0(get_base_data_meta_backup_reader, ObPhysicalBaseMetaBackupReader*());
   MOCK_METHOD0(get_macro_block_backup_reader, ObPartitionMacroBlockBackupReader*());
   MOCK_METHOD0(get_meta_backup_reader, ObPartitionBaseDataMetaBackupReader*());
@@ -81,8 +77,6 @@ public:
   MOCK_METHOD1(free, void(ObPartitionBaseDataMetaObReader* reader));
   MOCK_METHOD1(free, void(ObPGPartitionBaseDataMetaObReader* reader));
   MOCK_METHOD1(free, void(ObIPGPartitionBaseDataMetaObReader* reader));
-  MOCK_METHOD1(free, void(ObPGPartitionBaseDataMetaRestorReader* reader));
-  MOCK_METHOD1(free, void(ObPartitionGroupMetaRestoreReader* reader));
   MOCK_METHOD1(free, void(ObPhysicalBaseMetaBackupReader* reader));
   MOCK_METHOD1(free, void(ObPartitionMacroBlockBackupReader* reader));
   MOCK_METHOD1(free, void(ObPartitionBaseDataMetaBackupReader* reader));

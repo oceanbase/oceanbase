@@ -126,6 +126,7 @@ private:
   char* buf_;
   int64_t size_;  // has read or to write size.
   bool is_read_;
+  bool has_wait_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
@@ -290,6 +291,7 @@ private:
   int aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& offset, ObTmpFileIOHandle& handle);
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
+  int64_t find_first_extent(const int64_t offset);
 
 private:
   // NOTE:
@@ -302,7 +304,10 @@ private:
   bool is_big_;
   uint64_t tenant_id_;
   int64_t offset_;  // read offset
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
+  int64_t last_extent_id_;
+  int64_t last_extent_min_offset_;
+  int64_t last_extent_max_offset_;
   common::SpinRWLock lock_;
   bool is_inited_;
 
@@ -351,6 +356,8 @@ public:
   int remove(const int64_t fd);
   int remove_tenant_file(const uint64_t tenant_id);
 
+  int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
+
   int sync(const int64_t fd, const int64_t timeout_ms);
 
   void destroy();
@@ -367,7 +374,7 @@ private:
         : tenant_id_(tenant_id), fd_list_(fd_list)
     {}
     ~RmTenantTmpFileOp() = default;
-    bool operator()(common::hash::HashMapPair<int64_t, ObTmpFile*>& entry)
+    int operator()(common::hash::HashMapPair<int64_t, ObTmpFile *> &entry)
     {
       int ret = OB_SUCCESS;
       ObTmpFile* tmp_file = entry.second;
@@ -379,7 +386,7 @@ private:
           STORAGE_LOG(WARN, "fd_list_ push back failed", K(ret));
         }
       }
-      return OB_SUCCESS == ret;
+      return ret;
     }
 
   private:

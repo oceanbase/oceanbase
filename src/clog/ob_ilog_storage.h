@@ -40,8 +40,7 @@ public:
   virtual void destroy();
 
 public:
-  int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
-      ObLogCache* log_cache);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache);
 
   int add_partition_needed_to_file_id_cache(
       const common::ObPartitionKey& partition_key, const uint64_t last_replay_log_id);
@@ -100,8 +99,8 @@ public:
   ~ObIlogStorage();
 
 public:
-  int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
-      ObLogCache* log_cache, storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache,
+      storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
   void destroy();
   int start();
   void stop();
@@ -112,7 +111,7 @@ public:
   // 1) OB_SUCCESS
   // 2) OB_ERR_OUT_OF_UPPER_BOUND
   // 3) OB_CURSOR_NOT_EXIST
-  // 4) OB_NEED_RETRY, query log for old version, if ilog file hasn't beed loadm, need caller retry
+  // 4) OB_NEED_RETRY, query log for old version, if ilog file hasn't been loaded, need caller retry
   int get_cursor_batch(
       const common::ObPartitionKey& partition_key, const uint64_t query_log_id, ObGetCursorResult& result);
   int get_cursor_batch_from_file(
@@ -121,7 +120,7 @@ public:
   // 1) OB_SUCCESS
   // 2) OB_ERR_OUT_OF_UPPER_BOUND
   // 3) OB_CURSOR_NOT_EXIST
-  // 4) OB_NEED_RETRY, query log for old version, if ilog file hasn't beed loadm, need caller retry
+  // 4) OB_NEED_RETRY, query log for old version, if ilog file hasn't been loaded, need caller retry
   int get_cursor(
       const common::ObPartitionKey& partition_key, const uint64_t query_log_id, ObLogCursorExt& log_cursor_ext);
   int submit_cursor(

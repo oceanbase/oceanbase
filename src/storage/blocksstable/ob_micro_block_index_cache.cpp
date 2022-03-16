@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_index_cache.h"
 #include "lib/stat/ob_diagnose_info.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "ob_store_file.h"
 #include "storage/ob_sstable.h"
 #include "storage/ob_partition_service.h"

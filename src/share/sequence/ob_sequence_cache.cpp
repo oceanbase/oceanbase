@@ -342,12 +342,11 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
           ObNumber rest;
           ObNumber full;
           ObNumberCalc calc(item->curr_node_.end(), allocator);
-          // magic value
-          static const int64_t PREFETCH_OP_THRESHOLD = 4;
+          static const int64_t PREFETCH_OP_THRESHOLD = 2;
           //
           // const int64_t rest = std::abs(item->curr_node_.end_ - item->curr_node_.start_) * PREFETCH_OP_THRESHOLD;
           // const int64_t full = std::abs(schema.get_increment_by() * schema.get_cache_size());
-          // if (rest > full) {
+          // if (rest < full) {
           //    enable prefetch
           // }
           //
@@ -355,7 +354,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
             LOG_WARN("fail do number sub", K(ret));
           } else if (OB_FAIL(schema.get_increment_by().mul(schema.get_cache_size(), full, allocator))) {
             LOG_WARN("fail do number multiply", K(ret));
-          } else if (rest.abs() > full.abs()) {
+          } else if (rest.abs() <= full.abs()) {
             item->prefetching_ = true;
             need_prefetch = true;
           }

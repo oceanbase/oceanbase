@@ -11,6 +11,8 @@ ob_lib_add_target(oblib_lib_charset
   charset/ob_ctype_utf8.c
   charset/ob_dtoa.c
   hash/xxhash.c
+  signal/safe_snprintf.c
+  signal/ob_libunwind.c
 )
 disable_pch(oblib_lib_charset)
 
@@ -21,6 +23,9 @@ ob_lib_add_target(oblib_lib_coro_context
   coro/context/asm/jump_x86_64_sysv_elf_gas.S
   coro/context/asm/make_x86_64_sysv_elf_gas.S
   coro/context/asm/ontop_x86_64_sysv_elf_gas.S
+  coro/context/asm/make_sw_64_sysv_elf_gas.S
+  coro/context/asm/jump_sw_64_sysv_elf_gas.S
+  coro/context/asm/ontop_sw_64_aapcs_elf_gas.S
 )
 disable_pch(oblib_lib_coro_context)
 
@@ -67,7 +72,6 @@ ob_set_subtarget(oblib_lib common
   allocator/ob_thread_mempool.cpp
   allocator/ob_page_manager.cpp
   alloc/block_set.cpp
-  alloc/malloc_hook.cpp
   alloc/object_set.cpp
   alloc/ob_malloc_allocator.cpp
   alloc/ob_tenant_ctx_allocator.cpp
@@ -96,6 +100,12 @@ ob_set_subtarget(oblib_lib common
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
+  json_type/ob_json_common.cpp
+  json_type/ob_json_path.cpp
+  json_type/ob_json_tree.cpp
+  json_type/ob_json_bin.cpp
+  json_type/ob_json_base.cpp
+  json_type/ob_json_parse.cpp
   lock/Cond.cpp
   lock/Mutex.cpp
   lock/ob_bucket_lock.cpp
@@ -137,6 +147,7 @@ ob_set_subtarget(oblib_lib common
   oblog/ob_log_module.ipp
   oblog/ob_trace_log.cpp
   oblog/ob_warning_buffer.cpp
+  oblog/ob_log_compressor.cpp
   ob_name_id_def.cpp
   ob_replica_define.cpp
   profile/ob_atomic_event.cpp
@@ -200,7 +211,6 @@ ob_set_subtarget(oblib_lib common
   word_segment/ob_word_segment.cpp
   encode/ob_base64_encode.cpp
   signal/ob_memory_cutter.cpp
-  signal/safe_snprintf.cpp
   signal/ob_signal_struct.cpp
   signal/ob_signal_utils.cpp
   signal/ob_signal_handlers.cpp
@@ -235,6 +245,7 @@ ob_lib_add_pchs(lib
   oblog/ob_log.h
   oblog/ob_base_log_writer.h
   oblog/ob_async_log_struct.h
+  oblog/ob_log_compressor.h
   hash/fnv_hash.h
   coro/co_var.h
   time/Time.h
@@ -316,6 +327,12 @@ ob_lib_add_pchs(lib
   profile/ob_trace_id_adaptor.h
   json/ob_yson.h
   json/ob_yson_encode.h
+  json_type/ob_json_common.h
+  json_type/ob_json_path.h
+  json_type/ob_json_tree.h
+  json_type/ob_json_bin.h
+  json_type/ob_json_base.h
+  json_type/ob_json_parse.h 
   container/ob_array_wrap.h
   trace/ob_trace_event.h
   timezone/ob_time_convert.h
@@ -472,3 +489,7 @@ ob_lib_add_pchs(lib
   hash/ob_concurrent_hash_map.h
 )
 
+add_library(malloc_hook STATIC
+  alloc/malloc_hook.cpp
+  alloc/malloc_hook.h)
+target_link_libraries(malloc_hook oblib_base)

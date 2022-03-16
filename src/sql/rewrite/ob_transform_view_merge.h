@@ -100,6 +100,8 @@ private:
   int transform_generated_table(ObDMLStmt* parent_stmt, TableItem* table_item, bool& trans_happened);
   int transform_in_from_item(ObDMLStmt* stmt, bool& trans_happened);
   int transform_in_semi_info(ObDMLStmt* stmt, bool& trans_happened);
+
+  int check_outerjoin_condition_contain_subq(JoinedTable* joined_table, bool &contains_subq);
   bool for_post_process_;
   DISALLOW_COPY_AND_ASSIGN(ObTransformViewMerge);
 };

@@ -21,34 +21,49 @@ namespace oceanbase {
 namespace archive {
 //======================== public functions ==========================//
 
-int ObArchivePathUtil::build_base_path(const char* root_path, const char* cluster_name, const int64_t cluster_id,
-    const uint64_t tenant_id, const int64_t incarnantion, const int64_t archive_round, const int64_t path_buf_len,
-    char* base_path)
+int ObArchivePathUtil::build_base_path(const share::ObBackupDest& backup_dest, const char* cluster_name,
+    const int64_t cluster_id, const uint64_t tenant_id, const int64_t incarnantion, const int64_t archive_round,
+    const int64_t piece_id, const int64_t piece_create_date, const int64_t path_buf_len, char* base_path)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   ObClusterBackupDest dest;
   ObBackupPath path;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = {0};
 
-  if (OB_ISNULL(root_path) || OB_ISNULL(cluster_name) || OB_UNLIKELY(0 >= cluster_id) ||
+  if (!backup_dest.is_valid() || OB_ISNULL(cluster_name) || OB_UNLIKELY(0 >= cluster_id) ||
       OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= incarnantion) ||
-      OB_UNLIKELY(0 >= archive_round) || OB_UNLIKELY(0 >= path_buf_len) || OB_ISNULL(base_path)) {
+      OB_UNLIKELY(0 >= archive_round) || OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date)) ||
+      OB_UNLIKELY(0 >= path_buf_len) || OB_ISNULL(base_path)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN,
         "invalid argument",
         K(ret),
-        K(root_path),
+        K(backup_dest),
         K(cluster_name),
         K(cluster_id),
         K(tenant_id),
         K(incarnantion),
         K(archive_round),
+        K(piece_id),
+        K(piece_create_date),
         K(path_buf_len),
         K(base_path));
-  } else if (OB_FAIL(dest.set(root_path, cluster_name, cluster_id, incarnantion))) {
-    ARCHIVE_LOG(WARN, "dest set fail", KR(ret), K(root_path), K(cluster_name), K(cluster_id), K(incarnantion));
-  } else if (OB_FAIL(ObBackupPathUtil::get_cluster_clog_prefix_path(dest, tenant_id, archive_round, path))) {
-    ARCHIVE_LOG(WARN, "get_cluster_clog_prefix_path fail", KR(ret), K(dest), K(path));
+  } else if (OB_FAIL(backup_dest.get_backup_dest_str(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+    ARCHIVE_LOG(WARN, "failed to get backup dest str", KR(ret), K(backup_dest));
+  } else if (OB_FAIL(dest.set(backup_dest_str, cluster_name, cluster_id, incarnantion))) {
+    ARCHIVE_LOG(WARN, "dest set fail", KR(ret), K(backup_dest), K(cluster_name), K(cluster_id), K(incarnantion));
+  } else if (OB_FAIL(ObBackupPathUtil::get_cluster_clog_prefix_path(
+                 dest, tenant_id, archive_round, piece_id, piece_create_date, path))) {
+    ARCHIVE_LOG(WARN,
+        "get_cluster_clog_prefix_path fail",
+        KR(ret),
+        K(dest),
+        K(tenant_id),
+        K(archive_round),
+        K(piece_id),
+        K(piece_create_date),
+        K(path));
   } else if (OB_FAIL(databuff_printf(
                  base_path, path_buf_len, pos, "%.*s", static_cast<int32_t>(path.length()), path.get_ptr()))) {
     ARCHIVE_LOG(WARN,
@@ -57,11 +72,13 @@ int ObArchivePathUtil::build_base_path(const char* root_path, const char* cluste
         K(base_path),
         K(path),
         K(cluster_name),
-        K(root_path),
+        K(backup_dest),
         K(cluster_id),
         K(tenant_id),
         K(incarnantion),
-        K(archive_round));
+        K(archive_round),
+        K(piece_id),
+        K(piece_create_date));
   } else {
     ARCHIVE_LOG(DEBUG, "build_base_path succ", K(base_path));
   }
@@ -132,13 +149,15 @@ int ObArchivePathUtil::build_file_path(const ObPGKey& pg_key, const char* base_p
 }
 
 int ObArchivePathUtil::build_archive_file_prefix(const ObPGKey& pg_key, const LogArchiveFileType file_type,
-    const int64_t incarnation, const int64_t round, const int64_t path_buf_len, char* dest_path)
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const int64_t piece_create_date,
+    const int64_t path_buf_len, char* dest_path)
 {
   int ret = OB_SUCCESS;
   int64_t unused_pos = 0;
 
   if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(0 >= incarnation) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 >= path_buf_len) || OB_ISNULL(dest_path) || OB_UNLIKELY(!is_valid_file_type(file_type))) {
+      OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date)) || OB_UNLIKELY(0 >= path_buf_len) ||
+      OB_ISNULL(dest_path) || OB_UNLIKELY(!is_valid_file_type(file_type))) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN,
         "invalid argument",
@@ -147,18 +166,36 @@ int ObArchivePathUtil::build_archive_file_prefix(const ObPGKey& pg_key, const Lo
         K(file_type),
         K(incarnation),
         K(round),
+        K(piece_id),
+        K(piece_create_date),
         K(path_buf_len),
         K(dest_path));
-  } else if (OB_FAIL(build_archive_file_prefix_(
-                 pg_key, file_type, incarnation, round, path_buf_len, dest_path, unused_pos))) {
-    ARCHIVE_LOG(WARN, "build_archive_file_prefix_ fail", KR(ret), K(file_type), K(incarnation), K(round));
+  } else if (OB_FAIL(build_archive_file_prefix_(pg_key,
+                 file_type,
+                 incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 path_buf_len,
+                 dest_path,
+                 unused_pos))) {
+    ARCHIVE_LOG(WARN,
+        "build_archive_file_prefix_ fail",
+        K(ret),
+        K(pg_key),
+        K(file_type),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
+  } else { /*do nothing*/
   }
-
   return ret;
 }
 
 int ObArchivePathUtil::build_archive_file_prefix_(const ObPGKey& pg_key, const LogArchiveFileType file_type,
-    const int64_t incarnation, const int64_t round, const int64_t path_buf_len, char* dest_path, int64_t& pos)
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const int64_t piece_create_date,
+    const int64_t path_buf_len, char* dest_path, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   char base_path[OB_MAX_BACKUP_PATH_LENGTH];
@@ -167,6 +204,7 @@ int ObArchivePathUtil::build_archive_file_prefix_(const ObPGKey& pg_key, const L
   const char* cluster_name = GCTX.config_->cluster;
   const uint64_t tenant_id = pg_key.get_tenant_id();
   ObLogArchiveBackupInfo info;
+  ObBackupDest backup_dest;
 
   if (OB_ISNULL(dest_path)) {
     ret = OB_ERR_UNEXPECTED;
@@ -178,32 +216,45 @@ int ObArchivePathUtil::build_archive_file_prefix_(const ObPGKey& pg_key, const L
     ARCHIVE_LOG(WARN, "ObLogArchiveBackupInfo is not valid", KR(ret), K(pg_key), K(info));
   } else if (incarnation != info.status_.incarnation_ || round != info.status_.round_) {
     ret = OB_BACKUP_INFO_NOT_MATCH;
-    ARCHIVE_LOG(WARN, "work in different incarnation or round, wait to stop");
-  } else if (OB_FAIL(build_base_path(info.backup_dest_,
+    ARCHIVE_LOG(WARN, "work in different incarnation or round, wait to stop", K(incarnation), K(round), K(info));
+  } else if (OB_FAIL(backup_dest.set(info.backup_dest_))) {
+    ARCHIVE_LOG(WARN, "failed to set backup dest", K(ret), K(info));
+  } else if (OB_FAIL(build_base_path(backup_dest,
                  cluster_name,
                  cluster_id,
                  tenant_id,
                  info.status_.incarnation_,
                  info.status_.round_,
+                 piece_id,
+                 piece_create_date,
                  path_buf_len,
                  base_path))) {
-    ARCHIVE_LOG(WARN, "build_base_path fail", KR(ret), K(pg_key));
+    ARCHIVE_LOG(WARN, "build_base_path fail", KR(ret), K(pg_key), K(info), K(piece_id), K(piece_create_date));
   } else if (OB_FAIL(build_file_prefix_(pg_key, base_path, file_type, path_buf_len, dest_path, pos))) {
-    ARCHIVE_LOG(WARN, "build_file_prefix_ fail", KR(ret), K(pg_key), K(file_type), K(pos));
+    ARCHIVE_LOG(WARN,
+        "build_file_prefix_ fail",
+        KR(ret),
+        K(pg_key),
+        K(info),
+        K(piece_id),
+        K(piece_create_date),
+        K(file_type),
+        K(pos));
   }
 
   return ret;
 }
 
 int ObArchivePathUtil::build_archive_file_path(const ObPGKey& pg_key, const LogArchiveFileType file_type,
-    const uint64_t file_id, const int64_t incarnation, const int64_t round, const int64_t path_buf_len, char* dest_path)
+    const uint64_t file_id, const int64_t incarnation, const int64_t round, const int64_t piece_id,
+    const int64_t piece_create_date, const int64_t path_buf_len, char* dest_path)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
 
   if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_FILE_ID == file_id) || OB_UNLIKELY(0 >= incarnation) ||
-      OB_UNLIKELY(0 >= round) || OB_UNLIKELY(0 >= path_buf_len) || OB_ISNULL(dest_path) ||
-      OB_UNLIKELY(!is_valid_file_type(file_type))) {
+      OB_UNLIKELY(0 >= round) || OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date)) ||
+      OB_UNLIKELY(0 >= path_buf_len) || OB_ISNULL(dest_path) || OB_UNLIKELY(!is_valid_file_type(file_type))) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN,
         "invalid argument",
@@ -212,10 +263,20 @@ int ObArchivePathUtil::build_archive_file_path(const ObPGKey& pg_key, const LogA
         K(file_type),
         K(incarnation),
         K(round),
+        K(piece_id),
+        K(piece_create_date),
         K(path_buf_len),
         K(dest_path));
-  } else if (OB_FAIL(build_archive_file_prefix_(pg_key, file_type, incarnation, round, path_buf_len, dest_path, pos))) {
-    ARCHIVE_LOG(WARN, "build_archive_file_prefix_ fail", KR(ret), K(file_type), K(incarnation), K(round));
+  } else if (OB_FAIL(build_archive_file_prefix_(
+                 pg_key, file_type, incarnation, round, piece_id, piece_create_date, path_buf_len, dest_path, pos))) {
+    ARCHIVE_LOG(WARN,
+        "build_archive_file_prefix_ fail",
+        KR(ret),
+        K(file_type),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
   } else if (OB_FAIL(databuff_printf(dest_path, path_buf_len, pos, "/%lu", file_id))) {
     ARCHIVE_LOG(WARN, "build archive file path fail", KR(ret), K(pg_key), K(file_type), K(file_id));
   }
@@ -247,15 +308,16 @@ const char* ObArchivePathUtil::get_file_prefix_with_type_(const LogArchiveFileTy
   return prefix;
 }
 
-int ObArchivePathUtil::build_archive_key_prefix(const int64_t incarnation, const int64_t round,
-    const uint64_t tenant_id, const int64_t path_buf_len, char* path, const int64_t storage_info_len, char* info)
+int ObArchivePathUtil::build_archive_key_prefix(const int64_t incarnation, const int64_t round, const int64_t piece_id,
+    const int64_t piece_create_date, const uint64_t tenant_id, const int64_t path_buf_len, char* path,
+    const int64_t storage_info_len, char* info)
 {
   int ret = OB_SUCCESS;
   int64_t unused_pos = 0;
 
   if (OB_ISNULL(path) || OB_ISNULL(info) || OB_UNLIKELY(0 >= incarnation) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(0 >= path_buf_len) || OB_UNLIKELY(0 >= storage_info_len) ||
-      OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+      OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date)) || OB_UNLIKELY(0 >= path_buf_len) ||
+      OB_UNLIKELY(0 >= storage_info_len) || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN,
         "invalid argument",
@@ -264,11 +326,21 @@ int ObArchivePathUtil::build_archive_key_prefix(const int64_t incarnation, const
         K(info),
         K(incarnation),
         K(round),
+        K(piece_id),
+        K(piece_create_date),
         K(path_buf_len),
         K(storage_info_len),
         K(tenant_id));
-  } else if (OB_FAIL(build_archive_key_prefix_(
-                 incarnation, round, tenant_id, path_buf_len, path, unused_pos, storage_info_len, info))) {
+  } else if (OB_FAIL(build_archive_key_prefix_(incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 tenant_id,
+                 path_buf_len,
+                 path,
+                 unused_pos,
+                 storage_info_len,
+                 info))) {
     ARCHIVE_LOG(WARN, "build_archive_key_prefix_ fail", KR(ret), K(incarnation), K(round));
   } else {
     ARCHIVE_LOG(INFO, "build_archive_key_prefix succ", K(incarnation), K(round), K(path), K(info));
@@ -277,8 +349,33 @@ int ObArchivePathUtil::build_archive_key_prefix(const int64_t incarnation, const
   return ret;
 }
 
+int ObArchivePathUtil::build_archive_key_path(
+    const ObPGKey& pkey, const char* base_path, const int64_t path_len, char* path)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const uint64_t table_id = pkey.get_table_id();
+  const int64_t partition_id = pkey.get_partition_id();
+  if (OB_UNLIKELY(!pkey.is_valid()) || OB_ISNULL(base_path) || OB_ISNULL(path) || OB_UNLIKELY(0 >= path_len)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(databuff_printf(path,
+                 path_len,
+                 pos,
+                 "%s/%s/%lu_%ld",
+                 base_path,
+                 OB_STRING_BACKUP_ARCHIVE_KEY,
+                 table_id,
+                 partition_id))) {
+    ARCHIVE_LOG(WARN, "databuff_printf fail", KR(ret), K(pkey), K(path), K(pos));
+  } else {
+    ARCHIVE_LOG(INFO, "build_archive_key_path succ", K(pkey), K(path));
+  }
+  return ret;
+}
+
 int ObArchivePathUtil::build_archive_key_path(const ObPGKey& pkey, const int64_t incarnation, const int64_t round,
-    const int64_t path_buf_len, char* path, const int64_t storage_info_len, char* info)
+    const int64_t piece_id, const int64_t piece_create_date, const int64_t path_buf_len, char* path,
+    const int64_t storage_info_len, char* info)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -287,6 +384,7 @@ int ObArchivePathUtil::build_archive_key_path(const ObPGKey& pkey, const int64_t
   const int64_t partition_id = pkey.get_partition_id();
 
   if (OB_ISNULL(path) || OB_ISNULL(info) || OB_UNLIKELY(0 >= incarnation) || OB_UNLIKELY(0 >= round) ||
+      OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date)) ||
       OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(0 >= path_buf_len) ||
       OB_UNLIKELY(0 >= storage_info_len)) {
     ret = OB_INVALID_ARGUMENT;
@@ -297,11 +395,21 @@ int ObArchivePathUtil::build_archive_key_path(const ObPGKey& pkey, const int64_t
         K(info),
         K(incarnation),
         K(round),
+        K(piece_id),
+        K(piece_create_date),
         K(path_buf_len),
         K(storage_info_len),
         K(tenant_id));
-  } else if (OB_FAIL(build_archive_key_prefix_(
-                 incarnation, round, tenant_id, path_buf_len, path, pos, storage_info_len, info))) {
+  } else if (OB_FAIL(build_archive_key_prefix_(incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 tenant_id,
+                 path_buf_len,
+                 path,
+                 pos,
+                 storage_info_len,
+                 info))) {
     ARCHIVE_LOG(WARN, "build_archive_key_prefix_ fail", KR(ret), K(incarnation), K(round), K(pkey));
   } else if (OB_FAIL(databuff_printf(path, path_buf_len, pos, "/%lu_%ld", table_id, partition_id))) {
     ARCHIVE_LOG(WARN, "databuff_printf fail", KR(ret), K(pkey), K(path), K(pos));
@@ -312,9 +420,9 @@ int ObArchivePathUtil::build_archive_key_path(const ObPGKey& pkey, const int64_t
   return ret;
 }
 
-int ObArchivePathUtil::build_archive_key_prefix_(const int64_t incarnation, const int64_t round,
-    const uint64_t tenant_id, const int64_t path_buf_len, char* dest_path, int64_t& pos, const int64_t storage_info_len,
-    char* storage_info)
+int ObArchivePathUtil::build_archive_key_prefix_(const int64_t incarnation, const int64_t round, const int64_t piece_id,
+    const int64_t piece_create_date, const uint64_t tenant_id, const int64_t path_buf_len, char* dest_path,
+    int64_t& pos, const int64_t storage_info_len, char* storage_info)
 {
   int ret = OB_SUCCESS;
 
@@ -334,13 +442,21 @@ int ObArchivePathUtil::build_archive_key_prefix_(const int64_t incarnation, cons
     ARCHIVE_LOG(WARN, "ObLogArchiveBackupInfo is not valid", KR(ret), K(info));
   } else if (incarnation != info.status_.incarnation_ || round != info.status_.round_) {
     ret = OB_BACKUP_INFO_NOT_MATCH;
-    ARCHIVE_LOG(WARN, "work in different incarnation or round, wait to stop");
+    ARCHIVE_LOG(WARN, "work in different incarnation or round, wait to stop", K(ret), K(info), K(piece_id));
   } else if (OB_FAIL(dest.set(info.backup_dest_, cluster_name, cluster_id, info.status_.incarnation_))) {
     ARCHIVE_LOG(WARN, "ObBackupDest set fail", KR(ret), K(info), K(cluster_name), K(cluster_id));
-  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_prefix(dest, tenant_id, round, path))) {
-    ARCHIVE_LOG(WARN, "get_clog_archive_key_prefix fail", KR(ret), K(incarnation), K(round), K(info));
+  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_prefix(
+                 dest, tenant_id, round, piece_id, piece_create_date, path))) {
+    ARCHIVE_LOG(WARN,
+        "get_clog_archive_key_prefix fail",
+        KR(ret),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date),
+        K(info));
   } else if (OB_FAIL(databuff_printf(dest_path, path_buf_len, pos, "%s", path.get_ptr()))) {
-    ARCHIVE_LOG(WARN, "databuff_printf fail", KR(ret), K(incarnation), K(round), K(tenant_id));
+    ARCHIVE_LOG(WARN, "databuff_printf fail", KR(ret), K(incarnation), K(round), K(piece_id), K(tenant_id));
   } else {
     strncpy(storage_info, dest.dest_.storage_info_, storage_info_len);
   }

@@ -278,6 +278,7 @@ int ObTableReplaceOp::do_replace(ObSQLSessionInfo& my_session, const ObPartition
     int64_t cur_affected = 0;
     ObNewRow old_del_row;
     while (OB_SUCC(ret) && OB_SUCC(scan_res->get_next_row())) {
+      clear_evaluated_flag();
       if (OB_FAIL(ForeignKeyHandle::do_handle_old_row(*this, MY_SPEC.get_fk_args(), MY_SPEC.table_column_exprs_))) {
         LOG_WARN("handle foreign key failed", K(ret), K(MY_SPEC.table_column_exprs_));
       } else if (OB_FAIL(project_row(
@@ -447,9 +448,10 @@ int ObTableReplaceOp::check_values(bool& is_equal) const
         MY_SPEC.table_column_exprs_.at(i)->basic_funcs_->null_first_cmp_);
 
     if (schema::ObColumnSchemaV2::is_hidden_pk_column_id(MY_SPEC.column_ids_[i])) {
-    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum) ||
-                       OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum)))) {
-      LOG_WARN("eval expr failed", K(ret));
+    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum))) {
+      LOG_WARN("fail to eval insert when replace", K(ret));
+    } else if (OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum))) {
+      LOG_WARN("fail to eval delete when replace", K(ret));
     } else if (0 != MY_SPEC.output_.at(i)->basic_funcs_->null_first_cmp_(*insert_datum, *del_datum)) {
       is_equal = false;
     }

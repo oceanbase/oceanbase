@@ -23,7 +23,7 @@ using namespace common;
 namespace sql {
 
 ObDistinctSpec::ObDistinctSpec(ObIAllocator& alloc, const ObPhyOperatorType type)
-    : ObOpSpec(alloc, type), distinct_exprs_(), cmp_funcs_(alloc), is_block_mode_(false)
+    : ObOpSpec(alloc, type), distinct_exprs_(alloc), cmp_funcs_(alloc), is_block_mode_(false)
 {}
 
 OB_SERIALIZE_MEMBER((ObDistinctSpec, ObOpSpec), distinct_exprs_, cmp_funcs_, is_block_mode_);

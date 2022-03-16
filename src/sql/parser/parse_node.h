@@ -120,7 +120,8 @@ typedef struct _ParseNode {
     uint16_t is_assigned_from_child_ : 1;
     uint16_t is_num_must_be_pos_ : 1;
     uint16_t is_date_unit_ : 1;
-    uint16_t reserved_ : 3;
+    uint16_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
+    uint16_t reserved_ : 2;
   };
   union {
     int64_t value_;
@@ -249,6 +250,8 @@ typedef struct {
   const struct ObCharsetInfo* charset_info_;
   int last_well_formed_len_;
   bool may_bool_value_;  // used for true/false in sql parser
+  int connection_collation_;       // connection collation
+  bool mysql_compatible_comment_;  // whether the parser is parsing "/*! xxxx */"
 
 #ifdef SQL_PARSER_COMPILATION
   TokenPosInfo* comment_list_;

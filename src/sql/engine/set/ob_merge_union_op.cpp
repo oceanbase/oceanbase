@@ -282,9 +282,13 @@ int ObMergeUnionOp::inner_get_next_row()
   if (OB_ISNULL(get_next_row_func_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get_next_row_func is NULL", K(ret));
+  } else if (iter_end_) {
+    ret = OB_ITER_END;
   } else if (OB_FAIL((this->*get_next_row_func_)())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row failed", K(ret));
+    } else {
+      iter_end_ = true;
     }
   }
   return ret;

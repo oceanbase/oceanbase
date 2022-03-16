@@ -81,6 +81,8 @@
 #include "rootserver/ob_single_partition_balance.h"
 #include "rootserver/backup/ob_backup_lease_service.h"
 #include "rootserver/ob_restore_point_service.h"
+#include "rootserver/backup/ob_backup_archive_log_scheduler.h"
+#include "rootserver/backup/ob_backup_backupset.h"
 
 namespace oceanbase {
 
@@ -903,6 +905,12 @@ public:
     root_validate_.wakeup();
     return do_receive_batch_balance_over(task, res);
   }
+  int receive_batch_balance_over(const obrpc::ObBackupBackupsetBatchRes& res)
+  {
+    ObBackupBackupsetTask task;
+    backup_backupset_.wakeup();
+    return do_receive_batch_balance_over(task, res);
+  }
 
   int observer_copy_local_index_sstable(const obrpc::ObServerCopyLocalIndexSSTableArg& arg);
 
@@ -956,6 +964,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg& arg);
   int drop_index(const obrpc::ObDropIndexArg& arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObAlterTableRes& res);
+  int submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskArg &arg);
   // the interface only for switchover: execute skip check enable_ddl
   int force_drop_index(const obrpc::ObDropIndexArg& arg);
   int flashback_index(const obrpc::ObFlashBackIndexArg& arg);
@@ -968,7 +977,6 @@ public:
   int update_index_status(const obrpc::ObUpdateIndexStatusArg& arg);
   int purge_table(const obrpc::ObPurgeTableArg& arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg& arg);
-  int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg);
   int purge_database(const obrpc::ObPurgeDatabaseArg& arg);
   int flashback_database(const obrpc::ObFlashBackDatabaseArg& arg);
   int check_tenant_in_alter_locality(const uint64_t tenant_id, bool& in_alter_locality);
@@ -1113,6 +1121,7 @@ public:
   int set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg);
   // arg is readonly after take effect
   int set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg);
+  int wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item);
 
   // @see ObReplicaControlCleanTask
   int submit_replica_control_clean_task();
@@ -1158,16 +1167,15 @@ public:
   int logical_restore_partitions(const obrpc::ObRestorePartitionsArg& arg);
 
   int check_is_log_sync(bool& is_log_sync, const common::ObIArray<common::ObAddr>& stop_server);
+  int generate_log_in_sync_sql(const common::ObIArray<common::ObAddr> &dest_server_array, common::ObSqlString &sql);
   int generate_stop_server_log_in_sync_dest_server_array(const common::ObIArray<common::ObAddr>& alive_server_array,
       const common::ObIArray<common::ObAddr>& excluded_server_array,
       common::ObIArray<common::ObAddr>& dest_server_array);
-  int generate_log_in_sync_dest_server_buff(common::ObIAllocator& allocator,
-      const common::ObIArray<common::ObAddr>& dest_server_array, common::ObString& dest_server_buff);
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg& arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg& arg);
   int check_other_rs_exist(bool& is_other_rs_exist);
   ObRsGtsManager& get_rs_gts_manager()
-  {
+    {
     return rs_gts_manager_;
   }
   ObFreezeInfoManager& get_freeze_manager()
@@ -1193,6 +1201,10 @@ public:
   int handle_validate_database(const obrpc::ObBackupManageArg& arg);
   int handle_validate_backupset(const obrpc::ObBackupManageArg& arg);
   int handle_cancel_validate(const obrpc::ObBackupManageArg& arg);
+  int handle_backup_archive_log(const obrpc::ObBackupArchiveLogArg& arg);
+  int handle_backup_backupset(const obrpc::ObBackupBackupsetArg& arg);
+  int handle_backup_backuppiece(const obrpc::ObBackupBackupPieceArg& arg);
+  int handle_backup_archive_log_batch_res(const obrpc::ObBackupArchiveLogBatchRes& arg);
   int update_table_schema_version(const obrpc::ObUpdateTableSchemaVersionArg& arg);
   int modify_schema_in_restore(const obrpc::ObRestoreModifySchemaArg& arg);
   int check_backup_scheduler_working(obrpc::Bool& is_working);
@@ -1283,7 +1295,11 @@ private:
   {
     return lhs < tenant_id;
   }
-  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg& arg);
+  int handle_backup_delete_backup_data(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
+  int wait_refresh_config();
 
 private:
   bool is_sys_tenant(const common::ObString& tenant_name);
@@ -1454,8 +1470,10 @@ private:
   ObBackupAutoDeleteExpiredData backup_auto_delete_;
   ObReloadUnitReplicaCounterTask reload_unit_replica_counter_task_;
   ObSinglePartBalance single_part_balance_;
-  ObBackupLeaseService backup_lease_service_;
   ObRestorePointService restore_point_service_;
+  ObBackupArchiveLogScheduler backup_archive_log_;
+  ObBackupBackupset backup_backupset_;
+  ObBackupLeaseService backup_lease_service_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);

@@ -114,15 +114,15 @@ public:
   {
     object_id_ = object_id;
   }
-  int set_ins_col_ids(ObSEArray<uint64_t, 4> col_ids)
+  int set_ins_col_ids(ObSEArray<uint64_t, 4> &col_ids)
   {
     return ins_col_ids_.assign(col_ids);
   }
-  int set_upd_col_ids(ObSEArray<uint64_t, 4> col_ids)
+  int set_upd_col_ids(ObSEArray<uint64_t, 4> &col_ids)
   {
     return upd_col_ids_.assign(col_ids);
   }
-  int set_ref_col_ids(ObSEArray<uint64_t, 4> col_ids)
+  int set_ref_col_ids(ObSEArray<uint64_t, 4> &col_ids)
   {
     return ref_col_ids_.assign(col_ids);
   }

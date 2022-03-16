@@ -104,11 +104,14 @@ int ObPlXaStartExecutor::execute(ObExecContext& ctx, ObXaStartStmt& stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret), K(plan_ctx), K(my_session));
     ret = OB_TRANS_XA_RMFAIL;
+  } else if (!stmt.is_valid_oracle_xid()) {
+    ret = OB_TRANS_XA_INVAL;
+    LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
   } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_OUTSIDE;
-    LOG_WARN("already start trans", K(ret), K(stmt.get_xa_string()));
+    LOG_WARN("already start trans", K(ret), K(stmt.get_xa_string()), K(trans_desc));
   } else {
     transaction::ObStartTransParam& start_trans_param = plan_ctx->get_start_trans_param();
     init_start_trans_param(my_session, task_exec_ctx, start_trans_param);
@@ -183,6 +186,9 @@ int ObPlXaEndExecutor::execute(ObExecContext& ctx, ObXaEndStmt& stmt)
   if (OB_ISNULL(my_session) || OB_ISNULL(ps = task_exec_ctx.get_partition_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret), K(my_session));
+  } else if (!stmt.is_valid_oracle_xid()) {
+    ret = OB_TRANS_XA_INVAL;
+    LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
   } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (!my_session->get_in_transaction()) {
@@ -257,6 +263,9 @@ int ObPlXaPrepareExecutor::execute(ObExecContext& ctx, ObXaPrepareStmt& stmt)
   if (OB_ISNULL(my_session) || OB_ISNULL(plan_ctx) || OB_ISNULL(ps = task_exec_ctx.get_partition_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid param", K(ret), K(my_session), K(plan_ctx), K(ps));
+  } else if (!stmt.is_valid_oracle_xid()) {
+    ret = OB_TRANS_XA_INVAL;
+    LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
   } else if (OB_FAIL(xid.set(stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (my_session->get_in_transaction()) {
@@ -321,6 +330,31 @@ int ObXaEndTransExecutor::execute_(const ObString& xid, const bool is_rollback, 
   */
 }
 
+int ObPlXaEndTransExecutor::execute(ObExecContext& ctx, ObXaCommitStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  if (!stmt.is_valid_oracle_xid()) {
+    ret = OB_TRANS_XA_INVAL;
+    LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
+  } else {
+    ret =
+        execute_(stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id(), false, stmt.get_flags(), ctx);
+  }
+  return ret;
+}
+
+int ObPlXaEndTransExecutor::execute(ObExecContext& ctx, ObXaRollBackStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  if (!stmt.is_valid_oracle_xid()) {
+    ret = OB_TRANS_XA_INVAL;
+    LOG_WARN("invalid xid for oracle mode", K(ret), K(stmt));
+  } else {
+    ret = execute_(stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id(), true, stmt.get_flags(), ctx);
+  }
+  return ret;
+}
+
 int ObPlXaEndTransExecutor::execute_(const ObString& gtrid_str, const ObString& bqual_str, const int64_t format_id,
     const bool is_rollback, const int64_t flags, ObExecContext& ctx)
 {
@@ -331,6 +365,7 @@ int ObPlXaEndTransExecutor::execute_(const ObString& gtrid_str, const ObString& 
   ObTransDesc& trans_desc = my_session->get_trans_desc();
   storage::ObPartitionService* ps = nullptr;
   ObXATransID xid;
+  bool access_temp_table = false;
 
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(my_session) || OB_ISNULL(ps = task_exec_ctx.get_partition_service())) {
     ret = OB_ERR_UNEXPECTED;
@@ -345,10 +380,16 @@ int ObPlXaEndTransExecutor::execute_(const ObString& gtrid_str, const ObString& 
     init_start_trans_param(my_session, task_exec_ctx, start_trans_param);
     if (OB_FAIL(ObSqlTransControl::explicit_start_trans(ctx, start_trans_param))) {
       LOG_WARN("explicit start trans failed", K(ret), K(start_trans_param));
-    } else if (OB_FAIL(ps->xa_end_trans(xid, is_rollback, flags, trans_desc))) {
+    } else if (OB_FAIL(ps->xa_end_trans(xid, is_rollback, flags, trans_desc, access_temp_table))) {
       LOG_WARN("fail to execute xa commit/rollback", K(xid), K(is_rollback));
     } else {
       LOG_DEBUG("succeed to execute xa commit/rollback", K(xid), K(is_rollback));
+    }
+    if (!is_rollback && access_temp_table) {
+      int temp_ret = my_session->drop_temp_tables(false, true /*is_xa_trans*/);
+      if (OB_SUCCESS != temp_ret) {
+        LOG_WARN("trx level temporary table clean failed", KR(temp_ret));
+      }
     }
     my_session->reset_first_stmt_type();
     my_session->reset_tx_variable();

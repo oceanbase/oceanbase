@@ -569,6 +569,8 @@ all_user_def = dict(
       ('priv_alter_system', 'int', 'false', '0'),
       ('priv_create_resource_pool', 'int', 'false', '0'),
       ('priv_create_resource_unit', 'int', 'false', '0'),
+      ('max_connections', 'int', 'false', '0'),
+      ('max_user_connections', 'int', 'false', '0'),
     ],
 
     migrate_data_before_2200 = True,
@@ -3279,7 +3281,7 @@ def_table_schema(**gen_history_table_def(263, all_objauth_def))
 
 
 # __all_tenant_backup_info
-all_backup_info_def = dict(
+all_tenant_backup_info_def = dict(
   table_name    = '__all_tenant_backup_info',
   table_id      = '264',
   table_type = 'SYSTEM_TABLE',
@@ -3298,7 +3300,7 @@ all_backup_info_def = dict(
   ],
   columns_with_tenant_id = [],
 )
-def_table_schema(**all_backup_info_def)
+def_table_schema(**all_tenant_backup_info_def)
 
 # __all_restore_info
 all_restore_info_def = dict(
@@ -3313,7 +3315,7 @@ all_restore_info_def = dict(
   rs_restart_related = False,
 
   normal_columns = [
-    ('value', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+    ('value', 'longtext'),
   ],
   columns_with_tenant_id = [],
 )
@@ -3378,6 +3380,8 @@ all_backup_log_archive_status_def = dict(
     ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
     ('is_mark_deleted', 'bool', 'true'),
     ('compatible', 'int', 'false', '0'),
+    ('start_piece_id', 'int', 'false', '0'),
+    ('backup_piece_id', 'int', 'false', '0'),
   ],
   columns_with_tenant_id = [],
 )
@@ -3427,6 +3431,8 @@ all_tenant_backup_task_def = dict(
     ('finish_partition_count', 'int', 'true'),
     ('encryption_mode', 'varchar:OB_MAX_ENCRYPTION_MODE_LENGTH', 'false', 'None'),
     ('passwd', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
   ],
   columns_with_tenant_id = [],
 )
@@ -3477,6 +3483,8 @@ all_backup_task_history_def = dict(
     ('is_mark_deleted', 'bool', 'true'),
     ('encryption_mode', 'varchar:OB_MAX_ENCRYPTION_MODE_LENGTH', 'false', 'None'),
     ('passwd', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
   ],
   columns_with_tenant_id = [],
 )
@@ -3697,6 +3705,8 @@ all_backup_task_clean_history_def = dict(
     ('partition_count', 'int'),
     ('finish_partition_count', 'int'),
     ('copy_id', 'int'),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
   ],
   columns_with_tenant_id = [],
 )
@@ -3730,7 +3740,10 @@ def_table_schema(
       ('backup_cluster_id', 'int', 'false', '-1'),
       ('backup_cluster_name', 'varchar:OB_MAX_CLUSTER_NAME_LENGTH', 'false', ''),
       ('backup_tenant_id', 'int', 'false', '-1'),
-      ('backup_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false', '')
+      ('backup_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false', ''),
+      ('white_list', 'longtext', 'true'),
+      ('backup_set_list', 'longtext', 'true'),
+      ('backup_piece_list', 'longtext', 'true')
   ],
 )
 
@@ -3765,7 +3778,10 @@ def_table_schema(
       ('backup_cluster_id', 'int', 'false', '-1'),
       ('backup_cluster_name', 'varchar:OB_MAX_CLUSTER_NAME_LENGTH', 'false', ''),
       ('backup_tenant_id', 'int', 'false', '-1'),
-      ('backup_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false', '')
+      ('backup_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false', ''),
+      ('white_list', 'longtext', 'true'),
+      ('backup_set_list', 'longtext', 'true'),
+      ('backup_piece_list', 'longtext', 'true')
   ],
 )
 
@@ -4176,6 +4192,10 @@ all_backup_backupset_job_def = dict(
     ('backup_backupset_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH'),
     ('tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE'),
     ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('max_backup_times', 'int'),
+    ('result', 'int'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
   ],
   columns_with_tenant_id = [],
 )
@@ -4201,6 +4221,10 @@ all_backup_backupset_job_history_def = dict(
     ('backup_backupset_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH'),
     ('tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE'),
     ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('max_backup_times', 'int'),
+    ('result', 'int'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
   ],
   columns_with_tenant_id = [],
 )
@@ -4252,10 +4276,13 @@ all_tenant_backup_backupset_task_def = dict(
     ('result', 'int'),
     ('encryption_mode', 'varchar:OB_MAX_ENCRYPTION_MODE_LENGTH', 'false', 'None'),
     ('passwd', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
   ],
   columns_with_tenant_id = [],
 )
 def_table_schema(**all_tenant_backup_backupset_task_def)
+
 all_backup_backupset_task_history_def = dict(
   table_name = '__all_backup_backupset_task_history',
   table_id   = '301',
@@ -4303,10 +4330,13 @@ all_backup_backupset_task_history_def = dict(
     ('encryption_mode', 'varchar:OB_MAX_ENCRYPTION_MODE_LENGTH', 'false', 'None'),
     ('passwd', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
     ('is_mark_deleted', 'bool', 'true'),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
   ],
   columns_with_tenant_id = [],
 )
 def_table_schema(**all_backup_backupset_task_history_def)
+
 all_tenant_pg_backup_backupset_task_def = dict(
   table_name = '__all_tenant_pg_backup_backupset_task',
   table_id   = '302',
@@ -4340,6 +4370,7 @@ all_tenant_pg_backup_backupset_task_def = dict(
   columns_with_tenant_id = [],
 )
 def_table_schema(**all_tenant_pg_backup_backupset_task_def)
+
 # __all_tenant_backup_backup_log_archive_status
 all_tenant_backup_backup_log_archive_status_def = dict(
   table_name    = '__all_tenant_backup_backup_log_archive_status',
@@ -4356,6 +4387,7 @@ all_tenant_backup_backup_log_archive_status_def = dict(
   rs_restart_related = False,
   is_cluster_private = True,
   is_backup_private = True,
+
   normal_columns = [
     ('min_first_time', 'timestamp'),
     ('max_next_time', 'timestamp'),
@@ -4369,6 +4401,8 @@ all_tenant_backup_backup_log_archive_status_def = dict(
   columns_with_tenant_id = [],
 )
 def_table_schema(**all_tenant_backup_backup_log_archive_status_def)
+
+
 # __all_backup_backup_log_archive_status_history
 all_backup_backup_log_archive_status_def = dict(
   table_name    = '__all_backup_backup_log_archive_status_history',
@@ -4385,6 +4419,7 @@ all_backup_backup_log_archive_status_def = dict(
   rs_restart_related = False,
   is_cluster_private = True,
   is_backup_private = True,
+
   normal_columns = [
     ('min_first_time', 'timestamp'),
     ('max_next_time', 'timestamp'),
@@ -4395,12 +4430,13 @@ all_backup_backup_log_archive_status_def = dict(
     ('pg_count', 'int', 'false', '0'),
     ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
     ('is_mark_deleted', 'bool', 'true'),
+    ('compatible', 'int', 'false', '0'),
+    ('start_piece_id', 'int', 'false', '0'),
+    ('backup_piece_id', 'int', 'false', '0'),
   ],
   columns_with_tenant_id = [],
 )
 def_table_schema(**all_backup_backup_log_archive_status_def)
-
-# def_table_schema(**gen_history_table_def(298, all_tenant_dependency_def))
 
 def_table_schema(
   table_name    = '__all_res_mgr_plan',
@@ -4461,6 +4497,203 @@ def_table_schema(
   columns_with_tenant_id = [],
 )
 
+
+all_backup_backuppiece_job_def = dict(
+  table_name = '__all_backup_backuppiece_job',
+  table_id   = '310',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+    ('tenant_id', 'int'),
+    ('incarnation', 'int'),
+    ('backup_piece_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('max_backup_times', 'int'),
+    ('result', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
+    ('type', 'int'),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_backuppiece_job_def)
+
+all_backup_backuppiece_job_history_def = dict(
+  table_name = '__all_backup_backuppiece_job_history',
+  table_id   = '311',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+    ('tenant_id', 'int'),
+    ('incarnation', 'int'),
+    ('backup_piece_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('max_backup_times', 'int'),
+    ('result', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
+    ('type', 'int'),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_backuppiece_job_history_def)
+
+all_backup_backuppiece_task_def = dict(
+  table_name = '__all_backup_backuppiece_task',
+  table_id   = '312',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+    ('incarnation', 'int'),
+    ('tenant_id', 'int'),
+    ('round_id', 'int'),
+    ('backup_piece_id', 'int'),
+    ('copy_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('start_time', 'timestamp'),
+    ('end_time', 'timestamp'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('result', 'int'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_backuppiece_task_def)
+
+all_backup_backuppiece_task_history_def = dict(
+  table_name = '__all_backup_backuppiece_task_history',
+  table_id   = '313',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+    ('incarnation', 'int'),
+    ('tenant_id', 'int'),
+    ('round_id', 'int'),
+    ('backup_piece_id', 'int'),
+    ('copy_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('start_time', 'timestamp'),
+    ('end_time', 'timestamp'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('result', 'int'),
+    ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_backuppiece_task_history_def)
+
+# __all_backup_piece_files
+all_backup_piece_files_def = dict(
+  table_name    = '__all_backup_piece_files',
+  table_id      = '314',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('incarnation', 'int'),
+    ('tenant_id', 'int'),
+    ('round_id', 'int'),
+    ('backup_piece_id', 'int'),
+    ('copy_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+
+  normal_columns = [
+    ('create_date', 'int', 'false', '0'),
+    ('start_ts', 'int', 'false', '0'),
+    ('checkpoint_ts', 'int', 'false', '0'),
+    ('max_ts', 'int', 'false', '0'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', ''),
+    ('file_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', ''),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('compatible', 'int', 'false', '0'), # same with round
+    ('start_piece_id', 'int', 'false', '0'), # the start piece of a round
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_piece_files_def)
+
+all_backup_set_files_def = dict(
+  table_name = '__all_backup_set_files',
+  table_id   = '315',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('incarnation', 'int'),
+    ('tenant_id', 'int'),
+    ('backup_set_id', 'int'),
+    ('copy_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+
+  normal_columns = [
+    ('backup_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH'),
+    ('snapshot_version', 'int'),
+    ('prev_full_backup_set_id', 'int'),
+    ('prev_inc_backup_set_id', 'int'),
+    ('prev_backup_data_version', 'int'),
+    ('pg_count', 'int'),
+    ('macro_block_count', 'int'),
+    ('finish_pg_count', 'int'),
+    ('finish_macro_block_count', 'int'),
+    ('input_bytes', 'int'),
+    ('output_bytes', 'int'),
+    ('start_time', 'int'),
+    ('end_time', 'int'),
+    ('compatible', 'int'),
+    ('cluster_version', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('result', 'int'),
+    ('cluster_id', 'int'),
+    ('backup_data_version', 'int'),
+    ('backup_schema_version', 'int'),
+    ('cluster_version_display', 'varchar:OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH'),
+    ('partition_count', 'int'),
+    ('finish_partition_count', 'int'),
+    ('encryption_mode', 'varchar:OB_MAX_ENCRYPTION_MODE_LENGTH', 'false', 'None'),
+    ('passwd', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
+    ('file_status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH'),
+    ('start_replay_log_ts', 'int', 'false', 0),
+    ('date', 'int', 'false', 0),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_set_files_def);
+
 def_table_schema(
   table_name    = '__all_res_mgr_consumer_group',
   table_id      = '316',
@@ -4479,10 +4712,108 @@ def_table_schema(
   ],
   columns_with_tenant_id = [],
 )
+# __all_backup_info
+all_backup_info_def = dict(
+  table_name    = '__all_backup_info',
+  table_id      = '317',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('name', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
 
+  normal_columns = [
+    ('value', 'longtext'),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_info_def)
+
+# __all_backup_log_archive_status
+all_backup_log_archive_status_def = dict(
+  table_name    = '__all_backup_log_archive_status_v2',
+  table_id      = '318',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+
+  normal_columns = [
+    ('incarnation', 'int'),
+    ('log_archive_round', 'int'),
+    ('min_first_time', 'timestamp'),
+    ('max_next_time', 'timestamp'),
+    ('input_bytes', 'int', 'false', '0'),
+    ('output_bytes', 'int', 'false', '0'),
+    ('deleted_input_bytes', 'int', 'false', '0'),
+    ('deleted_output_bytes', 'int', 'false', '0'),
+    ('pg_count', 'int', 'false', '0'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('is_mount_file_created', 'int', 'false', '0'),
+    ('compatible', 'int', 'false', '0'),
+    ('start_piece_id', 'int', 'false', '0'),
+    ('backup_piece_id', 'int', 'false', '0'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'false', ''),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_backup_log_archive_status_def)
+
+# __all_backup_backup_log_archive_status
+all_tenant_backup_backup_log_archive_status_def = dict(
+  table_name    = '__all_backup_backup_log_archive_status_v2',
+  table_id      = '321',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+  ],
+  in_tenant_space = False,
+  rs_restart_related = False,
+  is_cluster_private = True,
+  is_backup_private = True,
+
+  normal_columns = [
+    ('copy_id', 'int'),
+    ('incarnation', 'int'),
+    ('log_archive_round', 'int'),
+    ('min_first_time', 'timestamp'),
+    ('max_next_time', 'timestamp'),
+    ('input_bytes', 'int', 'false', '0'),
+    ('output_bytes', 'int', 'false', '0'),
+    ('deleted_input_bytes', 'int', 'false', '0'),
+    ('deleted_output_bytes', 'int', 'false', '0'),
+    ('pg_count', 'int', 'false', '0'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('is_mount_file_created', 'int', 'false', '0'),
+    ('compatible', 'int', 'false', '0'),
+    ('start_piece_id', 'int', 'false', '0'),
+    ('backup_piece_id', 'int', 'false', '0'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'false', ''),
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_tenant_backup_backup_log_archive_status_def)
 
 # sys index schema def, only for compatible
 
+def_sys_index_table(
+  index_name = 'idx_data_table_id',
+  index_table_id = 9997,
+  index_columns = ['incarnation', 'backup_piece_id', 'copy_id'],
+  index_using_type = 'USING_BTREE',
+  keywords = all_def_keywords['__all_backup_piece_files'])
+
+# sys index schema def, only for compatible
 def_sys_index_table(
   index_name = 'idx_data_table_id',
   index_table_id = 9998,
@@ -4680,6 +5011,7 @@ def_table_schema(
   ('trans_id', 'uint'),
   ('thread_id', 'uint'),
   ('ssl_cipher', 'varchar:OB_MAX_COMMAND_LENGTH', 'true'),
+  ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -5644,6 +5976,7 @@ def_table_schema(
       ('replica_type', 'int', 'false', '0'),
       ('last_replay_log_id', 'int', 'false', '0'),
       ('schema_version', 'int', 'false', '0'),
+      ('last_replay_log_ts', 'int', 'false', '0'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -6900,6 +7233,7 @@ def_table_schema(
   ('zone_type', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('merge_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('zone_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
+  ('svr_min_log_timestamp', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -7212,7 +7546,7 @@ def_table_schema(
 
   normal_columns = [
   ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH'),
-  ('create_tablegroup', 'varchar:TABLEGROUP_DEFINE_LENGTH'),
+  ('create_tablegroup', 'longtext'),
   ],
 )
 
@@ -7463,6 +7797,40 @@ def_table_schema(
       ],
 
     partition_columns = ['svr_ip', 'svr_port'],
+)
+
+def_table_schema(
+    table_name     = '__virtual_show_restore_preview',
+    table_id       = '11102',
+    table_type = 'VIRTUAL_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('backup_type', 'varchar:20'),
+      ('backup_id', 'int'),
+      ('copy_id', 'int'),
+    ],
+  normal_columns = [
+      ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+      ('file_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', ''),
+  ],
+)
+
+def_table_schema(
+  table_name    = '__all_virtual_master_key_version_info',
+  table_id      = '11104',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+  ],
+  normal_columns = [
+    ('max_active_version', 'int'),
+    ('max_stored_version', 'int'),
+    ('expect_version', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
 )
 
 
@@ -9226,11 +9594,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_backup_info',
   keywords = all_def_keywords['__all_tenant_backup_info']))
 
-def_table_schema(**gen_iterate_virtual_table_def(
-  table_id = '12168',
-  real_tenant_id=True,
-  table_name = '__all_virtual_backup_log_archive_status',
-  keywords = all_def_keywords['__all_tenant_backup_log_archive_status']))
+# 12168 used for __all_virtual_backup_log_archive_status
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12170',
@@ -9265,6 +9629,7 @@ def_table_schema(
     ('log_archive_cur_ts', 'int'),
     ('max_log_id', 'int'),
     ('max_log_ts', 'int'),
+    ('cur_piece_id', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -9285,6 +9650,7 @@ def_table_schema(
     ('log_archive_start_ts', 'int'),
     ('log_archive_cur_ts', 'int'),
     ('pg_count', 'int'),
+    ('cur_piece_id', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -9355,11 +9721,32 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
 )
 
-def_table_schema(**gen_iterate_virtual_table_def(
-  table_id = '12180',
-  real_tenant_id=True,
-  table_name = '__all_virtual_backup_clean_info',
-  keywords = all_def_keywords['__all_tenant_backup_clean_info']))
+def_table_schema(
+    table_name    = '__all_virtual_backup_clean_info',
+    table_id      = '12180',
+    table_type = 'VIRTUAL_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+    ],
+
+    only_rs_vtable = True,
+
+    normal_columns = [
+      ('job_id', 'int'),
+      ('start_time', 'int'),
+      ('end_time', 'int'),
+      ('incarnation', 'int'),
+      ('type', 'varchar:OB_INNER_TABLE_BACKUP_CLEAN_TYPE_LENGTH'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('parameter', 'int'),
+      ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN'),
+      ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH'),
+      ('clog_gc_snapshot', 'int', 'true'),
+      ('result', 'int', 'true'),
+      ('copy_id', 'int')
+  ],
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12181',
@@ -9432,8 +9819,9 @@ def_table_schema(
     ('cur_index_file_offset', 'int'),
     ('cur_data_file_id', 'int'),
     ('cur_data_file_offset', 'int'),
-    #('clog_split_task_num', 'int'),
-    #('send_task_num', 'int'),
+    ('clog_split_task_num', 'int'),
+    ('send_task_num', 'int'),
+    ('cur_piece_id', 'int'),
     #('observer_archive_status', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
@@ -9760,11 +10148,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_pg_backup_backupset_task',
   keywords = all_def_keywords['__all_tenant_pg_backup_backupset_task']))
 
-def_table_schema(**gen_iterate_virtual_table_def(
-  table_id = '12204',
-  real_tenant_id=True,
-  table_name = '__all_virtual_backup_backup_log_archive_status',
-  keywords = all_def_keywords['__all_tenant_backup_backup_log_archive_status']))
+# 12204 used for __all_virtual_backup_backup_log_archive_status
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12206',
@@ -9971,6 +10355,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15177', True, all_
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15179', True, all_def_keywords['__all_res_mgr_consumer_group']))
 
 
+
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -10022,7 +10407,7 @@ def_table_schema(
   gm_columns = [],
   rowkey_columns = [],
   view_definition = """
-  SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH  FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin'
+  SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH, 'NO' as DEFAULT_ENCRYPTION FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin'
 """.replace("\n", " "),
 
   in_tenant_space = True,
@@ -10110,7 +10495,7 @@ def_table_schema(
                    case t.collation_type when 45 then 'utf8mb4' else 'NONE' end AS CHARACTER_SET_CLIENT,
                    case t.collation_type when 45 then 'utf8mb4_general_ci' else 'NONE' end AS COLLATION_CONNECTION
                    from oceanbase.__all_virtual_table as t join oceanbase.__all_virtual_database as d on t.tenant_id = effective_tenant_id() and d.tenant_id = effective_tenant_id() and t.database_id = d.database_id
-                   where (t.table_type = 1 or t.table_type = 4) and d.in_recyclebin = 0 and d.database_name != '__recyclebin' and d.database_name != 'information_schema' and d.database_name != 'oceanbase'
+                   where (t.table_type = 1 or t.table_type = 4) and d.in_recyclebin = 0 and d.database_name != '__recyclebin' and d.database_name != 'information_schema' and d.database_name != 'oceanbase' and 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name)
 """.replace("\n", " "),
 
 
@@ -10132,7 +10517,7 @@ def_table_schema(
                     b.database_name as TABLE_SCHEMA,
                     a.table_name as TABLE_NAME,
                     case when a.database_id & 0xFFFFFFFFFF = 2 then 'SYSTEM VIEW' when (a.table_type = 1 or a.table_type = 4) then 'VIEW' when a.table_type = 2 then 'SYSTEM TABLE' when a.table_type = 1 then 'INDEX' else 'BASE TABLE' end as TABLE_TYPE,
-                    NULL as ENGINE,
+                    'OceanBase' as ENGINE,
                     NULL as VERSION,
                     NULL as ROW_FORMAT,
                     sum(c.row_count) as TABLE_ROWS,
@@ -10153,7 +10538,7 @@ def_table_schema(
                     inner join oceanbase.__all_virtual_database b on a.database_id = b.database_id
                     left join oceanbase.__all_virtual_tenant_partition_meta_table c on a.table_id = c.table_id and c.tenant_id = effective_tenant_id() and a.tenant_id = c.tenant_id and c.role = 1
                     inner join oceanbase.__all_collation d on a.collation_type = d.id
-                    where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and a.table_type != 5 and b.database_name != '__recyclebin' and b.in_recyclebin = 0
+                    where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and a.table_type != 5 and b.database_name != '__recyclebin' and b.in_recyclebin = 0 and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name)
                     group by a.table_id, b.database_name, a.table_name, a.table_type, a.gmt_create, a.gmt_modified, d.collation, a.comment
 """.replace("\n", " "),
 
@@ -10236,7 +10621,7 @@ def_table_schema(
                     inner join oceanbase.__all_virtual_column b on a.table_id = b.table_id
                     inner join oceanbase.__all_virtual_database c on a.database_id = c.database_id
                     where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and c.tenant_id = effective_tenant_id() and c.in_recyclebin = 0 and c.database_name != '__recyclebin' and b.rowkey_position > 0 and b.column_id >= 16 and a.table_type != 5 and b.column_flags & (0x1 << 8) = 0)
-                    union (select /*+ READ_CONSISTENCY(WEAK) */ 'def' as CONSTRAINT_CATALOG,
+                    union all (select /*+ READ_CONSISTENCY(WEAK) */ 'def' as CONSTRAINT_CATALOG,
                     d.database_name as CONSTRAINT_SCHEMA,
                     substr(a.table_name, 2 + length(substring_index(a.table_name,'_',4))) as CONSTRAINT_NAME,
                     'def' as TABLE_CATALOG,
@@ -10253,7 +10638,31 @@ def_table_schema(
                     inner join oceanbase.__all_virtual_table c on a.data_table_id = c.table_id
                     inner join oceanbase.__all_virtual_database d on c.database_id = d.database_id
                     where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and c.tenant_id = effective_tenant_id() and d.in_recyclebin = 0 and d.tenant_id = effective_tenant_id() and d.database_name != '__recyclebin' and a.table_type = 5 and a.index_type in (2, 4, 8) and b.index_position > 0)
-""".replace("\n", " "),
+                    union all (select /*+ READ_CONSISTENCY(WEAK) */ 'def' as CONSTRAINT_CATALOG,
+                    d.database_name as CONSTRAINT_SCHEMA,
+                    f.foreign_key_name as CONSTRAINT_NAME,
+                    'def' as TABLE_CATALOG,
+                    d.database_name as TABLE_SCHEMA,
+                    t.table_name as TABLE_NAME,
+                    c.column_name as COLUMN_NAME,
+                    fc.position as ORDINAL_POSITION,
+                    NULL as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    d2.database_name as REFERENCED_TABLE_SCHEMA,
+                    t2.table_name as REFERENCED_TABLE_NAME,
+                    c2.column_name as REFERENCED_COLUMN_NAME
+                    from
+                    oceanbase.__all_virtual_foreign_key f
+                    inner join oceanbase.__all_virtual_table t on f.child_table_id = t.table_id
+                    inner join oceanbase.__all_virtual_database d on t.database_id = d.database_id
+                    inner join oceanbase.__all_virtual_foreign_key_column fc on f.foreign_key_id = fc.foreign_key_id
+                    inner join oceanbase.__all_virtual_column c on fc.child_column_id = c.column_id and t.table_id = c.table_id
+                    inner join oceanbase.__all_virtual_table t2 on f.parent_table_id = t2.table_id
+                    inner join oceanbase.__all_virtual_database d2 on t2.database_id = d2.database_id
+                    inner join oceanbase.__all_virtual_column c2 on fc.parent_column_id = c2.column_id and t2.table_id = c2.table_id
+                    where f.tenant_id = effective_tenant_id() and fc.tenant_id = effective_tenant_id()
+                          and t.tenant_id = effective_tenant_id() and d.tenant_id = effective_tenant_id() and c.tenant_id = effective_tenant_id()
+                          and t2.tenant_id = effective_tenant_id() and d2.tenant_id = effective_tenant_id() and c2.tenant_id = effective_tenant_id())
+                    """.replace("\n", " "),
 
   in_tenant_space = True,
 
@@ -12021,7 +12430,7 @@ def_table_schema(
                     PRIVILEGES,
                     COLUMN_COMMENT,
                     GENERATION_EXPRESSION
-  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS""",
+  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS where 0 = sys_privilege_check('table_acc', effective_tenant_id(), table_schema, table_name)""",
   in_tenant_space = True,
   normal_columns = [ ],
 )
@@ -12690,15 +13099,26 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
    SELECT
     INCARNATION,
     LOG_ARCHIVE_ROUND,
     TENANT_ID,
     STATUS,
-    MIN_FIRST_TIME,
-    MAX_NEXT_TIME,
+    START_PIECE_ID,
+    BACKUP_PIECE_ID,
+    CASE
+      WHEN time_to_usec(MIN_FIRST_TIME) = 0
+        THEN ''
+      ELSE
+        MIN_FIRST_TIME
+      END AS MIN_FIRST_TIME,
+    CASE
+      WHEN time_to_usec(MAX_NEXT_TIME) = 0
+        THEN ''
+      ELSE
+        MAX_NEXT_TIME
+      END AS MAX_NEXT_TIME,
     INPUT_BYTES,
     OUTPUT_BYTES,
     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,
@@ -12734,8 +13154,10 @@ select tenant_id,
        deleted_input_bytes,
        deleted_output_bytes,
        pg_count,
-       'STOP' as status
-       from __all_backup_log_archive_status_history where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+       'STOP' as status,
+       start_piece_id,
+       backup_piece_id
+       from oceanbase.__all_backup_log_archive_status_history 
 union
 select tenant_id,
        incarnation,
@@ -12747,8 +13169,10 @@ select tenant_id,
        deleted_input_bytes,
        deleted_output_bytes,
        pg_count ,
-       status
-       from __all_virtual_backup_log_archive_status where (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) and status != 'STOP');
+       status,
+       start_piece_id,
+       backup_piece_id
+       from oceanbase.__all_backup_log_archive_status_v2 where status != 'STOP')
 """.replace("\n", " ")
 )
 
@@ -12759,7 +13183,6 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
@@ -12816,9 +13239,10 @@ def_table_schema(
         ELSE
             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')
         END  AS OUTPUT_BYTES_PER_SEC_DISPLAY,
-    TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY
-    FROM __all_virtual_backup_task
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,
+    START_REPLAY_LOG_TS,
+    DATE
+    FROM oceanbase.__all_virtual_backup_task
 """.replace("\n", " ")
 )
 
@@ -12829,12 +13253,12 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
     TENANT_ID,
     BACKUP_SET_ID AS BS_KEY,
+    '0' AS COPY_ID,
     BACKUP_TYPE,
     ENCRYPTION_MODE,
     START_TIME,
@@ -12872,8 +13296,8 @@ def_table_schema(
         ELSE
             'COMPLETED'
         END AS STATUS
-    FROM __all_backup_task_history
-    WHERE status = 'FINISH' and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id())
+    FROM oceanbase.__all_backup_task_history
+    WHERE status = 'FINISH' 
 """.replace("\n", " ")
 )
 
@@ -12884,12 +13308,12 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
     TENANT_ID,
     BACKUP_SET_ID AS BS_KEY,
+    '0' AS COPY_ID,
     BACKUP_TYPE,
     ENCRYPTION_MODE,
     START_TIME,
@@ -12919,12 +13343,8 @@ def_table_schema(
             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')
         END  AS OUTPUT_RATE_BYTES_DISPLAY,
     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY
-    FROM __all_backup_task_history,
-        (select CONVERT(value, SIGNED INTEGER) as days
-                from __all_virtual_sys_parameter_stat where name = 'backup_recovery_window' and SVR_IP=host_ip() and SVR_PORT=rpc_port() limit 1)
-    WHERE status = 'COMPLETED'
-        and (days = 0 or TIMESTAMPDIFF(DAY, END_TIME, now()) > days)
-        and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id())
+    FROM oceanbase.__all_backup_task_history
+    WHERE INCARNATION = 0
 """.replace("\n", " ")
 )
 
@@ -12935,7 +13355,6 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
@@ -12958,8 +13377,7 @@ def_table_schema(
         ELSE
             'RUNNING'
         END AS STATUS
-    FROM __all_virtual_backup_task
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_virtual_backup_task
 """.replace("\n", " ")
 )
 
@@ -12970,12 +13388,12 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
     TENANT_ID,
     LOG_ARCHIVE_ROUND,
+    CUR_PIECE_ID,
     SVR_IP,
     SVR_PORT,
     TABLE_ID,
@@ -12998,8 +13416,7 @@ def_table_schema(
         ELSE
             'INVALID'
         END as STATUS
-    FROM __all_virtual_pg_backup_log_archive_status
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_virtual_pg_backup_log_archive_status
 """.replace("\n", " ")
 )
 
@@ -13010,11 +13427,11 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     TENANT_ID,
     JOB_ID AS BS_KEY,
+    COPY_ID,
     START_TIME,
     END_TIME,
     INCARNATION,
@@ -13023,8 +13440,7 @@ def_table_schema(
     PARAMETER,
     ERROR_MSG,
     COMMENT
-    FROM __all_backup_clean_info_history
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_backup_clean_info_history
 """.replace("\n", " ")
 )
 
@@ -13035,12 +13451,12 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     TENANT_ID,
     INCARNATION,
     BACKUP_SET_ID AS BS_KEY,
+    COPY_ID,
     BACKUP_TYPE,
     PARTITION_COUNT,
     MACRO_BLOCK_COUNT,
@@ -13051,8 +13467,7 @@ def_table_schema(
     START_TIME,
     END_TIME AS COMPLETION_TIME,
     STATUS
-    FROM __all_backup_task_clean_history
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_backup_task_clean_history
 """.replace("\n", " ")
 )
 
@@ -13073,6 +13488,7 @@ def_table_schema(
       BACKUP_TENANT_NAME,
       BACKUP_CLUSTER_ID,
       BACKUP_CLUSTER_NAME,
+      WHITE_LIST,
       STATUS,
       START_TIME,
       COMPLETION_TIME,
@@ -13083,8 +13499,10 @@ def_table_schema(
       RESTORE_START_TIMESTAMP,
       RESTORE_FINISH_TIMESTAMP,
       RESTORE_CURRENT_TIMESTAMP,
+      BACKUP_SET_LIST,
+      BACKUP_PIECE_LIST,
       INFO
-    FROM __all_restore_progress
+    FROM oceanbase.__all_restore_progress
 """.replace("\n", " ")
 )
 
@@ -13105,6 +13523,7 @@ def_table_schema(
       BACKUP_TENANT_NAME,
       BACKUP_CLUSTER_ID,
       BACKUP_CLUSTER_NAME,
+      WHITE_LIST,
       STATUS,
       START_TIME,
       COMPLETION_TIME,
@@ -13115,8 +13534,10 @@ def_table_schema(
       RESTORE_START_TIMESTAMP,
       RESTORE_FINISH_TIMESTAMP,
       RESTORE_CURRENT_TIMESTAMP,
-      INFO
-    FROM __all_restore_history
+      BACKUP_SET_LIST,
+      BACKUP_PIECE_LIST,
+      INFO      
+    FROM oceanbase.__all_restore_history
 """.replace("\n", " ")
 )
 
@@ -13412,7 +13833,7 @@ def_table_schema(
       BACKUP_SET_ID,
       PROGRESS_PERCENT,
       STATUS
-    FROM __all_backup_validation_job
+    FROM oceanbase.__all_backup_validation_job
 """.replace("\n", " ")
 )
 
@@ -13432,7 +13853,7 @@ def_table_schema(
       BACKUP_SET_ID,
       PROGRESS_PERCENT,
       STATUS
-    FROM __all_backup_validation_job_history
+    FROM oceanbase.__all_backup_validation_job_history
 """.replace("\n", " ")
 )
 
@@ -13443,7 +13864,6 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
       JOB_ID,
@@ -13462,8 +13882,7 @@ def_table_schema(
       TOTAL_MACRO_BLOCK_COUNT,
       FINISH_MACRO_BLOCK_COUNT,
       LOG_SIZE
-    FROM __all_virtual_backup_validation_task
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_virtual_backup_validation_task 
 """.replace("\n", " ")
 )
 
@@ -13492,7 +13911,7 @@ def_table_schema(
       TOTAL_MACRO_BLOCK_COUNT,
       FINISH_MACRO_BLOCK_COUNT,
       LOG_SIZE
-    FROM __all_backup_validation_task_history
+    FROM oceanbase.__all_backup_validation_task_history
 """.replace("\n", " ")
 )
 
@@ -13521,7 +13940,6 @@ def_table_schema(
   rowkey_columns  = [],
   normal_columns  = [],
   gm_columns      = [],
-  in_tenant_space = True,
   view_definition = """
     SELECT
     INCARNATION,
@@ -13564,10 +13982,9 @@ def_table_schema(
         ELSE
             'COMPLETED'
         END AS STATUS
-    FROM __all_virtual_backupset_history_mgr
+    FROM oceanbase.__all_virtual_backupset_history_mgr
     WHERE backup_recovery_window > 0
         and (backup_recovery_window + snapshot_version <= time_to_usec(now(6)))
-        and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id())
 """.replace("\n", " ")
 )
 
@@ -13593,8 +14010,11 @@ def_table_schema(
               'UNKNOWN'
           END AS TYPE,
       TENANT_NAME,
-      STATUS
-    FROM __all_backup_backupset_job
+      STATUS,
+      BACKUP_DEST,
+      MAX_BACKUP_TIMES,
+      RESULT
+    FROM oceanbase.__all_backup_backupset_job 
 """.replace("\n", " ")
 )
 
@@ -13620,8 +14040,11 @@ def_table_schema(
               'UNKNOWN'
           END AS TYPE,
       TENANT_NAME,
-      STATUS
-    FROM __all_backup_backupset_job_history
+      STATUS,
+      BACKUP_DEST,
+      MAX_BACKUP_TIMES,
+      RESULT
+    FROM oceanbase.__all_backup_backupset_job_history
 """.replace("\n", " ")
 )
 
@@ -13634,6 +14057,7 @@ def_table_schema(
   gm_columns      = [],
   view_definition = """
     SELECT
+    JOB_ID,
     INCARNATION,
     BACKUP_SET_ID AS BS_KEY,
     COPY_ID,
@@ -13657,8 +14081,7 @@ def_table_schema(
         ELSE
             'RUNNING'
         END AS STATUS
-    FROM __all_virtual_backup_backupset_task
-    WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+    FROM oceanbase.__all_virtual_backup_backupset_task 
 """.replace("\n", " ")
 )
 
@@ -13671,6 +14094,7 @@ def_table_schema(
   gm_columns      = [],
   view_definition = """
     SELECT
+    JOB_ID,
     INCARNATION,
     TENANT_ID,
     BACKUP_SET_ID AS BS_KEY,
@@ -13713,8 +14137,7 @@ def_table_schema(
         ELSE
             'COMPLETED'
         END AS STATUS
-    FROM __all_backup_backupset_task_history
-    WHERE status = 'FINISH' and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id())
+    FROM oceanbase.__all_backup_backupset_task_history
 """.replace("\n", " ")
 )
 
@@ -13732,8 +14155,18 @@ def_table_schema(
     COPY_ID,
     TENANT_ID,
     STATUS,
-    MIN_FIRST_TIME,
-    MAX_NEXT_TIME,
+    CASE
+      WHEN time_to_usec(MIN_FIRST_TIME) = 0
+        THEN ''
+      ELSE
+        MIN_FIRST_TIME
+      END AS MIN_FIRST_TIME,
+    CASE
+      WHEN time_to_usec(MAX_NEXT_TIME) = 0
+        THEN ''
+      ELSE
+        MAX_NEXT_TIME
+      END AS MAX_NEXT_TIME,
     INPUT_BYTES,
     OUTPUT_BYTES,
     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,
@@ -13771,8 +14204,7 @@ select tenant_id,
        deleted_output_bytes,
        pg_count,
        'STOP' as status
-       from __all_backup_backup_log_archive_status_history
-       where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
+       from oceanbase.__all_backup_backup_log_archive_status_history
 union
 select tenant_id,
        incarnation,
@@ -13786,9 +14218,346 @@ select tenant_id,
        deleted_output_bytes,
        pg_count,
        status
-       from __all_virtual_backup_backup_log_archive_status
-       where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() and status != 'STOP');
+       from oceanbase.__all_backup_backup_log_archive_status_v2 where status != 'STOP')
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_PIECE_FILES',
+  table_id        = '21136 ',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+   SELECT
+    INCARNATION,
+    TENANT_ID,
+    ROUND_ID,
+    BACKUP_PIECE_ID,
+    COPY_ID,
+    CREATE_DATE,
+    CASE 
+        WHEN START_TS = 0
+          THEN ''
+        ELSE
+          USEC_TO_TIME(START_TS)
+        END AS START_TS,
+    CASE 
+        WHEN CHECKPOINT_TS = 0
+          THEN ''
+        ELSE
+          USEC_TO_TIME(CHECKPOINT_TS)
+        END AS CHECKPOINT_TS,
+    CASE
+        WHEN MAX_TS = 0
+          THEN ''
+        WHEN MAX_TS = 9223372036854775807
+          THEN 'MAX'
+        ELSE
+          USEC_TO_TIME(MAX_TS)
+        END AS MAX_TS,
+    STATUS,
+    FILE_STATUS,
+    COMPATIBLE,
+    START_PIECE_ID
+    FROM oceanbase.__all_backup_piece_files;
+""".replace("\n", " ")
+)
+
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_SET_FILES',
+  table_id        = '21137',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    INCARNATION,
+    TENANT_ID,
+    BACKUP_SET_ID AS BS_KEY,
+    COPY_ID,
+    BACKUP_TYPE,
+    ENCRYPTION_MODE,
+    STATUS,
+    FILE_STATUS,
+    USEC_TO_TIME(START_TIME) AS START_TIME,
+    USEC_TO_TIME(END_TIME) AS COMPLETION_TIME,
+    ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,
+    'NO' AS KEEP,
+    '' AS KEEP_UNTIL,
+    'NO' AS COMPRESSED,
+    OUTPUT_BYTES,
+    OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,
+    ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,
+    CASE
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')
+        ELSE
+            CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')
+        END  AS OUTPUT_BYTES_DISPLAY,
+    CASE
+        WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')
+        ELSE
+            CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')
+        END  AS OUTPUT_RATE_BYTES_DISPLAY,
+    TIMEDIFF(USEC_TO_TIME(END_TIME), USEC_TO_TIME(START_TIME)) AS TIME_TAKEN_DISPLAY
+    FROM oceanbase.__all_backup_set_files
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_BACKUPPIECE_JOB',
+  table_id        = '21138',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    JOB_ID,
+    TENANT_ID,
+    INCARNATION,
+    BACKUP_PIECE_ID,
+    MAX_BACKUP_TIMES,
+    RESULT,
+    STATUS,
+    BACKUP_DEST,
+    COMMENT,
+    TYPE
+    FROM oceanbase.__all_backup_backuppiece_job
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY',
+  table_id        = '21139',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    JOB_ID,
+    TENANT_ID,
+    INCARNATION,
+    BACKUP_PIECE_ID,
+    MAX_BACKUP_TIMES,
+    RESULT,
+    STATUS,
+    BACKUP_DEST,
+    COMMENT,
+    TYPE
+    FROM oceanbase.__all_backup_backuppiece_job_history
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_BACKUPPIECE_TASK',
+  table_id        = '21140',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INCARNATION,
+    TENANT_ID,
+    ROUND_ID,
+    BACKUP_PIECE_ID,
+    COPY_ID,
+    START_TIME,
+    END_TIME,
+    STATUS,
+    BACKUP_DEST,
+    RESULT,
+    COMMENT
+    FROM oceanbase.__all_backup_backuppiece_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY',
+  table_id        = '21141',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INCARNATION,
+    TENANT_ID,
+    ROUND_ID,
+    BACKUP_PIECE_ID,
+    COPY_ID,
+    START_TIME,
+    END_TIME,
+    STATUS,
+    BACKUP_DEST,
+    RESULT,
+    COMMENT
+    FROM oceanbase.__all_backup_backuppiece_task_history
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name = 'v$ob_all_clusters',
+  table_id = '21142',
+  table_type = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = False,
+  view_definition = """
+      SELECT cluster_id,
+             cluster_name,
+             cluster_role,
+             cluster_status,
+             rootservice_list,
+             redo_transport_options
+      FROM oceanbase.__all_virtual_all_clusters
+      """.replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_ARCHIVELOG',
+  table_id        = '21143 ',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+   SELECT
+    INCARNATION,
+    LOG_ARCHIVE_ROUND,
+    TENANT_ID,
+    STATUS,
+    START_PIECE_ID,
+    BACKUP_PIECE_ID,
+    CASE
+      WHEN time_to_usec(MIN_FIRST_TIME) = 0
+        THEN ''
+      ELSE
+        MIN_FIRST_TIME
+      END AS MIN_FIRST_TIME,
+    CASE
+      WHEN time_to_usec(MAX_NEXT_TIME) = 0
+        THEN ''
+      ELSE
+        MAX_NEXT_TIME
+      END AS MAX_NEXT_TIME,
+    INPUT_BYTES,
+    OUTPUT_BYTES,
+    ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,
+    CASE
+        WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')
+        WHEN INPUT_BYTES >= 1024*1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')
+        WHEN INPUT_BYTES >= 1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')
+        ELSE
+            CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')
+        END  AS INPUT_BYTES_DISPLAY,
+    CASE
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')
+        ELSE
+            CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')
+        END  AS OUTPUT_BYTES_DISPLAY
+    FROM oceanbase.__all_backup_log_archive_status_v2;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_BACKUP_BACKUP_ARCHIVELOG',
+  table_id        = '21144',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    INCARNATION,
+    LOG_ARCHIVE_ROUND,
+    COPY_ID,
+    TENANT_ID,
+    STATUS,
+    START_PIECE_ID,
+    BACKUP_PIECE_ID,
+    CASE
+      WHEN time_to_usec(MIN_FIRST_TIME) = 0
+        THEN ''
+      ELSE
+        MIN_FIRST_TIME
+      END AS MIN_FIRST_TIME,
+    CASE
+      WHEN time_to_usec(MAX_NEXT_TIME) = 0
+        THEN ''
+      ELSE
+        MAX_NEXT_TIME
+      END AS MAX_NEXT_TIME,
+    INPUT_BYTES,
+    OUTPUT_BYTES,
+    ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,
+    CASE
+        WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')
+        WHEN INPUT_BYTES >= 1024*1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')
+        WHEN INPUT_BYTES >= 1024*1024*1024
+            THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')
+        ELSE
+            CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')
+        END  AS INPUT_BYTES_DISPLAY,
+    CASE
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')
+        WHEN OUTPUT_BYTES >= 1024*1024*1024
+            THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')
+        ELSE
+            CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')
+        END  AS OUTPUT_BYTES_DISPLAY
+    FROM oceanbase.__all_backup_backup_log_archive_status_v2;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'COLUMN_PRIVILEGES',
+  table_id        = '21150',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST(NULL AS VARCHAR(292)) AS GRANTEE,
+      CAST('def' AS VARCHAR(512)) AS TABLE_CATALOG,
+      CAST(NULL AS VARCHAR(64)) AS TABLE_SCHEMA,
+      CAST(NULL AS VARCHAR(64)) AS TABLE_NAME,
+      CAST(NULL AS VARCHAR(64)) AS COLUMN_NAME,
+      CAST(NULL AS VARCHAR(64)) AS PRIVILEGE_TYPE,
+      CAST(NULL AS VARCHAR(3))  AS IS_GRANTABLE
+    FROM DUAL
+    WHERE 1 = 0
+""".replace("\n", " "),
 )
 
 ################################################################################
@@ -15885,7 +16654,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -15906,19 +16678,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,
@@ -16030,7 +16807,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as  DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -16051,19 +16831,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as  CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,
@@ -16172,7 +16957,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as  DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -16193,19 +16981,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as  CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,
@@ -26686,6 +27479,7 @@ def_table_schema(
     rowkey_columns  = [],
     normal_columns  = [],
     gm_columns      = [],
+    in_tenant_space = True,
     view_definition = """SELECT
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_CATALOG,
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_SCHEMA,

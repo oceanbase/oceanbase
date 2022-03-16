@@ -69,7 +69,7 @@ public:
   //
   // Set %task to NULL if in schedule task not found.
   int get_schedule_task(const ObRebalanceTask& input_task, ObRebalanceTask*& task);
-  int get_schedule_task(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, ObRebalanceTask*& task);
+  int check_rebalance_task_exist(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist);
 
   // Get execute timeout task if exist.
   // Set %task to NULL if no timeout task.
@@ -181,11 +181,11 @@ public:
   int init(common::ObServerConfig& config, ObRebalanceTaskExecutor& executor);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
 
   // add_task() will never block. Task with no source_ field will be executed immediately.
   //
@@ -253,8 +253,7 @@ public:
   int check_dest_server_migrate_in_blocked(const ObRebalanceTask& task, bool& is_available);
   int check_dest_server_out_of_disk(const ObRebalanceTask& task, bool& is_available);
   int check_dest_server_has_too_many_partitions(const ObRebalanceTask& task, bool& is_available);
-  int get_schedule_task(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, common::ObIAllocator& allocator,
-      ObRebalanceTask*& task);
+  int check_rebalance_task_exist(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist);
   int64_t get_schedule_interval() const;
 
 private:

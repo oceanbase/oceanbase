@@ -260,9 +260,9 @@ int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt& stmt, SemiInfo&
   ObSqlBitSet<> right_table_set;
   ObIArray<ObRawExpr*>& semi_conditions = semi_info.semi_conditions_;
   is_all_equal_cond = true;
-  if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, semi_info.left_table_ids_, left_table_set))) {
+  if (OB_FAIL(stmt.get_table_rel_ids(semi_info.left_table_ids_, left_table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, semi_info.right_table_id_, right_table_set))) {
+  } else if (OB_FAIL(stmt.get_table_rel_ids(semi_info.right_table_id_, right_table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < semi_conditions.count(); ++i) {
@@ -400,7 +400,7 @@ int ObTransformSemiToInner::check_join_condition_match_index(ObDMLStmt* root_stm
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, semi_info.left_table_ids_, left_table_set))) {
+  } else if (OB_FAIL(stmt.get_table_rel_ids(semi_info.left_table_ids_, left_table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   }
   // check semi condition is match left table

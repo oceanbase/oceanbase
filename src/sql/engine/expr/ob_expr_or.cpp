@@ -14,7 +14,7 @@
 #include "sql/engine/expr/ob_expr_or.h"
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase {
@@ -49,7 +49,21 @@ int ObExprOr::calc_result2(
 
   bool obj1_is_true = false;
   EXPR_SET_CAST_CTX_MODE(expr_ctx);
-  if (OB_FAIL(ObLogicalExprOperator::is_true(obj1, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, obj1_is_true))) {
+  bool is_obj1_json = ob_is_json(obj1.get_type());
+  if (is_obj1_json) {
+    // cause for json type, in some case can't transform to number type
+    // add special process for json type
+    // use the some logical as mysql 
+    int cmp_result = 0;
+    if (obj1.is_null()) {
+    } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(obj1.get_string(), cmp_result))) {
+      LOG_WARN("failed: compare json", K(ret));
+    } else {
+      obj1_is_true = cmp_result != 0;
+    }
+  }
+  
+  if (!is_obj1_json && OB_FAIL(ObLogicalExprOperator::is_true(obj1, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, obj1_is_true))) {
     LOG_WARN("fail to evaluate obj1", K(obj1), K(ret));
   } else if (obj1_is_true) {
     result.set_int32(static_cast<int32_t>(true));
@@ -63,6 +77,18 @@ int ObExprOr::calc_result2(
     } else {
       // obj1 must be false here.
       bool bool_v2 = false;
+
+      bool is_obj2_json = ob_is_json(obj2.get_type());
+      if (is_obj2_json) {
+        int cmp_result = 0;
+        if (obj1.is_null()) {
+        } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(obj1.get_string(), cmp_result))) {
+          LOG_WARN("failed: compare json", K(ret));
+        } else {
+          bool_v2 = cmp_result != 0;
+        }
+      }
+
       if (OB_FAIL(ObLogicalExprOperator::is_true(obj2, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, bool_v2))) {
         LOG_WARN("fail to evaluate obj2", K(obj2), K(ret));
       } else {
@@ -119,7 +145,6 @@ int ObExprOr::cacl_res_with_one_param_null(
       // By design, compatible with mysql and oracle:
       // null or false == NULL. null or true == true.
       // see "NULL and the three-valued logic"
-      // https://en.wikipedia.org/wiki/Null_(SQL)#Comparisons_with_NULL_and_the_three-valued_logic_(3VL)
     } else if (value) {
       res.set_int32(static_cast<int32_t>(true));
     } else {

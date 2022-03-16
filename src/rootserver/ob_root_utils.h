@@ -232,7 +232,7 @@ public:
 
   static int check_small_tenant(const uint64_t tenant_id, bool& small_tenant);
   static int remove_ineffective_task(common::ObMySQLTransaction& trans, const uint64_t tenant_id);
-  static bool is_balance_target_schema(const share::schema::ObTableSchema& table_schema);
+  static bool is_balance_target_schema(const share::schema::ObSimpleTableSchemaV2& table_schema);
 
 private:
   static int check_small_tenant_primary_zone_and_locality_condition(

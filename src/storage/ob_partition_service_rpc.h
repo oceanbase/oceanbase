@@ -24,6 +24,7 @@
 #include "storage/ob_storage_struct.h"
 #include "storage/ob_partition_migrate_old_rpc.h"
 #include "observer/ob_server_struct.h"
+#include "storage/ob_reserved_data_mgr.h"
 
 namespace oceanbase {
 namespace observer {
@@ -546,6 +547,7 @@ struct ObFetchPGInfoResult {
   storage::ObPartitionGroupMeta pg_meta_;
   common::ObVersion major_version_;  // max{major table major freeze version}
   bool is_log_sync_;
+  common::ObSArray<storage::ObRecoveryPointKey> recovery_point_key_array_;
   int64_t pg_file_id_;
   int64_t compat_version_;
   OB_UNIS_VERSION(1);
@@ -684,6 +686,32 @@ public:
   ObAddr candidate_server_;
 };
 
+// pg reocvery point rpc struct
+struct ObFetchPGRecoveryPointMetaInfoArg {
+  ObFetchPGRecoveryPointMetaInfoArg();
+  ~ObFetchPGRecoveryPointMetaInfoArg()
+  {}
+  void reset();
+  bool is_valid() const;
+
+  TO_STRING_KV(K_(pg_key), K_(recovery_point_key_array));
+  common::ObPGKey pg_key_;
+  common::ObSArray<storage::ObRecoveryPointKey> recovery_point_key_array_;
+  OB_UNIS_VERSION(1);
+};
+
+struct ObFetchPGRecoveryPointMetaInfoRes {
+  ObFetchPGRecoveryPointMetaInfoRes();
+  ~ObFetchPGRecoveryPointMetaInfoRes()
+  {}
+  TO_STRING_KV(K_(recovery_point_meta_info));
+  void reset();
+  bool is_valid() const;
+  int assign(const ObFetchPGRecoveryPointMetaInfoRes& res);
+  storage::ObRecoveryPointMetaInfo recovery_point_meta_info_;
+  OB_UNIS_VERSION(1);
+};
+
 class ObPartitionServiceRpcProxy : public obrpc::ObRpcProxy {
 public:
   DEFINE_TO(ObPartitionServiceRpcProxy);
@@ -717,6 +745,8 @@ public:
   RPC_SS(PR5 fetch_logic_data_checksum_slice, OB_FETCH_LOGIC_DATA_CHECKSUM_SLICE, (ObFetchLogicRowArg),
       common::ObDataBuffer);
   RPC_SS(PR5 fetch_logic_row_slice, OB_FETCH_LOGIC_ROW_SLICE, (ObFetchLogicRowArg), common::ObDataBuffer);
+  RPC_SS(PR5 fetch_recovery_point_meta_info, OB_GET_RECOVERY_POINT_META_INFO, (ObFetchPGRecoveryPointMetaInfoArg),
+      common::ObDataBuffer);
   // 1.4x old rpc for fetch base meta data
   RPC_SS(PR5 fetch_base_data_meta, OB_FETCH_BASE_DATA_META, (ObFetchBaseDataMetaArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_macro_block_old, OB_FETCH_MACRO_BLOCK_OLD, (ObFetchMacroBlockListOldArg), common::ObDataBuffer);
@@ -1354,6 +1384,20 @@ public:
 protected:
   int process();
 };
+
+class ObFetchRecoveryPointMetaInfoP : public ObCommonPartitionServiceRpcP<OB_GET_RECOVERY_POINT_META_INFO> {
+public:
+  ObFetchRecoveryPointMetaInfoP(
+      storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
+  ~ObFetchRecoveryPointMetaInfoP()
+  {}
+
+protected:
+  int process();
+  int get_recovery_point_meta_info(const storage::ObRecoveryPointKey& recovery_point_key,
+      storage::ObRecoveryPointMetaInfo& recovery_point_meta_info);
+};
+
 }  // namespace obrpc
 
 namespace storage {
@@ -1383,6 +1427,10 @@ public:
   virtual int post_batch_backup_replica_res(const common::ObAddr& server, const obrpc::ObBackupBatchRes& res) = 0;
   virtual int post_validate_backup_res(const common::ObAddr& server, const obrpc::ObValidateRes& res) = 0;
   virtual int post_batch_validate_backup_res(const common::ObAddr& server, const obrpc::ObValidateBatchRes& res) = 0;
+  virtual int post_batch_backup_backupset_res(
+      const common::ObAddr& server, const obrpc::ObBackupBackupsetBatchRes& res) = 0;
+  virtual int post_batch_backup_archivelog_res(
+      const common::ObAddr& server, const obrpc::ObBackupArchiveLogBatchRes& res) = 0;
 
   virtual int post_get_member_list_msg(
       const common::ObAddr& server, const common::ObPartitionKey& key, common::ObMemberList& member_list) = 0;
@@ -1452,6 +1500,8 @@ public:
   int post_rebuild_replica_res(const common::ObAddr& server, const obrpc::ObRebuildReplicaRes& res);
   int post_batch_backup_replica_res(const common::ObAddr& server, const obrpc::ObBackupBatchRes& res);
   int post_batch_validate_backup_res(const common::ObAddr& server, const obrpc::ObValidateBatchRes& res);
+  int post_batch_backup_backupset_res(const common::ObAddr& server, const obrpc::ObBackupBackupsetBatchRes& res);
+  int post_batch_backup_archivelog_res(const common::ObAddr& server, const obrpc::ObBackupArchiveLogBatchRes& res);
 
   virtual int post_get_member_list_msg(
       const common::ObAddr& server, const common::ObPartitionKey& key, common::ObMemberList& member_list);

@@ -235,8 +235,7 @@ public:
   void start();
   // Destroy resources.
   void destroy();
-  void at_exit() override
-  {}
+  void at_exit() override;
 
   void usleep(uint32_t usec) final;
   void sleep_until(int64_t abs_time) final;

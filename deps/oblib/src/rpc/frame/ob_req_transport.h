@@ -54,7 +54,9 @@ public:
   // been called after easy has detected the response packet.
   class AsyncCB {
   public:
-    AsyncCB() : dst_(), timeout_(0), tenant_id_(0), req_(NULL), send_ts_(0), payload_(0)
+    AsyncCB()
+        : dst_(), timeout_(0), tenant_id_(0),
+           err_(0), req_(NULL), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB()
     {}
@@ -65,6 +67,10 @@ public:
     {}
     virtual int decode(void* pkt) = 0;
     virtual int process() = 0;
+    virtual void reset_rcode() = 0;
+    virtual void set_cloned(bool cloned) = 0;
+    virtual bool get_cloned() = 0;
+    virtual int get_rcode() = 0;
 
     // invoke when get a valid packet on protocol level, but can't decode it.
     virtual void on_invalid()
@@ -77,7 +83,8 @@ public:
       RPC_FRAME_LOG(DEBUG, "packet timeout");
     }
     virtual int on_error(int err);
-    int get_error() const;
+    void set_error(int err) { err_ = err; }
+    int get_error() const { return err_; }
 
     void set_dst(const ObAddr& dst)
     {
@@ -118,7 +125,8 @@ public:
     ObAddr dst_;
     int64_t timeout_;
     uint64_t tenant_id_;
-    const easy_request_t* req_;
+    int err_;
+    const easy_request_t *req_;
     int64_t send_ts_;
     int64_t payload_;
   };
@@ -230,6 +238,11 @@ public:
   {
     bucket_count_ = bucket_cnt;
   }
+  void enable_use_ssl()
+  {
+    enable_use_ssl_ = true;
+  }
+
   template <typename T>
   int create_request(Request<T>& req, const ObAddr& addr, int64_t size, int64_t timeout, const ObAddr& local_addr,
       const common::ObString& ssl_invited_nodes, const AsyncCB* cb = NULL) const;
@@ -261,6 +274,7 @@ private:
   easy_io_handler_pt* handler_;
   int32_t sgid_;
   int32_t bucket_count_;  // Control the number of buckets of batch_rpc_eio
+  bool enable_use_ssl_; // External client support enable ssl
 };                        // end of class ObReqTransport
 
 template <typename T>

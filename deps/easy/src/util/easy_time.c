@@ -139,6 +139,16 @@ static __inline__ uint64_t rdtscp()
   __asm__ __volatile__("rdtscp" : "=a"(rax), "=d"(rdx)::"%rcx");
   return (rdx << 32) + rax;
 }
+#elif defined(__sw_64__)
+static __inline__ uint64_t rdtsc()
+{
+  return (uint64_t)easy_time_now();
+}
+
+static __inline__ uint64_t rdtscp()
+{
+  return (uint64_t)easy_time_now();
+}
 #else
 static __inline__ uint64_t rdtscp()
 {
@@ -153,7 +163,7 @@ static __inline__ uint64_t rdtsc()
 
 #endif
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__sw_64__)
 uint64_t get_cpufreq_khz()
 {
   char line[256];

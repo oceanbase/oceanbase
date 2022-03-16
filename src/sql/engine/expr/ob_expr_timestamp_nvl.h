@@ -22,9 +22,9 @@ public:
   explicit ObExprTimestampNvl(common::ObIAllocator& alloc);
   virtual ~ObExprTimestampNvl();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_timestampnvl(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

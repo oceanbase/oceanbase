@@ -27,8 +27,8 @@ public:
   ~ObRestorePointService();
   int init(rootserver::ObDDLService& ddl_service, rootserver::ObFreezeInfoManager& freeze_info_mgr);
   int create_restore_point(const uint64_t tenant_id, const char* name);
-  int create_backup_point(
-      const uint64_t tenant_id, const char* name, const int64_t snapshot_version, const int64_t schema_version);
+  int create_backup_point(const uint64_t tenant_id, const char *name, const int64_t snapshot_version,
+      const int64_t schema_version, common::ObMySQLTransaction &trans);
   int drop_restore_point(const uint64_t tenant_id, const char* name);
   int drop_backup_point(const uint64_t tenant_id, const int64_t snapshot_version);
 

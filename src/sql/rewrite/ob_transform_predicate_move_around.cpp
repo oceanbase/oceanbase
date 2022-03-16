@@ -202,7 +202,7 @@ int ObTransformPredicateMoveAround::preprocess_semi_info(
     LOG_WARN("semi info is null", K(ret));
   } else if (semi_info->is_anti_join()) {
     // do not pull up anti conditions to upper conds
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, semi_info->left_table_ids_, left_rel_ids))) {
+  } else if (OB_FAIL(stmt.get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
     ObRawExpr* expr = NULL;
@@ -900,16 +900,24 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
     ObSelectStmt& sel_stmt, ObIArray<ObRawExpr*>& pullup_preds, ObIArray<ObRawExpr*>& pushdown_preds)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> new_having_exprs;
-  ObSEArray<ObRawExpr*, 4> target_exprs;
-  ObSEArray<ObRawExpr*, 4> input_preds;
-  ObSEArray<ObRawExpr*, 4> columns;
+  ObSEArray<ObRawExpr *, 4> new_having_exprs;
+  ObSEArray<ObRawExpr *, 4> target_exprs;
+  ObSEArray<ObRawExpr *, 4> input_preds;
+  ObSEArray<ObRawExpr *, 4> all_columns;
+  ObSEArray<ObRawExpr *, 4> columns;
+  ObSqlBitSet<> table_set;
   if (sel_stmt.get_having_exprs().empty() && pushdown_preds.empty()) {
     // do nothing
-  } else if (OB_FAIL(sel_stmt.get_column_exprs(columns))) {
+  } else if (OB_FAIL(sel_stmt.get_column_exprs(all_columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(append(input_preds, pullup_preds))) {
-    LOG_WARN("failed to append predicates", K(ret));
+  } else if (OB_FAIL(sel_stmt.get_from_tables(table_set))) {
+    LOG_WARN("failed to get from items rel ids", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, all_columns,
+                                                           table_set, columns))) {
+    LOG_WARN("failed to get related columns", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, pullup_preds,
+                                                           table_set, input_preds))) {
+    LOG_WARN("failed to get related pullup preds", K(ret));
   } else if (OB_FAIL(append(input_preds, sel_stmt.get_having_exprs()))) {
     LOG_WARN("failed to append having predicates", K(ret));
   } else if (OB_FAIL(append(input_preds, pushdown_preds))) {
@@ -930,17 +938,25 @@ int ObTransformPredicateMoveAround::pushdown_into_where(
     ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pullup_preds, ObIArray<ObRawExpr*>& predicates)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> new_conds;
-  ObSEArray<ObRawExpr*, 4> all_conds;
-  ObSEArray<ObRawExpr*, 4> columns;
+  ObSEArray<ObRawExpr *, 4> new_conds;
+  ObSEArray<ObRawExpr *, 4> all_conds;
+  ObSEArray<ObRawExpr *, 4> all_columns;
+  ObSEArray<ObRawExpr *, 4> columns;
+  ObSqlBitSet<> table_set;
   if (stmt.get_condition_exprs().empty() && predicates.empty()) {
     // do nothing
-  } else if (OB_FAIL(stmt.get_column_exprs(columns))) {
+  } else if (OB_FAIL(stmt.get_column_exprs(all_columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
+  } else if (OB_FAIL(stmt.get_from_tables(table_set))) {
+    LOG_WARN("failed to get from items rel ids", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(stmt, all_columns,
+                                                           table_set, columns))) {
+    LOG_WARN("failed to get related columns", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(stmt, pullup_preds,
+                                                           table_set, all_conds))) {
+    LOG_WARN("failed to get related pullup preds", K(ret));
   } else if (OB_FAIL(append(all_conds, predicates))) {
     LOG_WARN("failed to append push down predicates", K(ret));
-  } else if (OB_FAIL(append(all_conds, pullup_preds))) {
-    LOG_WARN("failed to append pullup predicates", K(ret));
   } else if (OB_FAIL(append(all_conds, stmt.get_condition_exprs()))) {
     LOG_WARN("failed to append where conditions", K(ret));
   } else if (OB_FAIL(transform_predicates(stmt, all_conds, columns, new_conds))) {
@@ -1151,7 +1167,7 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(ObDMLStmt* stmt, 
       filterable_table = joined_table;
     }
     if (NULL != filterable_table) {
-      if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *filterable_table, filter_table_set))) {
+      if (OB_FAIL(stmt->get_table_rel_ids(*filterable_table, filter_table_set))) {
         LOG_WARN("failed to get table relation ids", K(ret));
       }
     }
@@ -1320,7 +1336,7 @@ int ObTransformPredicateMoveAround::get_pushdown_predicates(
     target_table = &table;
   }
   if (OB_FAIL(ret) || NULL == target_table) {
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, *target_table, table_set))) {
+  } else if (OB_FAIL(stmt.get_table_rel_ids(*target_table, table_set))) {
     LOG_WARN("failed to get table set", K(ret));
   } else if (OB_FAIL(get_pushdown_predicates(stmt, table_set, preds, table_filters))) {
     LOG_WARN("failed to get push down predicates", K(ret));
@@ -1377,9 +1393,9 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(
     LOG_WARN("params have null", K(ret), K(stmt), K(semi_info), K(right_table));
   } else if (OB_FAIL(old_semi_conds.assign(semi_info->semi_conditions_))) {
     LOG_WARN("failed to assign exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, semi_info->left_table_ids_, left_rel_ids))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids))) {
     LOG_WARN("failed to get left rel ids", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, semi_info->right_table_id_, right_rel_ids))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
     LOG_WARN("failed to get right semi rel ids", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, pullup_preds, left_rel_ids, properites)) ||
              OB_FAIL(get_pushdown_predicates(*stmt, left_rel_ids, pushdown_preds, properites))) {
@@ -1400,17 +1416,17 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(
     LOG_WARN("failed to check different", K(ret));
   } else if (OB_FAIL(pushdown_into_table(stmt, right_table, pullup_preds, semi_info->semi_conditions_))) {
     LOG_WARN("failed to push down predicates", K(ret));
-  } else if (OB_FAIL(get_pushdown_predicates(*stmt, *right_table, semi_info->semi_conditions_, table_preds))) {
+  } else if (OB_FAIL(get_pushdown_predicates(*stmt, right_rel_ids, semi_info->semi_conditions_,
+                                             table_preds))) {
     LOG_WARN("failed to get push down predicates", K(ret));
   } else if (table_preds.empty()) {
     /* do nothing */
   } else if (OB_FAIL(ObTransformUtils::pushdown_semi_info_right_filter(stmt, ctx_, semi_info, table_preds))) {
     LOG_WARN("failed to pushdown semi info right filter", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(semi_info->semi_conditions_, table_preds))) {
-    LOG_WARN("failed to remove item", K(ret));
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(check_transform_happened(old_semi_conds, semi_info->semi_conditions_))) {
+  if (OB_SUCC(ret) && OB_FAIL(check_transform_happened(old_semi_conds,
+                                                       semi_info->semi_conditions_))) {
     LOG_WARN("failed to check transform happened", K(ret));
   }
   return ret;

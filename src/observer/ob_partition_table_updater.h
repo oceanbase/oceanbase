@@ -83,6 +83,15 @@ public:
   {
     return false;
   }
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObPTUpdateRoleTask& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
   TO_STRING_KV(K_(pkey), K_(data_version), K_(first_submit_time));
 
 private:
@@ -127,6 +136,15 @@ public:
   }
   bool is_barrier() const;
   static bool is_barrier(const common::ObPartitionKey& pkey);
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObPTUpdateTask& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
 
   TO_STRING_KV(K_(part_key), K_(data_version), K_(first_submit_time), K_(is_remove), K_(with_role));
 
@@ -228,9 +246,11 @@ private:
   int reput_to_queue(const common::ObIArray<ObPTUpdateRoleTask>& tasks);
 
   int check_if_tenant_has_been_dropped(const uint64_t tenant_id, bool& has_dropped);
-  int do_batch_execute(const common::ObIArray<ObPTUpdateTask>& tasks,
+  int do_batch_execute(const int64_t start_time, const common::ObIArray<ObPTUpdateTask>& tasks,
       const common::ObIArray<share::ObPartitionReplica>& replicas, const bool with_role);
-  int do_batch_execute(const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role);
+  int do_batch_execute(const int64_t start_time, const common::ObIArray<ObPTUpdateRoleTask>& tasks,
+      const common::ObIArray<share::ObPartitionReplica>& replicas, const common::ObRole new_role);
+  int submit_broadcast_tasks(const common::ObIArray<share::ObPartitionReplica>& replicas);
 
 private:
   bool inited_;

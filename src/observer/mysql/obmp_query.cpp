@@ -483,6 +483,9 @@ OB_INLINE int ObMPQuery::get_tenant_schema_info_(const uint64_t tenant_id, ObTen
 
   if (!cached_guard.is_inited()) {
     need_refresh = true;
+  } else if (tenant_id != cached_guard.get_tenant_id()) {
+    // change tenant
+    need_refresh = true;
   } else {
     int64_t tmp_tenant_version = 0;
     int64_t tmp_sys_version = 0;
@@ -739,9 +742,9 @@ OB_INLINE int ObMPQuery::do_process(
         } else {
           LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()));
         }
-        bool is_partition_hit = session.partition_hit().get_bool();
-        int err = send_error_packet(ret, NULL, is_partition_hit, (void*)&ctx_.reroute_info_);
-        if (OB_SUCCESS != err) {
+        bool is_partition_hit = session.get_err_final_partition_hit(ret);
+        int err = send_error_packet(ret, NULL, is_partition_hit, (void *)&ctx_.reroute_info_);
+        if (OB_SUCCESS != err) {  // send error packet
           LOG_WARN("send error packet failed", K(ret), K(err));
         }
       }
@@ -976,10 +979,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly)
     case stmt::T_SHOW_TRACE:
     case stmt::T_SHOW_ENGINES:
     case stmt::T_SHOW_PRIVILEGES:
+    case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_USE_DATABASE:
-    case stmt::T_SET_NAMES:  // read only not restrict it
     case stmt::T_START_TRANS:
     case stmt::T_END_TRANS: {
       is_readonly = true;
@@ -1076,7 +1079,7 @@ OB_INLINE int ObMPQuery::response_result(ObQueryExecCtx& query_ctx, bool force_s
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
     if (need_execute_async && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       ctx_.is_execute_async_ = true;
-      WITH_CONTEXT(&query_ctx.get_mem_context())
+      WITH_CONTEXT(query_ctx.get_mem_context())
       {
         if (OB_FAIL(register_callback_with_async(query_ctx))) {
           LOG_WARN("response result with async failed", K(ret));
@@ -1168,10 +1171,6 @@ void ObMPQuery::update_audit_info(const ObWaitEventStat& total_wait_desc, ObAudi
 int ObMPQuery::deserialize_com_field_list()
 {
   int ret = OB_SUCCESS;
-  /*
-   *
-   * Refer to : https://dev.mysql.com/doc/internals/en/com-field-list.html
-   */
   ObIAllocator* alloc = &THIS_WORKER.get_sql_arena_allocator();
   if (OB_ISNULL(alloc)) {
     ret = OB_ERR_UNEXPECTED;

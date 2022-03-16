@@ -256,7 +256,6 @@ public:
 
   // leader or follower
   virtual int get_role(common::ObRole& role) const = 0;
-  virtual int get_role_for_partition_table(common::ObRole& role) const = 0;
   virtual int get_role_unsafe(common::ObRole& role) const = 0;
   virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const = 0;
   virtual int get_leader(common::ObAddr& leader) const = 0;
@@ -468,7 +467,6 @@ public:
   virtual int retire_warmup_store(const bool is_disk_full) = 0;
   virtual int enable_write_log(const bool is_replay_old) = 0;
   virtual uint64_t get_min_replayed_log_id() = 0;  // Get the minimum log id that has been replayed continuously.
-  virtual void get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) = 0;
   virtual int get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) = 0;
   virtual int create_partition_group(const ObCreatePGParam& param) = 0;
   virtual int create_pg_partition(const common::ObPartitionKey& pkey, const int64_t multi_version_start,
@@ -514,16 +512,18 @@ public:
   virtual int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list) const = 0;
   virtual int get_all_tables(ObTablesHandle& tables_handle) = 0;
   virtual int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt) = 0;
+  virtual int recycle_sstable(const ObITable::TableKey &table_key) = 0;
   virtual int check_can_free(bool& can_free) = 0;
   virtual int get_merge_log_ts(int64_t& freeze_ts) = 0;
   virtual int get_table_store_cnt(int64_t& table_cnt) const = 0;
   virtual int check_can_physical_flashback(const int64_t flashback_scn) = 0;
   virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows) = 0;
   virtual int check_physical_split(bool& finished) = 0;
-  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id) = 0;
+  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts) = 0;
   virtual int reset_for_replay() = 0;
   virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
   virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
+  virtual int update_max_majority_log(const uint64_t log_id, const int64_t log_ts) = 0;
   TO_STRING_KV(K_(ref_cnt));
 
 protected:

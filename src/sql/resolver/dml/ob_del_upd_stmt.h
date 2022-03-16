@@ -22,9 +22,16 @@ namespace sql {
 struct IndexDMLInfo {
 public:
   IndexDMLInfo()
-  {
-    reset();
-  }
+      : table_id_(common::OB_INVALID_ID),
+        loc_table_id_(common::OB_INVALID_ID),
+        index_tid_(common::OB_INVALID_ID),
+        rowkey_cnt_(0),
+        part_cnt_(common::OB_INVALID_ID),
+        all_part_num_(0),
+        need_filter_null_(false),
+        distinct_algo_(T_DISTINCT_NONE),
+        index_type_(share::schema::INDEX_TYPE_IS_NOT)
+  {}
   inline void reset()
   {
     table_id_ = common::OB_INVALID_ID;
@@ -41,10 +48,12 @@ public:
     assignments_.reset();
     need_filter_null_ = false;
     distinct_algo_ = T_DISTINCT_NONE;
+    index_type_ = share::schema::INDEX_TYPE_IS_NOT;
     calc_part_id_exprs_.reset();
   }
   int64_t to_explain_string(char* buf, int64_t buf_len, ExplainType type) const;
-  int init_assignment_info(const ObAssignments& assignments);
+  int init_assignment_info(
+      const ObAssignments& assignments, ObRawExprFactory& expr_factory, bool use_static_typing_engine);
   int add_spk_assignment_info(ObRawExprFactory& expr_factory);
 
   int deep_copy(ObRawExprFactory& expr_factory, const IndexDMLInfo& other);
@@ -72,6 +81,7 @@ public:
     }
     seed = do_hash(need_filter_null_, seed);
     seed = do_hash(distinct_algo_, seed);
+    seed = do_hash(index_type_, seed);
     for (int64_t i = 0; i < primary_key_ids_.count(); ++i) {
       seed = do_hash(primary_key_ids_.at(i), seed);
     }
@@ -113,6 +123,7 @@ public:
   ObAssignments assignments_;
   bool need_filter_null_;
   DistinctType distinct_algo_;
+  share::schema::ObIndexType index_type_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> calc_part_id_exprs_;
 
   common::ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> primary_key_ids_;
@@ -248,7 +259,7 @@ public:
   {
     has_global_index_ |= has_global_index;
   }
-  virtual bool check_table_be_modified(uint64_t ref_table_id) const;
+  virtual bool check_table_be_modified(uint64_t ref_table_id) const override;
   void set_dml_source_from_join(bool from_join)
   {
     dml_source_from_join_ = from_join;
@@ -259,7 +270,7 @@ public:
   }
 
   virtual int update_base_tid_cid();
-  virtual int inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const;
+  virtual int inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const override;
   virtual int replace_inner_stmt_expr(
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
   uint64_t get_insert_table_id(uint64_t table_offset = 0) const;
@@ -267,8 +278,8 @@ public:
   uint64_t get_ref_table_id() const;
 
 protected:
-  int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
-  virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker)
+  int inner_get_relation_exprs(RelExprCheckerBase& expr_checker) override;
+  virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker) override
   {
     return ObDelUpdStmt::inner_get_relation_exprs(expr_checker);
   }

@@ -20,11 +20,11 @@ public:
   explicit ObExprSysPrivilegeCheck(common::ObIAllocator& alloc);
   virtual ~ObExprSysPrivilegeCheck();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
 
   /// obj_array(level, tenant, db, table)
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* obj_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* obj_array, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_sys_privilege_check(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

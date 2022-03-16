@@ -177,7 +177,7 @@ int ObPxSqcHandler::init()
       .set_parallel(4)
       .set_properties(lib::ALLOC_THREAD_SAFE);
   ObIAllocator* allocator = nullptr;
-  if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+  if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("create memory entity failed", K(ret));
   } else if (OB_ISNULL(mem_context_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -198,7 +198,7 @@ int ObPxSqcHandler::init()
   } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObPhysicalPlan)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc physical plan", K(ret));
-  } else if (FALSE_IT(des_phy_plan_ = new (buf) ObPhysicalPlan(*mem_context_))) {
+  } else if (FALSE_IT(des_phy_plan_ = new (buf) ObPhysicalPlan(mem_context_))) {
   } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObPxRpcInitSqcArgs)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc sqc init args", K(ret));

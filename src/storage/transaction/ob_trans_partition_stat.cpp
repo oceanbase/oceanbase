@@ -30,6 +30,11 @@ void ObTransPartitionStat::reset()
   active_memstore_version_.reset();
   total_ctx_count_ = 0;
   mgr_addr_ = 0;
+  with_dependency_trx_count_ = 0;
+  without_dependency_trx_count_ = 0;
+  end_trans_by_prev_count_ = 0;
+  end_trans_by_checkpoint_count_ = 0;
+  end_trans_by_self_count_ = 0;
 }
 
 // don't valid input arguments

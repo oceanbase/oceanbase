@@ -88,11 +88,19 @@ public:
     return flags_;
   }
 
+  bool is_valid_oracle_xid()
+  {
+    return gtrid_string_.length() > 0 && gtrid_string_.length() <= MAX_GTRID_LENGTH && bqual_string_.length() > 0 &&
+           bqual_string_.length() <= MAX_BQUAL_LENGTH;
+  }
+
   TO_STRING_KV(
       N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string), K_(bqual_string), K_(format_id), K_(flags));
 
 public:
   static const int32_t MAX_XID_LENGTH = 128;
+  static const int32_t MAX_GTRID_LENGTH = 64;
+  static const int32_t MAX_BQUAL_LENGTH = 64;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObXaStmt);

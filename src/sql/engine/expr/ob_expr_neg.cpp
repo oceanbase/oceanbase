@@ -16,6 +16,7 @@
 #include "share/datum/ob_datum_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase {
 using namespace common;
@@ -225,6 +226,9 @@ int ObExprNeg::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObEx
             type.set_type(ObNumberType);
             type1.set_calc_type(ObNumberType);
           }
+        } else if (type1.get_type() == ObJsonType) {
+          type.set_type(ObDoubleType);
+          type1.set_calc_type(ObDoubleType);
         }
       }
     }
@@ -435,6 +439,11 @@ int ObExprNeg::calc_param_type(const ObExprResType& param_type, ObObjType& calc_
     case ObExtendTC:
     case ObRawTC: {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      break;
+    }
+    case ObJsonTC: {
+      result_type = ObDoubleType;
+      calc_type = ObDoubleType;
       break;
     }
     default: {

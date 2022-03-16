@@ -294,6 +294,29 @@ int ObPxReceive::active_all_receive_channel(ObPxReceiveCtx& recv_ctx, ObExecCont
   return ret;
 }
 
+int ObPxReceive::erase_dtl_interm_result(ObExecContext &ctx) const
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDtlChannelInfo ci;
+  ObDTLIntermResultKey key;
+  ObPxReceiveCtx *recv_ctx = NULL;
+  if (OB_ISNULL(recv_ctx = GET_PHY_OPERATOR_CTX(ObPxReceiveCtx, ctx, get_id()))) {
+    LOG_DEBUG("The operator has not been opened.", K(ret), K_(id), "op_type",
+              ob_phy_operator_type_str(get_type()));
+  } else {
+    for (int i = 0; i < recv_ctx->get_ch_set().count(); ++i) {
+      if (OB_FAIL(recv_ctx->get_ch_set().get_channel_info(i, ci))) {
+        LOG_WARN("fail get channel info", K(ret));
+      } else {
+        key.channel_id_ = ci.chid_;
+        if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+          LOG_TRACE("fail to release recieve internal result", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
 //////////////////////////////////////////
 
 ObPxFifoReceive::ObPxFifoReceive(common::ObIAllocator& alloc) : ObPxReceive(alloc)
@@ -351,26 +374,11 @@ int ObPxFifoReceive::inner_close(ObExecContext& ctx) const
 
   /* we must release channel even if there is some error happen before */
   if (OB_NOT_NULL(recv_ctx)) {
-
-    int release_channel_ret = ObPxChannelUtil::flush_rows(recv_ctx->task_channels_);
-    if (release_channel_ret != common::OB_SUCCESS) {
-      LOG_WARN("release dtl channel failed", K(release_channel_ret));
+    int release_channel_ret = ObPxChannelUtil::flush_rows(recv_ctx->task_channels_);		
+    if (release_channel_ret != common::OB_SUCCESS) {		
+      LOG_WARN("release dtl channel failed", K(release_channel_ret));		
     }
-    ObDTLIntermResultKey key;
-    ObDtlBasicChannel* channel = NULL;
-    ;
-    for (int i = 0; i < recv_ctx->task_channels_.count(); ++i) {
-      channel = static_cast<ObDtlBasicChannel*>(recv_ctx->task_channels_.at(i));
-      key.channel_id_ = channel->get_id();
-      if (channel->use_interm_result()) {
-        release_channel_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
-        if (release_channel_ret != common::OB_SUCCESS) {
-          LOG_WARN("fail to release recieve internal result", KR(release_channel_ret), K(ret));
-        }
-      }
-    }
-
-    dtl::ObDtlChannelLoop& loop = recv_ctx->msg_loop_;
+    dtl::ObDtlChannelLoop &loop = recv_ctx->msg_loop_;
     release_channel_ret = loop.unregister_all_channel();
     if (release_channel_ret != common::OB_SUCCESS) {
       // the following unlink actions is not safe is any unregister failure happened
@@ -379,6 +387,11 @@ int ObPxFifoReceive::inner_close(ObExecContext& ctx) const
     release_channel_ret = ObPxChannelUtil::unlink_ch_set(recv_ctx->get_ch_set(), &recv_ctx->dfc_);
     if (release_channel_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", KR(release_channel_ret));
+    }
+    // must erase after unlink channel
+    release_channel_ret = erase_dtl_interm_result(ctx);
+    if (release_channel_ret != common::OB_SUCCESS) {
+      LOG_TRACE("release interm result failed", KR(release_channel_ret));
     }
   }
   return ret;
@@ -432,7 +445,7 @@ int ObPxFifoReceive::inner_get_next_row(ObExecContext& ctx, const common::ObNewR
           LOG_WARN("get row from channel timeout", K(ret));
         } else {
           usleep(1 * 1000);
-          int tmp_ret = THIS_WORKER.check_status();
+          int tmp_ret = ctx.fast_check_status();
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("wait to receive row interrupted", K(tmp_ret), K(ret));
             ret = tmp_ret;
@@ -519,9 +532,6 @@ int ObPxFifoReceive::get_one_row_from_channels(
         LOG_WARN("fail get row from row store", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret) && !got_row) {
-    ret = OB_EAGAIN;
   }
   return ret;
 }

@@ -90,8 +90,6 @@ int ObDumpTaskGenerator::generate_task_from_file()
       char str[lib::AOBJECT_LABEL_SIZE + 1];
       snprintf(str, sizeof(str), "%.*s", (int32_t)node->children_[0]->str_len_, node->children_[0]->str_value_);
       reset_mem_leak_checker_label(str);
-    } else if (SET_LEAK_RATE == node->value_) {
-      reset_mem_leak_checker_rate(node->children_[0]->value_);
     } else if (MEMORY_LEAK == node->value_) {
       dump_memory_leak();
     } else {
@@ -182,7 +180,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
         pos += snprintf(buf + pos,
             buf_len - pos,
             "\n######## LEAK_CHECKER (origin_str = %s, label_ = %s, check_type = %d, "
-            "static_id_ = %d, current_ts = %ld)########\n",
+            "static_id_ = 0x%lx, current_ts = %ld)########\n",
             get_mem_leak_checker().get_str(),
             get_mem_leak_checker().get_label(),
             get_mem_leak_checker().get_check_type(),

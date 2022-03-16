@@ -279,6 +279,7 @@ int ObStmtComparer::check_stmt_containment(
   } else if (first_sel->is_set_stmt() || second_sel->is_set_stmt() || first_sel->has_recusive_cte() ||
              second_sel->has_recusive_cte() || first_sel->has_hierarchical_query() ||
              second_sel->has_hierarchical_query() || first_sel->is_contains_assignment() ||
+             first_sel->get_semi_info_size() > 0 || second_sel->get_semi_info_size() > 0 ||
              second_sel->is_contains_assignment()) {
     /*do nothing*/
   } else if (first_sel->get_from_item_size() != second_sel->get_from_item_size()) {
@@ -611,18 +612,16 @@ int ObStmtComparer::compare_basic_table_item(ObDMLStmt* first, const TableItem* 
     } else if (OB_ISNULL(second_table_hint)) {
       relation = QueryRelation::LEFT_SUBSET;
     } else {
-      ObSqlBitSet<> first_set, second_set;
-      for (int64_t i = 0; i < first_table_hint->part_ids_.count(); ++i) {
-        first_set.add_member(first_table_hint->part_ids_.at(i));
-      }
-      for (int64_t i = 0; i < second_table_hint->part_ids_.count(); ++i) {
-        second_set.add_member(second_table_hint->part_ids_.at(i));
-      }
-      if (first_set.equal(second_set)) {
+      // part ids for subpartition is a large int64_t number, here can not use bit set.
+      bool left_subset = ObOptimizerUtil::is_subset(first_table_hint->part_ids_,
+                                                    second_table_hint->part_ids_);
+      bool right_subset = ObOptimizerUtil::is_subset(second_table_hint->part_ids_,
+                                                     first_table_hint->part_ids_);
+      if (left_subset && right_subset) {
         relation = QueryRelation::EQUAL;
-      } else if (first_set.is_subset(second_set)) {
+      } else if (left_subset) {
         relation = QueryRelation::LEFT_SUBSET;
-      } else if (first_set.is_superset(second_set)) {
+      } else if (right_subset) {
         relation = QueryRelation::RIGHT_SUBSET;
       } else {
         relation = QueryRelation::UNCOMPARABLE;

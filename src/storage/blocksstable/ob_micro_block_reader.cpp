@@ -58,7 +58,7 @@ int ObMicroBlockGetReader::get_row(const uint64_t tenant_id, const ObMicroBlockD
         STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
       }
     } else if (OB_FAIL(row_reader.read_row(row_buf, row_len, 0, column_map, allocator_, row))) {
-      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey));
+      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey), K(macro_meta));
     }
   }
   return ret;
@@ -78,14 +78,14 @@ int ObMicroBlockGetReader::get_row(const uint64_t tenant_id, const ObMicroBlockD
     int64_t pos = 0;
     if (OB_FAIL(locate_row(rowkey, rowkey_helper, macro_meta.schema_->column_type_array_, row_buf, row_len))) {
       if (OB_BEYOND_THE_RANGE != ret) {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       ObFlatRowReader row_reader;
       row.row_val_.count_ = macro_meta.meta_->column_number_;
       if (OB_FAIL(row_reader.read_full_row(
               row_buf, row_len, pos, macro_meta.schema_->column_type_array_, allocator_, row))) {
-        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos));
+        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos), K(macro_meta));
       }
     }
   }
@@ -109,7 +109,7 @@ int ObMicroBlockGetReader::exist_row(const uint64_t tenant_id, const ObMicroBloc
       if (OB_BEYOND_THE_RANGE == ret) {
         ret = OB_SUCCESS;
       } else {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       const ObRowHeader* row_header = reinterpret_cast<const ObRowHeader*>(row_buf);
@@ -252,45 +252,62 @@ int ObMicroBlockGetReader::check_row_locked_(ObIRowReader* row_reader_ptr, memta
       const int64_t sql_sequence_col_idx =
           ObMultiVersionRowkeyHelpper::get_sql_sequence_col_store_index(rowkey_cnt, extra_multi_version_col_cnt);
 
-      if (OB_FAIL(row_reader_ptr->setup_row(
-              data_begin_, index_data_[row_idx_ + 1], index_data_[row_idx_], header_->column_count_, &trans_id))) {
-        LOG_WARN("fail to setup row", K(ret));
-      } else if (OB_FAIL(row_reader_ptr->get_row_header(row_header))) {  // get row header
-        LOG_WARN("fail to get row header", K(ret));
-      } else if (OB_ISNULL(row_header)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row header is null", K(ret));
-      } else if (OB_FAIL(row_reader_ptr->read_column(version_column_meta,
-                     allocator_,
-                     trans_version_col_idx,
-                     version_cell))) {  // read trans version
-        LOG_WARN("fail to read version column", K(ret));
-      } else if (OB_FAIL(version_cell.get_int(lock_state.trans_version_))) {
-        LOG_WARN("fail to convert version cell to int", K(ret), K(version_cell));
-      } else {
-        lock_state.trans_version_ = -lock_state.trans_version_;
-      }
-      if (OB_SUCC(ret)) {
-        flag.flag_ = row_header->get_row_type_flag();
-        // check if row is uncommitted
-        if (flag.is_uncommitted_row()) {
-          lock_state.trans_version_ = INT64_MAX;
-          if (OB_FAIL(row_reader_ptr->read_column(sql_sequence_meta,
-                  allocator_,
-                  sql_sequence_col_idx,
-                  sql_sequence_cell))) {  // read sql sequence
-            LOG_WARN("fail to read version column", K(ret));
-          } else if (OB_FAIL(sql_sequence_cell.get_int(sql_sequence))) {
-            LOG_WARN("fail to convert sql_sequence cell to int32", K(ret), K(sql_sequence_cell));
-          } else {
-            sql_sequence = -sql_sequence;
-            ret = const_cast<transaction::ObTransStateTableGuard&>(trans_table_guard)
-                      .get_trans_state_table()
-                      .check_row_locked(rowkey, ctx, read_trans_id, trans_id, sql_sequence, lock_state);
-          }
+      while (OB_SUCC(ret) && row_idx_ < header_->row_count_) {
+        if (OB_FAIL(row_reader_ptr->setup_row(
+                data_begin_, index_data_[row_idx_ + 1], index_data_[row_idx_], header_->column_count_, &trans_id))) {
+          LOG_WARN("fail to setup row", K(ret));
+        } else if (OB_FAIL(row_reader_ptr->get_row_header(row_header))) {  // get row header
+          LOG_WARN("fail to get row header", K(ret));
+        } else if (OB_ISNULL(row_header)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row header is null", K(ret));
+        } else if (OB_FAIL(row_reader_ptr->read_column(version_column_meta,
+                       allocator_,
+                       trans_version_col_idx,
+                       version_cell))) {  // read trans version
+          LOG_WARN("fail to read version column", K(ret));
+        } else if (OB_FAIL(version_cell.get_int(lock_state.trans_version_))) {
+          LOG_WARN("fail to convert version cell to int", K(ret), K(version_cell));
+        } else {
+          lock_state.trans_version_ = -lock_state.trans_version_;
         }
-        STORAGE_LOG(
-            DEBUG, "check row lock", K(ret), K(rowkey), K(read_trans_id), K(trans_id), K(sql_sequence), K(lock_state));
+        if (OB_SUCC(ret)) {
+          flag.flag_ = row_header->get_row_type_flag();
+          // check if row is uncommitted
+          if (flag.is_uncommitted_row()) {
+            lock_state.trans_version_ = INT64_MAX;
+            if (OB_FAIL(row_reader_ptr->read_column(sql_sequence_meta,
+                    allocator_,
+                    sql_sequence_col_idx,
+                    sql_sequence_cell))) {  // read sql sequence
+              LOG_WARN("fail to read version column", K(ret));
+            } else if (OB_FAIL(sql_sequence_cell.get_int(sql_sequence))) {
+              LOG_WARN("fail to convert sql_sequence cell to int32", K(ret), K(sql_sequence_cell));
+            } else {
+              sql_sequence = -sql_sequence;
+              ret = const_cast<transaction::ObTransStateTableGuard &>(trans_table_guard)
+                        .get_trans_state_table()
+                        .check_row_locked(rowkey, ctx, read_trans_id, trans_id, sql_sequence, lock_state);
+              if (flag.is_last_multi_version_row()   // meet last row
+                  || 0 != lock_state.trans_version_  // trans is commit or abort
+                  || lock_state.is_locked_) {
+                break;
+              }
+            }
+          } else {  // meet committed row, should break
+            break;
+          }
+          ++row_idx_;
+
+          STORAGE_LOG(DEBUG,
+              "check row lock",
+              K(ret),
+              K(rowkey),
+              K(read_trans_id),
+              K(trans_id),
+              K(sql_sequence),
+              K(lock_state));
+        }
       }
     }
   }
@@ -323,7 +340,7 @@ int ObMultiVersionBlockGetReader::get_row(const uint64_t tenant_id, const ObMicr
         STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
       }
     } else if (OB_FAIL(row_reader.read_row(row_buf, row_len, 0, column_map, allocator_, row))) {
-      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey));
+      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey), K(macro_meta));
     }
   }
   return ret;
@@ -343,14 +360,14 @@ int ObMultiVersionBlockGetReader::get_row(const uint64_t tenant_id, const ObMicr
     int64_t pos = 0;
     if (OB_FAIL(locate_row(rowkey, rowkey_helper, macro_meta.schema_->column_type_array_, row_buf, row_len))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       ObFlatRowReader row_reader;
       row.row_val_.count_ = macro_meta.schema_->column_number_;
       if (OB_FAIL(row_reader.read_full_row(
               row_buf, row_len, pos, macro_meta.schema_->column_type_array_, allocator_, row))) {
-        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos));
+        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos), K(macro_meta));
       }
     }
   }
@@ -374,7 +391,7 @@ int ObMultiVersionBlockGetReader::exist_row(const uint64_t tenant_id, const ObMi
       if (OB_LIKELY(OB_BEYOND_THE_RANGE == ret)) {
         ret = OB_SUCCESS;
       } else {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       const ObRowHeader* row_header = reinterpret_cast<const ObRowHeader*>(row_buf);

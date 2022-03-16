@@ -65,9 +65,13 @@ public:
   virtual void destroy();
   int switch_file();
   file_id_t get_file_id() const;
-  bool is_disk_error() const;
-  int set_is_disk_error();
-  int reset_is_disk_error();
+  bool is_disk_hang() const;
+  inline bool is_disk_error() const
+  {
+    return true == is_disk_error_;
+  }
+  int set_is_disk_hang();
+  int reset_is_disk_hang();
 
 protected:
   virtual void process_log_items(common::ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
@@ -99,6 +103,7 @@ private:
   int inner_switch_file();
   bool is_started_;
   bool is_disk_error_;
+  bool is_disk_hang_;
   lib::ObMutex file_mutex_;
   ObCLogBaseFileWriter* file_writer_;
   ObLogWritePoolType type_;
@@ -136,6 +141,7 @@ public:
     int ret = common::OB_SUCCESS;
     file_id_t range_min_file_id = common::OB_INVALID_FILE_ID;
     file_id_t range_max_file_id = common::OB_INVALID_FILE_ID;
+    int64_t last_entry_ts = common::OB_INVALID_TIMESTAMP;
     // When empty folder, because the file header block occupies DIO_ALIGN_SIZE,
     // so the file start offset begins from CLOG_DIO_ALIGN_SIZE
     ObRawEntryIterator<Type, Interface> iter;
@@ -160,7 +166,11 @@ public:
       if (common::OB_ITER_END == ret) {
         file_id = param.file_id_;
         offset = param.offset_;
-        CLOG_LOG(INFO, "iter next_entry finish", K(ret), K(param), K(entry));  // FIXME
+        last_entry_ts = entry.get_submit_timestamp();
+        if (OB_INVALID_TIMESTAMP != last_entry_ts) {
+          ObClockGenerator::try_advance_cur_ts(last_entry_ts);
+        }
+        CLOG_LOG(INFO, "iter next_entry finish", K(ret), K(param), K(entry)); // FIXME
         ret = common::OB_SUCCESS;
       } else {
         CLOG_LOG(ERROR, "get cursor fail", K(ret), K(param), K(entry), K(range_max_file_id));

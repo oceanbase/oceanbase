@@ -54,14 +54,14 @@ public:
   ObTableScanInput();
   virtual ~ObTableScanInput();
   virtual void reset() override;
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
   int64_t get_location_idx() const;
   inline void set_location_idx(int64_t location_idx)
   {
     location_idx_ = location_idx;
   }
-  virtual ObPhyOperatorType get_phy_op_type() const;
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
+  virtual ObPhyOperatorType get_phy_op_type() const override;
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
   int reassign_ranges(ObIArray<ObNewRange>& ranges);
 
   int translate_pid_to_ldx(ObExecContext& ctx, int64_t partition_id, int64_t table_location_key, int64_t ref_table_id,
@@ -151,7 +151,7 @@ public:
     {
       table_allocator_ = alloc;
     }
-    inline void set_scan_iterator_mementity(lib::MemoryContext* mem)
+    inline void set_scan_iterator_mementity(lib::MemoryContext mem)
     {
       scan_param_.iterator_mementity_ = mem;
       scan_param_.allocator_ = &mem->get_arena_allocator();
@@ -193,15 +193,15 @@ public:
 public:
   explicit ObTableScan(common::ObIAllocator& allocator);
   virtual ~ObTableScan();
-  virtual void reset();
-  virtual void reuse();
+  virtual void reset() override;
+  virtual void reuse() override;
   // renew the TSC by a new granule task info and do table scan
   int reassign_task_and_do_table_scan(ObExecContext& ctx, ObGranuleTaskInfo& info) const;
   // get task from exection ctx
   int get_gi_task_and_restart(ObExecContext& ctx) const;
   // virtual int get_next_row(ObExecContext &ctx, const common::ObNewRow *&row) const;
-  virtual int rescan(ObExecContext& ctx) const;
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int rescan(ObExecContext& ctx) const override;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -329,6 +329,7 @@ public:
     return estimate_method_;
   }
   int set_pruned_index_name(const common::ObIArray<common::ObString>& pruned_index_name, ObIAllocator& phy_alloc);
+  int set_unstable_index_name(const common::ObIArray<common::ObString>& unstable_index_name, ObIAllocator& phy_alloc);
   int set_available_index_name(const common::ObIArray<common::ObString>& available_index_name, ObIAllocator& phy_alloc);
   int set_est_row_count_record(const common::ObIArray<common::ObEstRowCountRecord>& est_records);
   inline const common::ObIArray<common::ObEstRowCountRecord>& get_est_row_count_record() const
@@ -574,20 +575,20 @@ protected:
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   virtual bool need_filter_row() const override;
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_close(ObExecContext& ctx) const override;
   // helper
   int calc_expr_int_value(
       common::ObExprCtx& expr_ctx, const ObSqlExpression& expr, int64_t& retval, bool& is_null_value) const;
@@ -673,6 +674,7 @@ protected:
   common::ObFixedArray<common::ObEstRowCountRecord, common::ObIAllocator> est_records_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> available_index_name_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> pruned_index_name_;
+  common::ObFixedArray<common::ObString, common::ObIAllocator> unstable_index_name_;
   //***********************************
   bool gi_above_;
 

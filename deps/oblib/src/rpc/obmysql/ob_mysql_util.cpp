@@ -20,6 +20,8 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/rowid/ob_urowid.h"
 #include "common/object/ob_object.h"
+#include "lib/json_type/ob_json_bin.h"
+#include "lib/json_type/ob_json_base.h"
 
 using namespace oceanbase::common;
 
@@ -981,6 +983,47 @@ int ObMySQLUtil::urowid_cell_str(char* buf, const int64_t len, const ObURowIDDat
       ret = OB_SIZE_OVERFLOW;
     }
   }
+  return ret;
+}
+
+int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObJsonBin j_bin(val.ptr(), val.length(), &allocator);
+  ObIJsonBase *j_base = &j_bin;
+  ObJsonBuffer jbuf(&allocator);
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid input args", K(ret), KP(buf));
+  } else if (val.length() == 0) {
+    if (OB_FAIL(ObMySQLUtil::store_null(buf, len, pos))) {
+      OB_LOG(WARN, "fail to set null string", K(pos), K(len));
+    }
+  } else if (OB_FAIL(j_bin.reset_iter())) {
+    OB_LOG(WARN, "fail to reset json bin iter", K(ret), K(val));
+  } else if (OB_FAIL(j_base->print(jbuf, true))) {
+    OB_LOG(WARN, "json binary to string failed", K(ret), K(val), K(*j_base));
+  } else {
+    int64_t new_length = jbuf.length();
+    if (OB_LIKELY(new_length < len - pos)) {
+      int64_t pos_bk = pos;
+      if (OB_FAIL(ObMySQLUtil::store_length(buf, len, new_length, pos))) {
+        OB_LOG(WARN, "json_cell_str store length failed", K(ret), K(len), K(new_length), K(pos));
+      } else {
+        if (OB_LIKELY(new_length <= len - pos)) {
+          MEMCPY(buf + pos, jbuf.ptr(), new_length);
+          pos += new_length;
+        } else {
+          pos = pos_bk;
+          ret = OB_SIZE_OVERFLOW;
+        }
+      }
+    } else {
+      ret = OB_SIZE_OVERFLOW;
+    }
+  }
+
   return ret;
 }
 

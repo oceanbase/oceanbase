@@ -15,7 +15,6 @@ ob_set_subtarget(ob_clog common
   ob_clog_writer.cpp
   ob_disk_log_buffer.cpp
   ob_external_fetcher.cpp
-  ob_external_heartbeat_handler.cpp
   ob_external_leader_heartbeat_handler.cpp
   ob_external_log_service.cpp
   ob_external_log_service_monitor.cpp

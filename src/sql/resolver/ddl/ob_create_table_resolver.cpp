@@ -86,6 +86,9 @@ int ObCreateTableResolver::add_primary_key_part(
     } else if (ob_is_text_tc(col->get_data_type())) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+    } else if (ob_is_json_tc(col->get_data_type())) {
+      ret = OB_ERR_JSON_USED_AS_KEY;
+      LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
     } else if (ObTimestampTZType == col->get_data_type()) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
@@ -209,7 +212,8 @@ int ObCreateTableResolver::set_partitioning_key(
       if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == primary_keys_.count()) {
         ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
         LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-      } else if (ob_is_text_tc(column_schema->get_data_type())) {
+      } else if (ob_is_text_tc(column_schema->get_data_type())
+                 || ob_is_json_tc(column_schema->get_data_type())) {
         ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
         LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
             column_schema->get_column_name_str().length(),
@@ -460,6 +464,9 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         } else if (is_create_as_sel && is_mysql_mode) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+        } else if (is_mysql_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table");
         } else {
           is_temporary_table = true;
           is_oracle_temp_table_ = (is_mysql_mode == false);
@@ -552,6 +559,11 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
           SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(create_table_node->children_[3]->type_));
         } else {
           // do nothing
+        }
+
+        // 1、 resolve table_id first for check whether is inner_table
+        if (OB_SUCC(ret) && OB_FAIL(resolve_table_id_pre(create_table_node->children_[4]))) {
+          SQL_RESV_LOG(WARN, "resolve_table_id_pre failed", K(ret));
         }
 
         // consider index can be defined before column, so column should be
@@ -1315,6 +1327,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray
         if (OB_FAIL(resolve_check_constraint_node(*element, csts))) {
           SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
         }
+      } else if (T_EMPTY == element->type_) {
+        // compatible with mysql 5.7 check (expr), do nothing
       } else {
         // won't be here
         ret = OB_ERR_UNEXPECTED;
@@ -1444,7 +1458,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
   ParseNode* sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
   ObSelectStmt* select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
-  select_resolver.params_.is_from_create_view_ = true;
+  select_resolver.params_.is_from_create_table_ = true;
   // select stmt can not see upper insert stmt.
   select_resolver.set_parent_namespace_resolver(NULL);
   if (OB_ISNULL(session_info_)) {
@@ -1504,6 +1518,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid null expr in select_item", K(ret), K(select_item.expr_));
           } else if (select_item.is_real_alias_ || T_REF_COLUMN == select_item.expr_->get_expr_type()) {
+            // do nothing
+          } else if (select_item.expr_->get_expr_type() == T_FUN_SYS_SEQ_NEXTVAL) {
             // do nothing
           } else {
             ret = OB_NO_COLUMN_ALIAS;
@@ -1576,7 +1592,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
           } else if (is_oracle_mode() && create_table_column_count > 0) {
             if (column.is_string_type()) {
               if (column.get_meta_type().is_lob()) {
-                if (OB_FAIL(check_text_column_length_and_promote(column))) {
+                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                   LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                 }
               } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1617,9 +1633,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
                 LOG_DEBUG("reorder column successfully", K(new_column));
               }
             } else {
-              if (column.is_string_type()) {
-                if (column.get_meta_type().is_lob()) {
-                  if (OB_FAIL(check_text_column_length_and_promote(column))) {
+              if (column.is_string_type() || column.is_json()) {
+                if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()) {
+                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
                 } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1711,7 +1727,7 @@ int ObCreateTableResolver::generate_index_arg()
     if (is_oracle_temp_table_) {
       index_scope_ = LOCAL_INDEX;
     }
-    global_ = (index_scope_ != LOCAL_INDEX);
+    global_ = (GLOBAL_INDEX == index_scope_);
     ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema& table_schema = create_table_stmt->get_create_table_arg().schema_;
     if (OB_SUCC(ret)) {

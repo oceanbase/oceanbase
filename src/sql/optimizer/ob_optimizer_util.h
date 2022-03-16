@@ -291,6 +291,7 @@ public:
     INDEX_STORE_RELATED = -2,  // has column not index column, but storing column
     MUL_INDEX_COL = -1,        // has more than one index columns in expr not row.some case present not prefix filter
   };
+
   static int get_subquery_id(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt, uint64_t& id);
 
   static int get_child_corresponding_exprs(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt,
@@ -465,7 +466,7 @@ public:
   static int flip_op_type(const ObItemType expr_type, ObItemType& rotated_expr_type);
 
   static int get_rownum_filter_info(
-      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& const_expr, bool& is_const_filter);
+      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& rownum, ObRawExpr*& const_expr, bool& is_const_filter);
 
   static int convert_rownum_filter_as_offset(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info,
       const ObItemType filter_type, ObRawExpr* const_expr, ObRawExpr*& offset_int_expr);
@@ -587,11 +588,12 @@ public:
   static int is_lossless_column_cast(const ObRawExpr* expr, bool& is_lossless);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
-      ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt, ObSelectStmt* select_stmt);
+      ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt,
+      ObSelectStmt* select_stmt, const bool to_left_type = false);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, ObIArray<ObSelectStmt*>& left_stmts, ObIArray<ObSelectStmt*>& right_stmts,
-      ObSelectStmt* select_stmt);
+      ObSelectStmt* select_stmt, const bool to_left_type = false);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, ObSelectStmt* select_stmt);
@@ -601,7 +603,8 @@ public:
 
   static int try_add_cast_to_set_child_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, const bool is_distinct, ObIArray<ObSelectStmt*>& left_stmts,
-      ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types);
+      ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types,
+      const bool to_left_type = false);
 
   static int add_cast_to_set_list(ObSQLSessionInfo* session_info, ObRawExprFactory* expr_factory,
       ObIArray<ObSelectStmt*>& stmts, const ObExprResType& res_type, const int64_t idx);

@@ -67,7 +67,7 @@ public:
   }
   static int add_column_to_table_schema(ObColumnSchemaV2& column, ObTableSchema& table_schema);
   static int convert_sys_param_to_sysvar_schema(const ObSysParam& sysparam, ObSysVarSchema& sysvar_schema);
-  static int get_primary_zone_array(common::PageArena<>& alloc, const ObTableSchema& table_schema,
+  static int get_primary_zone_array(common::PageArena<>& alloc, const ObSimpleTableSchemaV2& table_schema,
       ObSchemaGetterGuard& schema_guard, common::ObIArray<ObZoneScore>& primary_zone_array);
   static int get_primary_zone_array(common::PageArena<>& alloc, const ObTablegroupSchema& tg_schema,
       ObSchemaGetterGuard& schema_guard, common::ObIArray<ObZoneScore>& primary_zone_array);

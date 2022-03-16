@@ -140,7 +140,8 @@ public:
 // For Example: If you change the signature of the function `commit` in
 // `ObTransCtx`, you should also modify the signature of function `commit` in
 // `ObPartTransCtx`, `ObSlaveTransCtx`, `ObScheTransCtx` and `ObCoordTransCtx`
-class ObTransCtx : public TransCtxHashValue {
+class ObTransCtx : public TransCtxHashValue
+{
   friend class CtxLock;
 
 protected:
@@ -183,11 +184,13 @@ public:
         part_trans_action_(ObPartTransAction::UNKNOWN),
         trans_audit_record_(NULL),
         pending_callback_param_(common::OB_SUCCESS),
+        elr_prepared_state_(ELRState::ELR_INIT),
         p_mt_ctx_(NULL),
         replay_clear_clog_ts_(0),
         is_dup_table_trans_(false),
         is_exiting_(false),
         is_readonly_(false),
+        cur_stmt_type_(ObStmtType::UNKNOWN),
         for_replay_(false),
         need_print_trace_log_(false),
         is_bounded_staleness_read_(false),
@@ -228,6 +231,11 @@ public:
   bool is_readonly() const
   {
     return is_readonly_;
+  }
+  void set_cur_stmt_type(const sql::stmt::StmtType stmt_type, const bool is_sfu);
+  bool is_stmt_readonly() const
+  {
+    return cur_stmt_type_ == ObStmtType::READ;
   }
   void set_bounded_staleness_read(const bool is_bounded_staleness_read)
   {
@@ -375,7 +383,7 @@ public:
   virtual int leader_active(const storage::LeaderActiveArg& arg) = 0;
   virtual int leader_revoke(const bool first_check, bool& need_release, ObEndTransCallbackArray& cb_array) = 0;
   virtual bool can_be_freezed() const = 0;
-  virtual int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly,
+  virtual int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly,
       const MonotonicTs commit_time, const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
       const common::ObString& app_trace_info, bool& need_convert_to_dist_trans) = 0;
   virtual void set_exiting_();
@@ -491,9 +499,8 @@ public:
   // then the total size of trans_ctx preallocated by resource pool is 200B * 100 * 1000 = 20MB.
   // Taking the concurrency num into consideration, obviously, it is appropriate.
   static const int64_t RP_TOTAL_NUM = 100 * 1000;
-
-protected:
   static const int64_t MAX_TRANS_2PC_TIMEOUT_US = 3 * 1000 * 1000;  // 3s
+protected:
   // if 600 seconds after trans timeout, warn is required
   static const int64_t OB_TRANS_WARN_USE_TIME = 600 * 1000 * 1000;
   // 0x0078746365657266 means freectx
@@ -554,6 +561,7 @@ protected:
   bool is_dup_table_trans_;
   bool is_exiting_;
   bool is_readonly_;
+  int64_t cur_stmt_type_;
   bool for_replay_;
   bool need_print_trace_log_;
   bool is_bounded_staleness_read_;
@@ -593,7 +601,7 @@ public:
 
 class ObDistTransCtx : public ObTransCtx {
   friend class CtxLock;
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
 public:
   explicit ObDistTransCtx(const char* ctx_type_str, const int64_t ctx_type)

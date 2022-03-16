@@ -33,8 +33,8 @@ public:
     multi_row_store_.reset();
     // deserialize_allocator_ cannot be reset because it is only set once when creating operator input
   }
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  virtual ObPhyOperatorType get_phy_op_type() const
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  virtual ObPhyOperatorType get_phy_op_type() const override
   {
     return PHY_TABLE_ROW_STORE;
   }
@@ -42,7 +42,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
 
 private:
   common::ObFixedArray<common::ObRowStore*, common::ObIAllocator> multi_row_store_;

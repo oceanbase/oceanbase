@@ -697,7 +697,7 @@ const int64_t MAX_ORACLE_SA_LABEL_TYPE_LENGTH = 15;
 // don't use share/inner_table/ob_inner_table_schema.h to avoid dependence.
 const int64_t OB_SCHEMA_CODE_VERSION = 1;
 const uint64_t OB_MAX_CORE_TABLE_ID = 100;
-const uint64_t OB_MIN_SYS_INDEX_TABLE_ID = 9997;
+const uint64_t OB_MIN_SYS_INDEX_TABLE_ID = 9996;
 const uint64_t OB_MAX_SYS_TABLE_ID = 10000;
 const uint64_t OB_MAX_MYSQL_VIRTUAL_TABLE_ID = 15000;
 const uint64_t OB_MIN_VIRTUAL_TABLE_ID = 15001;
@@ -818,6 +818,9 @@ const uint64_t OB_ORA_SYS_DATABASE_ID = 6;
 const uint64_t OB_ORA_LBACSYS_DATABASE_ID = 7;
 const uint64_t OB_ORA_AUDITOR_DATABASE_ID = 8;
 const char* const OB_ORA_PUBLIC_SCHEMA_NAME = "PUBLIC";
+// not actual database, only for using and creating outlines without specified database
+const uint64_t OB_OUTLINE_DEFAULT_DATABASE_ID = 9;
+const char* const OB_OUTLINE_DEFAULT_DATABASE_NAME = "__outline_default_db";
 
 // sys unit associated const
 const uint64_t OB_SYS_UNIT_CONFIG_ID = 1;
@@ -1425,6 +1428,7 @@ const int64_t OB_MAX_COLUMN_NUMBER = OB_ROW_MAX_COLUMNS_COUNT;  // used in ObSch
 const int64_t OB_MAX_PARTITION_KEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER;
 const int64_t OB_MAX_USER_DEFINED_COLUMNS_COUNT = OB_ROW_MAX_COLUMNS_COUNT - OB_APP_MIN_COLUMN_ID;
 const int64_t OB_CAST_TO_VARCHAR_MAX_LENGTH = 256;
+const int64_t OB_CAST_TO_JSON_SCALAR_LENGTH = 256;
 const int64_t OB_CAST_BUFFER_LENGTH = 256;
 const int64_t OB_PREALLOCATED_NUM = 21;  // half of 42
 const int64_t OB_PREALLOCATED_COL_ID_NUM = 4;
@@ -1490,6 +1494,8 @@ const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 const int64_t OB_MAX_CPU_NUM = 64;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
+#else
+const int64_t OB_MAX_CPU_NUM = 64;
 #endif
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
@@ -1524,6 +1530,7 @@ const int64_t MAX_SSTABLE_CNT_IN_STORAGE = 64;
 const int64_t RESERVED_STORE_CNT_IN_STORAGE =
     8;  // Avoid mistakenly triggering minor or major freeze to cause the problem of unsuccessful merge.
 const int64_t MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE = 7;
+const int64_t MAX_MEMSTORE_CNT = 16;
 // some frozen memstores and one active memstore
 // Only limited to minor freeze, major freeze is not subject to this restriction
 const int64_t MAX_MEMSTORE_CNT_IN_STORAGE = MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE + 1;
@@ -1868,7 +1875,7 @@ enum ObJITEnableMode {
 
 #define DATABUFFER_SERIALIZE_INFO data_buffer_.get_data(), data_buffer_.get_capacity(), data_buffer_.get_position()
 
-#define DIO_ALIGN_SIZE 512
+#define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
 #define CORO_INIT_PRIORITY 120
@@ -2011,9 +2018,10 @@ inline int64_t ob_gettid()
 #define COMMA_REVERSE ",Reverse"
 #define BRACKET_REVERSE "(Reverse)"
 
-#define ORALCE_LITERAL_PREFIX_DATE "DATE"
-#define ORALCE_LITERAL_PREFIX_TIMESTAMP "TIMESTAMP"
+#define LITERAL_PREFIX_DATE "DATE"
+#define LITERAL_PREFIX_TIMESTAMP "TIMESTAMP"
 #define ORACLE_LITERAL_PREFIX_INTERVAL "INTERVAL"
+#define MYSQL_LITERAL_PREFIX_TIME "TIME"
 inline bool is_x86()
 {
 #if defined(__x86_64__)

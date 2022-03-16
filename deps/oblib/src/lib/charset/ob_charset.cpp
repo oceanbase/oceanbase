@@ -574,6 +574,36 @@ void* ObCharset::charset_arr[CS_TYPE_MAX] = {
     // NULL,  // 96
 };
 
+double ObCharset::strntodv2(const char *str, size_t str_len, char **endptr, int *err)
+{
+  double result = 0.0;
+  if (lib::is_oracle_mode()) {
+    ObString str_orig(str_len, str);
+    ObString str_trim = str_orig.trim();
+    if ((str_trim.case_compare("NAN") == 0)
+            || (str_trim.case_compare("-NAN") == 0)
+            || (str_trim.case_compare("+NAN") == 0)) {
+      result = NAN;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else if ((str_trim.case_compare("+INFINITY") == 0)
+           || (str_trim.case_compare("INFINITY") == 0)
+           || (str_trim.case_compare("INF") == 0)) {
+      result = INFINITY;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else if ((str_trim.case_compare("-INFINITY") == 0)
+            || (str_trim.case_compare("-INF") == 0)) {
+      result = -INFINITY;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else {
+      result = strntod(str, str_len, endptr, err);
+    }
+  } else {
+    result = strntod(str, str_len, endptr, err);
+  }
+
+  return result;
+}
+
 double ObCharset::strntod(const char* str, size_t str_len, char** endptr, int* err)
 {
   ObCharsetInfo* cs = &ob_charset_bin;
@@ -852,6 +882,7 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
         OB_MAX_WEIGHT,
         reinterpret_cast<const unsigned char*>(str),
         str_len,
+        0,
         &is_valid_unicode_tmp);
     is_valid_unicode = is_valid_unicode_tmp;
   }
@@ -1593,7 +1624,7 @@ int ObCharset::aggregate_collation(const ObCollationLevel collation_level1, cons
   if (OB_UNLIKELY(CS_LEVEL_INVALID == collation_level1 || CS_LEVEL_INVALID == collation_level2 ||
                   CS_TYPE_INVALID == collation_type1 || CS_TYPE_INVALID == collation_type2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid collation level or type",
+    LOG_WARN("invalid collation level or type",
         K(ret),
         K(collation_level1),
         K(collation_type1),
@@ -2076,14 +2107,6 @@ int ObCharset::get_mbminlen_by_coll(const ObCollationType collation_type, int64_
 
 /*in order to prevent a char from be splitted into 2 blocks
 We have to get the right bound of a string in terms a block
-Take "我爱你" as an example
-if len_limit_in_byte = 8 which means that the max size of a block is 8 Bytes
-since '我' and '爱' takes 6 Bytes in total already.
-and '你' takes 3 Bytes.
-if we assign the '你' to the block
-then the total length will be 9 which is greater than 8
-so , byte_num = 6  and char_num = 2 will be returned.
-and '你' has to be assigned to another block.
 
 Please note that:
 
@@ -2235,13 +2258,33 @@ int ObCharset::charset_convert(ObIAllocator& alloc, const ObString& in, const Ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid collation type", K(ret), K(src_cs_type), K(dst_cs_type));
   } else {
-    if (0 == in.length() || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)) {
+    if (0 == in.length()
+        || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)
+        || charset_type_by_coll(dst_cs_type) == CHARSET_BINARY) {
       if (!(convert_flag & COPY_STRING_ON_SAME_CHARSET)) {
         out = in;
       } else {
         if (OB_FAIL(ob_write_string(alloc, in, out))) {
           LOG_WARN("fail to write string", K(ret), K(in));
         }
+      }
+    } else if (charset_type_by_coll(src_cs_type) == CHARSET_BINARY) {
+      char *buf = nullptr;
+      int32_t align_offset = 0;
+      int32_t res_buf_len = 0;
+      int mbminlen = ObCharset::get_charset(dst_cs_type)->mbminlen;
+      if (mbminlen > 0 && in.length() % mbminlen != 0) {
+        align_offset = mbminlen - in.length() % mbminlen;
+      }
+      res_buf_len = in.length() + align_offset;
+      if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(res_buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        out.reset();
+        LOG_WARN("allocate memory failed", K(ret), K(in), K(align_offset));
+      } else {
+        MEMCPY(buf + align_offset, in.ptr(), in.length());
+        MEMSET(buf, 0, align_offset);
+        out.assign_ptr(buf, res_buf_len);
       }
     } else {
       const uint32_t res_buf_len = in.length() * 4;
@@ -2250,43 +2293,42 @@ int ObCharset::charset_convert(ObIAllocator& alloc, const ObString& in, const Ob
       if (OB_ISNULL(res_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FAIL(
-                     charset_convert(src_cs_type, in.ptr(), in.length(), dst_cs_type, res_buf, res_buf_len, res_len))) {
       } else {
-        out.assign_ptr(res_buf, res_len);
-      }
-
-      // handle replace unknown character
-      if (OB_FAIL(ret)) {
-        LOG_WARN("convert charset failed", K(ret), K(in), K(src_cs_type), K(dst_cs_type), KPHEX(in.ptr(), in.length()));
-        if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
-          int32_t in_offset = 0;
-          int64_t res_buf_offset = 0;
-          ObString question_mark = ObCharsetUtils::get_const_str(dst_cs_type, '?');
-          while (in_offset < in.length() && res_buf_offset + question_mark.length() <= res_buf_len) {
-            int64_t offset = ObCharset::charpos(src_cs_type, in.ptr() + in_offset, in.length() - in_offset, 1);
-            ret = ObCharset::charset_convert(src_cs_type,
-                in.ptr() + in_offset,
-                offset,
-                dst_cs_type,
-                res_buf + res_buf_offset,
-                res_buf_len - res_buf_offset,
-                res_len);
-            in_offset += offset;
-            if (OB_SUCCESS == ret) {
-              res_buf_offset += res_len;
-            } else {
-              MEMCPY(res_buf + res_buf_offset, question_mark.ptr(), question_mark.length());
-              res_buf_offset += question_mark.length();
+        if (OB_SUCC(charset_convert(src_cs_type, in.ptr(), in.length(), dst_cs_type, res_buf, res_buf_len, res_len))) {
+          out.assign_ptr(res_buf, res_len);
+        } else {
+          // handle replace unknown character
+          LOG_WARN(
+              "convert charset failed", K(ret), K(in), K(src_cs_type), K(dst_cs_type), KPHEX(in.ptr(), in.length()));
+          if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
+            int32_t in_offset = 0;
+            int64_t res_buf_offset = 0;
+            ObString question_mark = ObCharsetUtils::get_const_str(dst_cs_type, '?');
+            while (in_offset < in.length() && res_buf_offset + question_mark.length() <= res_buf_len) {
+              int64_t offset = ObCharset::charpos(src_cs_type, in.ptr() + in_offset, in.length() - in_offset, 1);
+              ret = ObCharset::charset_convert(src_cs_type,
+                  in.ptr() + in_offset,
+                  offset,
+                  dst_cs_type,
+                  res_buf + res_buf_offset,
+                  res_buf_len - res_buf_offset,
+                  res_len);
+              in_offset += offset;
+              if (OB_SUCCESS == ret) {
+                res_buf_offset += res_len;
+              } else {
+                MEMCPY(res_buf + res_buf_offset, question_mark.ptr(), question_mark.length());
+                res_buf_offset += question_mark.length();
+              }
             }
-          }
-          if (in_offset < in.length()) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("buf size over flow", K(ret), K(in), KPHEX(in.ptr(), in.length()));
-          } else {
-            res_len = res_buf_offset;
-            out.assign_ptr(res_buf, res_len);
-            ret = OB_SUCCESS;
+            if (in_offset < in.length()) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("buf size over flow", K(ret), K(in), KPHEX(in.ptr(), in.length()));
+            } else {
+              res_len = res_buf_offset;
+              out.assign_ptr(res_buf, res_len);
+              ret = OB_SUCCESS;
+            }
           }
         }
       }
@@ -2397,5 +2439,21 @@ int ObStringScanner::next_character(ObString& encoding, int32_t& wchar)
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+bool ObStringScanner::next_character(ObString &encoding, int32_t &wchar, int &ret)
+{
+  bool has_next = false;
+  ret = next_character(encoding, wchar);
+  if (OB_ITER_END == ret) {
+    has_next = false;
+    ret = OB_SUCCESS;
+  } else if (OB_SUCC(ret)) {
+    has_next = true;
+  } else {
+    LOG_WARN("fail to get next character", K(ret), K(*this));
+    has_next = false;
+  }
+  return has_next;
+}
+
+} // namespace common
+} // namespace oceanbase

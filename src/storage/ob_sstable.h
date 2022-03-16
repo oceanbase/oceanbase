@@ -26,7 +26,6 @@
 #include "blocksstable/ob_storage_cache_suite.h"
 #include "blocksstable/ob_macro_block_reader.h"
 #include "blocksstable/ob_macro_block_writer.h"
-#include "blocksstable/ob_macro_block_meta_mgr.h"
 #include "blocksstable/ob_store_file_system.h"
 #include "ob_i_store.h"
 #include "ob_i_table.h"
@@ -345,11 +344,11 @@ public:
   int get_meta(const blocksstable::MacroBlockId& block_id, blocksstable::ObFullMacroBlockMeta& macro_meta) const;
   int replay_macro_metas();
   int get_all_macro_info(common::ObIArray<blocksstable::ObMacroBlockInfoPair>& macro_infos);
-  int convert_from_old_sstable(ObOldSSTable& src_sstable);
   bool has_compact_row() const
   {
     return meta_.has_compact_row_;
   }
+  int64_t dec_ref() override;
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
   INHERIT_TO_STRING_KV(
       "ObITable", ObITable, KP(this), K_(status), K_(meta), K_(file_handle), K_(dump_memtable_timestamp));
@@ -388,9 +387,6 @@ private:
   int replay_add_macro_block_meta(
       const common::ObIArray<blocksstable::MacroBlockId>& macro_block_ids, ObSSTable& other);
   int get_file_handle_from_replay_module(const common::ObPGKey& pg_key);
-  int convert_add_macro_block_meta(const blocksstable::MacroBlockId& macro_block_id, common::ObIAllocator& allocator);
-  int convert_add_macro_block_meta(
-      const common::ObIArray<blocksstable::MacroBlockId>& macro_block_ids, common::ObIAllocator& allocator);
   int serialize_schema_map(char* buf, int64_t data_len, int64_t& pos) const;
   int deserialize_schema_map(const char* buf, int64_t data_len, int64_t& pos);
   int64_t get_schema_map_serialize_size() const;

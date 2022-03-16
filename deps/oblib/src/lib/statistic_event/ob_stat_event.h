@@ -533,6 +533,56 @@ STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_SLEEP_US, "bandwidth out sleep us", ObStatClass
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAIT_TIMEOUT_COUNT, "memstore write lock wait timeout count",
     ObStatClassIds::STORAGE, "memstore write wait timeout count", 60083, true, true)
 
+// backup & restore
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, "backup io read count", 69000, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_READ_BYTES, "backup io read bytes", ObStatClassIds::STORAGE, "backup io read bytes", 69001, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_WRITE_COUNT, "backup io write count", ObStatClassIds::STORAGE, "backup io write count", 69002, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_WRITE_BYTES, "backup io write bytes", ObStatClassIds::STORAGE, "backup io write bytes", 69003, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_READ_COUNT, "cos io read count", ObStatClassIds::STORAGE, "cos io read count", 69004, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_READ_BYTES, "cos io read bytes", ObStatClassIds::STORAGE, "cos io read bytes", 69005, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_WRITE_COUNT, "cos io write count", ObStatClassIds::STORAGE, "cos io write count", 69006, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_WRITE_BYTES, "cos io write bytes", ObStatClassIds::STORAGE, "cos io write bytes", 69007, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_LS_COUNT, "cos io list count", ObStatClassIds::STORAGE, "cos io list count", 69008, true, true)
+STAT_EVENT_ADD_DEF(COS_IO_LS_LIMIT_COUNT, "cos list io limit count", ObStatClassIds::STORAGE, "cos list io limit count",
+    69009, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_DELETE_COUNT, "backup delete count", ObStatClassIds::STORAGE, "backup delete count", 69010, true, true)
+STAT_EVENT_ADD_DEF(COS_DELETE_COUNT, "cos delete count", ObStatClassIds::STORAGE, "cos delete count", 69011, true, true)
+
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_READ_DELAY, "backup io read delay", ObStatClassIds::STORAGE, "backup io read delay", 60012, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_WRITE_DELAY, "backup io write delay", ObStatClassIds::STORAGE, "backup io write delay", 60013, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_READ_DELAY, "cos io read delay", ObStatClassIds::STORAGE, "cos io read delay", 60014, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_WRITE_DELAY, "cos io write delay", ObStatClassIds::STORAGE, "cos io write delay", 60015, true, true)
+STAT_EVENT_ADD_DEF(
+    COS_IO_LS_DELAY, "cos io list delay", ObStatClassIds::STORAGE, "cos io list delay", 69016, true, true)
+STAT_EVENT_ADD_DEF(
+    BACKUP_DELETE_DELAY, "backup delete delay", ObStatClassIds::STORAGE, "backup delete delay", 69017, true, true)
+STAT_EVENT_ADD_DEF(COS_DELETE_DELAY, "cos delete delay", ObStatClassIds::STORAGE, "cos delete delay", 69018, true, true)
+
+STAT_EVENT_ADD_DEF(
+    BACKUP_IO_LS_COUNT, "backup io list count", ObStatClassIds::STORAGE, "backup io list count", 69019, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_IO_READ_FAIL_COUNT, "backup io read failed count", ObStatClassIds::STORAGE,
+    "backup io read failed count", 69020, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_IO_WRITE_FAIL_COUNT, "backup io write failed count", ObStatClassIds::STORAGE,
+    "backup io write failed count", 69021, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_IO_DEL_FAIL_COUNT, "backup io delete failed count", ObStatClassIds::STORAGE,
+    "backup io delete failed count", 69022, true, true)
+STAT_EVENT_ADD_DEF(BACKUP_IO_LS_FAIL_COUNT, "backup io list failed count", ObStatClassIds::STORAGE,
+    "backup io list failed count", 69023, true, true)
+
 // DEBUG
 STAT_EVENT_ADD_DEF(
     REFRESH_SCHEMA_COUNT, "refresh schema count", ObStatClassIds::DEBUG, "refresh schema count", 70000, true, true)
@@ -772,10 +822,10 @@ STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_PROCESS_TIME, "observer part
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_DROP_COUNT, "observer partition table updater drop task count",
     ObStatClassIds::OBSERVER, "observer partition table updater drop task count", 100004, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_REPUT_COUNT,
-    "observer partition table updater repurt to queue count", ObStatClassIds::OBSERVER,
+    "observer partition table updater reput to queue count", ObStatClassIds::OBSERVER,
     "observer partition table updater reput to queue count", 100005, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_FAIL_TIMES, "observer partition table updater execute fail times",
-    ObStatClassIds::OBSERVER, "observer partition table updater fail times", 10006, false, true)
+    ObStatClassIds::OBSERVER, "observer partition table updater fail times", 100006, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_FINISH_COUNT,
     "observer partition table updater success execute count", ObStatClassIds::OBSERVER,
     "observer partition table updater execute success count", 100007, false, true)

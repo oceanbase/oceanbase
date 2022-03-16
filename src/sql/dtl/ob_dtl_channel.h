@@ -213,18 +213,11 @@ public:
       }
     } while (1);
   }
-  void set_drain()
-  {
-    set_status(DTL_CHAN_DARIN);
-  }
-  void set_eof()
-  {
-    set_status(DTL_CHAN_EOF);
-  }
-  void set_first_buffer()
-  {
-    set_status(DTL_CHAN_FIRST_BUF);
-  }
+
+  void set_drain() { set_status(DTL_CHAN_DARIN); }
+  void set_eof() { set_status(DTL_CHAN_EOF); }
+  void set_first_buffer() { set_status(DTL_CHAN_FIRST_BUF); }
+  void set_blocked() { set_status(DTL_CHAN_BLOCKED); }
 
   int set_bcast_chan_ids(common::ObIArray<uint64_t>& chans);
   int get_bcast_chan_ids(common::ObIArray<uint64_t>& chans);

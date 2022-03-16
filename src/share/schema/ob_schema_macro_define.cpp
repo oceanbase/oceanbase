@@ -44,7 +44,7 @@ int ADD_COLUMN_SCHEMA_FULL(share::schema::ObTableSchema& table_schema, const cha
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
       column.set_data_precision(data_precision);
-    } else if (ob_is_text_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() : static_cast<ObScale>(data_scale);
@@ -66,6 +66,9 @@ int ADD_COLUMN_SCHEMA_FULL(share::schema::ObTableSchema& table_schema, const cha
       if (ob_is_string_type(data_type)) {
         column.set_charset_type(ObCharset::get_default_charset());
         column.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      } else if (ob_is_json(data_type)) {
+        column.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));
       } else {
         column.set_collation_type(CS_TYPE_BINARY);
         column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));
@@ -127,7 +130,7 @@ int ADD_COLUMN_SCHEMA_WITH_DEFAULT_VALUE(share::schema::ObTableSchema& table_sch
     const ObAccuracy& default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
       if (DEFAULT_PRECISION_FOR_STRING != data_precision) {
         column.set_data_precision(data_precision);
@@ -152,6 +155,9 @@ int ADD_COLUMN_SCHEMA_WITH_DEFAULT_VALUE(share::schema::ObTableSchema& table_sch
       if (ob_is_string_type(data_type)) {
         column.set_charset_type(ObCharset::get_default_charset());
         column.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      } else if (ob_is_json(data_type)) {
+        column.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));
       } else {
         column.set_collation_type(CS_TYPE_BINARY);
         column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));
@@ -217,7 +223,7 @@ int ADD_COLUMN_SCHEMA_TS_WITH_DEFAULT_VALUE(share::schema::ObTableSchema& table_
     const ObAccuracy& default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() : static_cast<ObScale>(data_scale);
@@ -239,6 +245,9 @@ int ADD_COLUMN_SCHEMA_TS_WITH_DEFAULT_VALUE(share::schema::ObTableSchema& table_
       if (ob_is_string_type(data_type)) {
         column.set_charset_type(ObCharset::get_default_charset());
         column.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      } else if (ob_is_json(data_type)) {
+        column.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type())); 
       } else {
         column.set_collation_type(CS_TYPE_BINARY);
         column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));
@@ -304,7 +313,7 @@ int ADD_COLUMN_SCHEMA_TS_FULL(share::schema::ObTableSchema& table_schema, const 
     const ObAccuracy& default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() : static_cast<ObScale>(data_scale);
@@ -326,6 +335,9 @@ int ADD_COLUMN_SCHEMA_TS_FULL(share::schema::ObTableSchema& table_schema, const 
       if (ob_is_string_type(data_type)) {
         column.set_charset_type(ObCharset::get_default_charset());
         column.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      } else if (ob_is_json(data_type)) {
+        column.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type())); 
       } else {
         column.set_collation_type(CS_TYPE_BINARY);
         column.set_charset_type(ObCharset::charset_type_by_coll(column.get_collation_type()));

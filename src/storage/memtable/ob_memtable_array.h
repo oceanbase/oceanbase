@@ -40,8 +40,8 @@ public:
   };
   bool is_reach_max_memtable_cnt()
   {
-    return get_count_() >= 16;
-  };
+    return get_count_() >= common::MAX_MEMSTORE_CNT;
+  }
   bool is_contain_this_memtable(ObMemtable* memtable);
   int check_memtable_count(int64_t& count);
 
@@ -54,7 +54,7 @@ private:
   int update_max_schema_version_(const int64_t pos, const int64_t schema_version);
 
 private:
-  ObMemtable* mt_[common::MAX_MEMSTORE_CNT_IN_STORAGE];
+  ObMemtable* mt_[common::MAX_MEMSTORE_CNT];
   int64_t mt_start_;
   int64_t mt_end_;
 };

@@ -169,7 +169,7 @@ public:
   {}
   virtual ~ObTableModifyOpInput()
   {}
-  virtual void reset()
+  virtual void reset() override
   {
     location_idx_ = common::OB_INVALID_INDEX;
     part_infos_.reset();
@@ -187,7 +187,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator)
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override
   {
     part_infos_.set_allocator(allocator);
   }
@@ -326,7 +326,13 @@ public:
   }
   const ObObjPrintParams get_obj_print_params()
   {
-    return CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+    ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+    print_params.need_cast_expr_ = true;
+  // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+  // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
+  // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
+    GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), print_params.skip_escape_);
+    return print_params;
   }
   int init_foreign_key_operation();
   int check_rowkey_is_null(const ObExprPtrIArray& row, int64_t rowkey_cnt, bool& is_null) const;
@@ -351,9 +357,9 @@ public:
   }
 
 protected:
-  OperatorOpenOrder get_operator_open_order() const;
-  virtual int inner_open();
-  virtual int inner_close();
+  OperatorOpenOrder get_operator_open_order() const override;
+  virtual int inner_open() override;
+  virtual int inner_close() override;
 
   // project expressions to old style row, allocate cells from ctx_.get_allocator() if needed.
   int project_row(ObExpr* const* exprs, const int64_t cnt, common::ObNewRow& row) const;
@@ -375,10 +381,15 @@ protected:
 
   int mark_lock_row_flag(int64_t flag);
 
-  int check_row_null(const ObExprPtrIArray& row, const common::ObIArray<ColumnContent>& column_infos) const;
-  int set_autoinc_param_pkey(const common::ObPartitionKey& pkey) const;
-  int get_part_location(const ObPhyTableLocation& table_location, const share::ObPartitionReplicaLocation*& out);
-  int get_part_location(common::ObIArray<DMLPartInfo>& part_keys);
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos,
+                     const common::ObIArray<ColumnContent> &update_col_infos) const;
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos) const;
+  int set_autoinc_param_pkey(const common::ObPartitionKey &pkey) const;
+  int get_part_location(const ObPhyTableLocation &table_location,
+                        const share::ObPartitionReplicaLocation *&out);
+  int get_part_location(common::ObIArray<DMLPartInfo> &part_keys);
 
   int get_gi_task();
   // filtered if filter return false value. (move from ObPhyOperator).

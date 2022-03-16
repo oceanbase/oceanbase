@@ -100,7 +100,7 @@ int StatFinderUtil::get_partition_entity_schemas_by_tg_idx(ITenantStatFinder& st
     FOREACH_X(tid, tids, OB_SUCC(ret))
     {
       if (!is_new_tablegroup_id(*tid)) {
-        const ObTableSchema* schema = nullptr;
+        const ObSimpleTableSchemaV2* schema = nullptr;
         if (OB_FAIL(schema_guard.get_table_schema(*tid, schema))) {
           LOG_WARN("fail get table schema", K(tenant_id), K(*tid), K(tids), K(ret));
         } else if (OB_ISNULL(schema)) {
@@ -126,7 +126,7 @@ int StatFinderUtil::get_partition_entity_schemas_by_tg_idx(ITenantStatFinder& st
 }
 
 int StatFinderUtil::get_need_balance_table_schemas_in_tenant(share::schema::ObSchemaGetterGuard& schema_guard,
-    uint64_t tenant_id, common::ObIArray<const share::schema::ObTableSchema*>& tables)
+    uint64_t tenant_id, common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tids;
@@ -135,7 +135,7 @@ int StatFinderUtil::get_need_balance_table_schemas_in_tenant(share::schema::ObSc
   } else {
     FOREACH_X(tid, tids, OB_SUCC(ret))
     {
-      const ObTableSchema* schema = NULL;
+      const ObSimpleTableSchemaV2* schema = NULL;
       if (OB_FAIL(schema_guard.get_table_schema(*tid, schema))) {
         LOG_WARN("fail get table schema", K(tenant_id), K(*tid), K(ret));
       } else if (OB_ISNULL(schema)) {

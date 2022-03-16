@@ -181,11 +181,11 @@ public:
   }
 
 public:
-  int schedule(ObTimeWheelTask* task, const int64_t delay);
-  int cancel(ObTimeWheelTask* task);
-
-private:
+  int schedule(ObTimeWheelTask *task, const int64_t delay);
+  int cancel(ObTimeWheelTask *task);
+public:
   static const int64_t MAX_THREAD_NUM = 64;
+private:
   static const int64_t MAX_TIMER_NAME_LEN = 16;
 
 private:

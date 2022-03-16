@@ -207,10 +207,14 @@ int ObRebalanceTaskUtil::build_batch_remove_member_task(ObRebalanceTaskMgr& task
         } else {  // cannot accumulate any more, execute the previous task the reset
           if (OB_FAIL(task_mgr.add_task(task))) {
             LOG_WARN("fail to add task", K(ret));
-          } else if (OB_FAIL(task_info_array.push_back(task_info))) {
-            LOG_WARN("fail to add task_info", K(ret), K(task_info));
-          } else if (OB_FAIL(task.build(task_info_array, leader, comment, check_leader))) {
-            LOG_WARN("fail to build remove member task", K(ret));
+          }
+          task.clear_task_info(); // reset this task whatever
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(task_info_array.push_back(task_info))) {
+              LOG_WARN("fail to add task_info", K(ret), K(task_info));
+            } else if (OB_FAIL(task.build(task_info_array, leader, comment, check_leader))) {
+              LOG_WARN("fail to build remove member task", K(ret));
+            }
           }
         }
         break;

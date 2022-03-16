@@ -7962,7 +7962,9 @@ ObUserInfo::ObUserInfo(ObIAllocator* allocator)
       role_id_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(*allocator)),
       profile_id_(OB_INVALID_ID),
       password_last_changed_timestamp_(OB_INVALID_TIMESTAMP),
-      role_id_option_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(*allocator))
+      role_id_option_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(*allocator)),
+      max_connections_(0),
+      max_user_connections_(0)
 {}
 
 ObUserInfo::ObUserInfo(const ObUserInfo& other) : ObSchema(), ObPriv()
@@ -8007,6 +8009,8 @@ ObUserInfo& ObUserInfo::operator=(const ObUserInfo& other)
       type_ = other.type_;
       profile_id_ = other.profile_id_;
       password_last_changed_timestamp_ = other.password_last_changed_timestamp_;
+      max_connections_ = other.max_connections_;
+      max_user_connections_ = other.max_user_connections_;
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -8036,6 +8040,8 @@ void ObUserInfo::reset()
   role_id_option_array_.reset();
   profile_id_ = OB_INVALID_ID;
   password_last_changed_timestamp_ = OB_INVALID_TIMESTAMP;
+  max_connections_ = 0;
+  max_user_connections_ = 0;
   ObSchema::reset();
   ObPriv::reset();
 }
@@ -8077,7 +8083,9 @@ OB_DEF_SERIALIZE(ObUserInfo)
       role_id_array_,
       profile_id_,
       password_last_changed_timestamp_,
-      role_id_option_array_);
+      role_id_option_array_,
+      max_connections_,
+      max_user_connections_);
   return ret;
 }
 
@@ -8119,7 +8127,9 @@ OB_DEF_DESERIALIZE(ObUserInfo)
         role_id_array_,
         profile_id_,
         password_last_changed_timestamp_,
-        role_id_option_array_);
+        role_id_option_array_,
+        max_connections_,
+        max_user_connections_);
   }
 
   return ret;
@@ -8140,7 +8150,9 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
       x509_subject_,
       type_,
       profile_id_,
-      password_last_changed_timestamp_);
+      password_last_changed_timestamp_,
+      max_connections_,
+      max_user_connections_);
   len += grantee_id_array_.get_serialize_size();
   len += role_id_array_.get_serialize_size();
   len += role_id_option_array_.get_serialize_size();
@@ -9047,8 +9059,8 @@ OB_DEF_SERIALIZE_SIZE(ObMaxConcurrentParam)
 ObOutlineParamsWrapper::ObOutlineParamsWrapper() : allocator_(NULL), outline_params_()
 {}
 
-ObOutlineParamsWrapper::ObOutlineParamsWrapper(common::ObIAllocator* allocator)
-    : allocator_(allocator), outline_params_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocator(allocator))
+ObOutlineParamsWrapper::ObOutlineParamsWrapper(common::ObIAllocator *allocator)
+    : allocator_(allocator), outline_params_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocatorWithAttr(allocator))
 {}
 
 ObOutlineParamsWrapper::~ObOutlineParamsWrapper()

@@ -170,7 +170,7 @@ public:
   explicit ObSelectResolver(ObResolverParams& params);
   virtual ~ObSelectResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
+  virtual int resolve(const ParseNode& parse_tree) override;
   ObSelectStmt* get_select_stmt();
   void set_calc_found_rows(bool found_rows)
   {
@@ -180,15 +180,15 @@ public:
   {
     has_top_limit_ = has_top_limit;
   }
-  virtual int resolve_child_stmt(const ParseNode& parse_tree)
+  virtual int resolve_child_stmt(const ParseNode& parse_tree) override
   {
     return SMART_CALL(resolve(parse_tree));
   }
-  virtual ObSelectStmt* get_child_stmt()
+  virtual ObSelectStmt* get_child_stmt() override
   {
     return get_select_stmt();
   }
-  virtual bool is_select_resolver() const
+  virtual bool is_select_resolver() const override
   {
     return true;
   }
@@ -222,13 +222,16 @@ public:
   {
     return in_exists_subquery_;
   }
-  virtual int resolve_column_ref_expr(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
+  virtual int resolve_column_ref_expr(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr) override;
   void set_transpose_item(const TransposeItem* transpose_item)
   {
     transpose_item_ = transpose_item;
   }
   // function members
   TO_STRING_KV(K_(has_calc_found_rows), K_(has_top_limit), K_(in_set_query), K_(in_subquery));
+  void set_resolver(ObSelectResolver* resolver){
+    saved_left_resolver = resolver;
+  }
 
 protected:
   int resolve_set_query(const ParseNode& parse_node);
@@ -274,7 +277,7 @@ protected:
   int resolve_cte_table(const ParseNode& parse_tree, const TableItem* CTE_table_item, TableItem*& table_item);
   int resolve_recursive_cte_table(const ParseNode& parse_tree, TableItem*& table_item);
   int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
-  int add_cte_table_item(TableItem* table_item);
+  int add_cte_table_item(TableItem* table_item) override;
   int resolve_with_clause(const ParseNode* node, bool same_level = false);
   int resolve_from_clause(const ParseNode* node);
   int resolve_field_list(const ParseNode& node);
@@ -336,13 +339,13 @@ protected:
   int resolve_start_with_clause(const ParseNode* node_1, const ParseNode* node_2);
   int resolve_connect_by_clause(const ParseNode* node_1, const ParseNode* node_2);
   int check_correlated_column_ref(const ObSelectStmt& select_stmt, ObRawExpr* expr, bool& correalted_query);
-  virtual int resolve_order_item(const ParseNode& sort_node, OrderItem& order_item);
+  virtual int resolve_order_item(const ParseNode& sort_node, OrderItem& order_item) override;
   virtual int resolve_order_item_by_pos(int64_t pos, OrderItem& order_item, ObSelectStmt* select_stmt);
   virtual int resolve_literal_order_item(
       const ParseNode& sort_node, ObRawExpr* expr, OrderItem& order_item, ObSelectStmt* select_stmt);
   virtual int resolve_aggr_exprs(
-      ObRawExpr*& expr, common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, const bool need_analyze = true);
-  virtual int resolve_win_func_exprs(ObRawExpr*& expr, common::ObIArray<ObWinFunRawExpr*>& win_exprs);
+      ObRawExpr*& expr, common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, const bool need_analyze = true) override;
+  virtual int resolve_win_func_exprs(ObRawExpr*& expr, common::ObIArray<ObWinFunRawExpr*>& win_exprs) override;
   int resolve_column_ref_in_all_namespace(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   /**
    * resolve column real ref expr, search order: alias name first, followed by table column
@@ -350,7 +353,7 @@ protected:
    * @param real_ref_expr, column real ref expr
    */
   int resolve_column_ref_alias_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
-  int resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
+  int resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr, bool need_further_match_alias = true);
   int resolve_column_ref_for_having(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   int resolve_column_ref_for_search(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   int resolve_table_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
@@ -361,12 +364,12 @@ protected:
   int resolve_all_generated_table_columns(const TableItem& table_item, common::ObIArray<ColumnItem>* column_items);
   virtual int set_select_item(SelectItem& select_item, bool is_auto_gen);
   int resolve_query_options(const ParseNode* node);
-  virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo>& subquery_info);
-  virtual int resolve_column_ref_for_subquery(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
+  virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo>& subquery_info) override;
+  virtual int resolve_column_ref_for_subquery(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr) override;
   inline bool column_need_check_group_by(const ObQualifiedName& q_name) const;
   int check_column_ref_in_group_by_or_field_list(const ObRawExpr* column_ref) const;
   int wrap_alias_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
-  virtual int check_need_use_sys_tenant(bool& use_sys_tenant) const;
+  virtual int check_need_use_sys_tenant(bool& use_sys_tenant) const override;
   virtual int check_in_sysview(bool& in_sysview) const override;
   int check_group_by();
   int check_order_by();
@@ -432,6 +435,8 @@ protected:
   bool in_subquery_;
   // query is subquery in exists
   bool in_exists_subquery_;
+  ObSelectResolver* saved_left_resolver = NULL;
+  // used to store left resolver and get alias name
   ObStandardGroupChecker standard_group_checker_;
   const TransposeItem* transpose_item_;
 

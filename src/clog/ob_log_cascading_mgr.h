@@ -76,7 +76,7 @@ public:
   }
   bool is_valid_child(const common::ObAddr& server) const;
   int reject_server(const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type) const;
-  int process_reject_msg(const common::ObAddr& server, const int32_t msg_type);
+  int process_reject_msg(const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type);
   int process_region_change(const common::ObRegion& new_region);
   int process_fetch_reg_server_req(const common::ObAddr& server, const common::ObReplicaType replica_type,
       const bool is_self_lag_behind, const bool is_request_leader, const bool is_need_force_register,
@@ -97,6 +97,10 @@ public:
   share::ObCascadMember get_parent() const
   {
     return parent_;
+  }
+  share::ObCascadMember get_prev_parent() const
+  {
+    return prev_parent_;
   }
   common::ObAddr get_parent_addr() const
   {

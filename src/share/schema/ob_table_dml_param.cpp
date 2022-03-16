@@ -31,9 +31,14 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator& allocator)
       fulltext_col_id_(OB_INVALID_ID),
       index_name_(),
       columns_(allocator),
+      col_descs_(allocator),
       col_map_(allocator),
+      projector_(allocator),
       is_dropped_schema_(false),
-      pk_name_()
+      pk_name_(),
+      full_col_descs_(allocator),
+      full_col_map_(allocator),
+      full_projector_(allocator)
 {}
 
 ObTableSchemaParam::~ObTableSchemaParam()
@@ -54,8 +59,12 @@ void ObTableSchemaParam::reset()
   index_name_.reset();
   columns_.reset();
   col_map_.clear();
+  projector_.reset();
   is_dropped_schema_ = false;
   pk_name_.reset();
+  full_col_descs_.reset();
+  full_col_map_.clear();
+  full_projector_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema* schema, const ObIArray<uint64_t>& col_ids)
@@ -63,7 +72,8 @@ int ObTableSchemaParam::convert(const ObTableSchema* schema, const ObIArray<uint
   int ret = OB_SUCCESS;
   static const int64_t COMMON_COLUMN_NUM = 16;
   ObSEArray<ObColumnParam*, COMMON_COLUMN_NUM> tmp_cols;
-  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> column_ids_no_virtual;
+  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> all_column_ids;
+  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> tmp_col_descs;
 
   if (OB_ISNULL(schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -100,19 +110,19 @@ int ObTableSchemaParam::convert(const ObTableSchema* schema, const ObIArray<uint
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(schema->get_column_ids(column_ids_no_virtual, false))) {
+    if (OB_FAIL(schema->get_column_ids(all_column_ids, false))) {
       LOG_WARN("fail to get column ids", K(ret));
     }
 
-    for (int32_t i = 0; OB_SUCC(ret) && i < column_ids_no_virtual.count(); ++i) {
-      const uint64_t column_id = column_ids_no_virtual.at(i).col_id_;
-      const ObColumnSchemaV2* column_schema = NULL;
-      ObColumnParam* column = NULL;
+    for (int32_t i = 0; OB_SUCC(ret) && i < all_column_ids.count(); ++i) {
+      const uint64_t column_id = all_column_ids.at(i).col_id_;
+      const ObColumnSchemaV2 *column_schema = NULL;
+      ObColumnParam *column = NULL;
       if (OB_ISNULL(column_schema = schema->get_column_schema(column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is NULL", K(schema->get_table_id()), K(column_id), K(i));
       } else if (column_schema->is_rowid_pseudo_column() && !has_exist_in_array(col_ids, column_id)) {
-        // ignore rowid, because storage donot store rowid column
+        // ignore rowid, because storage do not store rowid column
         // eg: create table t1(c1 int);
         //     delete from t1;
         // table dml param only need c1
@@ -123,8 +133,10 @@ int ObTableSchemaParam::convert(const ObTableSchema* schema, const ObIArray<uint
           LOG_WARN("alloc column failed", K(ret), K(i));
         } else if (OB_FAIL(ObTableParam::convert_column_schema_to_param(*column_schema, *column))) {
           LOG_WARN("convert failed", K(*column_schema), K(ret), K(i));
-        } else {
-          ret = tmp_cols.push_back(column);
+        } else if (OB_FAIL(tmp_cols.push_back(column))) {
+          LOG_WARN("store tmp column param failed", K(ret));
+        } else if (OB_FAIL(tmp_col_descs.push_back(all_column_ids.at(i)))) {
+          LOG_WARN("store tmp column desc failed", K(ret));
         }
       }
     }
@@ -133,8 +145,12 @@ int ObTableSchemaParam::convert(const ObTableSchema* schema, const ObIArray<uint
   if (OB_SUCC(ret)) {
     if (OB_FAIL(columns_.assign(tmp_cols))) {
       LOG_WARN("assign failed", K(ret), K(tmp_cols.count()));
+    } else if (OB_FAIL(col_descs_.assign(tmp_col_descs))) {
+      LOG_WARN("assign tmp col descs failed", K(ret));
     } else if (OB_FAIL(ObTableParam::create_column_map(columns_, col_map_))) {
       LOG_WARN("failed to create column map", K(ret));
+    } else if (OB_FAIL(prepare_full_column_param(*schema))) {
+      LOG_WARN("prepare full column param failed", K(ret));
     }
   }
   return ret;
@@ -230,7 +246,27 @@ int ObTableSchemaParam::get_rowkey_column_ids(ObIArray<ObColDesc>& column_ids) c
   return ret;
 }
 
-int ObTableSchemaParam::get_index_name(common::ObString& index_name) const
+int ObTableSchemaParam::get_rowkey_column_ids(ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("param not inited", K(ret), K(*this));
+  } else {
+    const ObColumnParam *param = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num_; ++i) {
+      if (OB_ISNULL(param = columns_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column param is NULL", K(ret), K(i));
+      } else if (OB_FAIL(column_ids.push_back(param->get_column_id()))) {
+        LOG_WARN("Fail to add rowkey column id to column_ids", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchemaParam::get_index_name(common::ObString &index_name) const
 {
   int ret = OB_SUCCESS;
   if (!is_index_table()) {
@@ -258,7 +294,40 @@ bool ObTableSchemaParam::is_depend_column(uint64_t column_id) const
   return is_depend;
 }
 
-int64_t ObTableSchemaParam::to_string(char* buf, const int64_t buf_len) const
+int ObTableSchemaParam::prepare_full_column_param(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  static const int64_t COMMON_COLUMN_NUM = 16;
+  ObSEArray<ObColDesc, COMMON_COLUMN_NUM> all_column_ids;
+  if (OB_FAIL(table_schema.get_column_ids(all_column_ids, !table_schema.is_index_table()))) {
+    LOG_WARN("get column ids from table schema failed", K(ret));
+  } else if (OB_FAIL(full_col_descs_.assign(all_column_ids))) {
+    LOG_WARN("assign full column descs failed", K(ret), K(all_column_ids));
+  } else if (OB_FAIL(full_col_map_.init(full_col_descs_))) {
+    LOG_WARN("init full column map failed", K(ret));
+  } else {
+    full_projector_.set_capacity(full_col_descs_.count());
+    projector_.set_capacity(columns_.count());
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < full_col_descs_.count(); ++i) {
+    if (OB_FAIL(full_projector_.push_back(i))) {
+      LOG_WARN("init full projector failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < columns_.count(); ++i) {
+    int idx = OB_INVALID_INDEX;
+    const ObColumnParam *col = columns_.at(i);
+    if (OB_FAIL(full_col_map_.get(col->get_column_id(), idx))) {
+      LOG_WARN("get column index from full column map failed", K(ret));
+    } else if (OB_FAIL(projector_.push_back(idx))) {
+      LOG_WARN("store projector failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
@@ -272,8 +341,10 @@ int64_t ObTableSchemaParam::to_string(char* buf, const int64_t buf_len) const
       K_(fulltext_col_id),
       K_(index_name),
       K_(pk_name),
-      "columns",
-      ObArrayWrap<ObColumnParam*>(0 == columns_.count() ? NULL : &columns_.at(0), columns_.count()));
+      K_(columns),
+      K_(projector),
+      K_(full_col_descs),
+      K_(full_projector));
   J_OBJ_END();
   return pos;
 }
@@ -304,6 +375,10 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
       LOG_WARN("failed to serialize pk name", K(ret));
     }
   }
+  OB_UNIS_ENCODE(col_descs_);
+  OB_UNIS_ENCODE(projector_);
+  OB_UNIS_ENCODE(full_col_descs_);
+  OB_UNIS_ENCODE(full_projector_);
   return ret;
 }
 
@@ -343,6 +418,15 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
       LOG_WARN("failed to copy pk name", K(ret), K(tmp_name));
     }
   }
+  OB_UNIS_DECODE(col_descs_);
+  OB_UNIS_DECODE(projector_);
+  OB_UNIS_DECODE(full_col_descs_);
+  OB_UNIS_DECODE(full_projector_);
+  if (OB_SUCC(ret) && !full_col_descs_.empty()) {
+    if (OB_FAIL(full_col_map_.init(full_col_descs_))) {
+      LOG_WARN("init full col map failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -372,6 +456,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, is_dropped_schema_);
   len += pk_name_.get_serialize_size();
+  OB_UNIS_ADD_LEN(col_descs_);
+  OB_UNIS_ADD_LEN(projector_);
+  OB_UNIS_ADD_LEN(full_col_descs_);
+  OB_UNIS_ADD_LEN(full_projector_);
   return len;
 }
 
@@ -395,8 +483,6 @@ void ObTableDMLParam::reset()
   tenant_schema_version_ = OB_INVALID_VERSION;
   data_table_.reset();
   index_tables_.reset();
-  col_descs_.reset();
-  col_map_.clear();
 }
 
 int ObTableDMLParam::convert(const ObTableSchema* table_schema,
@@ -608,10 +694,10 @@ int ObTableDMLParam::prepare_storage_param(const ObIArray<uint64_t>& column_ids)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column_ids", K(ret), K(col_cnt));
   } else {
-    ObSEArray<ObColDesc, common::OB_DEFAULT_COL_DEC_NUM> tmp_col_descs;
-    const ObColumnParam* col_param = nullptr;
+    const ObColumnParam *col_param = nullptr;
     uint64_t column_id = OB_INVALID_ID;
     ObColDesc col_desc;
+    col_descs_.set_capacity(col_cnt);
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       column_id = column_ids.at(i);
       if (nullptr == (col_param = data_table_.get_column(column_id))) {
@@ -621,7 +707,7 @@ int ObTableDMLParam::prepare_storage_param(const ObIArray<uint64_t>& column_ids)
         col_desc.col_id_ = column_id;
         col_desc.col_type_ = col_param->get_meta_type();
         col_desc.col_order_ = col_param->get_column_order();
-        if (OB_FAIL(tmp_col_descs.push_back(col_desc))) {
+        if (OB_FAIL(col_descs_.push_back(col_desc))) {
           LOG_WARN("fail to push back column description", K(ret), K(col_desc));
         }
       }
@@ -629,9 +715,7 @@ int ObTableDMLParam::prepare_storage_param(const ObIArray<uint64_t>& column_ids)
 
     // assign
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(col_descs_.assign(tmp_col_descs))) {
-        LOG_WARN("fail to assign column description array", K(ret));
-      } else if (OB_FAIL(col_map_.init(col_descs_))) {
+      if (OB_FAIL(col_map_.init(col_descs_))) {
         LOG_WARN("fail to init column map", K(ret));
       }
     }

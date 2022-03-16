@@ -289,7 +289,7 @@ public:
   static const int TYPE_NUM = 6;
   static const int INFO_NUM = 2;
   static const int FLAG_NUM = 5;
-  static const int DML_NUM = 3;
+  static const int DML_NUM = 6;
   static const int BASE_NUM = 2;
   static const int MULTI_VERSION_ROW_FLAG_NUM = 5;
   static const int TRANS_ID_NUM = 10;

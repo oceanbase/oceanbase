@@ -65,6 +65,16 @@ public:
     return false;
   }
 
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObIndexStatusReporter& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
+
   TO_STRING_KV(K_(part_key), K_(self), K_(index_table_id), K_(index_status), K_(ret_code));
 
 private:

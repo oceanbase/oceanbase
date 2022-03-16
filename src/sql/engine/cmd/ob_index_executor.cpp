@@ -22,6 +22,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;
@@ -235,12 +236,8 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo& my_ses
       LOG_WARN("fail to get index table schema", KR(ret), K(refreshed_schema_version), K(index_table_id));
     } else if (OB_ISNULL(index_schema)) {
       // maybe ddl(drop index,drop table,truncate table) in another session has dropped this index.
-      if (!is_update_global_indexes) {
-        ret = OB_ERR_ADD_INDEX;
-        LOG_USER_ERROR(OB_ERR_ADD_INDEX);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-      }
+      ret = OB_ERR_ADD_INDEX;
+      LOG_USER_ERROR(OB_ERR_ADD_INDEX);
       LOG_WARN("index table schema is null",
           KR(ret),
           K(index_table_id),
@@ -344,6 +341,32 @@ int ObDropIndexExecutor::execute(ObExecContext& ctx, ObDropIndexStmt& stmt)
     LOG_WARN("rpc proxy drop index failed", "dst", common_rpc_proxy->get_server(), K(ret));
   }
   return ret;
+}
+
+int ObFlashBackIndexExecutor::execute(ObExecContext &ctx, ObFlashBackIndexStmt &stmt) {		
+  int ret = OB_SUCCESS;		
+  ObTaskExecutorCtx *task_exec_ctx = NULL;		
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;		
+  const obrpc::ObFlashBackIndexArg &flashback_index_arg = stmt.get_flashback_index_arg();		
+  ObString first_stmt;		
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {		
+    LOG_WARN("fail to get first stmt" , K(ret));		
+  } else {		
+    const_cast<obrpc::ObFlashBackIndexArg&>(flashback_index_arg).ddl_stmt_str_ = first_stmt;		
+  }		
+  if (OB_FAIL(ret)) {		
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {		
+    ret = OB_NOT_INIT;		
+    LOG_WARN("get task executor context failed");		
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {		
+    LOG_WARN("get common rpc proxy failed", K(ret));		
+  } else if (OB_ISNULL(common_rpc_proxy)) {		
+    ret = OB_ERR_UNEXPECTED;		
+    LOG_WARN("common rpc proxy should not be null", K(ret));		
+  } else if (OB_FAIL(common_rpc_proxy->flashback_index(flashback_index_arg))) {		
+    LOG_WARN("rpc proxy flashback index failed", "dst", common_rpc_proxy->get_server(), K(ret));		
+  }		
+  return ret;		
 }
 
 int ObPurgeIndexExecutor::execute(ObExecContext& ctx, ObPurgeIndexStmt& stmt)

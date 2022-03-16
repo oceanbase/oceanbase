@@ -411,8 +411,8 @@ protected:
   // check whether the target unit space is sufficient,
   // if it is insufficient, do not migrate,
   // and return OB_OP_NOT_ALLOW
-  int try_migrate_unit(const uint64_t unit_id, const share::ObUnitStat& unit_stat,
-      const common::ObIArray<share::ObUnitStat>& migrating_unit_stat, const common::ObAddr& dst,
+  int try_migrate_unit(const uint64_t unit_id, const uint64_t tenant_id, const share::ObUnitStat &unit_stat,
+      const common::ObIArray<share::ObUnitStat> &migrating_unit_stat, const common::ObAddr &dst,
       const bool is_manual = false);
   int get_zone_units(const common::ObArray<share::ObResourcePool*>& pools, common::ObArray<ZoneUnit>& zone_units) const;
   virtual int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT);

@@ -208,7 +208,7 @@ int ObPxMSCoordOp::inner_get_next_row()
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
     clear_evaluated_flag();
     if (FALSE_IT(timeout_us = phy_plan_ctx->get_timeout_timestamp() - get_timestamp())) {
-    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
       // TODO: cleanup
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, timeout_us, nth_channel))) {
@@ -339,6 +339,10 @@ int ObPxMSCoordOp::next_row(bool& wait_next_msg)
 
   if (OB_SUCC(ret)) {
     if (0 == row_heap_.capacity()) {
+      if (GCONF.enable_sql_audit) {
+        op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+        op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
+      }
       all_rows_finish_ = true;
       metric_.mark_last_out();
     } else if (row_heap_.capacity() == row_heap_.count()) {

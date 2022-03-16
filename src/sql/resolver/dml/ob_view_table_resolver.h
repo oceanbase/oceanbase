@@ -17,19 +17,19 @@ namespace oceanbase {
 namespace sql {
 class ObViewTableResolver : public ObSelectResolver {
 public:
-  ObViewTableResolver(ObResolverParams& params, const ObString& view_db_name, const ObString& view_name)
-      : ObSelectResolver(params),
-        parent_view_resolver_(NULL),
-        is_create_view_(false),
-        materialized_(false),
-        auto_name_id_(1),
-        view_db_name_(view_db_name),
-        view_name_(view_name)
-  {
-    params_.is_from_create_view_ = params.is_from_create_view_;
-  }
-  virtual ~ObViewTableResolver()
-  {}
+  ObViewTableResolver(ObResolverParams &params, const ObString &view_db_name, const ObString &view_name)
+    : ObSelectResolver(params),
+      parent_view_resolver_(NULL),
+      is_create_view_(false),
+      materialized_(false),
+      auto_name_id_(1),
+      view_db_name_(view_db_name),
+      view_name_(view_name)
+      {
+        params_.is_from_create_view_ = params.is_from_create_view_;
+        params_.is_from_create_table_ = params.is_from_create_table_;
+      }
+  virtual ~ObViewTableResolver() {}
 
   void set_current_view_item(const TableItem& view_item)
   {
@@ -39,7 +39,7 @@ public:
   {
     parent_view_resolver_ = parent_view_resolver;
   }
-  int check_need_use_sys_tenant(bool& use_sys_tenant) const;
+  int check_need_use_sys_tenant(bool& use_sys_tenant) const override;
   virtual int check_in_sysview(bool& in_sysview) const override;
   void set_is_create_view(bool is_create_view)
   {
@@ -64,12 +64,12 @@ public:
 
 protected:
   virtual int do_resolve_set_query(
-      const ParseNode& parse_tree, ObSelectStmt*& child_stmt, const bool is_left_child = false);
-  virtual int expand_view(TableItem& view_item);
-  virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo>& subquery_info);
+      const ParseNode& parse_tree, ObSelectStmt*& child_stmt, const bool is_left_child = false) override;
+  virtual int expand_view(TableItem& view_item) override;
+  virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo>& subquery_info) override;
   int check_view_circular_reference(const TableItem& view_item);
-  virtual int resolve_generate_table(const ParseNode& table_node, const ObString& alias_name, TableItem*& table_item);
-  virtual int set_select_item(SelectItem& select_item, bool is_auto_gen);
+  virtual int resolve_generate_table(const ParseNode& table_node, const ObString& alias_name, TableItem*& table_item) override;
+  virtual int set_select_item(SelectItem& select_item, bool is_auto_gen) override;
   virtual const ObString get_view_db_name() const override
   {
     return view_db_name_;

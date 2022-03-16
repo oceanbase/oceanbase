@@ -40,8 +40,8 @@ public:
   virtual ~ObBlockSampleScan()
   {}
 
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   inline void set_sample_info(const common::SampleInfo& sample_info)
   {
     sample_info_ = sample_info;
@@ -54,7 +54,7 @@ public:
   {
     return sample_info_;
   }
-  virtual int prepare_scan_param(ObExecContext& ctx) const;
+  virtual int prepare_scan_param(ObExecContext& ctx) const override;
   OB_INLINE virtual bool need_filter_row() const override
   {
     return true;

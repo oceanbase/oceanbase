@@ -20,8 +20,11 @@
 #include "rootserver/ob_root_inspection.h"
 #include "share/ob_schema_status_proxy.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_schema_mgr.h"
 #include "share/ob_upgrade_utils.h"
 #include "storage/transaction/ob_i_ts_source.h"
+#include "share/backup/ob_backup_struct.h"      // ObPhysicalRestoreInfo
+#include "archive/ob_archive_restore_engine.h"  // ObTenantPhysicalRestoreMeta
 
 namespace oceanbase {
 namespace rootserver {
@@ -50,6 +53,7 @@ ObRestoreScheduler::ObRestoreScheduler()
       idling_(stop_),
       schema_service_(NULL),
       sql_proxy_(NULL),
+      oracle_sql_proxy_(NULL),
       rpc_proxy_(NULL),
       srv_rpc_proxy_(NULL),
       freeze_info_mgr_(NULL),
@@ -72,11 +76,11 @@ ObRestoreScheduler::~ObRestoreScheduler()
   }
 }
 
-int ObRestoreScheduler::init(ObMultiVersionSchemaService& schema_service, ObMySQLProxy& sql_proxy,
-    ObCommonRpcProxy& rpc_proxy, obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObFreezeInfoManager& freeze_info_mgr,
-    ObPartitionTableOperator& pt_operator, ObRebalanceTaskMgr& task_mgr, ObServerManager& server_manager,
-    ObZoneManager& zone_manager, ObUnitManager& unit_manager, ObDDLService& ddl_service,
-    const common::ObAddr& self_addr)
+int ObRestoreScheduler::init(ObMultiVersionSchemaService &schema_service, ObMySQLProxy &sql_proxy,
+    ObOracleSqlProxy &oracle_sql_proxy, ObCommonRpcProxy &rpc_proxy, obrpc::ObSrvRpcProxy &srv_rpc_proxy,
+    ObFreezeInfoManager &freeze_info_mgr, ObPartitionTableOperator &pt_operator, ObRebalanceTaskMgr &task_mgr,
+    ObServerManager &server_manager, ObZoneManager &zone_manager, ObUnitManager &unit_manager,
+    ObDDLService &ddl_service, const common::ObAddr &self_addr)
 {
   int ret = OB_SUCCESS;
   const int restore_scheduler_thread_cnt = 1;
@@ -94,6 +98,7 @@ int ObRestoreScheduler::init(ObMultiVersionSchemaService& schema_service, ObMySQ
   } else {
     schema_service_ = &schema_service;
     sql_proxy_ = &sql_proxy;
+    oracle_sql_proxy_ = &oracle_sql_proxy;
     rpc_proxy_ = &rpc_proxy;
     srv_rpc_proxy_ = &srv_rpc_proxy;
     freeze_info_mgr_ = &freeze_info_mgr;
@@ -186,7 +191,7 @@ void ObRestoreScheduler::run3()
   return;
 }
 
-int ObRestoreScheduler::process_restore_job(const ObPhysicalRestoreJob& job)
+int ObRestoreScheduler::process_restore_job(const ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -244,7 +249,7 @@ int ObRestoreScheduler::process_restore_job(const ObPhysicalRestoreJob& job)
 }
 
 // restore_tenant is not reentrant
-int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObCreateTenantArg arg;
@@ -300,7 +305,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::fill_job_info(ObPhysicalRestoreJob& job, ObCreateTenantArg& arg)
+int ObRestoreScheduler::fill_job_info(ObPhysicalRestoreJob &job, ObCreateTenantArg &arg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -315,7 +320,7 @@ int ObRestoreScheduler::fill_job_info(ObPhysicalRestoreJob& job, ObCreateTenantA
   }
   return ret;
 }
-int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob& job, ObCreateTenantArg& arg)
+int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob &job, ObCreateTenantArg &arg)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -347,7 +352,7 @@ int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob& job, 
     if (OB_FAIL(assign_pool_list(job.pool_list_, arg.pool_list_))) {
       LOG_WARN("fail to get pool list", K(ret), K(job));
     }
-    ObTenantSchema& tenant_schema = arg.tenant_schema_;
+    ObTenantSchema &tenant_schema = arg.tenant_schema_;
     // check locality
     if (OB_SUCC(ret)) {
       bool specific_locality = 0 != strlen(job.locality_);
@@ -398,13 +403,13 @@ int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob& job, 
   return ret;
 }
 
-int ObRestoreScheduler::assign_pool_list(const char* str, common::ObIArray<ObString>& pool_list)
+int ObRestoreScheduler::assign_pool_list(const char *str, common::ObIArray<ObString> &pool_list)
 {
   int ret = OB_SUCCESS;
-  char* item_str = NULL;
-  char* save_ptr = NULL;
+  char *item_str = NULL;
+  char *save_ptr = NULL;
   while (OB_SUCC(ret)) {
-    item_str = strtok_r((NULL == item_str ? const_cast<char*>(str) : NULL), ",", &save_ptr);
+    item_str = strtok_r((NULL == item_str ? const_cast<char *>(str) : NULL), ",", &save_ptr);
     if (NULL != item_str) {
       if (OB_FAIL(pool_list.push_back(ObString::make_string(item_str)))) {
         LOG_WARN("push_back failed", K(ret));
@@ -416,38 +421,115 @@ int ObRestoreScheduler::assign_pool_list(const char* str, common::ObIArray<ObStr
   return ret;
 }
 
-int ObRestoreScheduler::fill_backup_info(ObPhysicalRestoreJob& job, ObCreateTenantArg& arg)
+int ObRestoreScheduler::fill_restore_backup_info_param(
+    share::ObPhysicalRestoreJob &job, share::ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalRestoreBackupDestList &dest_list = job.multi_restore_path_list_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_FAIL(param.backup_set_path_list_.assign(dest_list.get_backup_set_path_list()))) {
+    LOG_WARN("failed to assign backup set path list", KR(ret), K(job));
+  } else if (OB_FAIL(param.backup_piece_path_list_.assign(dest_list.get_backup_piece_path_list()))) {
+    LOG_WARN("failed to assign backup piece path list", KR(ret), K(job));
+  } else {
+    param.backup_dest_ = job.backup_dest_;
+    param.backup_cluster_name_ = job.backup_cluster_name_;
+    param.cluster_id_ = job.cluster_id_;
+    param.incarnation_ = job.incarnation_;
+    param.backup_tenant_name_ = job.backup_tenant_name_;
+    param.restore_timestamp_ = job.restore_timestamp_;
+    param.passwd_array_ = job.passwd_array_;
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::fill_backup_info(ObPhysicalRestoreJob &job, ObCreateTenantArg &arg)
 {
   int ret = OB_SUCCESS;
   ObRestoreBackupInfo backup_info;
-  ObArray<ObPartitionKey> pkey_list;
   ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam param;
-  param.backup_dest_ = job.backup_dest_;
-  param.backup_cluster_name_ = job.backup_cluster_name_;
-  param.cluster_id_ = job.cluster_id_;
-  param.incarnation_ = job.incarnation_;
-  param.backup_tenant_name_ = job.backup_tenant_name_;
-  param.restore_timestamp_ = job.restore_timestamp_;
-  param.passwd_array_ = job.passwd_array_;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", KR(ret));
+  } else if (OB_FAIL(fill_restore_backup_info_param(job, param))) {
+    LOG_WARN("fail to fill restore backup info param", KR(ret), K(job));
   } else if (OB_FAIL(ObRestoreBackupInfoUtil::get_restore_backup_info(param, backup_info))) {
     LOG_WARN("fail to get backup info", KR(ret), K(job));
   } else if (OB_FAIL(check_source_cluster_version(backup_info.physical_restore_info_.cluster_version_))) {
     LOG_WARN("fail to check source cluster version", KR(ret), K(job));
   } else if (OB_FAIL(job.assign(backup_info))) {
     LOG_WARN("fail to assign backup info", KR(ret), K(job), K(backup_info));
-  } else if (OB_FAIL(arg.restore_pkeys_.assign(backup_info.sys_pg_key_list_))) {
-    LOG_WARN("fail to assign pkeys", KR(ret), K(job));
+  }
+  if (OB_SUCC(ret)) {
+    // fill restore_pkeys/restore_log_pkeys
+    if (OB_FAIL(arg.restore_pkeys_.assign(backup_info.sys_pg_key_list_))) {
+      LOG_WARN("fail to assign pkeys", KR(ret), K(job));
+    } else if (backup_info.snapshot_version_ == param.restore_timestamp_ &&
+               backup_info.physical_restore_info_.cluster_version_ > CLUSTER_VERSION_3000) {
+      LOG_INFO("backup snapshot equal to restore timestamp, no need get pkeys from log",
+          K(backup_info), K(param.restore_timestamp_));
+    } else if (OB_FAIL(fill_pkeys_for_physical_restore_log(job, arg))) {
+      LOG_WARN("fail to fill pkeys for physical restore log", KR(ret), K(arg));
+    }
   }
   return ret;
 }
 
-int ObRestoreScheduler::fill_rs_info(ObPhysicalRestoreJob& job)
+int ObRestoreScheduler::fill_pkeys_for_physical_restore_log(const ObPhysicalRestoreJob &job, ObCreateTenantArg &arg)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashSet<uint64_t> restore_pure_ids;
+  int64_t tenant_space_tables_cnt = ARRAYSIZEOF(tenant_space_tables);
+  if (OB_FAIL(restore_pure_ids.create(hash::cal_next_prime(tenant_space_tables_cnt), "ResPureIds", "ResPureIds"))) {
+    LOG_WARN("failed to create restore pure ids", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < arg.restore_pkeys_.count(); i++) {
+    const uint64_t pure_id = extract_pure_id(arg.restore_pkeys_.at(i).get_table_id());
+    if (OB_FAIL(restore_pure_ids.set_refactored(pure_id, 0 /* won't overwrite */))) {
+      LOG_WARN("fail to set pure_id", KR(ret), K(pure_id));
+    }
+  }
+  share::ObPhysicalRestoreInfo restore_info;
+  archive::ObTenantPhysicalRestoreMeta restore_meta;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(job.copy_to(restore_info))) {
+    LOG_WARN("fail to gen restore info", KR(ret), K(job));
+  } else if (OB_FAIL(restore_meta.init(restore_info))) {
+    LOG_WARN("fail to init restore meta", KR(ret), K(job));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(tenant_space_tables); ++i) {
+    const uint64_t tid = extract_pure_id(tenant_space_tables[i]);
+    if (is_inner_table_with_partition(tid) && !ObSysTableChecker::is_backup_private_tenant_table(tid)) {
+      int hash_ret = restore_pure_ids.exist_refactored(tid);
+      if (OB_HASH_EXIST == hash_ret) {
+        // skip
+      } else if (OB_HASH_NOT_EXIST == hash_ret) {
+        // check if partition has archived log
+        const uint64_t table_id = combine_id(job.backup_tenant_id_, tid);
+        common::ObPartitionKey pkey(table_id, 0, 0);
+        bool exist = false;
+        if (OB_FAIL(restore_meta.check_need_fetch_archived_log(pkey, exist))) {
+          LOG_WARN("fail to check if archived log exist", KR(ret), K(pkey));
+        } else if (exist && OB_FAIL(arg.restore_log_pkeys_.push_back(pkey))) {
+          LOG_WARN("fail to push back pkey", KR(ret), K(pkey));
+        } else {
+          // partition has no archived log
+        }
+      } else {
+        ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+        LOG_WARN("fail to check pure id exist", KR(ret), K(tid));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::fill_rs_info(ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
   ObRestoreBackupInfo backup_info;
@@ -467,19 +549,7 @@ int ObRestoreScheduler::fill_rs_info(ObPhysicalRestoreJob& job)
   return ret;
 }
 
-/*
- * System tables' replicas may have different initial is_restore status.
- * 1. is_restore = 0:
- *    - backup private table
- *    - system tables in tenant space which were not backuped because of backup cluster with lower cluster version.
- * 2. is_restore = 2:
- *    - cluster is never merged which also can't be backuped.
- *    - cluster is never merged after cluster is upgraded.(Avoided by operation and maintenance)
- * 3. is_restore = 1:
- *    - other situations.
- * So, we may create system tables' partitions with initial is_restore status which is either 0 or 1.
- */
-int ObRestoreScheduler::restore_sys_replica(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::restore_sys_replica(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -499,6 +569,8 @@ int ObRestoreScheduler::restore_sys_replica(const ObPhysicalRestoreJob& job_info
     } else if (0 == task_cnt) {
       if (OB_FAIL(set_member_list(job_info, stat))) {
         LOG_WARN("fail to set member_list", K(ret), K(job_info));
+      } else if (OB_FAIL(update_restore_schema_version(job_info))) {
+        LOG_WARN("fail to update restore schema version", KR(ret), K(job_info));
       } else {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = try_update_job_status(ret, job_info))) {
@@ -511,8 +583,30 @@ int ObRestoreScheduler::restore_sys_replica(const ObPhysicalRestoreJob& job_info
   return ret;
 }
 
+int ObRestoreScheduler::update_restore_schema_version(const ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = job.tenant_id_;
+  int64_t schema_version = OB_INVALID_VERSION;
+  ObPhysicalRestoreTableOperator restore_op;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", KR(ret));
+  } else if (OB_FAIL(restore_op.init(sql_proxy_))) {
+    LOG_WARN("fail init", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(*sql_proxy_, schema_status, schema_version))) {
+    LOG_WARN("fail to get schema version from inner table", KR(ret), K(schema_status));
+  } else if (OB_FAIL(restore_op.update_restore_option(job.job_id_, "restore_schema_version", schema_version))) {
+    LOG_WARN("fail to update restore option", KR(ret), K(schema_status), K(schema_version));
+  }
+  return ret;
+}
+
 int ObRestoreScheduler::schedule_restore_task(
-    const ObPhysicalRestoreJob& job_info, ObPhysicalRestoreStat& stat, int64_t& task_cnt)
+    const ObPhysicalRestoreJob &job_info, ObPhysicalRestoreStat &stat, int64_t &task_cnt)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_REPLICA);
@@ -552,8 +646,8 @@ int ObRestoreScheduler::schedule_restore_task(
   return ret;
 }
 
-int ObRestoreScheduler::schedule_restore_task(const ObPhysicalRestoreJob& job_info, ObPhysicalRestoreStat& stat,
-    const PhysicalRestorePartition* partition, int64_t& task_cnt)
+int ObRestoreScheduler::schedule_restore_task(const ObPhysicalRestoreJob &job_info, ObPhysicalRestoreStat &stat,
+    const PhysicalRestorePartition *partition, int64_t &task_cnt)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -565,7 +659,7 @@ int ObRestoreScheduler::schedule_restore_task(const ObPhysicalRestoreJob& job_in
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition is null", K(ret));
   } else if (partition->get_replica_count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_EAGAIN;
     LOG_WARN("partition has no replica", K(ret), KPC(partition));
   } else {
     int64_t paxos_restore_cnt = 0;
@@ -595,7 +689,7 @@ int ObRestoreScheduler::schedule_restore_task(const ObPhysicalRestoreJob& job_in
       stat.statistic_.finish_pg_cnt_ += 1;
       stat.statistic_.finish_partition_cnt_ += partition->table_cnt_;
     } else {
-      const ObPartitionReplica* restore_replica = NULL;
+      const ObPartitionReplica *restore_replica = NULL;
       FOR_BEGIN_END_E(r, *partition, stat.replicas_, OB_SUCC(ret))
       {
         if (OB_ISNULL(r)) {
@@ -638,9 +732,9 @@ int ObRestoreScheduler::schedule_restore_task(const ObPhysicalRestoreJob& job_in
   return ret;
 }
 
-int ObRestoreScheduler::schedule_leader_restore_task(const PhysicalRestorePartition& partition,
-    const ObPartitionReplica& replica, const ObPhysicalRestoreJob& job_info, const ObPhysicalRestoreStat& stat,
-    int64_t& task_cnt)
+int ObRestoreScheduler::schedule_leader_restore_task(const PhysicalRestorePartition &partition,
+    const ObPartitionReplica &replica, const ObPhysicalRestoreJob &job_info, const ObPhysicalRestoreStat &stat,
+    int64_t &task_cnt)
 {
   int ret = OB_SUCCESS;
   UNUSED(stat);
@@ -655,7 +749,7 @@ int ObRestoreScheduler::schedule_leader_restore_task(const PhysicalRestorePartit
     ObPhysicalRestoreTask task;
     ObPhysicalRestoreTaskInfo task_info;
     common::ObArray<ObPhysicalRestoreTaskInfo> task_info_array;
-    const char* comment = balancer::PHYSICAL_RESTORE_REPLICA;
+    const char *comment = balancer::PHYSICAL_RESTORE_REPLICA;
     int64_t tmp_cnt = 0;
     // fill dst
     OnlineReplica dst;
@@ -680,9 +774,9 @@ int ObRestoreScheduler::schedule_leader_restore_task(const PhysicalRestorePartit
   return ret;
 }
 
-int ObRestoreScheduler::schedule_follower_restore_task(const PhysicalRestorePartition& partition,
-    const ObPartitionReplica& replica, const ObPhysicalRestoreJob& job_info, const ObPhysicalRestoreStat& stat,
-    int64_t& task_cnt)
+int ObRestoreScheduler::schedule_follower_restore_task(const PhysicalRestorePartition &partition,
+    const ObPartitionReplica &replica, const ObPhysicalRestoreJob &job_info, const ObPhysicalRestoreStat &stat,
+    int64_t &task_cnt)
 {
   int ret = OB_SUCCESS;
   UNUSED(job_info);
@@ -697,7 +791,7 @@ int ObRestoreScheduler::schedule_follower_restore_task(const PhysicalRestorePart
     ObCopySSTableTaskInfo task_info;
     common::ObArray<ObCopySSTableTaskInfo> task_info_array;
     OnlineReplica dst;
-    const char* comment = balancer::RESTORE_FOLLOWER_REPLICA;
+    const char *comment = balancer::RESTORE_FOLLOWER_REPLICA;
     const ObCopySSTableType type = OB_COPY_SSTABLE_TYPE_RESTORE_FOLLOWER;
     ObReplicaMember data_src;
     int64_t tmp_cnt = 0;
@@ -724,7 +818,7 @@ int ObRestoreScheduler::schedule_follower_restore_task(const PhysicalRestorePart
 }
 
 int ObRestoreScheduler::fill_restore_arg(
-    const common::ObPartitionKey& pg_key, const ObPhysicalRestoreJob& job, ObPhysicalRestoreArg& arg)
+    const common::ObPartitionKey &pg_key, const ObPhysicalRestoreJob &job, ObPhysicalRestoreArg &arg)
 {
   int ret = OB_SUCCESS;
   arg.pg_key_ = pg_key;
@@ -737,7 +831,7 @@ int ObRestoreScheduler::fill_restore_arg(
 }
 
 int ObRestoreScheduler::choose_restore_data_source(
-    const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, ObReplicaMember& data_src)
+    const PhysicalRestorePartition &partition, const ObPhysicalRestoreStat &stat, ObReplicaMember &data_src)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -758,7 +852,7 @@ int ObRestoreScheduler::choose_restore_data_source(
   return ret;
 }
 
-int ObRestoreScheduler::set_member_list(const ObPhysicalRestoreJob& job_info, const ObPhysicalRestoreStat& stat)
+int ObRestoreScheduler::set_member_list(const ObPhysicalRestoreJob &job_info, const ObPhysicalRestoreStat &stat)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -777,7 +871,7 @@ int ObRestoreScheduler::set_member_list(const ObPhysicalRestoreJob& job_info, co
     LOG_WARN("fail to build member_list_map", K(ret), K(tenant_id));
   } else {
     bool all_done = true;
-    ObArray<const PhysicalRestorePartition*> persist_partitions;
+    ObArray<const PhysicalRestorePartition *> persist_partitions;
     ObRecoveryHelper::ObMemberListPkeyList partition_infos;
     SetMemberListAction action = SetMemberListAction::BALANCE;
     FOREACH_CNT_X(partition, stat.partitions_, OB_SUCC(ret))
@@ -864,7 +958,7 @@ int ObRestoreScheduler::set_member_list(const ObPhysicalRestoreJob& job_info, co
 // 3. SET_MEMBER_LIST: replicas match locality, and all replicas' is_restore =
 // REPLICA_RESTORE_WAIT_ALL_DUMPED/REPLICA_RESTORE_MEMBER_LIST.
 int ObRestoreScheduler::get_set_member_list_action(
-    const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, SetMemberListAction& action)
+    const PhysicalRestorePartition &partition, const ObPhysicalRestoreStat &stat, SetMemberListAction &action)
 {
   int ret = OB_SUCCESS;
   bool locality_match = false;
@@ -912,7 +1006,7 @@ int ObRestoreScheduler::get_set_member_list_action(
   return ret;
 }
 
-int ObRestoreScheduler::check_locality_valid(const share::schema::ZoneLocalityIArray& locality)
+int ObRestoreScheduler::check_locality_valid(const share::schema::ZoneLocalityIArray &locality)
 {
   int ret = OB_SUCCESS;
   int64_t cnt = locality.count();
@@ -921,7 +1015,7 @@ int ObRestoreScheduler::check_locality_valid(const share::schema::ZoneLocalityIA
     LOG_WARN("invalid cnt", K(ret), K(cnt));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
-      const share::ObZoneReplicaAttrSet& attr = locality.at(i);
+      const share::ObZoneReplicaAttrSet &attr = locality.at(i);
       if (attr.is_specific_readonly_replica() || attr.is_allserver_readonly_replica()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("locality with readonly replica is not supported", K(ret), K(locality));
@@ -938,7 +1032,7 @@ int ObRestoreScheduler::check_locality_valid(const share::schema::ZoneLocalityIA
 }
 
 int ObRestoreScheduler::check_locality_match(
-    const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, bool& locality_match)
+    const PhysicalRestorePartition &partition, const ObPhysicalRestoreStat &stat, bool &locality_match)
 {
   int ret = OB_SUCCESS;
   locality_match = false;
@@ -975,7 +1069,7 @@ int ObRestoreScheduler::check_locality_match(
         LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
       } else if (is_new_tablegroup_id(partition.schema_id_)) {
         // PG
-        const ObTablegroupSchema* tablegroup_schema = NULL;
+        const ObTablegroupSchema *tablegroup_schema = NULL;
         if (OB_FAIL(schema_guard.get_tablegroup_schema(partition.schema_id_, tablegroup_schema))) {
           LOG_WARN("fail to get tablegroup schema", K(ret), K(partition));
         } else if (OB_ISNULL(tablegroup_schema)) {
@@ -988,7 +1082,7 @@ int ObRestoreScheduler::check_locality_match(
         }
       } else {
         // standalone partition
-        const ObSimpleTableSchemaV2* table_schema = NULL;
+        const ObSimpleTableSchemaV2 *table_schema = NULL;
         if (OB_FAIL(schema_guard.get_table_schema(partition.schema_id_, table_schema))) {
           LOG_WARN("fail to get table schema", K(ret), K(partition));
         } else if (OB_ISNULL(table_schema)) {
@@ -1016,8 +1110,8 @@ int ObRestoreScheduler::check_locality_match(
   return ret;
 }
 
-int ObRestoreScheduler::add_member_list_pkey(const PhysicalRestorePartition& partition,
-    const ObPhysicalRestoreStat& stat, ObRecoveryHelper::ObMemberListPkeyList& partition_infos)
+int ObRestoreScheduler::add_member_list_pkey(const PhysicalRestorePartition &partition,
+    const ObPhysicalRestoreStat &stat, ObRecoveryHelper::ObMemberListPkeyList &partition_infos)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -1052,8 +1146,8 @@ int ObRestoreScheduler::add_member_list_pkey(const PhysicalRestorePartition& par
   return ret;
 }
 
-int ObRestoreScheduler::add_member_list_pkey(const ObPartitionKey& pkey,
-    const ObPartitionReplica::MemberList& member_list, ObRecoveryHelper::ObMemberListPkeyList& partition_infos)
+int ObRestoreScheduler::add_member_list_pkey(const ObPartitionKey &pkey,
+    const ObPartitionReplica::MemberList &member_list, ObRecoveryHelper::ObMemberListPkeyList &partition_infos)
 {
   int ret = OB_SUCCESS;
   int64_t member_cnt = member_list.count();
@@ -1092,7 +1186,7 @@ int ObRestoreScheduler::add_member_list_pkey(const ObPartitionKey& pkey,
   return ret;
 }
 
-int ObRestoreScheduler::batch_set_member_list(const ObRecoveryHelper::ObMemberListPkeyList& partition_infos)
+int ObRestoreScheduler::batch_set_member_list(const ObRecoveryHelper::ObMemberListPkeyList &partition_infos)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -1109,10 +1203,10 @@ int ObRestoreScheduler::batch_set_member_list(const ObRecoveryHelper::ObMemberLi
     ObSetMemberListBatchProxy batch_rpc_proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_set_member_list);
     int64_t rpc_count = 0;
     for (int64_t i = 0; i < partition_infos.ml_pk_array_.count() && OB_SUCC(ret); i++) {
-      const ObMemberList& member_list = partition_infos.ml_pk_array_.at(i).member_list_;
+      const ObMemberList &member_list = partition_infos.ml_pk_array_.at(i).member_list_;
       for (int64_t j = 0; j < partition_infos.ml_pk_array_.at(i).pkey_info_.count() && OB_SUCC(ret); j++) {
         int64_t index = partition_infos.ml_pk_array_.at(i).pkey_info_.at(j).pkey_index_;
-        const ObPartitionKey& key = partition_infos.pkey_array_.at(index);
+        const ObPartitionKey &key = partition_infos.pkey_array_.at(index);
         if (OB_FAIL(check_stop())) {
           LOG_WARN("restore scheduler stopped", K(ret));
         } else if (OB_FAIL(arg.add_arg(key, member_list))) {
@@ -1156,7 +1250,7 @@ int ObRestoreScheduler::batch_set_member_list(const ObRecoveryHelper::ObMemberLi
         }
       }
       for (int64_t i = 0; i < batch_rpc_proxy.get_results().count() && OB_SUCC(ret); i++) {
-        const ObCreatePartitionBatchRes* res = batch_rpc_proxy.get_results().at(i);
+        const ObCreatePartitionBatchRes *res = batch_rpc_proxy.get_results().at(i);
         if (OB_ISNULL(res)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get result is null", K(ret));
@@ -1178,7 +1272,7 @@ int ObRestoreScheduler::batch_set_member_list(const ObRecoveryHelper::ObMemberLi
 }
 
 int ObRestoreScheduler::send_batch_set_member_list_rpc(
-    ObSetMemberListBatchArg& arg, ObSetMemberListBatchProxy& batch_rpc_proxy)
+    ObSetMemberListBatchArg &arg, ObSetMemberListBatchProxy &batch_rpc_proxy)
 {
   int ret = OB_SUCCESS;
   ObAddr addr;
@@ -1192,7 +1286,7 @@ int ObRestoreScheduler::send_batch_set_member_list_rpc(
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else {
     ObAddr server;
-    const ObMemberList& server_list = arg.args_.at(0).member_list_;
+    const ObMemberList &server_list = arg.args_.at(0).member_list_;
     const int64_t MAX_WAIT_TIMEOUT = 10 * 1000 * 1000;
     int64_t abs_timeout = ObTimeUtility::current_time() + MAX_WAIT_TIMEOUT;
     for (int64_t i = 0; i < server_list.get_member_number() && OB_SUCC(ret); i++) {
@@ -1221,7 +1315,7 @@ int ObRestoreScheduler::send_batch_set_member_list_rpc(
 }
 
 int ObRestoreScheduler::build_member_list_map(
-    const uint64_t tenant_id, common::hash::ObHashMap<ObPartitionKey, ObPartitionReplica::MemberList>& member_list_map)
+    const uint64_t tenant_id, common::hash::ObHashMap<ObPartitionKey, ObPartitionReplica::MemberList> &member_list_map)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -1236,7 +1330,7 @@ int ObRestoreScheduler::build_member_list_map(
     ObSqlString sql;
     HEAP_VAR(ObMySQLProxy::MySQLResult, res)
     {
-      common::sqlclient::ObMySQLResult* result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt(
               "select * from %s where tenant_id = %ld", OB_ALL_PARTITION_MEMBER_LIST_TNAME, tenant_id))) {
         LOG_WARN("failed to assign sql", KR(ret), K(sql));
@@ -1290,7 +1384,7 @@ int ObRestoreScheduler::build_member_list_map(
 }
 
 int ObRestoreScheduler::batch_persist_member_list(
-    ObArray<const PhysicalRestorePartition*>& persist_partitions, const ObPhysicalRestoreStat& stat)
+    ObArray<const PhysicalRestorePartition *> &persist_partitions, const ObPhysicalRestoreStat &stat)
 {
   int ret = OB_SUCCESS;
   int64_t total_cnt = persist_partitions.count();
@@ -1309,7 +1403,7 @@ int ObRestoreScheduler::batch_persist_member_list(
       end = min(start + STEP, total_cnt - 1);
       ObDMLSqlSplicer dml;
       for (int64_t i = start; OB_SUCC(ret) && i <= end; i++) {
-        const PhysicalRestorePartition* partition = persist_partitions.at(i);
+        const PhysicalRestorePartition *partition = persist_partitions.at(i);
         if (OB_ISNULL(partition)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("partition is null", K(ret));
@@ -1340,15 +1434,15 @@ int ObRestoreScheduler::batch_persist_member_list(
 }
 
 int ObRestoreScheduler::fill_dml_splicer(
-    const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, ObDMLSqlSplicer& dml)
+    const PhysicalRestorePartition &partition, const ObPhysicalRestoreStat &stat, ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
   // fill member_list
   ObPartitionReplica::MemberList member_list;
   ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
   const int64_t length = MAX_MEMBER_LIST_LENGTH;
-  char* member_list_str = NULL;
-  if (NULL == (member_list_str = static_cast<char*>(allocator.alloc(length)))) {
+  char *member_list_str = NULL;
+  if (NULL == (member_list_str = static_cast<char *>(allocator.alloc(length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(length));
   } else {
@@ -1415,7 +1509,7 @@ int ObRestoreScheduler::clear_member_list_table(const uint64_t tenant_id)
   return ret;
 }
 
-int ObRestoreScheduler::refresh_schema(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::refresh_schema(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -1430,7 +1524,7 @@ int ObRestoreScheduler::refresh_schema(const ObPhysicalRestoreJob& job_info)
   } else {
     const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
     // TODO:() should refator in ver 3.3.0
-    ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
+    ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
     ObRefreshSchemaStatus schema_status(tenant_id, OB_INVALID_TIMESTAMP, OB_INVALID_VERSION, OB_INVALID_VERSION);
     ObArray<uint64_t> tenant_ids;
     if (OB_ISNULL(schema_status_proxy)) {
@@ -1454,7 +1548,7 @@ int ObRestoreScheduler::refresh_schema(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::check_gts(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::check_gts(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -1485,10 +1579,15 @@ int ObRestoreScheduler::check_gts(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::modify_schema(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::modify_schema(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
+  bool need_log_nop = true;
+#ifdef ERRSIM
+  need_log_nop = false;
+#endif
+
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_MODIFY_SCHEMA);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -1500,14 +1599,18 @@ int ObRestoreScheduler::modify_schema(const ObPhysicalRestoreJob& job_info)
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (OB_FAIL(force_drop_schema(tenant_id))) {
     LOG_WARN("fail to force drop schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(filter_schema(job_info))) {
+    LOG_WARN("fail to filter schema", KR(ret), K(job_info));
   } else if (OB_FAIL(convert_schema_options(tenant_id))) {
     LOG_WARN("fail to convert table options", K(ret), K(tenant_id));
   } else if (OB_FAIL(convert_index_status(job_info))) {
     LOG_WARN("fail to convert index status", K(ret), K(job_info));
   } else if (OB_FAIL(convert_parameters(job_info))) {
     LOG_WARN("fail to convert parameters", K(ret), K(job_info));
-  } else if (OB_FAIL(log_nop_operation(job_info))) {
+  } else if (need_log_nop && OB_FAIL(log_nop_operation(job_info))) {
     LOG_WARN("fail to log nop operation", KR(ret), K(job_info));
+  } else if (OB_FAIL(convert_column_statistic(job_info.tenant_id_))) {
+    LOG_WARN("failed to convert column statistic", K(ret), K(job_info));
   } else {
     // reset __all_restore_progress
     ObPhysicalRestoreTableOperator restore_op;
@@ -1562,6 +1665,464 @@ int ObRestoreScheduler::force_drop_schema(const uint64_t tenant_id)
   return ret;
 }
 
+// If white_list is not empty, we try drop the following schemas:
+// 1. view : all views in tenant
+// 2. index : index which related data_table is not in white list
+// 3. table : user table which is not in white list
+// 4. foreign key : foreign key which related child_table or related parent table is not in white list
+// 5. tablegroup : tablegroups except table's tablegroup in white list and tenant/database's default tablegroup
+// 6. recyclebin objects in tenant
+int ObRestoreScheduler::filter_schema(const ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = job_info.tenant_id_;
+  const ObSArray<obrpc::ObTableItem> &table_items = job_info.white_list_.get_table_white_list();
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (table_items.count() <= 0) {
+    // white_list is empty, it's no need to filter schema
+  } else {
+    common::hash::ObHashSet<uint64_t> table_white_list;
+    common::hash::ObHashSet<uint64_t> tablegroup_white_list;
+    const int64_t BUCKET_NUM = 1024;
+    if (OB_FAIL(table_white_list.create(BUCKET_NUM))) {
+      LOG_WARN("fail to init table_white_list", KR(ret));
+    } else if (OB_FAIL(tablegroup_white_list.create(BUCKET_NUM))) {
+      LOG_WARN("fail to init tablegroup_white_list", KR(ret));
+    } else if (OB_FAIL(gen_white_list(job_info, table_items, table_white_list, tablegroup_white_list))) {
+      LOG_WARN("fail to gen white list", KR(ret), K(table_items));
+    } else if (OB_FAIL(filter_recyclebin_objects(tenant_id))) {
+      LOG_WARN("fail to filter recyclebin objects", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(filter_view_and_foreign_key(tenant_id, table_white_list))) {
+      LOG_WARN("fail to filter view/foreign key", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(filter_table(tenant_id, table_white_list))) {
+      LOG_WARN("fail to filter table", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(filter_tablegroup(tenant_id, tablegroup_white_list))) {
+      LOG_WARN("fail to filter tablegroup", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::gen_white_list(const ObPhysicalRestoreJob &job_info,
+    const ObIArray<obrpc::ObTableItem> &table_items, common::hash::ObHashSet<uint64_t> &table_white_list,
+    common::hash::ObHashSet<uint64_t> &tablegroup_white_list)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const uint64_t tenant_id = job_info.tenant_id_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); i++) {
+      const obrpc::ObTableItem &item = table_items.at(i);
+      const ObDatabaseSchema *db = NULL;
+      const ObSimpleTableSchemaV2 *tb = NULL;
+      if (OB_FAIL(schema_guard.get_database_schema(tenant_id, item.database_name_, db))) {
+        LOG_WARN("fail to get database schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(db)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("database not exist", KR(ret), K(item));
+      } else if (db->is_or_in_recyclebin()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("restore table in recyclebin is not supported", KR(ret), K(item));
+      } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+                     db->get_database_id(),
+                     item.table_name_,
+                     false, /*is_index*/
+                     tb))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(item));
+      } else if (OB_ISNULL(tb)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("table not exist", KR(ret), K(item));
+      } else if (OB_FAIL(table_white_list.set_refactored(tb->get_table_id()))) {
+        LOG_WARN("fail to set table white list", KR(ret), K(item));
+      } else if (OB_INVALID_ID != tb->get_tablegroup_id() &&
+                 OB_FAIL(tablegroup_white_list.set_refactored_1(tb->get_tablegroup_id(), true /*overwrite*/))) {
+        LOG_WARN("fail to set tablegroup_id", KR(ret), K(item));
+      }
+    }
+    // TODO:(yanmu.ztl) We can reset database/tenant's default tablegroup so we won't restore such tablegroup.
+    if (OB_SUCC(ret)) {
+      ObArray<const ObDatabaseSchema *> databases;
+      if (OB_FAIL(schema_guard.get_database_schemas_in_tenant(tenant_id, databases))) {
+        LOG_WARN("fail to get databases", KR(ret), K(tenant_id));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < databases.count(); i++) {
+          const ObDatabaseSchema *database = databases.at(i);
+          if (OB_ISNULL(database)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("database is null", KR(ret));
+          } else if (OB_INVALID_ID != database->get_default_tablegroup_id()) {
+            if (OB_FAIL(tablegroup_white_list.set_refactored_1(
+                    database->get_default_tablegroup_id(), true /*overwrite*/))) {
+              LOG_WARN("fail to set default tablegroup id", KR(ret), KPC(database));
+            }
+          }
+        }
+      }
+      const ObTenantSchema *tenant = NULL;
+      if (FAILEDx(schema_guard.get_tenant_info(tenant_id, tenant))) {
+        LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+      } else if (OB_INVALID_ID != tenant->get_default_tablegroup_id()) {
+        if (OB_FAIL(tablegroup_white_list.set_refactored_1(tenant->get_default_tablegroup_id(), true /*overwrite*/))) {
+          LOG_WARN("fail to set default tablegroup id", KR(ret), KPC(tenant));
+        }
+      }
+    }
+    // restore fail when:
+    // 1. table/database/tenant doesn't exist.
+    // 2. table is in recyclebin.
+    // 3. table is oracle temp table.
+    if (OB_NOT_SUPPORTED == ret) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = try_update_job_status(ret, job_info))) {
+        LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::filter_recyclebin_objects(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else {
+    const int64_t PURGE_EACH_RPC = 100;
+    const int64_t SLEEP_INTERVAL = 1 * 1000 * 1000L;    // 1s
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+    obrpc::ObPurgeRecycleBinArg arg;
+    arg.tenant_id_ = tenant_id;
+    arg.exec_tenant_id_ = tenant_id;
+    arg.expire_time_ = ObTimeUtility::current_time();
+    arg.auto_purge_ = true;
+    arg.purge_num_ = PURGE_EACH_RPC;
+    while (OB_SUCC(ret)) {
+      obrpc::Int64 affected_rows = 0;
+      if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
+        LOG_WARN("purge reyclebin objects failed", KR(ret), K(arg));
+      } else if (affected_rows < PURGE_EACH_RPC) {
+        LOG_INFO("purge recyclebin objects done", KR(ret), K(arg), K(affected_rows));
+        break;
+      } else {
+        LOG_INFO("purge recyclebin objects, need continue", KR(ret), K(arg), K(affected_rows));
+        usleep(SLEEP_INTERVAL);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::filter_view_and_foreign_key(
+    const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t> &table_white_list)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<const ObSimpleTableSchemaV2 *> tables;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, tables))) {
+    LOG_WARN("fail to get table schemas", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      const ObSimpleTableSchemaV2 *table = tables.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null", KR(ret));
+      } else if (is_inner_table(table->get_table_id())) {
+        // skip
+      } else if (table->is_view_table()) {
+        // user view
+        if (OB_FAIL(try_drop_table(schema_guard, *table))) {
+          LOG_WARN("fail to drop view", KR(ret), KPC(table));
+        }
+      } else if (table->is_user_table() && table->get_simple_foreign_key_info_array().count() > 0) {
+        // foreign key's child table
+        if (OB_FAIL(try_drop_foreign_key(schema_guard, *table, table_white_list))) {
+          LOG_WARN("fail to drop foreign key", KR(ret), KPC(table));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::try_drop_table(
+    ObSchemaGetterGuard &schema_guard, const share::schema::ObSimpleTableSchemaV2 &table)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else {
+    const uint64_t tenant_id = table.get_tenant_id();
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+    obrpc::ObDropTableArg arg;
+    arg.if_exist_ = true;
+    arg.tenant_id_ = tenant_id;
+    arg.exec_tenant_id_ = tenant_id;
+    arg.to_recyclebin_ = false;
+    arg.table_type_ = table.get_table_type();
+    const ObSimpleDatabaseSchema *database = NULL;
+    if (OB_FAIL(schema_guard.get_database_schema(table.get_database_id(), database))) {
+      LOG_WARN("fail to get database schema", KR(ret), K(table));
+    } else if (OB_ISNULL(database)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("database not exist", KR(ret), K(table));
+    } else {
+      ObTableItem table_item;
+      table_item.database_name_ = database->get_database_name();
+      table_item.table_name_ = table.get_table_name();
+      if (OB_FAIL(arg.tables_.push_back(table_item))) {
+        LOG_WARN("fail to add table item", KR(ret), K(table_item));
+      } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_table(arg))) {
+        LOG_WARN("drop table failed", KR(ret), K(arg));
+      } else {
+        LOG_INFO("drop table/view", KR(ret), K(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::try_drop_foreign_key(ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObSimpleTableSchemaV2 &table, const common::hash::ObHashSet<uint64_t> &table_white_list)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!table.is_user_table() || table.get_simple_foreign_key_info_array().count() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table should has foreign keys", KR(ret), K(table));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else {
+    const uint64_t tenant_id = table.get_tenant_id();
+    const ObTableSchema *full_table = NULL;
+    const ObSimpleDatabaseSchema *database = NULL;
+    if (OB_FAIL(schema_guard.get_database_schema(table.get_database_id(), database))) {
+      LOG_WARN("fail to get database schema", KR(ret), K(table));
+    } else if (OB_ISNULL(database)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("database not exist", KR(ret), K(table));
+    } else if (OB_FAIL(schema_guard.get_table_schema(table.get_table_id(), full_table))) {
+      LOG_WARN("fail to get full table schema", KR(ret), K(table));
+    } else if (OB_ISNULL(full_table)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("full table should exist", KR(ret), K(table));
+    } else {
+      const ObIArray<ObForeignKeyInfo> &foreign_keys = full_table->get_foreign_key_infos();
+      for (int i = 0; OB_SUCC(ret) && i < foreign_keys.count(); i++) {
+        const ObForeignKeyInfo &foreign_key = foreign_keys.at(i);
+        const uint64_t child_table_id = foreign_key.child_table_id_;
+        const uint64_t parent_table_id = foreign_key.parent_table_id_;
+        int hash_ret_1 = table_white_list.exist_refactored(child_table_id);
+        int hash_ret_2 = table_white_list.exist_refactored(parent_table_id);
+        if (child_table_id != full_table->get_table_id()) {
+          // Only child table drop foreign key.
+        } else if (OB_SUCCESS == hash_ret_1 || OB_SUCCESS == hash_ret_2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("hash ret should not be OB_SUCCESS", KR(ret), KR(hash_ret_1), KR(hash_ret_2));
+        } else if (OB_HASH_EXIST == hash_ret_1 && OB_HASH_EXIST == hash_ret_2) {
+          // child_table and parent_table are both in white_list. We keep such foreign key.
+        } else if (OB_HASH_NOT_EXIST == hash_ret_1 || OB_HASH_NOT_EXIST == hash_ret_2) {
+          // drop foreign key
+          ObWorker::CompatMode compat_mode = ObWorker::CompatMode::INVALID;
+          bool is_oracle_mode = false;
+          if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+            LOG_WARN("fail to get tenant mode", KR(ret), K(tenant_id));
+          } else {
+            is_oracle_mode = (ObWorker::CompatMode::ORACLE == compat_mode);
+          }
+          ObSqlString sql;
+          const ObString &database_name = database->get_database_name();
+          const ObString &table_name = full_table->get_table_name();
+          const ObString &foreign_key_name = foreign_key.foreign_key_name_;
+          int64_t affected_rows = 0;
+          if (FAILEDx(sql.append_fmt(is_oracle_mode ? "ALTER TABLE \"%.*s\".\"%.*s\" DROP CONSTRAINT \"%.*s\""
+                                                    : "ALTER TABLE `%.*s`.`%.*s` DROP FOREIGN KEY `%.*s`",
+                  database_name.length(),
+                  database_name.ptr(),
+                  table_name.length(),
+                  table_name.ptr(),
+                  foreign_key_name.length(),
+                  foreign_key_name.ptr()))) {
+            LOG_WARN("fail to append sql", KR(ret), K(database_name), K(table_name), K(foreign_key_name));
+          } else if (is_oracle_mode && OB_FAIL(oracle_sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
+            LOG_WARN("fail to execute sql", KR(ret), K(sql));
+          } else if (!is_oracle_mode && OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_rows))) {
+            LOG_WARN("fail to execute sql", KR(ret), K(sql));
+          } else {
+            LOG_INFO("drop foreign key", KR(ret), K(sql));
+          }
+        } else {
+          ret = hash_ret_1;
+          LOG_WARN("fail to check table exist", KR(ret), K(child_table_id), K(parent_table_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::filter_table(
+    const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t> &table_white_list)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<const ObSimpleTableSchemaV2 *> tables;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, tables))) {
+    LOG_WARN("fail to get table schemas", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      const ObSimpleTableSchemaV2 *table = tables.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null", KR(ret));
+      } else if (is_inner_table(table->get_table_id())) {
+        // skip
+      } else if (table->is_user_table()) {
+        int hash_ret = table_white_list.exist_refactored(table->get_table_id());
+        if (OB_HASH_EXIST == hash_ret) {
+          // skip
+        } else if (OB_HASH_NOT_EXIST == hash_ret) {
+          // drop table
+          if (OB_FAIL(try_drop_table(schema_guard, *table))) {
+            LOG_WARN("fail to drop table", KR(ret), KPC(table));
+          }
+        } else {
+          ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+          LOG_WARN("fail to check table exsit", KR(ret), KPC(table));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::filter_tablegroup(
+    const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t> &tablegroup_white_list)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<const ObSimpleTablegroupSchema *> tablegroups;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tablegroup_schemas_in_tenant(tenant_id, tablegroups))) {
+    LOG_WARN("fail to get tablegroups", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablegroups.count(); i++) {
+      const ObSimpleTablegroupSchema *tablegroup = tablegroups.at(i);
+      if (OB_ISNULL(tablegroup)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablegroup is null", KR(ret), K(tenant_id));
+      } else if (extract_pure_id(tablegroup->get_tablegroup_id()) <= OB_USER_TABLEGROUP_ID) {
+        // skip system tablegroup
+      } else {
+        int hash_ret = tablegroup_white_list.exist_refactored(tablegroup->get_tablegroup_id());
+        if (OB_HASH_EXIST == hash_ret) {
+          // skip
+        } else if (OB_HASH_NOT_EXIST == hash_ret) {
+          // drop tablegroup
+          if (OB_FAIL(try_drop_tablegroup(*tablegroup))) {
+            LOG_WARN("fail to drop tablegroup", KR(ret), KPC(tablegroup));
+          }
+        } else {
+          ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+          LOG_WARN("fail to check tablegroup exsit", KR(ret), KPC(tablegroup));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::try_drop_tablegroup(const share::schema::ObSimpleTablegroupSchema &tablegroup)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else {
+    const uint64_t tenant_id = tablegroup.get_tenant_id();
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+    obrpc::ObDropTablegroupArg arg;
+    arg.if_exist_ = true;
+    arg.tenant_id_ = tenant_id;
+    arg.exec_tenant_id_ = tenant_id;
+    arg.tablegroup_name_ = tablegroup.get_tablegroup_name();
+    if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tablegroup(arg))) {
+      LOG_WARN("drop tablegroup failed", KR(ret), K(arg));
+    } else {
+      LOG_INFO("drop tablegroup", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
 int ObRestoreScheduler::convert_schema_options(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -1587,7 +2148,7 @@ int ObRestoreScheduler::convert_database_options(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  ObArray<const ObDatabaseSchema*> databases;
+  ObArray<const ObDatabaseSchema *> databases;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1606,7 +2167,7 @@ int ObRestoreScheduler::convert_database_options(const uint64_t tenant_id)
     arg.exec_tenant_id_ = tenant_id;
     arg.type_ = ObRestoreModifySchemaArg::RESET_DATABASE_PRIMARY_ZONE;
     for (int64_t i = 0; OB_SUCC(ret) && i < databases.count(); i++) {
-      const ObDatabaseSchema*& database = databases.at(i);
+      const ObDatabaseSchema *&database = databases.at(i);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("restore scheduler stopped", K(ret));
       } else if (OB_ISNULL(database)) {
@@ -1642,8 +2203,8 @@ int ObRestoreScheduler::convert_tablegroup_options(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObTenantSchema* tenant_schema = NULL;
-  ObArray<const ObTablegroupSchema*> tablegroups;
+  const ObTenantSchema *tenant_schema = NULL;
+  ObArray<const ObTablegroupSchema *> tablegroups;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1664,7 +2225,7 @@ int ObRestoreScheduler::convert_tablegroup_options(const uint64_t tenant_id)
   } else {
     const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablegroups.count(); i++) {
-      const ObTablegroupSchema*& tablegroup = tablegroups.at(i);
+      const ObTablegroupSchema *&tablegroup = tablegroups.at(i);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("restore scheduler stopped", K(ret));
       } else if (OB_ISNULL(tablegroup)) {
@@ -1702,7 +2263,7 @@ int ObRestoreScheduler::convert_tablegroup_options(const uint64_t tenant_id)
         } else if (!tablegroup->get_locality_str().empty()) {
           int tmp_ret = OB_SUCCESS;
           ObArray<share::ObZoneReplicaAttrSet> locality;
-          const ObString& locality_str = tablegroup->get_locality_str();
+          const ObString &locality_str = tablegroup->get_locality_str();
           if (OB_SUCCESS != (tmp_ret = ddl_service_->check_tablegroup_locality_with_tenant(
                                  schema_guard, *tenant_schema, *tablegroup))) {
             LOG_WARN("locality not match", K(tmp_ret), K(tablegroup_id), K(locality_str));
@@ -1742,8 +2303,8 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObTenantSchema* tenant_schema = NULL;
-  ObArray<const ObSimpleTableSchemaV2*> tables;
+  const ObTenantSchema *tenant_schema = NULL;
+  ObArray<const ObSimpleTableSchemaV2 *> tables;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1764,7 +2325,7 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
   } else {
     const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
-      const ObSimpleTableSchemaV2*& table = tables.at(i);
+      const ObSimpleTableSchemaV2 *&table = tables.at(i);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("restore scheduler stopped", K(ret));
       } else if (OB_ISNULL(table)) {
@@ -1781,7 +2342,7 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
         } else if (!table->get_primary_zone().empty()) {
           int tmp_ret = OB_SUCCESS;
           ObArray<share::ObZoneReplicaAttrSet> locality;
-          const ObString& locality_str = table->get_locality_str();
+          const ObString &locality_str = table->get_locality_str();
           ObSimpleTableSchemaV2 new_table;
           if (OB_FAIL(new_table.assign(*table))) {
             LOG_WARN("fail to assign new table", K(ret), KPC(table));
@@ -1848,7 +2409,7 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
  *             index_status should be reset to unavaliable, and index should be rebuilded later.
  * Since we have dropped delay-deleted schemas before, we don't consider delay-deleted indexes here.
  */
-int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard base_guard;    // schema_guard with schema_version using by data backup
@@ -1871,12 +2432,12 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob& job_inf
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
   } else {
-    ObArray<const ObSimpleTableSchemaV2*> table_schemas;
+    ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
     if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, table_schemas))) {
       LOG_WARN("fail to get table schemas in tenant", KR(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-        const ObSimpleTableSchemaV2* table_schema = table_schemas.at(i);
+        const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
         if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, table schema is NULL", KR(ret));
@@ -1890,7 +2451,7 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob& job_inf
           } else if (INDEX_STATUS_INDEX_ERROR == index_status || INDEX_STATUS_UNUSABLE == index_status) {
             // case 2, just skip
           } else if (INDEX_STATUS_AVAILABLE == index_status) {
-            const ObSimpleTableSchemaV2* index_schema = NULL;
+            const ObSimpleTableSchemaV2 *index_schema = NULL;
             if (OB_FAIL(base_guard.get_table_schema(index_id, index_schema))) {
               LOG_WARN("fail to get index schema", KR(ret), K(index_id));
             } else if (OB_ISNULL(index_schema)) {
@@ -1919,7 +2480,7 @@ int ObRestoreScheduler::convert_index_status(const ObPhysicalRestoreJob& job_inf
   return ret;
 }
 
-int ObRestoreScheduler::update_index_status(const common::ObIArray<uint64_t>& index_ids, ObIndexStatus index_status)
+int ObRestoreScheduler::update_index_status(const common::ObIArray<uint64_t> &index_ids, ObIndexStatus index_status)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -1951,7 +2512,7 @@ int ObRestoreScheduler::update_index_status(const common::ObIArray<uint64_t>& in
   return ret;
 }
 
-int ObRestoreScheduler::convert_parameters(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::convert_parameters(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -1986,7 +2547,7 @@ int ObRestoreScheduler::convert_parameters(const ObPhysicalRestoreJob& job_info)
  * is still limited by broadcasted schema version, it may cause deadlock when cluster is restoring.
  * To avoid this, we should broadcast new schema version before restore of user tables.
  */
-int ObRestoreScheduler::log_nop_operation(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::log_nop_operation(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2017,8 +2578,21 @@ int ObRestoreScheduler::log_nop_operation(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
+int ObRestoreScheduler::convert_column_statistic(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObColumnStatisticOperator op;
+  const int64_t version = 1;
+  if (OB_FAIL(op.init(sql_proxy_))) {
+    LOG_WARN("fail init", K(ret));
+  } else if (OB_FAIL(op.update_column_statistic_version(tenant_id, version))) {
+    LOG_WARN("fail to get jobs", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 // not reentrant
-int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2026,8 +2600,8 @@ int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_i
   ObSchemaGetterGuard base_guard;
   int64_t local_schema_version = OB_INVALID_VERSION;
   ObMultiVersionSchemaService::RefreshSchemaMode mode = ObMultiVersionSchemaService::FORCE_FALLBACK;
-  ObArray<const ObSimpleTableSchemaV2*> tables;
-  ObArray<const ObTablegroupSchema*> tablegroups;
+  ObArray<const ObSimpleTableSchemaV2 *> tables;
+  ObArray<const ObTablegroupSchema *> tablegroups;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_USER_PARTITIONS);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2056,12 +2630,13 @@ int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_i
     LOG_WARN("fail to get tenant tablegroup schemas", KR(ret), K(tenant_id));
   } else {
     // Only non-delay-deleted PG/Standalone partitions should be created.
+    DEBUG_SYNC(BEFORE_SEND_RESTORE_PARTITIONS_RPC);
     const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
     const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // 2s
     const int64_t PARTITION_CNT_PER_RPC = 5;
     for (int64_t i = 0; i < tablegroups.count() && OB_SUCC(ret); ++i) {
-      const ObTablegroupSchema* tablegroup = tablegroups.at(i);
-      const ObTablegroupSchema* base_tablegroup = NULL;
+      const ObTablegroupSchema *tablegroup = tablegroups.at(i);
+      const ObTablegroupSchema *base_tablegroup = NULL;
       uint64_t tablegroup_id = OB_INVALID_ID;
       ObRestorePartitionsArg arg;
       if (OB_FAIL(check_stop())) {
@@ -2087,8 +2662,8 @@ int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_i
       }
     }
     for (int64_t i = 0; i < tables.count() && OB_SUCC(ret); ++i) {
-      const ObSimpleTableSchemaV2* table = tables.at(i);
-      const ObSimpleTableSchemaV2* base_table = NULL;
+      const ObSimpleTableSchemaV2 *table = tables.at(i);
+      const ObSimpleTableSchemaV2 *base_table = NULL;
       uint64_t table_id = OB_INVALID_ID;
       ObRestorePartitionsArg arg;
       if (OB_FAIL(check_stop())) {
@@ -2126,7 +2701,7 @@ int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_i
 }
 
 int ObRestoreScheduler::fill_restore_partition_arg(
-    const uint64_t schema_id, const ObPartitionSchema* schema, obrpc::ObRestorePartitionsArg& arg)
+    const uint64_t schema_id, const ObPartitionSchema *schema, obrpc::ObRestorePartitionsArg &arg)
 {
   int ret = OB_SUCCESS;
   arg.schema_id_ = schema_id;
@@ -2137,7 +2712,7 @@ int ObRestoreScheduler::fill_restore_partition_arg(
     skip = true;
   } else if (!is_new_tablegroup_id(arg.schema_id_)) {
     // unavaliable index for data restore
-    const ObTableSchema* table = static_cast<const ObTableSchema*>(schema);
+    const ObTableSchema *table = static_cast<const ObTableSchema *>(schema);
     if (table->has_self_partition() && table->is_global_index_table() &&
         (table->is_dropped_schema() || INDEX_STATUS_AVAILABLE != table->get_index_status())) {
       skip = true;
@@ -2163,7 +2738,7 @@ int ObRestoreScheduler::fill_restore_partition_arg(
   return ret;
 }
 
-int ObRestoreScheduler::restore_user_replica(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::restore_user_replica(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -2195,13 +2770,13 @@ int ObRestoreScheduler::restore_user_replica(const ObPhysicalRestoreJob& job_inf
   return ret;
 }
 
-int ObRestoreScheduler::rebuild_index(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::rebuild_index(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   uint64_t tenant_id = job_info.tenant_id_;
   bool exist = true;
-  const ObTenantSchema* tenant_schema = NULL;
+  const ObTenantSchema *tenant_schema = NULL;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_REBUILD_INDEX);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2253,13 +2828,13 @@ int ObRestoreScheduler::rebuild_index(const ObPhysicalRestoreJob& job_info)
 }
 
 // TODO:() restore job should fail when rebuild index failed
-int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   uint64_t tenant_id = job_info.tenant_id_;
   bool exist = true;
-  const ObTenantSchema* tenant_schema = NULL;
+  const ObTenantSchema *tenant_schema = NULL;
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_POST_CHECK);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2308,7 +2883,7 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::restore_success(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::restore_success(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObPhysicalRestoreTableOperator restore_op;
@@ -2338,7 +2913,7 @@ int ObRestoreScheduler::restore_success(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::restore_fail(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::restore_fail(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   ObPhysicalRestoreTableOperator restore_op;
@@ -2375,7 +2950,7 @@ int ObRestoreScheduler::check_stop() const
  * 2. Physical restore jobs will be recycled asynchronously when restore tenant has been dropped.
  * 3. Physical restore jobs will be used to avoid duplicate tenant_name when tenant is creating.
  */
-int ObRestoreScheduler::try_recycle_job(const ObPhysicalRestoreJob& job)
+int ObRestoreScheduler::try_recycle_job(const ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -2420,7 +2995,7 @@ int ObRestoreScheduler::try_recycle_job(const ObPhysicalRestoreJob& job)
 }
 
 int ObRestoreScheduler::mark_job_failed(int64_t job_id, int return_ret, PhysicalRestoreMod mod,
-    const common::ObCurTraceId::TraceId& trace_id, const common::ObAddr& addr)
+    const common::ObCurTraceId::TraceId &trace_id, const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
   ObPhysicalRestoreTableOperator restore_op;
@@ -2452,7 +3027,7 @@ int ObRestoreScheduler::mark_job_failed(int64_t job_id, int return_ret, Physical
 }
 
 int ObRestoreScheduler::try_update_job_status(
-    int return_ret, const ObPhysicalRestoreJob& job, share::PhysicalRestoreMod mod)
+    int return_ret, const ObPhysicalRestoreJob &job, share::PhysicalRestoreMod mod)
 {
   int ret = OB_SUCCESS;
   ObPhysicalRestoreTableOperator restore_op;
@@ -2481,9 +3056,9 @@ int ObRestoreScheduler::try_update_job_status(
   return ret;
 }
 
-void ObRestoreScheduler::record_rs_event(const ObPhysicalRestoreJob& job, const PhysicalRestoreStatus status)
+void ObRestoreScheduler::record_rs_event(const ObPhysicalRestoreJob &job, const PhysicalRestoreStatus status)
 {
-  const char* status_str =
+  const char *status_str =
       ObPhysicalRestoreTableOperator::get_restore_status_str(static_cast<PhysicalRestoreStatus>(status));
   ROOTSERVICE_EVENT_ADD("physical_restore",
       "change_restore_status",
@@ -2563,7 +3138,7 @@ int ObRestoreScheduler::check_source_cluster_version(const uint64_t cluster_vers
  * 2. run upgrade_pre() by version.
  * 3. refresh tenant's schema.
  */
-int ObRestoreScheduler::upgrade_pre(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::upgrade_pre(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2596,7 +3171,7 @@ int ObRestoreScheduler::upgrade_pre(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::upgrade_post(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::upgrade_post(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2621,7 +3196,7 @@ int ObRestoreScheduler::upgrade_post(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::do_upgrade_pre(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::do_upgrade_pre(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2652,7 +3227,7 @@ int ObRestoreScheduler::do_upgrade_pre(const ObPhysicalRestoreJob& job_info)
       LOG_WARN("fail to get processor idx by range", KR(ret), K(start_version), K(end_version));
     }
     for (int64_t idx = start_idx + 1; OB_SUCC(ret) && idx <= end_idx; idx++) {
-      ObBaseUpgradeProcessor* processor = NULL;
+      ObBaseUpgradeProcessor *processor = NULL;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("restore scheduler stopped", KR(ret));
       } else if (OB_FAIL(upgrade_processors_.get_processor_by_idx(idx, processor))) {
@@ -2690,7 +3265,7 @@ int ObRestoreScheduler::do_upgrade_pre(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = job_info.tenant_id_;
@@ -2721,7 +3296,7 @@ int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob& job_info)
       LOG_WARN("fail to get processor idx by range", KR(ret), K(start_version), K(end_version));
     }
     for (int64_t idx = start_idx + 1; OB_SUCC(ret) && idx <= end_idx; idx++) {
-      ObBaseUpgradeProcessor* processor = NULL;
+      ObBaseUpgradeProcessor *processor = NULL;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("restore scheduler stopped", KR(ret));
       } else if (OB_FAIL(upgrade_processors_.get_processor_by_idx(idx, processor))) {
@@ -2759,32 +3334,43 @@ int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJob& job_info)
+int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
   const bool need_force_drop = GCONF._auto_drop_tenant_if_restore_failed;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+    LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("restore scheduler stopped", K(ret));
+    LOG_WARN("restore scheduler stopped", KR(ret));
   } else if (need_force_drop) {
-    obrpc::ObDropTenantArg arg;
-    arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-    arg.tenant_name_ = job_info.tenant_name_;
-    arg.if_exist_ = true;
-    arg.delay_to_drop_ = false;
-    ObSqlString sql;
-    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
-    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
-    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
-    if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
-      LOG_WARN("fail to generate sql", K(ret), K(arg));
-    } else if (FALSE_IT(arg.ddl_stmt_str_ = sql.string())) {
-    } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tenant(arg))) {
-      LOG_WARN("fail to drop tenant", K(ret), K(arg));
+    ObSchemaGetterGuard schema_guard;
+    ObString tenant_name(job_info.tenant_name_);
+    const ObTenantSchema *tenant_schema = NULL;
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_name, tenant_schema))) {
+      LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_name));
+    } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore()) {
+      LOG_INFO("tenant not exist or tenant is not in physical restore status, just skip", K(tenant_name));
     } else {
-      LOG_INFO("drop_tenant_force after restore fail", K(job_info));
+      obrpc::ObDropTenantArg arg;
+      arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+      arg.tenant_name_ = tenant_name;
+      arg.if_exist_ = true;
+      arg.delay_to_drop_ = false;
+      ObSqlString sql;
+      const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+      const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+      int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+      if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
+        LOG_WARN("fail to generate sql", KR(ret), K(arg));
+      } else if (FALSE_IT(arg.ddl_stmt_str_ = sql.string())) {
+      } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tenant(arg))) {
+        LOG_WARN("fail to drop tenant", KR(ret), K(arg));
+      } else {
+        LOG_INFO("drop_tenant_force after restore fail", K(job_info));
+      }
     }
   } else {
     LOG_INFO("no need to drop tenant after restore fail", K(job_info));

@@ -49,13 +49,9 @@ public:
   virtual ObPhysicalBaseMetaReader* get_base_data_meta_ob_reader();
   virtual ObPartitionMacroBlockObReader* get_macro_block_ob_reader();
   virtual ObPartGroupMigrationTask* get_part_group_migration_task();
-  virtual ObPhysicalBaseMetaRestoreReader* get_base_data_meta_restore_reader();
-  virtual ObPartitionMacroBlockRestoreReader* get_macro_block_restore_reader();
   virtual ObPartitionBaseDataMetaRestoreReader* get_meta_restore_reader();
   virtual ObPartitionBaseDataMetaObReader* get_old_rpc_base_data_meta_reader();
   virtual ObPGPartitionBaseDataMetaObReader* get_pg_info_reader();
-  virtual ObPGPartitionBaseDataMetaRestorReader* get_pg_info_restore_reader();
-  virtual ObPartitionGroupMetaRestoreReader* get_partition_group_meta_restore_reader();
   virtual ObPartGroupBackupTask* get_part_group_backup_task();
 
   virtual ObPhysicalBaseMetaBackupReader* get_base_data_meta_backup_reader();
@@ -100,9 +96,7 @@ public:
   virtual void free(ObPartitionBaseDataMetaRestoreReader* reader);
   virtual void free(ObPartitionBaseDataMetaObReader* reader);
   virtual void free(ObPGPartitionBaseDataMetaObReader* reader);
-  virtual void free(ObPGPartitionBaseDataMetaRestorReader* reader);
   virtual void free(ObIPGPartitionBaseDataMetaObReader* reader);
-  virtual void free(ObPartitionGroupMetaRestoreReader* reader);
   virtual void free(ObPartGroupBackupTask*& task);
   virtual void free(ObPartGroupTask*& task);
 

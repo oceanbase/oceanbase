@@ -21,7 +21,7 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-ObParser::ObParser(common::ObIAllocator& allocator, ObSQLMode mode, ObCollationType conn_collation)
+ObParser::ObParser(common::ObIAllocator &allocator, ObSQLMode mode, ObCollationType conn_collation)
     : allocator_(&allocator), sql_mode_(mode), connection_collation_(conn_collation)
 {}
 
@@ -30,14 +30,14 @@ ObParser::~ObParser()
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
-bool ObParser::is_pl_stmt(const ObString& stmt, bool* is_create_func)
+bool ObParser::is_pl_stmt(const ObString &stmt, bool *is_create_func)
 {
   UNUSED(stmt);
   UNUSED(is_create_func);
   return false;
 }
 
-bool ObParser::is_single_stmt(const ObString& stmt)
+bool ObParser::is_single_stmt(const ObString &stmt)
 {
   int64_t count = 0;
   int64_t end_trim_offset = stmt.length();
@@ -54,15 +54,15 @@ bool ObParser::is_single_stmt(const ObString& stmt)
 
 // In multi-stmt mode(delimiter #) eg: create t1; create t2; create t3
 // in the case of is_ret_first_stmt(false), queries will return the following stmts:
-//      queries[0]: create t1; create t2; create t3;
-//      queries[1]: create t2; create t3;
+//      queries[0]: create t1;
+//      queries[1]: create t2;
 //      queries[2]: create t3;
 // in the case of is_ret_first_stmt(true) and it will return one element
 //      queries[0]: create t1;
 // Actually, sql executor only executes the first stmt(create t1) and ignore the others
 // even though try to execute stmts like 'create t1; create t2; create t3;'
 int ObParser::split_multiple_stmt(
-    const ObString& stmt, ObIArray<ObString>& queries, ObMPParseStat& parse_stat, bool is_ret_first_stmt)
+    const ObString &stmt, ObIArray<ObString> &queries, ObMPParseStat &parse_stat, bool is_ret_first_stmt)
 {
   int ret = OB_SUCCESS;
 
@@ -76,13 +76,11 @@ int ObParser::split_multiple_stmt(
     int64_t remain = stmt.length();
 
     parse_stat.reset();
-    while (remain > 0 && ISSPACE(stmt[remain - 1])) {
+    while (remain > 0 && (ISSPACE(stmt[remain - 1]) || '\0' == stmt[remain - 1])) {
       --remain;
     }
-    if (remain > 0 && '\0' == stmt[remain - 1]) {
-      --remain;
-    }
-    while (remain > 0 && ISSPACE(stmt[remain - 1])) {
+    // case like: "select * from t1;;;;;;"->"select * from t1;"
+    while (remain > 1 && ';' == stmt[remain - 1] && ';' == stmt[remain - 2]) {
       --remain;
     }
 
@@ -92,26 +90,47 @@ int ObParser::split_multiple_stmt(
     }
 
     int tmp_ret = OB_SUCCESS;
-    while (remain > 0 && OB_SUCC(ret) && !parse_stat.parse_fail_) {
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    bool need_continue = true;
+    while (remain > 0 && OB_SUCC(ret) && !parse_stat.parse_fail_ && need_continue) {
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("SplitMultiStmt");
-      ObIAllocator* bak_allocator = allocator_;
+      ObIAllocator *bak_allocator = allocator_;
       allocator_ = &allocator;
-      ObString part(remain, stmt.ptr() + offset);
-      if (OB_SUCC(tmp_ret = parse(part, parse_result, parse_mode))) {
-        // length: length of the remainer statements
-        // size: length of the single statement
-        int32_t single_stmt_length = parse_result.end_col_;
-        if ((!is_ret_first_stmt) && (';' == *(stmt.ptr() + offset + parse_result.end_col_ - 1))) {
-          --single_stmt_length;
+      int64_t str_len = 0;
+      // for save memory allocate in parser, we need try find the single stmt length in advance
+      while (str_len < remain) {
+        if (';' == stmt[str_len + offset]) {
+          break;
+        } else if ('#' == stmt[str_len + offset]) {
+          while (str_len + 1 < remain && '\n' != stmt[str_len + offset + 1]) {
+            ++str_len;
+          }
+        } else if ('-' == stmt[str_len + offset]) {
+          if (str_len + 1 < remain && '-' == stmt[str_len + offset + 1]) {
+            ++str_len;
+            while (str_len + 1 < remain && '\n' != stmt[str_len + offset + 1]) {
+              ++str_len;
+            }
+          }
         }
-
+        ++str_len;
+      }
+      str_len = str_len == remain ? str_len : str_len + 1;
+      ObString part(str_len, stmt.ptr() + offset);
+      ObString remain_part(remain, stmt.ptr() + offset);
+      // first try parse part str, because it's have less length and need less memory
+      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
+        tmp_ret = OB_SUCCESS;
+        tmp_ret = parse(remain_part, parse_result, parse_mode);
+      }
+      if (OB_SUCC(tmp_ret)) {
+        int32_t single_stmt_length = parse_result.end_col_;
         if (is_ret_first_stmt) {
           ObString first_query(single_stmt_length, stmt.ptr());
           ret = queries.push_back(first_query);
-          break;  // only return the first stmt, so ignore the remaining stmts
+          need_continue = false;  // only return the first stmt, so ignore the remaining stmts
         } else {
-          ObString query(single_stmt_length, static_cast<int32_t>(remain), stmt.ptr() + offset);
+          ObString query(single_stmt_length, stmt.ptr() + offset);
           ret = queries.push_back(query);
         }
         remain -= parse_result.end_col_;
@@ -120,11 +139,7 @@ int ObParser::split_multiple_stmt(
           LOG_ERROR("split_multiple_stmt data error", K(remain), K(offset), K(stmt.length()), K(ret));
         }
       } else {
-        int32_t single_stmt_length = parse_result.end_col_;
-        if (';' == *(stmt.ptr() + offset + parse_result.end_col_ - 1)) {
-          --single_stmt_length;
-        }
-        ObString query(single_stmt_length, static_cast<int32_t>(remain), stmt.ptr() + offset);
+        ObString query(static_cast<int32_t>(remain), stmt.ptr() + offset);
         ret = queries.push_back(query);
         if (OB_SUCCESS == ret) {
           parse_stat.parse_fail_ = true;
@@ -140,12 +155,14 @@ int ObParser::split_multiple_stmt(
   return ret;
 }
 
-int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
+int ObParser::parse_sql(const ObString &stmt, ParseResult &parse_result, const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
-  ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
+  ObSQLParser sql_parser(*(ObIAllocator *)(parse_result.malloc_pool_), sql_mode_);
   if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
-    LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+    if (!no_throw_parser_error) {
+      LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+    }
   } else if (parse_result.is_dynamic_sql_) {
     memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
         parse_result.input_sql_ + parse_result.pl_parse_info_.last_pl_symbol_pos_,
@@ -154,11 +171,11 @@ int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
   } else { /*do nothing*/
   }
   if (parse_result.is_fp_ || parse_result.is_multi_query_) {
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) && !no_throw_parser_error) {
       LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",
         K(stmt),
@@ -199,8 +216,8 @@ int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
   return ret;
 }
 
-int ObParser::parse(
-    const ObString& query, ParseResult& parse_result, ParseMode parse_mode, const bool is_batched_multi_stmt_split_on)
+int ObParser::parse(const ObString &query, ParseResult &parse_result, ParseMode parse_mode,
+    const bool is_batched_multi_stmt_split_on, const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
 
@@ -241,10 +258,18 @@ int ObParser::parse(
       ObCharset::is_valid_collation(connection_collation_)
           ? (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4)
           : false;
+  parse_result.malloc_pool_ = allocator_;
+  parse_result.sql_mode_ = sql_mode_;
+  parse_result.need_parameterize_ = (FP_MODE == parse_mode || FP_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
+  parse_result.minus_ctx_.pos_ = -1;
+  parse_result.minus_ctx_.raw_sql_offset_ = -1;
+  parse_result.charset_info_ = ObCharset::get_charset(connection_collation_);
+  parse_result.connection_collation_ = connection_collation_;
+  parse_result.mysql_compatible_comment_ = false;
 
   if (parse_result.is_fp_ || parse_result.is_dynamic_sql_) {
     int64_t new_length = parse_result.is_fp_ ? stmt.length() + 1 : stmt.length() * 2;
-    char* buf = (char*)parse_malloc(new_length, parse_result.malloc_pool_);
+    char *buf = (char *)parse_malloc(new_length, parse_result.malloc_pool_);
     if (OB_UNLIKELY(NULL == buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("no memory for parser");
@@ -262,14 +287,16 @@ int ObParser::parse(
     LOG_DEBUG("check parse_result param", "connection charset", ObCharset::charset_name(connection_collation_));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(parse_sql(stmt, parse_result))) {
-      LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+    if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
+      if (!no_throw_parser_error) {
+        LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObParser::prepare_parse(const ObString& query, void* ns, ParseResult& parse_result)
+int ObParser::prepare_parse(const ObString &query, void *ns, ParseResult &parse_result)
 {
   int ret = OB_SUCCESS;
 
@@ -292,7 +319,7 @@ int ObParser::prepare_parse(const ObString& query, void* ns, ParseResult& parse_
   parse_result.sql_mode_ = sql_mode_;
   parse_result.pl_parse_info_.is_pl_parse_ = true;
   parse_result.pl_parse_info_.is_pl_parse_expr_ = false;
-  char* buf = (char*)parse_malloc(stmt.length() * 2, parse_result.malloc_pool_);
+  char *buf = (char *)parse_malloc(stmt.length() * 2, parse_result.malloc_pool_);
   if (OB_UNLIKELY(NULL == buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no memory for parser");
@@ -305,7 +332,7 @@ int ObParser::prepare_parse(const ObString& query, void* ns, ParseResult& parse_
   }
 
   if (OB_SUCC(ret)) {
-    ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
+    ObSQLParser sql_parser(*(ObIAllocator *)(parse_result.malloc_pool_), sql_mode_);
     if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
       LOG_WARN("failed to parse the statement",
           K(parse_result.yyscan_info_),
@@ -343,7 +370,7 @@ int ObParser::prepare_parse(const ObString& query, void* ns, ParseResult& parse_
   return ret;
 }
 
-int ObParser::pre_parse(const common::ObString& stmt, PreParseResult& res)
+int ObParser::pre_parse(const common::ObString &stmt, PreParseResult &res)
 {
   int ret = OB_SUCCESS;
   // /*tracd_id=xxx*/
@@ -352,7 +379,7 @@ int ObParser::pre_parse(const common::ObString& stmt, PreParseResult& res)
     // do_nothing
   } else {
     int32_t pos = 0;
-    const char* ptr = stmt.ptr();
+    const char *ptr = stmt.ptr();
     while (pos < len && is_space(ptr[pos])) {
       pos++;
     };
@@ -427,7 +454,7 @@ int ObParser::pre_parse(const common::ObString& stmt, PreParseResult& res)
   return ret;
 }
 
-int ObParser::scan_trace_id(const char* ptr, int64_t len, int32_t& pos, ObString& trace_id)
+int ObParser::scan_trace_id(const char *ptr, int64_t len, int32_t &pos, ObString &trace_id)
 {
   int ret = OB_SUCCESS;
   trace_id.reset();
@@ -464,7 +491,7 @@ bool ObParser::is_trace_id_end(char ch)
   return is_space(ch) || ch == ',' || ch == '*';
 }
 
-void ObParser::free_result(ParseResult& parse_result)
+void ObParser::free_result(ParseResult &parse_result)
 {
   UNUSED(parse_result);
   //  destroy_tree(parse_result.result_tree_);

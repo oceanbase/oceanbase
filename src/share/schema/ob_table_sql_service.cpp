@@ -1514,7 +1514,7 @@ int ObTableSqlService::supplement_for_core_table(
   } else {
     MEMSET(orig_default_value_buf, 0, value_buf_len);
     ObWorker::CompatMode compat_mode = ObWorker::CompatMode::INVALID;
-    if (!ob_is_string_type(column.get_data_type())) {
+    if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())) {
       if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(column.get_tenant_id(), compat_mode))) {
         LOG_WARN("fail to get tenant mode", K(ret));
       } else {
@@ -1529,7 +1529,7 @@ int ObTableSqlService::supplement_for_core_table(
   }
   ObString orig_default_value;
   if (OB_SUCC(ret)) {
-    if (ob_is_string_type(column.get_data_type())) {
+    if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())) {
       ObString orig_default_value_str = column.get_orig_default_value().get_string();
       orig_default_value.assign_ptr(orig_default_value_str.ptr(), orig_default_value_str.length());
     } else {
@@ -1688,8 +1688,19 @@ int ObTableSqlService::add_single_column(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
       } else {
-        bool is_all_table = combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_TID) == table_id ||
-                            combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_TID) == table_id;
+        /*
+         * We try to modify __all_table's content in __all_core_table when __all_table/__all_table_v2 adds new columns.
+         * For compatibility, we will add new columns to __all_table/__all_table_v2 at the same time, which means we
+         * modify
+         * __all_table's content in __all_core_table twice in such situaction.
+         *
+         * When we add string-like columns to __all_table/__all_table_v2, it may cause -4016 error because the second
+         * modification will do nothing and affected_rows won't change. To fix that, we skip the modification caused by
+         * adding columns to __all_table_v2.
+         *
+         */
+        bool is_all_table = combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_TID) == table_id;
+        //|| combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_TID) == table_id;
         bool is_all_column = combine_id(OB_SYS_TENANT_ID, OB_ALL_COLUMN_TID) == table_id;
         if (is_all_table || is_all_column) {
           if (OB_FAIL(supplement_for_core_table(sql_client, is_all_table, column))) {
@@ -3324,7 +3335,13 @@ int ObTableSqlService::gen_column_dml(
   ObString cur_default_value;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   char* extended_type_info_buf = NULL;
-  if (column.is_generated_column() || ob_is_string_type(column.get_data_type())) {
+  
+  if (ob_is_json(column.get_data_type()) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_313) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("column is json type not support until cluster version not less than 3.1.3.");
+  } else if (column.is_generated_column() ||
+      ob_is_string_type(column.get_data_type()) ||
+      ob_is_json(column.get_data_type())) {
     // The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
     ObString cur_default_value_str = column.get_cur_default_value().get_string();

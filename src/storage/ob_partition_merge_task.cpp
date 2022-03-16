@@ -94,7 +94,7 @@ int ObMacroBlockMergeTask::generate_next_task(ObITask*& next_task)
     ret = OB_ITER_END;
   } else if (!is_merge_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
-    LOG_ERROR("dag type not match", K(ret), K(*dag_));
+    LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
     ObMacroBlockMergeTask* merge_task = NULL;
     ObSSTableMergeDag* merge_dag = static_cast<ObSSTableMergeDag*>(dag_);
@@ -313,9 +313,9 @@ int ObSSTableMergeContext::add_lob_macro_blocks(const int64_t idx, blocksstable:
   } else if (OB_FAIL(new_block_write_ctx(lob_block_ctxs_[idx]))) {
     LOG_WARN("failed to new block write ctx", K(ret));
   } else if (OB_FAIL(lob_block_ctxs_[idx]->set(*blocks_ctx))) {
-    LOG_WARN("failed to transfer lob marco blocks ctx", K(ret), K(*blocks_ctx));
+    LOG_WARN("failed to transfer lob marco blocks ctx", K(ret), KPC(blocks_ctx));
   } else {
-    STORAGE_LOG(DEBUG, "[LOB] sstable merge context add lob macro blocks", K(idx), K(*blocks_ctx), K(ret));
+    STORAGE_LOG(DEBUG, "[LOB] sstable merge context add lob macro blocks", K(idx), KPC(blocks_ctx), K(ret));
   }
   return ret;
 }
@@ -594,6 +594,7 @@ ObSSTableMergeCtx::ObSSTableMergeCtx()
       merge_log_ts_(INT_MAX),
       trans_table_end_log_ts_(0),
       trans_table_timestamp_(0),
+    pg_last_replay_log_ts_(0),
       read_base_version_(0)
 {}
 
@@ -991,7 +992,7 @@ int ObSSTableMergePrepareTask::init()
     LOG_WARN("dag must not null", K(ret));
   } else if (!is_merge_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
-    LOG_ERROR("dag type not match", K(ret), K(*dag_));
+    LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
     merge_dag_ = static_cast<ObSSTableMergeDag*>(dag_);
     if (OB_UNLIKELY(!merge_dag_->get_ctx().param_.is_valid())) {
@@ -1037,8 +1038,11 @@ int ObSSTableMergePrepareTask::process()
                  storage = static_cast<ObPartitionStorage*>(ctx->partition_guard_.get_pg_partition()->get_storage()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The partition storage must not NULL", K(ret), K(ctx));
-  } else if (ctx->param_.is_multi_version_minor_merge() &&
-             OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_last_replay_log_ts(ctx->pg_last_replay_log_ts_))) {
+    LOG_WARN("failed to get pg last replay log ts", K(ret), K(ctx->param_));
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
                  ctx->trans_table_end_log_ts_, ctx->trans_table_timestamp_))) {
     LOG_WARN("failed to get trans_table end_log_ts and timestamp", K(ret), K(ctx->param_));
   } else if (OB_FAIL(storage->build_merge_ctx(*ctx))) {
@@ -1163,7 +1167,7 @@ int ObSSTableMergePrepareTask::create_sstable_for_large_snapshot(ObSSTableMergeC
       } else if (OB_FAIL(ctx.merged_table_handle_.get_sstable(new_sstable))) {
         LOG_WARN("fail to get merged sstable", K(ret));
       } else {
-        FLOG_INFO("success to create sstable for larger snapshot version than major ts", K(*new_sstable));
+        FLOG_INFO("success to create sstable for larger snapshot version than major ts", KPC(new_sstable));
       }
     }
   }
@@ -1189,7 +1193,7 @@ int ObSSTableMergeFinishTask::init()
     LOG_WARN("dag must not null", K(ret));
   } else if (!is_merge_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
-    LOG_ERROR("dag type not match", K(ret), K(*dag_));
+    LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
     merge_dag_ = static_cast<ObSSTableMergeDag*>(dag_);
     if (OB_UNLIKELY(!merge_dag_->get_ctx().is_valid())) {
@@ -1456,7 +1460,7 @@ int ObWriteCheckpointTask::init(int64_t frozen_version)
     LOG_WARN("dag must not null", K(ret));
   } else if (ObIDag::DAG_TYPE_MAJOR_MERGE_FINISH != dag_->get_type()) {
     ret = OB_ERR_SYS;
-    LOG_ERROR("dag type not match", K(ret), K(*dag_));
+    LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
     frozen_version_ = frozen_version;
     is_inited_ = true;
@@ -1954,11 +1958,11 @@ int ObTransTableMergeTask::merge_remote_with_local(blocksstable::ObMacroBlockWri
         pos1 = 0;
         if (OB_FAIL(local_trans_id.deserialize(
                 local_row->row_val_.cells_[0].get_string_ptr(), local_row->row_val_.cells_[0].val_len_, pos))) {
-          STORAGE_LOG(WARN, "failed to deserialize trans_id", K(ret), K(*local_row));
+          STORAGE_LOG(WARN, "failed to deserialize trans_id", K(ret), KPC(local_row));
         } else if (OB_FAIL(remote_trans_id.deserialize(remote_row->row_val_.cells_[0].get_string_ptr(),
                        remote_row->row_val_.cells_[0].val_len_,
                        pos1))) {
-          STORAGE_LOG(WARN, "failed to deserialize trans_id", K(ret), K(*remote_row));
+          STORAGE_LOG(WARN, "failed to deserialize trans_id", K(ret), KPC(remote_row));
         } else {
           ObTransKey local_trans_key(pg_key_, local_trans_id);
           ObTransKey remote_trans_key(pg_key_, remote_trans_id);
@@ -2031,7 +2035,7 @@ int ObTransTableMergeTask::merge_remote_with_local(blocksstable::ObMacroBlockWri
       if (OB_SUCC(ret)) {
         if (NULL != target_row) {
           if (OB_FAIL(writer.append_row(*target_row))) {
-            STORAGE_LOG(WARN, "failed to append row", K(ret), K(*target_row));
+            STORAGE_LOG(WARN, "failed to append row", K(ret), KPC(target_row));
           }
         }
       }

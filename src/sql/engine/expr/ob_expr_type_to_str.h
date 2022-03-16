@@ -105,8 +105,8 @@ class ObExprSetToStr : public ObExprTypeToStr {
 public:
   explicit ObExprSetToStr(common::ObIAllocator& alloc);
   virtual ~ObExprSetToStr();
-  virtual int calc(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+  virtual int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_str_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
@@ -119,8 +119,8 @@ class ObExprEnumToStr : public ObExprTypeToStr {
 public:
   explicit ObExprEnumToStr(common::ObIAllocator& alloc);
   virtual ~ObExprEnumToStr();
-  virtual int calc(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+  virtual int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_str_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
@@ -134,9 +134,9 @@ public:
   explicit ObExprSetToInnerType(common::ObIAllocator& alloc);
   virtual ~ObExprSetToInnerType();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_inner_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
@@ -150,9 +150,9 @@ public:
   explicit ObExprEnumToInnerType(common::ObIAllocator& alloc);
   virtual ~ObExprEnumToInnerType();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_inner_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 

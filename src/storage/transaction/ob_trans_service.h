@@ -153,9 +153,9 @@ public:
   int init(const ObAddr& self, ObITransRpc* rpc, ObILocationAdapter* location_adapter, ObIClogAdapter* clog_adapter,
       storage::ObPartitionService* partition_service, share::schema::ObMultiVersionSchemaService* schema_service,
       ObITsMgr* ts_mgr);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
   int push(void* task);
   virtual void handle(void* task) override;
@@ -396,8 +396,8 @@ public:
   // get partition iterator
   int iterate_partition(ObPartitionIterator& partition_iter);
   int iterate_partition_mgr_stat(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter);
-  // get transaction stat iterator by partition
-  int iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter);
+  // get transaction stat iterator without partition
+  int iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter);
   int print_all_trans_ctx(const common::ObPartitionKey& partition);
   // get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator& mem_stat_iter);
@@ -419,10 +419,11 @@ public:
   int xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStmtParam& stmt_param);
   // elr statistic
   int dump_elr_statistic();
-  int set_last_restore_log_id(const ObPartitionKey& pkey, const uint64_t last_restore_log_id);
+  int set_last_restore_log_info(
+      const ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int update_restore_replay_info(
-      const ObPartitionKey& partition, const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+  int update_restore_replay_info(const ObPartitionKey& partition, const int64_t restore_snapshot_version,
+      const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int xa_start_v2(
       const ObXATransID& xid, const int64_t flags, const int64_t xa_end_timeout_seconds, ObTransDesc& trans_desc);
   int xa_end_v2(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
@@ -451,7 +452,8 @@ public:
       const uint64_t tenant_id, const ObXATransID& xid, const int32_t state, int64_t& affected_rows);
   int delete_xa_branch(const uint64_t tenant_id, const ObXATransID& xid, const bool is_tightly_coupled);
   int delete_xa_all_tightly_branch(const uint64_t tenant_id, const ObXATransID& xid);
-  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc,
+      bool& access_temp_table);
   int gc_invalid_xa_record(const uint64_t tenant_id);
 
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
@@ -619,7 +621,7 @@ private:
   int handle_trans_ask_scheduler_status_request_(const ObTransMsg& msg, const int status);
   int query_xa_trans_(const ObXATransID& xid, const uint64_t tenant_id, ObPartitionKey& coordinator,
       ObTransID& trans_id, bool& is_xa_readonly);
-  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc, bool& access_temp_table);
   int xa_rollback_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
   int two_phase_rollback_(
       const uint64_t tenant_id, const ObXATransID& xid, const ObTransID& trans_id, const ObTransDesc& trans_desc);
@@ -716,7 +718,7 @@ private:
   int convert_sp_trans_to_dist_trans_(ObTransDesc& trans_desc);
   int check_snapshot_for_start_stmt_(const ObTransDesc& trans_desc, const ObPartitionLeaderArray& pla);
   memtable::ObMemtableCtx* alloc_tc_memtable_ctx_();
-  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool is_fast_select, const uint64_t tenant_id,
+  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool tls_enable /*thread local storage*/, const uint64_t tenant_id,
       memtable::ObMemtableCtx*& mt_ctx);
   void release_memtable_ctx_(const common::ObPartitionKey& pg_key, memtable::ObMemtableCtx* mt_ctx);
   int handle_start_stmt_request_(const ObTransMsg& msg);
@@ -733,8 +735,8 @@ private:
 
   int do_dist_rollback_(
       ObTransDesc& trans_desc, const int64_t sql_no, const common::ObPartitionArray& rollback_partitions);
-  int alloc_tmp_sche_ctx_(ObTransDesc& trans_desc, bool& use_tmp_sche_ctx);
-  void free_tmp_sche_ctx_(ObTransDesc& trans_desc);
+  int acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& sche_ctx, bool& use_tmp_sche_ctx);
+  void release_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx* sche_ctx, const bool use_tmp_sche_ctx);
 
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;

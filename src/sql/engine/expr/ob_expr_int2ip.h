@@ -21,9 +21,9 @@ class ObExprInt2ip : public ObStringExprOperator {
 public:
   explicit ObExprInt2ip(common::ObIAllocator& alloc);
   virtual ~ObExprInt2ip();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprStringBuf& string_buf);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int int2ip_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -39,16 +39,15 @@ private:
 inline int ObExprInt2ip::calc_result_type1(
     ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
-  UNUSED(text);
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
+  text.set_calc_type(common::ObIntType);
   type.set_varchar();
   type.set_length(common::MAX_IP_ADDR_LENGTH);
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type.set_default_collation_type();
-  // set calc type
-  text.set_calc_type(common::ObIntType);
   return common::OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_INT2IP_ */

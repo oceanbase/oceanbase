@@ -57,10 +57,11 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(const uint64_t tenant_id, const
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_table_id = common::OB_INVALID_ID;
+  ObTableSchema table_schema;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    table_schema.reset();
     bool is_deleted = false;
     ObTableSchema* allocated_table_schema = NULL;
-    ObTableSchema table_schema;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(fill_table_schema(tenant_id, check_deleted, result, table_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill table schema. ", K(check_deleted), K(ret));
@@ -84,14 +85,25 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(const uint64_t tenant_id, const
       allocator.free(allocated_table_schema);
       allocated_table_schema = NULL;
     }
-    SHARE_SCHEMA_LOG(INFO, "retrieve table schema", K(table_schema), K(is_deleted), K(ret));
+    if (OB_SUCC(ret)) {
+      SHARE_SCHEMA_LOG(INFO, "retrieve table schema", K(table_schema), K(is_deleted), KR(ret));
+    } else {
+      SHARE_SCHEMA_LOG(WARN,
+          "retrieve table schema failed",
+          "table_id",
+          table_schema.get_table_id(),
+          "schema_version",
+          table_schema.get_schema_version(),
+          K(prev_table_id),
+          K(is_deleted),
+          KR(ret));
+    }
     prev_table_id = table_schema.get_table_id();
-    table_schema.reset();
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all table schema. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve table schema");
+    SHARE_SCHEMA_LOG(INFO, "retrieve table schema", K(tenant_id));
     ret = common::OB_SUCCESS;
   }
   return ret;
@@ -214,7 +226,7 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(const uint64_t tenant_id, const
   int ret = common::OB_SUCCESS;
 
   table_schema = NULL;
-  SHARE_SCHEMA_LOG(INFO, "retrieve table schema");
+  SHARE_SCHEMA_LOG(DEBUG, "retrieve table schema");
   if (OB_FAIL(result.next())) {
     if (ret == common::OB_ITER_END) {  // no record
       ret = common::OB_ERR_UNEXPECTED;
@@ -250,7 +262,7 @@ int ObSchemaRetrieveUtils::retrieve_tablegroup_schema(
   int ret = common::OB_SUCCESS;
 
   tablegroup_schema = NULL;
-  SHARE_SCHEMA_LOG(INFO, "retrieve tablegroup schema");
+  SHARE_SCHEMA_LOG(DEBUG, "retrieve tablegroup schema");
   if (OB_FAIL(result.next())) {
     if (ret == common::OB_ITER_END) {  // no record
       ret = common::OB_ERR_UNEXPECTED;
@@ -757,12 +769,12 @@ int ObSchemaRetrieveUtils::retrieve_recycle_object(
   int ret = common::OB_SUCCESS;
   ObRecycleObject recycle_obj;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    recycle_obj.reset();
     if (OB_FAIL(fill_recycle_object(tenant_id, result, recycle_obj))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill recycle object. ", K(ret));
     } else if (OB_FAIL(recycle_objs.push_back(recycle_obj))) {
       SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
     }
-    recycle_obj.reset();
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all recycle objects. iter quit. ", K(ret));
@@ -892,7 +904,18 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(T& result, ObTenantSchema& tenant_
       }
     }
   }
-  SHARE_SCHEMA_LOG(INFO, "retrieve tenant schema", K(tenant_schema), K(is_deleted), K(ret));
+  if (OB_SUCC(ret)) {
+    SHARE_SCHEMA_LOG(INFO, "retrieve tenant schema", K(tenant_schema), K(is_deleted), KR(ret));
+  } else {
+    SHARE_SCHEMA_LOG(WARN,
+        "retrieve tenant schema failed",
+        "tenant_id",
+        tenant_schema.get_tenant_id(),
+        "schema_version",
+        tenant_schema.get_schema_version(),
+        K(is_deleted),
+        KR(ret));
+  }
   return ret;
 }
 
@@ -971,7 +994,17 @@ int ObSchemaRetrieveUtils::fill_temp_table_schema(const uint64_t tenant_id, T& r
   } else {
     table_schema.set_create_host(create_host);
   }
-  SHARE_SCHEMA_LOG(INFO, "Get create_host ", K(create_host), K(table_schema));
+  if (OB_SUCC(ret)) {
+    SHARE_SCHEMA_LOG(INFO, "Get create_host ", K(create_host), K(table_schema));
+  } else {
+    SHARE_SCHEMA_LOG(WARN,
+        "Get create_host failed",
+        KR(ret),
+        "table_id",
+        table_schema.get_table_id(),
+        "schema_version",
+        table_schema.get_schema_version());
+  }
   return ret;
 }
 
@@ -1685,6 +1718,10 @@ int ObSchemaRetrieveUtils::fill_user_schema(
         SQL_LOG(WARN, "fail to retrieve priv_create_synonym", K(ret));
       }
     }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, max_connections, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, max_user_connections, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
   }
   return ret;
 }
@@ -2154,9 +2191,7 @@ int ObSchemaRetrieveUtils::fill_schema_operation(const uint64_t tenant_id, T& re
     schema_operation.profile_id_ = schema_operation.table_id_;       // table_id_ reused to store profile_id_
     schema_operation.grantee_id_ = schema_operation.user_id_;        // table_id_ reused to store grantee_id_
     schema_operation.grantor_id_ = schema_operation.database_id_;    // database_id_ reused to store grantor_id_
-
-    SHARE_SCHEMA_LOG(DEBUG, "fill schema operation", K(schema_operation));
-    schema_operation.dblink_id_ = schema_operation.table_id_;  // table_id_ reused to store dblink_id
+    schema_operation.dblink_id_ = schema_operation.table_id_;        // table_id_ reused to store dblink_id
     SHARE_SCHEMA_LOG(INFO, "fill schema operation", K(schema_operation));
   } else {
     SHARE_SCHEMA_LOG(WARN, "fail to fill schema operation", KR(ret));
@@ -2180,6 +2215,7 @@ int ObSchemaRetrieveUtils::retrieve_tenant_schema(ObISQLClient& client, T& resul
   S tenant_schema;
   ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    tenant_schema.reset();
     bool is_deleted = false;
     if (OB_FAIL(fill_tenant_schema(result, tenant_schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill tenant schema", K(ret));
@@ -2190,7 +2226,6 @@ int ObSchemaRetrieveUtils::retrieve_tenant_schema(ObISQLClient& client, T& resul
       SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
     }
     prev_tenant_id = tenant_schema.get_tenant_id();
-    tenant_schema.reset();
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all tenant schema. iter quit. ", K(ret));
@@ -2342,6 +2377,7 @@ int ObSchemaRetrieveUtils::fill_sysvar_schema(
     S schema;                                                                                                         \
     int64_t count = 0;                                                                                                \
     while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {                                        \
+      schema.reset();                                                                                                 \
       bool is_deleted = false;                                                                                        \
       count++;                                                                                                        \
       if (OB_FAIL(fill_##SCHEMA##_schema(tenant_id, result, schema, is_deleted))) {                                   \
@@ -2357,7 +2393,6 @@ int ObSchemaRetrieveUtils::fill_sysvar_schema(
         SHARE_SCHEMA_LOG(INFO, "retrieve " #SCHEMA " schema succeed", K(schema));                                     \
       }                                                                                                               \
       prev_id = schema.get_##SCHEMA##_id();                                                                           \
-      schema.reset();                                                                                                 \
     }                                                                                                                 \
     if (ret != common::OB_ITER_END) {                                                                                 \
       SHARE_SCHEMA_LOG(WARN, "fail to get all " #SCHEMA " schema. iter quit. ", K(ret));                              \
@@ -2374,7 +2409,6 @@ RETRIEVE_SCHEMA_FUNC_DEFINE(tablegroup);
 RETRIEVE_SCHEMA_FUNC_DEFINE(table);
 RETRIEVE_SCHEMA_FUNC_DEFINE(outline);
 RETRIEVE_SCHEMA_FUNC_DEFINE(sequence);
-
 RETRIEVE_SCHEMA_FUNC_DEFINE(synonym);
 
 template <typename T, typename S>
@@ -2384,6 +2418,7 @@ int ObSchemaRetrieveUtils::retrieve_udf_schema(const uint64_t tenant_id, T& resu
   common::ObString udf_name;
   S schema;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    schema.reset();
     bool is_deleted = false;
     if (OB_FAIL(fill_udf_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill udf schema", K(ret));
@@ -2397,13 +2432,12 @@ int ObSchemaRetrieveUtils::retrieve_udf_schema(const uint64_t tenant_id, T& resu
       SHARE_SCHEMA_LOG(INFO, "retrieve udf schema succeed", K(schema));
     }
     udf_name = schema.get_udf_name_str();
-    schema.reset();
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all udf schema. iter quit. ", K(ret));
   } else {
     ret = common::OB_SUCCESS;
-    SHARE_SCHEMA_LOG(INFO, "retrieve udf schemas succeed");
+    SHARE_SCHEMA_LOG(INFO, "retrieve udf schemas succeed", K(tenant_id));
   }
   return ret;
 }
@@ -2419,7 +2453,7 @@ int ObSchemaRetrieveUtils::retrieve_link_table_schema(
   TST tmp_table_schema;
 
   table_schema = NULL;
-  SHARE_SCHEMA_LOG(INFO, "retrieve link table schema");
+  SHARE_SCHEMA_LOG(DEBUG, "retrieve link table schema");
   if (OB_FAIL(result.next())) {
     if (ret == common::OB_ITER_END) {  // no record
       ret = common::OB_ERR_UNEXPECTED;
@@ -2451,7 +2485,7 @@ int ObSchemaRetrieveUtils::retrieve_link_column_schema(const uint64_t tenant_id,
   bool is_deleted = false;
   ObColumnSchemaV2 column_schema;
 
-  SHARE_SCHEMA_LOG(INFO, "retrieve link column schema");
+  SHARE_SCHEMA_LOG(DEBUG, "retrieve link column schema");
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     column_schema.reset();
     if (OB_FAIL(fill_link_column_schema(tenant_id, result, column_schema, is_deleted))) {
@@ -2463,7 +2497,7 @@ int ObSchemaRetrieveUtils::retrieve_link_column_schema(const uint64_t tenant_id,
   }
   if (common::OB_ITER_END == ret) {
     ret = common::OB_SUCCESS;
-    SHARE_SCHEMA_LOG(INFO, "retrieve link column schema succeed");
+    SHARE_SCHEMA_LOG(INFO, "retrieve link column schema succeed", K(table_schema));
   }
   return ret;
 }
@@ -2475,6 +2509,7 @@ int ObSchemaRetrieveUtils::retrieve_db_priv_schema(const uint64_t tenant_id, T& 
   S db_priv;
   S prev_priv;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    db_priv.reset();
     bool is_deleted = false;
     if (OB_FAIL(fill_db_priv_schema(tenant_id, result, db_priv, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "Fail to fill database privileges", K(ret));
@@ -2486,8 +2521,9 @@ int ObSchemaRetrieveUtils::retrieve_db_priv_schema(const uint64_t tenant_id, T& 
     } else if (OB_FAIL(db_priv_array.push_back(db_priv))) {
       SHARE_SCHEMA_LOG(WARN, "Failed to push back", K(ret));
     }
-    prev_priv = db_priv;
-    db_priv.reset();
+    if (OB_SUCC(ret)) {
+      prev_priv = db_priv;
+    }
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "Fail to get database privileges. iter quit", K(ret));
@@ -2673,6 +2709,7 @@ int ObSchemaRetrieveUtils::retrieve_table_priv_schema(
   S table_priv;
   S prev_table_priv;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    table_priv.reset();
     bool is_deleted = false;
     if (OB_FAIL(fill_table_priv_schema(tenant_id, result, table_priv, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "Fail to fill table_priv", K(ret));
@@ -2684,8 +2721,9 @@ int ObSchemaRetrieveUtils::retrieve_table_priv_schema(
     } else if (OB_FAIL(table_priv_array.push_back(table_priv))) {
       SHARE_SCHEMA_LOG(WARN, "Failed to push back", K(ret));
     }
-    prev_table_priv = table_priv;
-    table_priv.reset();
+    if (OB_SUCC(ret)) {
+      prev_table_priv = table_priv;
+    }
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "Fail to get table privileges. iter quit", K(ret));
@@ -2860,7 +2898,18 @@ int ObSchemaRetrieveUtils::fill_tenant_schema(T& result, ObSimpleTenantSchema& t
       }
     }
   }
-  SHARE_SCHEMA_LOG(INFO, "retrieve tenant schema", K(tenant_schema), K(is_deleted), K(ret));
+  if (OB_SUCC(ret)) {
+    SHARE_SCHEMA_LOG(INFO, "retrieve tenant schema", K(tenant_schema), K(is_deleted), KR(ret));
+  } else {
+    SHARE_SCHEMA_LOG(WARN,
+        "retrieve tenant schema failed",
+        "tenant_id",
+        tenant_schema.get_tenant_id(),
+        "schema_version",
+        tenant_schema.get_schema_version(),
+        K(is_deleted),
+        KR(ret));
+  }
   return ret;
 }
 
@@ -3446,7 +3495,7 @@ int ObSchemaRetrieveUtils::retrieve_aux_tables(
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get aux table. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve aux table finish");
+    SHARE_SCHEMA_LOG(INFO, "retrieve aux table finish", K(tenant_id));
     ret = common::OB_SUCCESS;
   }
   return ret;
@@ -3474,7 +3523,7 @@ int ObSchemaRetrieveUtils::retrieve_schema_version(T& result, VersionHisVal& ver
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all schema version. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve schema version");
+    SHARE_SCHEMA_LOG(INFO, "retrieve schema version", K(version_his_val));
     ret = common::OB_SUCCESS;
   }
   return ret;
@@ -3494,7 +3543,12 @@ int ObSchemaRetrieveUtils::retrieve_foreign_key_info(const uint64_t tenant_id, T
     } else if (foreign_key_info.foreign_key_id_ == prev_foreign_key_id) {
       ret = common::OB_SUCCESS;
     } else if (is_deleted) {
-      SHARE_SCHEMA_LOG(INFO, "foreign key is is_deleted");
+      SHARE_SCHEMA_LOG(INFO,
+          "foreign key is is_deleted",
+          "table_id",
+          table_schema.get_table_id(),
+          "foreign_key_id",
+          foreign_key_info.foreign_key_id_);
     } else if (OB_FAIL(table_schema.add_foreign_key_info(foreign_key_info))) {
       SHARE_SCHEMA_LOG(WARN, "fail to add foreign key info", K(ret), K(foreign_key_info));
     }
@@ -3503,7 +3557,7 @@ int ObSchemaRetrieveUtils::retrieve_foreign_key_info(const uint64_t tenant_id, T
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get foreign key schema. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve foreign key schema");
+    SHARE_SCHEMA_LOG(INFO, "retrieve foreign key schema", "table_id", table_schema.get_table_id());
     ret = common::OB_SUCCESS;
   }
   return ret;
@@ -3539,7 +3593,7 @@ int ObSchemaRetrieveUtils::retrieve_foreign_key_column_info(
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get foreing key. iter quit.", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve foreign key");
+    SHARE_SCHEMA_LOG(INFO, "retrieve foreign key", K(foreign_key_info));
     ret = common::OB_SUCCESS;
   }
   return ret;
@@ -3641,7 +3695,7 @@ int ObSchemaRetrieveUtils::retrieve_simple_foreign_key_info(
     } else if (fk_id == prev_foreign_key_id) {
       ret = OB_SUCCESS;
     } else if (is_deleted) {
-      SHARE_SCHEMA_LOG(INFO, "foreign key is deleted");
+      SHARE_SCHEMA_LOG(INFO, "foreign key is deleted", K(table_id), K(fk_id));
     } else if (table_id == common::OB_INVALID_ID ||
                OB_ISNULL(table_schema_ptr = ObSchemaRetrieveUtils::find_table_schema(table_id, table_schema_array))) {
       SHARE_SCHEMA_LOG(WARN, "fail to find table schema by table id", K(ret), K(table_id));
@@ -3657,7 +3711,7 @@ int ObSchemaRetrieveUtils::retrieve_simple_foreign_key_info(
   if (ret != OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get simple foreign key info. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve simple foreign key info");
+    SHARE_SCHEMA_LOG(INFO, "retrieve simple foreign key info", K(tenant_id));
     ret = OB_SUCCESS;
   }
 
@@ -3719,7 +3773,7 @@ int ObSchemaRetrieveUtils::retrieve_simple_constraint_info(
     } else if (table_id == prev_table_id && cst_id == prev_constraint_id) {
       ret = OB_SUCCESS;
     } else if (is_deleted) {
-      SHARE_SCHEMA_LOG(INFO, "constraint is deleted");
+      SHARE_SCHEMA_LOG(INFO, "constraint is deleted", K(table_id), K(cst_id));
     } else if (table_id == common::OB_INVALID_ID ||
                OB_ISNULL(table_schema_ptr = ObSchemaRetrieveUtils::find_table_schema(table_id, table_schema_array))) {
       SHARE_SCHEMA_LOG(WARN, "fail to find table schema by table id", K(ret), K(table_id));
@@ -3743,7 +3797,7 @@ int ObSchemaRetrieveUtils::retrieve_simple_constraint_info(
   if (ret != OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get simple constraint info. iter quit. ", K(ret));
   } else {
-    SHARE_SCHEMA_LOG(INFO, "retrieve simple constraint info");
+    SHARE_SCHEMA_LOG(INFO, "retrieve simple constraint info", K(tenant_id));
     ret = OB_SUCCESS;
   }
 
@@ -3804,6 +3858,7 @@ int ObSchemaRetrieveUtils::retrieve_profile_schema(const uint64_t tenant_id, T& 
   uint64_t prev_id = common::OB_INVALID_ID;
   S schema;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    schema.reset();
     bool is_deleted = false;
     if (OB_FAIL(fill_profile_schema(tenant_id, result, schema, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fill profile schema ", K(ret));
@@ -3818,13 +3873,12 @@ int ObSchemaRetrieveUtils::retrieve_profile_schema(const uint64_t tenant_id, T& 
       SHARE_SCHEMA_LOG(INFO, "retrieve profile schema succeed", K(schema));
     }
     prev_id = schema.get_profile_id();
-    schema.reset();
   }
   if (ret != common::OB_ITER_END) {
     SHARE_SCHEMA_LOG(WARN, "fail to get all profile schema. iter quit. ", K(ret));
   } else {
     ret = common::OB_SUCCESS;
-    SHARE_SCHEMA_LOG(INFO, "retrieve profile schemas succeed");
+    SHARE_SCHEMA_LOG(INFO, "retrieve profile schemas succeed", K(tenant_id));
   }
   return ret;
 }

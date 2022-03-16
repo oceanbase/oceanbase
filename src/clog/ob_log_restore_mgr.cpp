@@ -76,6 +76,7 @@ void ObLogRestoreMgr::destroy()
     sw_ = NULL;
     log_engine_ = NULL;
     mm_ = NULL;
+    restore_end_id_ack_list_.reset();
     CLOG_LOG(INFO, "ObLogRestoreMgr destroy finished", K_(partition_key));
   }
 }
@@ -86,7 +87,7 @@ int ObLogRestoreMgr::leader_takeover_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (RESTORE_LEADER == role_) {
-    CLOG_LOG(WARN, "self is already resore leader", K(ret), K_(partition_key), K_(role));
+    CLOG_LOG(WARN, "self is already restore leader", K(ret), K_(partition_key), K_(role));
   } else {
     role_ = RESTORE_LEADER;
     restore_leader_ = self_;
@@ -104,6 +105,8 @@ int ObLogRestoreMgr::leader_takeover_()
       if (OB_FAIL(try_submit_restore_task_())) {
         CLOG_LOG(WARN, "try_submit_restore_task_ failed", K(ret), K_(partition_key));
       }
+      // reset restore_end_id_ack_list_
+      (void)restore_end_id_ack_list_.reset();
     }
     if (OB_FAIL(ret)) {
       // revoke when failure
@@ -205,16 +208,22 @@ int ObLogRestoreMgr::follower_check_state_()
         CLOG_LOG(WARN, "get_leader_from_loc_cache failed", K_(partition_key), K(tmp_ret));
       }
     }
-    if (!loc_leader.is_valid() || restore_leader_ == loc_leader) {
+    if (!loc_leader.is_valid() || restore_leader_ == loc_leader || self_ == loc_leader) {
       if (now - last_leader_resp_time_ >= RESTORE_LEADER_TIMEOUT_THRESHOLD &&
           !ObReplicaTypeCheck::is_log_replica(mm_->get_replica_type()) &&
           (share::REPLICA_RESTORE_DATA <= archive_restore_state_ &&
-              archive_restore_state_ <= share::REPLICA_RESTORE_WAIT_ALL_DUMPED)) {
-        CLOG_LOG(INFO, "detect leader dead, self try takeover", K_(partition_key), K_(restore_leader));
+              archive_restore_state_ <= share::REPLICA_RESTORE_LOG)) {
+        // If restore state is greater than REPLICA_RESTORE_LOG, it cannot takeover by RESTORE_LEADER.
+        // Because a lagged restore replica may increase to_leader_time(is_previous_leader) in meta table,
+        // which is greater than strong leader's value.
+        // This may cause root balance thread cannot find leader replica.
+        CLOG_LOG(INFO,
+            "detect leader dead, self try takeover",
+            K_(partition_key),
+            K_(restore_leader),
+            K_(archive_restore_state));
         (void)leader_takeover_();
       }
-    } else if (self_ == loc_leader) {
-      (void)leader_takeover_();
     } else {
       restore_leader_ = loc_leader;
     }
@@ -427,6 +436,62 @@ int ObLogRestoreMgr::change_restore_leader(const ObAddr& new_leader)
   }
   CLOG_LOG(INFO, "change_restore_leader finished", K(ret), K(new_leader), K_(role), K_(partition_key));
 
+  return ret;
+}
+
+int ObLogRestoreMgr::check_last_restore_id_majority_equal(const common::ObMemberList& member_list)
+{
+  int ret = OB_SUCCESS;
+  const int64_t member_num = member_list.get_member_number();
+  if (!member_list.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (restore_end_id_ack_list_.get_count() >= member_num / 2) {
+    // already majority, do nothing
+    CLOG_LOG(INFO, "check_last_restore_id_majority_equal success", K_(partition_key), K(restore_end_id_ack_list_));
+  } else {
+    // no marjoity, return eagain and try send rpc to other members
+    ret = OB_EAGAIN;
+  }
+  const int64_t now = ObTimeUtility::current_time();
+  if (OB_EAGAIN == ret && (OB_INVALID_TIMESTAMP == last_query_last_restore_id_time_ ||
+                              now - last_query_last_restore_id_time_ >= QUERY_RESTORE_ID_INTERVAL)) {
+    const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
+    int tmp_ret = OB_SUCCESS;
+    common::ObAddr cur_server;
+    for (int64_t i = 0; i < member_num; ++i) {
+      cur_server.reset();
+      if (OB_SUCCESS != (tmp_ret = member_list.get_server_by_index(i, cur_server))) {
+        CLOG_LOG(WARN, "get_member_by_index failed", K(tmp_ret), K_(partition_key));
+      } else if (self_ == cur_server) {
+        // skip self
+      } else if (restore_end_id_ack_list_.contains(cur_server)) {
+        // no need query
+      } else if (OB_SUCCESS != (tmp_ret = log_engine_->send_restore_check_rqst(
+                                    cur_server, dst_cluster_id, partition_key_, OB_CHECK_RESTORE_END_ID))) {
+        CLOG_LOG(WARN, "send_restore_check_rqst failed", K(tmp_ret), K_(partition_key), K(cur_server));
+      } else {
+        CLOG_LOG(DEBUG, "send_restore_check_rqst success", K(tmp_ret), K_(partition_key), K(cur_server));
+      }
+    }
+    last_query_last_restore_id_time_ = now;
+  }
+  return ret;
+}
+
+int ObLogRestoreMgr::process_restore_end_id_resp(const common::ObAddr& server)
+{
+  int ret = OB_SUCCESS;
+
+  if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid arguments", K(ret), K_(partition_key), K(server));
+  } else if (restore_end_id_ack_list_.contains(server)) {
+    // alredy exist, ignore
+  } else if (OB_FAIL(restore_end_id_ack_list_.add_server(server))) {
+    CLOG_LOG(WARN, "restore_end_id_ack_list_.add_server failed", K(ret), K_(partition_key), K(server));
+  } else {
+    CLOG_LOG(INFO, "restore_end_id_ack_list_.add_server success", K_(partition_key), K(server));
+  }
   return ret;
 }
 

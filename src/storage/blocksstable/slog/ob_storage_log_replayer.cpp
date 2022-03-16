@@ -144,6 +144,10 @@ int ObStorageLogCommittedTransGetter::revise_log(const char* log_dir)
   if (OB_SUCC(ret)) {
     min_log_file_id_ = min_log_id;
   }
+
+  if (nullptr != store) {
+    ObLogStoreFactory::destroy(store);
+  }
   return ret;
 }
 
@@ -569,9 +573,13 @@ int ObStorageLogReplayer::replay_after_ckpt(
         LOG_WARN("Fail to get write_start_cursor, ", K(ret));
       }
     } else {
-      finish_cursor_.file_id_ = replay_start_cursor.file_id_;
+      // if last_entry_seq is -1,
+      // it means we never read one single slog after replay_start_cursor(the checkpoint cursor)
+      // this is because this slog file may have reach the end,
+      // in this situation we should move forward to next file.
+      finish_cursor_.file_id_ = replay_start_cursor.file_id_ + 1;
       finish_cursor_.log_id_ = replay_start_cursor.log_id_;
-      finish_cursor_.offset_ = replay_start_cursor.offset_;
+      finish_cursor_.offset_ = 0;
     }
   }
 

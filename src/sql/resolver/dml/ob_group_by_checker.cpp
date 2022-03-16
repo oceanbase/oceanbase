@@ -451,7 +451,7 @@ int ObGroupByChecker::visit(ObConstRawExpr& expr)
   if (find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObGroupByChecker::visit(ObVarRawExpr& expr)

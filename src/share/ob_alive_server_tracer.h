@@ -40,6 +40,7 @@ public:
       const common::ObAddr& addr, bool& alive, bool& is_server_exist, int64_t& trace_time) const = 0;
 
   virtual int get_primary_cluster_id(int64_t& cluster_id) const = 0;
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const = 0;
 };
 
 class ObAliveServerMap : public ObIAliveServerTracer {
@@ -61,6 +62,7 @@ public:
     UNUSED(cluster_id);
     return common::OB_OP_NOT_ALLOW;
   }
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const;
 
 private:
   virtual int refresh_server_list(const common::ObIArray<common::ObAddr>& server_list,
@@ -106,6 +108,7 @@ public:
       const common::ObAddr& addr, bool& alive, bool& is_server_exist, int64_t& trace_time) const;
   virtual int get_primary_cluster_id(int64_t& cluster_id) const;
   virtual int refresh();
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const;
 
 private:
   int refresh_primary_cluster_id();

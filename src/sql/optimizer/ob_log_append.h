@@ -35,13 +35,13 @@ public:
   {
     type_ = type;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override
   {
     UNUSED(ctx);
     return common::OB_NOT_SUPPORTED;
   }
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return true;
   }

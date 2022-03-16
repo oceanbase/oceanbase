@@ -60,7 +60,7 @@ public:
   explicit ObExprCalcPartitionId(common::ObIAllocator& alloc);
   virtual ~ObExprCalcPartitionId();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_no_partition_location(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   static int calc_partition_level_one(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);

@@ -286,49 +286,53 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits&
         nway = 1;
       }
       const int64_t max_memory = tenant_config.config_.max_memory_;
-      int64_t new_tma_limit = max_memory;
-      if (has_memstore) {
-        // If the unit type of tenant is not Log, need to subtract
-        // the reserved memory of memstore
-        if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
-          OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
+      if (max_memory <= 0) {
+        // tenant config is invalid, skip
+      } else {
+        int64_t new_tma_limit = max_memory;
+        if (has_memstore) {
+          // If the unit type of tenant is not Log, need to subtract
+          // the reserved memory of memstore
+          if (cur_memstore_limit_percent > 100 || cur_memstore_limit_percent <= 0) {
+            OB_LOG(WARN, "memstore_limit_percentage val is unexpected", K(cur_memstore_limit_percent));
+          } else {
+            new_tma_limit = max_memory / 100 * (100 - cur_memstore_limit_percent);
+          }
+        }
+        int tmp_ret = OB_SUCCESS;
+        ObTenantMutilAllocator *tma = NULL;
+        if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator(tenant_id, tma))) {
+          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tmp_ret), K(tenant_id));
+        } else if (NULL == tma) {
+          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
         } else {
-          new_tma_limit = max_memory / 100 * (100 - cur_memstore_limit_percent);
+          tma->set_nway(nway);
+          int64_t pre_tma_limit = tma->get_limit();
+          if (pre_tma_limit != new_tma_limit) {
+            tma->set_limit(new_tma_limit);
+          }
+          OB_LOG(INFO,
+              "ObTenantMutilAllocator update tenant mem_limit finished",
+              K(ret),
+              K(tenant_id),
+              K(nway),
+              K(new_tma_limit),
+              K(pre_tma_limit),
+              K(cur_memstore_limit_percent),
+              K(tenant_config));
         }
-      }
-      int tmp_ret = OB_SUCCESS;
-      ObTenantMutilAllocator* tma = NULL;
-      if (OB_SUCCESS != (tmp_ret = get_tenant_mutil_allocator(tenant_id, tma))) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tmp_ret), K(tenant_id));
-      } else if (NULL == tma) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
-      } else {
-        tma->set_nway(nway);
-        int64_t pre_tma_limit = tma->get_limit();
-        if (pre_tma_limit != new_tma_limit) {
-          tma->set_limit(new_tma_limit);
-        }
-        OB_LOG(INFO,
-            "ObTenantMutilAllocator update tenant mem_limit finished",
-            K(ret),
-            K(tenant_id),
-            K(nway),
-            K(new_tma_limit),
-            K(pre_tma_limit),
-            K(cur_memstore_limit_percent),
-            K(tenant_config));
-      }
 
-      // update memstore threshold of GmemstoreAllocator
-      ObGMemstoreAllocator* memstore_allocator = NULL;
-      if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
-                             tenant_id, memstore_allocator))) {
-      } else if (OB_ISNULL(memstore_allocator)) {
-        OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
-      } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
-        OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
-      } else {
-        OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
+        // update memstore threshold of GmemstoreAllocator
+        ObGMemstoreAllocator *memstore_allocator = NULL;
+        if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
+                               tenant_id, memstore_allocator))) {
+        } else if (OB_ISNULL(memstore_allocator)) {
+          OB_LOG(WARN, "get_tenant_mutil_allocator failed", K(tenant_id));
+        } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
+          OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
+        } else {
+          OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
+        }
       }
     }
   }

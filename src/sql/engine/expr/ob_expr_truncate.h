@@ -27,7 +27,7 @@ public:
 
   virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
+  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int set_trunc_val(
       common::ObObj& result, common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx, common::ObObjType res_type);
 

@@ -180,7 +180,7 @@ int ObLogFetcherImpl::read_uncompressed_data_from_line_cache_(file_id_t file_id,
     } else if (OB_UNLIKELY(uncompress_size != origin_size)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN,
-          "data may be corruptted",
+          "data may be corrupted",
           K(uncompress_size),
           K(origin_size),
           K(file_id),

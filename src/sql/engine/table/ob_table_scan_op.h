@@ -94,6 +94,8 @@ public:
 
   int set_pruned_index_name(
       const common::ObIArray<common::ObString>& pruned_index_name, common::ObIAllocator& phy_alloc);
+  int set_unstable_index_name(
+      const common::ObIArray<common::ObString>& unstable_index_name, common::ObIAllocator& phy_alloc);
   int set_available_index_name(
       const common::ObIArray<common::ObString>& available_index_name, common::ObIAllocator& phy_alloc);
   int set_est_row_count_record(const common::ObIArray<common::ObEstRowCountRecord>& est_records);
@@ -225,6 +227,7 @@ public:
   common::ObFixedArray<common::ObEstRowCountRecord, common::ObIAllocator> est_records_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> available_index_name_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> pruned_index_name_;
+  common::ObFixedArray<common::ObString, common::ObIAllocator> unstable_index_name_;
 
   bool gi_above_;
   ObExpr* expected_part_id_;

@@ -171,7 +171,7 @@ public:
 
 public:
   int set_memstore_threshold(uint64_t tenant_id);
-  bool need_do_writing_throttle() const
+  bool need_do_writing_throttle()
   {
     return arena_.need_do_writing_throttle();
   }

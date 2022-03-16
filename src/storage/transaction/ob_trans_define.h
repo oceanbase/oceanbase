@@ -69,6 +69,9 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
+// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
+static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+
 class ObTransErrsim {
 public:
   static inline bool is_memory_errsim()
@@ -765,7 +768,19 @@ public:
   {
     return ((sql::stmt::T_SELECT == stmt_type_ && !is_sfu_) || sql::stmt::T_BUILD_INDEX_SSTABLE == stmt_type_);
   }
-  const char* get_sql_id() const
+  bool is_sfu() const
+  {
+    return is_sfu_;
+  }
+  sql::stmt::StmtType get_stmt_type() const
+  {
+    return stmt_type_;
+  }
+  inline bool is_delete_stmt() const
+  {
+    return sql::stmt::T_DELETE == stmt_type_;
+  }
+  const char *get_sql_id() const
   {
     return sql_id_.ptr();
   }
@@ -2268,6 +2283,21 @@ private:
   {}
 };
 
+class ObStmtType
+{
+public:
+  static const int64_t UNKNOWN = -1;
+  static const int64_t READ = 0;
+  static const int64_t SFU = 1;
+  static const int64_t WRITE = 2;
+public:
+  static bool is_valid(const int64_t stmt_type)
+  { return READ == stmt_type || SFU == stmt_type || WRITE == stmt_type; }
+private:
+  ObStmtType() {}
+  ~ObStmtType() {}
+};
+
 class Ob2PCState {
 public:
   static const int64_t UNKNOWN = -1;
@@ -2307,6 +2337,10 @@ public:
   static bool is_valid(const int32_t state)
   {
     return state >= NON_EXISTING && state <= PREPARING;
+  }
+  static bool is_prepared(const int32_t state)
+  {
+    return state == PREPARED;
   }
   static bool can_convert(const int32_t src_state, const int32_t dst_state);
   static const char* to_string(int32_t state)
@@ -2357,6 +2391,8 @@ public:
     TMSUCCESS = 0x4000000,
     TMRESUME = 0x8000000,
     TMONEPHASE = 0x40000000,
+    // non-standard xa protocol, to denote temp table xa trans
+    TEMPTABLE = 0x100000000,
   };
 
 public:
@@ -2406,6 +2442,10 @@ public:
   static bool is_tmonephase(const int64_t flag)
   {
     return flag == TMONEPHASE;
+  }
+  static bool contain_temptable(const int64_t flag)
+  {
+    return flag & TEMPTABLE;
   }
 };
 
@@ -3479,10 +3519,12 @@ public:
     mutator_log_no_ = 0;
     stmt_info_.reset();
     min_log_ts_ = 0;
+    min_log_id_ = 0;
     sp_user_request_ = 0;
     need_checksum_ = false;
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
+    clear_log_base_ts_ = 0;
   }
   void destroy()
   {
@@ -3493,7 +3535,7 @@ public:
       K_(app_trace_id_str), K_(partition_log_info_arr), K_(prev_trans_arr), K_(can_elr), K_(max_durable_log_ts),
       K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),
       K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),
-      K_(stmt_info), K_(min_log_ts), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
+      K_(stmt_info), K_(min_log_ts), K_(min_log_id), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
       K_(prepare_log_timestamp));
   ObTransTableStatusInfo trans_table_info_;
   common::ObPartitionKey partition_;
@@ -3523,10 +3565,12 @@ public:
   int64_t mutator_log_no_;
   ObTransStmtInfo stmt_info_;
   int64_t min_log_ts_;
+  int64_t min_log_id_;
   int sp_user_request_;
   bool need_checksum_;
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
+  int64_t clear_log_base_ts_;
 };
 
 struct CtxInfo final {

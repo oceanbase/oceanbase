@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/backup/ob_root_validate.h"
 #include "rootserver/backup/ob_backup_data_mgr.h"
+#include "rootserver/backup/ob_cancel_validate_scheduler.h"
 #include "share/ob_rpc_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_extern_backup_info_mgr.h"
@@ -48,7 +49,9 @@ ObRootValidate::ObRootValidate()
       server_mgr_(NULL),
       rebalance_mgr_(NULL),
       rpc_proxy_(NULL),
-      idling_(stop_)
+      backup_lease_service_(nullptr),
+      idling_(stop_),
+      inner_table_version_(OB_BACKUP_INNER_TABLE_VMAX)
 {}
 
 ObRootValidate::~ObRootValidate()
@@ -75,6 +78,7 @@ int ObRootValidate::init(common::ObServerConfig& config, common::ObMySQLProxy& s
     rebalance_mgr_ = &rebalance_mgr;
     rpc_proxy_ = &rpc_proxy;
     backup_lease_service_ = &backup_lease_service;
+    inner_table_version_ = OB_BACKUP_INNER_TABLE_VMAX;
     is_inited_ = true;
     LOG_INFO("root validate init success");
   }
@@ -173,6 +177,14 @@ int ObRootValidate::check_can_do_work(bool& can)
     LOG_WARN("root validate do not init", K(ret));
   } else if (OB_FAIL(backup_lease_service_->get_lease_status(can))) {
     LOG_WARN("failed to check can backup", K(ret));
+  } else if (is_valid_backup_inner_table_version(inner_table_version_) &&
+             inner_table_version_ >= OB_BACKUP_INNER_TABLE_V3) {
+    // inner table version is new enough
+  } else if (OB_FAIL(ObBackupInfoOperator::get_inner_table_version(*sql_proxy_, inner_table_version_))) {
+    LOG_WARN("Failed to get inner table version", K(ret));
+  } else if (inner_table_version_ < OB_BACKUP_INNER_TABLE_V3) {
+    ret = OB_EAGAIN;
+    LOG_INFO("inner table version is too old, waiting backup inner table upgrade", K(ret), K(inner_table_version_));
   }
   return ret;
 }
@@ -287,7 +299,7 @@ int ObRootValidate::get_all_tenant_ids(common::ObIArray<uint64_t>& tenant_ids)
     ret = OB_NOT_INIT;
     LOG_WARN("validate scheduler do not init", K(ret));
   } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(
-                 *sql_proxy_, for_update, OB_SYS_TENANT_ID, log_archive_info))) {
+                 *sql_proxy_, for_update, OB_SYS_TENANT_ID, inner_table_version_, log_archive_info))) {
     LOG_WARN("failed to get log archive backup info", K(ret));
   } else if (OB_FAIL(backup_history_updater.init(*sql_proxy_))) {
     LOG_WARN("failed to init backup history updater", K(ret));
@@ -1063,8 +1075,8 @@ int ObRootValidate::get_log_archive_time_range(const uint64_t tenant_id, int64_t
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("root validate do not init", K(ret));
-  } else if (OB_FAIL(
-                 log_archive_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, log_archive_info))) {
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(
+                 *sql_proxy_, for_update, tenant_id, inner_table_version_, log_archive_info))) {
     LOG_WARN("failed to get log archive backup info", K(ret));
   } else if (FALSE_IT(start_ts = log_archive_info.status_.start_ts_)) {
     // do nothing
@@ -1115,9 +1127,10 @@ int ObRootValidate::get_all_log_archive_backup_infos(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("root validate do not init", K(ret));
-  } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, cur_info))) {
-    LOG_WARN("failed to get log achive backup info", K(ret), K(tenant_id));
-  } else if (OB_FAIL(log_archive_mgr.get_log_archvie_history_infos(*sql_proxy_, tenant_id, for_update, his_infos))) {
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(
+                 *sql_proxy_, for_update, tenant_id, inner_table_version_, cur_info))) {
+    LOG_WARN("failed to get log archive backup info", K(ret), K(tenant_id));
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_history_infos(*sql_proxy_, tenant_id, for_update, his_infos))) {
     LOG_WARN("failed to get log archive history infos", K(ret), K(tenant_id));
   } else if (OB_FAIL(log_infos.push_back(cur_info))) {
     LOG_WARN("failed to push back current log archive backup info", K(ret), K(tenant_id), K(cur_info));
@@ -1344,6 +1357,40 @@ bool ObRootValidate::get_prepare_flag() const
   return is_prepare_flag_;
 }
 
+int ObRootValidate::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObBackupValidateTaskInfo> tasks;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root validate do not init", K(ret));
+  } else if (OB_SYS_TENANT_ID != tenant_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only sys tenant can force cancel validate", K(ret));
+  } else if (OB_FAIL(get_need_validate_tasks(tasks))) {
+    LOG_WARN("failed to get validating tasks", K(ret));
+  } else if (tasks.empty()) {
+    LOG_INFO("no validation job need to cancel", K(ret));
+  } else {
+    // cancel all validate tasks
+    for (int64_t i = 0; i < tasks.count() && OB_SUCC(ret); i++) {
+      ObCancelValidateScheduler cancel_scheduler;
+      ObBackupValidateTaskInfo &task = tasks[i];
+      if (OB_FAIL(cancel_scheduler.init(tenant_id, task.job_id_, *sql_proxy_, *this))) {
+        LOG_WARN("failed to init cancel validate scheduler", K(ret), K(tenant_id), K(task));
+      } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_validate())) {
+        LOG_WARN("failed to schedule cancel validate", K(ret), K(tenant_id), K(task));
+      } else {
+        LOG_WARN("succeed to schedule cancel validate", K(ret), K(tenant_id), K(task));
+      }
+    }
+  }
+
+  FLOG_WARN("force_cancel validate", K(ret), K(tasks));
+
+  return ret;
+}
+
 ObTenantValidate::ObTenantValidate()
     : is_inited_(false),
       is_dropped_(false),
@@ -1491,8 +1538,13 @@ int ObTenantValidate::do_generate(const share::ObTenantValidateTaskInfo& task_in
           }
         }
         LOG_WARN("failed to get log archive round of snapshot version", K(tenant_backup_info));
-      } else if (OB_FAIL(fetch_all_pg_list(
-                     backup_dest, log_archive_round, full_backup_set_id, backup_set_id, task_info, pkeys))) {
+      } else if (OB_FAIL(fetch_all_pg_list(backup_dest,
+                     log_archive_round,
+                     full_backup_set_id,
+                     backup_set_id,
+                     tenant_backup_info.date_,
+                     task_info,
+                     pkeys))) {
         LOG_WARN("failed to fetch all pg list", K(ret), K(task_info), K(pkeys));
       } else if (FALSE_IT(total_pg_count += pkeys.count())) {
       } else if (OB_FAIL(
@@ -1616,6 +1668,8 @@ int ObTenantValidate::get_backup_infos_from_his(const share::ObTenantValidateTas
   ObArray<ObTenantBackupTaskInfo> all_backup_task_infos;
   const int64_t backup_set_id = task_info.backup_set_id_;
   ObBackupTaskHistoryUpdater history_updater;
+  const bool is_backup_backup = false;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant validate do not init", K(ret));
@@ -1624,7 +1678,8 @@ int ObTenantValidate::get_backup_infos_from_his(const share::ObTenantValidateTas
     LOG_WARN("get backup set infos get invalid argument", K(ret), K(task_info));
   } else if (OB_FAIL(history_updater.init(*sql_proxy_))) {
     LOG_WARN("failed to init backup task history updater", K(ret));
-  } else if (OB_FAIL(history_updater.get_tenant_backup_tasks(task_info.tenant_id_, all_backup_task_infos))) {
+  } else if (OB_FAIL(history_updater.get_tenant_backup_tasks(
+                 task_info.tenant_id_, is_backup_backup, all_backup_task_infos))) {
     LOG_WARN("failed to get tenant backup tasks", K(ret), K(task_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < all_backup_task_infos.count(); ++i) {
@@ -1803,7 +1858,7 @@ int ObTenantValidate::cancel_doing_pg_tasks(const share::ObTenantValidateTaskInf
 }
 
 int ObTenantValidate::fetch_all_pg_list(const ObClusterBackupDest& backup_dest, const int64_t log_archive_round,
-    const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
+    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, const int64_t backup_snapshot_version,
     const share::ObTenantValidateTaskInfo& tenant_task_info, common::ObIArray<common::ObPartitionKey>& pkeys)
 {
   int ret = OB_SUCCESS;
@@ -1815,6 +1870,11 @@ int ObTenantValidate::fetch_all_pg_list(const ObClusterBackupDest& backup_dest, 
   hash::ObHashSet<ObPartitionKey> pkey_set;
   ObExternPGListMgr extern_pg_list_mgr;
   ObBackupListDataMgr list_data_mgr;
+  // TODO(yanfeng.yyy) full backup set id not use backup info
+  const int64_t compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
+  const int64_t fake_piece_id = 0;
+  const int64_t fake_create_ts = 0;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant validate do not init", K(ret));
@@ -1822,9 +1882,12 @@ int ObTenantValidate::fetch_all_pg_list(const ObClusterBackupDest& backup_dest, 
                  full_backup_set_id,
                  inc_backup_set_id,
                  backup_dest,
+                 backup_snapshot_version,
+                 compatible,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern pg list mgr", K(ret));
-  } else if (OB_FAIL(list_data_mgr.init(backup_dest, log_archive_round, tenant_task_info.tenant_id_))) {
+  } else if (OB_FAIL(list_data_mgr.init(
+                 backup_dest, log_archive_round, tenant_task_info.tenant_id_, fake_piece_id, fake_create_ts))) {
     LOG_WARN("failed to init backup list data mgr", K(ret));
   } else if (OB_FAIL(extern_pg_list_mgr.get_normal_pg_list(normal_pkeys))) {
     LOG_WARN("failed to get normal pg list");

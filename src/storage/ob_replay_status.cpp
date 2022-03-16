@@ -526,6 +526,8 @@ uint64_t ObReplayStatus::get_min_unreplay_log_id()
 // the invoker needs to lock
 int64_t ObReplayStatus::get_min_unreplay_log_timestamp()
 {
+  // for cold partition: timestamp returned may be small then expected, need to be double check with
+  // value returned by log service
   uint64_t unused = UINT64_MAX;
   int64_t timestamp = INT64_MAX;
   get_min_unreplay_log(unused, timestamp);
@@ -534,19 +536,12 @@ int64_t ObReplayStatus::get_min_unreplay_log_timestamp()
 
 void ObReplayStatus::get_min_unreplay_log(uint64_t& unreplay_log_id, int64_t& timestamp)
 {
-  unreplay_log_id = UINT64_MAX;
-  timestamp = INT64_MAX;
+  // for cold partition: timestamp returned may be small then expected, need to be double check with
+  // value returned by log service
   {
     RLockGuard Rlock_guard(get_submit_log_info_rwlock());
-    uint64_t next_submit_log_id = get_next_submit_log_id();
-    int64_t next_submit_log_ts = get_next_submit_log_ts();
-    uint64_t last_slide_out_log_id = get_last_slide_out_log_id();
-    int64_t last_slide_out_log_ts = get_last_slide_out_log_ts();
-
-    if (next_submit_log_ts <= last_slide_out_log_ts) {
-      unreplay_log_id = next_submit_log_id;
-      timestamp = next_submit_log_ts;
-    }
+    unreplay_log_id = get_next_submit_log_id();
+    timestamp = get_next_submit_log_ts();
   }
 
   for (int64_t i = 0; i < REPLAY_TASK_QUEUE_SIZE; ++i) {
@@ -576,8 +571,7 @@ void ObReplayStatus::check_eagain_too_many_(const ObReplayStatus::CheckCanReplay
     }
     if ((eagain_count_ >= EAGAIN_COUNT_THRESHOLD) && (REACH_TIME_INTERVAL(1 * 1000 * 1000L))) {
       const int64_t cur_time = ObTimeUtil::current_time();
-      if ((!result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_NORMAL_THRESHOLD)) ||
-          (result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_BIG_THRESHOLD))) {
+      if (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_THRESHOLD) {
         REPLAY_LOG(ERROR,
             "retry submit on EAGAIN too many times",
             K(eagain_count_),

@@ -28,6 +28,9 @@ class ObKVCacheHandle;
 template <class T>
 class ObIArray;
 }  // namespace common
+namespace sql {
+class ObSQLSessionInfo;
+}
 namespace share {
 class ObWorker;
 namespace schema {
@@ -185,6 +188,7 @@ public:
    */
   int get_can_read_index_array(uint64_t table_id, uint64_t* index_tid_array, int64_t& size, bool with_mv,
       bool with_global_index = true, bool with_domain_index = true);
+  int check_has_local_unique_index(uint64_t table_id, bool& has_local_unique_index);
 
   bool is_tenant_schema_valid(const int64_t tenant_id) const;
   /*
@@ -326,7 +330,8 @@ public:
   int verify_table_read_only(const uint64_t tenant_id, const ObNeedPriv& need_priv);
   // for privilege
   int add_role_id_recursively(uint64_t role_id, ObSessionPrivInfo& s_priv);
-  int check_user_access(const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st);
+  int check_user_access(
+      const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st, const ObUserInfo*& sel_user_info);
   int check_ssl_access(const ObUserInfo& user_info, SSL* ssl_st);
   int check_ssl_invited_cn(const uint64_t tenant_id, SSL* ssl_st);
   int check_db_access(ObSessionPrivInfo& s_priv, const common::ObString& database_name);
@@ -507,6 +512,10 @@ public:
   bool is_tenant_schema_guard() const
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_;
+  }
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
   }
 
   int get_tenant_mv_ids(const uint64_t tenant_id, common::ObArray<uint64_t>& mv_ids) const;

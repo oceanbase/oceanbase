@@ -14,6 +14,7 @@
 
 #include "ob_update_rs_list_task.h"
 
+#include "rootserver/ob_server_manager.h"
 #include "lib/profile/ob_trace_id.h"
 #include "share/config/ob_server_config.h"
 #include "share/partition_table/ob_partition_table_operator.h"

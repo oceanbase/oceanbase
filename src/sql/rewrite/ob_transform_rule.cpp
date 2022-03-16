@@ -204,7 +204,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
     ObOptimizerPartitionLocationCache optimizer_location_cache(*ctx_->allocator_, ctx_->partition_location_cache_);
     ObDMLStmt* optimizer_stmt = NULL;
     ObDMLStmt* temp_stmt = NULL;
-    lib::MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CostBasedRewrit", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
@@ -215,11 +215,13 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
       LOG_WARN("failed to deep copy stmt", K(ret));
     } else if (OB_FAIL(temp_stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt*&>(temp_stmt)))) {
+    } else if (OB_FAIL(temp_stmt->formalize_stmt_expr_reference())) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt *&>(temp_stmt)))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
     } else if (OB_FAIL(temp_stmt->check_and_convert_hint(*session_info))) {
       LOG_WARN("failed to check and convert hint", K(ret));
-    } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("failed to create memory entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;

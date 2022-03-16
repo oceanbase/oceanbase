@@ -21,12 +21,37 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/px/ob_dfo.h"
+#include "lib/utility/ob_print_utils.h"
 namespace oceanbase {
 using namespace common;
 using namespace share;
 using namespace transaction;
 namespace sql {
-ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator& allocator)
+DEF_TO_STRING(ObRemoteSqlInfo)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(use_ps), K_(is_batched_stmt), K_(ps_param_cnt), K_(remote_sql));
+  J_COMMA();
+  J_NAME("ps_params");
+  J_COLON();
+  if (OB_ISNULL(ps_params_) || ps_param_cnt_ <= 0) {
+    J_NULL();
+  } else {
+    J_ARRAY_START();
+    for (int64_t i = 0; pos < buf_len && i < ps_param_cnt_; ++i) {
+      BUF_PRINTO(ps_params_->at(i));
+      if (i != ps_param_cnt_ - 1) {
+        J_COMMA();
+      }
+    }
+    J_ARRAY_END();
+  }
+  J_OBJ_END();
+  return pos;
+}
+
+ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
     : allocator_(allocator),
       tenant_id_(OB_INVALID_ID),
       tsc_snapshot_timestamp_(0),
@@ -85,6 +110,13 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator& allocator)
 
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {}
+
+void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
+{
+  for (int64_t i = param_store_.count(); i > original_param_cnt; --i) {
+    param_store_.pop_back();
+  }
+}
 
 int ObPhysicalPlanCtx::reserve_param_space(int64_t param_count)
 {

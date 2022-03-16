@@ -118,7 +118,7 @@ private:
       ServerPGMap& server_pg_map, PGOfflineIlogFlushedInfoMap& pg_offline_ilog_flushed_info_map);
   int handle_pg_offline_ilog_flushed_info_map_(PGOfflineIlogFlushedInfoMap& pg_offline_ilog_flushed_info_map);
 
-  int execute_gc_tenant_tmp_file_(TenantSet& gc_tenant_set);
+  int execute_gc_tenant_tmp_file_();
   bool check_gc_condition_() const;
 
 private:

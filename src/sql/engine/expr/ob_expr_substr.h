@@ -23,13 +23,13 @@ public:
   explicit ObExprSubstr(common::ObIAllocator& alloc);
   virtual ~ObExprSubstr();
   virtual int calc_result2(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
-      common::ObExprCtx& expr_ctx) const;
+      common::ObExprCtx& expr_ctx) const override;
   virtual int calc_result3(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
-      const common::ObObj& length, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      const common::ObObj& length, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types_stack, int64_t param_num,
+      common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   static int substr(common::ObString& output, const common::ObString& input, const int64_t pos, const int64_t len,
       common::ObCollationType cs_type);

@@ -51,7 +51,7 @@ public:
   {
     return conflict_exprs_;
   }
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   void set_table_id(uint64_t table_id)
   {
     table_id_ = table_id;
@@ -80,7 +80,7 @@ public:
   TO_STRING_KV(K_(table_id), K_(index_tid), K_(only_data_table), K_(conflict_exprs), K_(access_exprs));
 
 private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
 private:
   uint64_t table_id_;

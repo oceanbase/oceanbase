@@ -129,14 +129,7 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext& ctx, const ObPxInitSqcResultMsg&
 
   ObDfo* edge = NULL;
   ObPxSqcMeta* sqc = NULL;
-  if (OB_SUCCESS != pkt.rc_) {
-    ret = pkt.rc_;
-    update_error_code(coord_info_.first_error_code_, pkt.rc_);
-    LOG_WARN("fail init sqc", K(pkt), K(ret));
-  } else if (pkt.task_count_ <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("task count returned by sqc invalid. expect 1 or more", K(pkt), K(ret));
-  } else if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
+  if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
     LOG_WARN("fail find dfo", K(pkt), K(ret));
   } else if (OB_ISNULL(edge)) {
     ret = OB_ERR_UNEXPECTED;
@@ -146,11 +139,24 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext& ctx, const ObPxInitSqcResultMsg&
   } else if (OB_ISNULL(sqc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", KP(sqc), K(ret));
-  } else if (OB_FAIL(sqc->get_partitions_info().assign(pkt.partitions_info_))) {
-    LOG_WARN("Failed to assign partitions info", K(ret));
   } else {
-    sqc->set_task_count(pkt.task_count_);
-    sqc->set_thread_inited(true);
+    if (OB_SUCCESS != pkt.rc_) {
+      ret = pkt.rc_;
+      update_error_code(coord_info_.first_error_code_, pkt.rc_);
+      LOG_WARN("fail init sqc, please check remote server log for details",
+          "remote_server",
+          sqc->get_exec_addr(),
+          K(pkt),
+          KP(ret));
+    } else if (pkt.task_count_ <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task count returned by sqc invalid. expect 1 or more", K(pkt), K(ret));
+    } else if (OB_FAIL(sqc->get_partitions_info().assign(pkt.partitions_info_))) {
+      LOG_WARN("Failed to assign partitions info", K(ret));
+    } else {
+      sqc->set_task_count(pkt.task_count_);
+      sqc->set_thread_inited(true);
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -226,7 +232,6 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinishSqcResult
   ObDfo* edge = NULL;
   ObPxSqcMeta* sqc = NULL;
   ObSQLSessionInfo* session = NULL;
-
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr session", K(ret));
@@ -462,8 +467,26 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinish
   LOG_TRACE("terminate msg : proc on sqc finish msg", K(pkt.rc_));
   ObDfo* edge = NULL;
   ObPxSqcMeta* sqc = NULL;
-  UNUSED(ctx);
-  if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
+  ObSQLSessionInfo* session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr session", K(ret));
+  } else if (OB_FAIL(session->get_trans_result().merge_result(pkt.get_trans_result()))) {
+    LOG_WARN("fail merge result",
+        K(ret),
+        "session_trans_result",
+        session->get_trans_result(),
+        "packet_trans_result",
+        pkt.get_trans_result());
+  } else {
+    LOG_DEBUG("on_sqc_finish_msg trans_result",
+        "session_trans_result",
+        session->get_trans_result(),
+        "packet_trans_result",
+        pkt.get_trans_result());
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
     LOG_WARN("fail find dfo", K(pkt), K(ret));
   } else if (OB_FAIL(edge->get_sqc(pkt.sqc_id_, sqc))) {
     LOG_WARN("fail find sqc", K(pkt), K(ret));

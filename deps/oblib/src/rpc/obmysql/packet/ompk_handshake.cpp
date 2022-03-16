@@ -65,7 +65,7 @@ OMPKHandshake::OMPKHandshake() : auth_plugin_data2_(), terminated_(0)
     auth_plugin_data_len_ = 0;
   }
 
-  server_language_ = 83;  // utf8_bin
+  server_language_ = 46;  // utf8mb4_bin
   server_status_ = 0;     // no this value in mysql protocol document
   memset(reserved_, 0, sizeof(reserved_));
   memset(auth_plugin_data2_, 'b', sizeof(auth_plugin_data2_) - 1);

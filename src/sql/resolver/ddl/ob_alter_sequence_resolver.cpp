@@ -89,13 +89,18 @@ int ObAlterSequenceResolver::resolve(const ParseNode& parse_tree)
   }
 
   /* sequence options */
-  if (OB_SUCC(ret) && NULL != parse_tree.children_[1]) {
-    if (OB_UNLIKELY(T_SEQUENCE_OPTION_LIST != parse_tree.children_[1]->type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid option node type", K(parse_tree.children_[1]->type_), K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(parse_tree.children_[1])) {
+      if (OB_UNLIKELY(T_SEQUENCE_OPTION_LIST != parse_tree.children_[1]->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid option node type", K(parse_tree.children_[1]->type_), K(ret));
+      } else {
+        ObSequenceResolver<ObAlterSequenceStmt> resolver;
+        ret = resolver.resolve_sequence_options(mystmt, parse_tree.children_[1]);
+      }
     } else {
-      ObSequenceResolver<ObAlterSequenceStmt> resolver;
-      ret = resolver.resolve_sequence_options(mystmt, parse_tree.children_[1]);
+      ret = OB_ERR_REQUIRE_ALTER_SEQ_OPTION;
+      LOG_USER_ERROR(OB_ERR_REQUIRE_ALTER_SEQ_OPTION);
     }
   }
   return ret;

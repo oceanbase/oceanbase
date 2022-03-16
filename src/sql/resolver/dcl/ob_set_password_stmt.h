@@ -61,6 +61,30 @@ public:
   {
     return set_password_arg_;
   }
+  void set_modify_max_connections(bool value)
+  {
+    modify_max_connections_ = value;
+  }
+  bool get_modify_max_connections()
+  {
+    return modify_max_connections_;
+  }
+  void set_max_connections_per_hour(uint64_t value)
+  {
+    max_connections_per_hour_ = value;
+  }
+  uint64_t get_max_connections_per_hour()
+  {
+    return max_connections_per_hour_;
+  }
+  void set_max_user_connections(uint64_t value)
+  {
+    max_user_connections_ = value;
+  }
+  uint64_t get_max_user_connections()
+  {
+    return max_user_connections_;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -72,7 +96,9 @@ private:
   bool need_enc_;
   bool for_current_user_;
   obrpc::ObSetPasswdArg set_password_arg_;
-
+  bool modify_max_connections_;
+  uint64_t max_connections_per_hour_;
+  uint64_t max_user_connections_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordStmt);
 };

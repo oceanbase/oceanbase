@@ -151,6 +151,7 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
     ObString interval_val;
     int64_t unit_value = 0;
     bool is_neg = false;
+    bool is_json = (ObJsonType == date.get_type());
     number::ObNumber interval_num;
     if (OB_SUCC(unit.get_int(unit_value))) {
       ObDateUnitType unit_val = static_cast<ObDateUnitType>(unit_value);
@@ -231,6 +232,12 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
           if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, date_obj, date_obj))) {
             LOG_WARN("failed to cast to string", K(ret), K(date_obj));
           } else {
+            if (is_json) { // json to string will add quote automatically, here should take off quote
+              ObString str = date_obj.get_string();
+              if (str.length() >= 3) { // 2 quote and content length >= 1
+                date_obj.set_string(date_obj.get_type(), str.ptr() + 1, str.length() - 1);
+              }
+            }
             bool dt_flag = false;
             int tmp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (tmp_ret = ObTimeConverter::str_is_date_format(date_obj.get_string(), dt_flag))) {
@@ -286,6 +293,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr& expr, ObEvalCtx& ctx, ObDat
   ObDatum* date = NULL;
   ObDatum* interval = NULL;
   ObDatum* unit = NULL;
+  bool is_json = (expr.args_[0]->args_ != NULL) && (expr.args_[0]->args_[0]->datum_meta_.type_ == ObJsonType);
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -305,6 +313,12 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr& expr, ObEvalCtx& ctx, ObDat
     } else {
       ObTime ob_time;
       ObTimeConvertCtx cvrt_ctx(get_timezone_info(session), false);
+      if (is_json) { // json to string will add quote automatically, here should take off quote
+        ObString str = date->get_string();
+        if (str.length() >= 3) { // 2 quote and content length >= 1
+          date->set_string(str.ptr() + 1, str.length() - 1);
+        }
+      }
       if (OB_FAIL(ob_datum_to_ob_time_with_date(*date,
               date_type,
               get_timezone_info(session),
@@ -593,7 +607,11 @@ int ObExprLastDay::calc_result_type1(ObExprResType& type, ObExprResType& type1, 
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
-  type.set_datetime();
+  if (is_oracle_mode()) {
+    type.set_datetime();
+  } else {
+    type.set_date();
+  }
   type.set_scale(OB_MAX_DATE_PRECISION);
   type1.set_calc_type(ObDateTimeType);
   type1.set_calc_scale(OB_MAX_DATETIME_PRECISION);
@@ -606,14 +624,32 @@ int ObExprLastDay::calc_result1(common::ObObj& result, const common::ObObj& obj,
   UNUSED(expr_ctx);
   int64_t ori_date_utc = 0;
   int64_t res_date_utc = 0;
-  if (obj.is_null_oracle()) {
+
+  const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = expr_ctx.my_session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (obj.is_null()) {
     result.set_null();
   } else if (OB_FAIL(obj.get_datetime(ori_date_utc))) {
     LOG_WARN("fail to get datetime", K(ret));
-  } else if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc))) {
-    LOG_WARN("fail to calc last mday", K(ret));
+  } else if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc, res_type, false))) {
+    LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_type));
+    if (!is_oracle_mode()) {
+      uint64_t cast_mode = 0;
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+        result.set_null();
+        ret = OB_SUCCESS;
+      }
+    }
   } else {
-    result.set_datetime(res_date_utc);
+    if (is_oracle_mode()) {
+      result.set_datetime(res_date_utc);
+    } else {
+      result.set_date(static_cast<int32_t>(res_date_utc));
+    }
     result.set_scale(OB_MAX_DATE_PRECISION);
   }
   return ret;
@@ -639,18 +675,36 @@ int ObExprLastDay::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, Ob
 int ObExprLastDay::calc_last_day(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param1 = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
+  ObDatum *param1 = NULL;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
     LOG_WARN("eval first param value failed");
   } else if (param1->is_null()) {
     expr_datum.set_null();
   } else {
+    const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
     int64_t ori_date_utc = param1->get_datetime();
     int64_t res_date_utc = 0;
-    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc))) {
-      LOG_WARN("fail to calc last mday", K(ret));
+    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(
+            ori_date_utc, res_date_utc, res_type, false))) {
+      LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+      if (!is_oracle_mode()) {
+        uint64_t cast_mode = 0;
+        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+        if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+          expr_datum.set_null();
+          ret = OB_SUCCESS;
+        }
+      }
     } else {
-      expr_datum.set_datetime(res_date_utc);
+      if (is_oracle_mode()) {
+        expr_datum.set_datetime(res_date_utc);
+      } else {
+        expr_datum.set_date(static_cast<int32_t>(res_date_utc));
+      }
     }
   }
 

@@ -71,44 +71,82 @@ public:
   {
     return ObMPBase::flush_buffer(is_last);
   }
+  inline bool support_send_long_data(const uint32_t type)
+  {
+    bool is_support = false;
+    switch (type) {
+      case obmysql::MYSQL_TYPE_OB_NVARCHAR2:
+      case obmysql::MYSQL_TYPE_OB_NCHAR:
+      case obmysql::MYSQL_TYPE_OB_RAW:
+      case obmysql::MYSQL_TYPE_TINY_BLOB:
+      case obmysql::MYSQL_TYPE_MEDIUM_BLOB:
+      case obmysql::MYSQL_TYPE_LONG_BLOB:
+      case obmysql::MYSQL_TYPE_BLOB:
+      case obmysql::MYSQL_TYPE_STRING:
+      case obmysql::MYSQL_TYPE_VARCHAR:
+      case obmysql::MYSQL_TYPE_VAR_STRING:
+      case obmysql::MYSQL_TYPE_OB_NUMBER_FLOAT:
+      case obmysql::MYSQL_TYPE_NEWDECIMAL:
+      case obmysql::MYSQL_TYPE_OB_UROWID:
+      case obmysql::MYSQL_TYPE_ORA_BLOB:
+      case obmysql::MYSQL_TYPE_ORA_CLOB:
+      case obmysql::MYSQL_TYPE_JSON:
+        is_support = true;
+        break;
+      case obmysql::MYSQL_TYPE_COMPLEX:
+        is_support = share::is_oracle_mode() ? true : false;
+        break;
+      default:
+        is_support = false;
+    }
+    return is_support;
+  }
+  inline int32_t get_param_num()
+  {
+    return params_num_;
+  }
+  inline void set_param_num(int32_t num)
+  {
+    params_num_ = num;
+  }
 
 protected:
-  virtual int deserialize()
+  virtual int deserialize() override
   {
     return common::OB_SUCCESS;
   }
-  virtual int process();
-  virtual void disconnect()
+  virtual int process() override;
+  virtual void disconnect() override
   {
     ObMPBase::disconnect();
   }
-  virtual void update_last_pkt_pos()
+  virtual void update_last_pkt_pos() override
   {
     if (NULL != ez_buf_) {
       comp_context_.update_last_pkt_pos(ez_buf_->last);
     }
   }
-  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL)
+  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL) override
   {
     return ObMPBase::send_error_packet(err, errmsg, is_partition_hit, extra_err_info);
   }
-  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param)
+  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param) override
   {
     return ObMPBase::send_ok_packet(session, ok_param);
   }
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result)
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result) override
   {
     return ObMPBase::send_eof_packet(session, result);
   }
-  virtual bool need_send_extra_ok_packet()
+  virtual bool need_send_extra_ok_packet() override
   {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
-  virtual int response_packet(obmysql::ObMySQLPacket& pkt)
+  virtual int response_packet(obmysql::ObMySQLPacket& pkt) override
   {
     return ObMPBase::response_packet(pkt);
   }
-  virtual int after_process()
+  virtual int after_process() override
   {
     return ObMPBase::after_process();
   }
@@ -150,14 +188,15 @@ private:
   // in oracle: %cs_type is server collation whose charset may differ with %charset
   int parse_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
       const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-      const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, ObObjParam& param);
+      const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, 
+      ObObjParam& param, int16_t param_id);
   int decode_type_info(const char*& buf, sql::TypeInfo& type_info);
 
-  virtual int before_response()
+  virtual int before_response() override
   {
     return OB_SUCCESS;
   }
-  virtual int before_process();
+  virtual int before_process() override;
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
 
   // copy or convert string, resove %extra_buf_len before result string.
@@ -186,6 +225,7 @@ private:
   int64_t single_process_timestamp_;
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
+  uint64_t params_num_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);

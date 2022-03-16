@@ -80,12 +80,15 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
   LOG_WARN("SendBCMsgCB invalid, check object serialization impl or oom", K_(trace_id));
   AsyncCB::on_invalid();
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
-  for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
-    int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_RPC_PACKET_INVALID);
+  for (int64_t i = 0; i < responses_.count(); ++i) {
+    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+                    : (i < resps.count() ? resps.at(i).recode_ : OB_RPC_PACKET_INVALID);
+    int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }
   }
+  resps.reset();
 }
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
@@ -93,11 +96,14 @@ void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
   LOG_WARN("SendBCMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
   for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
-    int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_TIMEOUT);
+    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+                    : (i < resps.count() ? resps.at(i).recode_ : OB_TIMEOUT);
+    int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }
   }
+  resps.reset();
 }
 
 int ObDtlRpcChannel::SendBCMsgCB::process()
@@ -121,6 +127,7 @@ int ObDtlRpcChannel::SendBCMsgCB::process()
     }
     LOG_TRACE("rpc clone sendbcmsg cb", K(responses_.at(i)), K(trace_id_));
   }
+  resps.reset();
   return ret;
 }
 
@@ -234,16 +241,8 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
     is_first = buf->is_data_msg() && 1 == buf->seq_no();
     is_eof = buf->is_eof();
 
-    if (msg_response_.is_in_process()) {
-      if (OB_FAIL(msg_response_.wait())) {
-        LOG_WARN("send previous message fail", K(ret));
-      } else if (OB_HASH_NOT_EXIST == ret) {
-        if (is_drain()) {
-          ret = OB_SUCCESS;
-        } else {
-          ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
-        }
-      }
+    if (OB_FAIL(wait_response())) {
+      LOG_WARN("failed to wait for response", K(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(wait_unblocking_if_blocked())) {
       LOG_WARN("failed to block data flow", K(ret));

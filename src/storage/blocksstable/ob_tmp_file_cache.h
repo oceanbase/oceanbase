@@ -108,16 +108,15 @@ public:
 class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> {
 public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
-  static ObTmpPageCache& get_instance();
-  int init(const char* cache_name, const int64_t priority, const ObStorageFileHandle& file_handle);
-  int prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInfo& info, ObTmpFileIOHandle& handle,
-      ObMacroBlockHandle& mb_handle);
+  static ObTmpPageCache &get_instance();
+  int init(const char *cache_name, const int64_t priority, const ObStorageFileHandle &file_handle);
+  int prefetch(const ObTmpPageCacheKey &key, const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle);
   // multi page prefetch
-  int prefetch(const ObTmpBlockIOInfo& info, const common::ObIArray<ObTmpPageIOInfo>& page_io_infos,
-      ObTmpFileIOHandle& handle, ObMacroBlockHandle& mb_handle);
-  int get_cache_page(const ObTmpPageCacheKey& key, ObTmpPageValueHandle& handle);
-  int get_page(const ObTmpPageCacheKey& key, ObTmpPageValueHandle& handle);
-  int put_page(const ObTmpPageCacheKey& key, const ObTmpPageCacheValue& value);
+  int prefetch(const ObTmpBlockIOInfo &info, const common::ObIArray<ObTmpPageIOInfo> &page_io_infos,
+      ObMacroBlockHandle &mb_handle);
+  int get_cache_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
+  int get_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
+  int put_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
   void destroy();
 
 public:

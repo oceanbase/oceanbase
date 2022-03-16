@@ -50,12 +50,10 @@ int ObSigBTOnlyProcessor::prepare()
   int64_t tid = syscall(SYS_gettid);
   char tname[16];
   prctl(PR_GET_NAME, tname);
-  unw_context_t uctx;
-  unw_getcontext(&uctx);
   int64_t count = 0;
   count = safe_snprintf(buf_ + pos_, len - pos_, "tid: %ld, tname: %s, lbt: ", tid, tname);
   pos_ += count;
-  safe_backtrace(uctx, buf_ + pos_, len - pos_, count);
+  safe_backtrace(buf_ + pos_, len - pos_, &count);
   pos_ += count;
   buf_[pos_++] = '\n';
   return ret;

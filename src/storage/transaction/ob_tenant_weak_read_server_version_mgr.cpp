@@ -15,6 +15,8 @@
 #include "share/ob_errno.h"
 #include "ob_tenant_weak_read_server_version_mgr.h"
 
+#include "share/ob_define.h"    // is_valid_read_snapshot_version
+
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace transaction {
@@ -64,7 +66,8 @@ int ObTenantWeakReadServerVersionMgr::update_with_part_info(const uint64_t tenan
     const bool need_skip, const bool is_user_part, const int64_t version)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(epoch_tstamp <= 0) || OB_UNLIKELY(!need_skip && version <= 0)) {
+  if (OB_UNLIKELY(epoch_tstamp <= 0)
+      || OB_UNLIKELY(! need_skip && ! is_valid_read_snapshot_version(version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, epoch or version",
         K(ret),
@@ -84,8 +87,9 @@ int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant
     const int64_t base_version_when_no_valid_partition, const bool need_print_status)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(epoch_tstamp <= 0) || OB_UNLIKELY(OB_INVALID_ID == tenant_id) ||
-      OB_UNLIKELY(base_version_when_no_valid_partition <= 0)) {
+  if (OB_UNLIKELY(epoch_tstamp <= 0)
+      || OB_UNLIKELY(OB_INVALID_ID == tenant_id)
+      || OB_UNLIKELY(! is_valid_read_snapshot_version(base_version_when_no_valid_partition))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(epoch_tstamp), K(tenant_id), K(base_version_when_no_valid_partition));
   }
@@ -214,8 +218,9 @@ int ObTenantWeakReadServerVersionMgr::ServerVersionInner::amend(
 int ObTenantWeakReadServerVersionMgr::ServerVersionInner::update(const ServerVersionInner& new_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == new_version.epoch_tstamp_) || OB_UNLIKELY(epoch_tstamp_ >= new_version.epoch_tstamp_) ||
-      OB_UNLIKELY(new_version.version_ <= 0)) {
+  if (OB_UNLIKELY(0 == new_version.epoch_tstamp_)
+      || OB_UNLIKELY(epoch_tstamp_ >= new_version.epoch_tstamp_)
+      || OB_UNLIKELY(! is_valid_read_snapshot_version(new_version.version_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid new server version", KR(ret), K(new_version), KPC(this));
   } else {

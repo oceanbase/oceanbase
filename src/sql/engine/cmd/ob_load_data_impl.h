@@ -542,6 +542,7 @@ public:
     cur_line_begin_pos_ = NULL;
     buf_begin_pos_ = NULL;
     buf_end_pos_ = NULL;
+    last_end_enclosed_ = NULL;
     field_id_ = 0;
     in_enclose_flag_ = false;
     is_escaped_flag_ = false;
@@ -575,10 +576,10 @@ public:
   }
 
 private:
-  bool is_terminate_char(char cur_char, char*& cur_pos, bool& is_line_term);
-  bool is_enclosed_field_start(char* cur_pos, char& cur_char);
-  void handle_one_field(char* field_end_pos);
-  void deal_with_empty_field(ObString& field_str, int64_t index);
+  bool is_terminate_char(char cur_char, char *&cur_pos, bool &is_line_term);
+  bool is_enclosed_field_start(char *cur_pos, char &cur_char);
+  void handle_one_field(char *field_end_pos, bool has_escaped);
+  void deal_with_empty_field(ObString &field_str, int64_t index);
   // void deal_with_field_with_escaped_chars(ObString &field_str);
   int deal_with_irregular_line();
   void remove_enclosed_char(char*& cur_field_end_pos);
@@ -590,12 +591,13 @@ private:
   common::ObBitSet<> string_type_column_;
   // parsing state variables
   bool is_last_buf_;
-  char* cur_pos_;
-  char* cur_field_begin_pos_;
-  char* cur_field_end_pos_;
-  char* cur_line_begin_pos_;
-  char* buf_begin_pos_;
-  char* buf_end_pos_;
+  char *cur_pos_;
+  char *cur_field_begin_pos_;
+  char *cur_field_end_pos_;
+  char *cur_line_begin_pos_;
+  char *buf_begin_pos_;
+  char *buf_end_pos_;
+  char *last_end_enclosed_;
   int64_t field_id_;
   bool in_enclose_flag_;
   bool is_escaped_flag_;
@@ -643,11 +645,8 @@ OB_INLINE bool ObCSVParser::is_terminate_char(char cur_char, char*& cur_pos, boo
     if (!in_enclose_flag_) {
       ret_bool = true;  // return true
     } else {
-      char* pre_pos = cur_pos - 1;
       // with in_enclose_flag_ = true, a term char is valid only if an enclosed char before it
-      if (static_cast<int64_t>(*pre_pos) == formats_.enclose_char_ &&
-          cur_field_begin_pos_ != pre_pos) {  // 123---->'---->123
-        in_enclose_flag_ = false;
+      if (last_end_enclosed_ == cur_pos - 1) {
         remove_enclosed_char(cur_pos);
         ret_bool = true;  // return true
       } else {
@@ -670,14 +669,17 @@ OB_INLINE bool ObCSVParser::is_enclosed_field_start(char* cur_pos, char& cur_cha
          && cur_pos == cur_field_begin_pos_;
 }
 
-OB_INLINE void ObCSVParser::handle_one_field(char* field_end_pos)
+OB_INLINE void ObCSVParser::handle_one_field(char *field_end_pos, bool has_escaped)
 {
   if (OB_LIKELY(field_id_ < total_field_nums_)) {
     int32_t str_len = static_cast<int32_t>(field_end_pos - cur_field_begin_pos_);
     if (OB_UNLIKELY(str_len <= 0)) {
       deal_with_empty_field(values_in_line_.at(field_id_), field_id_);
     } else {
-      if (str_len == 1 && *cur_field_begin_pos_ == 'N' && cur_pos_ - cur_field_begin_pos_ == 2) {
+      if (!in_enclose_flag_ &&
+          ((str_len == 1 && *cur_field_begin_pos_ == 'N' && has_escaped && cur_pos_ - cur_field_begin_pos_ == 2) ||
+              (formats_.enclose_char_ != INT64_MAX && !has_escaped && str_len == 4 &&
+                  0 == MEMCMP(cur_field_begin_pos_, "NULL", 4)))) {
         values_in_line_.at(field_id_).assign_ptr(&ObLoadDataUtils::NULL_VALUE_FLAG, 1);
       } else {
         values_in_line_.at(field_id_).assign_ptr(cur_field_begin_pos_, str_len);
@@ -732,7 +734,8 @@ public:
 
   static int memory_check_remote(uint64_t tenant_id, bool& need_wait_minor_freeze);
   static int memory_wait_local(
-      ObExecContext& ctx, const ObPartitionKey& part_key, ObAddr& server_addr, int64_t& total_wait_secs);
+      ObExecContext& ctx, const ObPartitionKey& part_key, ObAddr& server_addr,
+      int64_t& total_wait_secs, bool &is_leader_changed);
 
   virtual int execute(ObExecContext& ctx, ObLoadDataStmt& load_stmt) = 0;
 };
@@ -991,13 +994,15 @@ public:
   bool is_terminate(char& cur_char, ObKMPStateMachine& term_state_machine, char*& cur_pos);
   bool is_enclosed_field_start(char* cur_pos, char& cur_char);
   void remove_enclosed_char(char*& cur_field_end_pos);
-  int collect_insert_row_strings();
+  int collect_insert_row_strings(common::ObIAllocator &allocator,
+                                 bool is_no_backslash_escapes = false);
   int handle_one_file_buf(
       ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx, char* parsing_begin_pos, const int64_t data_len, bool is_eof);
   int handle_one_file_buf_fast(
       ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx, char* parsing_begin_pos, const int64_t data_len, bool is_eof);
   int handle_one_line(ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx);
-  int handle_one_line_local(ObPhysicalPlanCtx& plan_ctx);
+  int handle_one_line_local(ObPhysicalPlanCtx &plan_ctx, ObExecContext &ctx);
+  int transform_single_bs_to_double_bs(ObString &target, ObString &source, ObIAllocator &allocator);
   void handle_one_field(char* field_end_pos);
   void deal_with_irregular_line();
   void deal_with_empty_field(common::ObString& field_str, int64_t index);

@@ -524,7 +524,7 @@ public:
   virtual ~ObTailoredRowIterator()
   {}
   int init(const uint64_t index_id, const ObPartitionKey& pg_key, const int64_t schema_version,
-      const ObITable::TableKey& table_key, ObTablesHandle& handle);
+      const ObITable::TableKey& table_key, const int64_t restore_snapshot_version, ObTablesHandle& handle);
   virtual int get_next_row(const ObStoreRow*& store_row);
   virtual const obrpc::ObFetchLogicRowArg* get_fetch_logic_row_arg()
   {
@@ -618,6 +618,23 @@ private:
   bool is_inited_;
   ObStreamRpcReader<obrpc::OB_FETCH_PG_PARTITION_INFO> rpc_reader_;
   DISALLOW_COPY_AND_ASSIGN(ObPGPartitionBaseDataMetaObReader);
+};
+
+class ObRecoveryPointMetaInfoReader {
+public:
+  ObRecoveryPointMetaInfoReader() : is_inited_(false), rpc_reader_()
+  {}
+  virtual ~ObRecoveryPointMetaInfoReader()
+  {}
+
+  int init(obrpc::ObPartitionServiceRpcProxy& srv_rpc_proxy, common::ObInOutBandwidthThrottle& bandwidth_throttle,
+      const common::ObAddr& src_server, const obrpc::ObFetchPGRecoveryPointMetaInfoArg& arg, const int64_t cluster_id);
+  int fetch_recovery_point_meta_info(storage::ObRecoveryPointMetaInfo& recovery_point_meta_info);
+
+private:
+  bool is_inited_;
+  ObStreamRpcReader<obrpc::OB_GET_RECOVERY_POINT_META_INFO> rpc_reader_;
+  DISALLOW_COPY_AND_ASSIGN(ObRecoveryPointMetaInfoReader);
 };
 
 template <obrpc::ObRpcPacketCode RPC_CODE>

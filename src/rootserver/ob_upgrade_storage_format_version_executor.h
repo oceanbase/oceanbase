@@ -27,8 +27,8 @@ public:
   explicit ObUpgradeStorageFormatVersionTask(ObUpgradeStorageFormatVersionExecutor& executor) : executor_(&executor)
   {}
   virtual ~ObUpgradeStorageFormatVersionTask() = default;
-  virtual int64_t get_deep_copy_size() const;
-  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
+  virtual int64_t get_deep_copy_size() const override;
+  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
   virtual int process() override;
 
 private:

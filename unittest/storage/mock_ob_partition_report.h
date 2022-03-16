@@ -29,8 +29,8 @@ public:
   {}
   virtual ~MockObIPartitionReport()
   {}
-  MOCK_METHOD3(submit_pt_update_task,
-      int(const common::ObPartitionKey& part_key, const bool need_report_checksum, const bool with_role));
+  MOCK_METHOD2(submit_pt_update_task,
+      int(const common::ObPartitionKey& part_key, const bool need_report_checksum));
   MOCK_METHOD1(submit_pt_update_role_task, int(const common::ObPartitionKey& part_key));
   MOCK_METHOD1(submit_pg_pt_update_task, void(const common::ObPartitionArray& pg_partitions));
   MOCK_METHOD1(pt_sync_update, int(const common::ObPartitionKey& part_key));
@@ -48,6 +48,9 @@ public:
       int(const common::ObPartitionKey& pkey, const uint64_t sstable_id, const int sstable_type,
           const observer::ObSSTableChecksumUpdateType update_type, const bool task_need_batch));
   MOCK_METHOD1(update_pg_backup_task_info, int(const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_array));
+  MOCK_METHOD3(report_pg_backup_backupset_task,
+      int(const common::ObIArray<share::ObBackupBackupsetArg>& arg, const common::ObIArray<int32_t>& results,
+          const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status));
 };
 
 }  // namespace storage

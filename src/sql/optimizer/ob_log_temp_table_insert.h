@@ -25,7 +25,7 @@ public:
   ObLogTempTableInsert(ObLogPlan& plan);
   virtual ~ObLogTempTableInsert();
 
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }

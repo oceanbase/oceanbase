@@ -320,7 +320,11 @@ int ObCLogMgr::create_partition_(const ObPartitionKey& partition_key, const int6
              OB_FAIL(pls->set_offline())) {
     // physical restore data phase need set clog offline
     STORAGE_LOG(WARN, "fail to set_offline", K(ret), K(partition_key));
-  } else if (archive_restore_state >= share::REPLICA_RESTORE_DATA && OB_FAIL(pls->set_scan_disk_log_finished())) {
+  } else if ((archive_restore_state >= share::REPLICA_RESTORE_DATA
+                 // For two-phase-created non-paxos replica, because it won't execute set_election_leader or
+                 // set_member_list, so it need set_scan_disk_log_finished here.
+                 || !ObReplicaTypeCheck::is_paxos_replica(replica_type)) &&
+             OB_FAIL(pls->set_scan_disk_log_finished())) {
     // partitions created with physical restore flag need skip scan disk log stage, similar with add_partition
     // standby replica will always run here.
     CLOG_LOG(WARN, "set_scan_disk_log_finished failed", K(ret), K(partition_key));
@@ -574,7 +578,7 @@ int ObCLogMgr::req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStart
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(log_ext_executor_v2_.req_start_log_id_by_ts_with_breakpoint(req_msg, result))) {
-    CLOG_LOG(WARN, "log executorv2 req_start_log_id_by_ts_with_breakpoint failed", K(ret));
+    CLOG_LOG(WARN, "log executor req_start_log_id_by_ts_with_breakpoint failed", K(ret));
   } else {
     // success
   }
@@ -1275,7 +1279,7 @@ int ObCLogMgr::pre_batch_change_member_(const common::ObPartitionArray& partitio
     } else if (OB_FAIL(member_list_array.push_back(member_list))) {
       CLOG_LOG(WARN, "member_list_array push_back failed", K(ret), K(partition_key), K(member_list));
     } else if (OB_FAIL(proposal_id_array.push_back(proposal_id))) {
-      CLOG_LOG(WARN, "proposal_id_array push_back faield", K(ret), K(partition_key), K(proposal_id_array));
+      CLOG_LOG(WARN, "proposal_id_array push_back failed", K(ret), K(partition_key), K(proposal_id_array));
     } else if (OB_FAIL(ret_map.insert(partition_key, ret))) {
       CLOG_LOG(WARN, "ret_map insert failed", K(ret), K(ret), K(partition_key));
     } else {
@@ -2921,7 +2925,7 @@ int ObCLogMgr::leader_construct_log_info_(const common::ObPartitionArray& partit
                 unused_freeze_version,
                 is_trans_log))) {
           CLOG_LOG(WARN,
-              "log_header genearte_header failed",
+              "log_header generate_header failed",
               K(ret),
               K(log_type),
               K(partition_key),
@@ -3166,15 +3170,20 @@ int ObCLogMgr::get_election_group_priority(const uint64_t tenant_id, election::O
                               OBSERVER.get_gctx().rs_server_status_ == share::RSS_IS_WORKING;
     int tmp_ret = OB_SUCCESS;
     bool is_data_disk_error = false;
-    bool is_clog_disk_error = log_engine_.is_clog_disk_error();
+    bool is_clog_disk_hang = log_engine_.is_clog_disk_hang();
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
       CLOG_LOG(WARN, "is_data_disk_error failed", K(tmp_ret));
     }
-    if (is_clog_disk_error) {
-      priority.set_system_clog_disk_error();
+    const bool is_slog_disk_warning = SLOGGER.is_disk_warning();
+
+    if (is_clog_disk_hang) {
+      priority.set_system_clog_disk_hang();
     }
     if (is_data_disk_error) {
       priority.set_system_data_disk_error();
+    }
+    if (is_slog_disk_warning) {
+      priority.set_system_slog_disk_warning();
     }
     if (!partition_service_->is_service_started()) {
       priority.set_system_service_not_started();
@@ -3406,5 +3415,18 @@ bool ObCLogMgr::is_server_archive_stop(const int64_t incarnation, const int64_t 
   return archive_mgr_.is_server_archive_stop(incarnation, archive_round);
 }
 
+int ObCLogMgr::get_server_min_log_ts(int64_t &server_min_log_ts)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "clog_mgr is not inited", KR(ret));
+  } else if (OB_FAIL(log_engine_.get_server_min_log_ts(server_min_log_ts))) {
+    CLOG_LOG(WARN, "failed to get_server_min_log_ts", KR(ret));
+  } else {
+    CLOG_LOG(INFO, "get_server_min_log_ts success", K(server_min_log_ts));
+  }
+  return ret;
+}
 }  // namespace clog
 }  // end namespace oceanbase

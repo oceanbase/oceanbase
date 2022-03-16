@@ -123,16 +123,8 @@ public:
   {}
   ~ObPlXaEndTransExecutor()
   {}
-  int execute(ObExecContext& ctx, ObXaCommitStmt& stmt)
-  {
-    return execute_(
-        stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id(), false, stmt.get_flags(), ctx);
-  }
-  int execute(ObExecContext& ctx, ObXaRollBackStmt& stmt)
-  {
-    return execute_(
-        stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id(), true, stmt.get_flags(), ctx);
-  }
+  int execute(ObExecContext& ctx, ObXaCommitStmt& stmt);
+  int execute(ObExecContext& ctx, ObXaRollBackStmt& stmt);
 
 private:
   int execute_(const common::ObString& gtrid_str, const common::ObString& bqual_str, const int64_t format_id,

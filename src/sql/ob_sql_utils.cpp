@@ -108,9 +108,6 @@ int ObSQLUtils::md5(const ObString& stmt, char* sql_id, int32_t len)
         reinterpret_cast<unsigned char*>(md5_sum_buf));
     if (OB_ISNULL(res)) {
       // MD5() in openssl always return an pointer not NULL, so we need not check return value.
-      // see:
-      // http://www.openssl.org/docs/crypto/md5.html#DESCRIPTION
-      // http://www.openssl.org/docs/crypto/md5.html#RETURN_VALUES
       // Even so, we HAVE TO check it here. You know it.
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("md5 res null pointer", K(ret), K(res));
@@ -630,7 +627,7 @@ int ObSQLUtils::calc_const_expr(ObSQLSessionInfo* session, const ObRawExpr* expr
       .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param)
   {
-    ObIAllocator& tmp_allocator = CURRENT_CONTEXT.get_arena_allocator();
+    ObIAllocator& tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
     ObPhysicalPlanCtx phy_plan_ctx(tmp_allocator);
     for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
       if (OB_FAIL(phy_plan_ctx.get_param_store_for_update().push_back(params.at(i)))) {
@@ -833,9 +830,19 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
   int ret = OB_SUCCESS;
   const bool make_column_expression = false;  // return ObSqlExpression
   ObSQLSessionInfo default_session;
-  if (OB_FAIL(default_session.init(0, 0, 0, &allocator))) {
+  uint64_t tenant_id = extract_tenant_id(schema.get_table_id());
+  const ObTenantSchema *tenant_schema = nullptr;
+  ObSchemaGetterGuard guard;
+  
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(default_session.init(0, 0, 0, &allocator))) {
     LOG_WARN("init empty session failed", K(ret));
-  } else if (OB_FAIL(default_session.load_default_sys_variable(false, false))) {
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant_schema", K(ret));
+  } else if (OB_FAIL(default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+    LOG_WARN("fail to init", K(ret));
+  } else if (OB_FAIL(default_session.load_all_sys_vars(guard))) {
     LOG_WARN("session load default system variable failed", K(ret));
   } else if (OB_FAIL(make_generated_expression_from_str(
                  expr_str, default_session, schema, gen_col, col_ids, allocator, expression, make_column_expression))) {
@@ -938,19 +945,26 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
   return ret;
 }
 
-int ObSQLUtils::make_default_expr_context(ObIAllocator& allocator, ObExprCtx& expr_ctx)
+int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allocator, ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
-
-  ObSQLSessionInfo* default_session = static_cast<ObSQLSessionInfo*>(allocator.alloc(sizeof(ObSQLSessionInfo)));
+  ObSchemaGetterGuard guard;
+  const ObTenantSchema *tenant_schema = nullptr;
+  ObSQLSessionInfo *default_session = static_cast<ObSQLSessionInfo*>(allocator.alloc(sizeof(ObSQLSessionInfo)));
   if (OB_ISNULL(default_session)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
   } else {
     default_session = new (default_session) ObSQLSessionInfo();
     if (OB_FAIL(default_session->init(0, 0, 0, &allocator))) {
       LOG_WARN("init default session failed", K(ret));
-    } else if (OB_FAIL(default_session->load_default_sys_variable(false, false))) {
+    } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+      LOG_WARN("fail to get tenant_schema", K(ret));
+    } else if (OB_FAIL(default_session->init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+      LOG_WARN("fail to init", K(ret));
+    } else if (OB_FAIL(default_session->load_all_sys_vars(guard))) {
       LOG_WARN("load default system variable to session failed", K(ret));
     } else {
       expr_ctx.my_session_ = default_session;
@@ -1025,6 +1039,9 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
     const ObIArray<share::schema::ObColDesc>& col_ids, const ObNewRow& row, ObIAllocator& allocator,
     ObExprCtx& expr_ctx, ObObj& result)
 {
+  UNUSED(schema);
+  UNUSED(allocator);
+  UNUSED(col_ids);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1035,6 +1052,7 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
   } else {
     ObNewRow pad_row;
     bool need_pad = false;
+    /*
     if (is_pad_char_to_full_length(expr_ctx.my_session_->get_sql_mode())) {
       ObSEArray<int32_t, 16> whitespace_length;
       for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
@@ -1092,10 +1110,11 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
         }
       }
     }
+    */
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(expr->calc(expr_ctx, need_pad ? pad_row : row, result))) {
-        LOG_WARN("Fail to calc value", K(*expr), K(row), K(ret));
+        LOG_WARN("Fail to calc value", K(ret), K(*expr), K(row), K(need_pad), K(pad_row));
       }
     }
   }
@@ -1460,9 +1479,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult& result)
                T_SHOW_PARAMETERS == type || T_SHOW_INDEXES == type || T_SHOW_PROCESSLIST == type ||
                T_SHOW_TABLEGROUPS == type || T_USE_DATABASE == type || T_TRANSACTION == type || T_BEGIN == type ||
                T_COMMIT == type || T_ROLLBACK == type || T_VARIABLE_SET == type ||
-               T_SET_NAMES == type       // read only not restrict it
-               || T_SET_CHARSET == type  // read only not restrict it
-               || T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type) {
+               T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type || T_SHOW_RESTORE_PREVIEW == type) {
       ret = true;
     }
   }
@@ -1807,15 +1824,13 @@ int ObSQLUtils::construct_outline_sql(ObIAllocator& allocator, const ObSQLSessio
     LOG_WARN("fail to filter head space", K(ret));
   }
   if (OB_SUCC(ret)) {
-    ObString first_token = filter_sql.split_on(' ');
-    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s",
-            first_token.length(),
-            first_token.ptr(),
-            outline_content.length(),
-            outline_content.ptr(),
-            filter_sql.length(),
-            filter_sql.ptr()))) {
-      LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
+    char empty_split = find_first_empty_char(filter_sql);
+    ObString first_token = filter_sql.split_on(empty_split);
+    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s", first_token.length(), first_token.ptr(),
+                                      outline_content.length(), outline_content.ptr(),
+                                      filter_sql.length(), filter_sql.ptr()))) {
+       LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql),
+                                 K(filter_sql), K(outline_content), K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, sql_helper.string(), outline_sql))) {
       LOG_WARN("failed to write string", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
     } else { /*do nothing*/
@@ -1841,8 +1856,21 @@ int ObSQLUtils::filter_head_space(ObString& sql)
   return ret;
 }
 
-int ObSQLUtils::reconstruct_sql(
-    ObIAllocator& allocator, const ObStmt* stmt, ObString& sql, ObObjPrintParams print_params)
+char ObSQLUtils::find_first_empty_char(const ObString &sql)
+{
+  char empty_char = ' '; // default split
+  for (int64_t i = 0; i < sql.length(); ++i) {
+    char ch = sql[i];
+    if (' ' == ch || '\r' == ch || '\n' == ch || '\t' == ch || '\f' == ch) {
+      empty_char = ch;
+      break;
+    }
+  }
+  return empty_char;
+}
+
+int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
+                                ObObjPrintParams print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -2853,32 +2881,8 @@ int ObSQLUtils::clear_evaluated_flag(const ObExprPtrIArray& calc_exprs, ObEvalCt
 int ObSQLUtils::copy_and_convert_string_charset(
     ObIAllocator& allocator, const ObString& src, ObString& dst, ObCollationType src_coll, ObCollationType dst_coll)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!ObCharset::is_valid_collation(src_coll) || !ObCharset::is_valid_collation(dst_coll))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input collation", K(ret), K(src_coll), K(dst_coll));
-  } else if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src.length())) {
-    dst.reset();
-  } else if (ObCharset::charset_type_by_coll(src_coll) == ObCharset::charset_type_by_coll(dst_coll)) {
-    OZ(ob_write_string(allocator, src, dst));
-  } else {
-    const int32_t CharConvertFactorNum = 4;
-    char* buf = nullptr;
-    int32_t buf_len = src.length() * CharConvertFactorNum;
-    uint32_t result_len = 0;
-    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), "len", buf_len);
-    } else if (OB_FAIL(
-                   ObCharset::charset_convert(src_coll, src.ptr(), src.length(), dst_coll, buf, buf_len, result_len))) {
-      LOG_WARN("fail to do charset convert", K(ret));
-    } else {
-      dst.assign_ptr(buf, result_len);
-    }
-  }
-
-  return ret;
+  return ObCharset::charset_convert(allocator, src, src_coll, dst_coll, dst,
+                                    ObCharset::COPY_STRING_ON_SAME_CHARSET);
 }
 
 int ObSQLUtils::update_session_last_schema_version(
@@ -3230,10 +3234,7 @@ int ObVirtualTableResultConverter::convert_key_ranges(ObIArray<ObNewRange>& key_
   if (!key_ranges.empty()) {
     common::ObArray<common::ObNewRange> tmp_range;
     OZ(tmp_range.reserve(key_ranges.count()));
-    if (OB_ISNULL(key_types_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("key mapping is null", K(ret));
-    }
+    CK(OB_NOT_NULL(key_types_));
     for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
       ObNewRange new_range;
       new_range.table_id_ = key_ranges.at(i).table_id_;
@@ -3839,7 +3840,9 @@ int ObSQLUtils::handle_audit_record(
         } else {
           ObAuditRecordData audit_record = session.get_final_audit_record(exec_mode);
           audit_record.sched_info_ = exec_ctx.get_sched_info();
-          if (OB_FAIL(req_manager->record_request(audit_record))) {
+          bool is_sensitive = (NULL != exec_ctx.get_sql_ctx()) ?
+                              exec_ctx.get_sql_ctx()->is_sensitive_ : true;
+          if (OB_FAIL(req_manager->record_request(audit_record, is_sensitive))) {
             if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               LOG_DEBUG("cannot allocate mem for record", K(ret));
               ret = OB_SUCCESS;
@@ -3856,4 +3859,17 @@ int ObSQLUtils::handle_audit_record(
   session.update_stat_from_audit_record();
   session.reset_audit_record();
   return ret;
+}
+
+bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schema)
+{
+  bool can_skip = false;
+  if (!schema.is_partitioned_table()) {
+    can_skip = true;
+  } else if (schema.get_all_part_num() == 1 && schema.is_hash_part()) {
+    can_skip = true;
+  } else {
+    can_skip = false;
+  }
+  return can_skip;
 }

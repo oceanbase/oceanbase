@@ -106,12 +106,11 @@ ObFuseRowCacheValue::ObFuseRowCacheValue()
       schema_version_(0),
       snapshot_version_(0),
       partition_id_(0),
-      sstable_end_log_ts_(0),
-      fq_ctx_()
+      sstable_end_log_ts_(0)
 {}
 
 int ObFuseRowCacheValue::init(const ObStoreRow& row, const int64_t schema_version, const int64_t snapshot_version,
-    const int64_t partition_id, const int64_t sstable_end_log_ts, const ObFastQueryContext& fq_ctx)
+    const int64_t partition_id, const int64_t sstable_end_log_ts)
 {
   int ret = OB_SUCCESS;
   if (schema_version < 0 || snapshot_version <= 0 || partition_id < 0) {
@@ -125,7 +124,6 @@ int ObFuseRowCacheValue::init(const ObStoreRow& row, const int64_t schema_versio
     snapshot_version_ = snapshot_version;
     partition_id_ = partition_id;
     sstable_end_log_ts_ = sstable_end_log_ts;
-    fq_ctx_ = fq_ctx;
     size_ = sizeof(ObObj) * column_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       const ObObj& obj = obj_array_[i];
@@ -174,7 +172,6 @@ int ObFuseRowCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheV
     pfuse_value->flag_ = flag_;
     pfuse_value->snapshot_version_ = snapshot_version_;
     pfuse_value->partition_id_ = partition_id_;
-    pfuse_value->fq_ctx_ = fq_ctx_;
     pfuse_value->size_ = size_;
     pfuse_value->sstable_end_log_ts_ = sstable_end_log_ts_;
     pos = sizeof(*this) + sizeof(ObObj) * column_cnt_;

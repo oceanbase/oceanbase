@@ -227,7 +227,9 @@ int ObAsyncExecuteResult::get_next_row(ObExecContext& ctx, const ObNewRow*& row)
 {
   UNUSED(ctx);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cur_row_)) {
+  if (field_count_ <= 0) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(cur_row_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("scanner is invalid", K(ret));
   } else if (nullptr == spec_) {

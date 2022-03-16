@@ -272,8 +272,8 @@ private:
   int get_unit_resource_reservation(
       uint64_t unit_id, const common::ObAddr& new_server, common::ObIArray<share::ObUnitStat>& in_migrate_unit_stat);
 
-  int try_migrate_unit(const uint64_t unit_id, const share::ObUnitStat& unit_stat,
-      const common::ObIArray<share::ObUnitStat>& migrating_unit_stat, const common::ObAddr& dst);
+  int try_migrate_unit(const uint64_t unit_id, const uint64_t tenant_id, const share::ObUnitStat &unit_stat,
+      const common::ObIArray<share::ObUnitStat> &migrating_unit_stat, const common::ObAddr &dst);
 
   int try_cancel_migrate_unit(const share::ObUnit& unit, bool& is_canceled);
 

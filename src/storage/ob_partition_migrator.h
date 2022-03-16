@@ -29,6 +29,9 @@
 #include "storage/ob_partition_base_data_physical_restore.h"
 #include "storage/ob_partition_base_data_validate.h"
 #include "storage/backup/ob_partition_base_data_physical_restore_v2.h"
+#include "storage/ob_partition_base_data_backup_backupset.h"
+#include "storage/ob_backup_archive_log.h"
+#include "storage/ob_reserved_data_mgr.h"
 
 namespace oceanbase {
 namespace storage {
@@ -37,10 +40,10 @@ class ObPartitionService;
 class ObMigrateFinishTask;
 class ObMigrateLogicSSTableCtx;
 class ObMigratePhysicalSSTableCtx;
-class ObPartitionMigrateCtx;
 class ObIMigrateMacroBlockWriter;
 class ObBackupPhysicalPGCtx;
 class ObPartGroupTask;
+class ObBackupBackupsetPGCtx;
 
 class ObMacroBlockReuseMgr final {
 public:
@@ -80,6 +83,90 @@ struct ObPartitionGroupInfoResult {
 
   obrpc::ObFetchPGInfoResult result_;
   ObMigrateSrcInfo choose_src_info_;
+};
+
+struct ObIPartitionMigrateCtx {
+  enum Type {
+    PARTITION_MIGRATE_CTX,
+    RECOVERY_POINT_CTX,
+  };
+  ObIPartitionMigrateCtx() : ctx_(NULL)
+  {}
+  virtual ~ObIPartitionMigrateCtx() = default;
+  virtual int add_sstable(ObSSTable& table_handle) = 0;
+  virtual bool is_valid() const = 0;
+  virtual Type get_type() const = 0;
+  DECLARE_VIRTUAL_TO_STRING = 0;
+  ObMigrateCtx* ctx_;
+  DISALLOW_COPY_AND_ASSIGN(ObIPartitionMigrateCtx);
+};
+
+struct ObPartitionMigrateCtx : public ObIPartitionMigrateCtx {
+  ObPartitionMigrateCtx();
+  virtual bool is_valid() const;
+  void reset();
+  virtual int add_sstable(ObSSTable& handle);
+  virtual Type get_type() const
+  {
+    return PARTITION_MIGRATE_CTX;
+  }
+  int assign(const ObPartitionMigrateCtx& part_migrate_ctx);
+
+  ObMigratePartitionInfo copy_info_;
+  ObTablesHandle handle_;
+  bool is_partition_exist_;
+  common::SpinRWLock lock_;
+  // When the log_id is not continuous, we directly migrate all the dumps from the source end to replace the local one
+  // to prevent discontinuity after the migration
+  bool need_reuse_local_minor_;
+
+  TO_STRING_KV(KP_(ctx), K_(copy_info), K_(is_partition_exist), K_(handle), K_(need_reuse_local_minor));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPartitionMigrateCtx);
+};
+
+struct ObMigrateRecoveryPointCtx : public ObIPartitionMigrateCtx {
+  ObMigrateRecoveryPointCtx();
+  virtual ~ObMigrateRecoveryPointCtx();
+  void reset();
+  virtual int add_sstable(ObSSTable& table_handle);
+  virtual Type get_type() const
+  {
+    return RECOVERY_POINT_CTX;
+  }
+  virtual bool is_valid() const;
+
+  int get_recovery_point_info(const int64_t recovery_point_index, ObRecoveryPointKey& recovery_point_key);
+  int get_current_recovery_point_info(ObRecoveryPointKey& recovery_point_key);
+  int add_sstable(ObTableHandle& table_handle);
+  int get_sstable(const ObITable::TableKey& table_key, ObTableHandle& table_handle);
+  bool is_recovery_point_iter_finish() const;
+  bool is_recovery_point_index_valid() const;
+  void inc_recovery_point_index()
+  {
+    ++recovery_point_index_;
+  }
+  void reuse_tables_handle()
+  {
+    tables_handle_map_.reuse();
+  }
+  int init(ObMigrateCtx& migrate_ctx);
+  void reuse();
+  bool is_tables_handle_empty() const;
+  int get_all_recovery_point_key(common::ObIArray<ObRecoveryPointKey>& recovery_point_key_array);
+  int remove_unneed_table_handle(const hash::ObHashSet<ObITable::TableKey>& table_key_set);
+
+  DECLARE_VIRTUAL_TO_STRING;
+
+  static const int64_t BUCKET_NUM = 128;
+  int32_t recovery_point_index_;
+  ObArray<ObRecoveryPointKey> recovery_point_key_array_;
+  hash::ObHashMap<ObITable::TableKey, ObTableHandle> tables_handle_map_;
+  common::SpinRWLock lock_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateRecoveryPointCtx);
 };
 
 class ObBaseMigrateDag;
@@ -132,6 +219,8 @@ public:
   int set_is_restore_for_add_replica(const int16_t src_is_restore);
   bool is_copy_index() const;
   int alloc_migrate_dag(ObBaseMigrateDag*& base_migrate_dag);
+  int add_table_handle(ObTableHandle& table_handle);
+  int get_table_handle(const ObITable::TableKey& table_key, ObTableHandle& table_handle);
   TO_STRING_KV(K_(replica_op_arg), KP_(macro_indexs), "action", trans_action_to_str(action_), K_(result),
       K_(replica_state), K_(doing_task_cnt), K_(total_task_cnt), K_(need_rebuild), K(create_ts_), K(task_id_),
       K(copy_size_), K(continue_fail_count_), K(rebuild_count_), K(finish_ts_), K(clog_parent_), K(migrate_src_info_),
@@ -200,9 +289,9 @@ public:
   int64_t old_trans_table_seq_;
   bool create_new_pg_;
   ObIPartitionGroupMetaRestoreReader* restore_meta_reader_;
-  ObPartitionGroupMetaBackupReader* backup_meta_reader_;
   int64_t fetch_pg_info_compat_version_;
   ObBackupPhysicalPGCtx physical_backup_ctx_;
+  ObMigrateRecoveryPointCtx recovery_point_ctx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateCtx);
@@ -218,28 +307,6 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateCtxGuard);
-};
-
-struct ObPartitionMigrateCtx final {
-  ObPartitionMigrateCtx();
-  bool is_valid() const;
-  void reset();
-  int add_sstable(ObSSTable& handle);
-  int assign(const ObPartitionMigrateCtx& part_migrate_ctx);
-
-  ObMigrateCtx* ctx_;
-  ObMigratePartitionInfo copy_info_;
-  ObTablesHandle handle_;
-  bool is_partition_exist_;
-  common::SpinRWLock lock_;
-  // When the log_id is not continuous, we directly migrate all the dumps from the source end to replace the local one
-  // to prevent discontinuity after the migration
-  bool need_reuse_local_minor_;
-
-  TO_STRING_KV(KP_(ctx), K_(copy_info), K_(is_partition_exist), K_(handle), K_(need_reuse_local_minor));
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPartitionMigrateCtx);
 };
 
 struct ObIPartMigrationTask {
@@ -524,10 +591,13 @@ private:
   int try_single_remove_member();
   int inner_schedule_partition(ObPartMigrationTask*& task, bool& need_schedule);
   int try_schedule_partition_validate();
+  int try_schedule_partition_backup_backupset();
+  int try_schedule_partition_backup_archivelog();
   int try_schedule_partition_migration();
   int get_migrate_task(const ObPartitionKey& pg_key, ObPartMigrationTask*& task);
   int set_migrate_task_flags_(const ObMigrateStatus& status, const bool is_restore, ObPartMigrationTask& task);
   int check_before_backup();
+  int init_restore_meta_index_(const share::ObPhysicalRestoreArg& restore_arg);
 
 private:
   static const int64_t RETRY_JOB_MAX_WAIT_TIMEOUT = 600 * 1000 * 1000;  // 10m
@@ -541,6 +611,23 @@ private:
 };
 
 class ObPartGroupMigrator {
+public:
+  struct DoingTaskStat {
+  public:
+    DoingTaskStat();
+    void reset();
+
+    TO_STRING_KV(K_(rebuild_count), K_(backup_count), K_(validate_count), K_(backup_backupset_count),
+        K_(backup_archivelog_count), K_(normal_migrate_count));
+
+    int64_t rebuild_count_;
+    int64_t backup_count_;
+    int64_t validate_count_;
+    int64_t backup_backupset_count_;
+    int64_t backup_archivelog_count_;
+    int64_t normal_migrate_count_;
+  };
+
 public:
   ObPartGroupMigrator();
   virtual ~ObPartGroupMigrator();
@@ -565,8 +652,7 @@ private:
   int inner_schedule(const common::ObIArray<ObReplicaOpArg>& arg_list, const bool is_batch_mode,
       const share::ObTaskId& task_id, const bool is_normal_migrate, ObPartGroupTask*& group_task);
   int check_copy_limit_(const ObIArray<ObReplicaOpArg>& arg_list);
-  int get_not_finish_task_count(
-      int64_t& rebuild_count, int64_t& backup_count, int64_t& validate_count, int64_t& is_normal_migrate);
+  int get_not_finish_task_count(DoingTaskStat& stat);
   static int check_arg_list(const common::ObIArray<ObReplicaOpArg>& arg_list);
   int check_dup_task(const ObPartGroupTask& task);
   int check_dup_task(const ObIArray<ObPartitionKey>& pkey_list);
@@ -680,6 +766,28 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObValidateDag);
 };
 
+class ObBackupBackupsetDag : public ObBaseMigrateDag {
+public:
+  ObBackupBackupsetDag();
+  virtual ~ObBackupBackupsetDag();
+  virtual bool operator==(const ObIDag& other) const override;
+  virtual int64_t hash() const override;
+  virtual int init(ObMigrateCtx& migrate_ctx);
+
+protected:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupBackupsetDag);
+};
+
+class ObBackupArchiveLogDag : public ObBaseMigrateDag {
+public:
+  ObBackupArchiveLogDag();
+  virtual ~ObBackupArchiveLogDag();
+  virtual int init(ObMigrateCtx& migrate_ctx);
+
+protected:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveLogDag);
+};
+
 class ObMigrateUtil {
 public:
   static const int64_t RETRY_TASK_SLEEP_INTERVAL_S = 1000 * 1000L;  // 1s
@@ -690,6 +798,8 @@ public:
   static int merge_trans_table(ObMigrateCtx& ctx);
   static int enable_replay_with_new_partition(ObMigrateCtx& ctx);
   static int create_empty_trans_sstable_for_compat(ObMigrateCtx& ctx);
+  static int get_report_result(const common::ObIArray<ObReportPartMigrationTask>& report_list,
+      common::ObIArray<ObPartMigrationRes>& report_res_list);
 
 private:
   static int wait_trans_table_merge_finish(ObMigrateCtx& ctx);
@@ -712,12 +822,10 @@ public:
   int init();
   virtual int process() override;
 
-protected:
-  int add_migrate_status(ObMigrateCtx* ctx);
+  // int add_migrate_status(ObMigrateCtx *ctx);
   int add_partition_migration_status(const ObMigrateCtx& ctx);
 
   int prepare_migrate();
-  int try_hold_local_partition();
   int choose_migrate_src();
   int choose_ob_migrate_src(const ObReplicaOpArg& arg, ObPartitionGroupMeta& pg_meta, ObMigrateSrcInfo& addr);
   int choose_restore_migrate_src(const ObReplicaOpArg& arg, ObPartitionGroupMeta& meta, ObMigrateSrcInfo& src_info);
@@ -763,7 +871,7 @@ protected:
       common::ObIArray<ObITable::TableKey>& local_major_tables, common::ObIArray<ObITable::TableKey>& local_inc_tables,
       common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
-      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);
+      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx);
   int build_migrate_major_sstable_(common::ObIArray<ObITable::TableKey>& local_major_tables,
       common::ObIArray<ObITable::TableKey>& local_inc_tables, common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
@@ -772,68 +880,13 @@ protected:
       common::ObIArray<ObITable::TableKey>& local_major_tables, common::ObIArray<ObITable::TableKey>& local_inc_tables,
       common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
-      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);
+      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx);
   int build_migrate_minor_sstable(const bool need_reuse_local_minor, common::ObIArray<ObITable::TableKey>& local_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables, ObIArray<ObITable::TableKey>& remote_gc_inc_sstables,
       common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);
-  int set_replica_type(ObMigrateCtx* ctx);
-  int create_new_partition(const common::ObAddr& src_server, ObReplicaOpArg& replica_op_arg,
+  int create_new_partition(const common::ObAddr& initial_leader, ObReplicaOpArg& replica_op_arg,
       ObIPartitionGroupGuard& partition_guard, blocksstable::ObStorageFileHandle& file_handle);
 
-  int generate_physic_minor_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo::SSTableInfo& minor_sstable_info, ObITask* parent_task, ObITask* child_task);
-  int generate_logic_minor_sstable_copy_task(share::ObITask* parent_task, share::ObITask* child_task,
-      const ObMigrateSrcInfo& src, const ObMigrateTableInfo::SSTableInfo& minor_sstable_info,
-      ObPartitionMigrateCtx& part_migrate_ctx);
-  int generate_minor_sstable_copy_task(share::ObITask* parent_task, share::ObITask* child_task,
-      const ObMigrateSrcInfo& src_info, const ObMigrateTableInfo::SSTableInfo& minor_sstable_info,
-      ObPartitionMigrateCtx& part_migrate_ctx);
-  int build_logic_sstable_ctx(const ObMigrateSrcInfo& src_info,
-      const ObMigrateTableInfo::SSTableInfo& minor_sstable_info, ObMigrateLogicSSTableCtx& ctx);
-  int generate_major_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo::SSTableInfo& major_sstable_info, share::ObITask* parent_task,
-      share::ObITask* child_task);
-  int generate_physic_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo::SSTableInfo& sstable_info, share::ObITask* parent_task, share::ObITask* child_task);
-  int build_physical_sstable_ctx(const ObMigrateSrcInfo& src_info, const ObMigrateTableInfo::SSTableInfo& sstable_info,
-      ObMigratePhysicalSSTableCtx& ctx);
-  int build_sub_physical_task(
-      ObMigratePhysicalSSTableCtx& ctx, common::ObIArray<blocksstable::ObSSTablePair>& macro_block_list);
-
-  int generate_pg_backup_tasks(common::ObIArray<share::ObITask*>& last_task_array);
-  int generate_backup_tasks(ObITask*& last_task);
-  int generate_backup_tasks(share::ObFakeTask& wait_migrate_finish_task);
-  int generate_backup_major_tasks(share::ObITask*& parent_task);
-  int generate_backup_major_copy_task(ObITask* parent_task, ObITask* child_task);
-  int build_backup_physical_ctx(ObBackupPhysicalPGCtx& ctx);
-  int fetch_backup_sstables(ObIArray<ObITable::TableKey>& table_keys);
-  int build_backup_sub_task(ObBackupPhysicalPGCtx& ctx);
-
-  int generate_pg_validate_tasks(common::ObIArray<share::ObITask*>& last_task_array);
-  int generate_validate_tasks(share::ObITask*& last_task);
-  int generate_validate_tasks(share::ObFakeTask& wait_finish_task);
-  int generate_validate_backup_tasks(share::ObITask*& parent_task);
-  int generate_validate_backup_task(share::ObITask* parent_task, share::ObITask* child_task);
-  int build_validate_backup_ctx(ObValidateBackupPGCtx& ctx);
-  int fetch_pg_macro_index_list(const common::ObPartitionKey& pg_key, ObValidateBackupPGCtx& ctx,
-      common::ObIArray<ObBackupMacroIndex>& macro_index_list);
-  int build_validate_sub_task(const common::ObIArray<ObBackupMacroIndex>& macro_index_list, ObValidateBackupPGCtx& ctx);
-
-  int generate_pg_migrate_tasks(common::ObIArray<share::ObITask*>& last_task_array);
-  int generate_pg_rebuild_tasks(common::ObIArray<share::ObITask*>& last_task_array);
-  int generate_rebuild_tasks(ObPartitionMigrateCtx& part_migrate_ctx, share::ObITask*& last_task);
-  int generate_wait_migrate_finish_task(share::ObFakeTask*& wait_migrate_finish_task);
-  int generate_migrate_tasks(ObPartitionMigrateCtx& part_migrate_ctx, share::ObITask*& last_task);
-  int generate_migrate_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo& table_info, share::ObFakeTask& wait_migrate_finish_task);
-  int generate_rebuild_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo& table_info, share::ObFakeTask& wait_rebuild_finish_task);
-  int generate_major_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo& table_info, share::ObITask*& parent_task);
-  int generate_minor_tasks(const ObMigrateSrcInfo& src, ObPartitionMigrateCtx& part_migrate_ctx,
-      const ObMigrateTableInfo& table_info, share::ObITask*& parent_task);
-
-  int generate_finish_migrate_task(const common::ObIArray<ObITask*>& last_task_array, share::ObITask*& last_task);
   int try_get_snapshot_schema_version(
       const uint64_t table_id, const common::ObVersionRange& version_range, int64_t& schema_version);
   int get_snapshot_schema_version(const common::ObVersionRange& version_range, const uint64_t table_id,
@@ -842,24 +895,11 @@ protected:
   static int is_valid_standby_restore_src(const obrpc::ObFetchPGInfoResult& result, ObMigrateCtx& ctx, bool& is_valid);
   static int is_valid_rebuild_src(const obrpc::ObFetchPGInfoResult& result, ObMigrateCtx& ctx, bool& is_valid);
   static bool can_migrate_src_skip_log_sync(const obrpc::ObFetchPGInfoResult& result, ObMigrateCtx& ctx);
-  int need_generate_sstable_migrate_tasks(bool& need_schedule);
-  int get_base_meta_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
-      ObIPhysicalBaseMetaReader*& reader);
-  int get_base_meta_restore_reader_v1(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
-  int get_base_meta_restore_reader_v2(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
-  int get_base_meta_backup_reader(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
-  int get_base_meta_ob_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
-      ObIPhysicalBaseMetaReader*& reader);
-  int get_base_meta_rpc_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
-      ObIPhysicalBaseMetaReader*& reader);
-  int calc_macro_block_reuse(
-      const ObITable::TableKey& table_key, common::ObIArray<blocksstable::ObSSTablePair>& macro_block_list);
   int check_can_reuse_sstable(
       const ObPartitionKey& pkey, ObMigrateTableInfo& table_info, ObPartitionMigrateCtx& part_ctx);
   int check_and_reuse_sstable(
       const ObPartitionKey& pkey, const ObITable::TableKey& table_key, bool& is_reuse, ObPartitionMigrateCtx& part_ctx);
   int prepare_restore_reader_if_needed();
-  int prepare_backup_reader_if_needed();
   int create_partition_if_needed(  // for physical follower restore
       ObIPartitionGroupGuard& pg_guard, const ObPGPartitionStoreMeta& partition_meta);
   int update_multi_version_start();
@@ -868,7 +908,7 @@ protected:
   int remove_uncontinue_local_tables(const ObPartitionKey& pkey, const uint64_t table_id);
   int copy_rebuild_partition_info_result(
       ObPartitionGroupInfoResult& in_result, ObPartitionGroupInfoResult& out_result, bool& find_src);
-  int check_partition_integrity();
+  int check_fast_copy_macro_block();
   int create_pg_partition(const ObPGPartitionStoreMeta& meta, ObIPartitionGroup* partition, const bool in_slog_trans);
   int get_partition_table_info_reader(const ObMigrateSrcInfo& src_info, ObIPGPartitionBaseDataMetaObReader*& reader);
   int inner_get_partition_table_info_reader(
@@ -884,8 +924,6 @@ protected:
       const common::ObIArray<ObITable::TableKey>& tmp_remote_gc_minor_sstables,
       common::ObIArray<ObITable::TableKey>& remote_minor_sstables,
       common::ObIArray<ObITable::TableKey>& remote_gc_minor_sstables, bool& need_reuse_local_minor);
-  int generate_trans_table_migrate_task(ObITask*& last_task);
-  int generate_post_prepare_task(ObITask& parent_task);
   int prepare_new_partition();
   int check_backup_data_continues();
   int prepare_restore_reader();
@@ -897,9 +935,8 @@ protected:
   int get_minor_src_candidate_without_region(
       const ObReplicaOpArg& arg, common::ObIArray<ObMigrateSrcInfo>& src_info_array);
 
-  int generate_tasks_by_type();
-  int generate_migrate_prepare_task();
-  int generate_restore_cut_prepare_task();
+  int start_replica_control(const ObPGKey& pg_key, const ObReplicaOpType op_type);
+  int generate_and_schedule_tasks();
 
 protected:
   static const int64_t SRC_SET_BUCKET_NUM = 128;
@@ -910,9 +947,6 @@ protected:
   obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   ObPartitionService* partition_service_;
-  ObIPartitionGroupMetaRestoreReader* validate_meta_reader_;
-  ObIPartitionGroupMetaRestoreReader* restore_meta_reader_;
-  ObPartitionGroupMetaBackupReader* backup_meta_reader_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePrepareTask);
@@ -1020,7 +1054,7 @@ class ObMigrateCopyPhysicalTask : public share::ObITask {
 public:
   ObMigrateCopyPhysicalTask();
   virtual ~ObMigrateCopyPhysicalTask();
-  int generate_next_task(ObITask*& next_task);
+  int generate_next_task(ObITask*& next_task) override;
   int init(const int64_t task_idx, ObMigratePhysicalSSTableCtx& sstable_ctx, ObMigrateCtx& ctx);
   virtual int process() override;
 
@@ -1029,9 +1063,6 @@ private:
       common::ObInOutBandwidthThrottle* bandwidth_throttle, const ObMigrateSrcInfo& src_info,
       common::ObIArray<ObMigrateArgMacroBlockInfo>& list, ObITable::TableKey& table_key,
       const ObRestoreInfo* restore_info, ObIPartitionMacroBlockReader*& reader);
-  int get_macro_block_restore_reader(common::ObInOutBandwidthThrottle& bandwidth_throttle,
-      common::ObIArray<ObMigrateArgMacroBlockInfo>& list, const ObRestoreInfo& restore_info,
-      const ObITable::TableKey& table_key, ObIPartitionMacroBlockReader*& reader);
   int get_macro_block_restore_reader_v1(common::ObInOutBandwidthThrottle& bandwidth_throttle,
       common::ObIArray<ObMigrateArgMacroBlockInfo>& list, const share::ObPhysicalRestoreArg& restore_info,
       const ObITable::TableKey& table_key, ObIPartitionMacroBlockReader*& reader);
@@ -1066,7 +1097,7 @@ class ObMigrateFinishPhysicalTask : public share::ObITask {
 public:
   ObMigrateFinishPhysicalTask();
   virtual ~ObMigrateFinishPhysicalTask();
-  int init(ObPartitionMigrateCtx& part_finish_ctx);
+  int init(ObIPartitionMigrateCtx& part_finish_ctx);
   virtual int process() override;
   ObMigratePhysicalSSTableCtx& get_sstable_ctx()
   {
@@ -1075,12 +1106,13 @@ public:
 
 private:
   int check_sstable_meta(
-      const blocksstable::ObSSTableBaseMeta& src_meta, const blocksstable::ObSSTableBaseMeta& write_meta);
+      const blocksstable::ObSSTableBaseMeta& src_meta, const blocksstable::ObSSTableBaseMeta& write_meta, const bool is_check_in_advance);
   int acquire_sstable(const ObITable::TableKey& dest_table_key, ObTableHandle& handle);
+  int check_sstable_meta(const bool is_check_in_advance, ObTableHandle &handle);
 
 private:
   bool is_inited_;
-  ObPartitionMigrateCtx* part_migrate_ctx_;
+  ObIPartitionMigrateCtx* part_migrate_ctx_;
   ObMigratePhysicalSSTableCtx sstable_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObMigrateFinishPhysicalTask);
 };
@@ -1173,26 +1205,6 @@ public:
   static int get_clog_parent(clog::ObIPartitionLogService& log_service, ObMigrateSrcInfo& parent_info);
 };
 
-class ObMigratePostPrepareTask : public ObMigratePrepareTask {
-public:
-  ObMigratePostPrepareTask();
-  virtual ~ObMigratePostPrepareTask();
-  virtual int process() override;
-
-private:
-  int schedule_migrate_tasks();
-  int enable_replay_with_new_partition();
-  int deal_with_rebuild_partition();
-  int update_multi_version_start();
-  int deal_with_old_partition();
-  int deal_with_new_partition();
-  int deal_with_standby_restore_partition();
-  int generate_restore_tailored_task(share::ObITask* last_task);
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMigratePostPrepareTask);
-};
-
 OB_INLINE bool ObMigrateCtx::is_migrate_compat_version() const
 {
   return fetch_pg_info_compat_version_ < ObFetchPGInfoArg::FETCH_PG_INFO_ARG_COMPAT_VERSION_V2;
@@ -1268,6 +1280,240 @@ private:
   common::SpinRWLock lock_;
   ObArray<ObPartitionMigrateCtx> part_ctx_array_;
   int64_t schema_version_;
+};
+
+class ObITableTaskGeneratorTask : public share::ObITask {
+public:
+  ObITableTaskGeneratorTask()
+      : ObITask(TASK_TYPE_MIGRATE_PREPARE),
+        ctx_(NULL),
+        cp_fty_(NULL),
+        rpc_(NULL),
+        srv_rpc_proxy_(NULL),
+        bandwidth_throttle_(NULL),
+        partition_service_(NULL)
+  {}
+
+  virtual ~ObITableTaskGeneratorTask()
+  {}
+  virtual int process() = 0;
+
+protected:
+  int generate_physical_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObIPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo::SSTableInfo& sstable_info, share::ObITask* parent_task, share::ObITask* child_task);
+  int build_physical_sstable_ctx(const ObMigrateSrcInfo& src_info, const ObMigrateTableInfo::SSTableInfo& sstable_info,
+      ObMigratePhysicalSSTableCtx& ctx);
+  int build_sub_physical_task(
+      ObMigratePhysicalSSTableCtx& ctx, common::ObIArray<blocksstable::ObSSTablePair>& macro_block_list);
+  int get_base_meta_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
+      ObIPhysicalBaseMetaReader*& reader);
+  int get_base_meta_restore_reader_v1(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
+  int get_base_meta_restore_reader_v2(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
+  int get_base_meta_backup_reader(const ObITable::TableKey& table_key, ObIPhysicalBaseMetaReader*& reader);
+  int get_base_meta_ob_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
+      ObIPhysicalBaseMetaReader*& reader);
+  int get_base_meta_rpc_reader(const ObMigrateSrcInfo& src_info, const obrpc::ObFetchPhysicalBaseMetaArg& arg,
+      ObIPhysicalBaseMetaReader*& reader);
+  int calc_macro_block_reuse(
+      const ObITable::TableKey& table_key, common::ObIArray<blocksstable::ObSSTablePair>& macro_block_list);
+
+  int generate_logic_minor_sstable_copy_task(share::ObITask* parent_task, share::ObITask* child_task,
+      const ObMigrateSrcInfo& src, const ObMigrateTableInfo::SSTableInfo& minor_sstable_info,
+      ObPartitionMigrateCtx& part_migrate_ctx);
+  int build_logic_sstable_ctx(const ObMigrateSrcInfo& src_info,
+      const ObMigrateTableInfo::SSTableInfo& minor_sstable_info, ObMigrateLogicSSTableCtx& ctx);
+
+  int generate_wait_migrate_finish_task(share::ObFakeTask*& wait_migrate_finish_task);
+  int need_generate_sstable_migrate_tasks(bool& need_schedule);
+
+protected:
+  ObMigrateCtx* ctx_;
+  ObIPartitionComponentFactory* cp_fty_;
+  ObPartitionServiceRpc* rpc_;
+  obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy_;
+  common::ObInOutBandwidthThrottle* bandwidth_throttle_;
+  ObPartitionService* partition_service_;
+  DISALLOW_COPY_AND_ASSIGN(ObITableTaskGeneratorTask);
+};
+
+class ObMigrateTaskGeneratorTask : public ObITableTaskGeneratorTask {
+public:
+  typedef common::hash::ObHashMap<blocksstable::ObSSTablePair, blocksstable::MacroBlockId> MacroPairMap;
+  ObMigrateTaskGeneratorTask();
+  virtual ~ObMigrateTaskGeneratorTask();
+  int init();
+  virtual int process() override;
+
+private:
+  int schedule_migrate_tasks();
+  int enable_replay_with_new_partition();
+  int deal_with_rebuild_partition();
+  int update_multi_version_start();
+  int deal_with_old_partition();
+  int deal_with_new_partition();
+  int deal_with_standby_restore_partition();
+  int generate_restore_tailored_task(share::ObITask* last_task);
+
+  int generate_physic_minor_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo::SSTableInfo& minor_sstable_info, ObITask* parent_task, ObITask* child_task);
+  int generate_minor_sstable_copy_task(share::ObITask* parent_task, share::ObITask* child_task,
+      const ObMigrateSrcInfo& src_info, const ObMigrateTableInfo::SSTableInfo& minor_sstable_info,
+      ObPartitionMigrateCtx& part_migrate_ctx);
+  int generate_major_sstable_copy_task(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo::SSTableInfo& major_sstable_info, share::ObITask* parent_task,
+      share::ObITask* child_task);
+  int generate_pg_backup_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_backup_tasks(ObITask*& last_task);
+  int generate_backup_tasks(share::ObFakeTask& wait_migrate_finish_task);
+  int generate_backup_major_tasks(share::ObITask*& parent_task);
+  int generate_backup_major_copy_task(ObITask* parent_task, ObITask* child_task);
+  int build_backup_physical_ctx(ObBackupPhysicalPGCtx& ctx);
+  int fetch_backup_sstables(ObIArray<ObITable::TableKey>& table_keys);
+  int build_backup_sub_task(ObBackupPhysicalPGCtx& ctx);
+
+  int generate_pg_validate_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_validate_tasks(share::ObITask*& last_task);
+  int generate_validate_tasks(share::ObFakeTask& wait_finish_task);
+  int generate_validate_backup_tasks(share::ObITask*& parent_task);
+  int generate_validate_backup_task(share::ObITask* parent_task, share::ObITask* child_task);
+  int build_validate_backup_ctx(ObValidateBackupPGCtx& ctx);
+  int fetch_pg_macro_index_list(const common::ObPartitionKey& pg_key, ObValidateBackupPGCtx& ctx,
+      common::ObIArray<ObBackupMacroIndex>& macro_index_list);
+  int build_validate_sub_task(const common::ObIArray<ObBackupMacroIndex>& macro_index_list, ObValidateBackupPGCtx& ctx);
+
+  int generate_pg_backup_backupset_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_backup_backupset_tasks(share::ObITask*& last_task);
+  int generate_backup_backupset_tasks(share::ObFakeTask& wait_finish_task);
+  int generate_backup_backupset_pg_tasks(share::ObITask*& parent_task);
+  int generate_backup_backupset_pg_tasks(share::ObITask*& parent_task, share::ObITask* child_task);
+  int build_backup_backupset_ctx_v2(ObBackupBackupsetPGFileCtx& ctx);
+  int generate_pg_backup_archive_log_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_backup_archive_log_tasks(share::ObITask*& last_task);
+  int generate_backup_archive_log_tasks(share::ObFakeTask& wait_finish_task);
+  int generate_backup_archive_log_pg_tasks(share::ObITask*& parent_task);
+  int generate_backup_archive_log_pg_tasks(share::ObITask*& parent_task, share::ObITask* child_task);
+  int build_backup_archive_log_ctx(ObBackupArchiveLogPGCtx& ctx);
+  int get_backup_backup_minor_task_id(
+      const share::ObBackupBaseDataPathInfo& path_info, const common::ObPGKey& pg_key, int64_t& task_id);
+
+  int generate_pg_migrate_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_pg_rebuild_tasks(common::ObIArray<share::ObITask*>& last_task_array);
+  int generate_migrate_tasks(ObPartitionMigrateCtx& part_migrate_ctx, share::ObITask*& last_task);
+  int generate_rebuild_tasks(ObPartitionMigrateCtx& part_migrate_ctx, share::ObITask*& last_task);
+  int generate_migrate_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo& table_info, share::ObFakeTask& wait_migrate_finish_task);
+  int generate_rebuild_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo& table_info, share::ObFakeTask& wait_rebuild_finish_task);
+  int generate_major_tasks(const ObMigrateSrcInfo& src_info, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo& table_info, share::ObITask*& parent_task);
+  int generate_minor_tasks(const ObMigrateSrcInfo& src, ObPartitionMigrateCtx& part_migrate_ctx,
+      const ObMigrateTableInfo& table_info, share::ObITask*& parent_task);
+  int generate_finish_migrate_task(const common::ObIArray<ObITask*>& last_task_array, share::ObITask*& last_task);
+  int check_partition_integrity();
+
+private:
+  static const int64_t SRC_SET_BUCKET_NUM = 128;
+  bool is_inited_;
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateTaskGeneratorTask);
+};
+
+class ObMigrateRecoveryPointTaskGeneratorTask : public ObITableTaskGeneratorTask {
+public:
+  typedef common::hash::ObHashMap<blocksstable::ObSSTablePair, blocksstable::MacroBlockId> MacroPairMap;
+  ObMigrateRecoveryPointTaskGeneratorTask();
+  virtual ~ObMigrateRecoveryPointTaskGeneratorTask();
+  int init(share::ObITask& wait_recovery_point_task);
+  virtual int process() override;
+
+private:
+  int build_migrate_recovery_point_task();
+  int build_migrate_recovery_point_info(const ObRecoveryPointKey& recovery_point_key);
+  int inner_build_migrate_recovery_point_info(const ObRecoveryPointMetaInfo& recovery_point_meta_info);
+
+  int check_local_recovery_point_exist(const ObRecoveryPointKey& recovery_point_key, bool& is_exist);
+  int build_migrate_recovery_point_table_info(const ObRecoveryPointMetaInfo& recovery_point_meta_info);
+  int schedule_migrate_recovery_point_tasks();
+  int generate_migrate_recovery_point_tasks(ObITask*& last_task);
+
+  int get_recovery_point_meta_info(const ObMigrateSrcInfo& src_info, const ObRecoveryPointKey& recovery_point_key);
+
+private:
+  bool is_inited_;
+  ObRecoveryPointMetaInfo recovery_point_meta_info_;
+  bool is_recovery_point_exist_;
+  share::ObITask* wait_recovery_point_task_;
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateRecoveryPointTaskGeneratorTask);
+};
+
+class ObMigrateRecoveryPointFinishTask : public share::ObITask {
+public:
+  static const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000;      // 200ms
+  static const int64_t OB_WAIT_LOG_SYNC_TIMEOUT = 30 * 1000 * 1000;  // 30 s
+
+  ObMigrateRecoveryPointFinishTask();
+  virtual ~ObMigrateRecoveryPointFinishTask();
+  int init(const bool is_recovery_point_exist, const ObRecoveryPointMetaInfo& recovery_poinit_meta_info,
+      ObMigrateCtx& ctx, share::ObITask& wait_recovery_point_finish_task);
+  virtual int process() override;
+
+private:
+  int create_recovery_point();
+  int generate_next_task();
+  int inner_generate_next_task(ObITask*& task);
+
+private:
+  bool is_inited_;
+  bool is_recovery_point_exist_;
+  ObRecoveryPointMetaInfo recovery_point_meta_info_;
+  ObMigrateCtx* ctx_;
+  share::ObITask* wait_recovery_point_finish_task_;
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateRecoveryPointFinishTask);
+};
+
+class ObMigrateTransTableTaskGeneratorTask : public ObITableTaskGeneratorTask {
+public:
+  ObMigrateTransTableTaskGeneratorTask();
+  virtual ~ObMigrateTransTableTaskGeneratorTask();
+  int init(share::ObITask& wait_finish_task);
+  virtual int process() override;
+
+private:
+  int build_migrate_trans_table_task();
+  int inner_build_migrate_trans_table_task(ObPartitionMigrateCtx& part_migrate_ctx);
+  int build_trans_sstable_tasks(
+      const ObMigrateSrcInfo& src_info, const ObMigrateTableInfo& table_info, ObPartitionMigrateCtx& part_migrate_ctx);
+
+private:
+  bool is_inited_;
+  share::ObITask* wait_finish_task_;
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateTransTableTaskGeneratorTask);
+};
+
+class ObMigrateTaskSchedulerTask : public share::ObITask {
+public:
+  ObMigrateTaskSchedulerTask();
+  virtual ~ObMigrateTaskSchedulerTask();
+  int init();
+  virtual int process() override;
+
+private:
+  // same func in prepare task
+  int add_migrate_status(ObMigrateCtx* ctx);
+  int add_partition_migration_status(const ObMigrateCtx& ctx);
+  int try_hold_local_partition();
+  int schedule_task_by_type();
+  int generate_restore_cut_prepare_task();
+  int generate_migrate_prepare_task();
+
+private:
+  bool is_inited_;
+  ObMigrateCtx* ctx_;
+  ObIPartitionComponentFactory* cp_fty_;
+  ObPartitionServiceRpc* rpc_;
+  obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy_;
+  common::ObInOutBandwidthThrottle* bandwidth_throttle_;
+  ObPartitionService* partition_service_;
+  DISALLOW_COPY_AND_ASSIGN(ObMigrateTaskSchedulerTask);
 };
 
 }  // namespace storage

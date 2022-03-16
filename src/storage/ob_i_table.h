@@ -243,10 +243,12 @@ public:
   {
     ATOMIC_INC(&ref_cnt_);
   }
-  inline int64_t dec_ref()
-  {
-    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+  
+  virtual int64_t dec_ref() 
+  { 
+    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); 
   }
+  
   inline int64_t get_ref() const
   {
     return ATOMIC_LOAD(&ref_cnt_);
@@ -419,7 +421,6 @@ public:
   }
   int get_sstable(ObSSTable*& sstable);
   int get_sstable(const ObSSTable*& sstable) const;
-  int get_old_sstable(ObOldSSTable*& sstable);
   int get_memtable(memtable::ObMemtable*& memtable);
   int get_memtable(const memtable::ObMemtable*& memtable) const;
   int set_table(ObITable* table);
@@ -477,6 +478,7 @@ public:
   int get_all_minor_sstables(common::ObIArray<ObSSTable*>& sstables);
   int get_all_memtables(common::ObIArray<memtable::ObMemtable*>& memtables);
   void reset();
+  void reset_tables();
   int reserve(const int64_t count);
   void set_retire_check();
   bool check_store_expire() const;

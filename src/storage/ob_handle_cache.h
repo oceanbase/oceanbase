@@ -19,11 +19,6 @@
 namespace oceanbase {
 namespace storage {
 
-constexpr int64_t next_pow2(const int64_t x)
-{
-  return x ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1;
-}
-
 template <typename Key, typename Handle>
 class ObHandleCacheNode : public common::ObDLinkBase<ObHandleCacheNode<Key, Handle>> {
 public:
@@ -125,7 +120,7 @@ public:
   }
 
 private:
-  static const uint64_t BUCKET_SIZE = next_pow2(N * 2);
+  static const uint64_t BUCKET_SIZE = common::next_pow2(N * 2);
   static const uint64_t MASK = BUCKET_SIZE - 1;
   CacheNode nodes_[N];
   int16_t buckets_[BUCKET_SIZE];

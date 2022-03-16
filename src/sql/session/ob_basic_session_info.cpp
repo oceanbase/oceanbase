@@ -29,6 +29,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "storage/transaction/ob_weak_read_util.h"  //ObWeakReadUtil
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -129,8 +130,18 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
-  bool result = get_in_transaction() ||
-                (!get_local_autocommit() && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid());
+  /*!
+   * readonly sql not in transaction, for compatible, we also need send in trans flag to proxy.
+   * for now,
+   * we use ob_proxy_readonly_transaction_routing_policy parameter decide to send in trans or not.
+   */
+  bool result = get_in_transaction();
+  if (!result
+      && !get_local_autocommit()
+      && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(get_effective_tenant_id()));
+    result = is_isolation_serializable() || tenant_config->ob_proxy_readonly_transaction_routing_policy;
+  }
   return result;
 }
 
@@ -937,7 +948,7 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-// used for bootstarp, in which we can not get system variables from inner table.
+// used for bootstrap, in which we can not get system variables from inner table.
 int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;
@@ -2970,6 +2981,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
 
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
   LST_DO_CODE(OB_UNIS_ENCODE,
       sys_vars_cache_.inc_data_,
       trans_consistency_type_,
@@ -2996,7 +3008,9 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return ret;
 }
 
@@ -3140,6 +3154,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = 0;
   bool unused_literal_query = false;
   bool need_serial_exec = false;
+  uint64_t sql_scope_flags = 0;
 
   // sys_var_in_pc_str_ may be set when deserialize system variables,
   // so reset it before deserialization of itself.
@@ -3171,7 +3186,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   trans_flags_.set_need_serial_exec(need_serial_exec);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
@@ -3422,6 +3439,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   bool unused_literal_query = false;
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       sys_vars_cache_.inc_data_,
@@ -3449,7 +3467,9 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return len;
 }
 
@@ -3564,7 +3584,8 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(
       case SYS_VAR_OB_TRX_IDLE_TIMEOUT:
       case SYS_VAR_COLLATION_CONNECTION:
       case SYS_VAR_OB_PL_BLOCK_TIMEOUT:
-      case SYS_VAR_OB_COMPATIBILITY_MODE: {
+      case SYS_VAR_OB_COMPATIBILITY_MODE:
+      case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED: {
         changed = old_val.get_meta() == new_val.get_meta() ? old_val != new_val : true;
       } break;
       default: {
@@ -3638,6 +3659,17 @@ int ObBasicSessionInfo::set_trans_specified(const bool is_spec)
   if (OB_FAIL(update_sys_variable(SYS_VAR_OB_PROXY_SET_TRX_EXECUTED, obj))) {
     LOG_WARN("fail to update_system_variable", K(ret));
   } else {
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_session_temp_table_used(const bool is_used)
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  obj.set_int(is_used);
+  if (OB_FAIL(update_sys_variable(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED, obj))) {
+    LOG_WARN("fail to update_system_variable", K(ret));
   }
   return ret;
 }
@@ -3816,6 +3848,10 @@ int ObBasicSessionInfo::get_sql_safe_updates(bool& v) const
   return get_bool_sys_var(SYS_VAR_SQL_SAFE_UPDATES, v);
 }
 
+int ObBasicSessionInfo::get_session_temp_table_used(bool& is_used) const
+{
+  return get_bool_sys_var(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED, is_used);
+}
 void ObBasicSessionInfo::reset_tx_variable()
 {
   // this function will be called in end_trans phase, and must be idempotent.
@@ -3919,7 +3955,7 @@ int ObBasicSessionInfo::store_query_string(const ObString& stmt)
 int ObBasicSessionInfo::store_query_string_(const ObString& stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_CUR_QUERY_LEN - 1, static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));

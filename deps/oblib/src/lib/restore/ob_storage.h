@@ -28,25 +28,61 @@ void print_access_storage_log(
 int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type);
 int get_storage_type_from_name(const char* type_str, ObStorageType& type);
 const char* get_storage_type_str(const ObStorageType& type);
+bool is_io_error(const int result);
+
+// A singleton base class offering an easy way to create singleton.
+template <typename T>
+class ObSingleton {
+public:
+  // not thread safe
+  static T& get_instance()
+  {
+    static T instance;
+    return instance;
+  }
+
+  virtual ~ObSingleton()
+  {}
+
+protected:
+  ObSingleton()
+  {}
+
+private:
+  ObSingleton(const ObSingleton&);
+  ObSingleton& operator=(const ObSingleton&);
+};
+
+class ObStorageGlobalIns : public ObSingleton<ObStorageGlobalIns> {
+public:
+  int init();
+
+  void fin();
+  // When the observer is in not in white list, no matter read or write io is not allowed.
+  void set_io_prohibited(bool prohibited);
+
+  bool is_io_prohibited() const;
+
+private:
+  bool io_prohibited_;
+};
 
 enum ObAppendStrategy {
-  // Each write is a PUT operation that will overlay the old object
-  OB_APPEND_USE_SIMPLE_PUT = 0,
   // Each write will be done by the following operations:
   // 1. read the whole object
   // 2. write with previously read data as a newer object
-  OB_APPEND_USE_OVERRITE = 1,
+  OB_APPEND_USE_OVERRITE = 0,
   // Append data to the tail of the object with specific offset. The write
   // will be done only if actual tail is equal to the input offset. Otherwise,
   // return failed.
-  OB_APPEND_USE_APPEND = 2,
+  OB_APPEND_USE_APPEND = 1,
   // In this case, the object is a logical one which is actually composed of several
   // pythysical subobject. A number will be given for each write to format the name of
   // the subobject combined with the logical object name.
-  OB_APPEND_USE_SLICE_PUT = 3,
+  OB_APPEND_USE_SLICE_PUT = 2,
   // In this case, we will use multi-part upload provided by object storage, eg S3, to write
   // for the object. Note that the object is invisible before all parts are written.
-  OB_APPEND_USE_MULTI_PART_UPLOAD = 4,
+  OB_APPEND_USE_MULTI_PART_UPLOAD = 3,
   OB_APPEND_STRATEGY_TYPE
 };
 
@@ -90,8 +126,14 @@ public:
   int del_dir(const common::ObString& uri, const common::ObString& storage_info);
   int get_pkeys_from_dir(const common::ObString& uri, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
+  int is_tagging(const common::ObString& uri, const common::ObString& storage_info, bool& is_tagging);
   // uri is directory
   int delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info);
+  int is_empty_directory(const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  int check_backup_dest_lifecycle(
+      const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  int list_directories(const common::ObString& dir_path, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directory_names);
 
 private:
   int get_util(const common::ObString& uri, ObIStorageUtil*& util);
@@ -168,6 +210,7 @@ public:
   // TODO: out of date interface, to be deprecated.
   int open_deprecated(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   bool is_opened() const
   {

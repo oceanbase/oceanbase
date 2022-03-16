@@ -93,11 +93,12 @@ private:
   bool is_full() const;
   // used for rescan and switch iter
   virtual void reset_buf_state();
+  int set_param_null();
 
 public:
   ObJoinState state_;
   // for bnl join
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObChunkDatumStore left_store_;
   ObChunkDatumStore::Iterator left_store_iter_;
   bool is_left_end_;

@@ -24,16 +24,12 @@
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-ObMallocAllocator* ObMallocAllocator::instance_ = NULL;
+uint64_t ObMallocAllocator::max_used_tenant_id_ = 0;
+bool ObMallocAllocator::is_inited_ = false;
 
 ObMallocAllocator::ObMallocAllocator() : locks_(), allocators_(), reserved_(0), urgent_(0)
-{}
-
-ObMallocAllocator::~ObMallocAllocator()
-{}
-
-int ObMallocAllocator::init()
 {
+  set_root_allocator();
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < ObCtxIds::MAX_CTX_ID; i++) {
     if (OB_FAIL(create_tenant_ctx_allocator(OB_SYS_TENANT_ID, i))) {
@@ -42,7 +38,12 @@ int ObMallocAllocator::init()
       LOG_ERROR("create tenant allocator fail", K(ret), K(i));
     }
   }
-  return ret;
+  is_inited_ = true;
+}
+
+ObMallocAllocator::~ObMallocAllocator()
+{
+  is_inited_ = false;
 }
 
 void* ObMallocAllocator::alloc(const int64_t size)
@@ -53,8 +54,8 @@ void* ObMallocAllocator::alloc(const int64_t size)
 
 void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
-  UNUSED(_attr);
+#ifdef OB_USE_ASAN
+  UNUSED(attr);
   return ::malloc(size);
 #else
   int ret = E(EventTable::EN_4) OB_SUCCESS;
@@ -110,12 +111,12 @@ void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   }
 
   return ptr;
-#endif  // PERF_MODE
+#endif
 }
 
 void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   UNUSED(attr);
   return ::realloc(const_cast<void*>(ptr), size);
 #else
@@ -156,12 +157,12 @@ void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const ocea
   }
   return nptr;
   ;
-#endif  // PERF_MODE
+#endif
 }
 
 void ObMallocAllocator::free(void* ptr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   ::free(ptr);
 #else
   // directly free object instead of using tenant allocator.
@@ -206,6 +207,9 @@ ObTenantCtxAllocator* ObMallocAllocator::get_tenant_ctx_allocator(uint64_t tenan
 int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id)
 {
   int ret = OB_SUCCESS;
+  if (tenant_id > max_used_tenant_id_) {
+    UNUSED(ATOMIC_BCAS(&max_used_tenant_id_, max_used_tenant_id_, tenant_id));
+  }
   if (INT64_MAX == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(lbt()), K(tenant_id), K(ret));
@@ -294,6 +298,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t 
               ObTenantCtxAllocator* next_allocator = *cur;
               *cur = allocator;
               ((*cur)->get_next()) = next_allocator;
+              LOG_INFO("tenant ctx allocator was created", K(tenant_id), K(ctx_id), K(lbt()));
             } else {
               allocator->~ObTenantCtxAllocator();
               allocer->free(buf);
@@ -316,60 +321,21 @@ int ObMallocAllocator::delete_tenant_ctx_allocator(uint64_t tenant_id)
   return ret;
 }
 
-int ObMallocAllocator::set_root_allocator(ObTenantCtxAllocator* allocator)
+void ObMallocAllocator::set_root_allocator()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (!OB_ISNULL(allocators_[OB_SERVER_TENANT_ID][0])) {
-    ret = OB_ENTRY_EXIST;
+  static ObTenantCtxAllocator allocator(OB_SERVER_TENANT_ID);
+  if (OB_FAIL(allocator.set_tenant_memory_mgr())) {
+    LOG_ERROR("set_tenant_memory_mgr failed", K(ret));
   } else {
-    allocators_[OB_SERVER_TENANT_ID][0] = allocator;
+    allocators_[OB_SERVER_TENANT_ID][0] = &allocator;
   }
-  return ret;
 }
 
 ObMallocAllocator* ObMallocAllocator::get_instance()
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(ObMallocAllocator::instance_)) {
-    ObMallocAllocator* malloc_allocator = NULL;
-    ObTenantCtxAllocator* allocator = new (std::nothrow) ObTenantCtxAllocator(OB_SERVER_TENANT_ID);
-    if (!OB_ISNULL(allocator)) {
-      if (OB_FAIL(allocator->set_tenant_memory_mgr())) {
-        LOG_ERROR("set_tenant_memory_mgr failed", K(ret));
-      } else {
-        ObMemAttr attr;
-        attr.tenant_id_ = OB_SERVER_TENANT_ID;
-        attr.label_ = ObModIds::OB_TENANT_CTX_ALLOCATOR;
-        void* buf = allocator->alloc(sizeof(ObMallocAllocator), attr);
-        if (!OB_ISNULL(buf)) {
-          malloc_allocator = new (buf) ObMallocAllocator();
-          ret = malloc_allocator->set_root_allocator(allocator);
-        } else {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-        }
-      }
-    } else {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    }
-
-    if (OB_FAIL(ret)) {
-      if (!OB_ISNULL(malloc_allocator)) {
-        malloc_allocator->~ObMallocAllocator();
-        allocator->free(malloc_allocator);
-        malloc_allocator = NULL;
-      }
-      if (!OB_ISNULL(allocator)) {
-        delete allocator;
-        allocator = NULL;
-      }
-    } else {
-      ObMallocAllocator::instance_ = malloc_allocator;
-    }
-  }
-  return ObMallocAllocator::instance_;
+  static ObMallocAllocator instance;
+  return &instance;
 }
 
 int ObMallocAllocator::with_resource_handle_invoke(uint64_t tenant_id, InvokeFunc func)
@@ -413,6 +379,16 @@ int64_t ObMallocAllocator::get_tenant_hold(uint64_t tenant_id)
     return OB_SUCCESS;
   });
   return hold;
+}
+
+int64_t ObMallocAllocator::get_tenant_remain(uint64_t tenant_id)
+{
+  int64_t remain = 0;
+  with_resource_handle_invoke(tenant_id, [&remain](ObTenantMemoryMgr *mgr) {
+    remain = mgr->get_limit() - mgr->get_sum_hold() + mgr->get_cache_hold();
+    return OB_SUCCESS;
+  });
+  return remain;
 }
 
 int64_t ObMallocAllocator::get_tenant_rpc_hold(uint64_t tenant_id)

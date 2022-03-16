@@ -82,7 +82,7 @@ int ObPartitionLogPacketHandler::handle_single_request(ObLogReqContext& ctx)
         ObILogEngine* log_engine = NULL;
         if (OB_ISNULL(clog_mgr_) || (OB_ISNULL(log_engine = clog_mgr_->get_log_engine()))) {
           ret = OB_INVALID_ARGUMENT;
-          CLOG_LOG(WARN, "invalid arugment", KR(ret), KP(clog_mgr_), KP(log_engine), K(ctx));
+          CLOG_LOG(WARN, "invalid argument", KR(ret), KP(clog_mgr_), KP(log_engine), K(ctx));
         } else {
           ret = receive_log(log_service, log_engine, ctx, type);
         }
@@ -183,6 +183,12 @@ int ObPartitionLogPacketHandler::handle_single_request(ObLogReqContext& ctx)
         break;
       case OB_RENEW_MS_CONFIRMED_INFO_REQ:
         ret = receive_renew_ms_log_confirmed_info(log_service, ctx);
+        break;
+      case OB_RESTORE_CHECK_REQ:
+        ret = process_restore_check_req(log_service, ctx);
+        break;
+      case OB_QUERY_RESTORE_END_ID_RESP:
+        ret = process_query_restore_end_id_resp(log_service, ctx);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -296,12 +302,12 @@ int ObPartitionLogPacketHandler::receive_renew_ms_log(LogService* log_service, C
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObPushLogReq req;
+  ObPushMsLogReq req;
   ObLogEntry entry;
   int64_t pos = 0;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arugment", KP(log_service), K(ctx));
+    CLOG_LOG(WARN, "invalid argument", KP(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize ObPushLogReq error", K(ret), K(ctx));
   } else {
@@ -343,7 +349,7 @@ int ObPartitionLogPacketHandler::fake_ack_log(LogService* log_service, Context& 
   ObFakeAckReq req;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invlaid arugment", K(ret), K(log_service), K(ctx));
+    CLOG_LOG(WARN, "invlaid argument", K(ret), K(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize failed", K(ret), K(ctx));
   } else if (OB_FAIL(log_service->fake_ack_log(ctx.server_, req.log_id_, req.proposal_id_))) {
@@ -359,7 +365,7 @@ int ObPartitionLogPacketHandler::fake_receive_log(LogService* log_service, Conte
   ObFakePushLogReq req;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invlaid arugment", K(ret), K(log_service), K(ctx));
+    CLOG_LOG(WARN, "invlaid argument", K(ret), K(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize failed", K(ret), K(ctx));
   } else if (OB_FAIL(log_service->fake_receive_log(ctx.server_, req.log_id_, req.proposal_id_))) {
@@ -551,6 +557,42 @@ int ObPartitionLogPacketHandler::receive_confirmed_info(LogService* log_service,
   return ret;
 }
 
+int ObPartitionLogPacketHandler::process_restore_check_req(LogService* log_service, Context& ctx)
+{
+  int ret = OB_SUCCESS;
+  ObRestoreCheckReq req;
+  if (OB_ISNULL(log_service) || !ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_service), K(ctx));
+  } else if (OB_FAIL(deserialize(ctx, req))) {
+    CLOG_LOG(WARN, "ObRestoreCheckReq deserialize error", K(ret), K(log_service), K(ctx));
+  } else {
+    if (OB_FAIL(log_service->process_restore_check_req(ctx.server_, ctx.cluster_id_, req.restore_type_))) {
+      CLOG_LOG(WARN, "process_restore_check_req failed", K(ret), K(log_service), K(ctx), K(req));
+    }
+  }
+  CLOG_LOG(DEBUG, "process_restore_check_req finished", K(ret), K(log_service), K(ctx), K(req));
+  return ret;
+}
+
+int ObPartitionLogPacketHandler::process_query_restore_end_id_resp(LogService* log_service, Context& ctx)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRestoreEndIdResp req;
+  if (OB_ISNULL(log_service) || !ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_service), K(ctx));
+  } else if (OB_FAIL(deserialize(ctx, req))) {
+    CLOG_LOG(WARN, "ObRestoreCheckReq deserialize error", K(ret), K(log_service), K(ctx));
+  } else {
+    if (OB_FAIL(log_service->process_query_restore_end_id_resp(ctx.server_, req.last_restore_log_id_))) {
+      CLOG_LOG(WARN, "process_query_restore_end_id_resp failed", K(ret), K(log_service), K(ctx), K(req));
+    }
+  }
+  CLOG_LOG(DEBUG, "process_query_restore_end_id_resp finished", K(ret), K(log_service), K(ctx), K(req));
+  return ret;
+}
+
 int ObPartitionLogPacketHandler::receive_renew_ms_log_confirmed_info(LogService* log_service, Context& ctx)
 {
   int ret = OB_SUCCESS;
@@ -565,7 +607,7 @@ int ObPartitionLogPacketHandler::receive_renew_ms_log_confirmed_info(LogService*
       CLOG_LOG(WARN, "receive_renew_ms_log_confirmed_info failed", K(ret), K(log_service), K(ctx), K(req));
     }
   }
-  CLOG_LOG(INFO, "receive_renew_ms_log_confirmed_info", K(ret), K(log_service), K(ctx), K(req));
+  CLOG_LOG(DEBUG, "receive_renew_ms_log_confirmed_info", K(ret), K(log_service), K(ctx), K(req));
   return ret;
 }
 
@@ -645,7 +687,7 @@ int ObPartitionLogPacketHandler::process_reject_msg(LogService* log_service, Con
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize failed", K(ret), K(ctx));
   } else {
-    ret = log_service->process_reject_msg(ctx.server_, req.msg_type_, req.timestamp_);
+    ret = log_service->process_reject_msg(ctx.server_, ctx.cluster_id_, req.msg_type_, req.timestamp_);
     if (OB_SUCCESS != ret && REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       CLOG_LOG(WARN, "process_reject_msg failed", K(ret), K(req), K(ctx));
     }

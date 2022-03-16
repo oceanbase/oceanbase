@@ -193,6 +193,12 @@ OB_INLINE bool is_valid_membership_version(const int64_t membership_version)
   return membership_version >= 0;
 }
 
+OB_INLINE bool is_valid_read_snapshot_version(const int64_t read_snapshot_version)
+{
+  // read snapshot version should be greater than 0 and should not be INT64_MAX
+  return read_snapshot_version > 0 && INT64_MAX != read_snapshot_version;
+}
+
 inline bool is_schema_error(int err)
 {
   bool ret = false;
@@ -447,7 +453,7 @@ const int64_t OB_STATUS_LENGTH = 64;
 
 ///////////////////////////
 //// used for replay
-const int64_t REPLAY_TASK_QUEUE_SIZE = 4;
+const int64_t REPLAY_TASK_QUEUE_SIZE = 64;
 inline int64_t& get_replay_queue_index()
 {
   static __thread int64_t replay_queue_index = -1;

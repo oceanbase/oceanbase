@@ -354,7 +354,7 @@ public:
     is_single_part_ = false;
     part_infos_.reset();
   }
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
   inline int64_t get_location_idx() const
   {
     return location_idx_;
@@ -363,7 +363,7 @@ public:
   {
     location_idx_ = location_idx;
   }
-  virtual bool need_serialized() const
+  virtual bool need_serialized() const override
   {
     return !is_single_part_;
   }
@@ -371,7 +371,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator)
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override
   {
     part_infos_.set_allocator(allocator);
   }
@@ -405,7 +405,8 @@ protected:
           rowkey_dist_ctx_(NULL),
           iter_end_(false),
           saved_session_(NULL)
-    {}
+    {
+    }
     virtual ~ObTableModifyCtx()
     {
       destroy();
@@ -439,7 +440,14 @@ protected:
     }
     const ObObjPrintParams get_obj_print_params()
     {
-      return CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      print_params.need_cast_expr_ = true;
+      // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+      // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
+      // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
+      GET_SQL_MODE_BIT(
+          IS_NO_BACKSLASH_ESCAPES, exec_ctx_.get_my_session()->get_sql_mode(), print_params.skip_escape_);
+      return print_params;
     }
     int check_stack();
 
@@ -533,8 +541,8 @@ public:
   explicit ObTableModify(common::ObIAllocator& alloc);
   ~ObTableModify();
 
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   /**
    * @brief the table id specify which table will be modified data
    */
@@ -549,7 +557,7 @@ public:
   //  void set_child_table_id(uint64_t table_id) { child_table_id_ = table_id; }
   //  void set_parent_table_id(uint64_t table_id) { parent_table_id_ = table_id; }
   int add_column_info(const ColumnContent& column);
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   /**
    * @brief table_modify must tell storage every cell's column id in the row
    * @param column_id[in], the order of column_id must correspond with the index of column in the row
@@ -630,11 +638,11 @@ public:
   {
     return index_tid_;
   }
-  virtual bool is_dml_operator() const
+  virtual bool is_dml_operator() const override
   {
     return true;
   }
-  virtual bool is_dml_without_output() const
+  virtual bool is_dml_without_output() const override
   {
     return !is_returning();
   }
@@ -648,7 +656,7 @@ public:
   {
     return from_multi_table_dml_;
   }
-  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const;
+  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override;
   static common::ObString get_duplicated_rowkey_buffer(const common::ObIArray<uint64_t>& rowkey_ids,
       const common::ObNewRow& row, const common::ObTimeZoneInfo* tz_info = NULL);
   static int init_dml_param(ObExecContext& ctx, const uint64_t table_id, const ObPhyOperator& phy_op,
@@ -743,12 +751,12 @@ protected:
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_close(ObExecContext& ctx) const override;
 
   int calculate_virtual_column(common::ObExprCtx& expr_ctx, common::ObNewRow& calc_row, int64_t row_num) const;
   int calc_returning_row(ObExprCtx& expr_ctx, const ObNewRow& cur_row, ObNewRow& return_row) const;
@@ -760,11 +768,14 @@ protected:
   int validate_row(common::ObExprCtx& expr_ctx, common::ObCastCtx& column_conv_ctx, common::ObNewRow& calc_row,
       bool check_normal_column, bool check_virtual_column) const;
   int check_row_null(
-      ObExecContext& ctx, const common::ObNewRow& calc_row, const common::ObIArray<ColumnContent>& column_infos) const;
-  int set_autoinc_param_pkey(ObExecContext& ctx, const common::ObPartitionKey& pkey) const;
-  int get_part_location(ObExecContext& ctx, const ObPhyTableLocation& table_location,
-      const share::ObPartitionReplicaLocation*& out) const;
-  int get_part_location(ObExecContext& ctx, common::ObIArray<DMLPartInfo>& part_keys) const;
+      ObExecContext &ctx, const common::ObNewRow &calc_row, const common::ObIArray<ColumnContent> &column_infos) const;
+  int check_row_null(ObExecContext &ctx, const common::ObNewRow &calc_row,
+      const common::ObIArray<ColumnContent> &column_infos,
+      const common::ObIArray<ColumnContent> &update_col_infos) const;
+  int set_autoinc_param_pkey(ObExecContext &ctx, const common::ObPartitionKey &pkey) const;
+  int get_part_location(ObExecContext &ctx, const ObPhyTableLocation &table_location,
+      const share::ObPartitionReplicaLocation *&out) const;
+  int get_part_location(ObExecContext &ctx, common::ObIArray<DMLPartInfo> &part_keys) const;
   // for checking the rowkey whether null, the head of the row must be rowkey
   int check_rowkey_is_null(const ObNewRow& row, int64_t rowkey_cnt, bool& is_null) const;
   int get_gi_task(ObExecContext& ctx) const;

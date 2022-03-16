@@ -21,8 +21,8 @@ class ObExprToYMInterval : public ObFuncExprOperator {
 public:
   explicit ObExprToYMInterval(common::ObIAllocator& alloc);
   virtual ~ObExprToYMInterval();
-  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
+  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
+  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_yminterval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -34,8 +34,8 @@ class ObExprToDSInterval : public ObFuncExprOperator {
 public:
   explicit ObExprToDSInterval(common::ObIAllocator& alloc);
   virtual ~ObExprToDSInterval();
-  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
+  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
+  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_dsinterval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -48,9 +48,9 @@ public:
   explicit ObExprNumToYMInterval(common::ObIAllocator& alloc);
   virtual ~ObExprNumToYMInterval();
   int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
+  int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   template <class T>
   static int calc_result_common(
       const T& obj1, const T& obj2, common::ObIAllocator& calc_buf, common::ObIntervalYMValue& ym_value);
@@ -66,9 +66,9 @@ public:
   explicit ObExprNumToDSInterval(common::ObIAllocator& alloc);
   virtual ~ObExprNumToDSInterval();
   int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
+  int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
   template <class R, class T>
   static int calc_result_common(R& result, const T& obj1, const T& obj2, common::ObIAllocator& calc_buf);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;

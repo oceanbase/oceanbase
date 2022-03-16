@@ -346,7 +346,15 @@ int ObTransformViewMerge::check_can_be_unnested(
         LOG_WARN("NULL expr", K(ret));
       } else if (expr->has_flag(CNT_SUB_QUERY)) {
         can_be = false;
-      } else { /*do nothing*/
+      }
+    }
+    // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+    if (OB_SUCC(ret) && can_be) {
+      bool has_rand = false;
+      if (OB_FAIL(child_stmt->has_rand(has_rand))) {
+        LOG_WARN("failed to get rand flag", K(ret));
+      } else {
+        can_be = !has_rand;
       }
     }
   }
@@ -371,15 +379,12 @@ int ObTransformViewMerge::check_can_be_unnested(
   }
   if (OB_FAIL(ret) || !can_be) {
     /*do nothing*/
-  } else if (helper.need_check_null_propagate) {
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObRelIds rel_ids;
+  } else if (helper.need_check_null_propagate){
+    ObSEArray<ObRawExpr *, 4> columns;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 4> column_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*child_stmt, rel_ids))) {
+    if (OB_FAIL(child_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(child_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*child_stmt, columns, from_tables, column_exprs))) {
@@ -508,6 +513,7 @@ int ObTransformViewMerge::transform_joined_table(
   TableItem* left_table = NULL;
   TableItem* right_table = NULL;
   trans_happened = false;
+  bool cond_contain_subq = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(left_table = joined_table->left_table_) ||
       OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -518,6 +524,10 @@ int ObTransformViewMerge::transform_joined_table(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
   } else if (joined_table->joined_type_ == CONNECT_BY_JOIN) {
+    // do nothing
+  } else if (OB_FAIL(check_outerjoin_condition_contain_subq(joined_table, cond_contain_subq))) {
+    LOG_WARN("failed to check outer join condition contain subq", K(ret));
+  } else if (cond_contain_subq) {
     // do nothing
   } else {
     bool can_push_where = true;
@@ -781,14 +791,11 @@ int ObTransformViewMerge::wrap_case_when_if_necessary(
     ObSelectStmt& child_stmt, ViewMergeHelper& helper, ObIArray<ObRawExpr*>& exprs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> columns;
-  ObRelIds rel_ids;
+  ObSEArray<ObRawExpr *, 4> columns;
   ObSqlBitSet<> from_tables;
   ObSEArray<ObRawExpr*, 4> column_exprs;
-  if (OB_FAIL(ObTransformUtils::get_from_tables(child_stmt, rel_ids))) {
+  if (OB_FAIL(child_stmt.get_from_tables(from_tables))) {
     LOG_WARN("failed to get from tables", K(ret));
-  } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-    LOG_WARN("failed to add members", K(ret));
   } else if (OB_FAIL(child_stmt.get_column_exprs(columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(child_stmt, columns, from_tables, column_exprs))) {
@@ -912,6 +919,27 @@ int ObTransformViewMerge::adjust_stmt_semi_infos(ObDMLStmt* parent_stmt, ObSelec
         // do nothing
       } else if (OB_FAIL(append(semi_info->left_table_ids_, table_ids))) {
         LOG_WARN("failed append table id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformViewMerge::check_outerjoin_condition_contain_subq(JoinedTable* joined_table,
+                                                                 bool &contains_subq)
+{
+  int ret = OB_SUCCESS;
+  contains_subq = false;
+  if (joined_table->joined_type_ == FULL_OUTER_JOIN ||
+      joined_table->joined_type_ == LEFT_OUTER_JOIN ||
+      joined_table->joined_type_ == RIGHT_OUTER_JOIN) {
+    for (int64_t i = 0; OB_SUCC(ret) && !contains_subq && i < joined_table->get_join_conditions().count(); ++i) {
+      ObRawExpr* expr = joined_table->get_join_conditions().at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid condition expr", K(ret));
+      } else if (expr->has_flag(CNT_SUB_QUERY)) {
+        contains_subq = true;
       }
     }
   }

@@ -417,7 +417,8 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
       }
     }
     if (OB_SUCC(ret) && has_generated_column) {
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(allocator_, expr_ctx_))) {
+      uint64_t tenant_id = extract_tenant_id(merge_param.table_schema_->get_table_id());
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator_, expr_ctx_))) {
         STORAGE_LOG(WARN, "Failed to make default expr context ", K(ret));
       }
     }
@@ -568,6 +569,13 @@ int ObMajorPartitionMergeFuser::fuse_generate_exprs()
             "lob_scale",
             result_row_->row_val_.cells_[idx].get_scale(),
             K(ret));
+        result_row_->row_val_.cells_[idx].set_lob_inrow();
+      }
+    } else if (ob_is_json_tc(col->get_data_type())) {
+      if (!result_row_->row_val_.cells_[idx].is_json_inrow()) {
+        const ObObj &lob_obj = result_row_->row_val_.cells_[idx];
+        STORAGE_LOG(WARN, "[LOB] Unexpected json obj scale from generated_exprs", K(lob_obj), "lob_scale",
+                    result_row_->row_val_.cells_[idx].get_scale(), K(ret));
         result_row_->row_val_.cells_[idx].set_lob_inrow();
       }
     } else {
@@ -1363,7 +1371,7 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
     const MERGE_ITER_ARRAY& macro_row_iters, ObStoreRow& store_row)
 {
   int ret = OB_SUCCESS;
-  store_row.row_type_flag_.set_compacted_multi_version_row(false);
+  store_row.row_type_flag_.set_compacted_multi_version_row(true);
   store_row.row_type_flag_.set_first_multi_version_row(true);
   if (need_check_curr_row_last_) {
     store_row.row_type_flag_.set_last_multi_version_row(true);
@@ -1372,9 +1380,8 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
   }
 
   for (int64_t i = 0; i < macro_row_iters.count(); ++i) {
-    if (macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row() ||
-        !macro_row_iters.at(i)->get_table()->is_multi_version_table()) {
-      store_row.row_type_flag_.set_compacted_multi_version_row(true);
+    if (!macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row()) {
+      store_row.row_type_flag_.set_compacted_multi_version_row(false);
       break;
     }
   }

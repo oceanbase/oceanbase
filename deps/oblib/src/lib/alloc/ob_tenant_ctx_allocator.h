@@ -66,6 +66,8 @@ public:
     attr.tenant_id_ = tenant_id;
     attr.ctx_id_ = ctx_id;
   }
+  virtual ~ObTenantCtxAllocator()
+  {}
   int set_tenant_memory_mgr()
   {
     int ret = common::OB_SUCCESS;

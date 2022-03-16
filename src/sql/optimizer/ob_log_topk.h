@@ -49,11 +49,11 @@ public:
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual int allocate_exchange(AllocExchContext* ctx, bool parts_order);
 
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
 private:
   int64_t minimum_row_count_;

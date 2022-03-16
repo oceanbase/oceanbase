@@ -490,8 +490,8 @@
       if (skip_column_error) {                                                         \
         SQL_LOG(INFO, "column not found, ignore", "column_name", #column_name);        \
         /*overwrite ret*/                                                              \
-        if (OB_FAIL((class_obj).set_##column_name(str_value))) {                       \
-          SQL_LOG(WARN, "fail to set value", KR(ret), K(str_value));                   \
+        if (OB_FAIL((class_obj).set_##column_name(default_value))) {                   \
+          SQL_LOG(WARN, "fail to set value", KR(ret), K(default_value));               \
         }                                                                              \
       } else {                                                                         \
         SQL_LOG(WARN, "column not found", "column_name", #column_name, K(ret));        \
@@ -520,6 +520,27 @@
     } else {                                                                                                          \
       SQL_LOG(WARN, "fail to extract strbuf field mysql. ", K(ret));                                                  \
     }                                                                                                                 \
+  }
+
+#define EXTRACT_LONGTEXT_FIELD_MYSQL_WITH_ALLOCATOR_SKIP_RET(result, column_name, field, allocator, real_length) \
+  if (OB_SUCC(ret)) {                                                                                            \
+    ObString str_value;                                                                                          \
+    if (OB_SUCCESS == (ret = (result).get_varchar(column_name, str_value))) {                                    \
+      if (OB_ISNULL(field = static_cast<char*>((allocator).alloc(str_value.length() + 1)))) {                    \
+        ret = OB_ALLOCATE_MEMORY_FAILED;                                                                         \
+        SQL_LOG(WARN, "allocate memory failed", K(ret));                                                         \
+      } else {                                                                                                   \
+        MEMCPY(field, str_value.ptr(), str_value.length());                                                      \
+        real_length = str_value.length();                                                                        \
+        field[str_value.length()] = '\0';                                                                        \
+      }                                                                                                          \
+    } else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {                                     \
+      ret = OB_SUCCESS;                                                                                          \
+      real_length = 0;                                                                                           \
+      field[0] = '\0';                                                                                           \
+    } else {                                                                                                     \
+      SQL_LOG(WARN, "fail to extract strbuf field mysql. ", K(ret));                                             \
+    }                                                                                                            \
   }
 
 #define EXTRACT_STRBUF_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, column_name, class_obj, max_length)                      \
@@ -679,7 +700,14 @@
         } else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj))) {               \
           SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type);     \
         } else {                                                                                          \
-          dest_obj.set_scale(column.get_data_scale());                                                    \
+          if (ob_is_json(data_type)) {                                                                    \
+            dest_obj.set_lob_inrow();                                                                     \
+            dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                        \
+          }                                                                                               \
+          else                                                                                            \
+          {                                                                                               \
+            dest_obj.set_scale(column.get_data_scale());                                                  \
+          }                                                                                               \
           ret = (class_obj).set_##column_name(dest_obj);                                                  \
         }                                                                                                 \
       }                                                                                                   \
@@ -892,7 +920,6 @@ namespace sqlclient {
 class ObMySQLResult {
 public:
   // see this for template virtual function
-  // http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER
   ObMySQLResult();
   virtual ~ObMySQLResult();
@@ -1093,7 +1120,7 @@ int ObMySQLResult::get_lob_locator(const char* col_name, ObLobLocator*& lob_loca
   TAllocator<Allocator> ta(allocator);
   return inner_get_lob_locator(col_name, lob_locator, allocator);
 }
-}
-}
-}
+}  // namespace sqlclient
+}  // namespace common
+}  // namespace oceanbase
 #endif  // OCEANBASE_OB_MYSQL_RESULT_H_

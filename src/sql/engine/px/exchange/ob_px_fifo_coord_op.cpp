@@ -99,7 +99,6 @@ int ObPxFifoCoordOp::inner_get_next_row()
     msg_loop_.set_tenant_id(ctx_.get_my_session()->get_effective_tenant_id());
     first_row_fetched_ = true;
   }
-
   bool wait_next_msg = true;
   while (OB_SUCC(ret) && wait_next_msg) {
     // SQC-QC control channel and TASKs-QC data channel are registered in loop.
@@ -107,7 +106,7 @@ int ObPxFifoCoordOp::inner_get_next_row()
     int64_t timeout_us = 0;
     clear_evaluated_flag();
     if (FALSE_IT(timeout_us = phy_plan_ctx->get_timeout_timestamp() - get_timestamp())) {
-    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
       // TODO: cleanup
     } else if (OB_FAIL(msg_loop_.process_one(timeout_us))) {
@@ -191,6 +190,10 @@ int ObPxFifoCoordOp::next_row(bool& wait_next_msg)
         LOG_TRACE("All channel finish", "finish_ch_cnt", finish_ch_cnt_, K(ret));
         all_rows_finish_ = true;
         ret = OB_SUCCESS;
+        if (GCONF.enable_sql_audit) {
+          op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+          op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
+        }
       }
     } else if (OB_SUCCESS == ret) {
       wait_next_msg = false;

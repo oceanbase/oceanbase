@@ -50,6 +50,9 @@ extern int ob_io_cancel(io_context_t ctx, struct iocb* iocb, struct io_event* ev
 extern int ob_io_getevents(
     io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout);
 
+int io_getevents_with_retry(
+    io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout);
+
 void align_offset_size(const int64_t offset, const int64_t size, int64_t& align_offset, int64_t& align_size);
 
 enum ObIOMode {
@@ -98,8 +101,8 @@ public:
   static const int64_t DEFAULT_CPU_HIGH_WATER_LEVEL = 4800;
   static const int64_t DEFAULT_WRITE_FAILURE_DETECT_INTERVAL = 60 * 1000 * 1000;         // 1 min
   static const int64_t DEFAULT_READ_FAILURE_IN_BLACK_LIST_INTERVAL = 300 * 1000 * 1000;  // 5 min
-  static const int32_t DEFAULT_RETRY_WARN_LIMIT = 2;
-  static const int32_t DEFAULT_RETRY_ERROR_LIMIT = 5;
+  static const int32_t DEFAULT_WARNING_TOLERANCE_TIME = 30L * 1000L * 1000L;             // 30s
+  static const int32_t DEFAULT_ERROR_TOLERANCE_TIME = 300L * 1000L * 1000L;              // 300s
   static const int64_t DEFAULT_DISK_IO_THREAD_COUNT = 8;
   static const int64_t DEFAULT_IO_CALLBACK_THREAD_COUNT = 8;
   static const int64_t DEFAULT_LARGE_QUERY_IO_PERCENT = 0;                 // 0 means unlimited
@@ -113,19 +116,22 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(sys_io_low_percent), K_(sys_io_high_percent), K_(user_iort_up_percent), K_(cpu_high_water_level),
-      K_(write_failure_detect_interval), K_(read_failure_black_list_interval), K_(retry_warn_limit),
-      K_(retry_error_limit), K_(disk_io_thread_count), K_(callback_thread_count), K_(large_query_io_percent),
-      K_(data_storage_io_timeout_ms));
+      K_(write_failure_detect_interval), K_(read_failure_black_list_interval), K_(data_storage_warning_tolerance_time),
+      K_(data_storage_error_tolerance_time), K_(disk_io_thread_count), K_(callback_thread_count),
+      K_(large_query_io_percent), K_(data_storage_io_timeout_ms));
 
 public:
+  // schedule related
   int64_t sys_io_low_percent_;
   int64_t sys_io_high_percent_;
   int64_t user_iort_up_percent_;
   int64_t cpu_high_water_level_;
+  // diagnose related
   int64_t write_failure_detect_interval_;
   int64_t read_failure_black_list_interval_;
-  int64_t retry_warn_limit_;
-  int64_t retry_error_limit_;
+  int64_t data_storage_warning_tolerance_time_;
+  int64_t data_storage_error_tolerance_time_;
+  // resource related
   int64_t disk_io_thread_count_;
   int64_t callback_thread_count_;
   int64_t large_query_io_percent_;

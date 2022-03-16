@@ -34,7 +34,7 @@ public:
 public:
   virtual int64_t cal_work_thread_num() = 0;
   virtual void set_thread_name_str(char* str) = 0;
-  virtual int handle_task_list(ObArchiveTaskStatus* status) = 0;
+  virtual int handle_task_list(void* data) = 0;
 
 private:
   void run1();

@@ -459,6 +459,8 @@ RPC_F(obrpc::OB_GET_MIN_SSTABLE_SCHEMA_VERSION, obrpc::ObGetMinSSTableSchemaVers
 RPC_F(obrpc::OB_BATCH_GET_MEMBER_LIST_AND_LEADER, obrpc::ObLocationRpcRenewArg, obrpc::ObLocationRpcRenewResult,
     ObBatchRpcRenewLocProxy);
 RPC_F(obrpc::OB_BATCH_GET_ROLE, obrpc::ObBatchGetRoleArg, obrpc::ObBatchGetRoleResult, ObBatchGetRoleProxy);
+RPC_F(obrpc::OB_BROADCAST_LOCATIONS, obrpc::ObPartitionBroadcastArg, obrpc::ObPartitionBroadcastResult,
+    ObBroadcastLocationProxy);
 RPC_F(obrpc::OB_BATCH_GET_PROTECTION_LEVEL, obrpc::ObBatchCheckLeaderArg, obrpc::ObBatchCheckRes,
     ObBatchGetProtectionLevelProxy);
 RPC_F(obrpc::OB_CHECK_NEED_OFFLINE_REPLICA, obrpc::ObTenantSchemaVersions, obrpc::ObGetPartitionCountResult,

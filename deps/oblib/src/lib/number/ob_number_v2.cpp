@@ -344,7 +344,9 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
     }
   }
 
-  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) && ('e' == cur || 'E' == cur)) {
+  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) 
+                   && ('e' == cur || 'E' == cur) 
+                   && is_valid_sci_tail_(str, length, i)) {
     LOG_DEBUG("ObNumber from sci",
         K(ret),
         K(i),
@@ -656,26 +658,38 @@ int ObNumber::find_point_range_(const char* str, const int64_t length, int64_t& 
 
       for (; str_ptr != str_end && *str_ptr == '0'; ++str_ptr)
         ; /* ignore leading zero */
-      start_idx = str_ptr - str;
-      tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
+      if (str_ptr == str_end) {
+          // all zero cases:
+          // start_idx should points to the last '0'.
+          // start_idx and end_idx point to the same position,
+          // so that the 'construct_digits_()' would generate
+          // number '0' in the end
+          start_idx = str_ptr - 1 - str;
+          tmp_start_idx = start_idx;
+          floating_point = start_idx;
+          end_idx = start_idx;
+      } else {
+        start_idx = str_ptr - str;
+        tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
 
-      for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
-        ;
-
-      if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
-        int64_t non_zero_end = 0;
-        floating_point = str_ptr - str;
-        ++str_ptr;
         for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
           ;
-        end_idx = str_ptr - str;
-      } else {
-        floating_point = str_ptr - str;
-        end_idx = floating_point;
-      }
 
-      if (str_ptr != str_end) {
-        warning = OB_INVALID_NUMERIC;
+        if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
+          int64_t non_zero_end = 0;
+          floating_point = str_ptr - str;
+          ++str_ptr;
+          for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
+            ;
+          end_idx = str_ptr - str;
+        } else {
+          floating_point = str_ptr - str;
+          end_idx = floating_point;
+        }
+
+        if (str_ptr != str_end) {
+          warning = OB_INVALID_NUMERIC;
+        }
       }
     }
     if (NULL != precision && NULL != scale) {
@@ -1357,6 +1371,27 @@ int ObNumber::extract_valid_uint64_with_trunc(uint64_t& value) const
   }
   return ret;
 }
+
+int ObNumber::extract_valid_int64_with_round(int64_t &value) const
+{
+  int ret = common::OB_SUCCESS;
+  if (!is_valid_int64(value)) {
+    number::ObNumber tmp_number;
+    char buf_alloc[ObNumber::MAX_BYTE_LEN];
+    ObDataBuffer allocator(buf_alloc, ObNumber::MAX_BYTE_LEN);
+    //need deep copy before round
+    if (OB_FAIL(tmp_number.from(*this, allocator))) {
+      LOG_WARN("fail to deep_copy", K(ret), K(tmp_number));
+    } else if (OB_FAIL(tmp_number.round(0))) {
+      LOG_WARN("fail to trunc", K(ret), K(tmp_number));
+    } else if (!tmp_number.is_valid_int64(value)) {
+      ret = OB_DATA_OUT_OF_RANGE;
+      LOG_WARN("invalid const type for array index", K(tmp_number), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObNumber::width_bucket(
     const ObNumber& start, const ObNumber& end, const ObNumber& bucket, ObNumber& value, ObIAllocator& allocator) const
 {
@@ -1373,50 +1408,52 @@ int ObNumber::width_bucket(
   ObDataBuffer allocator2(buf_alloc2, ObNumber::MAX_BYTE_LEN);
   ObDataBuffer allocator3(buf_alloc3, ObNumber::MAX_BYTE_LEN);
   if (OB_FAIL(bucket_num.from(bucket, allocator_bucket))) {
-    LOG_WARN("copy bucket number failed", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("copy bucket number failed", K(bucket_num), K(ret));
   } else if (OB_FAIL(bucket_num.floor(0))) {
-    LOG_WARN("bucket floor failed", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("bucket floor failed", K(bucket_num), K(ret));
   } else if (OB_UNLIKELY(bucket_num.is_zero() || bucket_num.is_negative())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("bucket < 1", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("bucket < 1", K(bucket_num), K(ret));
   } else {
     ObNumber range, offset;
     if (start == end) {
       if (*this < start) {
-        res.from(static_cast<int64_t>(0), allocator_res);
+        if (OB_FAIL(res.from(static_cast<int64_t>(0), allocator_res))) {
+          LOG_WARN("create number 0 failed", K(res), K(ret));
+        }
       } else {
         ObNumber temp;
         if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator1))) {
-          LOG_WARN("create number 1 failed", K(*this), K(bucket_num), K(res), K(temp), K(ret));
+          LOG_WARN("create number 1 failed", K(res), K(temp), K(ret));
         } else if (OB_FAIL(bucket_num.add(temp, res, allocator_res))) {
-          LOG_WARN("bucket add 1 failed", K(*this), K(bucket_num), K(res), K(ret));
+          LOG_WARN("bucket add 1 failed", K(bucket_num), K(res), K(ret));
         }
       }
     } else {
       if (start > end) {
         if (OB_FAIL(start.sub(end, range, allocator1))) {
-          LOG_WARN("start sub end failed", K(*this), K(start), K(end), K(range), K(ret));
+          LOG_WARN("start sub end failed", K(start), K(end), K(range), K(ret));
         } else if (OB_FAIL(start.sub(*this, offset, allocator2))) {
-          LOG_WARN("start sub target failed", K(*this), K(start), K(offset), K(ret));
+          LOG_WARN("start sub target failed", K(start), K(offset), K(ret));
         }
       } else {
         if (OB_FAIL(end.sub(start, range, allocator1))) {
-          LOG_WARN("end sub start failed", K(*this), K(start), K(end), K(range), K(ret));
+          LOG_WARN("end sub start failed", K(start), K(end), K(range), K(ret));
         } else if (OB_FAIL(sub(start, offset, allocator2))) {
-          LOG_WARN("end sub target failed", K(*this), K(start), K(offset), K(ret));
+          LOG_WARN("end sub target failed", K(start), K(offset), K(ret));
         }
       }
       if (OB_SUCC(ret)) {
         if (offset.is_negative()) {
           if (OB_FAIL(res.from(static_cast<int64_t>(0), allocator_res))) {
-            LOG_WARN("assign 0 to res failed", K(*this), K(res), K(ret));
+            LOG_WARN("assign 0 to res failed", K(res), K(ret));
           }
         } else if (offset >= range) {
           ObNumber temp;
           if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator3))) {
-            LOG_WARN("create number 1 failed", K(*this), K(temp), K(ret));
+            LOG_WARN("create number 1 failed", K(temp), K(ret));
           } else if (OB_FAIL(bucket_num.add(temp, res, allocator_res))) {
-            LOG_WARN("bucket add 1 failed", K(*this), K(bucket_num), K(temp), K(res), K(ret));
+            LOG_WARN("bucket add 1 failed", K(bucket_num), K(temp), K(res), K(ret));
           }
         } else {
           ObNumber q;
@@ -1432,16 +1469,18 @@ int ObNumber::width_bucket(
             allocator2.free();
             std::swap(allocator2, allocator_res);
             if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator1))) {
-              LOG_WARN("create number 1 failed", K(*this), K(temp), K(ret));
+              LOG_WARN("create number 1 failed", K(temp), K(ret));
             } else if (OB_FAIL(res.add(temp, res, allocator_res))) {
-              LOG_WARN("value add 1 failed", K(*this), K(res), K(temp), K(ret));
+              LOG_WARN("value add 1 failed", K(res), K(temp), K(ret));
             }
           }
         }
       }
     }
     if (OB_SUCC(ret)) {
-      value.from(res, allocator);
+      if (OB_FAIL(value.from(res, allocator))) {
+        LOG_WARN("copy res failed", K(value), K(res), K(ret));
+      }
     }
   }
   return ret;
@@ -4393,7 +4432,7 @@ int ObNumber::add_v3(const ObNumber& other, ObNumber& value, ObIAllocator& alloc
 
       if (OB_SUCC(ret)) {
         MEMSET(sum_digits, 0, sizeof(uint32_t) * OB_CALC_BUFFER_SIZE);
-        MEMCPY(sum_digits + 1, augend_digits, augend_desc.len_ * sizeof(uint32_t));
+        MEMCPY(sum_digits + 1, augend_digits, min(augend_desc.len_, OB_MAX_DECIMAL_DIGIT) * sizeof(uint32_t));
 
         // inverse traversal
         const int64_t cur_augend_exp = augend_exp - (augend_desc.len_ - 1);
@@ -6291,8 +6330,9 @@ int ObNumber::power(
     int abs_exponent = std::abs(exponent);
 
     number::ObNumber base_product;
-    base_product.from(*this, one_time_allocator);
-    if ((abs_exponent & 1) != 0) {
+    if (OB_FAIL(base_product.from(*this, one_time_allocator))) {
+      LOG_WARN("failed: deep copy this to base_product", K(ret));
+    } else if ((abs_exponent & 1) != 0) {
       if (OB_FAIL(result.from(*this, one_time_allocator))) {
         LOG_WARN("failed: deep copy base to result", K(ret));
       }
@@ -6615,6 +6655,36 @@ int ObNumber::cast_to_int64(int64_t& value) const
     LOG_DEBUG("this is not valid integer number", KPC(this), K(ret));
   }
   return ret;
+}
+
+/**
+ * check whether a sci format string has a valid exponent part
+ * valid : 1.8E-1/1.8E1   invalid : 1.8E, 1.8Ea, 1.8E-a
+ * @param str     string need to parse
+ * @param length  length of str
+ * @param e_pos   index of 'E'
+ */
+bool ObNumber::is_valid_sci_tail_(const char *str, 
+                                 const int64_t length, 
+                                 const int64_t e_pos)
+{
+  bool res = false;
+  if (e_pos == length - 1) {
+    //like 1.8e, false
+  } else if (e_pos < length - 1) {
+    if ('+' == str[e_pos + 1] || '-' == str[e_pos + 1]) {
+      if (e_pos < length - 2 && str[e_pos + 2] >= '0' && str[e_pos + 2] <= '9') {
+        res = true;
+      } else {
+        //like 1.8e+, false
+      }
+    } else if (str[e_pos + 1] >= '0' && str[e_pos + 1] <= '9') {
+      res = true;
+    } else {
+      //like 1.8ea, false
+    }
+  }
+  return res;
 }
 
 void ObNumber::set_one()

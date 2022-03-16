@@ -41,6 +41,7 @@
 #include "ob_expr_int2ip.h"
 #include "ob_expr_int_div.h"
 #include "ob_expr_ip2int.h"
+#include "ob_expr_inet.h"
 #include "ob_expr_is.h"
 #include "ob_expr_last_exec_id.h"
 #include "ob_expr_last_trace_id.h"
@@ -49,6 +50,7 @@
 #include "ob_expr_like.h"
 #include "ob_expr_lower.h"
 #include "ob_expr_md5.h"
+#include "ob_expr_crc32.h"
 #include "ob_expr_mid.h"
 #include "ob_expr_minus.h"
 #include "ob_expr_mod.h"
@@ -69,6 +71,7 @@
 #include "ob_expr_regexp_replace.h"
 #include "ob_expr_regexp_substr.h"
 #include "ob_expr_repeat.h"
+#include "ob_expr_export_set.h"
 #include "ob_expr_replace.h"
 #include "ob_expr_func_dump.h"
 #include "ob_expr_func_part_hash.h"
@@ -169,84 +172,127 @@
 #include "ob_expr_user_can_access_obj.h"
 #include "ob_expr_empty_lob.h"
 #include "ob_expr_radians.h"
+#include "ob_expr_pi.h"
 #include "ob_expr_maketime.h"
+#include "ob_expr_makedate.h"
+#include "ob_expr_time_format.h"
 #include "ob_expr_to_blob.h"
 #include "ob_expr_to_outfile_row.h"
 #include "ob_expr_format.h"
 #include "ob_expr_quarter.h"
 #include "ob_expr_bit_length.h"
+#include "ob_expr_to_single_byte.h"
+#include "ob_expr_to_multi_byte.h"
+#include "ob_expr_convert_tz.h"
+#include "ob_expr_degrees.h"
+#include "ob_expr_weight_string.h"
+#include "ob_expr_any_value.h"
+#include "ob_expr_validate_password_strength.h"
+#include "ob_expr_benchmark.h"
+#include "ob_expr_uuid_short.h"
+#include "ob_expr_to_base64.h"
+#include "ob_expr_from_base64.h"
+#include "ob_expr_json_object.h"
+#include "ob_expr_json_extract.h"
+#include "ob_expr_json_contains.h"
+#include "ob_expr_json_contains_path.h"
+#include "ob_expr_json_depth.h"
+#include "ob_expr_json_keys.h"
+#include "ob_expr_json_search.h"
+#include "ob_expr_json_array.h"
+#include "ob_expr_json_quote.h"
+#include "ob_expr_json_unquote.h"
+#include "ob_expr_json_overlaps.h"
+#include "ob_expr_json_valid.h"
+#include "ob_expr_json_remove.h"
+#include "ob_expr_json_array_append.h"
+#include "ob_expr_json_array_insert.h"
+#include "ob_expr_json_value.h"
+#include "ob_expr_json_replace.h"
+#include "ob_expr_json_type.h"
+#include "ob_expr_json_length.h"
+#include "ob_expr_json_insert.h"
+#include "ob_expr_json_storage_size.h"
+#include "ob_expr_json_storage_free.h"
+#include "ob_expr_json_set.h"
+#include "ob_expr_json_merge_preserve.h"
+#include "ob_expr_json_merge.h"
+#include "ob_expr_json_merge_patch.h"
+#include "ob_expr_json_pretty.h"
+#include "ob_expr_json_member_of.h"
+
 
 namespace oceanbase {
 using namespace common;
 namespace sql {
 
-extern int cast_eval_arg(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int anytype_to_varchar_char_explicit(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int anytype_anytype_explicit(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_acos_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_and_exprN(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_asin_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_assign_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_atan2_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_atan_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_between_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_bool_expr_for_integer_type(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_bool_expr_for_float_type(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_bool_expr_for_double_type(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_bool_expr_for_other_type(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_char_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_coalesce_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_cos_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_cosh_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_exp_expr_double(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_exp_expr_number(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_ceil_floor(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_round_expr_datetime1(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_round_expr_datetime2(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_round_expr_numeric2(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_round_expr_numeric1(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_initcap_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_left_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_ln_expr_mysql(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_ln_expr_oracle_double(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_ln_expr_oracle_number(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_log10_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_log2_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_log_expr_double(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_log_expr_number(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_not_between_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_or_exprN(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_power_expr_oracle(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_right_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sign_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sin_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sinh_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sqrt_expr_mysql(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sqrt_expr_oracle_double(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_sqrt_expr_oracle_number(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_str_to_date_expr_date(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_str_to_date_expr_time(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_str_to_date_expr_datetime(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_tan_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_tanh_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_timestampadd_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_time_to_usec_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_todays_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_to_temporal_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_translate_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_usec_to_time_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_charset_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_collation_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_coercibility_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_set_collation_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_cmp_meta_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_trunc_expr_datetime(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_trunc_expr_numeric(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_truncate_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
-extern int calc_reverse_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-extern int calc_instrb_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-extern int calc_convert_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
-extern int calc_translate_using_expr(const ObExpr&, ObEvalCtx&, ObDatum&);
+extern int cast_eval_arg(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int anytype_to_varchar_char_explicit(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int anytype_anytype_explicit(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_acos_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_and_exprN(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_asin_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_assign_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_atan2_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_atan_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_between_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_bool_expr_for_integer_type(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_bool_expr_for_float_type(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_bool_expr_for_double_type(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_bool_expr_for_other_type(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_char_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_coalesce_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_cos_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_cosh_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_exp_expr_double(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_exp_expr_number(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_ceil_floor(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_round_expr_datetime1(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_round_expr_datetime2(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_round_expr_numeric2(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_round_expr_numeric1(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_initcap_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_left_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_ln_expr_mysql(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_ln_expr_oracle_double(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_ln_expr_oracle_number(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_log10_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_log2_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_log_expr_double(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_log_expr_number(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_not_between_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_or_exprN(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_power_expr_oracle(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_right_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sign_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sin_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sinh_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sqrt_expr_mysql(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sqrt_expr_oracle_double(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sqrt_expr_oracle_number(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_str_to_date_expr_date(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_str_to_date_expr_time(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_str_to_date_expr_datetime(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_tan_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_tanh_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_timestampadd_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_time_to_usec_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_todays_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_to_temporal_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_translate_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_usec_to_time_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_charset_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_collation_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_coercibility_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_set_collation_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_cmp_meta_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_trunc_expr_datetime(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_trunc_expr_numeric(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_truncate_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_reverse_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+extern int calc_instrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+extern int calc_convert_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+extern int calc_translate_using_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
 
 // append only, can not delete, set to NULL for mark delete
 static ObExpr::EvalFunc g_expr_eval_functions[] = {
@@ -638,7 +684,108 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprFormat::calc_format_expr,           /* 387 */
     calc_translate_using_expr,                /* 388 */
     ObExprQuarter::calc_quater,               /* 389 */
-    ObExprBitLength::calc_bit_length          /* 390 */
+    ObExprBitLength::calc_bit_length,         /* 390 */
+    NULL,                                     // ObExprConvertOracle::calc_convert_oracle_expr,             /* 391 */
+    NULL,                                     // ObExprUnistr::calc_unistr_expr,                            /* 392 */
+    NULL,                                     // ObExprAsciistr::calc_asciistr_expr,                        /* 393 */
+    NULL,                                     // ObExprAtTimeZone::eval_at_time_zone,                       /* 394 */
+    NULL,                                     // ObExprAtLocal::eval_at_local,                              /* 395 */
+    ObExprToSingleByte::calc_to_single_byte,  /* 396 */
+    ObExprToMultiByte::calc_to_multi_byte,    /* 397 */
+    NULL,                                     // ObExprDllUdf::eval_dll_udf,                                /* 398 */
+    NULL,                                     // ObExprRawtonhex::calc_rawtonhex_expr,                      /* 399 */
+    ObExprPi::eval_pi,                        /* 400 */
+    ObExprConvertTZ::eval_convert_tz,         /* 401 */
+    ObExprUtcTime::eval_utc_time,             /* 402 */
+    ObExprUtcDate::eval_utc_date,             /* 403 */
+    ObExprGetFormat::calc_get_format,         /* 404 */
+    NULL,                                     // ObExprCollectionConstruct::eval_collection_construct,       /* 405 */
+    NULL,                                     // ObExprObjAccess::eval_obj_access,                           /* 406 */
+    ObExprTimeFormat::calc_time_format,       /* 407 */
+    ObExprMakedate::calc_makedate,            /* 408 */
+    ObExprPeriodAdd::calc_periodadd,          /* 409 */
+    NULL,                                     /* 410 */
+    NULL,                                     /* 411 */
+    ObExprAnyValue::eval_any_value,           /* 412 */
+    NULL,                                     /* 413 */
+    ObExprDegrees::calc_degrees_expr,         /* 414 */
+    NULL,                                     /* 415 */
+    NULL,                                     /* 416 */
+    NULL,                                     /* 417 */
+    NULL,                                     /* 418 */
+    NULL,                                     /* 419 */
+    NULL,                                     /* 420 */
+    NULL,                                     /* 421 */
+    NULL,                                     /* 422 */
+    NULL,                                     /* 423 */
+    NULL,                                     /* 424 */
+    NULL,                                     /* 425 */
+    NULL,                                     /* 426 */
+    NULL,                                     /* 427 */
+    NULL,                                     /* 428 */
+    NULL,                                     /* 429 */
+    NULL,                                     /* 430 */
+    NULL,                                     /* 431 */
+    NULL,                                     /* 432 */
+    NULL,                                     /* 433 */
+    NULL,                                     /* 434 */
+    NULL,                                     /* 435 */
+    NULL,                                     /* 436 */
+    NULL,                                     /* 437 */
+    NULL,                                     /* 438 */
+    NULL,                                     /* 439 */
+    NULL,                                     /* 440 */
+    ObExprTimestamp::calc_timestamp1,         /* 441 */
+    ObExprTimestamp::calc_timestamp2,         /* 442 */
+    ObExprValidatePasswordStrength::eval_password_strength, /* 443 */
+    NULL,                                     /* 444 */
+    NULL,                                     /* 445 */
+    NULL,                                     /* 446 */
+    NULL,                                     /* 447 */
+    ObExprUuidShort::eval_uuid_short,         /* 448 */
+    ObExprBenchmark::eval_benchmark,          /* 449 */
+    ObExprExportSet::eval_export_set,         /* 450 */
+    ObExprInet6Aton::calc_inet6_aton,         /* 451 */
+    ObExprIsIpv4::calc_is_ipv4,               /* 452 */
+    ObExprIsIpv6::calc_is_ipv6,               /* 453 */
+    ObExprIsIpv4Mapped::calc_is_ipv4_mapped,  /* 454 */
+    ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 455 */
+    ObExprInetAton::calc_inet_aton,           /* 456 */
+    ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
+    ObExprWeightString::eval_weight_string,   /* 458 */
+    ObExprConvertTZ::eval_convert_tz,         /* 459 */
+    ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprToBase64::eval_to_base64,           /* 461 */
+    ObExprFromBase64::eval_from_base64,       /* 462 */
+    ObExprJsonObject::eval_json_object,                                 /* 463 */
+    ObExprJsonExtract::eval_json_extract,                               /* 464 */
+    ObExprJsonContains::eval_json_contains,                             /* 465 */
+    ObExprJsonContainsPath::eval_json_contains_path,                    /* 466 */
+    ObExprJsonDepth::eval_json_depth,                                   /* 467 */
+    ObExprJsonKeys::eval_json_keys,                                     /* 468 */
+    ObExprJsonArray::eval_json_array,                                   /* 469 */
+    ObExprJsonQuote::eval_json_quote,                                   /* 470 */
+    ObExprJsonUnquote::eval_json_unquote,                               /* 471 */
+    ObExprJsonOverlaps::eval_json_overlaps,                             /* 472 */
+    ObExprJsonRemove::eval_json_remove,                                 /* 473 */
+    ObExprJsonSearch::eval_json_search,                                 /* 474 */
+    ObExprJsonValid::eval_json_valid,                                   /* 475 */
+    ObExprJsonArrayAppend::eval_json_array_append,                      /* 476 */
+    ObExprJsonArrayInsert::eval_json_array_insert,                      /* 477 */
+    ObExprJsonReplace::eval_json_replace,                               /* 478 */
+    ObExprJsonType::eval_json_type,                                     /* 479 */
+    ObExprJsonLength::eval_json_length,                                 /* 480 */
+    ObExprJsonInsert::eval_json_insert,                                 /* 481 */
+    ObExprJsonStorageSize::eval_json_storage_size,                      /* 482 */
+    ObExprJsonStorageFree::eval_json_storage_free,                      /* 483 */
+    ObExprJsonMergePreserve::eval_json_merge_preserve,                  /* 484 */
+    ObExprJsonMerge::eval_json_merge_preserve,                          /* 485 */
+    ObExprJsonMergePatch::eval_json_merge_patch,                        /* 486 */
+    ObExprJsonPretty::eval_json_pretty,                                 /* 487 */
+    ObExprJsonSet::eval_json_set,                                       /* 488 */
+    ObExprJsonValue::eval_json_value,                                   /* 489 */
+    ObExprJsonMemberOf::eval_json_member_of,                            /* 490 */
+    ObExprJsonExtract::eval_json_extract_null                           /* 491 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

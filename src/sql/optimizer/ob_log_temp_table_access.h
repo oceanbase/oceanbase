@@ -24,7 +24,7 @@ class ObLogTempTableAccess : public ObLogicalOperator {
 public:
   ObLogTempTableAccess(ObLogPlan& plan);
   virtual ~ObLogTempTableAccess();
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -59,7 +59,7 @@ public:
   {
     return is_last_access_;
   }
-  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   inline common::ObString& get_table_name()
   {
     return temp_table_name_;
@@ -72,7 +72,7 @@ public:
   {
     return access_exprs_;
   }
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableAccess);

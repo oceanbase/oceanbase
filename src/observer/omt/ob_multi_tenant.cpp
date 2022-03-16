@@ -155,10 +155,8 @@ int ObMultiTenant::init(ObAddr myaddr, double node_quota, int64_t times_of_worke
 
   myaddr_ = myaddr;
   node_quota_ = node_quota;
-  const int64_t total_reserved_quota = static_cast<int64_t>(
-      GCONF.system_cpu_quota + GCONF.election_cpu_quota + GCONF.user_location_cpu_quota() +
-      GCONF.sys_location_cpu_quota() + GCONF.root_location_cpu_quota() + GCONF.core_location_cpu_quota() +
-      EXT_LOG_TENANT_CPU + OB_MONITOR_CPU + OB_SVR_BLACKLIST_CPU);
+  const int64_t total_reserved_quota
+      = static_cast<int64_t>(VIRTUAL_TENANTS_CPU_RESERVED_QUOTA);
 
   int64_t init_workers_cnt =
       (static_cast<int64_t>(node_quota) + static_cast<int64_t>(GCONF.server_cpu_quota_min)) * DEFAULT_TIMES_OF_WORKERS +
@@ -417,6 +415,9 @@ int ObMultiTenant::add_tenant(const uint64_t tenant_id, const double min_cpu, co
                OB_FAIL(OTC_MGR.got_version(tenant_id, common::ObSystemConfig::INIT_VERSION))) {
       LOG_ERROR("failed to got version", K(tenant_id), K(ret));
 #endif
+    } else if (OB_FAIL(GCTX.sql_engine_->get_plan_cache_manager()->validate_plan_cache(tenant_id))) {
+      // do nothing
+      LOG_WARN("failed to active plan cache", K(ret), K(tenant_id));
     } else {
       LOG_INFO("activate tenant done", K(tenant_id), K(ret));
     }
@@ -732,10 +733,8 @@ int ObMultiTenant::get_tenant_cpu(const uint64_t tenant_id, double& min_cpu, dou
 void ObMultiTenant::set_workers_per_cpu(int64_t v)
 {
   times_of_workers_ = v;
-  const int64_t total_reserved_quota = static_cast<int64_t>(
-      GCONF.system_cpu_quota + GCONF.election_cpu_quota + GCONF.user_location_cpu_quota() +
-      GCONF.sys_location_cpu_quota() + GCONF.root_location_cpu_quota() + GCONF.core_location_cpu_quota() +
-      EXT_LOG_TENANT_CPU + OB_MONITOR_CPU + OB_SVR_BLACKLIST_CPU);
+  const int64_t total_reserved_quota
+      = static_cast<int64_t>(VIRTUAL_TENANTS_CPU_RESERVED_QUOTA);
   auto max_workers_cnt = static_cast<int64_t>(node_quota_) * times_of_workers_ +
                          total_reserved_quota * static_cast<int64_t>(quota2token_) +
                          static_cast<int64_t>(node_quota_) * 16;

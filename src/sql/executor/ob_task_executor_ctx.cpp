@@ -46,7 +46,7 @@ int ObTaskExecutorCtx::CalcVirtualPartitionIdParams::init(uint64_t ref_table_id)
 }
 
 OB_SERIALIZE_MEMBER(ObTaskExecutorCtx, table_locations_, retry_times_, min_cluster_version_, expected_worker_cnt_,
-    allocated_worker_cnt_);
+    allocated_worker_cnt_, query_tenant_begin_schema_version_, query_sys_begin_schema_version_);
 
 ObTaskExecutorCtx::ObTaskExecutorCtx(ObExecContext& exec_context)
     : task_resp_handler_(NULL),
@@ -335,8 +335,9 @@ int ObTaskExecutorCtxUtil::get_part_runner_server(
   return ret;
 }
 
-int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext& ctx, uint64_t table_location_key,
-    uint64_t ref_table_id, bool is_weak, const ObPhyTableLocation*& table_location)
+// 每次调用都会 allocate 一个 table_location
+int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext &ctx, uint64_t table_location_key,
+    uint64_t ref_table_id, bool is_weak, ObPhyTableLocationGuard &table_location)
 {
   int ret = OB_SUCCESS;
   ObPhyTableLocationInfo phy_location_info;
@@ -348,9 +349,6 @@ int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext& ctx,
   const ObTableSchema* table_schema = NULL;
   const uint64_t tenant_id = extract_tenant_id(ref_table_id);
   // ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
-  ObPhyTableLocation* loc = nullptr;
-  table_location = NULL;
-
   if (OB_ISNULL(location_cache) || OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location cache or schema_service is null", KP(location_cache), KP(schema_service), K(ret));
@@ -380,18 +378,13 @@ int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext& ctx,
 
   if (OB_FAIL(ret)) {
     // bypass
-  } else if (NULL == (loc = static_cast<ObPhyTableLocation*>(ctx.get_allocator().alloc(sizeof(ObPhyTableLocation))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (NULL == (loc = new (loc) ObPhyTableLocation())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail new object", K(ret));
   } else if (OB_FAIL(ObTableLocation::get_phy_table_location_info(
                  ctx, table_location_key, ref_table_id, is_weak, part_ids, *location_cache, phy_location_info))) {
     LOG_WARN("get phy table location info failed", K(ret));
-  } else if (OB_FAIL(loc->add_partition_locations(phy_location_info))) {
+  } else if (OB_FAIL(table_location.new_location(ctx.get_allocator()))) {
+    LOG_WARN("fail alloc new location", K(ret));
+  } else if (OB_FAIL(table_location.get_loc()->add_partition_locations(phy_location_info))) {
     LOG_WARN("add partition locations failed", K(ret), K(phy_location_info));
-  } else {
-    table_location = loc;
   }
   return ret;
 }

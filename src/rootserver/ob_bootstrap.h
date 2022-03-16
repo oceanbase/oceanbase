@@ -183,6 +183,7 @@ virtual int set_table_locality(
   virtual int insert_first_freeze_info();
   virtual int insert_first_freeze_schema();
   virtual int init_gts_service_data();
+  int init_backup_inner_table();
   template <typename SCHEMA>
   int set_replica_options(const bool set_primary_zone, SCHEMA& schema);
   template <typename SCHEMA>

@@ -54,163 +54,248 @@ namespace oceanbase {
 namespace common {
 class ObFIFOAllocator;
 class ObPLogItem;
+class ObString;
+class ObLogCompressor;
 
 #define OB_LOGGER ::oceanbase::common::ObLogger::get_logger()
-#define OB_LOG_NEED_TO_PRINT(level) OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)
+#define OB_LOG_NEED_TO_PRINT(level) (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))
 
-#define OB_T_TO_STRING_BODY_1                                                                \
-  char* buf1 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key1, false, obj1); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_1                                                                    \
+    char *buf1 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key1, false, obj1))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_2                                                                \
-  OB_T_TO_STRING_BODY_1                                                                      \
-  char* buf2 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key2, false, obj2); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_2                                                                    \
+    OB_T_TO_STRING_BODY_1                                                                        \
+    char *buf2 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key2, false, obj2))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_3                                                                \
-  OB_T_TO_STRING_BODY_2                                                                      \
-  char* buf3 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key3, false, obj3); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_3                                                                    \
+    OB_T_TO_STRING_BODY_2                                                                        \
+    char *buf3 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key3, false, obj3))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
+#define OB_T_TO_STRING_BODY_4                                                                    \
+    OB_T_TO_STRING_BODY_3                                                                        \
+    char *buf4 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key4, false, obj4))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_4                                                                \
-  OB_T_TO_STRING_BODY_3                                                                      \
-  char* buf4 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key4, false, obj4); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_5                                                                    \
+    OB_T_TO_STRING_BODY_4                                                                        \
+    char *buf5 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key5, false, obj5))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_5                                                                \
-  OB_T_TO_STRING_BODY_4                                                                      \
-  char* buf5 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key5, false, obj5); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_6                                                                    \
+    OB_T_TO_STRING_BODY_5                                                                        \
+    char *buf6 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key6, false, obj6))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_6                                                                \
-  OB_T_TO_STRING_BODY_5                                                                      \
-  char* buf6 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key6, false, obj6); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_7                                                                    \
+    OB_T_TO_STRING_BODY_6                                                                        \
+    char *buf7 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key7, false, obj7))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_7                                                                \
-  OB_T_TO_STRING_BODY_6                                                                      \
-  char* buf7 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key7, false, obj7); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_8                                                                    \
+    OB_T_TO_STRING_BODY_7                                                                        \
+    char *buf8 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key8, false, obj8))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_8                                                                \
-  OB_T_TO_STRING_BODY_7                                                                      \
-  char* buf8 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key8, false, obj8); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_9                                                                    \
+    OB_T_TO_STRING_BODY_8                                                                        \
+    char *buf9 = buf + MAX(__pos, 0);                                                            \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key9, false, obj9))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_9                                                                \
-  OB_T_TO_STRING_BODY_8                                                                      \
-  char* buf9 = buf + MAX(__pos, 0);                                                          \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key9, false, obj9); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_10                                                                   \
+    OB_T_TO_STRING_BODY_9                                                                        \
+    char *buf10 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key10, false, obj10))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_10                                                                 \
-  OB_T_TO_STRING_BODY_9                                                                        \
-  char* buf10 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key10, false, obj10); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_11                                                                   \
+    OB_T_TO_STRING_BODY_10                                                                       \
+    char *buf11 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key11, false, obj11))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_11                                                                 \
-  OB_T_TO_STRING_BODY_10                                                                       \
-  char* buf11 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key11, false, obj11); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_12                                                                   \
+    OB_T_TO_STRING_BODY_11                                                                       \
+    char *buf12 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key12, false, obj12))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_12                                                                 \
-  OB_T_TO_STRING_BODY_11                                                                       \
-  char* buf12 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key12, false, obj12); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_13                                                                   \
+    OB_T_TO_STRING_BODY_12                                                                       \
+    char *buf13 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key13, false, obj13))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_13                                                                 \
-  OB_T_TO_STRING_BODY_12                                                                       \
-  char* buf13 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key13, false, obj13); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_14                                                                   \
+    OB_T_TO_STRING_BODY_13                                                                       \
+    char *buf14 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key14, false, obj14))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_14                                                                 \
-  OB_T_TO_STRING_BODY_13                                                                       \
-  char* buf14 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key14, false, obj14); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_15                                                                   \
+    OB_T_TO_STRING_BODY_14                                                                       \
+    char *buf15 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key15, false, obj15))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_15                                                                 \
-  OB_T_TO_STRING_BODY_14                                                                       \
-  char* buf15 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key15, false, obj15); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_16                                                                   \
+    OB_T_TO_STRING_BODY_15                                                                       \
+    char *buf16 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key16, false, obj16))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_16                                                                 \
-  OB_T_TO_STRING_BODY_15                                                                       \
-  char* buf16 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key16, false, obj16); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_17                                                                   \
+    OB_T_TO_STRING_BODY_16                                                                       \
+    char *buf17 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key17, false, obj17))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_17                                                                 \
-  OB_T_TO_STRING_BODY_16                                                                       \
-  char* buf17 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key17, false, obj17); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_18                                                                   \
+    OB_T_TO_STRING_BODY_17                                                                       \
+    char *buf18 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key18, false, obj18))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_18                                                                 \
-  OB_T_TO_STRING_BODY_17                                                                       \
-  char* buf18 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key18, false, obj18); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_19                                                                   \
+    OB_T_TO_STRING_BODY_18                                                                       \
+    char *buf19 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key19, false, obj19))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_19                                                                 \
-  OB_T_TO_STRING_BODY_18                                                                       \
-  char* buf19 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key19, false, obj19); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_20                                                                   \
+    OB_T_TO_STRING_BODY_19                                                                       \
+    char *buf20 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key20, false, obj20))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_20                                                                 \
-  OB_T_TO_STRING_BODY_19                                                                       \
-  char* buf20 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key20, false, obj20); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_21                                                                   \
+    OB_T_TO_STRING_BODY_20                                                                       \
+    char *buf21 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key21, false, obj21))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_21                                                                 \
-  OB_T_TO_STRING_BODY_20                                                                       \
-  char* buf21 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key21, false, obj21); \
-  buf[__pos++] = '\0';
+#define OB_T_TO_STRING_BODY_22                                                                   \
+    OB_T_TO_STRING_BODY_21                                                                       \
+    char *buf22 = buf + MAX(__pos, 0);                                                           \
+    if (OB_FAIL(ret)) {                                                                          \
+    } else if (OB_FAIL(::oceanbase::common::logdata_print_key_obj(buf, buf_size - 1, __pos, key22, false, obj22))) { \
+    } else if (__pos + 1 >= buf_size) {                                                          \
+    } else {                                                                                     \
+      buf[__pos++] = '\0';                                                                       \
+    }
 
-#define OB_T_TO_STRING_BODY_22                                                                 \
-  OB_T_TO_STRING_BODY_21                                                                       \
-  char* buf22 = buf + MAX(__pos, 0);                                                           \
-  ret = ::oceanbase::common::logdata_print_key_obj(buf, buf_size, __pos, key22, false, obj22); \
-  buf[__pos++] = '\0';
-
-#define DEFINE_OB_PRINT_KV(n)                                                                               \
-  template <LOG_TYPENAME_TN##n>                                                                             \
-  void OB_PRINT(const char* mod_name,                                                                       \
-      const int32_t level,                                                                                  \
-      const char* file,                                                                                     \
-      const int32_t line,                                                                                   \
-      const char* function,                                                                                 \
-      const uint64_t location_hash_val,                                                                     \
-      const char* info_string,                                                                              \
-      LOG_PARAMETER_KV##n)                                                                                  \
-  {                                                                                                         \
-    int64_t __pos = 0;                                                                                      \
-    int ret = OB_SUCCESS;                                                                                   \
-    if (OB_LIKELY(!OB_LOGGER.get_guard())) {                                                                \
-      OB_LOGGER.get_guard() = true;                                                                         \
-      char* buf = ::oceanbase::common::ObLogger::get_small_buffer();                                        \
-      const int64_t buf_size = ::oceanbase::common::ObLogger::OB_SMALL_LOG_BUFFER_SIZE - 1;                 \
-      OB_T_TO_STRING_BODY_##n OB_LOGGER.log_message_kv(                                                     \
-          mod_name, level, file, line, function, location_hash_val, info_string, EXPAND_ARGUMENT_##n(buf)); \
-      OB_LOGGER.get_guard() = false;                                                                        \
-      UNUSED(ret);                                                                                          \
-    }                                                                                                       \
+#define DEFINE_OB_PRINT_KV(n)                                                                    \
+  template <LOG_TYPENAME_TN##n>                                                                  \
+  void OB_PRINT(const char *mod_name, const int32_t level, const char *file, const int32_t line, \
+                const char *function, const uint64_t location_hash_val, const char *info_string, \
+                LOG_PARAMETER_KV##n)                                                             \
+  {                                                                                              \
+    int64_t __pos = 0;                                                                           \
+    int ret = OB_SUCCESS;                                                                        \
+    if (OB_LIKELY(!OB_LOGGER.get_guard())) {                                                     \
+      OB_LOGGER.get_guard() = true;                                                              \
+      char *buf = ::oceanbase::common::ObLogger::get_small_buffer();                             \
+      const int64_t buf_size = ::oceanbase::common::ObLogger::OB_SMALL_LOG_BUFFER_SIZE;          \
+      OB_T_TO_STRING_BODY_##n                                                                    \
+      OB_LOGGER.log_message_kv(mod_name, level, file, line, function, location_hash_val,         \
+                               info_string, EXPAND_ARGUMENT_##n(buf));                           \
+      OB_LOGGER.get_guard() = false;                                                             \
+      UNUSED(ret);                                                                               \
+    }                                                                                            \
   }
 
 //@class ObLogIdLevelMap
@@ -646,9 +731,6 @@ public:
   bool is_force_allows() const;
   void check_reset_force_allows();
 
-  int64_t get_reimbursation_time();
-  int64_t get_wait_us(const int32_t level);
-
   //@brief thread buffer for printing log
   LogBuffer* get_thread_buffer();
 
@@ -786,9 +868,15 @@ public:
   void set_max_file_size(int64_t max_file_size);
   //@brief Set the max number of log-files. If max_file_index = 0, no limit.
   int set_max_file_index(int64_t max_file_index = 0x0F);
+  //@brief Set the max retention time of log-files. If max_file_time = 0, no limit.
+  int set_max_file_time(int64_t max_file_time);
+  //@brief Set whether compress log-files. If this flag set, will compress all log files.
+  int set_enable_file_compress(bool enable_file_compress);
   //@brief Set whether record old log file. If this flag and max_file_index set,
   // will record log files in the directory for log file
   int set_record_old_log_file(bool rec_old_file_flag = false);
+
+  int set_log_compressor(ObLogCompressor *log_compressor);
 
   //@brief Get current time.
   static struct timeval get_cur_tv();
@@ -932,6 +1020,9 @@ private:
   int add_files_to_list(void* files /*ObIArray<FileName> * */, void* wf_files /*ObIArray<FileName> * */,
       std::deque<std::string>& file_list, std::deque<std::string>& wf_file_list);
 
+  void remove_outdated_file(std::deque<std::string> &file_list);
+  void update_compression_file(std::deque<std::string> &file_list);
+
   void rotate_log(
       const int64_t size, const bool redirect_flag, ObPLogFileStruct& log_struct, const ObPLogFDType fd_type);
   //@brief Rename the log to a filename with fmt. And open a new file with the old, then add old file to file_list.
@@ -981,9 +1072,12 @@ private:
   static RLOCAL(bool, disable_logging_);
 
   ObPLogFileStruct log_file_[MAX_FD_FILE];
+  ObLogCompressor *log_compressor_;
 
   int64_t max_file_size_;
   int64_t max_file_index_;
+  int64_t max_file_time_;         // max retention time(second) of log-file
+  int32_t enable_file_compress_;  // percentage of log-file to compress
 
   pthread_mutex_t file_size_mutex_;
   pthread_mutex_t file_index_mutex_;

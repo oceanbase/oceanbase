@@ -80,7 +80,7 @@ public:
   }
 
 protected:
-  virtual int get_all_diag_info();
+  virtual int get_all_diag_info() override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSessionEventI1);

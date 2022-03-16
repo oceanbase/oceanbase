@@ -70,6 +70,10 @@ public:
   {
     return ATOMIC_LOAD(&min_using_file_id_);
   }
+  ObLogWritePoolType get_pool_type() const
+  {
+    return type_;
+  }
   void update_min_file_id(const file_id_t file_id);
   void update_max_file_id(const file_id_t file_id);
   void update_min_using_file_id(const file_id_t file_id);
@@ -90,6 +94,7 @@ protected:
   int fsync_dir(const int dir_fd);
   int get_dir_name(const char* fname, char* dir_name, const int64_t len);
   int rename_file(const int src_dir_fd, const char* srcfile, const int dest_dir_fd, const char* destfile);
+  int check_file_existence(const char* dir, const file_id_t file_id, bool& b_exist);
 
 private:
   static const int TASK_NUM = 1024;

@@ -23,11 +23,11 @@ public:
   ~ObFreezeInfoUpdater();
   int init(ObFreezeInfoManager& freeze_info_manager);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
 
 private:
   int try_gc_snapshot();

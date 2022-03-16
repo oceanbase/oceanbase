@@ -38,15 +38,20 @@ public:
   {
     UNUSED(allocator);
   }
-  virtual void* alloc(int64_t sz)
+  virtual void* alloc(const int64_t sz) override
   {
     UNUSEDx(sz);
     return nullptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void* alloc(const int64_t sz, const ObMemAttr& attr) override
   {
     UNUSEDx(sz, attr);
     return nullptr;
+  }
+
+  virtual void free(void *p) override
+  {
+    UNUSED(p);
   }
 
   virtual ~ObNullAllocator(){};
@@ -55,11 +60,18 @@ public:
 template <typename BlockAllocatorT>
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, BlockAllocatorT& block_allocator)
 {
-  block_allocator = BlockAllocatorT(mem_entity.get_allocator());
+  block_allocator = BlockAllocatorT(mem_entity->get_allocator());
 }
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePageAllocator& block_allocator)
 {
-  block_allocator = ModulePageAllocator(mem_entity.get_allocator(), block_allocator.get_label());
+  block_allocator = ModulePageAllocator(mem_entity->get_allocator(), block_allocator.get_label());
+}
+static inline void init_block_allocator(lib::MemoryContext &mem_context, ObIAllocator &block_allocator)
+{
+  // this implement is invalid, just for compilation.
+  // protected by static_assert.
+  UNUSED(mem_context);
+  UNUSED(block_allocator);
 }
 
 // ObSEArrayImpl is a high performant array for OceanBase developers,
@@ -69,6 +81,8 @@ static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePa
 static const int64_t OB_DEFAULT_SE_ARRAY_COUNT = 64;
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObSEArrayImpl : public ObIArray<T> {
+  static_assert(std::is_constructible<BlockAllocatorT>::value || !auto_free, "BlockAllocatorT can not be constructed.");
+
 public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;
@@ -310,8 +324,8 @@ private:
   {
     if (OB_UNLIKELY(!has_alloc_)) {
       if (auto_free) {
-        mem_context_ = &CURRENT_CONTEXT;
-        init_block_allocator(*mem_context_, block_allocator_);
+        mem_context_ = CURRENT_CONTEXT;
+        init_block_allocator(mem_context_, block_allocator_);
       }
       has_alloc_ = true;
     } else {
@@ -342,7 +356,7 @@ private:
   int error_;
   BlockAllocatorT block_allocator_;
   bool has_alloc_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 };
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool auto_free>
@@ -478,6 +492,9 @@ void ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::pop_back()
 {
   if (OB_UNLIKELY(count_ <= 0)) {
   } else {
+    if (!is_memcpy_safe()) {
+      data_[count_ - 1].~T();
+    }
     --count_;
   }
 }

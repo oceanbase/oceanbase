@@ -92,7 +92,7 @@ public:
   explicit ObDtlRpcChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlRpcChannel();
 
-  virtual DtlChannelType get_channel_type()
+  virtual DtlChannelType get_channel_type() override
   {
     return DtlChannelType::RPC_CHANNEL;
   }
@@ -101,7 +101,7 @@ public:
   virtual void destroy();
 
   virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int send_message(ObDtlLinkedBuffer*& buf);
+  virtual int send_message(ObDtlLinkedBuffer*& buf) override;
 };
 
 }  // namespace dtl

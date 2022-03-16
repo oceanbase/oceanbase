@@ -139,10 +139,22 @@ int ObShowCreateTablegroup::fill_row_cells(uint64_t show_tablegroup_id, const Ob
                   show_tablegroup_id, db_def_buf, db_def_buf_size, pos, false, TZ_INFO(session_)))) {
             LOG_WARN("Generate tablegroup definition failed");
           } else {
-            ObString value_str(static_cast<int32_t>(db_def_buf_size), static_cast<int32_t>(pos), db_def_buf);
-            cur_row_.cells_[cell_idx].set_varchar(value_str);
-            cur_row_.cells_[cell_idx].set_collation_type(
-                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            const ObColumnSchemaV2 *column_schema = NULL;
+            if (OB_ISNULL(table_schema_) || OB_ISNULL(column_schema = table_schema_->get_column_schema(col_id))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table or column schema is null", K(ret), KP(table_schema_), KP(column_schema));
+            } else {
+              const bool type_is_lob = column_schema->get_meta_type().is_lob();
+              // for compatibility
+              if (type_is_lob) {
+                cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType, db_def_buf, static_cast<int32_t>(pos));
+              } else {
+                ObString value_str(static_cast<int32_t>(db_def_buf_size), static_cast<int32_t>(pos), db_def_buf);
+                cur_row_.cells_[cell_idx].set_varchar(value_str);
+              }
+              cur_row_.cells_[cell_idx].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            }
           }
           break;
         }

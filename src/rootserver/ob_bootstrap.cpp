@@ -797,6 +797,8 @@ int ObBootstrap::execute_bootstrap()
     LOG_WARN("wait_all_rs_in_service failed", K(ret));
   } else if (GCONF._enable_ha_gts_full_service && OB_FAIL(init_gts_service_data())) {
     LOG_WARN("fail to init gts service data", K(ret));
+  } else if (OB_FAIL(init_backup_inner_table())) {
+    LOG_WARN("failed tro init backup inner table", K(ret));
   } else {
     ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   }
@@ -1037,6 +1039,22 @@ int ObBootstrap::primary_construct_all_schema(ObIArray<ObTableSchema>& table_sch
           } else {
             LOG_INFO("create sys index schema", K(ret), K(table_schema));
           }
+        } else if (OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table_schema.get_table_id())) {
+          // index for __all_backup_piece_files
+          ObTableSchema index_schema;
+          if (OB_FAIL(ObInnerTableSchema::all_backup_piece_files_idx_data_table_id_schema(index_schema))) {
+            LOG_WARN("fail to create index schema", K(ret), K(table_schema));
+          } else if (OB_FAIL(table_schema.add_simple_index_info(ObAuxTableMetaInfo(index_schema.get_table_id(),
+                         index_schema.get_table_type(),
+                         index_schema.get_drop_schema_version())))) {
+            LOG_WARN("fail to add simple_index_info", K(ret), K(table_schema));
+          } else if (OB_FAIL(table_schemas.push_back(index_schema))) {
+            LOG_WARN("push_back failed", K(ret), K(index_schema));
+          } else if (OB_FAIL(table_schemas.push_back(table_schema))) {
+            LOG_WARN("push_back failed", K(ret), K(table_schema));
+          } else {
+            LOG_INFO("create sys index schema", K(ret), K(table_schema));
+          }
         } else {
           if (OB_FAIL(table_schemas.push_back(table_schema))) {
             LOG_WARN("push_back failed", K(ret), K(table_schema));
@@ -1090,11 +1108,26 @@ int ObBootstrap::create_all_schema(ObDDLService& ddl_service, ObIArray<ObTableSc
   } else {
     int64_t begin = 0;
     int64_t batch_count = BATCH_INSERT_SCHEMA_CNT;
+    const int64_t MAX_RETRY_TIMES = 3;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
       if (table_schemas.count() == (i + 1) || (i + 1 - begin) >= batch_count) {
-        if (OB_FAIL(batch_create_schema(ddl_service, table_schemas, begin, i + 1))) {
-          LOG_WARN("batch create schema failed", K(ret), "table count", i + 1 - begin);
-        } else {
+        int64_t retry_times = 1;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(batch_create_schema(ddl_service, table_schemas, begin, i + 1))) {
+            LOG_WARN("batch create schema failed", K(ret), "table count", i + 1 - begin);
+            // bugfix:https://work.aone.alibaba-inc.com/issue/34030283
+            if ((OB_SCHEMA_EAGAIN == ret || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret) &&
+                retry_times <= MAX_RETRY_TIMES) {
+              retry_times++;
+              ret = OB_SUCCESS;
+              LOG_INFO("schema error while create table, need retry", KR(ret), K(retry_times));
+              usleep(1 * 1000 * 1000L);  // 1s
+            }
+          } else {
+            break;
+          }
+        }
+        if (OB_SUCC(ret)) {
           begin = i + 1;
         }
       }
@@ -1129,7 +1162,8 @@ int ObBootstrap::batch_create_schema(
         const ObString* ddl_stmt = NULL;
         bool need_sync_schema_version =
             extract_pure_id(table.get_table_id()) != OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID &&
-            extract_pure_id(table.get_table_id()) != OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID;
+            extract_pure_id(table.get_table_id()) != OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID &&
+            extract_pure_id(table.get_table_id()) != OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID;
         if (OB_FAIL(ddl_operator.create_table(table, trans, ddl_stmt, need_sync_schema_version, is_truncate_table))) {
           LOG_WARN("add table schema failed",
               K(ret),
@@ -1620,6 +1654,24 @@ int ObBootstrap::init_gts_service_data()
     LOG_WARN("fail to create gts instance", K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::init_backup_inner_table()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", K(ret));
+  } else if (OB_FAIL(ObBackupInfoOperator::set_inner_table_version(
+                 ddl_service_.get_sql_proxy(), OB_BACKUP_INNER_TABLE_V3))) {
+    LOG_WARN("failed to init backup inner table version", K(ret));
+  } else if (OB_FAIL(ObBackupInfoOperator::set_max_piece_id(ddl_service_.get_sql_proxy(), 0))) {
+    LOG_WARN("failed to init max piece id", K(ret));
+  } else if (OB_FAIL(ObBackupInfoOperator::set_max_piece_create_date(ddl_service_.get_sql_proxy(), 0))) {
+    LOG_WARN("failed to init set_max_piece_create_date", K(ret));
+  }
+
   return ret;
 }
 

@@ -25,7 +25,7 @@ namespace oceanbase {
 
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaGetterGuard;
 }  // namespace schema
 }  // namespace share
@@ -63,7 +63,7 @@ class TablePrefixValue {
 public:
   uint64_t tablegroup_id_;
   uint64_t table_id_;
-  const share::schema::ObTableSchema* schema_;
+  const share::schema::ObSimpleTableSchemaV2* schema_;
   TO_STRING_KV(K_(tablegroup_id), K_(table_id));
 };
 
@@ -91,7 +91,7 @@ public:
   // Iterate the ShardGroup.
   // Note: If there are multiple tables belonging to the same table group,
   //       only the primary table in the table group is taken as a representative and stored in tids
-  int next(common::ObIArray<const share::schema::ObTableSchema*>& schemas);
+  int next(common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& schemas);
 
 private:
   int build_prefix_map(uint64_t tenant_id, ShardGroupPrefixMap& prefix_map);
@@ -101,7 +101,7 @@ private:
   int add_to_shardgroup(common::ObIArray<TablePrefixValue>& cur_shard, int64_t cur_shard_idx,
       common::hash::ObHashMap<uint64_t, int64_t>& shardgroup_map, common::ObIArray<ShardGroup*>& shardgroups);
   int extract_table_name_prefix(const common::ObString& table, TablePrefixKey& prefix_info);
-  int build_prefix_key(const share::schema::ObTableSchema& table, TablePrefixKey& prefix_key);
+  int build_prefix_key(const share::schema::ObSimpleTableSchemaV2& table, TablePrefixKey& prefix_key);
 
 private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
@@ -153,14 +153,14 @@ public:
         cur_table_idx_(0)
   {}
   int analysis(const uint64_t tenant_id);
-  int next(const share::schema::ObTableSchema*& table_schema);
+  int next(const share::schema::ObSimpleTableSchemaV2*& table_schema);
 
 private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
   common::ObIAllocator& allocator_;
   common::hash::ObHashSet<uint64_t>& processed_tids_;
-  common::ObArray<const share::schema::ObTableSchema*> table_schemas_;
+  common::ObArray<const share::schema::ObSimpleTableSchemaV2*> table_schemas_;
   int64_t cur_table_idx_;
 };
 

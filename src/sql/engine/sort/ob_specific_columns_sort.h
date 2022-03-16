@@ -26,14 +26,14 @@ public:
   ObSpecificColumnsSort(const char* label, uint64_t malloc_block_size, uint64_t tenant_id,
       oceanbase::common::ObCtxIds::ObCtxIdEnum ctx_id);
   virtual ~ObSpecificColumnsSort(){};
-  virtual void reset();
-  virtual void reuse();
-  virtual void rescan();
-  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos);
-  virtual int add_row(const common::ObNewRow& row, bool& need_sort);
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual void rescan() override;
+  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos) override;
+  virtual int add_row(const common::ObNewRow& row, bool& need_sort) override;
   int add_row_without_copy(common::ObNewRow* row);
-  virtual int sort_rows();
-  virtual int get_next_row(common::ObNewRow& row);
+  virtual int sort_rows() override;
+  virtual int get_next_row(common::ObNewRow& row) override;
   int get_sort_result_array(common::ObArray<const common::ObNewRow*>& sort_result);
   virtual int64_t get_row_count() const override
   {
@@ -43,12 +43,12 @@ public:
   {
     return row_alloc_.used();
   }
-  virtual int init_tenant_id(uint64_t tenant_id)
+  virtual int init_tenant_id(uint64_t tenant_id) override
   {
     row_alloc_.set_tenant_id(tenant_id);
     return common::OB_SUCCESS;
   }
-  virtual int get_next_compact_row(common::ObString& compact_row)
+  virtual int get_next_compact_row(common::ObString& compact_row) override
   {
     UNUSED(compact_row);
     return common::OB_SUCCESS;

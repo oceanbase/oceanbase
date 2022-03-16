@@ -85,10 +85,8 @@ public:
   int get_log_id_range(
       const common::ObPartitionKey& partition_key, uint64_t& ret_min_log_id, uint64_t& ret_max_log_id) const;
 
-  // The ilog_memstore that calls following function must be frozen
-  int check_need_switch_file(bool& need_switch_file) const;
-
   int get_cursor_size(int64_t& cursor_size) const;
+  int get_clog_size(int64_t& clog_size) const;
   int insert_partition_meta_info(const common::ObPartitionKey& pkey, const IndexInfoBlockEntry& entry);
   int insert_partition_memberlist_info(const common::ObPartitionKey& pkey, const MemberListInfo& member_list);
   int insert_partition_log_cursor_ext_info(const ObPartitionLogInfo& log_info, const ObLogCursorExt& log_cursor);

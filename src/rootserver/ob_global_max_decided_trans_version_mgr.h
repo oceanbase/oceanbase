@@ -41,10 +41,10 @@ public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, share::ObPartitionTableOperator* pt_operator,
       share::schema::ObMultiVersionSchemaService* schema_service, const common::ObAddr& self_addr);
   virtual void run3() override;
-  virtual int start();
-  virtual void stop();
-  virtual void wait();
-  virtual int blocking_run()
+  virtual int start() override;
+  virtual void stop() override;
+  virtual void wait() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }

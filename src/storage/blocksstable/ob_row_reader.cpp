@@ -107,7 +107,7 @@ int deserialize_trans_id(const char* buf, const int64_t row_end_pos, int64_t& po
   if (OB_FAIL(trans_id_ptr->deserialize(buf, row_end_pos, pos))) {
     STORAGE_LOG(WARN, "Failed to deserialize TransID", K(ret), K(buf), K(row_end_pos), K(pos));
   } else {
-    STORAGE_LOG(DEBUG, "Deserialize TransId success", K(*trans_id_ptr));
+    STORAGE_LOG(DEBUG, "Deserialize TransId success", KPC(trans_id_ptr));
   }
   return ret;
 }
@@ -244,6 +244,13 @@ int ObIRowReader::read_text_store(const ObStoreMeta& store_meta, common::ObIAllo
   return ret;
 }
 
+int ObIRowReader::read_json_store(
+    const ObStoreMeta &store_meta,
+    common::ObIAllocator &allocator,
+    ObObj &obj) {
+  return read_text_store(store_meta, allocator, obj);
+}
+
 //----------------------ObFlatRowReader-----------------------------------
 
 ObFlatRowReader::ObFlatRowReader()
@@ -300,7 +307,7 @@ OB_INLINE int ObFlatRowReader::analyze_row_header(const int64_t input_column_cnt
   } else {
     pos_ += row_header_size;  // move forward
     DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), K(*trans_id_ptr), K(row_header_->get_version()));
+    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), KPC(row_header_));
   }
   return ret;
 }
@@ -828,6 +835,15 @@ int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator
         empty_str = 0 == obj.get_val_len();
         break;
       }
+      case ObJsonStoreType: {
+        if (OB_FAIL(read_json_store(*meta, allocator, obj))) {
+          STORAGE_LOG(WARN, "fail to read json store", K(ret));
+        } else if (src_meta.is_json_outrow()) {
+          need_cast = false;
+        }
+        empty_str = 0 == obj.get_val_len();
+        break;
+      }
       case ObHexStoreType: {
         ObString value;
         const uint32_t* len = read<uint32_t>(buf_, pos_);
@@ -895,7 +911,7 @@ int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator
                  empty_str) {  // just change the type
         // extra bypaas path for raw, or data will be wrong
         obj.set_type(src_meta.get_type());
-        if (empty_str && ObTextTC == type_class) {
+        if (empty_str && (ObTextTC == type_class || ObJsonTC == type_class)) {
           obj.set_lob_inrow();
         }
       } else {
@@ -1087,6 +1103,14 @@ int ObFlatRowReader::read_obj_no_meta(
           }
           break;
         }
+        case ObJsonStoreType: {
+          if (OB_FAIL(read_json_store(*meta, allocator, obj))) {
+            STORAGE_LOG(WARN, "fail to read text store", K(ret));
+          } else if (src_meta.is_json()) {
+            obj.set_type(src_meta.get_type());
+          }
+          break;
+        }
         case ObHexStoreType: {
           ObString value;
           const int32_t* len = read<int32_t>(buf_, pos_);
@@ -1216,7 +1240,7 @@ OB_INLINE int ObSparseRowReader::analyze_row_header(transaction::ObTransID* tran
   } else {
     pos_ += row_header_size;  // move forward
     DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), K(row_header_->get_version()));
+    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), KPC(row_header_));
   }
   return ret;
 }

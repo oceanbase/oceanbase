@@ -134,8 +134,10 @@ int ObPxFifoCoord::inner_get_next_row(ObExecContext& ctx, const common::ObNewRow
     if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("phy plan ctx NULL", K(ret));
-    } else if (FALSE_IT(timeout_us = phy_plan_ctx->get_timeout_timestamp() - px_ctx->get_timestamp())) {
-    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    } else if ((timeout_us = phy_plan_ctx->get_timeout_timestamp() - px_ctx->get_timestamp()) < 0) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("query timeout", K(ret), K(timeout_us), "timeout_ts", THIS_WORKER.get_timeout_ts());
+    } else if (OB_FAIL(ctx.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
       // TODO: cleanup
     } else if (OB_FAIL(loop.process_one(timeout_us))) {

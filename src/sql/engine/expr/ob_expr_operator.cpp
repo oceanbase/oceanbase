@@ -150,8 +150,7 @@ bool ObExprOperator::is_default_expr_cg() const
   } func_val;
   static_assert(sizeof(int64_t) * 2 == sizeof(CGFunc), "size mismatch");
   func_val.func_ = &ObExprOperator::cg_expr;
-  // virtual member function pointer is vtable absolute offset + 1 (to avoid null)
-  const int64_t func_idx = (func_val.val_ - 1) / sizeof(void*);
+  const int64_t func_idx = func_val.val_ / sizeof(void *);
   return (*(void***)(&base))[func_idx] == (*(void***)(this))[func_idx];
 }
 
@@ -203,8 +202,35 @@ int OB_INLINE ObExprOperator::cast_operand_type(
     LOG_DEBUG(
         "need cast operand", K(res_type), K(res_type.get_calc_meta().get_scale()), K(res_obj), K(res_obj.get_scale()));
     ObCastMode cast_mode = get_cast_mode();
+    // In PAD expression, we need add COLUMN_CONVERT to cast mode when cast is
+    // from bit to binary and column convert is set in column_conv_ctx_. The COLUMN_CONVERT
+    // cast mode is used in bit_to_string to decide which cast way is appropriate.
+    if (OB_UNLIKELY(T_FUN_PAD == get_type() && ob_is_bit_tc(param_type) &&
+                    ob_is_varbinary_type(calc_type, calc_collation_type) &&
+                    CM_IS_COLUMN_CONVERT(expr_ctx.column_conv_ctx_.cast_mode_))) {
+      cast_mode |= CM_COLUMN_CONVERT;
+    }
 
-    if (ob_is_string_or_lob_type(res_type.get_calc_type()) && res_type.is_zerofill()) {
+    bool is_bool = false;
+    ObItemType item_type = T_NULL;
+    if (lib::is_mysql_mode() && calc_type == ObJsonType && ob_obj_type_class(param_type) == ObIntTC) {
+      if (OB_FAIL(get_param_is_boolean(expr_ctx, res_obj, is_bool))) {
+        LOG_WARN("get src item type failed, bool may be cast as json int", K(res_obj), K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_bool) {
+      const ObObj *tmp_res_obj = NULL;
+      EXPR_DEFINE_CAST_CTX(expr_ctx, cast_mode);
+      if (CS_TYPE_INVALID != calc_collation_type) {
+        cast_ctx.dest_collation_ = calc_collation_type;
+      } else if (share::is_mysql_mode()
+          && CS_TYPE_INVALID != param_collation_type) {
+        cast_ctx.dest_collation_ = param_collation_type;
+      }
+      ret = ObObjCaster::bool_to_json(calc_type, cast_ctx, res_obj, res_obj, tmp_res_obj);
+      LOG_DEBUG("cast bool to json", K(cast_mode), K(calc_type), K(cast_ctx.dest_collation_), K(res_obj), K(ret));
+    } else if (ob_is_string_or_lob_type(res_type.get_calc_type()) && res_type.is_zerofill()) {
       // For zerofilled string
       ObZerofillInfo zf_info(true, res_type.get_length());
       EXPR_DEFINE_CAST_CTX_ZF(expr_ctx, cast_mode, &zf_info);
@@ -232,7 +258,9 @@ int OB_INLINE ObExprOperator::cast_operand_type(
           } else {
             cast_ctx.dest_collation_ = ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4);
           }
-        }
+        } 
+      } else if (share::is_mysql_mode() && ob_is_json(calc_type)) {
+         cast_ctx.dest_collation_ = CS_TYPE_UTF8MB4_BIN;
       }
       ObObj res_obj_copy = res_obj;
       cast_ctx.expect_obj_collation_ = cast_ctx.dest_collation_;
@@ -462,6 +490,36 @@ int ObExprOperator::param_eval(common::ObExprCtx& expr_ctx, const common::ObObj&
           OB_FAIL(cast_operand_type(const_cast<ObObj&>(param), input_types_.at(param_index), expr_ctx))) {
         LOG_WARN("cast failed", K(ret), K(param), K(input_types_.at(param_index)));
       }
+    }
+  }
+  return ret;
+}
+
+int ObExprOperator::get_param_type(common::ObExprCtx &expr_ctx,
+    const common::ObObj &param, ObItemType &param_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr_ctx.infix_expr_)) {
+    // do nothing for postfix expression
+  } else {
+    if (OB_FAIL(expr_ctx.infix_expr_->get_param_type(expr_ctx, param, param_type))) {
+      LOG_WARN("param eval failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprOperator::get_param_is_boolean(common::ObExprCtx &expr_ctx,
+      const common::ObObj &param, bool &is_boolean) const
+{
+  int ret = OB_SUCCESS;
+  is_boolean = false;
+  if (OB_ISNULL(expr_ctx.infix_expr_)) {
+    // do nothing for postfix expression
+  } else {
+    if (OB_FAIL(expr_ctx.infix_expr_->get_param_is_boolean(expr_ctx, param,
+                                                               is_boolean))) {
+      LOG_WARN("get param bool semantics failed", K(ret));
     }
   }
   return ret;
@@ -714,7 +772,7 @@ int ObExprOperator::aggregate_string_type_and_charset_oracle(const ObBasicSessio
 
   if (OB_SUCC(ret)) {
     result.set_type_simple(result_type);
-    if (ob_is_large_text(result_type)) {
+    if (ob_is_large_text(result_type) || ob_is_json(result_type)) {
       result.set_lob_inrow();
     }
     result.set_collation_type(result_charset);
@@ -804,6 +862,8 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType& type1, const
       match = ob_is_blob_locator(type2.get_type(), type2.get_collation_type());
     } else if (ob_is_clob_locator(type1.get_type(), type1.get_collation_type())) {
       match = ob_is_clob_locator(type2.get_type(), type2.get_collation_type());
+    } else if (ob_is_json(type1.get_type())) {
+      match = ob_is_json(type2.get_type());
     }
   }
   return ret;
@@ -849,6 +909,8 @@ int ObExprOperator::aggregate_result_type_for_case(ObExprResType& type, const Ob
             need_merge_type,
             skip_null))) {
       LOG_WARN("fail to aggregate result type", K(ret));
+    } else if (ObFloatType == type.get_type() && !is_oracle_mode) {
+      type.set_type(ObDoubleType);
     }
   }
   return ret;
@@ -877,7 +939,6 @@ int ObExprOperator::aggregate_result_type_for_merge(ObExprResType& type, const O
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       type.set_type(res_type);
       if (ob_is_numeric_type(res_type)) {
@@ -895,6 +956,9 @@ int ObExprOperator::aggregate_result_type_for_merge(ObExprResType& type, const O
         type.set_collation_level(CS_LEVEL_NUMERIC);
       } else if (ob_is_interval_tc(res_type)) {
         ret = aggregate_accuracy_for_merge(type, types, param_num);
+      } else if (ob_is_json(res_type)) {
+        type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        type.set_collation_level(CS_LEVEL_IMPLICIT);
       }
     }
     LOG_DEBUG("merged type is", K(type), K(is_oracle_mode));
@@ -1063,8 +1127,7 @@ int ObExprOperator::aggregate_temporal_accuracy_for_merge(
       }
     }
     if (OB_UNLIKELY(scale < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected scale.", K(ret), K(scale));
+      type.set_scale(ObAccuracy::MAX_ACCURACY2[is_oracle_mode()][type.get_type()].get_scale());
     } else {
       type.set_scale(scale);
     }
@@ -1412,7 +1475,7 @@ int ObRelationalExprOperator::compare_nullsafe(int64_t& result, const ObObj& obj
 }
 
 bool ObRelationalExprOperator::can_cmp_without_cast(
-    ObExprResType type1, ObExprResType type2, ObCmpOp cmp_op, const ObSQLSessionInfo& session)
+    const ObExprResType& type1, const ObExprResType& type2, ObCmpOp cmp_op, const ObSQLSessionInfo& session)
 {
   bool need_no_cast = false;
   if (ob_is_enum_or_set_type(type1.get_type()) && ob_is_enum_or_set_type(type2.get_type())) {
@@ -1591,7 +1654,7 @@ int ObExprOperator::calc_trig_function_result_type1(
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][type.get_type()].get_precision());
   }
   type1.set_calc_type(type.get_type());
-  ObExprOperator::calc_result_flag1(type, type1);
+  //no need add not null check for trig/ln/e funciotn in mysql mode
   return ret;
 }
 
@@ -1833,7 +1896,7 @@ int ObRelationalExprOperator::calc_result2(
   int ret = OB_SUCCESS;
   // TODO:: raw
   //  bool need_cast = (share::is_oracle_mode() && obj1.get_collation_type() != obj2.get_collation_type());
-  bool need_cast = false;
+  bool need_cast = (share::is_oracle_mode() && obj1.get_type() != obj2.get_type());
   EXPR_DEFINE_CMP_CTX(result_type_.get_calc_meta(), is_null_safe, expr_ctx);
   /*
    * FIX ME,please. It seems that we must check obj1 and obj2 are null or not here
@@ -2222,10 +2285,7 @@ int ObSubQueryRelationalExpr::calc_resultN(
       tmp_row.count_ = param_num - 1;
       left_row = &tmp_row;
       const ObObj& idx_obj = param_array[param_num - 1];
-      if (OB_ISNULL(left_row)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("left_row is null", K(left_row), K(ret));
-      } else if (OB_FAIL(idx_obj.get_int(subquery_idx))) {
+      if (OB_FAIL(idx_obj.get_int(subquery_idx))) {
         LOG_WARN("get subquery index failed", K(ret));
       } else if (T_WITH_ALL == subquery_key_) {
         if (OB_FAIL(calc_result_with_all(result, *left_row, subquery_idx, expr_ctx))) {
@@ -2584,7 +2644,6 @@ int ObSubQueryRelationalExpr::check_exists(const ObExpr& expr, ObEvalCtx& ctx, b
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected argument count", K(ret));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, v))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL subquery ref info returned", K(ret));
   } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
                  ctx, ObExprSubQueryRef::ExtraInfo::get_info(v->get_int()), iter))) {
@@ -3010,15 +3069,20 @@ int ObVectorExprOperator::calc_result_type2_(
 {
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
-  if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  if (OB_ISNULL(type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+    LOG_WARN("calc cmp type2 failed", K(ret));
+  } else {
     type.set_int();  // not tinyint, compatiable with MySQL
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
     ObExprOperator::calc_result_flag2(type, type1, type2);
 
-    if (GCONF.enable_static_engine_for_query()) {
-      obj_cmp_func func_ptr = NULL;
-      bool need_no_cast = ObRelationalExprOperator::can_cmp_without_cast(type1, type2, CO_EQ, func_ptr);
+    if (type_ctx.get_session()->use_static_typing_engine()) {
+      bool need_no_cast = ObRelationalExprOperator::can_cmp_without_cast(type1, type2,
+                                                            CO_EQ, *type_ctx.get_session());
       type1.set_calc_type(need_no_cast ? type1.get_type() : cmp_type.get_calc_type());
       type2.set_calc_type(need_no_cast ? type2.get_type() : cmp_type.get_calc_type());
       if (ob_is_string_type(cmp_type.get_calc_type())) {
@@ -3072,139 +3136,47 @@ int ObStringExprOperator::convert_result_collation(
   return ret;
 }
 
+// for calc result type and length for function date_format and time_format.
+void ObStringExprOperator::calc_temporal_format_result_length(
+      ObExprResType &type, const ObExprResType &format) const
+{
+  const int64_t VARCHAR_RES_MAX_PARAM_LENGTH = 17;
+  const int64_t TEXT_RES_MAX_PARAM_LENGTH = 728;
+  const int64_t MAX_VARCHAR_BUFFER_SIZE = 256;
+  if (ob_is_string_tc(format.get_type())) {
+    // consistent with Mysql, result_length / format_length = 30
+    const int64_t ratio = 30;
+    if (format.get_length() <= VARCHAR_RES_MAX_PARAM_LENGTH) {
+      type.set_varchar();
+      type.set_length(format.get_length() * ratio);
+    } else if (format.get_length() < TEXT_RES_MAX_PARAM_LENGTH) {
+      type.set_type(ObTextType);
+    } else {
+      type.set_type(ObLongTextType);
+    }
+  } else if (ob_is_text_tc(format.get_type())) {
+    type.set_type(ObTinyTextType == format.get_type() ? ObTextType : ObLongTextType);
+  } else {
+    type.set_varchar();
+    type.set_length(MAX_VARCHAR_BUFFER_SIZE);
+  }
+  if (is_mysql_mode() && ob_is_text_tc(type.get_type())) {
+    const int32_t mbmaxlen = 4;
+    const int32_t default_text_length = ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].get_length() / mbmaxlen;
+    // need to set a correct length for text tc in mysql mode
+    type.set_length(default_text_length);
+  }
+}
+
 ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const
 {
   /*
-    drop table t1;
-    drop table t2;
-    create table t1 (
-      col_varchar    varchar(1),
-      col_varbinary  varbinary(1),
-      col_char       char(1),
-      col_binary     binary(1),
-      col_tinytext   tinytext,
-      col_tinyblob   tinyblob,
-      col_mediumtext mediumtext,
-      col_mediumblob mediumblob,
-      col_text       text,
-      col_blob       blob,
-      col_count      bigint);
-    create table t2 as
-    select repeat('啊',   512),
-           repeat('a',    513),
-           repeat('啊', 21845),
-           repeat('a',  21846),
-           repeat(col_varchar, '512'),
-           repeat(col_varchar, '513'),
-           repeat(col_varchar, 65535),
-           repeat(col_varchar, 65536),
-           repeat(col_varbinary, '512'),
-           repeat(col_varbinary, '513'),
-           repeat(col_varbinary, 65535),
-           repeat(col_varbinary, 65536),
-           repeat(col_char, '512'),
-           repeat(col_char, '513'),
-           repeat(col_char, 65535),
-           repeat(col_char, 65536),
-           repeat(col_binary, '512'),
-           repeat(col_binary, '513'),
-           repeat(col_binary, 65535),
-           repeat(col_binary, 65536),
-           repeat(col_tinytext,   2),
-           repeat(col_tinytext,   3),
-           repeat(col_tinytext, 257),
-           repeat(col_tinytext, 258),
-           repeat(col_tinyblob,   2),
-           repeat(col_tinyblob,   3),
-           repeat(col_tinyblob, 257),
-           repeat(col_tinyblob, 258),
-           repeat(col_mediumtext, 1),
-           repeat(col_mediumblob, 1),
-           repeat(col_text, 1),
-           repeat(col_text, 2),
-           repeat(col_blob, 1),
-           repeat(col_blob, 2),
-           repeat('啊', col_count),
-           repeat('a', col_count),
-           repeat(col_varchar, col_count),
-           repeat(col_varbinary, col_count),
-           repeat(col_char, col_count),
-           repeat(col_binary, col_count),
-           repeat(col_tinytext, col_count),
-           repeat(col_tinyblob, col_count),
-           repeat(col_mediumtext, col_count),
-           repeat(col_mediumblob, col_count),
-           repeat(col_text, col_count),
-           repeat(col_blob, col_count)
-    from t1;
-    desc t2;
-
-    MySQL> desc t2;
-    +-----------------------------------+----------------+------+-----+---------+-------+
-    | Field                             | Type           | Null | Key | Default | Extra |
-    +-----------------------------------+----------------+------+-----+---------+-------+
-    | repeat('啊',   512)               | varchar(512)   | YES  |     | NULL    |       |
-    | repeat('a',    513)               | text           | YES  |     | NULL    |       |
-    | repeat('啊', 21845)               | text           | YES  |     | NULL    |       |
-    | repeat('a',  21846)               | longtext       | YES  |     | NULL    |       |
-    | repeat(col_varchar, '512')        | varchar(512)   | YES  |     | NULL    |       |
-    | repeat(col_varchar, '513')        | text           | YES  |     | NULL    |       |
-    | repeat(col_varchar, 65535)        | text           | YES  |     | NULL    |       |
-    | repeat(col_varchar, 65536)        | longtext       | YES  |     | NULL    |       |
-    | repeat(col_varbinary, '512')      | varbinary(512) | YES  |     | NULL    |       |
-    | repeat(col_varbinary, '513')      | blob           | YES  |     | NULL    |       |
-    | repeat(col_varbinary, 65535)      | blob           | YES  |     | NULL    |       |
-    | repeat(col_varbinary, 65536)      | longblob       | YES  |     | NULL    |       |
-    | repeat(col_char, '512')           | varchar(512)   | YES  |     | NULL    |       |
-    | repeat(col_char, '513')           | text           | YES  |     | NULL    |       |
-    | repeat(col_char, 65535)           | text           | YES  |     | NULL    |       |
-    | repeat(col_char, 65536)           | longtext       | YES  |     | NULL    |       |
-    | repeat(col_binary, '512')         | varbinary(512) | YES  |     | NULL    |       |
-    | repeat(col_binary, '513')         | blob           | YES  |     | NULL    |       |
-    | repeat(col_binary, 65535)         | blob           | YES  |     | NULL    |       |
-    | repeat(col_binary, 65536)         | longblob       | YES  |     | NULL    |       |
-    | repeat(col_tinytext,   2)         | varchar(510)   | YES  |     | NULL    |       |
-    | repeat(col_tinytext,   3)         | text           | YES  |     | NULL    |       |
-    | repeat(col_tinytext, 257)         | text           | YES  |     | NULL    |       |
-    | repeat(col_tinytext, 258)         | longtext       | YES  |     | NULL    |       |
-    | repeat(col_tinyblob,   2)         | varbinary(510) | YES  |     | NULL    |       |
-    | repeat(col_tinyblob,   3)         | blob           | YES  |     | NULL    |       |
-    | repeat(col_tinyblob, 257)         | blob           | YES  |     | NULL    |       |
-    | repeat(col_tinyblob, 258)         | longblob       | YES  |     | NULL    |       |
-    | repeat(col_mediumtext, 1)         | longtext       | YES  |     | NULL    |       |
-    | repeat(col_mediumblob, 1)         | longblob       | YES  |     | NULL    |       |
-    | repeat(col_text, 1)               | text           | YES  |     | NULL    |       |
-    | repeat(col_text, 2)               | longtext       | YES  |     | NULL    |       |
-    | repeat(col_blob, 1)               | blob           | YES  |     | NULL    |       |
-    | repeat(col_blob, 2)               | longblob       | YES  |     | NULL    |       |
-    | repeat('啊', col_count)           | longtext       | YES  |     | NULL    |       |
-    | repeat('a', col_count)            | longtext       | YES  |     | NULL    |       |
-    | repeat(col_varchar, col_count)    | longtext       | YES  |     | NULL    |       |
-    | repeat(col_varbinary, col_count)  | longblob       | YES  |     | NULL    |       |
-    | repeat(col_char, col_count)       | longtext       | YES  |     | NULL    |       |
-    | repeat(col_binary, col_count)     | longblob       | YES  |     | NULL    |       |
-    | repeat(col_tinytext, col_count)   | longtext       | YES  |     | NULL    |       |
-    | repeat(col_tinyblob, col_count)   | longblob       | YES  |     | NULL    |       |
-    | repeat(col_mediumtext, col_count) | longtext       | YES  |     | NULL    |       |
-    | repeat(col_mediumblob, col_count) | longblob       | YES  |     | NULL    |       |
-    | repeat(col_text, col_count)       | longtext       | YES  |     | NULL    |       |
-    | repeat(col_blob, col_count)       | longblob       | YES  |     | NULL    |       |
-    +-----------------------------------+----------------+------+-----+---------+-------+
-    46 rows in set (0.00 sec)
-
    * summarize the rules that mysql decide the result type of some string functions,
    * which mainly depend on the MAX CHAR LENGTH of result:
    * 1. less than or equal to 512: varchar, otherwise
    * 2. less than or equal to 65535: text or blob, otherwise
    * 3. longtext or longblob (including UNKNOWN length when count param is not const).
    * do not care about the input data type, or whether the input is column or const.
-   *
-   * ATTENTION! we will ignore these exceptions:
-   * 1. repeat('啊', 21845) => text, repeat('a',  21846) => longtext. we can not
-   *    understand the magic numbers 21845 and 21846.
-   * 2. repeat(col_mediumtext, 1) => longtext, repeat(col_mediumblob, 1) => longblob.
-   *    text or blob is enough, see:
-   *    repeat(col_text, 1) => text, repeat(col_blob, 1) => blob.
    */
   ObObjType res_type = ObMaxType;
   if (char_length <= MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT) {
@@ -3395,8 +3367,11 @@ int ObBitwiseExprOperator::calc_(
           LOG_WARN("failed to get int64", K(obj2), K(ret));
         } else {
           ObNumber result;
-          result.from((int64_v1 & int64_v2), *expr_ctx.calc_buf_);
-          res.set_number(result);
+          if (OB_FAIL(result.from((int64_v1 & int64_v2), *expr_ctx.calc_buf_))) {
+            LOG_WARN("get ObNumber from int64 failed", K(ret), K(int64_v1 & int64_v2));
+          } else {
+            res.set_number(result);
+          }
         }
       }
     }
@@ -3574,8 +3549,11 @@ int ObBitwiseExprOperator::get_int64_from_number_type(
 {
   int ret = OB_SUCCESS;
   int64_t tmp_int = 0;
-  number::ObNumber nmb(datum.get_number());
-  if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
+  ObNumStackAllocator<> num_allocator;
+  number::ObNumber nmb;
+  if (OB_FAIL(nmb.from(datum.get_number(), num_allocator))) {
+    LOG_WARN("number copy failed", K(ret));
+  } else if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
     LOG_WARN("round/trunc failed", K(ret), K(is_round), K(nmb));
   } else if (nmb.is_valid_int64(tmp_int)) {
     out = tmp_int;
@@ -3593,10 +3571,13 @@ int ObBitwiseExprOperator::get_uint64_from_number_type(
     const ObDatum& datum, bool is_round, uint64_t& out, const ObCastMode& cast_mode)
 {
   int ret = OB_SUCCESS;
-  number::ObNumber nmb(datum.get_number());
+  ObNumStackAllocator<> num_allocator;
+  number::ObNumber nmb;
   int64_t tmp_int = 0;
   uint64_t tmp_uint = 0;
-  if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
+  if (OB_FAIL(nmb.from(datum.get_number(), num_allocator))) {
+    LOG_WARN("number copy failed", K(ret));
+  } else if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
     LOG_WARN("round/trunc failed", K(ret), K(is_round), K(nmb));
   } else if (nmb.is_valid_int64(tmp_int)) {
     out = static_cast<uint64_t>(tmp_int);
@@ -3904,6 +3885,8 @@ int ObMinMaxExprOperator::calc_with_cast(ObObj& result, const ObObj* objs_stack,
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
     if (ob_is_nstring_type(result_type.get_calc_type())) {
       cast_ctx.dest_collation_ = expr_ctx.my_session_->get_nls_collation_nation();
+    } else if (share::is_mysql_mode() && ob_is_json(result_type.get_calc_type())) {
+      cast_ctx.dest_collation_ = CS_TYPE_UTF8MB4_BIN;
     } else if (share::is_mysql_mode() && CS_TYPE_INVALID != result_type.get_collation_type()) {
       cast_ctx.dest_collation_ = result_type.get_collation_type();
     }
@@ -4750,8 +4733,10 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension, ObIAlloca
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret));
       }
-
-      if (OB_UNLIKELY(left_row->arg_cnt_ != right_row->arg_cnt_)) {
+      if (OB_ISNULL(right_row) || OB_ISNULL(left_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("right_row or left_row is null ptr", K(ret), K(right_row), K(left_row));
+      } else if (OB_UNLIKELY(left_row->arg_cnt_ != right_row->arg_cnt_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected row cnt", K(left_row->arg_cnt_), K(right_row->arg_cnt_));
       }

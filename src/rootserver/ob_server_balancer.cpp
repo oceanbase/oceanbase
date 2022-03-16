@@ -203,7 +203,8 @@ int ObServerBalancer::distribute_pool_for_standalone_sys_unit(
         }
       } else if (OB_FAIL(get_unit_resource_reservation(unit->unit_id_, migrate_server, in_migrate_unit_stat))) {
         LOG_WARN("fail to get unit resource reservation", K(ret), K(unit), K(migrate_server));
-      } else if (OB_FAIL(try_migrate_unit(unit->unit_id_, unit_stat, in_migrate_unit_stat, migrate_server))) {
+      } else if (OB_FAIL(try_migrate_unit(
+                     unit->unit_id_, pool.tenant_id_, unit_stat, in_migrate_unit_stat, migrate_server))) {
         LOG_WARN("fail to migrate unit", K(ret), K(unit), K(unit_stat), K(in_migrate_unit_stat));
       }
     }
@@ -319,8 +320,8 @@ int ObServerBalancer::distribute_for_unit_intersect()
               } else if (OB_FAIL(get_unit_resource_reservation(
                              unit.unit_.unit_id_, migrate_server, in_migrate_unit_stat))) {
                 LOG_WARN("fail to get unit resource reservation", K(ret), K(unit), K(migrate_server));
-              } else if (OB_FAIL(
-                             try_migrate_unit(unit.unit_.unit_id_, unit_stat, in_migrate_unit_stat, migrate_server))) {
+              } else if (OB_FAIL(try_migrate_unit(
+                             unit.unit_.unit_id_, tenant_id, unit_stat, in_migrate_unit_stat, migrate_server))) {
                 LOG_WARN("fail to migrate unit", K(ret), K(unit), K(unit_stat), K(in_migrate_unit_stat));
               }
             }
@@ -575,7 +576,11 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
       ObArray<ObUnitStat> in_migrate_unit_stat;
       if (OB_FAIL(get_unit_resource_reservation(unit_info.unit_.unit_id_, migrate_server, in_migrate_unit_stat))) {
         LOG_WARN("get_unit_resource_reservation failed", K(unit_info), K(ret));
-      } else if (OB_FAIL(try_migrate_unit(unit_info.unit_.unit_id_, unit_stat, in_migrate_unit_stat, migrate_server))) {
+      } else if (OB_FAIL(try_migrate_unit(unit_info.unit_.unit_id_,
+                     unit_info.pool_.tenant_id_,
+                     unit_stat,
+                     in_migrate_unit_stat,
+                     migrate_server))) {
         LOG_WARN("fail to try migrate unit", "unit", unit_info.unit_, K(migrate_server), K(ret));
       } else {
         LOG_INFO("migrate unit success", K(unit_info), K(status), "dest_server", migrate_server);
@@ -649,7 +654,11 @@ int ObServerBalancer::distribute_for_migrate_in_blocked(const ObUnitInfo& unit_i
             K(ret));
       } else if (OB_FAIL(get_unit_resource_reservation(unit_info.unit_.unit_id_, new_server, in_migrate_unit_stat))) {
         LOG_WARN("get_unit_resource_reservation failed", K(unit_info), K(ret));
-      } else if (OB_FAIL(try_migrate_unit(unit_info.unit_.unit_id_, unit_stat, in_migrate_unit_stat, new_server))) {
+      } else if (OB_FAIL(try_migrate_unit(unit_info.unit_.unit_id_,
+                     unit_info.pool_.tenant_id_,
+                     unit_stat,
+                     in_migrate_unit_stat,
+                     new_server))) {
         LOG_WARN("fail to try migrate unit ", "unit", unit_info.unit_, K(new_server), K(ret));
       }
     }
@@ -699,15 +708,15 @@ int ObServerBalancer::get_unit_resource_reservation(
   return ret;
 }
 
-int ObServerBalancer::try_migrate_unit(const uint64_t unit_id, const ObUnitStat& unit_stat,
-    const ObIArray<ObUnitStat>& migrating_unit_stat, const ObAddr& dst)
+int ObServerBalancer::try_migrate_unit(const uint64_t unit_id, const uint64_t tenant_id, const ObUnitStat &unit_stat,
+    const ObIArray<ObUnitStat> &migrating_unit_stat, const ObAddr &dst)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("server balancer not init", K_(inited), K(ret));
   } else {
-    ret = unit_mgr_->try_migrate_unit(unit_id, unit_stat, migrating_unit_stat, dst);
+    ret = unit_mgr_->try_migrate_unit(unit_id, tenant_id, unit_stat, migrating_unit_stat, dst);
     unit_migrated_ = true;
   }
   return ret;
@@ -3222,6 +3231,7 @@ int ObServerBalancer::do_migrate_unit_task(const common::ObIArray<UnitMigrateSta
                      in_migrate_unit_stat))) {
         LOG_WARN("fail to get unit resource reservation", K(ret));
       } else if (OB_FAIL(try_migrate_unit(unit_migrate_stat.unit_load_.unit_->unit_id_,
+                     unit_migrate_stat.unit_load_.pool_->tenant_id_,
                      unit_stat,
                      in_migrate_unit_stat,
                      unit_migrate_stat.arranged_pos_))) {
@@ -3279,6 +3289,7 @@ int ObServerBalancer::do_migrate_unit_task(const common::ObIArray<UnitMigrateSta
                      in_migrate_unit_stat))) {
         LOG_WARN("fail to get unit resource reservation", K(ret));
       } else if (OB_FAIL(try_migrate_unit(unit_migrate_stat->unit_load_.unit_->unit_id_,
+                     unit_migrate_stat->unit_load_.pool_->tenant_id_,
                      unit_stat,
                      in_migrate_unit_stat,
                      unit_migrate_stat->arranged_pos_))) {

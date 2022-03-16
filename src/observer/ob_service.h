@@ -20,6 +20,7 @@
 #include "observer/ob_lease_state_mgr.h"
 #include "observer/ob_heartbeat.h"
 #include "observer/ob_partition_table_updater.h"
+#include "observer/ob_partition_location_updater.h"
 #include "observer/ob_sstable_checksum_updater.h"
 #include "observer/ob_server_schema_updater.h"
 #include "observer/ob_pg_partition_meta_table_updater.h"
@@ -38,6 +39,7 @@ namespace share {
 class ObSSTableDataChecksumItem;
 class ObSSTableColumnChecksumItem;
 class ObPGPartitionMTUpdateItem;
+class ObIAliveServerTracer;
 }  // namespace share
 namespace storage {
 class ObFrozenStatus;
@@ -70,7 +72,7 @@ public:
   explicit ObService(const ObGlobalContext& gctx);
   virtual ~ObService();
 
-  int init(common::ObMySQLProxy& sql_proxy);
+  int init(common::ObMySQLProxy& sql_proxy, share::ObIAliveServerTracer& server_tracer);
   int start();
   void set_stop();
   void stop();
@@ -92,7 +94,7 @@ public:
   virtual int fill_partition_replica(const common::ObPGKey& pg_key, share::ObPartitionReplica& replica) override;
   virtual int fill_partition_replica(storage::ObIPartitionGroup* part, share::ObPartitionReplica& replica);
   int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key) const;
-  virtual const common::ObAddr& get_self_addr();
+  virtual const common::ObAddr& get_self_addr() override;
   virtual int fill_checksum(const common::ObPartitionKey& pkey, const uint64_t sstable_id, const int sstable_type,
       const ObSSTableChecksumUpdateType update_type,
       common::ObIArray<share::ObSSTableDataChecksumItem>& data_checksum_items,
@@ -101,8 +103,8 @@ public:
 
   ////////////////////////////////////////////////////////////////
   // ObIPartitionReport interface
-  virtual int submit_pt_update_task(const common::ObPartitionKey& part_key, const bool need_report_checksum = true,
-      const bool with_role = false) override;
+  virtual int submit_pt_update_task(
+      const common::ObPartitionKey& part_key, const bool need_report_checksum = true) override;
   virtual int submit_pt_update_role_task(const common::ObPartitionKey& part_key) override;
   virtual void submit_pg_pt_update_task(const common::ObPartitionArray& pg_partitions) override;
   virtual int submit_checksum_update_task(const common::ObPartitionKey& part_key, const uint64_t sstable_id,
@@ -123,6 +125,8 @@ public:
       const storage::ObRebuildSwitch& rebuild_switch) override;
   virtual int update_pg_backup_task_info(
       const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_info_array) override;
+  virtual int report_pg_backup_backupset_task(const common::ObIArray<share::ObBackupBackupsetArg>& args,
+      const common::ObIArray<int32_t>& results, const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status) override;
   // ObIPartitionReport interface
   int submit_pt_remove_task(const common::ObPartitionKey& part_key) override;
 
@@ -171,6 +175,8 @@ public:
   int physical_restore_replica(const obrpc::ObPhyRestoreReplicaArg& arg, const share::ObTaskId& task_id);
   int get_tenant_log_archive_status(
       const share::ObGetTenantLogArchiveStatusArg& arg, share::ObTenantLogArchiveStatusWrapper& result);
+  int get_tenant_log_archive_status_v2(
+      const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result);
   int copy_sstable_batch(const obrpc::ObCopySSTableBatchArg& arg);
   // ObRpcMigrateReplicaP @RS load balance
   int migrate_replica(const obrpc::ObMigrateReplicaArg& arg, const share::ObTaskId& task_id);
@@ -195,6 +201,8 @@ public:
   int standby_cutdata_batch_task(const obrpc::ObStandbyCutDataBatchTaskArg& arg);
 
   int validate_backup_batch(const obrpc::ObValidateBatchArg& arg);
+  int backup_backupset_batch(const obrpc::ObBackupBackupsetBatchArg& arg);
+  int backup_archive_log(const obrpc::ObBackupArchiveLogBatchArg& arg);
 
   int change_replica_batch(const obrpc::ObChangeReplicaBatchArg& arg);
   int check_sys_task_exist(const share::ObTaskId& arg, bool& res);
@@ -271,11 +279,17 @@ public:
   int cancel_sys_task(const share::ObTaskId& task_id);
   int refresh_memory_stat();
   int broadcast_rs_list(const obrpc::ObRsListArg& arg);
+  int submit_broadcast_task(const share::ObPartitionBroadcastTask& task);
+  int broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, obrpc::ObPartitionBroadcastResult& result);
   ////////////////////////////////////////////////////////////////
   // misc functions
   int64_t get_partition_table_updater_user_queue_size() const;
   int64_t get_partition_table_updater_sys_queue_size() const;
   int64_t get_partition_table_updater_core_queue_size() const;
+  ObPartitionLocationUpdater &get_partition_location_updater()
+  {
+    return partition_location_updater_;
+  }
 
   int get_all_partition_status(int64_t& inactive_num, int64_t& total_num) const;
   int get_root_server_status(obrpc::ObGetRootserverRoleResult& get_role_result);
@@ -290,6 +304,7 @@ public:
   int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
   int renew_in_zone_hb(const share::ObInZoneHbRequest& arg, share::ObInZoneHbResponse& result);
   int pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg& arg);
+  int submit_retry_ghost_index_task(const uint64_t index_id);
 
 private:
   int register_self();
@@ -307,6 +322,7 @@ private:
   ObServerSchemaUpdater schema_updater_;
 
   ObPartitionTableUpdater partition_table_updater_;
+  ObPartitionLocationUpdater partition_location_updater_;
   ObIndexStatusUpdater index_updater_;
   ObSSTableChecksumUpdater checksum_updater_;
   ObUniqTaskQueue<ObIndexStatusReporter, ObIndexStatusUpdater> index_status_report_queue_;

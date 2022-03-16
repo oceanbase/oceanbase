@@ -70,6 +70,7 @@ public:
   {
     return task_index_writer_->get_macro_block_write_ctx();
   }
+  int dump_micro_block_writer_buffer();
   TO_STRING_KV(K_(block_write_ctx));
 
   struct IndexMicroBlockBuilder {
@@ -159,7 +160,6 @@ private:
 
   int prepare_micro_block_reader(const char* buf, const int64_t size, ObIMicroBlockReader*& micro_reader);
   int print_micro_block_row(ObIMicroBlockReader* micro_reader);
-  int dump_micro_block_writer_buffer();
 
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_COUNT = 128;

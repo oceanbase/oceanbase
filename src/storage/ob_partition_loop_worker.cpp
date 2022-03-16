@@ -123,6 +123,10 @@ int ObPartitionLoopWorker::gen_readable_info_with_memtable_(ObPartitionReadableI
   if (OB_ISNULL(pls_) || OB_ISNULL(txs_) || OB_ISNULL(replay_status_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "not inited", K(ret), K(pkey_), KP_(pls), KP_(txs), KP_(replay_status));
+  } else if (!replay_status_->is_enabled()) {
+    //current replay_status is disable, return specific errcode
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "replay status is disable", K(ret), K(pkey_), KP_(pls), KP_(txs), KP_(replay_status));
   } else if (OB_FAIL(pls_->get_next_replay_log_info(next_replay_log_id, readable_info.min_log_service_ts_))) {
     if (OB_STATE_NOT_MATCH == ret) {
       // print one log per minute
@@ -133,7 +137,15 @@ int ObPartitionLoopWorker::gen_readable_info_with_memtable_(ObPartitionReadableI
       STORAGE_LOG(WARN, "get_next_replay_log_info error", K(ret), K_(pkey));
     }
   } else {
-    readable_info.min_replay_engine_ts_ = replay_status_->get_min_unreplay_log_timestamp();
+    uint64_t min_unreplay_log_id = OB_INVALID_ID;
+    int64_t min_unreplay_log_ts = OB_INVALID_TIMESTAMP;
+    replay_status_->get_min_unreplay_log(min_unreplay_log_id, min_unreplay_log_ts);
+    if (min_unreplay_log_id == next_replay_log_id) {
+      // cold partition, min_unreplay_log_ts returned by replay engine may be too small
+      readable_info.min_replay_engine_ts_ = readable_info.min_log_service_ts_;
+    } else {
+      readable_info.min_replay_engine_ts_ = min_unreplay_log_ts;
+    }
     if (OB_FAIL(txs_->get_min_uncommit_prepare_version(pkey_, readable_info.min_trans_service_ts_))) {
       if (OB_PARTITION_NOT_EXIST == ret) {
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
@@ -243,7 +255,7 @@ int ObPartitionLoopWorker::write_checkpoint_(const int64_t checkpoint)
     if (OB_FAIL(cb->init(ps_, checkpoint))) {
       STORAGE_LOG(WARN, "checkpoint log callback init failed", K(ret), K(checkpoint));
     } else if (OB_FAIL(write_checkpoint(checkpoint, cb, log_id))) {
-      STORAGE_LOG(WARN, "submit checkpoint log failed", K(ret), K(log));
+      STORAGE_LOG(WARN, "submit checkpoint log failed", K(ret));
     } else {
       // do nothing
     }
@@ -339,9 +351,9 @@ int ObPartitionLoopWorker::gene_checkpoint_()
       } else if (last_max_trans_version < max_trans_version) {
         ATOMIC_STORE(&last_max_trans_version_, max_trans_version);
       } else if (last_max_trans_version == max_trans_version) {
-        if (last_checkpoint <= max_trans_version ||
-            ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL &&
-                REACH_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
+        if (last_checkpoint <= max_trans_version
+            || ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL
+                && EXECUTE_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
           if (OB_FAIL(write_checkpoint_(cur_checkpoint))) {
             STORAGE_LOG(WARN, "write checkpoint failed", K(ret), K_(pkey), K(cur_checkpoint));
           } else {
@@ -558,7 +570,9 @@ int ObPartitionLoopWorker::set_replay_checkpoint(const int64_t checkpoint)
     const int64_t last_checkpoint = ATOMIC_LOAD(&last_checkpoint_);
     const int64_t NOTICE_THRESHOLD = 3 * 1000 * 1000;
     if (last_checkpoint > 0 && checkpoint - last_checkpoint > NOTICE_THRESHOLD) {
-      STORAGE_LOG(INFO, "replay checkpoint updated", K_(pkey), K(checkpoint), K(*this));
+      if (EXECUTE_COUNT_PER_SEC(10)) {
+        STORAGE_LOG(INFO, "replay checkpoint updated", K_(pkey), K(checkpoint), K(*this));
+      }
     }
     inc_update(&last_checkpoint_, checkpoint);
   } else {

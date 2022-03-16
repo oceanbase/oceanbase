@@ -187,7 +187,7 @@ private:
   uint64_t hit_count_;
   uint64_t access_count_;
 
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator* inner_allocator_;
 };
 

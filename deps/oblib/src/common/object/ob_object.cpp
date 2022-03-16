@@ -458,7 +458,8 @@ int ObObj::build_not_strict_default_value()
     case ObTinyTextType:
     case ObTextType:
     case ObMediumTextType:
-    case ObLongTextType: {
+    case ObLongTextType: 
+    case ObJsonType: {
       ObString null_str;
       set_string(data_type, null_str);
       meta_.set_lob_inrow();
@@ -514,7 +515,7 @@ int ObObj::build_not_strict_default_value()
 int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_string_type(src.get_type())) {
+  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -570,7 +571,30 @@ int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& p
   return ret;
 }
 
-bool ObObj::can_compare(const ObObj& other) const
+void* ObObj::get_deep_copy_obj_ptr()
+{
+  void * ptr = NULL;
+  if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())) {
+    // val_len_ == 0 is empty string, and it may point to unexpected address
+    // Therefore, reset it to NULL
+    if (val_len_ != 0) {
+      ptr = (void *)v_.string_;
+    }
+  } else if (ob_is_raw(this->get_type())) {
+    ptr = (void *)v_.string_;
+  } else if (ob_is_number_tc(this->get_type())) {
+    ptr = (void *)v_.nmb_digits_;
+  } else if (ob_is_rowid_tc(this->get_type())) {
+    ptr = (void *)v_.string_;
+  } else if (ob_is_lob_locator(this->get_type())) {
+    ptr = (void *)&v_.lob_locator_;
+  } else {
+    // do nothing
+  }
+  return ptr;
+}
+
+bool ObObj::can_compare(const ObObj &other) const
 {
   obj_cmp_func cmp_func = NULL;
   return (is_min_value() || is_max_value() || other.is_min_value() || other.is_max_value() ||
@@ -636,67 +660,6 @@ int ObObj::check_collation_free_and_compare(const ObObj& other, int& cmp) const
     }
   }
   return ret;
-}
-
-// TODO : remove this function
-int ObObj::check_collation_free_and_compare(const ObObj& other) const
-{
-  int cmp = 0;
-  if (CS_TYPE_COLLATION_FREE != get_collation_type() && CS_TYPE_COLLATION_FREE != other.get_collation_type()) {
-    cmp = compare(other, CS_TYPE_INVALID);
-  } else if (is_null() || other.is_null() || is_min_value() || is_max_value() || other.is_min_value() ||
-             other.is_max_value()) {
-    cmp = ObObjCmpFuncs::compare_nullsafe(*this, other, CS_TYPE_INVALID);
-  } else if (OB_UNLIKELY(get_collation_type() != other.get_collation_type()) ||
-             CS_TYPE_COLLATION_FREE != get_collation_type() || get_type() != other.get_type() || !is_character_type()) {
-    LOG_ERROR("unexpected error, invalid argument", K(*this), K(other));
-    right_to_die_or_duty_to_live();
-  } else {
-    const int32_t lhs_len = get_val_len();
-    const int32_t rhs_len = other.get_val_len();
-    const int32_t cmp_len = std::min(lhs_len, rhs_len);
-    const bool is_oracle = lib::is_oracle_mode();
-    bool need_skip_tail_space = false;
-    cmp = memcmp(get_string_ptr(), other.get_string_ptr(), cmp_len);
-    // if two strings only have different trailing spaces:
-    // 1. in oracle varchar mode, the strings are considered to be different,
-    // 2. in oracle char mode, the strings are considered to be same,
-    // 3. in mysql mode, the strings are considered to be different.
-    if (is_oracle) {
-      if (0 == cmp) {
-        if (!is_varying_len_char_type()) {
-          need_skip_tail_space = true;
-        } else if (lhs_len != cmp_len || rhs_len != cmp_len) {
-          cmp = lhs_len > cmp_len ? 1 : -1;
-        }
-      }
-    } else if (0 == cmp && (lhs_len != cmp_len || rhs_len != cmp_len)) {
-      need_skip_tail_space = true;
-    }
-    if (need_skip_tail_space) {
-      bool has_non_space = false;
-      const int32_t left_len = (lhs_len > cmp_len) ? lhs_len - cmp_len : rhs_len - cmp_len;
-      const char* ptr = (lhs_len > cmp_len) ? get_string_ptr() : other.get_string_ptr();
-      const unsigned char* uptr = reinterpret_cast<const unsigned char*>(ptr);
-      int32_t i = 0;
-      uptr += cmp_len;
-      for (; i < left_len; ++i) {
-        if (*(uptr + i) != ' ') {
-          has_non_space = true;
-          break;
-        }
-      }
-      if (has_non_space) {
-        // special behavior of mysql: a\1 < a, but ab > a
-        if (*(uptr + i) < ' ') {
-          cmp = lhs_len > cmp_len ? -1 : 1;
-        } else {
-          cmp = lhs_len > cmp_len ? 1 : -1;
-        }
-      }
-    }
-  }
-  return cmp;
 }
 
 /*
@@ -840,7 +803,8 @@ int ObObj::apply(const ObObj& mutation)
   if (OB_UNLIKELY(
           ObMaxType <= mut_type ||
           (ObExtendType != org_type && ObNullType != org_type && ObExtendType != mut_type && ObNullType != mut_type &&
-              org_type != mut_type && !(ObLongTextType == org_type && ObLobType == mut_type)))) {
+              org_type != mut_type && !(ObLongTextType == org_type && 
+              ObLobType == mut_type) && !(ObJsonType == org_type && ObLobType == mut_type)))) {
     _OB_LOG(WARN, "type not coincident or invalid type[this->type:%d,mutation.type:%d]", org_type, mut_type);
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -939,6 +903,7 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] = {
     DEF_FUNC_ENTRY(ObNCharType),          // 44, nchar
     DEF_FUNC_ENTRY(ObURowIDType),         // 45, urowid
     DEF_FUNC_ENTRY(ObLobType),            // 46, lob
+    DEF_FUNC_ENTRY(ObJsonType)            // 47, json
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -1026,7 +991,7 @@ int ObObj::print_smart(char* buf, int64_t buf_len, int64_t& pos) const
     bool can_print = true;
     if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (!(meta_.is_string_or_lob_locator_type() && ObHexStringType != meta_.get_type())) {
+    } else if (!(meta_.is_string_or_lob_locator_type() && ObHexStringType != meta_.get_type()) && (!meta_.is_json())) {
       ret = OBJ_FUNCS[meta_.get_type()].print_json(*this, buf, buf_len, pos, params);
     } else if (OB_FAIL(is_printable(get_string_ptr(), get_string_len(), can_print))) {
     } else if (can_print) {
@@ -1415,6 +1380,7 @@ void ParamFlag::reset()
   expected_bool_value_ = false;
   need_to_check_extend_type_ = true;
   is_ref_cursor_type_ = false;
+  is_boolean_ = false;
 }
 
 DEF_TO_STRING(ObHexEscapeSqlStr)
@@ -1432,6 +1398,11 @@ DEF_TO_STRING(ObHexEscapeSqlStr)
         } else {
           buf[buf_pos++] = *cur;
         }
+      }
+    } else if (skip_escape_) {
+      // do not escape_ while in NO_BACKSLASH_ESCAPES mode
+      for (const char *cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {
+        buf[buf_pos++] = *cur;
       }
     } else {
       for (const char* cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {

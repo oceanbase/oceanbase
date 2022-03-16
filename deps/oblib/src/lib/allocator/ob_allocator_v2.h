@@ -23,27 +23,29 @@
 
 namespace oceanbase {
 namespace lib {
-class MemoryContext;
+class __MemoryContext__;
 }
 namespace common {
 using common::ObPageManager;
 using lib::AObject;
-using lib::MemoryContext;
+using lib::__MemoryContext__;
 using lib::ObjectSet;
 
 class ObAllocator : public ObIAllocator {
-  friend class lib::MemoryContext;
+  friend class lib::__MemoryContext__;
   friend class ObParallelAllocator;
 
 public:
-  ObAllocator(MemoryContext* mem_context, const ObMemAttr& attr = default_memattr, const bool use_pm = false,
+  ObAllocator(__MemoryContext__* mem_context, const ObMemAttr& attr = default_memattr, const bool use_pm = false,
       const uint32_t ablock_size = lib::INTACT_NORMAL_AOBJECT_SIZE);
+  virtual ~ObAllocator()
+  {}
   void* alloc(const int64_t size) override
   {
     return alloc(size, attr_);
   }
-  void* alloc(const int64_t size, const ObMemAttr& attr) override;
-  void free(void* ptr) override;
+  virtual void* alloc(const int64_t size, const ObMemAttr& attr) override;
+  virtual void free(void* ptr) override;
   int64_t hold() const;
   int64_t total() const override
   {
@@ -71,7 +73,7 @@ private:
   }
 
 private:
-  MemoryContext* mem_context_;
+  __MemoryContext__* mem_context_;
   ObMemAttr attr_;
   const bool use_pm_;
   void* pm_;
@@ -84,7 +86,7 @@ private:
 };
 
 inline ObAllocator::ObAllocator(
-    MemoryContext* mem_context, const ObMemAttr& attr, const bool use_pm, const uint32_t ablock_size)
+    __MemoryContext__* mem_context, const ObMemAttr& attr, const bool use_pm, const uint32_t ablock_size)
     : mem_context_(mem_context),
       attr_(attr),
       use_pm_(use_pm),
@@ -141,7 +143,7 @@ class ObParallelAllocator : public ObIAllocator {
   static const int N = 8;
 
 public:
-  ObParallelAllocator(ObAllocator& root_allocator, MemoryContext* mem_context, const ObMemAttr& attr = default_memattr,
+  ObParallelAllocator(ObAllocator& root_allocator, __MemoryContext__* mem_context, const ObMemAttr& attr = default_memattr,
       const int parallel = 4, const uint32_t ablock_size = lib::INTACT_NORMAL_AOBJECT_SIZE);
   virtual ~ObParallelAllocator();
   void* alloc(const int64_t size) override
@@ -162,7 +164,7 @@ private:
 
 private:
   ObAllocator& root_allocator_;
-  MemoryContext* mem_context_;
+  __MemoryContext__* mem_context_;
   ObMemAttr attr_;
   uint32_t ablock_size_;
   // buffer of sub_allocators_
@@ -176,7 +178,7 @@ private:
   lib::ObMutex mutex_;
 };
 
-inline ObParallelAllocator::ObParallelAllocator(ObAllocator& root_allocator, MemoryContext* mem_context,
+inline ObParallelAllocator::ObParallelAllocator(ObAllocator& root_allocator, __MemoryContext__* mem_context,
     const ObMemAttr& attr, const int parallel, const uint32_t ablock_size)
     : root_allocator_(root_allocator),
       mem_context_(mem_context),

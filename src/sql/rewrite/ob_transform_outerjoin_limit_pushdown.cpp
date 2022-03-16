@@ -102,9 +102,7 @@ int ObTransformOuterJoinLimitPushDown::check_basic(ObDMLStmt* stmt, OjLimitPushD
              select_stmt->has_group_by() || select_stmt->has_having() || select_stmt->has_rollup() ||
              select_stmt->has_window_function() || select_stmt->has_sequence() ||
              select_stmt->get_semi_infos().count() > 0 ||
-             // disable meaningless distinct co-exists with orderby cases.
-             // distinct with limit only is allowed and no need special handling.
-             (select_stmt->has_distinct() && select_stmt->has_order_by())) {
+             select_stmt->has_distinct()) {
     is_valid = false;
   } else if (OB_FAIL(check_limit(select_stmt, is_valid_limit))) {
     LOG_WARN("failed to check the validity of limit expr", K(ret));
@@ -130,11 +128,14 @@ int ObTransformOuterJoinLimitPushDown::check_basic(ObDMLStmt* stmt, OjLimitPushD
     table_item = select_stmt->get_table_item(from_item);
     JoinedTable* joined_table = static_cast<JoinedTable*>(table_item);
     bool is_single_type = false;
+    bool has_generated_table = false;
     // only left outer allowed after right->left transformation
     // mixed join type, such as left & inner is NOT allowed
-    if (OB_FAIL(check_join_type(joined_table, LEFT_OUTER_JOIN, is_single_type))) {
+    if (OB_FAIL(check_join_type(joined_table, LEFT_OUTER_JOIN, is_single_type, has_generated_table))) {
       LOG_WARN("failed to check deep tree type", K(ret));
     } else if (!is_single_type) {
+      is_valid = false;
+    } else if (has_generated_table && select_stmt->get_condition_size() > 0) {
       is_valid = false;
     } else {
       helper.select_stmt_ = select_stmt;
@@ -240,7 +241,7 @@ int ObTransformOuterJoinLimitPushDown::check_offset_limit_expr(ObRawExpr* offset
 }
 
 int ObTransformOuterJoinLimitPushDown::check_join_type(
-    TableItem* table_item, ObJoinType joined_type, bool& is_single_type)
+    TableItem *table_item, ObJoinType joined_type, bool &is_single_type, bool &has_generated_table)
 {
   int ret = OB_SUCCESS;
   is_single_type = true;
@@ -248,13 +249,16 @@ int ObTransformOuterJoinLimitPushDown::check_join_type(
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table item", K(ret));
-  } else if (table_item->is_basic_table() || table_item->is_generated_table()) {
+  } else if (table_item->is_basic_table()) {
     // do nothing
-  } else if (table_item->is_joined_table() && static_cast<JoinedTable*>(table_item)->joined_type_ == joined_type) {
-    JoinedTable* joined_table = static_cast<JoinedTable*>(table_item);
+  } else if (table_item->is_generated_table()) {
+    has_generated_table = true;
+  } else if (table_item->is_joined_table() && static_cast<JoinedTable *>(table_item)->joined_type_ == joined_type) {
+    JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
     // only need to check left side recursively after right to left formalization
     bool is_left_single_type = false;
-    if (OB_FAIL(SMART_CALL(check_join_type(joined_table->left_table_, joined_type, is_left_single_type)))) {
+    if (OB_FAIL(SMART_CALL(
+            check_join_type(joined_table->left_table_, joined_type, is_left_single_type, has_generated_table)))) {
       LOG_WARN("failed to check left child deep tree type", K(ret));
     } else if (!is_left_single_type) {
       is_single_type = false;
@@ -304,7 +308,6 @@ int ObTransformOuterJoinLimitPushDown::collect_orderby_table_ids(
     ObSelectStmt* select_stmt, ObSqlBitSet<>& table_ids, bool& is_valid_orderby)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> order_exprs;
   table_ids.reset();
   is_valid_orderby = true;
   if (OB_ISNULL(select_stmt)) {
@@ -360,7 +363,7 @@ int ObTransformOuterJoinLimitPushDown::find_target_table(
       while (OB_SUCC(ret) && OB_NOT_NULL(table) && !found) {
         // find target joined_table based on order by column relation_ids
         ObSqlBitSet<> cur_table_ids;
-        if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*select_stmt, *table, cur_table_ids))) {
+        if (OB_FAIL(select_stmt->get_table_rel_ids(*table, cur_table_ids))) {
           LOG_WARN("failed to get table rel ids", K(ret));
         } else if (cur_table_ids.equal(table_ids)) {
           found = true;
@@ -408,8 +411,13 @@ int ObTransformOuterJoinLimitPushDown::check_validity_for_target_table(OjLimitPu
     } else if (has_rownum) {
       is_valid = false;
     } else {
-      // no need to create new view
-      helper.need_create_view_ = false;
+      if (ref_query->is_set_stmt()) {
+        helper.need_create_view_ = true;
+      } else {
+        // no need to create new view
+        helper.need_create_view_ = false;
+      }
+      helper.need_rename_ = true;
       helper.view_table_ = helper.target_table_;
     }
   } else {
@@ -421,22 +429,31 @@ int ObTransformOuterJoinLimitPushDown::check_validity_for_target_table(OjLimitPu
 int ObTransformOuterJoinLimitPushDown::do_transform(OjLimitPushDownHelper& helper)
 {
   int ret = OB_SUCCESS;
-  TableItem* target_view_table = NULL;
+  ObSelectStmt *ref_query = NULL;
   if (OB_ISNULL(helper.select_stmt_) || OB_ISNULL(helper.target_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter in helper", K(ret));
-  } else if (helper.need_create_view_ && OB_FAIL(prepare_view_table(helper.select_stmt_,
-                                             helper.target_table_,
-                                             helper.extracted_conditions_,
-                                             helper.saved_order_items_,
-                                             helper.view_table_))) {
+  } else if (OB_FAIL(remove_and_copy_condition_orderby(helper.select_stmt_,
+                                                       helper.extracted_conditions_,
+                                                       helper.saved_order_items_))) {
+    LOG_WARN("failed to do remove and copy for condition and orderby", K(ret));
+  } else if (helper.need_create_view_ &&
+             OB_FAIL(ObTransformUtils::create_view_with_table(helper.select_stmt_,
+                                                              ctx_,
+                                                              helper.target_table_,
+                                                              helper.view_table_))) {
     LOG_WARN("failed to prepare new view for pushing down", K(ret));
+  } else if (OB_ISNULL(helper.view_table_) ||
+            !helper.view_table_->is_generated_table() ||
+            OB_ISNULL(ref_query = helper.view_table_->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid view table", K(ret));
   } else if (OB_FAIL(pushdown_view_table(helper.select_stmt_,
-                 helper.view_table_,
-                 helper.extracted_conditions_,
-                 helper.saved_order_items_,
-                 !helper.need_create_view_,
-                 helper.is_limit_only_))) {
+                                        helper.view_table_,
+                                        helper.extracted_conditions_,
+                                        helper.saved_order_items_,
+                                        !helper.need_create_view_,
+                                        helper.is_limit_only_))) {
     LOG_WARN("failed to push down view table", K(ret));
   } else { /* do nothing */
   }
@@ -446,32 +463,6 @@ int ObTransformOuterJoinLimitPushDown::do_transform(OjLimitPushDownHelper& helpe
   } else { /* do nothing */
   }
 
-  return ret;
-}
-
-int ObTransformOuterJoinLimitPushDown::prepare_view_table(ObSelectStmt* stmt, TableItem* target_table,
-    ObIArray<ObRawExpr*>& extracted_conditions, ObIArray<OrderItem>& saved_order_items, TableItem*& view_table)
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt* ref_query = NULL;
-  // before warpping with view, remove extracted condition exprs in upper stmt,
-  // and do condition exprs copy avoid being modified by create_view_with_table,
-  // which will be added back to the created view later.
-  // order by exprs have been copied at former collection stage.
-  if (OB_ISNULL(stmt) || OB_ISNULL(target_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid stmt", K(ret));
-  } else if (OB_FAIL(remove_and_copy_condition_orderby(stmt, extracted_conditions, saved_order_items))) {
-    LOG_WARN("failed to do remove and copy for condition and orderby", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_, target_table, view_table))) {
-    LOG_WARN("failed to create view with table", K(ret));
-  } else if (OB_ISNULL(view_table) || !view_table->is_generated_table() ||
-             OB_ISNULL(ref_query = view_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected view table", K(ret), K(*view_table));
-  } else {
-    // do nothing
-  }
   return ret;
 }
 
@@ -521,7 +512,6 @@ int ObTransformOuterJoinLimitPushDown::pushdown_view_table(ObSelectStmt* stmt, T
     LOG_WARN("failed to formalize generated_view", K(ret));
   } else { /* do nothing */
   }
-
   return ret;
 }
 
@@ -532,16 +522,19 @@ int ObTransformOuterJoinLimitPushDown::add_condition_expr_for_viewtable(
   if (OB_ISNULL(generated_view)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid generated_view", K(ret));
-  } else if (OB_FAIL(append(generated_view->get_condition_exprs(), extracted_conditions))) {
-    LOG_WARN("failed to append condition exprs back", K(ret));
   } else if (need_rename) {
     // renaming for saved condition expr from upper level
     // after pushdown into generated_view condition exprs.
     ObSEArray<ObRawExpr*, 16> old_column_exprs;
     ObSEArray<ObRawExpr*, 16> new_column_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < extracted_conditions.count(); ++i) {
+      old_column_exprs.reuse();
+      new_column_exprs.reuse();
       ObRawExpr* expr = extracted_conditions.at(i);
-      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, old_column_exprs))) {
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid condition", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, old_column_exprs))) {
         LOG_WARN("failed to extract column expr", K(ret));
       } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
                      old_column_exprs, *generated_view, new_column_exprs))) {
@@ -551,6 +544,11 @@ int ObTransformOuterJoinLimitPushDown::add_condition_expr_for_viewtable(
       } else { /* do nothing */
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(append(generated_view->get_condition_exprs(), extracted_conditions))) {
+      LOG_WARN("failed to append condition exprs back", K(ret));
+    } else {/* do nothing */}
   }
   return ret;
 }
@@ -562,37 +560,36 @@ int ObTransformOuterJoinLimitPushDown::add_orderby_for_viewtable(
   if (OB_ISNULL(generated_view) || OB_ISNULL(upper_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
-  } else if (!need_rename) {
-    // directly assign saved order items to generated_view
-    generated_view->get_order_items().reset();
-    if (OB_FAIL(generated_view->get_order_items().assign(saved_order_items))) {
-      LOG_WARN("assign new order items failed", K(ret));
-    } else { /* do nothing */
-    }
-  } else {
-    // single table item generated_table into here.
+  } else if (need_rename) {
     // order by column needs to be renamed before moving
     // from upper_stmt to inner generated_view.
     ObSEArray<ObRawExpr*, 16> old_order_exprs;
     ObSEArray<ObRawExpr*, 16> new_order_exprs;
-    if (OB_FAIL(append(generated_view->get_order_items(), upper_stmt->get_order_items()))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < saved_order_items.count(); i++) {
+      old_order_exprs.reuse();
+      new_order_exprs.reuse();
+      if (OB_ISNULL(saved_order_items.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(saved_order_items.at(i).expr_,
+                                                              old_order_exprs))) {
+        LOG_WARN("failed to extract column expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(old_order_exprs,
+                                                                              *generated_view,
+                                                                              new_order_exprs))) {
+        LOG_WARN("failed to convert columnexpr to select expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::replace_expr(old_order_exprs,
+                                                        new_order_exprs,
+                                                        saved_order_items.at(i).expr_))) {
+        LOG_WARN("failed to replace expr for order item", K(ret));
+      } else {/* do nothing */
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(append(generated_view->get_order_items(), saved_order_items))) {
       LOG_WARN("failed to append order item", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < upper_stmt->get_order_item_size(); ++i) {
-        if (OB_FAIL(old_order_exprs.push_back(upper_stmt->get_order_items().at(i).expr_))) {
-          LOG_WARN("failed to append order item", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
-                old_order_exprs, *generated_view, new_order_exprs))) {
-          LOG_WARN("failed to convert columnexpr to select expr", K(ret));
-        } else if (OB_FAIL(ObTransformUtils::replace_expr_for_order_item(
-                       old_order_exprs, new_order_exprs, generated_view->get_order_items()))) {
-          LOG_WARN("failed to replace expr for order item", K(ret));
-        } else { /* do nothing */
-        }
-      }
+    } else {/* do nothing */
     }
   }
   return ret;

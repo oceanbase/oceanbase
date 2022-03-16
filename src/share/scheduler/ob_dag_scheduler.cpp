@@ -181,7 +181,8 @@ void ObITask::prepare_check_cycle()
 
 /********************************************ObIDag impl******************************************/
 
-const common::ObString ObIDag::ObIDagPriorityStr[ObIDag::DAG_PRIO_MAX] = {"DAG_PRIO_TRANS_TABLE_MERGE",
+const char *ObIDag::ObIDagPriorityStr[ObIDag::DAG_PRIO_MAX] = {
+    "DAG_PRIO_TRANS_TABLE_MERGE",
     "DAG_PRIO_SSTABLE_MINI_MERGE",
     "DAG_PRIO_SSTABLE_MINOR_MERGE",
     "DAG_PRIO_GROUP_MIGRATE",
@@ -192,9 +193,10 @@ const common::ObString ObIDag::ObIDagPriorityStr[ObIDag::DAG_PRIO_MAX] = {"DAG_P
     "DAG_PRIO_MIGRATE_LOW",
     "DAG_PRIO_CREATE_INDEX",
     "DAG_PRIO_SSTABLE_SPLIT",
-    "DAG_PRIO_VALIDATE"};
+    "DAG_PRIO_VALIDATE",
+};
 
-const common::ObString ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
+const char *ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
     "DAG_ULT_MINI_MERGE",
     "DAG_ULT_MINOR_MERGE",
     "DAG_ULT_GROUP_MIGRATE",
@@ -205,7 +207,8 @@ const common::ObString ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
     "DAG_ULT_BACKUP",
 };
 
-const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {"DAG_UT",
+const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {
+    "DAG_UT",
     "DAG_MINOR_MERGE",
     "DAG_MAJOR_MERGE",
     "DAG_CREATE_INDEX",
@@ -222,7 +225,31 @@ const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {"DAG_UT",
     "DAG_TYPE_BACKUP",
     "DAG_SERVER_PREPROCESS",
     "DAG_FAST_RECOVERY"
-    "DAG_TYPE_VALIDATE"};
+    "DAG_TYPE_VALIDATE"
+    "DAG_TYPE_BACKUP_BACKUPSET"
+    "DAG_TYPE_BACKUP_ARCHIVELOG",
+};
+
+const char *ObIDag::ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {
+    "EMPTY",
+    "COMPACTION",
+    "COMPACTION",
+    "INDEX",
+    "SPLIT",
+    "OTHER",
+    "MIGRATE",
+    "COMPACTION",
+    "MIGRATE",
+    "INDEX",
+    "COMPACTION",
+    "TRANS_TABLE_MERGE",
+    "FAST_RECOVERY",
+    "FAST_RECOVERY",
+    "BACKUP",
+    "OTHER",
+    "OTHER",
+    "OTHER",
+};
 
 ObIDag::ObIDag(ObIDagType type, ObIDagPriority priority)
     : dag_ret_(OB_SUCCESS),
@@ -473,7 +500,15 @@ int64_t ObIDag::to_string(char* buf, const int64_t buf_len) const
   } else {
     const int64_t tenant_id = get_tenant_id();
     J_OBJ_START();
-    J_KV(KP(this), K_(type), K_(id), K_(dag_ret), K_(dag_status), K_(start_time), K(tenant_id));
+    J_KV(KP(this),
+        K_(type),
+        "name",
+        get_dag_type_str(type_),
+        K_(id),
+        K_(dag_ret),
+        K_(dag_status),
+        K_(start_time),
+        K(tenant_id));
     J_OBJ_END();
   }
   return pos;
@@ -492,6 +527,50 @@ void ObIDag::gene_warning_info(storage::ObDagWarningInfo& info)
   info.task_id_ = id_;
   info.gmt_modified_ = ObTimeUtility::current_time();
   fill_comment(info.warning_info_, OB_DAG_WARNING_INFO_LENGTH);
+}
+
+const char *ObIDag::get_dag_type_str(enum ObIDagType type)
+{
+  const char *str = "";
+  if (type >= DAG_TYPE_MAX || type < DAG_TYPE_UT) {
+    str = "invalid_type";
+  } else {
+    str = ObIDagTypeStr[type];
+  }
+  return str;
+}
+
+const char *ObIDag::get_dag_module_str(enum ObIDagType type)
+{
+  const char *str = "";
+  if (type >= DAG_TYPE_MAX || type < DAG_TYPE_UT) {
+    str = "invalid_type";
+  } else {
+    str = ObIDagModuleStr[type];
+  }
+  return str;
+}
+
+const char *ObIDag::get_dag_prio_str(enum ObIDagPriority prio)
+{
+  const char *str = "";
+  if (prio >= DAG_PRIO_MAX || prio < DAG_PRIO_TRANS_TABLE_MERGE) {
+    str = "invalid_type";
+  } else {
+    str = ObIDagPriorityStr[prio];
+  }
+  return str;
+}
+
+const char *ObIDag::get_dag_uplimit_type_str(enum ObIDagUpLimitType uplimit_type)
+{
+  const char *str = "";
+  if (uplimit_type >= DAG_ULT_MAX || uplimit_type < DAG_ULT_MINI_MERGE) {
+    str = "invalid_type";
+  } else {
+    str = ObIDagUpLimitTypeStr[uplimit_type];
+  }
+  return str;
 }
 
 /*************************************ObDagWorker***********************************/
@@ -578,7 +657,7 @@ void ObDagWorker::run1()
         COMMON_LOG(WARN, "dag is null", K(ret), K(task_));
       } else {
         ObCurTraceId::set(dag->get_dag_id());
-        lib::set_thread_name(dag->get_name());
+        lib::set_thread_name(dag->get_dag_type_str(dag->get_type()));
         if (OB_UNLIKELY(ObWorker::CompatMode::INVALID ==
                         (compat_mode = static_cast<ObWorker::CompatMode>(dag->get_compat_mode())))) {
           ret = OB_ERR_UNEXPECTED;
@@ -1426,6 +1505,12 @@ int ObDagScheduler::sys_task_start(ObIDag* dag)
         break;
       case ObIDag::DAG_TYPE_VALIDATE:
         sys_task_status.task_type_ = BACKUP_VALIDATION_TASK;
+        break;
+      case ObIDag::DAG_TYPE_BACKUP_BACKUPSET:
+        sys_task_status.task_type_ = BACKUP_BACKUPSET_TASK;
+        break;
+      case ObIDag::DAG_TYPE_BACKUP_ARCHIVELOG:
+        sys_task_status.task_type_ = BACKUP_ARCHIVELOG_TASK;
         break;
       default:
         COMMON_LOG(ERROR, "sys task type error", K(ret), K(dag->get_type()));

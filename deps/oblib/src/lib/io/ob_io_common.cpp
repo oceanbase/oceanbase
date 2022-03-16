@@ -95,22 +95,22 @@ int ob_io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* 
 #ifdef ERRSIM
   ret = E(EventTable::EN_IO_GETEVENTS) OB_SUCCESS;
   if (OB_SUCC(ret)) {
-    ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+    ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
   } else {
     if (OB_IO_ERROR == ret) {
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       for (int64_t i = 0; i < ret; ++i) {
         events[i].res = 1;
       }
     } else if (OB_TIMEOUT == ret) {
       sleep(1);
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
     } else if (OB_AIO_TIMEOUT == ret) {
       // ignore real return
-      io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       ret = 0;
     } else if (OB_EAGAIN == ret) {
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       if (ret >= 1) {
         // random make 1 event fail
         int64_t idx = common::ObRandom::rand(1, ret) - 1;
@@ -118,17 +118,24 @@ int ob_io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* 
       }
     } else if (OB_RESOURCE_OUT == ret) {
       // OB_CS_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       for (int64_t i = 0; i < ret; ++i) {
         events[i].res2 = -ENOSPC;
       }
     }
   }
 #else
-  // ignore EINTR and retry
-  while ((ret = io_getevents(ctx_id, min_nr, nr, events, timeout)) < 0 && -EINTR == ret)
-    ;
+  ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
 #endif
+  return ret;
+}
+
+int io_getevents_with_retry(
+    io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout)
+{
+  int ret = 0;
+  // ignore EINTR and retry
+  while ((ret = io_getevents(ctx_id, min_nr, nr, events, timeout)) < 0 && -EINTR == ret) {}
   return ret;
 }
 
@@ -150,8 +157,8 @@ void ObIOConfig::set_default_value()
   cpu_high_water_level_ = DEFAULT_CPU_HIGH_WATER_LEVEL;
   write_failure_detect_interval_ = DEFAULT_WRITE_FAILURE_DETECT_INTERVAL;
   read_failure_black_list_interval_ = DEFAULT_READ_FAILURE_IN_BLACK_LIST_INTERVAL;
-  retry_warn_limit_ = DEFAULT_RETRY_WARN_LIMIT;
-  retry_error_limit_ = DEFAULT_RETRY_ERROR_LIMIT;
+  data_storage_warning_tolerance_time_ = DEFAULT_WARNING_TOLERANCE_TIME;
+  data_storage_error_tolerance_time_ = DEFAULT_ERROR_TOLERANCE_TIME;
   disk_io_thread_count_ = DEFAULT_DISK_IO_THREAD_COUNT;
   callback_thread_count_ = DEFAULT_IO_CALLBACK_THREAD_COUNT;
   large_query_io_percent_ = DEFAULT_LARGE_QUERY_IO_PERCENT;
@@ -163,7 +170,8 @@ bool ObIOConfig::is_valid() const
   return sys_io_low_percent_ >= 0 && sys_io_low_percent_ <= 100 && sys_io_high_percent_ > 0 &&
          sys_io_high_percent_ <= 100 && sys_io_low_percent_ <= sys_io_high_percent_ && user_iort_up_percent_ >= 0 &&
          cpu_high_water_level_ > 0 && write_failure_detect_interval_ > 0 && read_failure_black_list_interval_ > 0 &&
-         retry_warn_limit_ > 0 && retry_error_limit_ > retry_warn_limit_ && disk_io_thread_count_ > 0 &&
+         data_storage_warning_tolerance_time_ > 0 &&
+         data_storage_error_tolerance_time_ >= data_storage_warning_tolerance_time_ && disk_io_thread_count_ > 0 &&
          disk_io_thread_count_ <= ObDisk::MAX_DISK_CHANNEL_CNT * 2 && disk_io_thread_count_ % 2 == 0 &&
          callback_thread_count_ > 0 && large_query_io_percent_ >= 0 && large_query_io_percent_ <= 100 &&
          data_storage_io_timeout_ms_ > 0;
@@ -177,8 +185,8 @@ void ObIOConfig::reset()
   cpu_high_water_level_ = 0;
   write_failure_detect_interval_ = 0;
   read_failure_black_list_interval_ = 0;
-  retry_warn_limit_ = 0;
-  retry_error_limit_ = 0;
+  data_storage_warning_tolerance_time_ = 0;
+  data_storage_error_tolerance_time_ = 0;
   disk_io_thread_count_ = 0;
   callback_thread_count_ = 0;
   large_query_io_percent_ = 0;

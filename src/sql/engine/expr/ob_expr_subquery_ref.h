@@ -46,11 +46,11 @@ public:
   explicit ObExprSubQueryRef(common::ObIAllocator& alloc);
   virtual ~ObExprSubQueryRef();
 
-  virtual int assign(const ObExprOperator& other);
+  virtual int assign(const ObExprOperator& other) override;
 
-  virtual void reset();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
+  virtual void reset() override;
+  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int expr_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);

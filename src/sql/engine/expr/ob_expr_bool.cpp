@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_bool.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 namespace oceanbase {
 namespace sql {
@@ -32,9 +33,12 @@ int ObExprBool::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObE
   if (!lib::is_mysql_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bool expr is only for mysql mode", K(ret));
-  } else if (ob_is_numeric_type(type1.get_type())) {
+  } else if (ob_is_numeric_type(type1.get_type()) || ob_is_json(type1.get_type())) {
     type1.set_calc_meta(type1.get_obj_meta());
     type1.set_calc_accuracy(type1.get_accuracy());
+    if (ob_is_json(type1.get_type())) {
+      type1.set_calc_type(type1.get_type());      
+    }
   } else {
     const ObObjType& calc_type = ObDoubleType;
     type1.set_calc_type(calc_type);
@@ -95,8 +99,20 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
 {
   EVAL_ARG()
   {
-    int32_t res = child_datum->get_number().is_zero() ? 0 : 1;
-    res_datum.set_int32(res);
+    if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {
+      int cmp_result = 0;
+      if (child_datum->is_null()) {
+        res_datum.set_int32(1);;
+      } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
+        LOG_WARN("failed: compare json", K(ret));
+      } else {
+        res_datum.set_int32(cmp_result);
+      }
+    } else {
+      int32_t res = child_datum->get_number().is_zero() ? 0 : 1;
+      res_datum.set_int32(res);      
+    }
+
   }
   return ret;
 }

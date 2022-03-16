@@ -85,9 +85,6 @@ private:
   // other attributes.
   ObTaskStatus status_;
   common::ObSpinLock lock_;
-
-private:
-  static const int64_t TTL_THRESHOLD = 5;
 };
 
 typedef common::Ob2DArray<ObReporter, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObReporterArray;
@@ -132,6 +129,8 @@ private:
   void wait_reporter_event(int64_t wait_timeout);
 
 private:
+  // trans_result will be inited and reset by main thread, accessed by rpc thread,
+  // so we need protect it with lock.
   TransResult* trans_result_;
   int err_code_;
   common::ObSpinLock lock_;
@@ -146,7 +145,7 @@ private:
   obrpc::SingleWaitCond reporter_cond_;
 
 private:
-  static const int64_t TTL_THRESHOLD = 5;
+  static const int64_t TTL_THRESHOLD = 10;
   static const int64_t WAIT_ONCE_TIME = 500000;  // 500ms.
 };
 

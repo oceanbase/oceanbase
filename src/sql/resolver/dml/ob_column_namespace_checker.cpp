@@ -295,6 +295,7 @@ int ObColumnNamespaceChecker::find_column_in_single_table(
   // if databasename or table name is not specified,
   // we must check the uniqueness of column in the table with the same name
   bool is_match = true;
+  LOG_TRACE("column info", K(q_name), K(table_item));
   if (!q_name.database_name_.empty()) {
     if (OB_FAIL(ObResolverUtils::name_case_cmp(
             params_.session_info_, q_name.database_name_, table_item.database_name_, OB_TABLE_NAME_CLASS, is_match))) {
@@ -312,11 +313,6 @@ int ObColumnNamespaceChecker::find_column_in_single_table(
   if (OB_SUCC(ret) && is_match && !q_name.tbl_name_.empty()) {
     if (OB_FAIL(ObResolverUtils::name_case_cmp(
             params_.session_info_, q_name.tbl_name_, table_item.get_object_name(), OB_TABLE_NAME_CLASS, is_match))) {
-      LOG_WARN("database name case compare failed", K(ret));
-    }
-    if (OB_SUCC(ret) && !is_match && !table_item.synonym_name_.empty() &&
-        OB_FAIL(ObResolverUtils::name_case_cmp(
-            params_.session_info_, q_name.tbl_name_, table_item.synonym_name_, OB_TABLE_NAME_CLASS, is_match))) {
       LOG_WARN("database name case compare failed", K(ret));
     }
   }

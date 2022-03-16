@@ -21,6 +21,7 @@
 #include "lib/charset/ob_charset.h"
 #include "share/ob_errno.h"
 
+
 namespace oceanbase {
 namespace common {
 
@@ -41,9 +42,11 @@ namespace common {
 #define CM_FORCE_USE_STANDARD_NLS_FORMAT (1ULL << 7)
 #define CM_STRICT_MODE (1ULL << 8)
 #define CM_SET_MIN_IF_OVERFLOW (1ULL << 9)
+#define CM_ERROR_ON_SCALE_OVER (1ULL << 10)
+#define CM_TO_BOOLEAN (1ULL << 11)
 // when casting string to integer, round if not set this flag, otherwise trunc.
 // but ceil will always round to +inf, and floor will always round to -inf.
-#define CM_STRING_INTEGER_TRUNC (1ULL << 9)
+#define CM_STRING_INTEGER_TRUNC (1ULL << 57)
 #define CM_COLUMN_CONVERT (1ULL << 58)
 #define CM_ENABLE_BLOB_CAST (1ULL << 59)
 #define CM_EXPLICIT_CAST (1ULL << 60)
@@ -80,6 +83,9 @@ typedef uint64_t ObCastMode;
 #define CM_IS_IGNORE_CHARSET_CONVERT_ERR(mode) ((CM_CHARSET_CONVERT_IGNORE_ERR & (mode)) != 0)
 #define CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(mode) ((CM_FORCE_USE_STANDARD_NLS_FORMAT & (mode)) != 0)
 #define CM_IS_SET_MIN_IF_OVERFLOW(mode) ((CM_SET_MIN_IF_OVERFLOW & (mode)) != 0)
+#define CM_IS_ERROR_ON_SCALE_OVER(mode) ((CM_ERROR_ON_SCALE_OVER & (mode)) != 0)
+#define CM_IS_JSON_VALUE(mode)  CM_IS_ERROR_ON_SCALE_OVER(mode)
+#define CM_HAS_BOOLEAN_FLAG(mode) ((CM_TO_BOOLEAN & (mode)) != 0)
 
 struct ObObjCastParams {
   // add params when necessary
@@ -257,7 +263,7 @@ typedef int (*ObCastEnumOrSetFunc)(
 bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_type, const ObObjType expect_type,
     const ObCollationType expect_cs_type);
 int ob_obj_to_ob_time_with_date(
-    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, bool is_dayofmonth = false);
+    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, const int64_t cur_ts_value, bool is_dayofmonth = false);
 int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time);
 
 // CM_STRING_INTEGER_TRUNC only affect string to [unsigned] integer cast.
@@ -310,6 +316,10 @@ public:
   static int to_type(
       const ObObjType expect_type, ObCastCtx& cast_ctx, const ObObj& in_obj, ObObj& buf_obj, const ObObj*& out_obj);
   static int to_datetime(
+      const ObObjType expect_type, ObCastCtx& cast_ctx, const ObObj& in_obj, ObObj& buf_obj, const ObObj*& res_obj);
+  static int bool_to_json(
+      const ObObjType expect_type, ObCastCtx& cast_ctx, const ObObj& in_obj, ObObj& buf_obj, const ObObj*& res_obj);
+  static int enumset_to_json(
       const ObObjType expect_type, ObCastCtx& cast_ctx, const ObObj& in_obj, ObObj& buf_obj, const ObObj*& res_obj);
   // casting to enum/set is supported.
   static int to_type(

@@ -435,16 +435,7 @@ int ObPartitionGroup::get_role(common::ObRole& role) const
   return ret;
 }
 
-int ObPartitionGroup::get_role_for_partition_table(common::ObRole& role) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {
-    ret = pls_->get_role_for_partition_table(role);
-  }
-  return ret;
-}
-
-int ObPartitionGroup::get_role_unsafe(common::ObRole& role) const
+int ObPartitionGroup::get_role_unsafe(common::ObRole &role) const
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {
@@ -1885,7 +1876,6 @@ int ObPartitionGroup::replay_split_source_log(
         "replay split source log failed",
         K(ret),
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         "used_time",
@@ -1894,7 +1884,6 @@ int ObPartitionGroup::replay_split_source_log(
     STORAGE_LOG(INFO,
         "replay split source log success",
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         K(write_slog),
@@ -2148,6 +2137,7 @@ int ObPartitionGroup::prepare_splitting(
 int ObPartitionGroup::check_cur_partition_split(bool& is_split_partition)
 {
   int ret = OB_SUCCESS;
+  const bool split_kill_trans = true;
   //  SpinWLockGuard guard(split_lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2158,7 +2148,7 @@ int ObPartitionGroup::check_cur_partition_split(bool& is_split_partition)
   } else {
     is_split_partition = false;
   }
-  if (!(GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_3100)) {
+  if (split_kill_trans || !(GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_3100)) {
     is_split_partition = false;
   }
 
@@ -2483,7 +2473,7 @@ int ObPartitionGroup::split_dest_partition(const ObPartitionSplitInfo& split_inf
                     split_info.get_spp()))) {
               STORAGE_LOG(WARN, "split dest log init failed", K(ret));
             } else if (OB_FAIL(submit_split_dest_log_(log))) {
-              STORAGE_LOG(WARN, "submit split dest log failed", K(ret), K(log));
+              STORAGE_LOG(WARN, "submit split dest log failed", K(ret));
             } else {
               // do nothing
             }
@@ -2560,10 +2550,10 @@ int ObPartitionGroup::push_reference_tables(const ObIArray<ObPartitionKey>& dest
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(check_if_dest_pg_ready_(dest_array, is_dest_partition_ready))) {
-    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret), K(log));
+    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret));
   } else if (!is_dest_partition_ready) {
     ret = OB_EAGAIN;
-    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret), K(log));
+    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret));
   } else if (OB_FAIL(push_reference_tables_(dest_array, split_version))) {
     STORAGE_LOG(WARN, "failed to push reference tables", K(ret), K(dest_array), K(split_version));
   }
@@ -3417,7 +3407,8 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
             K(*this));
       }
     } else {
-      // 2. The freeze_id of follower is the right boundary of replay queue.
+      // 2. The freeze_id of follower is the the maximum log id of the right
+      // boundary of replay queue and the max majoritied log id
       // The follower will block the replay, wait it to be empty and then get the freeze_id.
       if (OB_FAIL(wait_follower_no_pending_task_())) {
         STORAGE_LOG(WARN, "wait follower no pending task failed", K(is_leader), K(freeze_id), K(*this));
@@ -3429,6 +3420,52 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
             K(freeze_id),
             K(freeze_ts),
             K(*this));
+      } else {
+        // The logic below is sophistic:
+        //
+        // If you remember the semantic of end_log_ts and max_log_ts belong to
+        // the memstore, you will know that all data belong to the log before
+        // end_log_ts is within the memstore, and the data may or maynot exist
+        // in the memstore if the log creates the data is between end_log_ts and
+        // max_log_ts
+        //
+        // In terms of the minor freeze, follower needs to wait until replaying
+        // to a continuous log point and fetch the freeze point. While follower
+        // cannot use the min replayed log ts both as the end_log_ts and
+        // max_log_ts.
+        //
+        // To see why the more sophistic max_log_ts calculation is required,
+        // consider the following example:
+        // 1. Leader submits the log 5,6,7 and only log 7 is in quorum using
+        //    paxos and its data is already filled in the memstore
+        // 2. Leader switches to the follower and the min replayed log ts is
+        //    smaller than the log 5's log_ts
+        // 3. If we just use the min replayed log ts as both the end_log_ts and
+        //    max_log_ts the semantic specified above is broken
+        //
+        // So we need maintain the max_log_ts using the log 7's timestamp, in
+        // terms of the implementation, we use the max_majority_log_ts which is
+        // updated after each log's synchronization of leader.
+        //
+        // What's more, we need mark all data whose log is between end_log_ts to
+        // max_log_ts as overflow(the requirement from the storage layer). while
+        // the data may already synced and we have no chance to mark the data
+        // except traversing all data in the memtable. So we choose to mark the
+        // end_log_ts as the max_majority_log_ts as well.
+        //
+        // NB: we never maintain the max_mjority_log_ts for follower, so we just
+        // use the variable for the corner case of leader transfer.
+        uint64_t max_majority_log_id = OB_INVALID_ID;
+        int64_t max_majority_log_ts = OB_INVALID_TIMESTAMP;
+        (void)pls_->get_max_majority_log(max_majority_log_id, max_majority_log_ts);
+        if (max_majority_log_ts > freeze_ts) {
+          TRANS_LOG(WARN,
+              "max majority log ts is larger than freeze timestamp",
+              K(max_majority_log_ts),
+              K(freeze_ts),
+              K(*this));
+          ret = OB_EAGAIN;
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -3624,7 +3661,7 @@ int ObPartitionGroup::wait_follower_no_pending_task_()
   int64_t cnt = 0;
   int64_t task_cnt = replay_status_->get_pending_task_count();
 
-  while (replay_status_->has_pending_task(pkey_) && OB_SUCC(ret)) {
+  while (replay_status_->has_pending_task(pkey_) && !replay_status_->has_encount_fatal_error() && OB_SUCC(ret)) {
     usleep(FREEZE_WAIT_RETRY_SLEEP_TS);
     cnt++;
 
@@ -3639,6 +3676,11 @@ int ObPartitionGroup::wait_follower_no_pending_task_()
 
       cnt = 0;
     }
+  }
+
+  if (replay_status_->has_encount_fatal_error()) {
+    TRANS_LOG(ERROR, "encounter fatal error", K(*replay_status_), K(ret), K(pkey_));
+    ret = OB_ERR_UNEXPECTED;
   }
 
   return ret;
@@ -3669,7 +3711,6 @@ int ObPartitionGroup::check_range_changed_(ObTableHandle& handle, const bool is_
     base_version = mt->get_base_version();
 
     if (tmp_freeze_ts < start_log_ts || tmp_snapshot_version < base_version) {
-      ret = OB_EAGAIN;
       STORAGE_LOG(INFO,
           "skip freeze, maybe in the process of restarting",
           K(ret),
@@ -3823,22 +3864,32 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
       STORAGE_LOG(WARN, "fail to freeze log", K(ret), K(pkey_));
     }
   } else if (OB_FAIL(check_range_changed_(old_handle, is_leader, changed))) {
-    if (OB_EAGAIN != ret) {
+    if (OB_STATE_NOT_MATCH == ret) {
+      STORAGE_LOG(INFO, "skip freeze due to clog state", K(ret), K(pkey_));
+      ret = OB_SUCCESS;
+    } else {
       STORAGE_LOG(WARN, "failed to check log_id or version range changed", K(ret), K(old_handle));
     }
   } else if (!changed) {
     // skip
-  } else if (OB_FAIL(submit_freeze_and_effect_memstore_(
-                 is_leader, emergency, *frozen_memtable, effected, snapshot_version))) {
-    STORAGE_LOG(WARN, "submit freeze and prepare memstore", K(ret), K(pkey_), K(*frozen_memtable));
-  } else if (effected) {
-    if (OB_FAIL(pg_storage_.get_active_memtable(new_handle))) {
-      STORAGE_LOG(WARN, "fail to get new active memtable", K(ret), K(pkey_));
-    } else if (OB_FAIL(freeze_record_.submit_new_active_memtable(new_handle))) {
-      // Submit a new memtable. Allow async_freeze threads to scan and synchronize log.
-      STORAGE_LOG(ERROR, "fail to submit freeze record", K(ret), K(pkey_));
-    } else {
-      STORAGE_LOG(INFO, "submit_new_active_memtable success", K(ret), K(pkey_));
+  } else {
+    if (OB_FAIL(
+            submit_freeze_and_effect_memstore_(is_leader, emergency, *frozen_memtable, effected, snapshot_version))) {
+      STORAGE_LOG(WARN, "submit freeze and prepare memstore", K(ret), K(pkey_), K(*frozen_memtable));
+    } else if (effected) {
+      if (OB_FAIL(pg_storage_.get_active_memtable(new_handle))) {
+        STORAGE_LOG(WARN, "fail to get new active memtable", K(ret), K(pkey_));
+      } else if (OB_FAIL(freeze_record_.submit_new_active_memtable(new_handle))) {
+        // Submit a new memtable. Allow async_freeze threads to scan and synchronize log.
+        STORAGE_LOG(ERROR, "fail to submit freeze record", K(ret), K(pkey_));
+      } else {
+        STORAGE_LOG(INFO, "submit_new_active_memtable success", K(ret), K(pkey_));
+      }
+    }
+
+    if (OB_FAIL(ret) || !effected) {
+      TRANS_LOG(INFO, "clear the record when failed", K(*this));
+      freeze_record_.clear();
     }
   }
 
@@ -3888,12 +3939,8 @@ int ObPartitionGroup::freeze(const bool emergency, const bool force, int64_t& fr
   ObPartitionGroupLockGuard guard(lock_, 0, PGLOCKSTORAGE);
 
   if (with_data_()) {
-    // F replica, need freeze;
     ret = freeze_log_and_data_v2_(emergency, force, freeze_snapshot);
-    // F/R replica are with data because they have sstable. The freeze operation will be skipped at
-    // lower layer because they do not have memtable.
   } else {
-    // L replica or empty PG
     ret = freeze_log_(force);
   }
 
@@ -4038,7 +4085,7 @@ int ObPartitionGroup::get_curr_clog_info_(
   if (OB_FAIL(get_base_storage_info_(clog_info))) {
     STORAGE_LOG(WARN, "fail to get base storage info", K(ret), K(pkey_));
   } else if (0 == clog_info.get_last_replay_log_id()) {
-    // skip fetching log_archive_status
+    // do nothing
   } else if (ObServerConfig::get_instance().enable_log_archive && !is_sys_tenant && !is_restore &&
              src_cluster_id == self_cluster_id) {
     // Only the requests from the database itself need to obtain the archive point if the archive is enabled.
@@ -4072,13 +4119,31 @@ int ObPartitionGroup::get_curr_clog_info_(
             K(clog_info),
             K(log_archive_status));
       } else {
-        STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
-        if (log_archive_status.last_archived_log_id_ < clog_info.get_last_replay_log_id()) {
-          log_info_usable = true;
-          clog_info.set_last_replay_log_id(log_archive_status.last_archived_log_id_);
-          clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
-          clog_info.set_epoch_id(log_archive_status.clog_epoch_id_);
-          clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
+        bool clog_exist = true;
+        const uint64_t last_archived_log_id = log_archive_status.last_archived_log_id_;
+        const bool is_mandatory = ObServerConfig::get_instance().backup_log_archive_option.is_mandatory();
+        if (! is_mandatory && last_archived_log_id < clog_info.get_last_replay_log_id()) {
+          // check next archive log exist, return clog_exist = true only on situation of log exist
+          if (OB_FAIL(pls_->check_log_exist(last_archived_log_id + 1, clog_exist))) {
+            STORAGE_LOG(WARN, "failed to check log exist", KR(ret), K(pkey_), K(log_archive_status));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        }
+        // if archive not in madatory mode and next archive log not exist, omit archive
+        else if (! is_mandatory && ! clog_exist) {
+          STORAGE_LOG(WARN, "attent!! archive had been omitted due to log based on archive not exist, maybe some error occur",
+              KR(ret), K(pkey_), K(log_archive_status));
+        } else {
+          STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
+          if (last_archived_log_id < clog_info.get_last_replay_log_id()) {
+            log_info_usable = true;
+            clog_info.set_last_replay_log_id(last_archived_log_id);
+            clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
+            clog_info.set_epoch_id(log_archive_status.clog_epoch_id_);
+            clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
+          }
         }
       }
     } else { /*do nothing*/
@@ -4175,8 +4240,10 @@ int ObPartitionGroup::check_is_from_restore(bool& is_from_restore) const
   int ret = OB_SUCCESS;
 
   uint64_t last_restore_log_id = OB_INVALID_ID;
+  int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
   int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
-  if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id, restore_snapshot_version))) {
+  if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id,
+          last_restore_log_ts, restore_snapshot_version))) {
     STORAGE_LOG(WARN, "fail to get_restore_replay_info", K(ret), K(pkey_));
   } else {
     is_from_restore = (OB_INVALID_ID != last_restore_log_id);
@@ -5310,35 +5377,12 @@ uint64_t ObPartitionGroup::get_min_replayed_log_id()
   uint64_t min_replay_log_id = UINT64_MAX;
   int64_t unused = 0;
 
-  get_min_replayed_log(min_replay_log_id, unused);
+  get_min_replayed_log_with_keepalive(min_replay_log_id, unused);
 
   return min_replay_log_id;
 }
 
-void ObPartitionGroup::get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts)
-{
-  uint64_t unreplay_log_id = UINT64_MAX;
-  int64_t unreplay_log_ts = 0;
-  uint64_t last_replay_log_id = UINT64_MAX;
-  int64_t last_replay_log_ts = 0;
-
-  // 1. The left boundary of sliding window.
-  pls_->get_last_replay_log(last_replay_log_id, last_replay_log_ts);
-
-  // 2. The minimum continuously replayed log of replay engine.
-  replay_status_->get_min_unreplay_log(unreplay_log_id, unreplay_log_ts);
-  if (unreplay_log_id <= last_replay_log_id) {
-    min_replay_log_id = unreplay_log_id - 1;
-    min_replay_log_ts = unreplay_log_ts - 1;
-  } else {
-    min_replay_log_id = last_replay_log_id;
-    min_replay_log_ts = last_replay_log_ts;
-  }
-
-  STORAGE_LOG(INFO, "min replayed log", K(pkey_), K(min_replay_log_ts), K(unreplay_log_ts), K(last_replay_log_ts));
-}
-
-int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts)
+int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t &min_replay_log_id, int64_t &min_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   uint64_t unreplay_log_id = UINT64_MAX;
@@ -5352,12 +5396,13 @@ int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t& min_replay_l
   } else {
     // 2. The minimum continuously replayed log of replay engine.
     replay_status_->get_min_unreplay_log(unreplay_log_id, unreplay_log_ts);
-    if (unreplay_log_id <= next_replay_log_id - 1) {
-      min_replay_log_id = unreplay_log_id - 1;
-      min_replay_log_ts = unreplay_log_ts - 1;
-    } else {
+    if (unreplay_log_id == next_replay_log_id) {
+      // cold partition, return next_replay_log_ts instead of unreplay_log_ts,  unreplay_log_ts may be too small.
       min_replay_log_id = next_replay_log_id - 1;
       min_replay_log_ts = next_replay_log_ts - 1;
+    } else {
+      min_replay_log_id = unreplay_log_id - 1;
+      min_replay_log_ts = unreplay_log_ts - 1;
     }
 
     STORAGE_LOG(INFO,
@@ -5802,7 +5847,7 @@ int ObPartitionGroup::get_merge_log_ts(int64_t& merge_ts)
 
   ObPartitionGroupLockGuard guard(lock_, PGLOCKTRANS | PGLOCKREPLAY | PGLOCKCLOG, 0);
   uint64_t unused = 0;
-  get_min_replayed_log(unused, merge_ts);
+  get_min_replayed_log_with_keepalive(unused, merge_ts);
 
   if (OB_ISNULL(txs_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -5826,7 +5871,16 @@ int ObPartitionGroup::recycle_unused_sstables(const int64_t max_recycle_cnt, int
   return ret;
 }
 
-int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list)
+int ObPartitionGroup::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pg_storage_.recycle_sstable(table_key))) {
+    STORAGE_LOG(WARN, "fail to recycle sstable", K(ret), K(table_key));
+  }
+  return ret;
+}
+
+int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId> &meta_block_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -5949,24 +6003,29 @@ int ObPartitionGroup::check_can_physical_flashback(const int64_t flashback_scn)
   return ret;
 }
 
-int ObPartitionGroup::clear_trans_after_restore_log(const uint64_t last_restore_log_id)
+int ObPartitionGroup::clear_trans_after_restore_log(const uint64_t last_restore_log_id,
+    const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
   ObPartitionGroupLockGuard guard(lock_, PGLOCKTRANS | PGLOCKSTORAGE, 0);
   if (OB_SYS_TENANT_ID == pkey_.get_tenant_id()) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "sys partitions do not do physical restore", K(ret), K(pkey_));
+    STORAGE_LOG(ERROR, "sys partitions do not do physical restore", K(ret), K(pkey_));
   } else if (OB_ISNULL(txs_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "txs_ is NULL", KR(ret), K_(pkey));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id)
+      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid last_restore_log_id", KR(ret), K_(pkey), K(last_restore_log_id));
-  } else if (OB_FAIL(pg_storage_.set_last_restore_log_id(last_restore_log_id))) {
-    CLOG_LOG(WARN, "failed to set_last_restore_log_id", K(ret), K_(pkey), K(last_restore_log_id));
-  } else if (OB_FAIL(txs_->set_last_restore_log_id(pkey_, last_restore_log_id))) {
-    STORAGE_LOG(WARN, "failed to set_last_restore_log_id", KR(ret), K_(pkey), K(last_restore_log_id));
+    STORAGE_LOG(
+        WARN, "invalid last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(pg_storage_.set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_info", K(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(txs_->set_last_restore_log_info(pkey_, last_restore_log_id, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     ATOMIC_SET(&has_clear_trans_after_restore_, true);
   }
@@ -5982,7 +6041,9 @@ int ObPartitionGroup::get_base_storage_info_(common::ObBaseStorageInfo& info)
   } else {
     int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
     uint64_t last_restore_log_id = OB_INVALID_ID;
-    if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id, restore_snapshot_version))) {
+    int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
+    if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id,
+            last_restore_log_ts, restore_snapshot_version))) {
       STORAGE_LOG(WARN, "failed to get_restore_replay_info", KR(ret), K(pkey_));
     } else if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
       // The last_replay_log_id of recovered partition needs to be adjusted.
@@ -6054,6 +6115,20 @@ int ObPartitionGroup::inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, con
     if (OB_FAIL(pg_storage_.inc_pending_elr_count(mt_ctx, log_ts))) {
       STORAGE_LOG(WARN, "failed to inc_pending_elr_count", K(ret), K_(pkey), K(log_ts));
     }
+  }
+
+  return ret;
+}
+
+int ObPartitionGroup::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "Partition object not initialized", K(ret), K(is_inited_));
+  } else {
+    pls_->try_update_max_majority_log(log_id, log_ts);
   }
 
   return ret;

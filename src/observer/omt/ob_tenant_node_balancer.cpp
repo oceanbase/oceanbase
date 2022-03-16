@@ -118,6 +118,14 @@ int ObTenantNodeBalancer::update_tenant(TenantUnits& units, const bool is_local)
     omt_->set_synced();
   }
 
+  // This func is called when restart(is_local=true) or run1(is_local=false).
+  // So we need update tenant allocator here.
+  if (OB_SUCCESS != (tmp_ret = TMA_MGR_INSTANCE.update_tenant_mem_limit(units))) {
+    LOG_WARN("TMA_MGR_INSTANCE.update_tenant_mem_limit failed", K(tmp_ret));
+  } else {
+    LOG_INFO("TMA_MGR_INSTANCE.update_tenant_mem_limit success", K(units), K(is_local));
+  }
+
   if (OB_FAIL(check_del_tenant(units))) {
     tmp_ret = ret;
     LOG_WARN("check delete tenant fail", K(ret));

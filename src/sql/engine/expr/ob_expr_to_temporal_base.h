@@ -23,10 +23,10 @@ public:
   explicit ObExprToTemporalBase(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name);
   virtual ~ObExprToTemporalBase()
   {}
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types_array, int64_t param_num,
+      common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int set_my_result_from_ob_time(
       common::ObExprCtx& expr_ctx, common::ObTime& ob_time, common::ObObj& result) const = 0;
   virtual common::ObObjType get_my_target_obj_type() const = 0;

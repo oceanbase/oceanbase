@@ -91,6 +91,8 @@ int ObHashUnionOp::inner_get_next_row()
       LOG_WARN("failed to get next row", K(ret));
     }
     first_get_left_ = false;
+  } else if (iter_end_) {
+    ret = OB_ITER_END;
   }
   bool got_row = false;
   bool has_exists = false;
@@ -144,6 +146,9 @@ int ObHashUnionOp::inner_get_next_row()
     if (OB_FAIL(convert_row(cur_child_op_->get_spec().output_, MY_SPEC.set_exprs_))) {
       LOG_WARN("copy current row failed", K(ret));
     }
+  }
+  if (OB_ITER_END == ret) {
+    iter_end_ = true;
   }
   return ret;
 }

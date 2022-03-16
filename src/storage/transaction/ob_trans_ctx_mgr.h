@@ -137,7 +137,8 @@ public:
 public:
   // alloc transaction context if alloc is set true when transaction context not exist
   int get_trans_ctx(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx);
+      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx,
+      const bool wait_init = true);
   int revert_trans_ctx(ObTransCtx* ctx);
   int acquire_ctx_ref(const ObTransID& trans_id)
   {
@@ -268,7 +269,6 @@ public:
     return ATOMIC_LOAD(&end_trans_by_self_count_);
   }
   void reset_elr_statistic();
-  int iterate_trans_stat(ObTransStatIterator& trans_stat_iter);
   int iterate_trans_lock_stat(ObTransLockStatIterator& trans_lock_stat_iter);
   int iterate_trans_result_info_in_TRIM(ObTransResultInfoStatIterator& iter);
   int iterate_trans_table(const uint64_t end_log_id, blocksstable::ObMacroBlockWriter& writer);
@@ -336,9 +336,14 @@ public:
   {
     return ATOMIC_LOAD(&last_restore_log_id_);
   }
-  int set_last_restore_log_id(const uint64_t last_restore_log_id);
+  int64_t get_last_restore_log_ts() const
+  {
+    return ATOMIC_LOAD(&last_restore_log_ts_);
+  }
+  int set_last_restore_log_info(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const int64_t restore_snapshot_version);
-  int update_restore_replay_info(const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+  int update_restore_replay_info(
+      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   ObTransLogBufferAggreContainer& get_trans_log_buffer_aggre_container()
   {
     return aggre_log_container_;
@@ -363,7 +368,7 @@ public:
   }
 
   TO_STRING_KV(KP(this), K_(partition), K_(state), K_(ctx_type), K_(read_only_count), K_(active_read_write_count),
-      K_(total_ctx_count), K_(restore_snapshot_version), K_(last_restore_log_id), "uref",
+      K_(total_ctx_count), K_(restore_snapshot_version), K_(last_restore_log_id), K_(last_restore_log_ts), "uref",
       ((ObTransCtxType::SCHEDULER == ctx_type_ || !is_inited_) ? -1 : get_uref()));
 
 private:
@@ -395,7 +400,8 @@ private:
     return ATOMIC_LOAD(&total_ctx_count_);
   }
   int get_trans_ctx_(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx);
+      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx,
+      const bool wait_init = true);
   bool has_valid_compact_mode_();
   int set_compact_mode_(const int compact_mode);
   int get_compact_mode_() const
@@ -605,6 +611,8 @@ private:
   int64_t restore_snapshot_version_;
   // it is used to record the last restore log id pulling by physical backup and recovery
   uint64_t last_restore_log_id_;
+  // it is used to record the last restore log ts pulling by physical backup and recovery
+  int64_t last_restore_log_ts_;
   // the statistics for elr
   // number of trans with prev
   uint64_t with_dependency_trx_count_;
@@ -688,6 +696,8 @@ public:
   // hold lock before revert or release trans_ctx
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx);
+  int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
+      const bool is_readonly, bool& alloc, ObTransCtx*& ctx, const bool wait_init);
   // unlock transaction context
   int revert_trans_ctx(ObTransCtx* ctx);
   int inactive_tenant(const uint64_t tenant_id);
@@ -757,6 +767,7 @@ private:
 };
 
 class ObTransCtxMgrImpl {
+protected:
   enum { CACHE_NUM = 17313, CONTEXT_MAP_COUNT = 1 << 6 };
 
 public:
@@ -926,8 +937,8 @@ public:
   int iterate_partition(ObPartitionIterator& partition_iter);
   int iterate_partition(ObELRStatSummary& elr_stat);
   int iterate_partition_mgr_stat(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter, const ObAddr& addr);
-  // get transaction stat iterator by partition
-  int iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter);
+  // get transaction stat iterator without partition
+  int iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter);
   int print_all_trans_ctx(const common::ObPartitionKey& partition);
   // get transaction lock stat iterator by partition
   int iterate_trans_lock_stat(const common::ObPartitionKey& partition, ObTransLockStatIterator& trans_lock_stat_iter);
@@ -968,10 +979,11 @@ public:
   int clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_id);
   int has_terminated_trx_in_given_log_ts_range(
       const ObPartitionKey& pkey, const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
-  int set_last_restore_log_id(const common::ObPartitionKey& pkey, const uint64_t last_restore_log_id);
+  int set_last_restore_log_info(
+      const common::ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const common::ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int update_restore_replay_info(
-      const ObPartitionKey& partition, const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+  int update_restore_replay_info(const ObPartitionKey& partition, const int64_t restore_snapshot_version,
+      const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int submit_log_for_split(const common::ObPartitionKey& pkey, bool& log_finished);
   int copy_trans_table(
       ObTransService* txs, const common::ObPartitionKey& pkey, const ObIArray<ObPartitionKey>& dest_array);

@@ -153,7 +153,8 @@ public:
 
   int rebuild_index_in_trans(share::schema::ObSchemaGetterGuard& schema_guard,
       share::schema::ObTableSchema& table_schema, const int64_t frozen_version, const ObString* ddl_stmt_str,
-      const obrpc::ObCreateTableMode create_mode, ObMySQLTransaction* sql_trans);
+      const obrpc::ObCreateTableMode create_mode, ObMySQLTransaction* sql_trans,
+      bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
 
   int create_inner_expr_index(const share::schema::ObTableSchema& orig_table_schema,
       share::schema::ObTableSchema& new_table_schema, common::ObIArray<share::schema::ObColumnSchemaV2*>& new_columns,
@@ -772,7 +773,7 @@ private:
       const int64_t paxos_replica_num, const int64_t non_paxos_replica_num,
       const common::ObIArray<int64_t>& partition_ids, const ObITablePartitionAddr& table_addr,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const bool is_bootstrap, const bool is_standby,
-      obrpc::ObCreateTableMode create_mode, const share::ObSimpleFrozenStatus& frozen_status,
+      obrpc::ObCreateTableMode create_mode, const int64_t restore, const share::ObSimpleFrozenStatus& frozen_status,
       const uint64_t last_replay_log_id = 0);
 
   virtual int prepare_create_partitions(ObPartitionCreator& creator, const share::schema::ObTableSchema& new_schema,
@@ -780,7 +781,7 @@ private:
       const int64_t paxos_replica_num, const int64_t non_paxos_replica_num,
       const common::ObIArray<int64_t>& partition_ids, const ObITablePartitionAddr& table_addr,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const bool is_bootstrap, const bool is_standby,
-      obrpc::ObCreateTableMode create_mode, const share::ObSimpleFrozenStatus& frozen_status,
+      obrpc::ObCreateTableMode create_mode, const int64_t restore, const share::ObSimpleFrozenStatus& frozen_status,
       const uint64_t last_replay_log_id = 0);
   int fill_partition_member_list(const ObPartitionAddr& part_addr, const int64_t timestamp,
       const int64_t paxos_replica_count, obrpc::ObCreatePartitionArg& arg);
@@ -790,7 +791,7 @@ private:
   int construct_create_partition_creator(const common::ObPartitionKey& pkey,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const int64_t paxos_replica_num,
       const int64_t non_paxos_replica_num, const int64_t schema_version, const int64_t last_replay_log_id,
-      const obrpc::ObCreateTableMode create_mode, const ObPartitionAddr& partition_addr,
+      const obrpc::ObCreateTableMode create_mode, const int64_t restore, const ObPartitionAddr& partition_addr,
       const share::ObSplitPartition& split_info, const share::ObSimpleFrozenStatus& frozen_status,
       const bool is_standby, const bool is_bootstrap, ObPartitionCreator& creator);
   int fill_create_binding_partition_arg(const common::ObPartitionKey& pkey, const common::ObPGKey& pgkey,
@@ -805,7 +806,7 @@ private:
   int set_flag_role(const bool initial_leader, const bool is_standby, const int64_t restore, const uint64_t table_id,
       common::ObRole& role);
   int fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
-      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, const common::ObRole role,
+      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr,
       share::ObPartitionReplica& flag_replica);
 
   int try_modify_tenant_primary_zone_entity_count(common::ObMySQLTransaction& trans,
@@ -858,6 +859,8 @@ private:
   int replay_alter_user(const share::schema::ObUserInfo& user_info);
   int set_passwd_in_trans(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& new_passwd,
       const common::ObString* ddl_stmt_str);
+  int set_max_connection_in_trans(const uint64_t tenant_id, const uint64_t user_id, const uint64_t max_connections_per_hour,
+      const uint64_t max_user_connections, const ObString *ddl_stmt_str);
   int alter_user_require_in_trans(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObSetPasswdArg& arg,
       const common::ObString* ddl_stmt_str);
   int rename_user_in_trans(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObAccountArg& new_account,
@@ -952,7 +955,8 @@ private:
   int drop_table_in_trans(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema& table_schema, const bool is_rebuild_index, const bool is_index,
       const bool to_recyclebin, const common::ObString* ddl_stmt_str, ObMySQLTransaction* sql_trans,
-      share::schema::DropTableIdHashSet* drop_table_set = NULL);
+      share::schema::DropTableIdHashSet* drop_table_set = NULL,
+      bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
   int drop_aux_table_in_drop_table(common::ObMySQLTransaction& trans, ObDDLOperator& ddl_operator,
       share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObTableSchema& table_schema,
       const share::schema::ObTableType table_type, const bool to_recyclebin);

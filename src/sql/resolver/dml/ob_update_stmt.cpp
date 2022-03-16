@@ -47,7 +47,7 @@ int ObUpdateStmt::deep_copy_stmt_struct(
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(refill_index_assignment_info())) {
+    if (OB_FAIL(refill_global_index_dml_info(expr_factory, other.use_static_typing_engine_))) {
       LOG_WARN("fail refill index assignment info", K(ret));
     }
   }
@@ -315,6 +315,7 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
       LOG_WARN("fail copy array", K(ret));
     } else {
       bool is_update_part_key = false;
+      bool is_update_unique_key = false;
       if (dml_index_info.all_part_num_ > 1) {  // Only partition tables have part_key
         for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
           uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
@@ -326,7 +327,22 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
           }
         }
       }
+
+      if (share::schema::ObSimpleTableSchemaV2::is_global_unique_index_table(dml_index_info.index_type_)) {
+        for (int i = 0; i < dml_index_info.assignments_.count(); ++i) {
+          uint64_t col_id = dml_index_info.assignments_.at(i).column_expr_->get_column_id();
+          for (int j = 0; j < dml_index_info.primary_key_ids_.count(); ++j) {
+            if (dml_index_info.primary_key_ids_.at(j) == col_id) {
+              is_update_unique_key = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // [pdml]: 对于每个索引表单独计算，不应该继承主表的属性
       table_assignments->is_update_part_key_ = is_update_part_key;
+      table_assignments->is_update_unique_key_ = is_update_unique_key;
       table_assignments->table_id_ = dml_index_info.table_id_;
     }
 
@@ -342,7 +358,7 @@ const ObTablesAssignments* ObUpdateStmt::get_slice_from_all_table_assignments(
   return tables_assignments;
 }
 
-int ObUpdateStmt::refill_index_assignment_info()
+int ObUpdateStmt::refill_global_index_dml_info(ObRawExprFactory& expr_factory, bool use_static_typing_engine)
 {
   int ret = OB_SUCCESS;
   const ObTablesAssignments& table_assign = get_tables_assignments();
@@ -353,7 +369,7 @@ int ObUpdateStmt::refill_index_assignment_info()
     ObIArray<IndexDMLInfo>& index_infos = all_table_columns.at(i).index_dml_infos_;
     for (int64_t j = 0; OB_SUCC(ret) && j < index_infos.count(); ++j) {
       IndexDMLInfo& index_info = index_infos.at(j);
-      if (OB_FAIL(index_info.init_assignment_info(assignments))) {
+      if (OB_FAIL(index_info.init_assignment_info(assignments, expr_factory, use_static_typing_engine))) {
         LOG_WARN("init index assignment info failed", K(i), K(ret));
       }
     }

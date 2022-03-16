@@ -73,12 +73,25 @@ int ObNestedLoopJoinOp::switch_iterator()
   return ret;
 }
 
-int ObNestedLoopJoinOp::rescan()
-{
+int ObNestedLoopJoinOp::set_param_null() {
+  int ret = OB_SUCCESS;
+  ObDatum null_datum;
+  null_datum.set_null();
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.rescan_params_.count(); ++i) {
+    OZ(MY_SPEC.rescan_params_.at(i).update_dynamic_param(eval_ctx_,
+                                                         null_datum));
+    LOG_DEBUG("prepare_rescan_params", K(ret), K(i));
+  }
+  return ret;
+}
+
+int ObNestedLoopJoinOp::rescan() {
   int ret = OB_SUCCESS;
   reset_buf_state();
-  ObPhysicalPlanCtx* plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  if (OB_FAIL(ObBasicNestedLoopJoinOp::rescan())) {
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  if (OB_FAIL(set_param_null())) {
+    LOG_WARN("failed to set param null", K(ret));
+  } else if (OB_FAIL(ObBasicNestedLoopJoinOp::rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }
 
@@ -116,6 +129,13 @@ int ObNestedLoopJoinOp::inner_get_next_row()
         }
       }
     }  // while end
+  }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(set_param_null())) {
+      LOG_WARN("failed to set param null", K(ret));
+    } else {
+      ret = OB_ITER_END;
+    }
   }
 
   return ret;
@@ -233,7 +253,7 @@ int ObNestedLoopJoinOp::group_read_left_operate()
         lib::ContextParam param;
         param.set_mem_attr(tenant_id, ObModIds::OB_SQL_NLJ_CACHE, ObCtxIds::WORK_AREA)
             .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-        if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+        if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
           LOG_WARN("create entity failed", K(ret));
         } else if (OB_ISNULL(mem_context_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -326,7 +346,7 @@ int ObNestedLoopJoinOp::deep_copy_dynamic_obj()
   ParamStore& param_store = plan_ctx->get_param_store_for_update();
   if (OB_ISNULL(mem_context_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mem entity not init", KP(mem_context_), K(ret));
+    LOG_WARN("mem entity not init", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
     const ObDynamicParamSetter& rescan_param = get_spec().rescan_params_.at(i);

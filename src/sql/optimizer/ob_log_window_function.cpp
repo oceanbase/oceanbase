@@ -127,9 +127,7 @@ int ObLogWindowFunction::allocate_exchange_post(AllocExchContext* ctx)
         LOG_WARN("fail to check match parallel condition", K(ret));
       } else if (can_parallel) {
         is_parallel_ = true;
-        if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-          LOG_WARN("failed to deep copy sharding info from child", K(ret));
-        }
+        sharding_info_.set_location_type(OB_TBL_LOCATION_DISTRIBUTED);
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::MAX_VALUE;
         sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
@@ -514,9 +512,6 @@ int ObLogWindowFunction::get_win_partition_intersect_exprs(
 bool ObLogWindowFunction::is_block_op() const
 {
   bool is_block_op = true;
-  // 对于window function算子, 在没有partition by以及完整窗口情况下,
-  // 所有数据作为一个窗口, 认为是block算子
-  // 在其他情况下, 认为是非block算子
   ObWinFunRawExpr* win_expr = NULL;
   for (int64_t i = 0; i < win_exprs_.count(); ++i) {
     if (OB_ISNULL(win_expr = win_exprs_.at(i))) {

@@ -445,7 +445,11 @@ int ObMPStmtPrepare::do_process(
 
     if (!OB_SUCC(ret) && !async_resp_used && need_response_error && conn_valid_ && !THIS_WORKER.need_retry()) {
       LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()), K_(sql));
-      bool is_partition_hit = session.partition_hit().get_bool();
+      // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
+      // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
+      // 则需要在下面回复一个error_packet作为收尾。否则后面没人帮忙发错误包给客户端了，
+      // 可能会导致客户端挂起等回包。
+      bool is_partition_hit = session.get_err_final_partition_hit(ret);
       int err = send_error_packet(ret, NULL, is_partition_hit);
       if (OB_SUCCESS != err) {
         LOG_WARN("send error packet failed", K(ret), K(err));

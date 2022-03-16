@@ -58,8 +58,6 @@ int ObExtLogService::init(ObPartitionService* partition_service, ObILogEngine* l
     EXTLOG_LOG(WARN, "fetcher init error", K(ret), KP(log_engine), K(self_addr));
   } else if (OB_FAIL(archive_log_fetcher_.init(log_archive_line_cache_, log_engine))) {
     EXTLOG_LOG(WARN, "log_archive_fetcher init error", K(ret), KP(log_engine), K(self_addr));
-  } else if (OB_FAIL(hb_handler_.init(partition_service, log_engine))) {
-    EXTLOG_LOG(WARN, "hb_handler_ init error", K(ret));
   } else if (OB_FAIL(leader_hb_handler_.init(partition_service))) {
     EXTLOG_LOG(WARN, "leader_hb_handler_ init error", K(ret));
   } else {
@@ -80,7 +78,6 @@ void ObExtLogService::destroy()
     locator_.destroy();
     fetcher_.destroy();
     archive_log_fetcher_.destroy();
-    hb_handler_.destroy();
     leader_hb_handler_.destroy();
     clog_mgr_ = NULL;
     line_cache_.destroy();
@@ -98,7 +95,7 @@ int ObExtLogService::req_start_log_id_by_ts_with_breakpoint(
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     resp.set_err(OB_SERVER_IS_INIT);
     EXTLOG_LOG(WARN,
-        "all clog and ilog file are not scan-finised, can not serve "
+        "all clog and ilog file are not scan-finished, can not serve "
         "req_start_log_id_by_ts_with_breakpoint RPC",
         K(req_msg),
         K(resp));
@@ -140,7 +137,7 @@ int ObExtLogService::fetch_log(
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     resp.set_err(OB_SERVER_IS_INIT);
     EXTLOG_LOG(WARN,
-        "all clog and ilog file are not scan-finised, can not serve fetch_log RPC",
+        "all clog and ilog file are not scan-finished, can not serve fetch_log RPC",
         K(req),
         K(resp),
         K(send_ts),
@@ -178,7 +175,7 @@ int ObExtLogService::archive_fetch_log(const ObPGKey& pg_key, const ObReadParam&
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     ret = OB_EAGAIN;
     EXTLOG_LOG(
-        WARN, "all clog and ilog file are not scan-finised, can not serve fetch_log", K(pg_key), K(param), KR(ret));
+        WARN, "all clog and ilog file are not scan-finished, can not serve fetch_log", K(pg_key), K(param), KR(ret));
   } else {
     const int64_t start_ts = ObTimeUtility::current_time();
     if (OB_FAIL(archive_log_fetcher_.fetch_log(pg_key, param, rbuf, res))) {
@@ -192,24 +189,6 @@ int ObExtLogService::archive_fetch_log(const ObPGKey& pg_key, const ObReadParam&
       // TODO:stat info
       EXTLOG_LOG(TRACE, "ObExtLogService log_archive_fetch_log", KR(ret), K(param));
     }
-  }
-  return ret;
-}
-
-int ObExtLogService::req_heartbeat_info(
-    const ObLogReqHeartbeatInfoRequest& req_msg, ObLogReqHeartbeatInfoResponse& resp)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    EXTLOG_LOG(WARN, "ObExtLogService not init", K(ret));
-  } else {
-    const int64_t start_ts = ObTimeUtility::current_time();
-    ret = hb_handler_.req_heartbeat_info(req_msg, resp);
-    const int64_t end_ts = ObTimeUtility::current_time();
-    ObExtLogServiceMonitor::heartbeat_count();
-    EVENT_INC(CLOG_EXTLOG_HEARTBEAT_RPC_COUNT);
-    ObExtLogServiceMonitor::heartbeat_time(end_ts - start_ts);
   }
   return ret;
 }

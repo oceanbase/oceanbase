@@ -65,12 +65,10 @@ int ObInsertLogPlan::generate_plan()
       ObIArray<IndexDMLInfo>& index_infos = table_columns.at(0).index_dml_infos_;
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         LOG_DEBUG("table_assign", K(table_assign.at(0).assignments_));
-        if (OB_FAIL(index_infos.at(i).init_assignment_info(table_assign.at(0).assignments_))) {
+        bool use_static_typing_engine = optimizer_context_.get_session_info()->use_static_typing_engine();
+        if (OB_FAIL(index_infos.at(i).init_assignment_info(
+                table_assign.at(0).assignments_, optimizer_context_.get_expr_factory(), use_static_typing_engine))) {
           LOG_WARN("init index assignment info failed", K(ret));
-        } else if (optimizer_context_.get_session_info()->use_static_typing_engine()) {
-          if (OB_FAIL(index_infos.at(i).add_spk_assignment_info(optimizer_context_.get_expr_factory()))) {
-            LOG_WARN("fail to add spk assignment info", K(ret));
-          }
         }
       }
     }
@@ -95,7 +93,8 @@ int ObInsertLogPlan::generate_plan()
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;
@@ -495,10 +494,6 @@ int ObInsertLogPlan::generate_values_op_as_child(ObLogicalOperator*& top)
       /*do nothing*/
     } else if (OB_FAIL(values_op->add_values_expr(insert_stmt->get_value_vectors()))) {
       LOG_WARN("failed to add values expr", K(ret));
-    } else if (NULL != exec_ctx && NULL != exec_ctx->get_my_session() &&
-               exec_ctx->get_my_session()->use_static_typing_engine() &&
-               OB_FAIL(values_op->add_str_values_array(insert_stmt->get_column_conv_functions()))) {
-      LOG_WARN("fail to add_str_values_array", K(ret));
     } else { /*do nothing*/
     }
   }

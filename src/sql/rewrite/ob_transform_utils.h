@@ -81,7 +81,19 @@ private:
   };
 
 public:
+  enum NULLABLE_SCOPE {
+    NS_FROM     = 1 << 0,
+    NS_WHERE    = 1 << 1,
+    NS_GROUPBY  = 1 << 2,
+    NS_HAVING   = 1 << 3,
+    NS_TOP      = 1 << 4
+  };
+
   static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
+
+  static int is_correlated_subquery(ObSelectStmt* subquery,
+                                    int32_t correlated_level,
+                                    bool &is_correlated);
 
   static int is_direct_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated);
 
@@ -264,6 +276,12 @@ public:
 
   static int find_expr(const ObIArray<OrderItem>& source, const ObRawExpr* target, bool& bret);
 
+  static int check_nullable_exprs_in_groupby(ObDMLStmt *stmt, ObRawExpr *expr, int nullable_scope, bool &found);
+
+  static int find_expr_in_groupby_clause(ObSelectStmt *select_stmt, ObRawExpr *column_expr, bool &found);
+  
+  static int find_expr_in_scala_groupby(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &found);
+
   /**
    * @brief is_null_propagate_type
    * white list for null propagate expr
@@ -294,6 +312,10 @@ public:
   static int is_match_index(const ObDMLStmt* stmt, const ObIArray<uint64_t>& index_cols,
       const ObColumnRefRawExpr* col_expr, bool& is_match, EqualSets* equal_sets = NULL,
       ObIArray<ObColumnRefRawExpr*>* col_exprs = NULL);
+
+  static int extract_inseparable_query_ref_expr(ObIArray<ObRawExpr*> &exprs, ObIArray<ObRawExpr*> &target_exprs);
+
+  static int extract_inseparable_query_ref_expr(ObRawExpr *expr, ObIArray<ObRawExpr*> &target_exprs);
 
   static int extract_query_ref_expr(ObIArray<ObRawExpr*>& exprs, ObIArray<ObQueryRefRawExpr*>& subqueries);
 
@@ -735,9 +757,6 @@ public:
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
 private:
-  static int create_select_item_for_subquery(
-      ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
-
   static int add_non_duplicated_select_expr(
       ObIArray<ObRawExpr*>& add_select_exprs, ObIArray<ObRawExpr*>& org_select_exprs);
 };

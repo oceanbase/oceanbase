@@ -37,7 +37,7 @@ public:
   int save_curr_rowkey();
   int set_tables(const common::ObIArray<ObITable*>& tables);
   int switch_iterator(const int64_t range_array_idx);
-
+  virtual int release_table_ref();
 private:
   static const int64_t MAX_NUM_PER_BATCH = 1000;
   ObQueryRowIterator* index_iter_;

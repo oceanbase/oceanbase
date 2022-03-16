@@ -217,6 +217,7 @@ OB_DEF_SERIALIZE(ObExprDllUdf)
       LOG_WARN("serialize aggregate column expression failed", K(ret));
     }
   }
+  OZ(ObFuncExprOperator::serialize(buf, buf_len, pos));
   return ret;
 }
 
@@ -238,13 +239,14 @@ OB_DEF_DESERIALIZE(ObExprDllUdf)
       LOG_WARN("fail to deserialize expression", K(ret));
     }
   }
+  OZ(ObFuncExprOperator::deserialize(buf, data_len, pos));
+  OZ(udf_func_.init(udf_meta_));
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObExprDllUdf)
 {
   int64_t len = 0;
-  len += ObFuncExprOperator::get_serialize_size();
   OB_UNIS_ADD_LEN(udf_meta_);
   OB_UNIS_ADD_LEN(udf_attributes_);
   OB_UNIS_ADD_LEN(udf_attributes_types_);
@@ -258,6 +260,7 @@ OB_DEF_SERIALIZE_SIZE(ObExprDllUdf)
       len += expr->get_serialize_size();
     }
   }
+  len += ObFuncExprOperator::get_serialize_size();
   return len;
 }
 

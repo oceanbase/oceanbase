@@ -165,7 +165,7 @@ struct ObDynReserveBuf {
   {
     const common::ObObjTypeClass tc = common::ob_obj_type_class(type);
     return common::ObStringTC == tc || common::ObTextTC == tc || common::ObRawTC == tc || common::ObRowIDTC == tc ||
-           common::ObLobTC == tc;
+           common::ObLobTC == tc || common::ObJsonTC == tc;
   }
 
   ObDynReserveBuf() = default;
@@ -269,6 +269,7 @@ public:
   // type of ObObj memory layout to ObDatum memory layout mapping,
   // used to convert ObDatum to ObObj and vice versa.
   common::ObObjDatumMapType obj_datum_map_;
+  uint64_t is_boolean_; // to distinguish result of this expr between and int tc
   // expr evaluate function
   union {
     EvalFunc eval_func_;
@@ -343,6 +344,15 @@ public:
   {}
 
   void* alloc(const int64_t size) override;
+  void* alloc(const int64_t size, const common::ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
+  {
+    UNUSED(ptr);
+  }
 
 private:
   int64_t off_;
@@ -753,7 +763,7 @@ inline int decode(const char* buf, const int64_t data_len, int64_t& pos, const O
       array.data_ = NULL;
     } else {
       const int64_t alloc_size = sizeof(*array.data_) * array.cnt_;
-      array.data_ = static_cast<T*>(CURRENT_CONTEXT.get_arena_allocator().alloc(alloc_size));
+      array.data_ = static_cast<T*>(CURRENT_CONTEXT->get_arena_allocator().alloc(alloc_size));
       if (OB_ISNULL(array.data_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "alloc memory failed", K(ret), K(alloc_size));

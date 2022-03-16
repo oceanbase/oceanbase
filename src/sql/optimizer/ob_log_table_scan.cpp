@@ -681,12 +681,16 @@ int ObLogTableScan::extract_access_exprs(
           expr = static_cast<ObColumnRefRawExpr*>(raw_expr);
         } else if (OB_FAIL(ObRawExprUtils::build_column_expr(opt_ctx->get_expr_factory(), *column_schema, expr))) {
           LOG_WARN("build column expr failed", K(ret));
+        } else if (FALSE_IT(expr->set_table_id(get_table_id()))) {
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null", K(col_idx), K(ret));
-        } else if (OB_FAIL(expr->formalize(opt_ctx->get_session_info()))) {
-          LOG_WARN("failed to formalize the new expr", K(ret));
-        } else { /*do nothing*/
+        } else {
+          expr->set_ref_id(get_table_id(), column_schema->get_column_id());
+          if (OB_FAIL(expr->formalize(opt_ctx->get_session_info()))) {
+            LOG_WARN("failed to formalize the new expr", K(ret));
+          } else { /*do nothing*/
+          }
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(rowkey_exprs.push_back(expr))) {
@@ -1223,6 +1227,36 @@ int ObLogTableScan::explain_index_selection_info(char* buf, int64_t& buf_len, in
           } else { /* Do nothing */
           }
         }
+        // print unstable index name
+        if (OB_SUCC(ret) && table_opt_info_->unstable_index_name_.count() > 0) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("BUF_PRINTF fails", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF("unstable_index_name["))) {
+            LOG_WARN("BUF_PRINTF fails", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < table_opt_info_->unstable_index_name_.count(); ++i) {
+              if (OB_FAIL(BUF_PRINTF("%.*s",
+                      table_opt_info_->unstable_index_name_.at(i).length(),
+                      table_opt_info_->unstable_index_name_.at(i).ptr()))) {
+                LOG_WARN("BUF_PRINTF fails", K(ret));
+              } else if (i != table_opt_info_->unstable_index_name_.count() - 1) {
+                if (OB_FAIL(BUF_PRINTF(","))) {
+                  LOG_WARN("BUF_PRINTF fails", K(ret));
+                } else { /* do nothing*/
+                }
+              } else { /* do nothing*/
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(BUF_PRINTF("]"))) {
+              LOG_WARN("BUF_PRINTF fails", K(ret));
+            } else { /* Do nothing */
+            }
+          } else { /* Do nothing */
+          }
+        }
+
         // print est row count infos
         if (OB_SUCC(ret) && est_records_.count() > 0) {
           if (OB_FAIL(BUF_PRINTF(", estimation info[table_id:%ld,", est_records_.at(0).table_id_))) {

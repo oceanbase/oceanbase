@@ -91,7 +91,7 @@ private:
       NoSwapCache;
   typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaCacheValue> KVCache;
 
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   NoSwapCache sys_cache_;
   KVCache cache_;
   bool is_inited_;

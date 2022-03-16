@@ -213,6 +213,30 @@ constexpr int OB_ERR_OPERATOR_CANNOT_BE_USED_WITH_LIST = -5729;
 constexpr int OB_INVALID_ROWID = -5802;
 constexpr int OB_ERR_NUMERIC_NOT_MATCH_FORMAT_LENGTH = -5873;
 constexpr int OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR = -5898;
+constexpr int OB_ERR_ILL_OBJ_FLAG = -5974;
+constexpr int OB_ERR_INVALID_JSON_TEXT = -5975;
+constexpr int OB_ERR_INVALID_JSON_TEXT_IN_PARAM = -5976;
+constexpr int OB_ERR_INVALID_JSON_BINARY_DATA = -5977;
+constexpr int OB_ERR_INVALID_JSON_PATH = -5978;
+constexpr int OB_ERR_INVALID_JSON_CHARSET = -5979;
+constexpr int OB_ERR_INVALID_JSON_CHARSET_IN_FUNCTION = -5980;
+constexpr int OB_ERR_INVALID_TYPE_FOR_JSON = -5981;
+constexpr int OB_ERR_INVALID_CAST_TO_JSON = -5982;
+constexpr int OB_ERR_INVALID_JSON_PATH_CHARSET = -5983;
+constexpr int OB_ERR_INVALID_JSON_PATH_WILDCARD = -5984;
+constexpr int OB_ERR_JSON_VALUE_TOO_BIG = -5985;
+constexpr int OB_ERR_JSON_KEY_TOO_BIG = -5986;
+constexpr int OB_ERR_JSON_USED_AS_KEY = -5987;
+constexpr int OB_ERR_JSON_VACUOUS_PATH = -5988;
+constexpr int OB_ERR_JSON_BAD_ONE_OR_ALL_ARG = -5989;
+constexpr int OB_ERR_NUMERIC_JSON_VALUE_OUT_OF_RANGE = -5990;
+constexpr int OB_ERR_INVALID_JSON_VALUE_FOR_CAST = -5991;
+constexpr int OB_ERR_JSON_OUT_OF_DEPTH = -5992;
+constexpr int OB_ERR_JSON_DOCUMENT_NULL_KEY = -5993;
+constexpr int OB_ERR_BLOB_CANT_HAVE_DEFAULT = -5994;
+constexpr int OB_ERR_INVALID_JSON_PATH_ARRAY_CELL = -5995;
+constexpr int OB_ERR_MISSING_JSON_VALUE = -5996;
+constexpr int OB_ERR_MULTIPLE_JSON_VALUES = -5997;
 constexpr int OB_MASK_SET_NO_NODE = -6203;
 constexpr int OB_TRANS_TIMEOUT = -6210;
 constexpr int OB_TRANS_KILLED = -6211;
@@ -228,12 +252,13 @@ constexpr int OB_INIT_MD5_ERROR = -9004;
 constexpr int OB_OUT_OF_ELEMENT = -9005;
 constexpr int OB_UPDATE_MD5_ERROR = -9006;
 constexpr int OB_FILE_LENGTH_INVALID = -9007;
-constexpr int OB_COS_ERROR = -9008;
 constexpr int OB_BACKUP_FILE_NOT_EXIST = -9011;
 constexpr int OB_INVALID_BACKUP_DEST = -9026;
+constexpr int OB_IO_LIMIT = -9061;
+constexpr int OB_BACKUP_BACKUP_REACH_COPY_LIMIT = -9062;
+constexpr int OB_BACKUP_IO_PROHIBITED = -9063;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR = -20999;
-
 }  // namespace common
 using namespace common;  // maybe someone can fix
 }  // namespace oceanbase

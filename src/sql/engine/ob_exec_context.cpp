@@ -161,7 +161,9 @@ ObExecContext::ObExecContext(ObIAllocator& allocator)
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
-      expr_partition_id_(OB_INVALID_ID)
+      expr_partition_id_(OB_INVALID_ID),
+      iters_(256, allocator),
+      check_status_times_(0)
 {}
 
 ObExecContext::ObExecContext()
@@ -220,7 +222,9 @@ ObExecContext::ObExecContext()
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
-      expr_partition_id_(OB_INVALID_ID)
+      expr_partition_id_(OB_INVALID_ID),
+      iters_(256, allocator_),
+      check_status_times_(0)
 {}
 
 ObExecContext::~ObExecContext()
@@ -252,6 +256,7 @@ ObExecContext::~ObExecContext()
     DESTROY_CONTEXT(lob_fake_allocator_);
     lob_fake_allocator_ = NULL;
   }
+  iters_.reset();
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -265,6 +270,30 @@ void ObExecContext::clean_resolve_ctx()
     stmt_factory_ = nullptr;
   }
   sql_ctx_ = nullptr;
+}
+
+int ObExecContext::push_back_iter(common::ObNewRowIterator *iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(iters_.push_back(iter))) {
+    LOG_WARN("failed to push back iter", K(ret));
+  }
+  return ret;
+}
+
+int ObExecContext::remove_iter(common::ObNewRowIterator *iter)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); i++) {
+    if (iters_.at(i) == iter) {
+      if (OB_FAIL(iters_.remove(i))) {
+        LOG_WARN("failed to remove iter", K(ret), K(i));
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
 }
 
 uint64_t ObExecContext::get_ser_version() const
@@ -413,9 +442,9 @@ int ObExecContext::init_eval_ctx()
     CK(NULL == eval_tmp_mem_);
     CK(NULL != my_session_);
 
-    lib::MemoryContext& current_context =
+    lib::MemoryContext current_context =
         (query_exec_ctx_ != nullptr ? query_exec_ctx_->get_mem_context() : CURRENT_CONTEXT);
-    WITH_CONTEXT(&current_context)
+    WITH_CONTEXT(current_context)
     {
       lib::ContextParam param;
       param.set_properties(!use_remote_sql() ? lib::USE_TL_PAGE_OPTIONAL : lib::DEFAULT_PROPERTIES)
@@ -428,10 +457,10 @@ int ObExecContext::init_eval_ctx()
       if (OB_ISNULL(mem = allocator_.alloc(sizeof(*eval_ctx_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(eval_res_mem_, param))) {
+      } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(eval_res_mem_, param))) {
         LOG_WARN("create memory entity failed", K(ret));
         eval_res_mem_ = NULL;
-      } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(eval_tmp_mem_, param))) {
+      } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(eval_tmp_mem_, param))) {
         LOG_WARN("create memory entity failed", K(ret));
         eval_tmp_mem_ = NULL;
       } else {
@@ -707,6 +736,8 @@ int ObExecContext::check_status()
     LOG_WARN("session info is null");
   } else if (my_session_->is_terminate(ret)) {
     LOG_WARN("execution was terminated", K(ret));
+  } else if (OB_FAIL(release_table_ref())) {
+    LOG_WARN("failed to refresh table on demand", K(ret));
   } else if (IS_INTERRUPTED()) {
     ObInterruptCode& ic = GET_INTERRUPT_CODE();
     ret = ic.code_;
@@ -715,6 +746,15 @@ int ObExecContext::check_status()
     if (share::ObWorker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
       ret = OB_KILLED_BY_THROTTLING;
     }
+  }
+  return ret;
+}
+
+int ObExecContext::fast_check_status(const int64_t n)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((check_status_times_++ & n) == n)) {
+    ret = check_status();
   }
   return ret;
 }
@@ -771,7 +811,7 @@ int ObExecContext::get_lob_fake_allocator(ObArenaAllocator*& allocator)
           .set_mem_attr(my_session_->get_effective_tenant_id(),
               common::ObModIds::OB_SQL_EXPR_CALC,
               common::ObCtxIds::DEFAULT_CTX_ID);
-      if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(lob_fake_allocator_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(lob_fake_allocator_, param))) {
         SQL_ENG_LOG(WARN, "create entity failed", K(ret));
       }
     }
@@ -1012,6 +1052,23 @@ int ObExecContext::get_pwj_map(PWJPartitionIdMap*& pwj_map)
     }
   } else {
     pwj_map = pwj_map_;
+  }
+  return ret;
+}
+
+// Currently, there are some limitations
+// Only iterator in ITER_END can be released because of memory allocation problem
+// iterator in merge sort join cannot work properly,
+// because iterator may not go to end
+int ObExecContext::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); i++) {
+    if (OB_FAIL(iters_.at(i)->release_table_ref())) {
+      LOG_WARN("failed to release table ref", K(ret), K(i));
+    } else {
+      LOG_DEBUG("succ to release_table_ref");
+    }
   }
   return ret;
 }

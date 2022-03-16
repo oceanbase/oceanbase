@@ -620,7 +620,7 @@ public:
   }
   int get_select_exprs(ObIArray<ObRawExpr*>& select_exprs, const bool is_for_outout = false);
   int get_select_exprs(ObIArray<ObRawExpr*>& select_exprs, const bool is_for_outout = false) const;
-  int inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const;
+  int inner_get_share_exprs(ObIArray<ObRawExpr*>& candi_share_exprs) const override;
   const common::ObIArray<ObAggFunRawExpr*>& get_aggr_items() const
   {
     return agg_items_;
@@ -783,7 +783,7 @@ public:
   {
     return for_update_columns_;
   }
-  virtual bool is_affect_found_rows() const
+  virtual bool is_affect_found_rows() const override
   {
     bool ret = false;
     if (select_type_ == AFFECT_FOUND_ROWS) {
@@ -793,7 +793,7 @@ public:
     }
     return ret;
   }
-  virtual bool has_link_table() const
+  virtual bool has_link_table() const override
   {
     bool bret = ObDMLStmt::has_link_table();
     for (int64_t i = 0; !bret && i < set_query_.count(); i++) {
@@ -835,7 +835,7 @@ public:
   bool is_mix_of_group_func_and_fileds() const;
   // replace expression from %from to %to, only replace expr pointer of stmt,
   // will not recursive replace of expr
-  virtual int replace_expr_in_stmt(ObRawExpr* from, ObRawExpr* to);
+  virtual int replace_expr_in_stmt(ObRawExpr* from, ObRawExpr* to) override;
   void set_star_select()
   {
     is_select_star_ = true;
@@ -856,14 +856,14 @@ public:
   {
     return is_match_topk_;
   }
-  virtual bool is_set_stmt() const
+  virtual bool is_set_stmt() const override
   {
     return NONE != set_op_;
   }
-  int get_child_stmt_size(int64_t& child_size) const;
-  int get_child_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const;
-  int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt);
-  int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const;
+  int get_child_stmt_size(int64_t& child_size) const override;
+  int get_child_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const override;
+  int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt) override;
+  int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const override;
   const common::ObIArray<ObWinFunRawExpr*>& get_window_func_exprs() const
   {
     return win_func_exprs_;
@@ -962,7 +962,7 @@ public:
   {
     return get_sample_info_by_table_id(table_id) != nullptr;
   }
-  virtual bool check_table_be_modified(uint64_t ref_table_id) const;
+  virtual bool check_table_be_modified(uint64_t ref_table_id) const override;
 
   // check aggregation has distinct or group concat e.g.:
   //  count(distinct c1)
@@ -1018,8 +1018,8 @@ private:
       const ObIArray<ObMultiRollupItem>& multi_rollup_items, const ObExprInfoFlag flag, bool& has) const;
 
 protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
-  virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker)
+  virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker) override;
+  virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker) override
   {
     return inner_get_relation_exprs(expr_checker);
   }

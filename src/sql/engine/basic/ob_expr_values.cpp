@@ -352,6 +352,7 @@ int ObExprValues::serialize(char* buf, int64_t buf_len, int64_t& pos, ObPhyOpSer
   int64_t range_param_count = 0;
   int64_t col_num = get_column_count();
   const ObIArray<int64_t>* row_id_list = static_cast<const ObIArray<int64_t>*>(seri_ctx.row_id_list_);
+
   if (OB_SUCC(ret)) {
     if (use_range_param) {
       value_count = 0;

@@ -30,22 +30,22 @@ using namespace sql;
 using namespace obmysql;
 namespace observer {
 
-ObSyncPlanDriver::ObSyncPlanDriver(const ObGlobalContext& gctx, const ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-    ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender)
+ObSyncPlanDriver::ObSyncPlanDriver(const ObGlobalContext &gctx, const ObSqlCtx &ctx, sql::ObSQLSessionInfo &session,
+    ObQueryRetryCtrl &retry_ctrl, ObIMPPacketSender &sender)
     : ObQueryDriver(gctx, ctx, session, retry_ctrl, sender)
 {}
 
 ObSyncPlanDriver::~ObSyncPlanDriver()
 {}
 
-int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
+int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
   bool ac = true;
   bool admission_fail_and_need_retry = false;
-  const ObNewRow* not_used_row = NULL;
+  const ObNewRow *not_used_row = NULL;
   if (OB_ISNULL(result.get_physical_plan())) {
     ret = OB_NOT_INIT;
     LOG_WARN("should have set plan to result set", K(ret));
@@ -82,6 +82,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
         retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
         LOG_WARN("result response failed, check if need retry", K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
+      } else {
+        ObResultSet::refresh_location_cache(result.get_exec_context().get_task_exec_ctx(), true, ret);
       }
       // After judging whether you need to retry, we won't judge whether to retry later
       THIS_WORKER.disable_retry();
@@ -96,7 +98,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
       process_ok = true;
 
       OMPKEOF eofp;
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       uint16_t warning_count = 0;
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
@@ -147,10 +149,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
       if (!result.has_implicit_cursor()) {
         // no implicit cursor, send one ok packet to client
         ObOKPParam ok_param;
-        ok_param.message_ = const_cast<char*>(result.get_message());
+        ok_param.message_ = const_cast<char *>(result.get_message());
         ok_param.affected_rows_ = result.get_affected_rows();
         ok_param.lii_ = result.get_last_insert_id_to_client();
-        const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+        const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
         if (OB_ISNULL(warnings_buf)) {
           LOG_WARN("can not get thread warnings buffer");
         } else {
@@ -167,7 +169,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
         result.reset_implicit_cursor_idx();
         while (OB_SUCC(ret) && OB_SUCC(result.switch_implicit_cursor())) {
           ObOKPParam ok_param;
-          ok_param.message_ = const_cast<char*>(result.get_message());
+          ok_param.message_ = const_cast<char *>(result.get_message());
           ok_param.affected_rows_ = result.get_affected_rows();
           ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
           ok_param.has_more_result_ = !result.is_cursor_end();
@@ -189,7 +191,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
       OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
     // if OB_BATCHED_MULTI_STMT_ROLLBACK is err ret of batch stmt rollback,not return to client, retry
     int sret = OB_SUCCESS;
-    bool is_partition_hit = session_.partition_hit().get_bool();
+    bool is_partition_hit = session_.get_err_final_partition_hit(ret);
     if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
       LOG_WARN("send error packet fail", K(sret), K(ret));
     }
@@ -199,12 +201,12 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
 }
 
 int ObSyncPlanDriver::response_query_result(
-    ObResultSet& result, bool has_more_result, bool& can_retry, int64_t fetch_limit)
+    ObResultSet &result, bool has_more_result, bool &can_retry, int64_t fetch_limit)
 {
   int ret = OB_SUCCESS;
   can_retry = true;
   bool is_first_row = true;
-  const ObNewRow* result_row = NULL;
+  const ObNewRow *result_row = NULL;
   bool has_top_limit = result.get_has_top_limit();
   bool is_cac_found_rows = result.is_calc_found_rows();
   int64_t limit_count = OB_INVALID_COUNT == fetch_limit ? INT64_MAX : fetch_limit;
@@ -217,7 +219,7 @@ int ObSyncPlanDriver::response_query_result(
   }
   session_.get_trans_desc().consistency_wait();
   MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? BINARY : TEXT;
-  const common::ColumnsFieldIArray* fields = NULL;
+  const common::ColumnsFieldIArray *fields = NULL;
   if (OB_SUCC(ret)) {
     fields = result.get_field_columns();
     if (OB_ISNULL(fields)) {
@@ -226,7 +228,7 @@ int ObSyncPlanDriver::response_query_result(
     }
   }
   while (OB_SUCC(ret) && row_num < limit_count && !OB_FAIL(result.get_next_row(result_row))) {
-    ObNewRow* row = const_cast<ObNewRow*>(result_row);
+    ObNewRow *row = const_cast<ObNewRow *>(result_row);
     // If it is the first line, first reply to the client with field and other information
     if (is_first_row) {
       is_first_row = false;
@@ -236,7 +238,7 @@ int ObSyncPlanDriver::response_query_result(
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < row->get_count(); i++) {
-      ObObj& value = row->get_cell(i);
+      ObObj &value = row->get_cell(i);
       if (result.is_ps_protocol()) {
         if (value.get_type() != fields->at(i).type_.get_type()) {
           ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL, CS_TYPE_INVALID);
@@ -257,12 +259,13 @@ int ObSyncPlanDriver::response_query_result(
     }
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session_);
-      OMPKRow rp(ObSMRow(protocol_type,
+      ObSMRow sm_row(protocol_type,
           *row,
           dtc_params,
           result.get_field_columns(),
           ctx_.schema_guard_,
-          session_.get_effective_tenant_id()));
+          session_.get_effective_tenant_id());
+      OMPKRow rp(sm_row);
       if (OB_FAIL(sender_.response_packet(rp))) {
         LOG_WARN("response packet fail", K(ret), KP(row), K(row_num), K(can_retry));
         // break;
@@ -295,12 +298,12 @@ int ObSyncPlanDriver::response_query_result(
   return ret;
 }
 
-ObRemotePlanDriver::ObRemotePlanDriver(const ObGlobalContext& gctx, const ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-    ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender)
+ObRemotePlanDriver::ObRemotePlanDriver(const ObGlobalContext &gctx, const ObSqlCtx &ctx, sql::ObSQLSessionInfo &session,
+    ObQueryRetryCtrl &retry_ctrl, ObIMPPacketSender &sender)
     : ObSyncPlanDriver(gctx, ctx, session, retry_ctrl, sender)
 {}
 
-int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
+int ObRemotePlanDriver::response_result(ObMySQLResultSet &result)
 {
   int ret = result.get_errcode();
   bool process_ok = false;
@@ -345,7 +348,7 @@ int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
     if (OB_SUCC(ret)) {
       process_ok = true;
       OMPKEOF eofp;
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       uint16_t warning_count = 0;
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
@@ -390,10 +393,10 @@ int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
     } else if (!result.has_implicit_cursor()) {
       // no implicit cursor, send one ok packet to client
       ObOKPParam ok_param;
-      ok_param.message_ = const_cast<char*>(result.get_message());
+      ok_param.message_ = const_cast<char *>(result.get_message());
       ok_param.affected_rows_ = result.get_affected_rows();
       ok_param.lii_ = result.get_last_insert_id_to_client();
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
       } else {
@@ -410,7 +413,7 @@ int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
       result.reset_implicit_cursor_idx();
       while (OB_SUCC(ret) && OB_SUCC(result.switch_implicit_cursor())) {
         ObOKPParam ok_param;
-        ok_param.message_ = const_cast<char*>(result.get_message());
+        ok_param.message_ = const_cast<char *>(result.get_message());
         ok_param.affected_rows_ = result.get_affected_rows();
         ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
         ok_param.has_more_result_ = !result.is_cursor_end();
@@ -431,7 +434,7 @@ int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
   if (!retry_ctrl_.need_retry()) {
     if (OB_FAIL(ret) && !process_ok) {
       int sret = OB_SUCCESS;
-      bool is_partition_hit = session_.partition_hit().get_bool();
+      bool is_partition_hit = session_.get_err_final_partition_hit(ret);
       if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
         LOG_WARN("send error packet fail", K(sret), K(ret));
       }

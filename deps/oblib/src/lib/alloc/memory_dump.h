@@ -101,7 +101,7 @@ private:
   static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
   static const int MAX_LABEL_ITEM_CNT = 16L << 10;
   static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
-  static const int64_t LOG_BUF_LEN = 8L << 10;
+  static const int64_t LOG_BUF_LEN = 64L << 10;
 
   struct TenantCtxRange {
     static bool compare(const TenantCtxRange& tcr, const std::pair<uint64_t, uint64_t>& cmp_val)
@@ -180,7 +180,7 @@ private:
     AChunk** chunks_;
   };
   uint64_t* tenant_ids_;
-  lib::MemoryContext* dump_context_;
+  lib::MemoryContext dump_context_;
   LabelMap lmap_;
   common::ObLatch iter_lock_;
   Stat* r_stat_;

@@ -90,18 +90,8 @@ public:
 
   virtual void destroy();
   virtual void reset();
-  void set_is_last_open_succ(bool val)
-  {
-    stat_.is_last_open_succ_ = val;
-  }
-  bool is_last_open_succ() const
-  {
-    return stat_.is_last_open_succ_;
-  }
-  bool from_plan_baseline() const
-  {
-    return common::OB_INVALID_ID != stat_.bl_info_.plan_baseline_id_;
-  }
+  void set_is_last_exec_succ(bool val) { stat_.is_last_exec_succ_ = val; }
+  bool is_last_exec_succ() const { return stat_.is_last_exec_succ_; }
   const ObString& get_constructed_sql() const
   {
     return stat_.bl_info_.key_.constructed_sql_;
@@ -159,7 +149,8 @@ public:
   }
   inline bool check_if_is_expired(const int64_t first_exec_row_count, const int64_t current_row_count) const;
 
-  bool is_plan_unstable();
+  bool is_plan_unstable(
+      const int64_t sample_count, const int64_t sample_exec_row_count, const int64_t sample_exec_usec);
   bool is_expired() const
   {
     return stat_.is_expired_;

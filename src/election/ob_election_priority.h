@@ -76,9 +76,11 @@ public:
   }
   int64_t get_system_score_without_election_blacklist() const;
   bool is_in_election_blacklist() const;
-  void set_system_clog_disk_error();
+  void set_system_disk_full();
+  void set_system_clog_disk_hang();
   void set_system_tenant_out_of_memory();
   void set_system_data_disk_error();
+  void set_system_slog_disk_warning();
   void set_system_need_rebuild();
   void set_system_in_election_blacklist();
   void set_system_service_not_started();
@@ -96,8 +98,10 @@ private:
   int compare_(const ObElectionPriority& priority, const bool with_locality, const bool with_log_id) const;
 
 private:
-  const static int64_t SYSTEM_SCORE_CLOG_DISK_ERROR = (1 << 6);
-  const static int64_t SYSTEM_SCORE_TENANT_OUT_OF_MEM = (1 << 5);
+  const static int64_t SYSTEM_SCORE_DISK_FULL = (1 << 8);
+  const static int64_t SYSTEM_SCORE_NON_FULL_REPLICA = (1 << 7);
+  const static int64_t SYSTEM_SCORE_CLOG_DISK_HANG = (1 << 6);
+  const static int64_t SYSTEM_SCORE_TENANT_OUT_OF_MEM = (1 << 5);  // tenant memstore is full
   const static int64_t SYSTEM_SCORE_DATA_DISK_ERROR = (1 << 4);
   const static int64_t SYSTEM_SCORE_NEED_REBUILD = (1 << 3);
   const static int64_t SYSTEM_SCORE_IN_ELECTION_BLACKLIST = (1 << 2);

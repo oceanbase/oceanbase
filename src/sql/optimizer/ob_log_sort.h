@@ -100,7 +100,7 @@ public:
   {
     return topk_offset_count_;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   // @brief Set the sorting columns
   int set_sort_keys(const common::ObIArray<OrderItem>& order_keys);
   int check_prefix_sort();
@@ -112,9 +112,9 @@ public:
   int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
   int push_down_sort(ObLogicalOperator* consumer_exc);
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual uint64_t hash(uint64_t seed) const;
-  int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual const char* get_name() const;
+  virtual uint64_t hash(uint64_t seed) const override;
+  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual const char* get_name() const override;
   int set_topk_params(
       ObRawExpr* limit_count, ObRawExpr* limit_offset, int64_t minimum_row_cuont, int64_t topk_precision);
   inline int64_t get_minimum_row_count() const
@@ -125,21 +125,21 @@ public:
   {
     return topk_precision_;
   }
-  virtual int transmit_op_ordering();
+  virtual int transmit_op_ordering() override;
   virtual bool is_block_op() const override
   {
     return !is_prefix_sort();
   }
   virtual int compute_op_ordering() override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
 protected:
   virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs);
+      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs) override;
 
 private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
 private:
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;

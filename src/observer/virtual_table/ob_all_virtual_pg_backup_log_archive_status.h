@@ -36,6 +36,7 @@ class ObAllVirtualPGBackupLogArchiveStatus : public common::ObVirtualTableIterat
     LAST_ARCHIVED_LOG_TS,
     MAX_LOG_ID,
     MAX_LOG_TS,
+    CUR_PIECE_ID,
   };
 
 public:

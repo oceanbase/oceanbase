@@ -79,6 +79,7 @@ enum ObDataStoreType {
   ObIntervalYMStoreType = 15,
   ObIntervalDSStoreType = 16,
   ObRowIDStoreType = 17,
+  ObJsonStoreType = 18,
   ObExtendStoreType = 31
 };
 
@@ -658,7 +659,6 @@ public:
   uint16_t* column_ids_;
   common::ObNewRow row_val_;
   int64_t snapshot_version_;
-  ObFastQueryContext fq_ctx_;
   int64_t range_array_idx_;
   transaction::ObTransID* trans_id_ptr_;
   bool fast_filter_skipped_;
@@ -892,6 +892,7 @@ public:
     UNUSED(range_array_idx);
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int release_table_ref() { return OB_SUCCESS; }
   VIRTUAL_TO_STRING_KV(K_(type));
 
 public:
@@ -963,6 +964,7 @@ struct ObStoreCtx {
     snapshot_info_.reset();
     trans_table_guard_ = NULL;
     log_ts_ = INT64_MAX;
+    is_thread_scope_ = true;
   }
   int get_snapshot_info(transaction::ObTransSnapInfo& snap_info) const;
   bool is_valid() const
@@ -975,7 +977,7 @@ struct ObStoreCtx {
     return common::is_valid_tenant_id(tenant_id_);
   }
   TO_STRING_KV(KP_(mem_ctx), KP_(warm_up_ctx), KP_(tables), K_(tenant_id), K_(trans_id), K_(is_sp_trans), K_(isolation),
-      K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard));
+      K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard), K_(is_thread_scope));
 
   memtable::ObIMemtableCtx* mem_ctx_;
   ObWarmUpCtx* warm_up_ctx_;
@@ -992,6 +994,8 @@ struct ObStoreCtx {
   int64_t log_ts_;
   transaction::ObTransSnapInfo snapshot_info_;
   transaction::ObTransStateTableGuard* trans_table_guard_;
+  // storage access lifetime span won't cross thread
+  bool is_thread_scope_;
 };
 
 struct ObTableAccessStat {
@@ -1216,8 +1220,10 @@ public:
       const common::ObIArray<share::schema::ObColDesc>& column_ids, const bool is_multi_version_merge = false,
       share::schema::ObTableParam* table_param = NULL, const bool is_mv_right_table = false);
   // used for get unique index conflict row
-  int init_basic_param(const uint64_t table_id, const int64_t schema_version, const int64_t rowkey_column_num,
-      const common::ObIArray<share::schema::ObColDesc>& column_ids, const common::ObIArray<int32_t>* out_cols_index);
+  int init_dml_access_param(const uint64_t table_id, const int64_t schema_version, const int64_t rowkey_column_num,
+      share::schema::ObTableParam &table_param);
+  int init_dml_access_param(const uint64_t table_id, const int64_t schema_version, const int64_t rowkey_column_num,
+      const share::schema::ObTableSchemaParam &schema_param, const common::ObIArray<int32_t> *out_cols_project);
   // used for index back when query
   int init_index_back(ObTableScanParam& scan_param);
   // init need_fill_scale_ and search column which need fill scale
@@ -1355,14 +1361,14 @@ struct ObTableAccessContext {
       const common::ObVersionRange& trans_version_range, const ObIStoreRowFilter* row_filter,
       const bool is_index_back = false);
   // used for merge
-  int init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx, common::ObArenaAllocator& allocator,
-      common::ObArenaAllocator& stmt_allocator, blocksstable::ObBlockCacheWorkingSet& block_cache_ws,
-      const common::ObVersionRange& trans_version_range);
+  int init(const common::ObQueryFlag &query_flag, const ObStoreCtx &ctx, common::ObIAllocator &allocator,
+      common::ObIAllocator &stmt_allocator, blocksstable::ObBlockCacheWorkingSet &block_cache_ws,
+      const common::ObVersionRange &trans_version_range);
   // used for exist or simple scan
-  int init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx, common::ObArenaAllocator& allocator,
-      const common::ObVersionRange& trans_version_range);
+  int init(const common::ObQueryFlag &query_flag, const ObStoreCtx &ctx, common::ObIAllocator &allocator,
+      const common::ObVersionRange &trans_version_range);
   TO_STRING_KV(K_(is_inited), K_(timeout), K_(pkey), K_(query_flag), K_(sql_mode), KP_(store_ctx), KP_(expr_ctx),
-      KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(stmt_mem), KP_(scan_mem), KP_(table_scan_stat),
+      KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(table_scan_stat),
       KP_(block_cache_ws), K_(out_cnt), K_(is_end), K_(trans_version_range), KP_(row_filter), K_(merge_log_ts),
       K_(read_out_type), K_(lob_locator_helper));
 
@@ -1379,11 +1385,11 @@ public:
   common::ObExprCtx* expr_ctx_;
   common::ObLimitParam* limit_param_;
   // sql statement level allocator, available before sql execute finish
-  common::ObArenaAllocator* stmt_allocator_;
+  common::ObIAllocator *stmt_allocator_;
   // storage scan/rescan interface level allocator, will be reclaimed in every scan/rescan call
-  common::ObArenaAllocator* allocator_;
-  lib::MemoryContext* stmt_mem_;  // sql statement level memory entity, only for query
-  lib::MemoryContext* scan_mem_;  // scan/rescan level memory entity, only for query
+  common::ObIAllocator *allocator_;
+  lib::MemoryContext stmt_mem_;  // sql statement level memory entity, only for query
+  lib::MemoryContext scan_mem_;  // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic* table_scan_stat_;
   blocksstable::ObBlockCacheWorkingSet* block_cache_ws_;
   ObTableAccessStat access_stat_;
@@ -1392,7 +1398,6 @@ public:
   common::ObVersionRange trans_version_range_;
   const ObIStoreRowFilter* row_filter_;
   bool use_fuse_row_cache_;  // temporary code
-  const ObFastQueryContext* fq_ctx_;
   bool need_scn_;
   int16_t fuse_row_cache_hit_rate_;
   int16_t block_cache_hit_rate_;
@@ -1511,7 +1516,7 @@ public:
 
 private:
   common::ObStoreRowkey min_key_;
-  lib::MemoryContext* scan_mem_;  // scan/rescan level memory entity, only for query
+  lib::MemoryContext scan_mem_;  // scan/rescan level memory entity, only for query
   int64_t delete_count_;
   bool collation_free_transformed_;
   int16_t rowkey_column_num_;

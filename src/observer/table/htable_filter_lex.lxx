@@ -1,0 +1,109 @@
+%option yylineno case-insensitive reentrant
+%option bison-bridge bison-locations
+%option noyyalloc noyyrealloc noyyfree noyywrap nounput noinput
+%option extra-type="oceanbase::table::ObHTableFilterParser *"
+%option prefix="ob_hfilter_"
+%top{
+#define USING_LOG_PREFIX SERVER
+#include "observer/table/ob_htable_filter_parser.h"
+#include "observer/table/ob_htable_filters.h"
+#include "observer/table/htable_filter_tab.hxx"
+using namespace oceanbase::common;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+}
+%x IN_STRING
+
+ID ([A-Za-z0-9$_]*)
+INT          [0-9]+
+SQUOTE '
+
+%%
+  /* rules */
+SKIP { return SKIP; }
+WHILE { return WHILE; }
+AND { return AND; }
+OR { return OR; }
+
+"="  { return EQUAL; }
+"!=" { return NOT_EQUAL; }
+">=" { return GREATER_OR_EQUAL; }
+">"  { return GREATER; }
+"<=" { return LESS_OR_EQUAL; }
+"<"  { return LESS; }
+NO_OP { return NO_OP; }
+
+TRUE {
+yylval->ival = 1;
+return BOOL_VALUE;
+}
+
+FALSE {
+yylval->ival = 0;
+return BOOL_VALUE;
+}
+
+{INT} {
+  errno = 0;
+  yylval->lval = strtoll(yytext, NULL, 10);
+  if (ERANGE == errno)
+  {
+    ob_hfilter_error(yylloc, yyextra, "integar value out of range");
+  }
+  return INT_VALUE;
+}
+
+{SQUOTE} {
+BEGIN(IN_STRING);
+char *buf = static_cast<char*>(yyextra->alloc(yyextra->get_input_len()+1));
+if (NULL == buf) {
+yyextra->error_code_ = oceanbase::common::OB_ALLOCATE_MEMORY_FAILED;
+ob_hfilter_error(yylloc, yyextra, "no memory");
+return ERROR;
+}
+yylval->sval.len_ = 0;
+yylval->sval.str_ = buf;
+}
+<IN_STRING>[^']+ {
+    memcpy(yylval->sval.str_+yylval->sval.len_, yytext, yyleng);
+    yylval->sval.len_ += yyleng;
+}
+<IN_STRING>{SQUOTE}{SQUOTE} {
+    yylval->sval.str_[yylval->sval.len_++] = '\'';
+}
+<IN_STRING>{SQUOTE} {
+    BEGIN(INITIAL);
+    return STRING_VALUE;
+}
+<IN_STRING><<EOF>> {
+  ob_hfilter_error(yylloc, yyextra, "unterminated quoted string");
+  return ERROR;
+}
+
+RowFilter { return RowFilter; }
+ValueFilter { return ValueFilter; }
+QualifierFilter { return QualifierFilter; }
+SingleColumnValueFilter { return SingleColumnValueFilter; }
+PageFilter { return PageFilter; }
+ColumnCountGetFilter { return ColumnCountGetFilter; }
+CheckAndMutateFilter { return CheckAndMutateFilter; }
+PrefixFilter { return PrefixFilter; }
+
+[(),] {
+    return yytext[0];
+}
+
+[ \t\r\n] {/*skip*/}
+
+<<EOF>> {
+    return END;
+}
+
+. {
+  ob_hfilter_error(yylloc, yyextra, "mystery charactor '%c'", *yytext);
+  return ERROR;
+}
+%%
+  /* user code */
+
+#pragma GCC diagnostic pop

@@ -725,7 +725,8 @@ int ObMemtable::check_row_locked_by_myself(const ObStoreCtx& ctx, const uint64_t
         } else if (lock_state.is_locked_ && lock_state.lock_trans_id_ == ctx.trans_id_) {
           is_locked = true;
         }
-        TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable), K(is_locked));
+        TRANS_LOG(DEBUG, "check_row_locked meet sstable",
+                  K(ret), K(rowkey), K(*sstable), K(is_locked), K(lock_state));
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unknown store type", K(ret));
@@ -897,7 +898,6 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
   ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   const common::ObIArray<share::schema::ObColDesc>* out_cols = nullptr;
-  bool need_query_memtable = false;
   ObTransSnapInfo snapshot_info;
   const bool skip_compact = false;
   if (IS_NOT_INIT) {
@@ -915,64 +915,14 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
     TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
   } else if (OB_FAIL(context.store_ctx_->get_snapshot_info(snapshot_info))) {
     TRANS_LOG(WARN, "get snapshot info failed", K(ret));
-  } else {
-    bool fast_query = false;
-    const ObFastQueryContext* fq_ctx = nullptr;
-    if (nullptr != context.fq_ctx_) {
-      fq_ctx = context.fq_ctx_;
-      fast_query =
-          timestamp_ == fq_ctx->get_timestamp() && this == fq_ctx->get_memtable() && nullptr != fq_ctx->get_mvcc_row();
-    }
-    if (fast_query && !context.store_ctx_->mem_ctx_->is_can_elr()) {
-      int64_t trans_version = 0L;
-      if (OB_FAIL(mvcc_engine_.get_trans_version(*context.store_ctx_->mem_ctx_,
-              snapshot_info,
-              context.query_flag_,
-              &parameter_mtk,
-              reinterpret_cast<ObMvccRow*>(fq_ctx->get_mvcc_row()),
-              trans_version))) {
-        TRANS_LOG(WARN, "fail to do mvcc engine fast get", K(ret));
-      } else {
-        if (trans_version == fq_ctx->get_row_version()) {
-          // just read from row cache
-          // do not set memtable row
-          row.flag_ = common::ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-          row.fq_ctx_.set_timestamp(-1L);
-          row.fq_ctx_.set_memtable(nullptr);
-          row.fq_ctx_.set_mvcc_row(nullptr);
-          row.fq_ctx_.set_row_version(0L);
-          row.snapshot_version_ = trans_version;
-          TRANS_LOG(DEBUG, "do fast get successfully", K(rowkey), K(trans_version), K(*fq_ctx));
-        } else {
-          if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
-                  snapshot_info,
-                  context.query_flag_,
-                  skip_compact,
-                  &parameter_mtk,
-                  &returned_mtk,
-                  value_iter))) {
-            TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
-          } else {
-            need_query_memtable = true;
-          }
-        }
-      }
-    } else {
-      if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
-              snapshot_info,
-              context.query_flag_,
-              skip_compact,
-              &parameter_mtk,
-              &returned_mtk,
-              value_iter))) {
-        TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
-      } else {
-        need_query_memtable = true;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret) || !need_query_memtable) {
+  } else if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
+                 snapshot_info,
+                 context.query_flag_,
+                 skip_compact,
+                 &parameter_mtk,
+                 &returned_mtk,
+                 value_iter))) {
+    TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
   } else {
     ColumnMap* local_map = NULL;
     const ColumnMap* param_column_map = nullptr;
@@ -1037,10 +987,6 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
             }
           }
         }
-        row.fq_ctx_.set_timestamp(timestamp_);
-        row.fq_ctx_.set_memtable(this);
-        row.fq_ctx_.set_mvcc_row(const_cast<ObMvccRow*>(value_iter.get_mvcc_row()));
-        row.fq_ctx_.set_row_version(row.snapshot_version_);
       }
     }
   }
@@ -1378,7 +1324,9 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
     const int64_t log_timestamp = mt_ctx->get_redo_log_timestamp();
     // In principle, failure is not allowed here, but from implementation aspect,
     // the logic inside needs to deal with failures due to lack of memory
-    if (OB_UNLIKELY(0 >= log_timestamp) || OB_UNLIKELY(INT64_MAX == log_timestamp)) {
+    const int64_t log_id = mt_ctx->get_redo_log_id();
+    if (OB_UNLIKELY(0 >= log_timestamp) || OB_UNLIKELY(INT64_MAX == log_timestamp) || OB_UNLIKELY(0 >= log_id) ||
+        OB_UNLIKELY(INT64_MAX == log_id)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected log timestamp", K(ret), K(*mt_ctx));
     } else if (OB_FAIL(mt_ctx->set_replay_host(this, for_replay))) {
@@ -1431,13 +1379,21 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
             if (OB_ITER_END != ret) {
               TRANS_LOG(WARN, "get next row error", K(ret));
             }
-          } else if (OB_FAIL(check_standby_cluster_schema_condition_(ctx, table_id, table_version))) {
-            TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id), K(table_version));
+          } else if (OB_FAIL(ObPartitionService::get_instance().check_standby_cluster_schema_condition(
+                         key_.get_partition_key(), table_version))) {
+            if (OB_TRANS_WAIT_SCHEMA_REFRESH == ret) {
+              ctx.mem_ctx_->set_table_version(table_version);  // return to be used by replay engine
+            }
+            TRANS_LOG(WARN,
+                "failed to check standby_cluster_schema_condition",
+                K(ret),
+                K(table_id),
+                K_(key),
+                K(table_version));
           } else {
             // FIXME.
+            transaction::ObPartTransCtx* part_ctx = static_cast<transaction::ObPartTransCtx*>(mt_ctx->get_trans_ctx());
             if (0 != flag) {
-              transaction::ObPartTransCtx* part_ctx =
-                  static_cast<transaction::ObPartTransCtx*>(mt_ctx->get_trans_ctx());
               if (OB_FAIL(part_ctx->replay_rollback_to(sql_no, ctx.log_ts_))) {
                 TRANS_LOG(WARN, "replay rollback savepoint failed", K(ret), K(*mt_ctx), K(sql_no));
               } else {
@@ -1469,8 +1425,10 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
                       K(acc_checksum));
                 }
               } else {
-                ctx.mem_ctx_->set_table_version(table_version);
-                set_max_schema_version(table_version);
+                if (part_ctx->need_update_schema_version(log_id, log_timestamp)) {
+                  ctx.mem_ctx_->set_table_version(table_version);
+                  set_max_schema_version(table_version);
+                }
               }
             }
           }
@@ -1967,15 +1925,18 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "stores in context is null", K(ret));
   } else {
+    bool locked_by_self = false;
     int64_t max_trans_version = 0;
     const ObIArray<ObITable*>* stores = ctx.tables_;
+    ObStoreRowLockState lock_state;
 
     // ignore active memtable
     for (int64_t i = stores->count() - 2; OB_SUCC(ret) && i >= 0; i--) {
       int64_t current_version = 0;
       bool is_locked = false;
       uint32_t lock_descriptor = 0;
-      ObStoreRowLockState lock_state;
+
+      lock_state.reset();
 
       if (NULL == stores->at(i)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1984,7 +1945,13 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
         ObMemtable* memtable = static_cast<ObMemtable*>(stores->at(i));
         if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(
                 *ctx.mem_ctx_, key, is_locked, lock_descriptor, current_version))) {
-          TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(is_locked), K(lock_descriptor));
+          TRANS_LOG(WARN,
+              "mvcc engine check row lock fail, may be locked by other",
+              K(ret),
+              K(is_locked),
+              K(lock_descriptor));
+        } else {
+          locked_by_self |= is_locked && lock_descriptor == ctx.mem_ctx_->get_ctx_descriptor();
         }
       } else if (stores->at(i)->is_sstable()) {
         ObSSTable* sstable = static_cast<ObSSTable*>(stores->at(i));
@@ -1992,6 +1959,7 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
           TRANS_LOG(WARN, "failed to check row lock by other", K(ret), K(*key), K(lock_state));
         } else {
           current_version = lock_state.trans_version_;
+          locked_by_self |= lock_state.is_locked_ && ctx.trans_id_ == lock_state.lock_trans_id_;
         }
         TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(*key), K(*sstable), K(current_version));
       } else {
@@ -2000,16 +1968,27 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
       }
 
       max_trans_version = max(max_trans_version, current_version);
-      TRANS_LOG(DEBUG, "check_row_locked", K(i), K(stores->count()), K(stores->at(i)));
+      TRANS_LOG(DEBUG,
+          "check_row_locked",
+          K(i),
+          K(stores->count()),
+          K(stores->at(i)),
+          K(locked_by_self),
+          K(current_version),
+          K(max_trans_version));
     }
 
     if (OB_SUCC(ret)) {
       value->update_max_trans_version(max_trans_version);
-      value->set_lower_lock_scaned();
+      if (!locked_by_self) {
+        // there is no locks on frozen stores
+        if (max_trans_version > ctx.mem_ctx_->get_read_snapshot()) {
+          ret = OB_TRANSACTION_SET_VIOLATION;
+          TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx.mem_ctx_);
+        }
 
-      if (max_trans_version > ctx.mem_ctx_->get_read_snapshot()) {
-        ret = OB_TRANSACTION_SET_VIOLATION;
-        TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx.mem_ctx_);
+        value->set_lower_lock_scaned();
+        TRANS_LOG(DEBUG, "lower lock check finish", K(*value), K(*stores));
       }
     }
   }
@@ -2609,61 +2588,6 @@ int ObMemtable::get_merge_priority_info(ObMergePriorityInfo& merge_priority_info
 void ObMemtable::set_minor_merged()
 {
   minor_merged_time_ = ObTimeUtility::current_time();
-}
-
-int ObMemtable::check_standby_cluster_schema_condition_(
-    const ObStoreCtx& ctx, const int64_t table_id, const int64_t table_version)
-{
-  int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  ret = E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
-  if (OB_FAIL(ret) && !common::is_inner_table(table_id)) {
-    TRANS_LOG(WARN, "ERRSIM, replay row failed", K(ret));
-    return ret;
-  }
-#endif
-  if (GCTX.is_standby_cluster()) {
-    // only stand_by cluster need to be check
-    uint64_t tenant_id = extract_tenant_id(table_id);
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "invalid tenant_id", K(ret), K(tenant_id), K(table_id), K(table_version));
-    } else if (OB_SYS_TENANT_ID == tenant_id) {
-      // sys tenant do not need check
-    } else {
-      // user tables of normal tenants(not sys tenant) need to be checked by schema version of
-      // itself;
-      // sys tables of normal tenants(not sys tenant) need to be checked by schema version of sys tenent;
-      uint64_t referred_tenant_id = common::is_inner_table(table_id) ? OB_SYS_TENANT_ID : tenant_id;
-      int64_t tenant_schema_version = 0;
-      if (OB_FAIL(GSCHEMASERVICE.get_tenant_refreshed_schema_version(referred_tenant_id, tenant_schema_version))) {
-        TRANS_LOG(WARN,
-            "get_tenant_schema_version failed",
-            K(ret),
-            K(referred_tenant_id),
-            K(table_id),
-            K(tenant_id),
-            K(table_version));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          // tenant schema hasn't been flushed in the case of restart, rewrite OB_ENTRY_NOT_EXIST
-          ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        }
-      } else if (table_version > tenant_schema_version) {
-        // replay is not allowed when data's table version is greater than tenant's schema version
-        ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        ctx.mem_ctx_->set_table_version(table_version);  // return to be used by replay engine
-        TRANS_LOG(WARN,
-            "local table schema version is too small, cannot replay",
-            K(ret),
-            K(tenant_id),
-            K(referred_tenant_id),
-            K(table_version),
-            K(tenant_schema_version));
-      } else { /*do nothing*/
-      }
-    }
-  }
-  return ret;
 }
 
 int ObMemtable::prepare_freeze_log_ts()

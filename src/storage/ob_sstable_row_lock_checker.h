@@ -38,7 +38,7 @@ public:
   }
 
 protected:
-  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
+  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row) override;
   virtual void set_row_snapshot(ObStoreRow& row) override;
 
 private:

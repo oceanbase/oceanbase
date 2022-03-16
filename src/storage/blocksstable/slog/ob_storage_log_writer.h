@@ -94,16 +94,8 @@ public:
   }
 
   int delete_log_file(int64_t file_id);
-  int get_using_disk_space(int64_t& using_space) const;
-
-  OB_INLINE bool is_ok() const
-  {
-    return ATOMIC_LOAD(&is_ok_);
-  }
-  OB_INLINE void set_ok(bool ok)
-  {
-    ATOMIC_STORE(&is_ok_, ok);
-  }
+  int get_using_disk_space(int64_t &using_space) const;
+  bool is_disk_warning() const;
 
 private:
   static const int64_t FLUSH_THREAD_IDLE_INTERVAL_US = 10 * 1000;  // 10ms
@@ -201,6 +193,7 @@ private:
 
 private:
   bool is_inited_;
+  bool is_started_;
   common::ObFixedQueue<void> log_buffers_;
   int64_t log_buffer_size_;
   common::ObArenaAllocator log_item_allocator_;
@@ -221,12 +214,8 @@ private:
   common::ObLogCursor write_cursor_;
   common::ObLogCursor flush_cursor_;
 
-  // indicate whether slog writer is ok for outside checking
-  bool is_ok_;
-  int64_t write_failed_times_;
-
-  common::ObILogFileStore* file_store_;
-  char* batch_write_buf_;
+  common::ObILogFileStore *file_store_;
+  char *batch_write_buf_;
   int64_t batch_write_len_;
   int64_t batch_limit_size_;
 };

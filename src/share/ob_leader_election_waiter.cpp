@@ -37,13 +37,12 @@ int ObLeaderElectionWaiter::wait(const uint64_t table_id, const int64_t partitio
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();
-  const int64_t abs_timeout = start_time + timeout;
   ObAddr leader;
   if (!ObIPartitionTable::is_valid_key(table_id, partition_id) || timeout <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KT(table_id), K(partition_id), K(timeout));
-  } else if (OB_FAIL(wait(table_id, partition_id, abs_timeout, leader))) {
-    LOG_WARN("wait failed", KT(table_id), K(partition_id), K(abs_timeout), K(ret));
+  } else if (OB_FAIL(wait(table_id, partition_id, timeout, leader))) {
+    LOG_WARN("wait failed", KT(table_id), K(partition_id), K(timeout), K(ret));
   }
   LOG_WAIT_RESULT(start_time, KT(table_id), K(partition_id), K(timeout));
   return ret;
@@ -97,7 +96,7 @@ int ObLeaderElectionWaiter::wait(const ObTablegroupSchema& tablegroup_schema, co
   return ret;
 }
 
-int ObLeaderElectionWaiter::wait(const ObTableSchema& table_schema, const int64_t timeout)
+int ObLeaderElectionWaiter::wait(const ObSimpleTableSchemaV2& table_schema, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();

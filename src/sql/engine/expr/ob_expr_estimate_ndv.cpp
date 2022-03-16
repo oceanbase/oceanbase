@@ -80,6 +80,7 @@ void ObExprEstimateNdv::llc_estimate_ndv(int64_t& result, const ObString& bitmap
 }
 uint64_t ObExprEstimateNdv::llc_leading_zeros(uint64_t value, uint64_t bit_width)
 {
+  OB_ASSERT(0ULL != value);
   return std::min(bit_width, static_cast<uint64_t>(__builtin_clzll(value)));
 }
 

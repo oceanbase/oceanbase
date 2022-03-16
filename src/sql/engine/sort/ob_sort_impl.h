@@ -148,7 +148,7 @@ public:
 protected:
   class MemEntifyFreeGuard {
   public:
-    explicit MemEntifyFreeGuard(lib::MemoryContext*& entify) : entify_(entify)
+    explicit MemEntifyFreeGuard(lib::MemoryContext& entify) : entify_(entify)
     {}
     ~MemEntifyFreeGuard()
     {
@@ -157,7 +157,7 @@ protected:
         entify_ = NULL;
       }
     }
-    lib::MemoryContext*& entify_;
+    lib::MemoryContext& entify_;
   };
   class Compare {
   public:
@@ -268,7 +268,7 @@ protected:
   bool need_rewind_;
   bool got_first_row_;
   bool sorted_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   MemEntifyFreeGuard mem_entify_guard_;
   int64_t tenant_id_;
   const SortColumns* sort_columns_;

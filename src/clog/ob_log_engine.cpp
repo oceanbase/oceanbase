@@ -10,11 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/vfs.h>
 #include "ob_log_engine.h"
+#include <sys/vfs.h>
 #include "common/ob_member_list.h"
 #include "lib/file/file_directory_utils.h"
+#include "lib/ob_define.h"
 #include "lib/thread_local/thread_buffer.h"
+#include "lib/time/ob_time_utility.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_server_blacklist.h"
@@ -94,10 +96,14 @@ int ObLogEnv::init(const Config& cfg, const ObAddr& self_addr, ObIInfoBlockHandl
   } else if (NULL == (file_store_ = ObLogStoreFactory::create(cfg.log_dir_, cfg.file_size_, write_pool_type))) {
     ret = OB_INIT_FAIL;
     CLOG_LOG(WARN, "create file store failed.", K(ret));
-  } else if (OB_FAIL(direct_reader_.init(
-                 cfg.log_dir_, cfg.log_shm_path_, use_log_cache, &log_cache_, &log_tail_, write_pool_type))) {
+  } else if (OB_FAIL(direct_reader_.init(cfg.log_dir_,
+                 nullptr /*no shared memory*/,
+                 use_log_cache,
+                 &log_cache_,
+                 &log_tail_,
+                 write_pool_type))) {
     CLOG_LOG(WARN, "direct reader init error", K(ret), K(enable_log_cache), K(write_pool_type));
-  } else if (OB_FAIL(init_log_file_writer(cfg.log_dir_, cfg.log_shm_path_, file_store_))) {
+  } else if (OB_FAIL(init_log_file_writer(cfg.log_dir_, file_store_))) {
     CLOG_LOG(WARN, "Fail to init log file writer ", K(ret));
   } else {
     // do nothing
@@ -334,14 +340,14 @@ bool ObLogEnv::cluster_version_before_2000_() const
   return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000;
 }
 
-int ObLogEnv::init_log_file_writer(const char* log_dir, const char* shm_path, const ObILogFileStore* file_store)
+int ObLogEnv::init_log_file_writer(const char* log_dir, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (nullptr ==
       (log_file_writer_ = static_cast<ObCLogBaseFileWriter*>(OB_NEW(ObCLogLocalFileWriter, ObModIds::OB_LOG_WRITER)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc file writer failed, ", K(ret));
-  } else if (OB_FAIL(log_file_writer_->init(log_dir, shm_path, CLOG_DIO_ALIGN_SIZE, file_store))) {
+  } else if (OB_FAIL(log_file_writer_->init(log_dir, CLOG_DIO_ALIGN_SIZE, file_store))) {
     CLOG_LOG(WARN, "Fail to init file writer, ", K(ret));
   }
 
@@ -758,13 +764,8 @@ int ObLogEngine::init(const ObLogEnv::Config& cfg, const ObAddr& self_addr, obrp
   } else if (OB_FAIL(ilog_log_cache_.init(
                  self_addr, cfg.index_cache_name_, cfg.index_cache_priority_, ilog_hot_cache_size))) {
     CLOG_LOG(WARN, "failed to init ilog_log_cache", K(ret));
-  } else if (OB_FAIL(ilog_storage_.init(cfg.index_log_dir_,
-                 cfg.index_log_shm_path_,
-                 server_seq,
-                 self_addr,
-                 &ilog_log_cache_,
-                 partition_service,
-                 &clog_env_))) {
+  } else if (OB_FAIL(ilog_storage_.init(
+                 cfg.index_log_dir_, server_seq, self_addr, &ilog_log_cache_, partition_service, &clog_env_))) {
     CLOG_LOG(WARN, "ilog_storage_ init failed", K(ret));
   } else {
     batch_rpc_ = batch_rpc;
@@ -1013,7 +1014,7 @@ static bool is_need_batch(int pcode)
          OB_REREGISTER_MSG == pcode || OB_CHECK_REBUILD_REQ == pcode || OB_FAKE_ACK_LOG == pcode ||
          OB_RESTORE_LEADER_TAKEOVER_MSG == pcode || OB_RESTORE_ALIVE_REQ == pcode || OB_RESTORE_ALIVE_RESP == pcode ||
          OB_RENEW_MS_CONFIRMED_INFO_REQ == pcode || OB_RENEW_MS_LOG_ACK == pcode || OB_FAKE_PUSH_LOG == pcode ||
-         OB_SYNC_LOG_ARCHIVE_PROGRESS == pcode;
+         OB_SYNC_LOG_ARCHIVE_PROGRESS == pcode || OB_RESTORE_CHECK_REQ == pcode;
 }
 
 template <typename Req>
@@ -1296,6 +1297,23 @@ int ObLogEngine::fetch_log_from_leader(const common::ObAddr& server, const int64
   return ret;
 }
 
+int ObLogEngine::send_restore_check_rqst(const common::ObAddr& server, const int64_t dst_cluster_id,
+    const common::ObPartitionKey& key, const ObRestoreCheckType restore_type)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_SERVER_TENANT_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!server.is_valid() || !key.is_valid() || OB_INVALID_CLUSTER_ID == dst_cluster_id) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(server), K(key), K(dst_cluster_id));
+  } else {
+    ObRestoreCheckReq req(restore_type);
+    ret = post_packet(tenant_id, server, dst_cluster_id, key, OB_RESTORE_CHECK_REQ, req);
+  }
+  return ret;
+}
+
 int ObLogEngine::submit_check_rebuild_req(
     const common::ObAddr& server, const int64_t dst_cluster_id, const ObPartitionKey& key, const uint64_t start_id)
 {
@@ -1569,7 +1587,7 @@ int ObLogEngine::prepare_response(const common::ObAddr& server, const int64_t ds
         K(self_cluster_id));
   } else {
     CLOG_LOG(INFO,
-        "-->prepare_respone",
+        "-->prepare_response",
         K(partition_key),
         K(proposal_id),
         K(max_log_id),
@@ -1711,6 +1729,25 @@ int ObLogEngine::send_restore_alive_resp(
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       CLOG_LOG(INFO, "send_restore_alive_resp", K(server), K(partition_key), K(now));
     }
+  }
+  return ret;
+}
+
+int ObLogEngine::send_query_restore_end_id_resp(const common::ObAddr& server, const int64_t cluster_id,
+    const common::ObPartitionKey& partition_key, const uint64_t last_restore_log_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!server.is_valid() || OB_INVALID_ID == last_restore_log_id || !partition_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(server), K(partition_key), K(last_restore_log_id), K(ret));
+  } else {
+    const uint64_t tenant_id = OB_SERVER_TENANT_ID;
+    ObQueryRestoreEndIdResp req(last_restore_log_id);
+    ret = post_packet(tenant_id, server, cluster_id, partition_key, OB_QUERY_RESTORE_END_ID_RESP, req);
+    CLOG_LOG(
+        DEBUG, "send_query_restore_end_id_resp finished", K(ret), K(server), K(partition_key), K(last_restore_log_id));
   }
   return ret;
 }
@@ -2111,18 +2148,13 @@ int ObLogEngine::check_need_freeze_based_on_used_space_(bool& is_need) const
   return ret;
 }
 
-int ObLogEngine::check_need_block_log(bool& is_need) const
+int ObLogEngine::check_need_block_log(const file_id_t cur_file_id, bool &is_need) const
 {
   int ret = OB_SUCCESS;
   is_need = false;
-  const uint32_t clog_max_file_id = clog_env_.get_max_file_id();
-  const uint32_t clog_min_file_id = clog_env_.get_min_file_id();
-  const uint32_t clog_min_using_file_id = clog_env_.get_min_using_file_id();
-
-  // clog disk has been used
-  if (clog_min_file_id > 1) {
-    is_need = (clog_max_file_id - clog_min_using_file_id) * 100LL >
-              (clog_max_file_id - clog_min_file_id) * RESERVED_DISK_USAGE_PERFERT;
+  uint32_t clog_min_using_file_id = get_clog_min_using_file_id();
+  if (cur_file_id == clog_min_using_file_id) {
+    ret = check_need_freeze_based_on_used_space_(is_need);
   }
   return ret;
 }
@@ -2234,6 +2266,36 @@ int ObLogEngine::delete_all_clog_files()
   } else {
     // TODO: close & delete cfg_.log_shm_path_
     CLOG_LOG(INFO, "delete_all_clog_files success");
+  }
+  return ret;
+}
+
+int ObLogEngine::check_clog_exist(const common::ObPartitionKey &partition_key,
+    const uint64_t log_id,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObLogCursorExt log_cursor;
+  exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "not init", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == log_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_id), K(partition_key));
+  } else if (OB_FAIL(get_cursor(partition_key, log_id, log_cursor))) {
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_EAGAIN;
+    } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      CLOG_LOG(WARN, "log not exist, may be recycled", K(ret), K(log_id), K(partition_key));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "log not exist", K(ret), K(log_id), K(partition_key));
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(clog_env_.get_log_file_store()->exist(log_cursor.get_file_id(), exist))) {
+    // return ret
+    CLOG_LOG(WARN, "check file exist failed", K(ret), K(log_id), K(partition_key));
   }
   return ret;
 }
@@ -2523,16 +2585,73 @@ int ObLogEngine::get_ilog_using_disk_space(int64_t& space) const
   return ret;
 }
 
-bool ObLogEngine::is_clog_disk_error() const
+bool ObLogEngine::is_clog_disk_hang() const
 {
-  bool is_disk_error = false;
-  const ObCommitLogEnv* env = get_clog_env_();
+  bool is_disk_hang = false;
+  const ObCommitLogEnv *env = get_clog_env_();
   if (IS_NOT_INIT) {
-    is_disk_error = false;
+    is_disk_hang = false;
   } else if (OB_LIKELY(NULL != env)) {
-    is_disk_error = (env->get_writer()).is_disk_error();
+    is_disk_hang = (env->get_writer()).is_disk_hang();
   }
-  return is_disk_error;
+  return is_disk_hang;
+}
+
+int ObLogEngine::get_server_min_log_ts(int64_t &server_min_log_ts)
+{
+  int ret = OB_SUCCESS;
+  ObLogBlockMetaV2 log_block;
+  ObReadBuf read_buf;
+  ObReadRes res;
+  ObReadCost cost;
+  ObReadParam read_param;
+  const int64_t in_read_size = 4 * 1024;
+  read_buf.buf_len_ = in_read_size + CLOG_DIO_ALIGN_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (NULL == (read_buf.buf_
+        = static_cast<char*>(ob_malloc_align(CLOG_DIO_ALIGN_SIZE, read_buf.buf_len_, "LogEngine")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    const int64_t TIMEOUT_TS = 1 * 1000 * 1000;
+    int64_t start_ts = ObTimeUtility::current_time();
+    do {
+      file_id_t min_file_id = get_clog_min_file_id();
+      read_param.file_id_ = min_file_id;
+      read_param.offset_ = 0;
+      read_param.read_len_ = in_read_size;
+      if (OB_INVALID_FILE_ID == min_file_id) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_FAIL(read_data_direct(read_param, read_buf, res, cost))) {
+        CLOG_LOG(WARN, "read_log_by_location failed", K(ret), K(read_param));
+      } else {
+      }
+      int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+      if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+        if (cost_ts >= TIMEOUT_TS) {
+          ret = OB_TIMEOUT;
+          CLOG_LOG(WARN, "get_server_min_log_ts timeout", K(ret));
+        } else {
+          usleep(100 * 1000);
+        }
+      }
+    } while (OB_NO_SUCH_FILE_OR_DIRECTORY == ret);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t pos = 0;
+    if (OB_FAIL(log_block.deserialize(res.buf_, res.data_len_, pos))) {
+    } else if (false == log_block.check_meta_checksum()) {
+      ret = OB_INVALID_DATA;
+      CLOG_LOG(WARN, "LogBlock has been corrupt", K(ret), K(log_block));
+    } else {
+      server_min_log_ts = log_block.get_timestamp();
+      CLOG_LOG(INFO, "ObLogEngine get_server_min_log_ts success", K(server_min_log_ts), K(read_param));
+    }
+  }
+  if (true == read_buf.is_valid()) {
+    ob_free_align(read_buf.buf_);
+  }
+  return ret;
 }
 
 NetworkLimitManager::NetworkLimitManager() : is_inited_(false), addr_array_(), ethernet_speed_(0), hash_map_()

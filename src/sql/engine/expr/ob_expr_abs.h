@@ -75,6 +75,9 @@ private:
   // bit
   static int abs_enum_set(common::ObObj& res, const common::ObObj& param, common::ObExprCtx& expr_ctx);
 
+  //json
+  static int abs_json(common::ObObj &res, const common::ObObj &param, common::ObExprCtx &expr_ctx);
+
   static common::ObObjType calc_param_type(const common::ObObjType orig_param_type, const bool is_oracle_mode);
 
 private:

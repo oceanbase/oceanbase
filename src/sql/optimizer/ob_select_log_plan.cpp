@@ -1330,7 +1330,8 @@ int ObSelectLogPlan::generate_plan()
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;
@@ -2261,11 +2262,12 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
   } else {
     bool use_late_mat = false;
     ObLogicalOperator* best_plan = NULL;
-    ObLogTableScan* index_scan = NULL;
+    ObLogTableScan* best_index_scan = NULL;
     TableItem* nl_table_item = NULL;
     ObLogTableScan* nl_table_get = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       bool need = false;
+      ObLogTableScan* index_scan = NULL;
       CandidatePlan& plain_plan = candidates_.candidate_plans_.at(i);
       if (OB_FAIL(if_plan_need_late_materialization(plain_plan.plan_tree_, index_scan, need))) {
         LOG_WARN("failed to check if need late materialization", K(ret));
@@ -2288,6 +2290,7 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
       } else if (NULL == best_plan || plain_plan.plan_tree_->get_cost() < best_plan->get_cost()) {
         best_plan = plain_plan.plan_tree_;
         use_late_mat = need;
+        best_index_scan = index_scan;
       } else { /*do nothing*/
       }
     }
@@ -2300,7 +2303,8 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
         if (OB_FAIL(candidates_.candidate_plans_.push_back(CandidatePlan(best_plan)))) {
           LOG_WARN("failed to push back candidate plan", K(ret));
         } else if (use_late_mat && !get_optimizer_context().is_cost_evaluation() &&
-                   OB_FAIL(adjust_late_materialization_structure(best_plan, index_scan, nl_table_get, nl_table_item))) {
+                   OB_FAIL(adjust_late_materialization_structure(
+                       best_plan, best_index_scan, nl_table_get, nl_table_item))) {
           LOG_WARN("failed to adjust late materialization stmt", K(ret));
         } else {
           candidates_.plain_plan_.first = best_plan->get_cost();
@@ -2329,11 +2333,11 @@ int ObSelectLogPlan::adjust_late_materialization_structure(
 }
 
 int ObSelectLogPlan::convert_project_columns(
-    uint64_t table_id, uint64_t project_id, const ObString& project_table_name, ObIArray<uint64_t>& index_columns)
+    uint64_t table_id, TableItem *project_table_item, ObIArray<uint64_t> &index_columns)
 {
   int ret = OB_SUCCESS;
-  ObDMLStmt* stmt = NULL;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(project_table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get_stmt() returns null", K(ret));
   } else {
@@ -2344,11 +2348,70 @@ int ObSelectLogPlan::convert_project_columns(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected NULL pointer", K(item), K(ret));
       } else if (item->table_id_ == table_id && !ObOptimizerUtil::find_item(index_columns, item->column_id_)) {
-        item->set_ref_id(project_id, item->column_id_);
-        expr->set_ref_id(project_id, expr->get_column_id());
-        expr->set_table_name(project_table_name);
+        item->set_ref_id(project_table_item->table_id_, item->column_id_);
+        expr->set_ref_id(project_table_item->table_id_, expr->get_column_id());
+        expr->set_table_name(project_table_item->get_table_name());
+        if ((expr->is_generated_column() || OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == expr->get_column_id()) &&
+            OB_FAIL(project_generate_column(table_id, project_table_item, index_columns, expr))) {
+          LOG_WARN("failed to project dependant expr", K(ret));
+        }
       } else { /*do nothing*/
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::project_generate_column(
+    uint64_t table_id, TableItem *project_table_item, ObIArray<uint64_t> &index_columns, ObColumnRefRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  ObSEArray<ObRawExpr *, 4> dependant_columns;
+  ObSEArray<ObRawExpr *, 4> new_dependant_columns;
+  if (OB_ISNULL(expr) || OB_ISNULL(expr->get_dependant_expr()) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr->get_dependant_expr(), dependant_columns))) {
+    LOG_WARN("failed to extrace column expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < dependant_columns.count(); ++i) {
+    ColumnItem *col_item = NULL;
+    ColumnItem copy_col_item;
+    ObRawExpr *col_expr = dependant_columns.at(i);
+    ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(col_expr);
+    if (OB_ISNULL(col_expr) || OB_UNLIKELY(!col_expr->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (!ObOptimizerUtil::find_item(index_columns, col->get_column_id())) {
+      if (OB_FAIL(new_dependant_columns.push_back(col_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    } else if (OB_ISNULL(col_item = stmt->get_column_item(table_id, col->get_column_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null column item", K(ret));
+    } else if (OB_FAIL(copy_col_item.deep_copy(get_optimizer_context().get_expr_factory(), *col_item))) {
+      LOG_WARN("failed to copy column item", K(ret));
+    } else if (OB_ISNULL(copy_col_item.expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else {
+      copy_col_item.set_ref_id(project_table_item->table_id_, col->get_column_id());
+      copy_col_item.expr_->set_ref_id(project_table_item->table_id_, col->get_column_id());
+      copy_col_item.expr_->set_table_name(project_table_item->get_table_name());
+      if (OB_FAIL(stmt->add_column_item(copy_col_item))) {
+        LOG_WARN("failed to add column item", K(ret));
+      } else if (OB_FAIL(new_dependant_columns.push_back(copy_col_item.expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObRawExpr *dependant_expr = expr->get_dependant_expr();
+    if (OB_FAIL(ObTransformUtils::replace_expr(dependant_columns, new_dependant_columns, dependant_expr))) {
+      LOG_WARN("failed to replace expr", K(ret));
+    } else {
+      expr->set_dependant_expr(dependant_expr);
     }
   }
   return ret;
@@ -2421,10 +2484,7 @@ int ObSelectLogPlan::adjust_late_materialization_stmt_structure(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_scan->set_range_columns(range_columns))) {
       LOG_WARN("failed to set range columns", K(ret));
-    } else if (OB_FAIL(convert_project_columns(index_scan->get_table_id(),
-                   table_scan->get_table_id(),
-                   table_scan->get_table_name(),
-                   old_column_ids))) {
+    } else if (OB_FAIL(convert_project_columns(index_scan->get_table_id(), table_item, old_column_ids))) {
       LOG_WARN("failed to convert project columns", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::generate_rowkey_exprs(stmt,
                    get_optimizer_context(),

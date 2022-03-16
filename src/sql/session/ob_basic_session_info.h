@@ -89,6 +89,18 @@ struct ObSessionNLSParams  // oracle nls parameters
 
 #define CREATE_OBJ_PRINT_PARAM(session) (NULL != (session) ? (session)->create_obj_print_params() : ObObjPrintParams())
 
+// flag is a single bit, but marco(e.g., IS_NO_BACKSLASH_ESCAPES) compare two 64-bits int using '&';
+// if we directly assign the result to flag(single bit), only the last bit of the result is used,
+// which is equal to 'flag = result & 1;'.
+// So we first convert the result to bool(tmp_flag) and assign the bool to flag, which is equal to
+// 'flag = result!=0;'.
+#define GET_SQL_MODE_BIT(marco, sql_mode, flag) \
+  do {                                          \
+    bool tmp_flag = false;                      \
+    marco(sql_mode, tmp_flag);                  \
+    flag = tmp_flag;                            \
+  } while (0)
+
 #ifndef NDEBUG
 #define CHECK_COMPATIBILITY_MODE(session)    \
   do {                                       \
@@ -174,6 +186,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
   class TransFlags {
   public:
     TransFlags() : flags_(0)
@@ -855,7 +868,15 @@ public:
   void set_session_in_retry(ObSessionRetryStatus is_retry)
   {
     LockGuard lock_guard(thread_data_mutex_);
-    thread_data_.is_in_retry_ = is_retry;
+    if (OB_LIKELY(SESS_NOT_IN_RETRY == is_retry ||
+                  SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_)) {
+      thread_data_.is_in_retry_ = is_retry;
+    } else {
+      // if the last retry is for duplicate table
+      // and the SQL is retried again
+      // we still keep the retry for dup table status.
+      thread_data_.is_in_retry_ = SESS_IN_RETRY_FOR_DUP_TBL;
+    }
   }
 
   void set_session_in_retry(bool is_retry, int ret)
@@ -868,8 +889,7 @@ public:
     } else {
       status = SESS_IN_RETRY;
     }
-    LockGuard lock_guard(thread_data_mutex_);
-    thread_data_.is_in_retry_ = status;
+    set_session_in_retry(status);
   }
   bool get_is_in_retry()
   {
@@ -1252,48 +1272,32 @@ public:
   int get_max_allowed_packet(int64_t& max_allowed_pkt) const;
   int get_net_buffer_length(int64_t& net_buffer_len) const;
   /// @}
-  int64_t get_session_info_mem_size() const
+  int64_t get_session_info_mem_size() const { return block_allocator_.get_total_mem_size(); }
+  int64_t get_sys_var_mem_size() const { return base_sys_var_alloc_.total(); }
+  // no relationship with function set_partition_hit(const bool is_hit) above.
+  ObPartitionHitInfo &partition_hit() { return partition_hit_; }
+  bool get_err_final_partition_hit(int err_ret)
   {
-    return block_allocator_.get_total_mem_size();
+    bool is_partition_hit = partition_hit().get_bool();
+    if (is_proxy_refresh_location_ret(err_ret)) {
+      is_partition_hit = false;
+    } else if (get_is_in_retry()
+               && is_proxy_refresh_location_ret(retry_info_.get_last_query_retry_err())) {
+      is_partition_hit = false;
+    }
+    return is_partition_hit;
+  };
+  bool is_proxy_refresh_location_ret(int err_ret) {
+    return common::OB_NOT_MASTER == err_ret;
   }
-  int64_t get_sys_var_mem_size() const
-  {
-    return base_sys_var_alloc_.total();
-  }
-  // for improving cache miss of proxy, nothing to do with the set_partition_hit() above.
-  ObPartitionHitInfo& partition_hit()
-  {
-    return partition_hit_;
-  }
-  void set_shadow(bool is_shadow)
-  {
-    ATOMIC_STORE(&thread_data_.is_shadow_, is_shadow);
-  }
-  bool is_shadow()
-  {
-    return ATOMIC_LOAD(&thread_data_.is_shadow_);
-  }
-  uint32_t get_version() const
-  {
-    return version_;
-  }
-  uint32_t get_magic_num()
-  {
-    return magic_num_;
-  }
-  int64_t get_current_execution_id() const
-  {
-    return current_execution_id_;
-  }
-  const common::ObCurTraceId::TraceId& get_last_trace_id() const
-  {
-    return last_trace_id_;
-  }
-  void set_current_execution_id(int64_t execution_id)
-  {
-    current_execution_id_ = execution_id;
-  }
-  void set_last_trace_id(common::ObCurTraceId::TraceId* trace_id)
+  void set_shadow(bool is_shadow) { ATOMIC_STORE(&thread_data_.is_shadow_, is_shadow); }
+  bool is_shadow() { return ATOMIC_LOAD(&thread_data_.is_shadow_);  }
+  uint32_t get_version() const {return version_;}
+  uint32_t get_magic_num() {return magic_num_;}
+  int64_t get_current_execution_id() const { return current_execution_id_; }
+  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
+  void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
+  void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
     if (OB_ISNULL(trace_id)) {
     } else {
@@ -1543,6 +1547,9 @@ public:
     is_password_expired_ = value;
   }
   int load_default_sys_variable(int64_t var_idx);
+
+  int set_session_temp_table_used(const bool is_used);
+  int get_session_temp_table_used(bool& is_used) const;
 
 protected:
   int process_session_variable(
@@ -2275,7 +2282,8 @@ inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() co
 // oracle SYS user actual nls_length_semantics is always BYTE
 inline ObLengthSemantics ObBasicSessionInfo::get_actual_nls_length_semantics() const
 {
-  return (is_oracle_sys_user() ? LS_BYTE : sys_vars_cache_.get_nls_length_semantics());
+  return OB_ORA_SYS_DATABASE_ID == extract_pure_id(get_database_id()) ?
+          LS_BYTE : sys_vars_cache_.get_nls_length_semantics();
 }
 
 inline int64_t ObBasicSessionInfo::get_local_ob_org_cluster_id() const

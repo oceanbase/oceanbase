@@ -264,7 +264,7 @@ public:
   int init();
 
 public:
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -304,7 +304,7 @@ public:
   {
     return can_elr_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   void set_last()
   {
@@ -319,6 +319,9 @@ public:
     return xid_;
   }
   bool is_xa_trans() const;
+  int init_for_deserialize(const bool use_mutator_buf = true);
+  int replace_encrypt_info_tenant_id(const uint64_t real_tenant_id);
+  int decrypt_table_key();
 
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(scheduler),
       K_(coordinator), K_(participants), K_(trans_param), K_(cluster_id), K_(active_memstore_version),
@@ -445,7 +448,7 @@ public:
   {}
 
 public:
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -506,7 +509,7 @@ public:
   {
     return xid_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
 
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(scheduler), K_(coordinator),
@@ -580,7 +583,7 @@ public:
   {
     return split_info_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(partition_log_info_arr), K_(global_trans_version),
       K_(checksum), K_(cluster_id));
@@ -609,7 +612,7 @@ public:
   {
     return publish_version_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
 
 public:
@@ -629,7 +632,7 @@ public:
   {}
   int init(const int64_t log_type, const common::ObPartitionKey& partition, const ObTransID& trans_id,
       const PartitionLogInfoArray& partition_log_info_arr, const uint64_t cluster_id);
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   const ObTransSplitInfo& get_split_info() const
   {
@@ -661,7 +664,31 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransClearLog);
 
 public:
-  bool is_valid() const;
+  bool is_valid() const override;
+};
+
+class ObSpTransRedoLogHelper {
+public:
+  ObSpTransRedoLogHelper()
+      : tenant_id_(common::OB_INVALID_TENANT_ID),
+        log_no_(-1),
+        trans_param_(),
+        mutator_(),
+        active_memstore_version_(),
+        prev_trans_arr_(),
+        can_elr_(false)
+  {}
+  ~ObSpTransRedoLogHelper()
+  {}
+
+public:
+  uint64_t tenant_id_;
+  int64_t log_no_;
+  ObStartTransParam trans_param_;
+  ObTransMutator mutator_;
+  common::ObVersion active_memstore_version_;
+  ObElrTransInfoArray prev_trans_arr_;
+  bool can_elr_;
 };
 
 class ObSpTransRedoLog : public ObTransLog {
@@ -678,6 +705,16 @@ public:
         prev_trans_arr_(),
         can_elr_(false)
   {}
+  ObSpTransRedoLog(ObSpTransRedoLogHelper& helper)
+      : ObTransLog(),
+        tenant_id_(helper.tenant_id_),
+        log_no_(helper.log_no_),
+        trans_param_(helper.trans_param_),
+        mutator_(),
+        active_memstore_version_(helper.active_memstore_version_),
+        prev_trans_arr_(helper.prev_trans_arr_),
+        can_elr_(helper.can_elr_)
+  {}
   ~ObSpTransRedoLog()
   {}
   int init(const int64_t log_type, const common::ObPartitionKey& partition, const ObTransID& trans_id,
@@ -685,7 +722,7 @@ public:
       const ObElrTransInfoArray& prev_trans_arr, const bool can_elr);
 
 public:
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -719,8 +756,11 @@ public:
   {
     return can_elr_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
+  int init_for_deserialize(const bool use_mutator_buf = true);
+  int replace_encrypt_info_tenant_id(const uint64_t real_tenant_id);
+  int decrypt_table_key();
 
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(trans_param),
       K_(cluster_id), K_(active_memstore_version), K_(prev_trans_arr), K_(can_elr));
@@ -738,12 +778,29 @@ protected:
   bool can_elr_;
 };
 
+class ObSpTransCommitLogHelper : public ObSpTransRedoLogHelper {
+public:
+  ObSpTransCommitLogHelper() : ObSpTransRedoLogHelper()
+  {}
+  ~ObSpTransCommitLogHelper()
+  {}
+};
+
 class ObSpTransCommitLog : public ObSpTransRedoLog {
   OB_UNIS_VERSION(1);
 
 public:
   ObSpTransCommitLog()
       : ObSpTransRedoLog(),
+        global_trans_version_(-1),
+        checksum_(0),
+        prev_redo_log_ids_(common::ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+        app_trace_id_str_(),
+        checkpoint_(0),
+        app_trace_info_()
+  {}
+  ObSpTransCommitLog(ObSpTransCommitLogHelper& helper)
+      : ObSpTransRedoLog(helper),
         global_trans_version_(-1),
         checksum_(0),
         prev_redo_log_ids_(common::ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -789,7 +846,7 @@ public:
   {
     return prev_trans_arr_;
   }
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(trans_param), K_(cluster_id),
       K_(active_memstore_version), K_(checksum), K_(prev_redo_log_ids), K_(app_trace_id_str), K_(checkpoint),
@@ -826,7 +883,7 @@ public:
       const uint64_t cluster_id);
 
 public:
-  bool is_valid() const;
+  bool is_valid() const override;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id));
 
@@ -892,7 +949,7 @@ public:
   {
     return create_ts_;
   }
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -974,7 +1031,7 @@ public:
   }
 
 public:
-  bool is_valid() const
+  bool is_valid() const override
   {
     return true;
   }
@@ -1009,6 +1066,32 @@ private:
   ObXATransID xid_;
 };
 
+class ObTransMutatorLogHelper {
+public:
+  ObTransMutatorLogHelper()
+      : tenant_id_(common::OB_INVALID_TENANT_ID),
+        trans_expired_time_(0),
+        trans_param_(),
+        log_no_(0),
+        mutator_(),
+        prev_trans_arr_(),
+        can_elr_(false),
+        cluster_version_(0)
+  {}
+  ~ObTransMutatorLogHelper()
+  {}
+
+public:
+  int64_t tenant_id_;
+  int64_t trans_expired_time_;
+  ObStartTransParam trans_param_;
+  int64_t log_no_;
+  ObTransMutator mutator_;
+  ObElrTransInfoArray prev_trans_arr_;
+  bool can_elr_;
+  uint64_t cluster_version_;
+};
+
 class ObTransMutatorLog : public ObTransLog {
   OB_UNIS_VERSION(1);
 
@@ -1024,6 +1107,17 @@ public:
         can_elr_(false),
         cluster_version_(0)
   {}
+  ObTransMutatorLog(ObTransMutatorLogHelper& helper)
+      : ObTransLog(),
+        tenant_id_(helper.tenant_id_),
+        trans_expired_time_(helper.trans_expired_time_),
+        trans_param_(),
+        log_no_(helper.log_no_),
+        mutator_(),
+        prev_trans_arr_(),
+        can_elr_(helper.can_elr_),
+        cluster_version_(helper.cluster_version_)
+  {}
   ~ObTransMutatorLog()
   {
     destroy();
@@ -1036,7 +1130,7 @@ public:
   {}
 
 public:
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -1073,6 +1167,9 @@ public:
     return cluster_version_;
   }
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
+  int init_for_deserialize(const bool use_mutator_buf = true);
+  int replace_encrypt_info_tenant_id(const uint64_t real_tenant_id);
+  int decrypt_table_key();
 
 public:
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(tenant_id), K_(trans_expired_time),

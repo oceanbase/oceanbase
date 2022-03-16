@@ -118,6 +118,7 @@ void ObTenantWeakReadService::destroy()
 
   TG_STOP(tg_id_);
   TG_WAIT(tg_id_);
+  TG_DESTROY(tg_id_);
 
   cluster_service_.destroy();
 
@@ -221,8 +222,9 @@ int ObTenantWeakReadService::get_cluster_version_by_rpc_(int64_t& version)
     } else if (OB_SUCCESS != resp.err_code_) {
       LOG_WARN("get weak read cluster version RPC return error", K(resp), K(tenant_id_), K(cluster_service_master));
       ret = resp.err_code_;
-    } else if (OB_UNLIKELY(resp.version_ <= 0)) {
-      LOG_WARN("invalid weak read cluster version from RPC", K(resp), K(tenant_id_), K(cluster_service_master));
+    } else if (OB_UNLIKELY(! is_valid_read_snapshot_version(resp.version_))) {
+      LOG_WARN("invalid weak read cluster version from RPC", K(resp), K(tenant_id_),
+          K(cluster_service_master));
       ret = OB_INVALID_ERROR;
     } else {
       version = resp.version_;

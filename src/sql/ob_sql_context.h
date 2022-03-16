@@ -391,6 +391,8 @@ public:
 
   bool can_reroute_sql_;
   share::ObFeedbackRerouteInfo reroute_info_;
+  bool is_sensitive_;     // Whether it contains sensitive information.
+                          // If so, it will not be recorded in sql audit.
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
 };
 
@@ -493,7 +495,7 @@ public:
 
   int get_dml_stmt_name(stmt::StmtType stmt_type, char* buf, int64_t buf_len, int64_t& pos);
 
-  int append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos);
+  int append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos, int64_t& id_start);
 
   int get_stmt_name_by_id(const int64_t stmt_id, common::ObString& stmt_name) const;
   int get_stmt_org_name_by_id(const int64_t stmt_id, common::ObString& org_name) const;

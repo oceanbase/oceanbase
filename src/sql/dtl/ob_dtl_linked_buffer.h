@@ -22,7 +22,7 @@ namespace dtl {
 
 #define DTL_BROADCAST (1ULL)
 
-class ObDtlMsgHeader;
+struct ObDtlMsgHeader;
 class ObDtlChannel;
 
 class ObDtlDfoKey {

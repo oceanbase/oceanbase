@@ -33,8 +33,8 @@ public:
 
 private:
   int prepare_backup_clean_infos(const common::ObIArray<uint64_t>& tenant_ids);
-  int get_backup_clean_info(
-      const uint64_t tenant_id, common::ObISQLClient& sql_proxy, share::ObBackupCleanInfo& clean_info);
+  int get_backup_clean_info(const uint64_t tenant_id, const bool for_update, common::ObISQLClient& sql_proxy,
+      share::ObBackupCleanInfo& clean_info);
   int insert_backup_clean_info(
       const uint64_t tenant_id, const share::ObBackupCleanInfo& clean_info, common::ObISQLClient& sql_proxy);
   int update_backup_clean_info(const share::ObBackupCleanInfo& src_clean_info,
@@ -42,14 +42,7 @@ private:
   int get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
   int schedule_backup_data_clean(const common::ObIArray<uint64_t>& tenant_ids);
   int schedule_sys_tenant_backup_data_clean();
-  int schedule_tenants_backup_data_clean(const common::ObIArray<uint64_t>& tenant_ids);
-  int schedule_tenant_backup_data_clean(const uint64_t tenant_id, common::ObISQLClient& sys_tenant_trans);
-  int set_backup_clean_info(const uint64_t tenant_id, share::ObBackupCleanInfo& clean_info);
-  int start_backup_clean();
-  int rollback_backup_clean_infos(const common::ObIArray<uint64_t>& tenant_ids);
-  int rollback_backup_clean_info(const uint64_t tenant_id);
-  // delete backup set need to know incarnation
-  int get_backup_incarnation(const uint64_t tenant_id, const int64_t backup_set_id);
+  int set_backup_clean_info(const uint64_t tenant_id, share::ObBackupCleanInfo &clean_info);
 
 private:
   bool is_inited_;

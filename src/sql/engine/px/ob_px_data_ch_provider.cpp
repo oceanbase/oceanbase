@@ -80,7 +80,6 @@ int ObPxChProviderUtil::inner_get_data_ch(bool ch_map_opt, ObPxTaskChSets& ch_se
     // transmit get channel
     // M: transmit task count
     // N: receive task count
-    uint64_t chid = 0;
     if (is_transmit) {
       // transmit
       if (OB_FAIL(ObDtlChannelUtil::get_transmit_dtl_channel_set(sqc_id, task_id, ch_total_info, ch_set))) {

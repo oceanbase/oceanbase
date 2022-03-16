@@ -25,6 +25,8 @@ namespace oceanbase {
 namespace storage {
 class ObPGSSTableMgr;
 class ObRecoveryPointInfo;
+class ObRecoveryPointMetaInfo;
+class ObRecoveryPointKey;
 
 class ObRecoveryTableData {
 public:
@@ -110,7 +112,8 @@ public:
   int get_partition_store_meta(const ObPartitionKey& pkey, ObPGPartitionStoreMeta& partition_store_meta);
   int get_sstable(const ObITable::TableKey& table_key, ObTableHandle& handle);
   int get_partition_tables(const ObPartitionKey& pkey, ObTablesHandle& handle);
-
+  // for migrate
+  int get_recovery_point_meta_info(ObRecoveryPointMetaInfo& recovery_point_meta_info);
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -208,6 +211,7 @@ enum ObRecoveryPointType {
   RESTORE_POINT = 1,
   BACKUP = 2,
 };
+
 class ObRecoveryDataMgr {
 public:
   struct SerializePair {
@@ -264,21 +268,30 @@ public:
   int get_backup_sstable(const int64_t snapshot_version, const ObITable::TableKey& table_key, ObTableHandle& handle);
   int check_backup_point_exist(const int64_t snapshot_version, bool& is_exist);
   int get_all_backup_tables(const int64_t snapshot_version, ObTablesHandle& handle);
+  // for migrate
+  int check_recovery_point_exist(const ObRecoveryPointKey& recovery_point_key, bool& is_exist);
+  int add_recovery_point(const ObRecoveryPointKey& recovery_point_key,
+      const ObRecoveryPointMetaInfo& recovery_point_meta_info, const ObTablesHandle& tables_handle);
+  int get_recovery_point_meta_info(
+      const ObRecoveryPointKey& recovery_point_key, ObRecoveryPointMetaInfo& recovery_point_meta_info);
+  int get_all_recovery_point_key(ObIArray<ObRecoveryPointKey>& recovery_point_key_array);
 
   TO_STRING_KV(K_(pg_key), K_(restore_point_data), K_(backup_point_data));
 
 private:
   int add_recovery_point_(const ObRecoveryPointType point_type, const int64_t snapshot_version,
-      const ObPartitionGroupMeta& pg_meta, const ObIArray<ObPGPartitionStoreMeta>& partition_store_metas,
-      const ObTablesHandle& tables_handle, ObRecoveryData& recovery_data);
-  int write_add_data_slog_(const ObRecoveryPointType point_type, ObRecoveryPointData& point_data);
-  int write_remove_data_slogs_(const ObRecoveryPointType point_type, ObIArray<ObRecoveryPointData*>& points_data);
+      const ObPartitionGroupMeta &pg_meta, const ObIArray<ObPGPartitionStoreMeta> &partition_store_metas,
+      const ObTablesHandle &tables_handle);
+  int write_add_data_slog_(const ObRecoveryPointType point_type, ObRecoveryPointData &point_data);
+  int write_remove_data_slogs_(const ObRecoveryPointType point_type, ObIArray<ObRecoveryPointData *> &points_data);
   // for restore point
   int replay_add_restore_point_(const ObRecoveryPointData& point_data);
   int replay_remove_restore_point_(const int64_t snapshot_version);
   // for backup
   int replay_add_backup_point_(const ObRecoveryPointData& point_data);
   int replay_remove_backup_point_(const int64_t replay_log_ts);
+
+  int check_recovery_point_exist_(const ObRecoveryPointKey& recovery_point_key, bool& is_exist);
 
 private:
   static const int64_t OLD_MAGIC_NUM = -0xABCD;
@@ -366,6 +379,46 @@ private:
   common::ObArray<ObRecoveryPointInfo> points_info_;
   int64_t array_idx_;
   ObRecoveryDataMgr* data_mgr_;
+};
+
+struct ObRecoveryPointKey {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRecoveryPointKey() : snapshot_version_(0), type_(ObRecoveryPointType::UNKNOWN_TYPE)
+  {}
+
+  virtual ~ObRecoveryPointKey() = default;
+  void reset()
+  {
+    snapshot_version_ = 0;
+    type_ = ObRecoveryPointType::UNKNOWN_TYPE;
+  }
+  bool is_valid() const
+  {
+    return snapshot_version_ > 0 && ObRecoveryPointType::UNKNOWN_TYPE != type_;
+  }
+  TO_STRING_KV(K_(snapshot_version), K_(type));
+  int64_t snapshot_version_;
+  ObRecoveryPointType type_;
+};
+
+struct ObRecoveryPointMetaInfo {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRecoveryPointMetaInfo();
+  virtual ~ObRecoveryPointMetaInfo() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObRecoveryPointMetaInfo& recovery_point_meta_info);
+  ObPartitionGroupMeta pg_meta_;
+  common::ObSArray<ObPGPartitionStoreMeta> partition_store_metas_;
+  common::ObSArray<ObITable::TableKey> table_keys_;
+  TO_STRING_KV(K_(pg_meta), K_(partition_store_metas), K_(table_keys));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRecoveryPointMetaInfo);
 };
 
 }  // namespace storage

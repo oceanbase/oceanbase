@@ -31,6 +31,7 @@ public:
   static ObDatumCmpFuncType get_nullsafe_cmp_func(const ObObjType type1, const ObObjType type2,
       const ObCmpNullPos null_pos, const ObCollationType cs_type, const bool is_oracle_mode);
   static bool is_string_type(const ObObjType type);
+  static bool is_json(const ObObjType type);
   static bool is_varying_len_char_type(const ObObjType type, const ObCollationType cs_type)
   {
     return (type == ObNVarchar2Type || (type == ObVarcharType && cs_type != CS_TYPE_BINARY));

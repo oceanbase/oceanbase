@@ -367,6 +367,8 @@ int ObMemtableRowReader::get_memtable_row(bool& row_empty, const share::schema::
         bitmap.set_false(column_pos);
         if (row.row_val_.cells_[column_pos].is_lob()) {
           row.row_val_.cells_[column_pos].set_lob_inrow();
+        } else if (row.row_val_.cells_[column_pos].is_json()) {
+          row.row_val_.cells_[column_pos].set_lob_inrow();
         }
         ++filled_column_count;
       }
@@ -455,6 +457,7 @@ OB_INLINE int ObMemtableRowReader::parse_with_meta(ObStoreRow& row, bool& row_em
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType:
+    case ObJsonType:
       READ_TEXT(meta->type_);
       break;
     case ObVarcharType:
@@ -599,6 +602,7 @@ OB_INLINE int ObMemtableRowReader::parse_no_meta(
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType:
+    case ObJsonType:
       READ_TEXT(meta->type_);
       break;
     case ObVarcharType:
@@ -765,8 +769,8 @@ void ObMemtableIterRowReader::reset()
   }
 }
 
-int ObMemtableIterRowReader::init(common::ObArenaAllocator* allocator, const share::schema::ColumnMap* cols_map,
-    ObNopBitMap* bitmap, const storage::ObColDescArray& columns)
+int ObMemtableIterRowReader::init(common::ObIAllocator *allocator, const share::schema::ColumnMap *cols_map,
+    ObNopBitMap *bitmap, const storage::ObColDescArray &columns)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

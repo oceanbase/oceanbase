@@ -194,6 +194,9 @@ int ObAllVirtualProxySchema::inner_open()
             LOG_WARN("ob_write_string failed", K(object_table_name), K(ret));
           } else if (OB_FAIL(full_schema_guard_.get_database_schema(object_database_id, database_schema))) {
             LOG_WARN("get_database_schema failed", K(tenant_id), K(object_database_id), K(ret));
+          } else if (OB_ISNULL(database_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database schema is null", K(ret), K(object_database_id));
           } else if (OB_FAIL(ob_write_string(
                          *allocator_, database_schema->get_database_name_str(), level1_decoded_db_name_))) {
             LOG_WARN("ob_write_string failed", K(database_schema->get_database_name_str()), K(ret));

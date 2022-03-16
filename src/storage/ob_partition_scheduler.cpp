@@ -25,7 +25,6 @@
 #include "share/ob_task_define.h"
 #include "share/ob_index_status_table_operator.h"
 #include "storage/blocksstable/ob_store_file.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/ob_sstable_row_whole_scanner.h"
 #include "storage/ob_partition_storage.h"
 #include "storage/transaction/ob_ts_mgr.h"
@@ -180,26 +179,6 @@ int ObBloomFilterBuildTask::build_bloom_filter()
           access_param_.iter_param_.table_id_ = table_id_;
           access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
           access_param_.iter_param_.rowkey_cnt_ = meta.schema_->rowkey_column_number_;
-          access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
-          scanner = new (buf) ObSSTableRowWholeScanner();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
-          col_desc.col_id_ = meta.schema_->column_id_array_[i];
-          col_desc.col_type_ = meta.schema_->column_type_array_[i];
-          if (OB_FAIL(access_param_.out_col_desc_param_.push_back(col_desc))) {
-            LOG_WARN("Fail to push the col to param columns, ", K(ret));
-          }
-        }
-      }
-      // prepare scan param
-      if (OB_SUCC(ret)) {
-        access_param_.reset();
-        if (OB_FAIL(access_param_.out_col_desc_param_.init())) {
-          LOG_WARN("init out cols fail", K(ret));
-        } else {
-          access_param_.iter_param_.table_id_ = table_id_;
-          access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
-          access_param_.iter_param_.rowkey_cnt_ = meta.meta_->rowkey_column_number_;
           access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
@@ -1204,8 +1183,10 @@ int ObPartitionScheduler::schedule_pg(
             if (OB_ENTRY_NOT_EXIST != tmp_ret) {
               LOG_WARN("Failed to check need fast freeze for hotspot table", K(tmp_ret), K(pg_key));
             }
-          } else if (!need_fast_freeze) {
-
+          }
+          // ignore tmp_ret
+          if (!need_fast_freeze) {
+            // do nothing
           } else if (OB_SUCCESS != (tmp_ret = partition_service_->minor_freeze(pg_key))) {
             LOG_WARN("Failed to schedule fast freeze", K(tmp_ret), K(pg_key));
           } else {
@@ -1395,12 +1376,7 @@ int ObPartitionScheduler::schedule_partition_merge(const ObMergeType merge_type,
   }
 
   if (OB_SUCC(ret) && need_merge_table_ids.count() > 0) {
-    bool can_schedule = true;
-    if (OB_FAIL(can_schedule_partition(merge_type, can_schedule))) {
-      LOG_WARN("failed to check can schedule partition", K(ret), K(merge_type));
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < need_merge_table_ids.count() && can_schedule; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < need_merge_table_ids.count(); ++i) {
       const uint64_t table_id = need_merge_table_ids[i];
       if (OB_FAIL(check_need_merge_table(table_id, need_merge))) {
         LOG_WARN("failed to check need merge table", K(ret), K(table_id), "pg_key", pg.get_partition_key());
@@ -2477,41 +2453,12 @@ int ObPartitionScheduler::reload_minor_merge_schedule_interval()
   return ret;
 }
 
-int ObPartitionScheduler::can_schedule_partition(const ObMergeType merge_type, bool& can_schedule)
-{
-  int ret = OB_SUCCESS;
-  const float PAUSE_MERGE_DISK_RADIO = 0.95;
-  const int64_t PRINT_INTERVAL = 5 * 1000 * 1000;  // 5s
-  bool is_backup_started = false;
-  can_schedule = true;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("The ObPartitionScheduler has not been inited, ", K(ret));
-  } else if (ObMergeType::MAJOR_MERGE != merge_type) {
-    can_schedule = true;
-  } else if (OB_FAIL(ObBackupInfoMgr::get_instance().is_base_backup_start(is_backup_started))) {
-    LOG_WARN("failed to check is base backup started", K(ret));
-  } else {
-    // TODO() fix ofs
-    //    const float use_disk_space_radio = OB_FILE_SYSTEM.get_used_macro_block_count() /
-    //        OB_FILE_SYSTEM.get_total_macro_block_count();
-    //    can_schedule = !(use_disk_space_radio >= PAUSE_MERGE_DISK_RADIO && is_backup_started);
-    //    if (!can_schedule) {
-    //      if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
-    //        FLOG_INFO("can not schedule merge", K(is_backup_started), K(use_disk_space_radio));
-    //      }
-    //    }
-  }
-  return ret;
-}
-
 ObFastFreezeChecker::ObFastFreezeChecker(const int64_t tenant_id)
 {
   reset();
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID)) {
     LOG_WARN("Invalid tenant id to init fast freeze checker", K(tenant_id));
-  } else if (OB_SYS_TENANT_ID != tenant_id) {
-    // fast freeze only trigger for user tenant
+  } else {
     tenant_id_ = tenant_id;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     if (tenant_config.is_valid()) {

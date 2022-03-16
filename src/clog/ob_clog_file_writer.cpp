@@ -29,9 +29,7 @@ namespace oceanbase {
 namespace clog {
 ObCLogBaseFileWriter::ObCLogBaseFileWriter()
     : is_inited_(false),
-      log_ctrl_(NULL),
-      shm_buf_(NULL),
-      shm_data_buf_(NULL),
+      aligned_data_buf_(nullptr),
       buf_write_pos_(0),
       file_offset_(0),
       buf_padding_size_(0),
@@ -47,35 +45,36 @@ ObCLogBaseFileWriter::~ObCLogBaseFileWriter()
   destroy();
 }
 
-int ObCLogBaseFileWriter::init(
-    const char* log_dir, const char* shm_path, const uint32_t align_size, const ObILogFileStore* file_store)
+int ObCLogBaseFileWriter::init(const char* log_dir, const uint32_t align_size, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "already inited", K(ret));
-  } else if (OB_ISNULL(log_dir) || OB_ISNULL(shm_path) || OB_ISNULL(file_store)) {
+  } else if (OB_ISNULL(log_dir) || OB_ISNULL(file_store)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_dir), K(align_size), KP(file_store));
-  } else if (OB_FAIL(ObBaseLogBufferMgr::get_instance().get_buffer(shm_path, log_ctrl_))) {
+    CLOG_LOG(WARN, "invalid param", K(ret), K(log_dir), K(align_size), KP(file_store));
+  } else if (OB_ISNULL(aligned_data_buf_ =
+                           (char*)ob_malloc_align(align_size, CLOG_MAX_WRITE_BUFFER_SIZE, "CLogFileWriter"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "get log buf failed", K(ret), K(log_dir));
   } else {
-    shm_buf_ = log_ctrl_->base_buf_;
-    shm_data_buf_ = log_ctrl_->data_buf_;
     log_dir_[sizeof(log_dir_) - 1] = '\0';
     (void)snprintf(log_dir_, sizeof(log_dir_) - 1, log_dir);
     align_size_ = align_size;
     store_ = const_cast<ObILogFileStore*>(file_store);
   }
+
   return OB_SUCCESS;
 }
 
 void ObCLogBaseFileWriter::destroy()
 {
   is_inited_ = false;
-  log_ctrl_ = NULL;
-  shm_buf_ = NULL;
-  shm_data_buf_ = NULL;
+  if (nullptr != aligned_data_buf_) {
+    ob_free_align(aligned_data_buf_);
+    aligned_data_buf_ = nullptr;
+  }
   buf_write_pos_ = 0;
   file_offset_ = 0;
   buf_padding_size_ = 0;
@@ -104,7 +103,6 @@ int ObCLogLocalFileWriter::load_file(uint32_t& file_id, uint32_t& offset, bool e
 {
   UNUSED(enable_pre_creation);
   int ret = OB_SUCCESS;
-  ObAtomicFilePos file_pos;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -118,122 +116,22 @@ int ObCLogLocalFileWriter::load_file(uint32_t& file_id, uint32_t& offset, bool e
   } else if (OB_FAIL(store_->open(file_id))) {
     CLOG_LOG(WARN, "open file failed", K(file_id), K(ret));
   } else {
-    file_id_ = file_id;
-    file_pos.file_id_ = file_id;
-    file_pos.file_offset_ = offset;
-    CLOG_LOG(INFO, "load start, ", K(file_pos), K(shm_buf_->file_write_pos_), K(shm_buf_->file_flush_pos_));
-
-    if (0 == shm_buf_->file_flush_pos_.atomic_ || 0 == shm_buf_->file_write_pos_.atomic_) {
-      // first start or start after server restart
-      ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, file_pos.atomic_);
-      ATOMIC_STORE(&shm_buf_->file_write_pos_.atomic_, file_pos.atomic_);
-    } else if (shm_buf_->file_write_pos_.file_id_ + 1 == file_pos.file_id_ ||
-               shm_buf_->file_flush_pos_.file_id_ + 1 == file_pos.file_id_) {
-      // observer restart just after creating new_file()
-      if (0 != file_pos.file_offset_ || shm_buf_->file_write_pos_ < shm_buf_->file_flush_pos_) {
-        ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR,
-            "The clog new file start pos is unexpected, ",
-            K(ret),
-            K(file_pos),
-            K(shm_buf_->file_flush_pos_),
-            K(shm_buf_->file_write_pos_),
-            K(shm_buf_->log_dir_));
-      } else {
-        ATOMIC_STORE(&shm_buf_->file_write_pos_.atomic_, file_pos.atomic_);
-        ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, file_pos.atomic_);
-        CLOG_LOG(INFO, "Success to sync new file pos", K(file_pos));
-      }
-    } else {
-      // start after observer process restart and there is data in share memory
-      if (shm_buf_->file_flush_pos_.file_id_ != file_pos.file_id_ ||
-          shm_buf_->file_write_pos_.file_id_ != file_pos.file_id_ || shm_buf_->file_flush_pos_ > file_pos ||
-          shm_buf_->file_write_pos_ < shm_buf_->file_flush_pos_) {
-        ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR,
-            "The clog start pos is unexpected, ",
-            K(ret),
-            K(file_id),
-            K(offset),
-            K(shm_buf_->file_flush_pos_),
-            K(shm_buf_->file_write_pos_),
-            K(shm_buf_->log_dir_));
-      } else if (shm_buf_->file_write_pos_ > shm_buf_->file_flush_pos_) {
-        // the write buffer is not flushed, need flush
-        // if need alignment, also include previous unaligned part + padding part
-        buf_write_pos_ = shm_buf_->file_write_pos_.file_offset_ - shm_buf_->file_flush_pos_.file_offset_;
-        if (need_align()) {
-          buf_write_pos_ += (shm_buf_->file_flush_pos_.file_offset_ % align_size_);
-          buf_write_pos_ += ObPaddingEntry::get_padding_size(buf_write_pos_);
-        }
-        file_offset_ = shm_buf_->file_flush_pos_.file_offset_;
-
-        CLOG_LOG(INFO,
-            "Flush remaining buf, ",
-            K(ret),
-            K(file_id),
-            K(offset),
-            K(shm_buf_->file_flush_pos_),
-            K(shm_buf_->file_write_pos_),
-            K(shm_buf_->log_dir_),
-            K_(file_offset),
-            K_(buf_write_pos));
-
-        if (buf_write_pos_ > shm_buf_->buf_len_) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR,
-              "The buf pos is unexpected, ",
-              K(ret),
-              K_(buf_write_pos),
-              K(shm_buf_->buf_len_),
-              K(shm_buf_->file_flush_pos_),
-              K(shm_buf_->file_write_pos_),
-              K(shm_buf_->log_dir_));
-        } else if (OB_FAIL(flush_buf())) {
-          CLOG_LOG(ERROR,
-              "Fail to flush share memory buffer to log file, ",
-              K(ret),
-              K(errno),
-              K_(buf_write_pos),
-              K(shm_buf_->log_dir_));
-        } else {
-          ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, shm_buf_->file_write_pos_.atomic_);
-          CLOG_LOG(INFO, "Success to flush log buf to file!");
-        }
-      } else {
-        // equal write and flush pos
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (shm_buf_->file_flush_pos_ < file_pos) {
-      ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, file_pos.atomic_);
-      ATOMIC_STORE(&shm_buf_->file_write_pos_.atomic_, file_pos.atomic_);
-    }
+    CLOG_LOG(INFO, "load start", K(file_id), K(offset));
   }
 
   // Load last time unaligned part if it is aligned system
   // Append only system is not needed, so just reset buf empty
   if (OB_SUCC(ret)) {
     if (need_align()) {
-      buf_write_pos_ = shm_buf_->file_flush_pos_.file_offset_ % align_size_;
+      buf_write_pos_ = offset % align_size_;
       int64_t read_size = 0;
-      if (buf_write_pos_ > 0 && OB_FAIL(store_->read(shm_data_buf_,
-                                    align_size_,
-                                    lower_align(shm_buf_->file_flush_pos_.file_offset_, align_size_),
-                                    read_size))) {
-        CLOG_LOG(ERROR,
-            "Fail to read data from log file, ",
-            K(ret),
-            K_(buf_write_pos),
-            K(shm_buf_->file_flush_pos_.file_offset_),
-            K(shm_buf_->log_dir_));
+      if (buf_write_pos_ > 0 &&
+          OB_FAIL(store_->read(aligned_data_buf_, align_size_, lower_align(offset, align_size_), read_size))) {
+        CLOG_LOG(ERROR, "Fail to read data from log file, ", K(ret), K(buf_write_pos_), K(offset));
       } else if (read_size != align_size_) {
-        CLOG_LOG(INFO, "Log file size is not aligned. ", K(read_size), K_(align_size), K(shm_buf_->file_flush_pos_));
+        CLOG_LOG(INFO, "Log file size is not aligned. ", K(read_size), K(align_size_));
       } else {
-        CLOG_LOG(
-            INFO, "Read data from log file to shared memory buffer, ", K(buf_write_pos_), K(shm_buf_->file_flush_pos_));
+        CLOG_LOG(INFO, "Read data from log file to shared memory buffer, ", K(buf_write_pos_), K(file_id), K(offset));
       }
     } else {
       reset_buf();
@@ -243,7 +141,8 @@ int ObCLogLocalFileWriter::load_file(uint32_t& file_id, uint32_t& offset, bool e
   if (OB_FAIL(ret)) {
     CLOG_LOG(WARN, "log writer start failed", K(ret), K(file_id), K(offset));
   } else {
-    file_offset_ = shm_buf_->file_flush_pos_.file_offset_;
+    file_id_ = file_id;
+    file_offset_ = offset;
     CLOG_LOG(INFO, "load success", K(file_id), K(offset));
   }
   return ret;
@@ -255,9 +154,10 @@ int ObCLogBaseFileWriter::append_trailer_entry(const uint32_t info_block_offset)
   ObLogFileTrailer trailer;
   int64_t pos = 0;
   const file_id_t phy_file_id = file_id_ + 1;
+
   // build trailer from last 512 byte offset (4096-512)
   int64_t trailer_pos = CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
-  char* buf = shm_data_buf_ + trailer_pos;
+  char* buf = aligned_data_buf_ + trailer_pos;
   reset_buf();
 
   if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
@@ -287,7 +187,8 @@ int ObCLogBaseFileWriter::flush_trailer_entry()
   } else if (CLOG_DIO_ALIGN_SIZE != buf_write_pos_) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "buf write position mismatch", K_(buf_write_pos), LITERAL_K(CLOG_DIO_ALIGN_SIZE));
-  } else if (OB_FAIL(store_->write(shm_data_buf_, buf_write_pos_, CLOG_TRAILER_ALIGN_WRITE_OFFSET))) {
+  } else if (OB_FAIL(store_->write(aligned_data_buf_, buf_write_pos_, CLOG_TRAILER_ALIGN_WRITE_OFFSET))) {
+    // no retry
     CLOG_LOG(ERROR,
         "write fail",
         K(ret),
@@ -303,11 +204,11 @@ int ObCLogBaseFileWriter::append_info_block_entry(ObIInfoBlockHandler* info_gett
 {
   int ret = OB_SUCCESS;
   ObLogBlockMetaV2 meta;
-  uint32_t block_meta_len = (uint32_t)meta.get_serialize_size();
-  int64_t buf_len = shm_buf_->buf_len_ - block_meta_len;
+  const uint32_t block_meta_len = (uint32_t)meta.get_serialize_size();
+  const int64_t buf_len = CLOG_MAX_WRITE_BUFFER_SIZE - block_meta_len;
   int64_t data_len = 0;
   int64_t pos = 0;
-  char* buf = shm_data_buf_ + block_meta_len;
+  char* buf = aligned_data_buf_ + block_meta_len;
 
   reset_buf();
 
@@ -316,7 +217,8 @@ int ObCLogBaseFileWriter::append_info_block_entry(ObIInfoBlockHandler* info_gett
     // build_info_block will reset flying info_block for next file
     CLOG_LOG(WARN, "read partition meta fail", K(ret), KP(buf), K(buf_len), K_(file_offset), K_(buf_padding_size));
 
-  } else if (OB_FAIL(meta.build_serialized_block(shm_data_buf_, block_meta_len, buf, data_len, OB_INFO_BLOCK, pos))) {
+  } else if (OB_FAIL(
+                 meta.build_serialized_block(aligned_data_buf_, block_meta_len, buf, data_len, OB_INFO_BLOCK, pos))) {
     CLOG_LOG(WARN, "build serialized block fail", K(ret), K_(file_offset), K_(buf_padding_size));
   } else {
     buf_write_pos_ += (block_meta_len + (uint32_t)data_len);
@@ -346,12 +248,6 @@ int ObCLogLocalFileWriter::create_next_file()
   } else {
     ++file_id_;
     file_offset_ = 0;
-    ObAtomicFilePos file_pos;
-    file_pos.file_id_ = file_id_;
-    file_pos.file_offset_ = file_offset_;
-
-    ATOMIC_STORE(&shm_buf_->file_write_pos_.atomic_, file_pos.atomic_);
-    ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, file_pos.atomic_);
 
     // fild_id is 32 bits. The first clog file_id is 1 and each clog file size is 64MB.
     // Suppose the maximum log write throughput is 1GB/s.
@@ -373,16 +269,16 @@ int ObCLogBaseFileWriter::append_padding_entry(const uint32_t padding_size)
   if (padding_size > 0) {
     int64_t serialize_pos = 0;
     ObPaddingEntry padding_entry;
-    char* buf = shm_data_buf_ + buf_write_pos_;
+    char* buf = aligned_data_buf_ + buf_write_pos_;
 
-    if (buf_write_pos_ + padding_size > shm_buf_->buf_len_) {
+    if (buf_write_pos_ + padding_size > CLOG_MAX_WRITE_BUFFER_SIZE) {
       ret = OB_BUF_NOT_ENOUGH;
       CLOG_LOG(WARN,
           "padding entry size over buf length",
           K(ret),
           K(padding_size),
           K_(buf_write_pos),
-          K(shm_buf_->buf_len_));
+          LITERAL_K(CLOG_MAX_WRITE_BUFFER_SIZE));
     } else if (OB_FAIL(padding_entry.set_entry_size(padding_size))) {
       CLOG_LOG(WARN, "padding entry set size error", K(ret), K(padding_size));
     } else if (OB_FAIL(padding_entry.serialize(buf, padding_size, serialize_pos))) {
@@ -425,18 +321,12 @@ int ObCLogBaseFileWriter::append_log_entry(const char* item_buf, const uint32_t 
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "file not start", K_(file_id), K(ret));
   } else {
-    // copy log to share memory buffer
-    lib::ObMutexGuard buf_guard(log_ctrl_->buf_mutex_);
-    memcpy(shm_data_buf_ + buf_write_pos_, item_buf, len);
+    // copy log to memory buffer
+    memcpy(aligned_data_buf_ + buf_write_pos_, item_buf, len);
     buf_write_pos_ += (uint32_t)len;
 
     if (OB_FAIL(align_buf())) {
       CLOG_LOG(ERROR, "fail to add padding, ", K(ret));
-    } else {
-      ObAtomicFilePos file_pos;
-      file_pos.file_id_ = file_id_;
-      file_pos.file_offset_ = file_offset_ + len;
-      ATOMIC_STORE(&shm_buf_->file_write_pos_.atomic_, file_pos.atomic_);
     }
   }
 
@@ -451,26 +341,12 @@ int ObCLogLocalFileWriter::flush(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "not inited", K(ret));
-  } else if (file_id_ != shm_buf_->file_flush_pos_.file_id_ ||
-             file_offset_ != shm_buf_->file_flush_pos_.file_offset_) {  // Defense code
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR,
-        "file position not match",
-        K(ret),
-        K_(file_id),
-        K_(file_offset),
-        K(shm_buf_->file_flush_pos_),
-        K(shm_buf_->file_write_pos_));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     flush_start_offset = file_offset_;
     if (OB_FAIL(flush_buf())) {
       CLOG_LOG(WARN, "Fail to flush clog to disk, ", K(ret));
     } else {
-      lib::ObMutexGuard buf_guard(log_ctrl_->buf_mutex_);
-      ATOMIC_STORE(&shm_buf_->file_flush_pos_.atomic_, shm_buf_->file_write_pos_.atomic_);
-      file_offset_ = shm_buf_->file_write_pos_.file_offset_;
+      file_offset_ = lower_align(file_offset_, align_size_) + buf_write_pos_ - buf_padding_size_;
       truncate_buf();
     }
   }
@@ -494,14 +370,13 @@ int ObCLogLocalFileWriter::align_buf()
 }
 
 ///            ObCLogLocalFileWriter             ///
-int ObCLogLocalFileWriter::init(
-    const char* log_dir, const char* shm_path, const uint32_t align_size, const ObILogFileStore* file_store)
+int ObCLogLocalFileWriter::init(const char* log_dir, const uint32_t align_size, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "already inited", K(ret));
-  } else if (OB_FAIL(ObCLogBaseFileWriter::init(log_dir, shm_path, align_size, file_store))) {
+  } else if (OB_FAIL(ObCLogBaseFileWriter::init(log_dir, align_size, file_store))) {
     CLOG_LOG(WARN, "ObCLogBaseFileWriter init fail", K(ret));
   } else if (NULL == (blank_buf_ = (char*)ob_malloc(OB_MAX_LOG_BUFFER_SIZE, ObModIds::OB_LOG_WRITER))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -675,7 +550,7 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
       CLOG_LOG(WARN, "fail to add info block", K(ret), K(info_getter));
     } else if (OB_FAIL(flush_buf())) {
       CLOG_LOG(WARN, "fail to flush info block", K(ret));
-    } else if (OB_FAIL(cache_buf(log_cache, shm_data_buf_, buf_write_pos_))) {
+    } else if (OB_FAIL(cache_buf(log_cache, aligned_data_buf_, buf_write_pos_))) {
       CLOG_LOG(WARN, "fail to cache info block", K(ret));
     }
   }
@@ -689,14 +564,14 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
 
   // - Flush trailer entry to log file
   // - Cache trailer entry to log cache
-  char* trailer_buf = shm_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
+  char* trailer_buf = aligned_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append_trailer_entry(info_block_offset))) {
       CLOG_LOG(WARN, "fail to add trailer", K(ret));
     } else if (OB_FAIL(flush_trailer_entry())) {
       CLOG_LOG(WARN, "fail to flush trailer", K(ret));
     } else if (OB_FAIL(cache_buf(log_cache, trailer_buf, CLOG_TRAILER_SIZE))) {
-      CLOG_LOG(WARN, "fail to cache trailer", K(ret), KP(trailer_buf), LITERAL_K(CLOG_TRAILER_SIZE));
+      CLOG_LOG(WARN, "fail to cache trailer", K(ret));
     } else if (CLOG_FILE_SIZE != file_offset_) {  // Defense code
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "file_offset_ mismatch file size", K(ret), K_(file_offset));
@@ -730,7 +605,7 @@ int ObCLogLocalFileWriter::cache_last_padding_entry(ObLogCache* log_cache)
     padding_size = ObPaddingEntry::get_padding_size(file_offset_, align_size_);
     if (OB_FAIL(append_padding_entry(padding_size))) {
       CLOG_LOG(WARN, "inner add padding entry error", K(ret), K(padding_size));
-    } else if (OB_FAIL(cache_buf(log_cache, shm_data_buf_, buf_write_pos_))) {
+    } else if (OB_FAIL(cache_buf(log_cache, aligned_data_buf_, buf_write_pos_))) {
       CLOG_LOG(WARN, "fail to cache last padding", K(ret));
     }
   }
@@ -740,16 +615,6 @@ int ObCLogLocalFileWriter::cache_last_padding_entry(ObLogCache* log_cache)
     if (need_align() && 0 != (file_offset_ % align_size_)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "file offset not align", K(ret), K_(file_offset), K_(align_size));
-    } else if (file_offset_ < shm_buf_->file_flush_pos_.file_offset_ ||
-               file_id_ != shm_buf_->file_flush_pos_.file_id_ ||
-               shm_buf_->file_flush_pos_ != shm_buf_->file_write_pos_) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN,
-          "file position mismatch",
-          K(ret),
-          K_(file_offset),
-          K(shm_buf_->file_flush_pos_),
-          K(shm_buf_->file_write_pos_));
     }
   }
 
@@ -797,7 +662,7 @@ void ObCLogLocalFileWriter::truncate_buf()
     tail_part_start = (uint32_t)lower_align(buf_write_pos_ - buf_padding_size_, align_size_);
     buf_write_pos_ = (buf_write_pos_ - buf_padding_size_) % align_size_;
     if (buf_write_pos_ > 0) {
-      memmove(shm_data_buf_, shm_data_buf_ + tail_part_start, buf_write_pos_);
+      memmove(aligned_data_buf_, aligned_data_buf_ + tail_part_start, buf_write_pos_);
     }
   }
 }
@@ -817,7 +682,7 @@ int ObCLogLocalFileWriter::flush_buf()
       // buf has been pad and include last flush time remaining unaligned part
       file_write_pos = (uint32_t)lower_align(file_offset_, align_size_);
     }
-    if (OB_FAIL(store_->write(shm_data_buf_, buf_write_pos_, file_write_pos))) {
+    if (OB_FAIL(store_->write(aligned_data_buf_, buf_write_pos_, file_write_pos))) {
       CLOG_LOG(ERROR, "write fail", K(ret), K(buf_write_pos_), K(file_write_pos), K(errno));
     }
     timer.finish_timer(__FILE__, __LINE__, CLOG_PERF_WARN_THRESHOLD);

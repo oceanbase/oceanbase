@@ -269,7 +269,7 @@ bool ObConfigMemoryLimitChecker::check(const ObConfigItem& t) const
   bool is_valid = false;
   int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
   if (is_valid) {
-    is_valid = value >= lib::ObRunningModeConfig::instance().MINI_MEM_LOWER;
+    is_valid = 0 == value || value >= lib::ObRunningModeConfig::instance().MINI_MEM_LOWER;
   }
   return is_valid;
 }
@@ -298,6 +298,17 @@ bool ObConfigPartitionBalanceStrategyFuncChecker::check(const ObConfigItem& t) c
     if (0 == ObString::make_string(balance_strategy[i]).case_compare(t.str())) {
       is_valid = true;
     }
+  }
+  return is_valid;
+}
+
+bool ObDataStorageErrorToleranceTimeChecker::check(const ObConfigItem& t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigTimeParser::get(t.str(), is_valid);
+  if (is_valid) {
+    const int64_t warning_value = GCONF.data_storage_warning_tolerance_time;
+    is_valid = value >= warning_value;
   }
   return is_valid;
 }
@@ -452,6 +463,51 @@ bool ObConfigUseLargePagesChecker::check(const ObConfigItem& t) const
     }
   }
   return is_valid;
+}
+
+bool ObConfigBoolParser::get(const char* str, bool& valid)
+{
+  bool value = true;
+  valid = false;
+
+  if (OB_ISNULL(str)) {
+    valid = false;
+    OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
+  } else if (0 == STRCASECMP(str, "false")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "true")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "off")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "on")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "no")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "yes")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "f")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "t")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "1")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "0")) {
+    valid = true;
+    value = false;
+  } else {
+    OB_LOG(ERROR, "Get bool config item fail", K(str));
+    valid = false;
+  }
+  return value;
 }
 
 }  // namespace common

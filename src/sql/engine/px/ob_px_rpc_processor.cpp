@@ -75,6 +75,22 @@ int ObInitSqcP::process()
   } else {
     /*do nothing*/
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(sqc_handler)) {
+    if (unregister_interrupt_) {
+      ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
+      UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
+      unregister_interrupt_ = false;
+    }
+    ObPxSqcHandler::release_handler(sqc_handler);
+    arg_.sqc_handler_ = nullptr;
+  }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
+  // 非rpc框架的错误内容设置到response消息中
+  // rpc框架的错误码在process中返回OB_SUCCESS
   result_.rc_ = ret;
   // return value by result_.rc_
   return OB_SUCCESS;
@@ -137,16 +153,20 @@ int ObInitSqcP::after_process()
     ret = startup_normal_sqc(*sqc_handler);
   }
 
-  /**
-   * clear interrupt
-   */
-  if (unregister_interrupt_) {
-    ObPxRpcInitSqcArgs& arg = sqc_handler->get_sqc_init_arg();
-    UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
+  if (!no_need_startup_normal_sqc) {
+    if (unregister_interrupt_) {
+      if (OB_ISNULL(sqc_handler = arg_.sqc_handler_)
+          || !sqc_handler->valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid sqc handler", K(ret), KPC(sqc_handler));
+      } else {
+        ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
+        UNSET_INTERRUPTABLE(arg.sqc_.get_interrupt_id().px_interrupt_id_);
+      }
+    }
+    ObPxSqcHandler::release_handler(sqc_handler);
+    arg_.sqc_handler_ = nullptr;
   }
-
-  ObPxSqcHandler::release_handler(sqc_handler);
-  arg_.sqc_handler_ = nullptr;
 
   return ret;
 }
@@ -167,8 +187,8 @@ int ObInitTaskP::after_process()
   return OB_NOT_SUPPORTED;
 }
 
-void ObFastInitSqcReportQCMessageCall::operator()(
-    hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry)
+void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterruptibleTaskID,
+      ObInterruptCheckerNode *> &entry)
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
@@ -233,6 +253,12 @@ int ObInitFastSqcP::process()
       LOG_WARN("fail to startup normal sqc", K(ret));
     }
   }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
+
   if (OB_NOT_NULL(sqc_handler)) {
     sqc_handler->set_end_ret(ret);
     if (sqc_handler->has_flag(OB_SQC_HANDLER_QC_SQC_LINKED)) {
@@ -299,7 +325,7 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
   int ret = OB_SUCCESS;
   ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_);
   call.ret_ = OB_TIMEOUT;
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
     if (OB_FAIL(manager->get_map().atomic_refactored(interrupt_id_, call))) {
       LOG_WARN("fail to deal with rpc timeout call", K(interrupt_id_));
@@ -330,7 +356,9 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
 {
   if (OB_TIMEOUT == ret_) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
-    if (timeout_ts_ - cur_timestamp > 0) {
+    // 由于存在时间精度不一致导致的时间差, 这里需要满足大于100ms才认为不是超时.
+    // 一个容错的处理.
+    if (timeout_ts_ - cur_timestamp > 100 * 1000) {
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
                 "change error code to OB_CONNECT_ERROR",
           K(ret_),

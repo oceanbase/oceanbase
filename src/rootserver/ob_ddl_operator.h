@@ -349,7 +349,8 @@ public:
 
   virtual int drop_table(const share::schema::ObTableSchema& table_schema, common::ObMySQLTransaction& trans,
       const common::ObString* ddl_stmt_str = NULL, const bool is_truncate_table = false,
-      share::schema::DropTableIdHashSet* drop_table_set = NULL, const bool is_drop_db = false);
+      share::schema::DropTableIdHashSet* drop_table_set = NULL, const bool is_drop_db = false,
+      bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
   virtual int drop_table_for_not_dropped_schema(const share::schema::ObTableSchema& table_schema,
       common::ObMySQLTransaction& trans, const common::ObString* ddl_stmt_str = NULL,
       const bool is_truncate_table = false, share::schema::DropTableIdHashSet* drop_table_set = NULL,
@@ -409,6 +410,8 @@ public:
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
   virtual int set_passwd(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& passwd,
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
+  virtual int set_max_connections(const uint64_t tenant_id, const uint64_t user_id, const uint64_t max_connections_per_hour,
+      const uint64_t max_user_connections, const common::ObString *ddl_stmt_str, common::ObMySQLTransaction &trans);
   virtual int alter_user_require(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObSetPasswdArg& arg,
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
   virtual int grant_revoke_user(const uint64_t tenant_id, const uint64_t user_id, const ObPrivSet priv_set,

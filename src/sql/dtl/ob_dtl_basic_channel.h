@@ -343,7 +343,7 @@ public:
   explicit ObDtlBasicChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlBasicChannel();
 
-  virtual DtlChannelType get_channel_type()
+  virtual DtlChannelType get_channel_type() override
   {
     return DtlChannelType::BASIC_CHANNEL;
   }
@@ -368,7 +368,7 @@ public:
   virtual int send(
       const ObDtlMsg& msg, int64_t timeout_ts, ObEvalCtx* eval_ctx = nullptr, bool is_eof = false) override;
   virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int attach(ObDtlLinkedBuffer*& linked_buffer, bool is_first_buffer_cached = false);
+  virtual int attach(ObDtlLinkedBuffer*& linked_buffer, bool is_first_buffer_cached = false) override;
   // don't call send&flush in different threads.
   virtual int flush(bool wait = true, bool wait_response = true) override;
 
@@ -397,8 +397,8 @@ public:
   int unblock_on_decrease_size(int64_t size);
   bool belong_to_receive_data();
   bool belong_to_transmit_data();
-  virtual int clear_response_block();
-  virtual int wait_response();
+  virtual int clear_response_block() override;
+  virtual int wait_response() override;
   void inc_send_buffer_cnt()
   {
     ++send_buffer_cnt_;
@@ -425,12 +425,12 @@ public:
   }
 
   int get_processed_buffer(int64_t timeout);
-  virtual int clean_recv_list();
+  virtual int clean_recv_list() override;
   void clean_broadcast_buffer();
   bool has_less_buffer_cnt();
   int push_back_send_list(ObDtlLinkedBuffer* buffer);
 
-  void set_dfc_idx(int64_t idx)
+  void set_dfc_idx(int64_t idx) override
   {
     dfc_idx_ = idx;
   }
@@ -461,7 +461,7 @@ protected:
     return &msg_response_;
   }
 
-  OB_INLINE virtual bool has_msg()
+  OB_INLINE virtual bool has_msg() override
   {
     return recv_buffer_cnt_ > processed_buffer_cnt_;
   }

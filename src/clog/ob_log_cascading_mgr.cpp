@@ -219,15 +219,6 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
         K(new_parent),
         K(cur_parent),
         K(leader));
-  } else if (STANDBY_LEADER == state_mgr_->get_role() && GCTX.is_sync_level_on_standby() && primary_leader.is_valid() &&
-             new_parent_addr != primary_leader) {
-    // in max protection mode, the parent of standby leader must be primary leader
-    CLOG_LOG(WARN,
-        "standby_leader is in max_protection mode, but new_parent is not primary_leader",
-        K_(partition_key),
-        K(new_parent),
-        K(cur_parent),
-        K(primary_leader));
   } else if (self_ == new_parent_addr) {
     // ignore self
   } else if (cur_parent == new_parent) {
@@ -238,11 +229,21 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
   } else {
     state_mgr_->reset_need_rebuild();
     state_mgr_->reset_fetch_state();
-    prev_parent_ = parent_;
+    if (parent_.is_valid()) {
+      // update prev_parent by valid old parent
+      prev_parent_ = parent_;
+    }
     parent_ = new_parent;
     if (partition_reach_time_interval(60 * 1000 * 1000, update_parent_warn_time_)) {
-      CLOG_LOG(
-          INFO, "update parent", K_(partition_key), K(cur_parent), K(new_parent), K(prev_parent_), K_(children_list));
+      CLOG_LOG(INFO,
+          "update parent",
+          K_(partition_key),
+          K(cur_parent),
+          K(new_parent),
+          K(prev_parent_),
+          K_(children_list),
+          K(leader),
+          K(primary_leader));
     }
   }
   if (parent_.get_server().is_valid()) {
@@ -376,7 +377,8 @@ int ObLogCascadingMgr::reject_server(
   return ret;
 }
 
-int ObLogCascadingMgr::process_reject_msg(const common::ObAddr& server, const int32_t msg_type)
+int ObLogCascadingMgr::process_reject_msg(
+    const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -390,7 +392,7 @@ int ObLogCascadingMgr::process_reject_msg(const common::ObAddr& server, const in
       if (server == parent_.get_server()) {
         if (state_mgr_->is_cluster_allow_vote() && ObReplicaTypeCheck::is_paxos_replica_V2(mm_->get_replica_type()) &&
             server == state_mgr_->get_leader()) {
-          // paxos replica that colocates with strong leader won't reset parent,
+          // paxos replica that colocated with strong leader won't reset parent,
           // because maybe leader is not elected yet
           if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
             CLOG_LOG(WARN,
@@ -434,6 +436,14 @@ int ObLogCascadingMgr::process_reject_msg(const common::ObAddr& server, const in
             K(server),
             "leader",
             state_mgr_->get_leader());
+      }
+    } else if (OB_REPLICA_MSG_TYPE_QUICK_REGISTER == msg_type) {
+      ObRegion self_region = DEFAULT_REGION_NAME;
+      if (OB_FAIL(get_server_region_(self_, self_region))) {
+        CLOG_LOG(WARN, "get_server_region_ failed", K_(partition_key), K(ret));
+      } else if (OB_FAIL(fetch_register_server(server, cluster_id, self_region, state_mgr_->get_idc(), true, false))) {
+        CLOG_LOG(WARN, "fetch_register_server failed", K(ret), K(partition_key_));
+      } else {
       }
     } else {
       // do nothing
@@ -561,15 +571,19 @@ int ObLogCascadingMgr::primary_process_protect_mode_switch()
     if (old_sync_child.is_valid() && OB_FAIL(try_add_child_unlock_(old_sync_child))) {
       CLOG_LOG(WARN, "try_add_child_unlock_ failed", K_(partition_key), K(ret), K(old_sync_child));
     }
+    // reset sync_standby_child_
     sync_standby_child_.reset();
   } else if (GCTX.need_sync_to_standby()) {
     // changed to sync mode(max protection/max availability), try to update sync child
     int64_t sync_cluster_id = OB_INVALID_CLUSTER_ID;
     ObAddr dst_standby_child;
-    if (OB_FAIL(get_sync_standby_cluster_id(sync_cluster_id)) || OB_INVALID_CLUSTER_ID == sync_cluster_id) {
+    if (OB_FAIL(get_sync_standby_cluster_id(sync_cluster_id))) {
       CLOG_LOG(WARN, "get_sync_standby_cluster_id failed", K_(partition_key), K(ret));
+    } else if (OB_INVALID_CLUSTER_ID == sync_cluster_id) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "sync_cluster_id returned by GCTX is invalid", K_(partition_key), K(sync_cluster_id), K(ret));
     } else if (has_async_standby_child_(sync_cluster_id, dst_standby_child)) {
-      // if it is aysnc child, change it to sync child
+      // if it is async child, change it to sync child
       if (OB_FAIL(async_standby_children_.remove_server(dst_standby_child))) {
         CLOG_LOG(WARN, "async_standby_children_ remove server failed", K_(partition_key), K(ret), K(dst_standby_child));
       } else {
@@ -579,7 +593,9 @@ int ObLogCascadingMgr::primary_process_protect_mode_switch()
         CLOG_LOG(INFO, "update sync_standby_child_ success", K_(partition_key), K_(sync_standby_child));
       }
     } else {
-      // need get sync stadnby_leader from location cache, it may returns -4023, just ignore
+      // reset sync_standby_child_
+      sync_standby_child_.reset();
+      // need get sync standby_leader from location cache, it may returns -4023, just ignore
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = leader_try_update_sync_standby_child_unlock_(true))) {
         CLOG_LOG(WARN, "leader_try_update_sync_standby_child_unlock_ failed", K_(partition_key), K(tmp_ret));
@@ -610,13 +626,13 @@ int ObLogCascadingMgr::leader_try_update_sync_standby_child_unlock_(const bool n
     CLOG_LOG(WARN, "self is not leader", K_(partition_key), K(ret));
   } else if (!GCTX.need_sync_to_standby() ||
              ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id())) {
-    // not sync mode or private talbe, skip
+    // not sync mode or private table, skip
   } else {
     int64_t sync_cluster_id = OB_INVALID_CLUSTER_ID;
     if (OB_FAIL(get_sync_standby_cluster_id(sync_cluster_id)) || OB_INVALID_CLUSTER_ID == sync_cluster_id) {
       CLOG_LOG(WARN, "get_sync_standby_cluster_id failed", K_(partition_key), K(ret));
     } else {
-      // retrieve sync standby_leader from lcoation cache with renew
+      // retrieve sync standby_leader from location cache with renew
       bool need_renew = need_renew_loc;
       const int64_t now = ObTimeUtility::current_time();
       if (need_renew && (OB_INVALID_TIMESTAMP == last_renew_standby_loc_time_ ||
@@ -734,13 +750,13 @@ int ObLogCascadingMgr::process_fetch_reg_server_req(const common::ObAddr& server
     int64_t assigned_parent_cluster_id = self_cluster_id;
 
     // rules that assigning parent for non-paxos replicas:
-    // if self is a follwer, try to become its parent Preferentially
+    // if self is a follower, try to become its parent Preferentially
     // if self is leader, try to allocate candidates from children
     // 0. is_need_force_register = true, leader need force add it to children
     if (LEADER == state_mgr_->get_role() || STANDBY_LEADER == state_mgr_->get_role()) {
       if (cluster_id == self_cluster_id && ObReplicaTypeCheck::is_paxos_replica_V2(replica_type) &&
           !mm_->get_curr_member_list().contains(server)) {
-        // for rpelica that not in same cluster with leader, no need assing parent
+        // for replica that not in same cluster with leader, no need assing parent
         is_need_assign_parent = false;
         is_need_response = false;
       } else if (mm_->get_curr_member_list().contains(server)) {
@@ -819,7 +835,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_req(const common::ObAddr& server
         assigned_parent_cluster_id = self_cluster_id;
       }
     } else {
-      // 1. self is follwer, if own children list is not full, it will become its parent directly.
+      // 1. self is follower, if own children list is not full, it will become its parent directly.
       if (is_request_leader) {
         // If the requester thinks I am the leader, I will not respond
         ret = OB_NOT_MASTER;
@@ -923,7 +939,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_req(const common::ObAddr& server
   return ret;
 }
 
-/* assgin parent response */
+/* assign parent response */
 int ObLogCascadingMgr::process_fetch_reg_server_resp(const common::ObAddr& sender, const bool is_assign_parent_succeed,
     const ObCascadMemberList& candidate_list, const int32_t msg_type, const common::ObRegion& self_region)
 {
@@ -943,7 +959,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_resp(const common::ObAddr& sende
     // sender is not last_request_candidate_
     CLOG_LOG(WARN, "sender is not last_request_candidate_", K_(partition_key), K(sender), K(last_request_candidate_));
   } else if (is_assign_parent_succeed) {
-    // assign parent succeussfully
+    // assign parent successfully
     ObCascadMember new_parent;
     if (OB_FAIL(candidate_list.get_member_by_index(0, new_parent))) {
       CLOG_LOG(WARN, "candidate_list.get_server_by_index failed", K_(partition_key), K(ret), K(candidate_list));
@@ -969,7 +985,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_resp(const common::ObAddr& sende
           CLOG_LOG(WARN, "request_replace_sick_child failed", K(ret), K_(partition_key), K(its_parent), K(sender));
         } else {
           if (REACH_TIME_INTERVAL(1000 * 1000)) {
-            CLOG_LOG(INFO, "detect sick candidate, try to replcace it", K_(partition_key), K(its_parent), K(sender));
+            CLOG_LOG(INFO, "detect sick candidate, try to replace it", K_(partition_key), K(its_parent), K(sender));
           }
           last_request_candidate_ = its_parent.get_server();
           need_request_next_level = false;
@@ -1388,7 +1404,7 @@ int ObLogCascadingMgr::try_request_next_candidate_(const common::ObRegion& self_
   } else if (candidate_server_list_.get_member_number() <= 0) {
     // candidate_list is already empty
     if (last_request_candidate_.is_valid()) {
-      // after request all candidates, but still failed, it need request leader to force becaming its child.
+      // after request all candidates, but still failed, it need request leader to force becoming its child.
       ObCascadMember cascad_leader;
       (void)state_mgr_->get_cascad_leader(cascad_leader);
 
@@ -1473,7 +1489,7 @@ int ObLogCascadingMgr::fetch_register_server(const common::ObAddr& dst_server, c
     ret = OB_STATE_NOT_MATCH;
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       CLOG_LOG(WARN,
-          "non-private table in disabled state, cannot fetch_regitster_server from diff cluster server",
+          "non-private table in disabled state, cannot fetch_register_server from diff cluster server",
           K(ret),
           K_(partition_key));
     }
@@ -1604,7 +1620,7 @@ int ObLogCascadingMgr::check_parent_state(const int64_t now, const common::ObReg
                 }
               }
             } else {
-              // request next cadidate succeed, update check time
+              // request next candidate succeed, update check time
               last_check_parent_time_ = now;
             }
           }
@@ -1633,12 +1649,6 @@ int ObLogCascadingMgr::check_parent_state(const int64_t now, const common::ObReg
                   K(next_ilog_id),
                   K(sw_start_id),
                   K_(partition_key));
-            }
-            last_check_log_ts_ = next_replay_log_ts;
-            last_check_parent_time_ = now;
-          } else if (state_mgr_->is_need_rebuild()) {
-            if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-              CLOG_LOG(INFO, "wait rebuild", K_(partition_key));
             }
             last_check_log_ts_ = next_replay_log_ts;
             last_check_parent_time_ = now;

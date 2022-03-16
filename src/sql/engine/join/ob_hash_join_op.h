@@ -310,8 +310,8 @@ private:
       part_shift_ = part_shift;
       level_one_part_count_ = level1_part_count;
       level_two_part_count_ = level2_part_count;
-      level1_bit_ = __builtin_ctz(level1_part_count);
-      level2_bit_ = __builtin_ctz(level2_part_count);
+      level1_bit_ = (0 == level1_part_count) ? 0 : __builtin_ctz(level1_part_count);
+      level2_bit_ = (0 == level2_part_count) ? 0 : __builtin_ctz(level2_part_count);
     }
     bool is_valid()
     {
@@ -421,7 +421,7 @@ private:
   int next();
   int join_end_operate();
   int join_end_func_end();
-  int get_next_left_row();
+  int get_next_left_row() override;
   int reuse_for_next_chunk();
   int load_next_chunk();
   int build_hash_table_for_nest_loop(int64_t& num_left_rows);
@@ -448,7 +448,7 @@ private:
   int split_partition_and_build_hash_table(int64_t& num_left_rows);
   int recursive_process(bool& need_not_read_right);
   int adaptive_process(bool& need_not_read_right);
-  int get_next_right_row();
+  int get_next_right_row() override;
   int read_right_operate();
   int calc_hash_value(const ObIArray<ObExpr*>& join_keys, const ObIArray<ObHashFunc>& hash_funcs, uint64_t& hash_value);
   int calc_right_hash_value();
@@ -667,7 +667,7 @@ private:
   PartHashJoinTable hash_table_;
   HashTableCell* cur_tuple_;       // null or last matched tuple
   common::ObNewRow cur_left_row_;  // like cur_row_ in operator, get row from rowstore
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator* alloc_;  // for buckets
   ModulePageAllocator* bloom_filter_alloc_;
   ObGbyBloomFilter* bloom_filter_;
@@ -724,7 +724,7 @@ inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_ARENA_HASH_JOIN, common::ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));

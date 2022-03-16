@@ -164,7 +164,10 @@ private:
   int handle_log_not_exist(
       const common::ObPartitionKey& pkey, const uint64_t next_log_id, obrpc::ObLogStreamFetchLogResp& resp);
   int after_partition_fetch_log(ObStreamItem& stream_item, const uint64_t beyond_upper_log_id,
-      const int64_t beyond_upper_log_ts, const int64_t fetched_log_count, obrpc::ObLogStreamFetchLogResp& resp);
+      const int64_t beyond_upper_log_ts, const int64_t fetched_log_count, obrpc::ObLogStreamFetchLogResp& resp,
+      const clog::ObLogCursorExt* cursor_ext, clog::ObReadCost& read_cost);
+  int get_aggre_log_min_timestamp(const common::ObPartitionKey& pkey, const clog::ObLogCursorExt& cursor_ext,
+      int64_t& first_log_ts, clog::ObReadCost& read_cost);
   int prefill_resp_with_clog_entry(const clog::ObLogCursorExt& cursor_ext, const common::ObPartitionKey& pkey,
       const int64_t end_tstamp, clog::ObReadCost& read_cost, obrpc::ObLogStreamFetchLogResp& resp,
       bool& fetch_log_from_hot_cache, int64_t& log_entry_size);

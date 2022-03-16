@@ -17,17 +17,19 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
-int ObConfirmedInfo::init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum)
+int ObConfirmedInfo::init(
+    const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum, const int64_t submit_timestamp)
 {
   int ret = OB_SUCCESS;
   data_checksum_ = data_checksum;
   epoch_id_ = epoch_id;
   accum_checksum_ = accum_checksum;
+  submit_timestamp_ = submit_timestamp;
   return ret;
 }
 
 // used for RPC
-OB_SERIALIZE_MEMBER(ObConfirmedInfo, data_checksum_, epoch_id_, accum_checksum_);
+OB_SERIALIZE_MEMBER(ObConfirmedInfo, data_checksum_, epoch_id_, accum_checksum_, submit_timestamp_);
 
 ObMembershipLog::ObMembershipLog()
     : version_(MS_LOG_VERSION),
@@ -115,7 +117,7 @@ int64_t ObMembershipLog::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   databuff_printf(buf, buf_len, pos, "replica_num:%ld,", replica_num_);
-  databuff_printf(buf, buf_len, pos, "timetamp:%ld,", timestamp_);
+  databuff_printf(buf, buf_len, pos, "timestamp:%ld,", timestamp_);
   databuff_printf(buf, buf_len, pos, "member_list:%s,", to_cstring(&member_list_));
   databuff_printf(buf, buf_len, pos, "prev_member_list:%s,", to_cstring(&prev_member_list_));
   databuff_printf(buf, buf_len, pos, "type:%ld", type_);
@@ -233,7 +235,7 @@ int64_t ObRenewMembershipLog::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   databuff_printf(buf, buf_len, pos, "replica_num:%ld,", replica_num_);
-  databuff_printf(buf, buf_len, pos, "timetamp:%ld,", timestamp_);
+  databuff_printf(buf, buf_len, pos, "timestamp:%ld,", timestamp_);
   databuff_printf(buf, buf_len, pos, "member_list:%s,", to_cstring(&member_list_));
   databuff_printf(buf, buf_len, pos, "prev_member_list:%s,", to_cstring(&prev_member_list_));
   databuff_printf(buf, buf_len, pos, "type:%ld", type_);

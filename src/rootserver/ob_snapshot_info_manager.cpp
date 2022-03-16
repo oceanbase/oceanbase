@@ -118,8 +118,8 @@ int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy& proxy, const int64
   return ret;
 }
 
-int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id,
-    share::ObSnapShotType snapshot_type, const int64_t snapshot_ts, share::ObSnapshotInfo& snapshot_info)
+int ObSnapshotInfoManager::get_snapshot(common::ObISQLClient &proxy, const int64_t tenant_id,
+    share::ObSnapShotType snapshot_type, const int64_t snapshot_ts, share::ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;

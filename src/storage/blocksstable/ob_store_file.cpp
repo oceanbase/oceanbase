@@ -11,20 +11,18 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include <linux/falloc.h>
 #include "ob_store_file.h"
 #include "lib/file/file_directory_utils.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_force_print_log.h"
 #include "storage/ob_partition_service.h"
 #include "storage/ob_partition_meta_block_reader.h"
-#include "storage/ob_table_mgr_meta_block_reader.h"
 #include "storage/ob_tenant_config_mgr.h"
 #include "storage/ob_tenant_config_meta_block_reader.h"
 #include "storage/ob_server_checkpoint_log_reader.h"
-#include "storage/ob_server_checkpoint_log_reader_v1.h"
 #include "storage/ob_server_checkpoint_writer.h"
 #include "storage/ob_data_macro_id_iterator.h"
-#include "ob_macro_meta_block_reader.h"
 #include "ob_storage_cache_suite.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/compaction/ob_micro_block_iterator.h"
@@ -410,7 +408,9 @@ ObStoreFile::ObStoreFile()
       store_file_system_(NULL),
       is_mark_sweep_enabled_(false),
       is_doing_mark_sweep_(false),
-      cond_()
+      cond_(),
+      is_fs_support_punch_hole_(true),
+      block_file_fd_(OB_INVALID_FD)
 {
   MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
 }
@@ -430,6 +430,7 @@ int ObStoreFile::init(const ObStorageEnv& storage_env, ObStoreFileSystem* store_
 {
   int ret = OB_SUCCESS;
   ObLogCursor replay_start_cursor;
+  ObLocalFileSystem *local_fs = nullptr;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -446,8 +447,16 @@ int ObStoreFile::init(const ObStorageEnv& storage_env, ObStoreFileSystem* store_
     STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret), K_(print_buffer_size));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
     STORAGE_LOG(WARN, "fail to init thread cond", K(ret));
+  } else if (FALSE_IT(local_fs = dynamic_cast<ObLocalFileSystem*>(store_file_system))) {
   } else {
     store_file_system_ = store_file_system;
+
+    if (nullptr != local_fs) {
+      block_file_fd_ = local_fs->get_block_file_fd();
+      is_fs_support_punch_hole_ = true;
+    } else {
+      is_fs_support_punch_hole_ = false;
+    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(alloc_memory(store_file_system_->get_total_macro_block_count(),
@@ -486,9 +495,6 @@ int ObStoreFile::open(const bool is_physical_flashback)
   } else if (OB_UNLIKELY(is_opened_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "The ObStoreFile has been started, ", K(ret));
-  } else if (OB_FAIL(
-                 ObMacroBlockMetaMgr::get_instance().init(store_file_system_->get_total_macro_block_count() + 16))) {
-    STORAGE_LOG(WARN, "Fail to init ObMacroBlockMetaMgr, ", K(ret));
   } else if (OB_FAIL(read_checkpoint_and_replay_log(is_replay_old))) {
     STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));
   } else {
@@ -550,7 +556,6 @@ void ObStoreFile::destroy()
   TG_STOP(lib::TGDefIDs::StoreFileGC);
   TG_WAIT(lib::TGDefIDs::StoreFileGC);
   SLOGGER.destroy();
-  ObMacroBlockMetaMgr::get_instance().destroy();
 
   lib::ObMutexGuard bad_block_guard(bad_block_lock_);
   bad_block_infos_.reset();
@@ -580,6 +585,8 @@ void ObStoreFile::destroy()
   is_mark_sweep_enabled_ = false;
   is_doing_mark_sweep_ = false;
   cond_.destroy();
+  is_fs_support_punch_hole_ = true;
+  block_file_fd_ = OB_INVALID_FD;
 }
 
 void ObStoreFile::stop()
@@ -1021,6 +1028,30 @@ void ObStoreFile::free_block(const uint32_t block_idx, bool& is_freed)
     free_block_array_[free_block_push_pos_] = block_idx;
     free_block_push_pos_ = (free_block_push_pos_ + 1) % store_file_system_->get_total_macro_block_count();
     ++free_block_cnt_;
+
+    // FALLOC_FL_PUNCH_HOLE is only supported after glibc-2.17
+    // https://bugzilla.redhat.com/show_bug.cgi?id=1476120
+# if __linux && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 17))
+    if (is_fs_support_punch_hole_ && GCONF._enable_block_file_punch_hole) {
+      const int64_t len = store_file_system_->get_macro_block_size();
+      const int64_t offset = store_file_system_->get_macro_block_size() * block_idx;
+      const int sys_ret = ::fallocate(block_file_fd_, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset, len);
+      if (sys_ret < 0) {
+        const int sys_err = errno;
+        if (EOPNOTSUPP == sys_err) {
+          // The file system containing the file referred to by fd does
+          // not support this operation; or the mode is not supported
+          // by the file system containing the file referred to by fd.
+          is_fs_support_punch_hole_ = false;
+          SHARE_LOG(WARN, "Punch hole not support", K(block_idx), K(offset), K(len), K(sys_ret), K(sys_err), KERRMSG);
+        } else {
+          SHARE_LOG(ERROR, "Punch hole fail", K(block_idx), K(offset), K(len), K(sys_ret), K(sys_err), KERRMSG);
+        }
+      } else {
+        SHARE_LOG(INFO, "Punch hole success", K(block_idx), K(offset), K(len));
+      }
+    }
+#endif
   }
 }
 
@@ -1183,19 +1214,7 @@ int ObStoreFile::read_checkpoint_and_replay_log(bool& is_replay_old)
   if (OB_FAIL(store_file_system_->get_super_block_version(super_block_version))) {
     LOG_WARN("fail to get super block version", K(ret));
   } else {
-    if (OB_SUPER_BLOCK_V2 == super_block_version) {
-      ObServerCheckpointLogReaderV1 reader;
-      ObSuperBlockV2 old_super_block;
-      ObLogCursor cur_cursor;
-      if (OB_FAIL(store_file_system_->read_old_super_block(old_super_block))) {
-        LOG_WARN("fail to read old super block", K(ret));
-      } else if (OB_FAIL(
-                     reader.read_checkpoint_and_replay_log(old_super_block, meta_block_ids_[cur_meta_array_pos_]))) {
-        STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));
-      } else {
-        is_replay_old = true;
-      }
-    } else if (OB_SUPER_BLOCK_V3 == super_block_version) {
+    if (OB_SUPER_BLOCK_V3 == super_block_version) {
       ObServerCheckpointLogReader reader;
       if (OB_FAIL(reader.read_checkpoint_and_replay_log())) {
         STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));
@@ -1327,6 +1346,30 @@ int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new
     }
   }
   enable_mark_sweep();
+  return ret;
+}
+
+int ObStoreFile::validate_datafile_size(const char* config_data_file_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("The OB store file instance is not exist", K(ret));
+  } else {
+    bool valid = false;
+    int64_t new_data_file_size = ObConfigCapacityParser::get(config_data_file_size, valid);
+    if(!valid){
+      ret = OB_ERR_PARSE_SQL;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be parsed");
+    } else {
+      const int64_t original_file_size = store_file_system_->get_total_data_size();
+      if (new_data_file_size < original_file_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("datafile_size is smaller than the original configuration", K(ret));
+        LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be smaller than the original configuration");
+      }
+    }  
+  }
   return ret;
 }
 

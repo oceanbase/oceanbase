@@ -274,7 +274,7 @@ public:
 
 public:
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -289,7 +289,7 @@ public:
   int on_check_pg_recovery_finished(const common::ObAddr& server, const int ret_code);
   int update_file_recovery_status(const common::ObAddr& server, const common::ObAddr& dest_server,
       const uint64_t tenant_id, const int64_t file_id, FileRecoveryStatus pre_status, FileRecoveryStatus cur_status);
-  void stop();
+  void stop() override;
 
 private:
   // Machine const

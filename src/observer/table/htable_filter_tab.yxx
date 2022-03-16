@@ -1,0 +1,349 @@
+/* Location tracking.  */
+%locations
+/* Pure yylex.  */
+%define api.pure
+/* Pure yyparse.  */
+%parse-param {oceanbase::table::ObHTableFilterParser *parse_ctx}
+%verbose
+%error-verbose
+%name-prefix "ob_hfilter_"
+%{
+#define USING_LOG_PREFIX SERVER
+#include <stdint.h>
+#include "observer/table/ob_htable_filters.h"
+#include "observer/table/ob_htable_filter_parser.h"
+#include "observer/table/htable_filter_lex.hxx"
+#define YYDEBUG 1
+#define YYLEX_PARAM (parse_ctx->scanner_)
+using namespace oceanbase::table;
+using namespace oceanbase::common;
+%}
+// Symbols.
+%union
+{
+    int32_t ival;
+    int64_t lval;
+    oceanbase::table::hfilter::CompareOperator cmp_op;
+    oceanbase::table::ObHTableFilterParser::SimpleString sval;
+    oceanbase::table::hfilter::Filter *fval;
+};
+
+%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter
+%token CheckAndMutateFilter PrefixFilter
+%token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP
+%token  <ival>          BOOL_VALUE
+%token  <sval>          STRING_VALUE
+%token  <lval>          INT_VALUE
+
+%left OR
+%left AND
+%right SKIP WHILE
+%token END 0 "end of file"
+%token ERROR
+
+%type   <fval>          simple_filter filter result_filter
+%type   <sval>          family qualifier comparator
+%type   <cmp_op>        compare_op
+
+%start result_filter
+%%
+////////////////////////////////////////////////////////////////
+result_filter: filter END {
+                   parse_ctx->set_result_filter($1);
+                   YYACCEPT;
+                }
+        ;
+
+filter:
+                filter AND filter %prec AND
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::FilterListBase *filter_list = nullptr;
+                    $$ = filter_list = OB_NEWx(hfilter::FilterListAND, parse_ctx->allocator(),
+                                               hfilter::FilterListBase::Operator::MUST_PASS_ALL);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($1))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($3))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FilterList with AND");
+                        YYABORT;
+                    }
+                }
+        |       filter OR filter %prec OR
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::FilterListBase *filter_list = nullptr;
+                    $$ = filter_list = OB_NEWx(hfilter::FilterListOR, parse_ctx->allocator(),
+                                               hfilter::FilterListBase::Operator::MUST_PASS_ONE);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($1))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    } else if (OB_FAIL(filter_list->add_filter($3))) {
+                        LOG_WARN("failed to add filter to list", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse FilterList with AND");
+                        YYABORT;
+                    }
+                }
+        |       SKIP filter %prec SKIP
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::SkipFilter, parse_ctx->allocator(), $2);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse SkipFilter");
+                        YYABORT;
+                    }
+                }
+        |       WHILE filter %prec WHILE
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::WhileMatchFilter, parse_ctx->allocator(), $2);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse WhileFilter");
+                        YYABORT;
+                    }
+                }
+        |       simple_filter
+                {
+                    $$ = $1;
+                }
+        ;
+
+simple_filter:
+                '(' filter ')'
+                { $$ = $2; }
+         |      RowFilter '(' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(hfilter::RowFilter, parse_ctx->allocator(), $3, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::RowFilter*>($$)->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse RowFilter");
+                        YYABORT;
+                    }
+                }
+        |       QualifierFilter '(' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(hfilter::QualifierFilter, parse_ctx->allocator(), $3, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::QualifierFilter*>($$)->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse QualifierFilter");
+                        YYABORT;
+                    }
+                }
+        |       ValueFilter '(' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(hfilter::ValueFilter, parse_ctx->allocator(), $3, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::ValueFilter*>($$)->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ValueFilter");
+                        YYABORT;
+                    }
+                }
+        |       PrefixFilter '(' STRING_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_prefix_comparator($3, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        $$ = OB_NEWx(hfilter::RowFilter, parse_ctx->allocator(), hfilter::CompareOperator::EQUAL, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::RowFilter*>($$)->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse PrefixFilter");
+                        YYABORT;
+                    }
+                }
+        |       SingleColumnValueFilter '(' family ',' qualifier ',' compare_op ',' comparator ',' BOOL_VALUE ',' BOOL_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($9, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family($3.len_, $3.str_);
+                        ObString qualifier($5.len_, $5.str_);
+                        bool filter_if_missing = ($11 == 1);
+                        bool latest_version_only = ($13 == 1);
+                        hfilter::SingleColumnValueFilter *filter = NULL;
+                        $$ = filter = OB_NEWx(hfilter::SingleColumnValueFilter, parse_ctx->allocator(), family, qualifier, $7, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        } else {
+                            filter->set_filter_if_missing(filter_if_missing);
+                            filter->set_latest_version_only(latest_version_only);
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse SingleColumnValueFilter");
+                        YYABORT;
+                    }
+                }
+        |       SingleColumnValueFilter '(' family ',' qualifier ',' compare_op ',' comparator ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($9, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family($3.len_, $3.str_);
+                        ObString qualifier($5.len_, $5.str_);
+                        const bool filter_if_missing = false;
+                        const bool latest_version_only = true;
+                        hfilter::SingleColumnValueFilter *filter = NULL;
+                        $$ = filter = OB_NEWx(hfilter::SingleColumnValueFilter, parse_ctx->allocator(), family, qualifier, $7, comparable);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        } else {
+                            filter->set_filter_if_missing(filter_if_missing);
+                            filter->set_latest_version_only(latest_version_only);
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse SingleColumnValueFilter");
+                        YYABORT;
+                    }
+                }
+        |       PageFilter '(' INT_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_NOT_SUPPORTED;
+                    UNUSED(ret);
+                    ob_hfilter_error(&(@$), parse_ctx, "PageFilter not supported");
+                    YYABORT;
+                }
+        |       ColumnCountGetFilter '(' INT_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::ColumnCountGetFilter, parse_ctx->allocator(), $3);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnCountGetFilter");
+                        YYABORT;
+                    }
+                }
+        |       CheckAndMutateFilter '(' compare_op ',' comparator ',' family ',' qualifier ',' BOOL_VALUE')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator($5, comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        const ObString family($7.len_, $7.str_);
+                        const ObString qualifier($9.len_, $9.str_);
+                        const bool value_is_null = ($11 == 1);
+                        hfilter::CheckAndMutateFilter *filter = NULL;
+                        $$ = filter = OB_NEWx(hfilter::CheckAndMutateFilter, parse_ctx->allocator(), family, qualifier, $3, comparable, value_is_null);
+                        if (nullptr == $$) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse CheckAndMutateFilter");
+                        YYABORT;
+                    }
+                }
+        ;
+family:
+                STRING_VALUE { $$ = $1; }
+        ;
+qualifier:
+                STRING_VALUE { $$ = $1; }
+        ;
+compare_op:
+                LESS { $$ = hfilter::CompareOperator::LESS; }
+        |       LESS_OR_EQUAL { $$ = hfilter::CompareOperator::LESS_OR_EQUAL; }
+        |       EQUAL { $$ = hfilter::CompareOperator::EQUAL; }
+        |       NOT_EQUAL { $$ = hfilter::CompareOperator::NOT_EQUAL; }
+        |       GREATER { $$ = hfilter::CompareOperator::GREATER; }
+        |       GREATER_OR_EQUAL { $$ = hfilter::CompareOperator::GREATER_OR_EQUAL; }
+        |       NO_OP { $$ = hfilter::CompareOperator::NO_OP; }
+        ;
+comparator:
+                STRING_VALUE
+                { $$ = $1; }
+        ;
+%%

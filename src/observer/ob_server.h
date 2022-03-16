@@ -19,9 +19,11 @@
 #include "share/stat/ob_user_tab_col_statistics.h"
 #include "share/stat/ob_opt_stat_service.h"
 
+#include "observer/table/ob_table_service.h"
 #include "sql/ob_sql.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/ob_query_exec_ctx_mgr.h"
+#include "sql/session/ob_user_resource_mgr.h"
 
 #include "storage/transaction/ob_weak_read_service.h"  // ObWeakReadService
 #include "storage/ob_long_ops_monitor.h"
@@ -44,6 +46,7 @@
 #include "observer/ob_service.h"
 #include "observer/ob_server_reload_config.h"
 #include "observer/ob_root_service_monitor.h"
+#include "lib/oblog/ob_log_compressor.h"
 
 namespace oceanbase {
 namespace omt {
@@ -108,7 +111,22 @@ public:
     bool is_inited_;
   };
 
-  class ObRefreshTime {
+  class ObRefreshNetworkSpeedTask: public common::ObTimerTask
+  {
+  public:
+    ObRefreshNetworkSpeedTask();
+    virtual ~ObRefreshNetworkSpeedTask() {}
+    int init(ObServer *observer, int tg_id);
+    void destroy();
+    virtual void runTimerTask() override;
+  private:
+    const static int64_t REFRESH_INTERVAL = 1L * 1000L * 1000L;//1hr
+    ObServer *obs_;
+    bool is_inited_;
+  };
+
+
+class ObRefreshTime {
   public:
     explicit ObRefreshTime(ObServer* obs) : obs_(obs)
     {}
@@ -220,6 +238,10 @@ public:
   {
     return sql_proxy_;
   }
+  sql::ObConnectResourceMgr& get_conn_res_mgr()
+  {
+    return conn_res_mgr_;
+  }
 
 private:
   int stop();
@@ -257,10 +279,13 @@ private:
   int wait_gts();
   int init_gts_cache_mgr();
   int init_storage();
-  int init_bandwidth_throttle();
   int init_gc_partition_adapter();
-  int reload_bandwidth_throttle_limit();
   int init_loaddata_global_stat();
+  int init_bandwidth_throttle();
+  int reload_bandwidth_throttle_limit(int64_t network_speed);
+  int get_network_speed_from_sysfs(int64_t &network_speed);
+  int get_network_speed_from_config_file(int64_t &network_speed);
+  int refresh_network_speed();
 
   int clean_up_invalid_tables();
   int init_ctas_clean_up_task();  // Regularly clean up the residuals related to querying and building tables and
@@ -268,6 +293,7 @@ private:
   int refresh_temp_table_sess_active_time();
   int init_refresh_active_time_task();  // Regularly update the sess_active_time of the temporary table created by the
                                         // proxy connection sess
+  int init_refresh_network_speed_task();
   int set_running_mode();
   int check_server_can_start_service();
 
@@ -369,6 +395,9 @@ private:
   // Weakly Consistent Read Service
   transaction::ObWeakReadService weak_read_service_;
 
+  // table service             
+  ObTableService table_service_;
+
   // Tenant isolation resource management
   omt::ObCgroupCtrl cgroup_ctrl_;
 
@@ -394,11 +423,14 @@ private:
   storage::ObPurgeCompletedMonitorInfoTask long_ops_task_;
   ObCTASCleanUpTask ctas_clean_up_task_;        // repeat & no retry
   ObRefreshTimeTask refresh_active_time_task_;  // repeat & no retry
+  ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
   ObSignalWorker sig_worker_;
+  common::ObLogCompressor log_compressor_;
 
   bool is_log_dir_empty_;
+  sql::ObConnectResourceMgr conn_res_mgr_;
 };  // end of class ObServer
 
 inline ObServer& ObServer::get_instance()

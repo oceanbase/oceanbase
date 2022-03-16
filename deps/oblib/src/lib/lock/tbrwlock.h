@@ -60,18 +60,18 @@ public:
   CRWLock(ELockMode lockMode = NO_PRIORITY);
   ~CRWLock();
 
-  CRLock* rlock() const
+  const CRLock *rlock() const
   {
-    return _rlock;
+    return &_rlock;
   }
-  CWLock* wlock() const
+  const CWLock *wlock() const
   {
-    return _wlock;
+    return &_wlock;
   }
 
 private:
-  CRLock* _rlock;
-  CWLock* _wlock;
+  CRLock _rlock;
+  CWLock _wlock;
   pthread_rwlock_t _rwlock;
 };
 

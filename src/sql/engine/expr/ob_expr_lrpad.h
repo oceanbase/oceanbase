@@ -100,7 +100,7 @@ public:
   virtual int calc_result3(common::ObObj& result, const common::ObObj& text, const common::ObObj& len,
       const common::ObObj& pad_text, common::ObExprCtx& expr_ctx) const override;
   // for engine 3.0
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
+  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_mysql_rpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
 private:
@@ -118,7 +118,7 @@ public:
   virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
       common::ObExprCtx& expr_ctx) const override;
   // for engine 3.0
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
+  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_oracle_lpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
 private:
@@ -136,7 +136,7 @@ public:
   virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
       common::ObExprCtx& expr_ctx) const override;
   // for engine 3.0
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
+  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_oracle_rpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
 private:

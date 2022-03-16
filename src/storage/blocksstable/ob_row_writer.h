@@ -68,7 +68,9 @@ private:
 private:
   inline int write_oracle_timestamp(
       const common::ObOTimestampData& ot_data, const common::ObOTimestampMetaAttrType otmat);
+  int write_text_store_impl(const common::ObObj &obj, storage::ObDataStoreType store_type);
   int write_text_store(const common::ObObj& obj);
+  int write_json_store(const common::ObObj &obj);
   int append_column(const common::ObObj& obj);
   int init_common(char* buf, const int64_t buf_size, const int64_t pos);
   int init_store_row(const storage::ObStoreRow& row, const int64_t rowkey_column_count);

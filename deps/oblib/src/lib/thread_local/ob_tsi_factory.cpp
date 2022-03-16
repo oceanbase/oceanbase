@@ -19,15 +19,5 @@ TSIFactory& get_tsi_fatcory()
   static TSIFactory instance;
   return instance;
 }
-
-void tsi_factory_init()
-{
-  get_tsi_fatcory().init();
-}
-
-void tsi_factory_destroy()
-{
-  get_tsi_fatcory().destroy();
-}
 }  // namespace common
 }  // namespace oceanbase

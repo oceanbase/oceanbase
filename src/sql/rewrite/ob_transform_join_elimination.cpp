@@ -60,7 +60,29 @@ int ObTransformJoinElimination::transform_one_stmt(
   return ret;
 }
 
-int ObTransformJoinElimination::eliminate_join_self_foreign_key(ObDMLStmt* stmt, bool& trans_happened)
+int ObTransformJoinElimination::check_table_can_be_eliminated(const ObDMLStmt *stmt, uint64_t table_id, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null stmt", K(ret));
+  } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
+    const ObDelUpdStmt *del_up_stmt = static_cast<const ObDelUpdStmt *>(stmt);
+    for (uint64_t i = 0; OB_SUCC(ret) && i < del_up_stmt->get_all_table_columns().count(); ++i) {
+      const TableColumns &tab_cols = del_up_stmt->get_all_table_columns().at(i);
+      const IndexDMLInfo &index_info = tab_cols.index_dml_infos_.at(0);
+      if (index_info.table_id_ == table_id) {
+        is_valid = false;
+      }
+    }
+  } else {
+    // TODO: add more cases if necessary
+  }
+  return ret;
+}
+
+int ObTransformJoinElimination::eliminate_join_self_foreign_key(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool from_happedend = false;
@@ -335,8 +357,13 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt* source
       for (int64_t i = 0; OB_SUCC(ret) && i < table_map.count(); i++) {
         TableItem* temp_source_table = NULL;
         TableItem* temp_target_table = NULL;
-        if (OB_ISNULL(temp_source_table = source_stmt->get_table_item(i)) ||
-            OB_ISNULL(temp_target_table = target_stmt->get_table_item(table_map.at(i)))) {
+        int64_t idx = table_map.at(i);
+        if (idx < 0 || idx >= target_stmt->get_table_size() || 
+            i >= source_stmt->get_table_size()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect table idx", K(ret));
+        } else if (OB_ISNULL(temp_source_table = source_stmt->get_table_item(i)) ||
+            OB_ISNULL(temp_target_table = target_stmt->get_table_item(idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(temp_source_table), K(temp_target_table), K(ret));
         } else if ((temp_source_table->is_basic_table() && temp_target_table->is_basic_table()) ||
@@ -1058,7 +1085,9 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
 
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, candi_conds, left_tables, left_table_conditions))) {
     LOG_WARN("failed to extract table exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, candi_conds, right_tables, right_table_conditions))) {
+  } else if (!semi_info->is_anti_join() &&  // anti join do not use right filter
+             OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, candi_conds, right_tables,
+                                                           right_table_conditions))) {
     LOG_WARN("failed to extract table exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                  ctx_->session_info_,
@@ -1102,7 +1131,7 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt* stmt, SemiI
   if (OB_ISNULL(stmt) || OB_ISNULL(semi_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, target_tables, right_tables))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(target_tables, right_tables))) {
     LOG_WARN("failed to get rel ids", K(ret));
   } else {
     ObRawExpr* expr = NULL;
@@ -1320,9 +1349,9 @@ int ObTransformJoinElimination::trans_semi_condition_exprs(ObDMLStmt* stmt, Semi
     LOG_WARN("param has null", K(stmt), K(ctx_), K(ret));
   } else if (semi_info->is_semi_join()) {
     ret = append(stmt->get_condition_exprs(), semi_info->semi_conditions_);
-  } else if (ObTransformUtils::get_table_rel_ids(*stmt, semi_info->left_table_ids_, left_rel_ids)) {
+  } else if (stmt->get_table_rel_ids(semi_info->left_table_ids_, left_rel_ids)) {
     LOG_WARN("failed to get table rel ids", K(ret));
-  } else if (ObTransformUtils::get_table_rel_ids(*stmt, semi_info->right_table_id_, right_rel_ids)) {
+  } else if (stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids)) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
     const int64_t count = semi_info->semi_conditions_.count();
@@ -1434,7 +1463,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_foreign_key(ObDMLS
                  stmt, conds, left_table, right_table, can_be_eliminated, is_first_table_parent, foreign_key_info))) {
     LOG_WARN("check transform validity with foreign key failed", K(ret));
   } else if (is_first_table_parent) {
-    /*do nothing*/
+    can_be_eliminated = false;
   } else if (!can_be_eliminated) {
     /*do nothing*/
   } else if (!semi_info->is_anti_join()) {
@@ -1705,6 +1734,7 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
   trans_happened = false;
   EqualSets* equal_sets = &ctx_->equal_sets_;
   ObArenaAllocator allocator;
+  bool is_valid = true;
   if (conds.empty()) {
     /*do nothing*/
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator, conds, *equal_sets))) {
@@ -1719,6 +1749,10 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
         for (int64_t j = 0; OB_SUCC(ret) && j < candi_tables.count(); ++j) {
           if (i == j || removed_items.has_member(j)) {
             /*do nothing*/
+          } else if (OB_FAIL(check_table_can_be_eliminated(stmt, candi_tables.at(j)->table_id_, is_valid))) {
+            LOG_WARN("check table can be eliminated failed", K(ret));
+          } else if (!is_valid) {
+            // do nothing
           } else if (OB_FAIL(do_join_elimination_self_key(
                          stmt, candi_tables.at(i), candi_tables.at(j), is_happened, equal_sets))) {
             LOG_WARN("failed to eliminate self key join in base table", K(ret));
@@ -1732,8 +1766,13 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
         }
         is_happened = false;
         for (int64_t j = 0; OB_SUCC(ret) && !is_happened && j < child_candi_tables.count(); ++j) {
-          if (OB_FAIL(do_join_elimination_self_key(
-                  stmt, child_candi_tables.at(j), candi_tables.at(i), is_happened, equal_sets))) {
+          is_valid = true;
+          if (OB_FAIL(check_table_can_be_eliminated(stmt, candi_tables.at(i)->table_id_, is_valid))) {
+            LOG_WARN("check table can be eliminated failed", K(ret));
+          } else if (!is_valid) {
+            // do nothing
+          } else if (OB_FAIL(do_join_elimination_self_key(
+                         stmt, child_candi_tables.at(j), candi_tables.at(i), is_happened, equal_sets))) {
             LOG_WARN("failed to do join elimination erlf key", K(ret));
           } else if (!is_happened) {
             /*do nothing*/
@@ -1800,7 +1839,7 @@ int ObTransformJoinElimination::rebuild_joined_tables(ObDMLStmt* stmt, TableItem
     LOG_WARN("empty tables", K(ret), K(tables));
   } else if (1 == tables.count()) {
     top_table = tables.at(0);
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *tables.at(0), table_set))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*tables.at(0), table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
     TableItem* left_table = NULL;
@@ -1813,7 +1852,7 @@ int ObTransformJoinElimination::rebuild_joined_tables(ObDMLStmt* stmt, TableItem
       if (OB_ISNULL(left_table = tables.at(i)) || OB_ISNULL(right_table = cur_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(left_table), K(right_table));
-      } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *left_table, table_set))) {
+      } else if (OB_FAIL(stmt->get_table_rel_ids(*left_table, table_set))) {
         LOG_WARN("failed to get table rel ids", K(ret));
       } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, join_conds, table_set, cur_join_conds))) {
         LOG_WARN("failed to extract table exprs", K(ret));

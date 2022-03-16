@@ -143,7 +143,7 @@ public:
     return is_empty_();
   }
 
-  virtual int search_boundary(const T& item, T& prev_item, T& next_item)
+  virtual int search_boundary(const T& item, T& prev_item, T& next_item) override
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
@@ -409,8 +409,12 @@ int ObFileIdList::get_front_log2file_max_timestamp(int64_t& front_log2file_max_t
 {
   int ret = OB_SUCCESS;
   Log2File log_2_file;
-  if (OB_FAIL(container_ptr_->top_front(log_2_file)) && OB_ENTRY_NOT_EXIST != ret) {
-    CSR_LOG(ERROR, "container_ptr_ is empty", K(ret));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == container_ptr_->is_empty()) {
+    front_log2file_max_timestamp = OB_INVALID_TIMESTAMP;
+  } else if (OB_FAIL(container_ptr_->top_front(log_2_file))) {
+    CSR_LOG(WARN, "container_ptr_ is empty", K(ret));
   } else if (OB_UNLIKELY(!log_2_file.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CSR_LOG(ERROR, "container_ptr_ unexpected error", K(ret));
@@ -848,7 +852,7 @@ bool ObFileIdCachePurgeByFileId::need_wait(bool& need_print_error) const
   bool bool_ret = false;
   need_print_error = false;
   const file_id_t curr_max_file_id = file_id_cache_.get_curr_max_file_id();
-  // This measn that ilog can be purged, but ilog index don't in file_id_cahce
+  // This means that ilog can be purged, but ilog index don't in file_id_cache
   if (OB_INVALID_FILE_ID == curr_max_file_id || curr_max_file_id < min_file_id_) {
     bool_ret = true;
     need_print_error = true;
@@ -1018,7 +1022,7 @@ int ObFileIdCache::init(const int64_t server_seq, const common::ObAddr& addr, Ob
   } else if (OB_FAIL(map_.init(MAP_LABEL, MAP_TENANT_ID))) {
     CSR_LOG(WARN, "map_ init error", K(ret));
   } else if (OB_FAIL(filter_map_.init("FAST_PG_FILTER", MAP_TENANT_ID))) {
-    CSR_LOG(WARN, "fliter_map_ init error", K(ret));
+    CSR_LOG(WARN, "filter_map_ init error", K(ret));
   } else {
     curr_max_file_id_ = OB_INVALID_FILE_ID;
     next_can_purge_log2file_timestamp_ = OB_INVALID_TIMESTAMP;
@@ -1067,8 +1071,8 @@ void ObFileIdCache::destroy()
 // 1. OB_SUCCESS                          prev_item and next_item are both valid
 // 2. OB_ERR_OUT_OF_UPPER_BOUND           prev_item valid, next_item invalid
 // 3. OB_ERR_OUT_OF_LOWER_BOUND           prev_item invalid, next_item valid
-// 4. OB_PARTITION_NOT_EXIST              partiiton not exist, prev_item and next_item are both invalid
-// 5. OB_NEED_RETRY                       need retrym prev_item and next_item are both invalid
+// 4. OB_PARTITION_NOT_EXIST              partition not exist, prev_item and next_item are both invalid
+// 5. OB_NEED_RETRY                       need retry prev_item and next_item are both invalid
 // 6. Others
 int ObFileIdCache::locate(const ObPartitionKey& pkey, const int64_t target_value, const bool locate_by_log_id,
     Log2File& prev_item, Log2File& next_item)
@@ -1325,7 +1329,7 @@ bool ObFileIdCache::ObUndoAppendFunctor::operator()(const ObPartitionKey& pkey, 
     CSR_LOG(WARN, "list undo_append error", K(broken_file_id_), K(pkey), K(empty), KP(list));
   } else if (empty) {
     if (OB_FAIL(dead_pkeys_.push_back(pkey))) {
-      CSR_LOG(WARN, "push pkey inito dead_pkeys error", K(ret), K(dead_pkeys_), K(pkey));
+      CSR_LOG(WARN, "push pkey into dead_pkeys error", K(ret), K(dead_pkeys_), K(pkey));
     } else {
       CSR_LOG(TRACE, "dead_pkey", K(pkey), K(broken_file_id_), KP(list));
     }
@@ -1350,7 +1354,9 @@ bool ObFileIdCache::ObPurgeFunctor::operator()(const ObPartitionKey& pkey, ObFil
       CSR_LOG(TRACE, "dead pkey", K(pkey), KP(list));
     }
   } else if (OB_FAIL(list->get_front_log2file_max_timestamp(front_log2file_max_log_timestamp))) {
-    CSR_LOG(ERROR, "get_log2file_max_timestamp unexpected error", K(ret));
+    CSR_LOG(WARN, "get_log2file_max_timestamp failed", K(ret));
+  } else if (OB_INVALID_TIMESTAMP == front_log2file_max_log_timestamp) {
+    CSR_LOG(INFO, "file_id_list is empty, no need consider this partition", K(pkey));
   } else if (OB_INVALID_TIMESTAMP == next_can_purge_log2file_timestamp_) {
     next_can_purge_log2file_timestamp_ = front_log2file_max_log_timestamp;
   } else {
@@ -1544,7 +1550,7 @@ int ObFileIdCache::undo_append_(const file_id_t broken_file_id)
   WLockGuard wguard(rwlock_);
   if (OB_UNLIKELY(OB_INVALID_FILE_ID == broken_file_id)) {
     ret = OB_INVALID_ARGUMENT;
-    CSR_LOG(WARN, "ObFileIdCachel undo_append error", K(ret), K(broken_file_id));
+    CSR_LOG(WARN, "ObFileIdCache undo_append error", K(ret), K(broken_file_id));
   } else {
     ObUndoAppendFunctor undo_functor(broken_file_id);
     if (OB_FAIL(map_.for_each(undo_functor))) {

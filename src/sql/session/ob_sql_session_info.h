@@ -350,7 +350,7 @@ public:
   {
     return has_temp_table_flag_;
   };
-  int drop_temp_tables(const bool is_sess_disconn = true);
+  int drop_temp_tables(const bool is_sess_disconn = true, const bool is_xa_trans = false);
   void refresh_temp_tables_sess_active_time();
   int drop_reused_oracle_temp_tables();
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg& const_drop_table_arg);
@@ -475,6 +475,12 @@ public:
   {
     return session_type_;
   }
+  // sql from obclient, proxy, PL are all marked as user_session
+  // NOTE: for sql from PL, is_inner() = true, is_user_session() = true
+  inline bool is_user_session() const
+  {
+    return USER_SESSION == session_type_;
+  }
   void set_early_lock_release(bool enable);
   bool get_early_lock_release() const
   {
@@ -486,7 +492,8 @@ public:
     return inner_flag_;
   }
   void reset_audit_record();
-  ObAuditRecordData& get_audit_record();
+  ObAuditRecordData& get_audit_record();  // try_cnt will be changed !
+  ObAuditRecordData &get_raw_audit_record();
   const ObAuditRecordData& get_raw_audit_record() const;
   const ObAuditRecordData& get_final_audit_record(ObExecuteMode mode);
   ObSessionStat& get_session_stat()
@@ -531,11 +538,11 @@ public:
     use_static_typing_engine_ = use;
   }
 
-  void set_ctx_mem_context(lib::MemoryContext* ctx_mem_context)
+  void set_ctx_mem_context(lib::MemoryContext ctx_mem_context)
   {
     ctx_mem_context_ = ctx_mem_context;
   }
-  lib::MemoryContext* get_ctx_mem_context()
+  lib::MemoryContext get_ctx_mem_context()
   {
     return ctx_mem_context_;
   }
@@ -639,6 +646,19 @@ public:
     return is_ignore_stmt_;
   }
 
+  void set_got_conn_res(bool v)
+  {
+    got_conn_res_ = v;
+  }
+  bool has_got_conn_res() const
+  {
+    return got_conn_res_;
+  }
+  int on_user_connect(share::schema::ObSessionPrivInfo& priv_info, const share::schema::ObUserInfo* user_info);
+  int on_user_disconnect();
+
+  void *get_piece_cache(bool need_init = false);
+
 private:
   int close_all_ps_stmt();
 
@@ -700,7 +720,7 @@ private:
 
   ObSessionStat session_stat_;
 
-  lib::MemoryContext* ctx_mem_context_;
+  lib::MemoryContext ctx_mem_context_;
   common::ObSEArray<uint64_t, 8> enable_role_array_;
   ObTenantCachedSchemaGuardInfo cached_schema_guard_info_;
   bool in_definer_named_proc_;
@@ -718,6 +738,12 @@ private:
   // return different stmt id for same sql if proxy version is higher than min_proxy_version_ps_.
   uint64_t min_proxy_version_ps_;
   bool is_ignore_stmt_;  // for static engine.
+  // Record whether this session has got connection resource, which means it increased connections count.
+  // It's used for on_user_disconnect.
+  // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
+  // While only session got connection resource can release connection resource and decrease connections count.
+  bool got_conn_res_;
+  void *piece_cache_;
 };
 
 inline ObIExtraStatusCheck::Guard::Guard(ObSQLSessionInfo& session, ObIExtraStatusCheck& checker)

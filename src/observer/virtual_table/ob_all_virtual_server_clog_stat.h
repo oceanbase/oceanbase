@@ -42,7 +42,8 @@ private:
     IDC,
     ZONE_TYPE,
     MERGE_STATUS,
-    ZONE_STATUS
+    ZONE_STATUS,
+    SVR_MIN_LOG_TIMESTAMP
   };
   common::ObAddr* addr_;
   common::ObString ipstr_;

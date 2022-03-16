@@ -49,16 +49,16 @@ public:
   ObLocalMergeSort();
   virtual ~ObLocalMergeSort();
 
-  virtual void reset();
-  virtual void reuse();
-  virtual int add_row(const common::ObNewRow& row, bool& need_sort);
-  virtual int sort_rows();
-  virtual int get_next_row(common::ObNewRow& row);
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual int add_row(const common::ObNewRow& row, bool& need_sort) override;
+  virtual int sort_rows() override;
+  virtual int get_next_row(common::ObNewRow& row) override;
   virtual int64_t get_used_mem_size() const override;
   virtual int inner_dump(ObIMergeSort& merge_sort, bool dump_last);
-  virtual int dump(ObIMergeSort& merge_sort);
-  virtual int final_dump(ObIMergeSort& merge_sort);
-  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t preifx_pos);
+  virtual int dump(ObIMergeSort& merge_sort) override;
+  virtual int final_dump(ObIMergeSort& merge_sort) override;
+  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t preifx_pos) override;
   virtual void set_cur_input(int64_t nth_input)
   {
     cur_input_ = nth_input;

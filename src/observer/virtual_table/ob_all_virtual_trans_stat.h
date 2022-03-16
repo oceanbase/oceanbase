@@ -101,7 +101,6 @@ private:
 
 private:
   transaction::ObTransService* trans_service_;
-  transaction::ObPartitionIterator partition_iter_;
   transaction::ObTransStatIterator trans_stat_iter_;
 
 private:

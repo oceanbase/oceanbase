@@ -29,6 +29,7 @@
 #include "sql/resolver/expr/ob_case_op_expr.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_schema_struct.h"
 #include "sql/ob_sql_define.h"
 #include "sql/resolver/expr/ob_expr_info_flag.h"
 #include "share/system_variable/ob_system_variable.h"
@@ -50,7 +51,28 @@ class ObSQLSessionInfo;
 class ObExprOperator;
 class ObRawExprFactory;
 class ObSelectStmt;
-extern ObRawExpr* USELESS_POINTER;
+extern ObRawExpr *USELESS_POINTER;
+
+// If is_stack_overflow is true, the printing will not continue
+#define DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW(body)                               \
+  DECLARE_VIRTUAL_TO_STRING                                                               \
+  {                                                                                       \
+    int ret = common::OB_SUCCESS;                                                         \
+    int64_t pos = 0;                                                                      \
+    bool is_stack_overflow = false;                                                       \
+    if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {                               \
+      SQL_RESV_LOG(WARN, "failed to check stack overflow", K(ret), K(is_stack_overflow)); \
+    } else if (is_stack_overflow) {                                                       \
+      SQL_RESV_LOG(DEBUG, "too deep recursive", K(ret), K(is_stack_overflow));            \
+    } else {                                                                              \
+      J_OBJ_START();                                                                      \
+      body;                                                                               \
+      J_OBJ_END();                                                                        \
+    }                                                                                     \
+    return pos;                                                                           \
+  }
+
+#define VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(args...) DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW(J_KV(args))
 
 // ObSqlBitSet is a simple bitset, in order to avoid memory explosure
 // ObBitSet is too large just for a simple bitset
@@ -70,7 +92,7 @@ public:
       SQL_RESV_LOG(WARN, "invalid argument", K(ret));
     } else {
       int64_t words_size = sizeof(BitSetWord) * MAX_BITSETWORD;
-      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord*)block_allocator_->alloc(words_size))) {
+      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
@@ -82,7 +104,7 @@ public:
     }
   }
 
-  ObSqlBitSet(const ObSqlBitSet<N, FlagType, auto_free>& other)
+  ObSqlBitSet(const ObSqlBitSet<N, FlagType, auto_free> &other)
       : block_allocator_(NULL), bit_set_word_array_(NULL), desc_()
   {
     int ret = OB_SUCCESS;
@@ -100,7 +122,7 @@ public:
         cap = MAX_BITSETWORD;
       }
       int64_t words_size = sizeof(BitSetWord) * cap;
-      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord*)block_allocator_->alloc(words_size))) {
+      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
@@ -125,7 +147,7 @@ public:
     } else {
       int64_t bitset_word_cnt = (bit_size <= N ? MAX_BITSETWORD : ((bit_size - 1) / PER_BITSETWORD_BITS + 1));
       int64_t words_size = sizeof(BitSetWord) * bitset_word_cnt;
-      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord*)block_allocator_->alloc(words_size))) {
+      if (OB_ISNULL(bit_set_word_array_ = (BitSetWord *)block_allocator_->alloc(words_size))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
       } else {
@@ -338,7 +360,7 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  int add_members(const ObSqlBitSet<M, FlagType2, auto_free2>& other)
+  int add_members(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
@@ -377,13 +399,13 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  int add_members2(const ObSqlBitSet<M, FlagType2, auto_free2>& other)
+  int add_members2(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {
     return add_members(other);
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  int del_members(const ObSqlBitSet<M, FlagType2, auto_free2>& other)
+  int del_members(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
@@ -398,13 +420,13 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  int del_members2(const ObSqlBitSet<M, FlagType2, auto_free2>& other)
+  int del_members2(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {
     return del_members(other);
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool is_subset(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool is_subset(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     bool bool_ret = true;
     if (!is_valid()) {
@@ -426,13 +448,13 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool is_subset2(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool is_subset2(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     return is_subset(other);
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool is_superset(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool is_superset(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     bool bool_ret = false;
     if (!is_valid()) {
@@ -455,13 +477,13 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool is_superset2(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool is_superset2(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     return is_superset(other);
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool overlap(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool overlap(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     bool bool_ret = false;
     if (!is_valid()) {
@@ -478,12 +500,12 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool overlap2(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool overlap2(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     return overlap(other);
   }
 
-  int to_array(ObIArray<int64_t>& arr) const
+  int to_array(ObIArray<int64_t> &arr) const
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid()) {
@@ -508,7 +530,7 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2>
-  bool equal(const ObSqlBitSet<M, FlagType2, auto_free2>& other) const
+  bool equal(const ObSqlBitSet<M, FlagType2, auto_free2> &other) const
   {
     bool bool_ret = true;
     if (!is_valid() || !other.is_valid()) {
@@ -525,18 +547,18 @@ public:
     return bool_ret;
   }
 
-  bool operator==(const ObSqlBitSet<N, FlagType, auto_free>& other) const
+  bool operator==(const ObSqlBitSet<N, FlagType, auto_free> &other) const
   {
     return this->equal(other);
   }
 
-  bool operator!=(const ObSqlBitSet<N, FlagType, auto_free>& other) const
+  bool operator!=(const ObSqlBitSet<N, FlagType, auto_free> &other) const
   {
     return !(*this == other);
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2, int64_t L, typename FlagType3, bool auto_free3>
-  int intersect(const ObSqlBitSet<M, FlagType2, auto_free2>& left, const ObSqlBitSet<L, FlagType3, auto_free3>& right)
+  int intersect(const ObSqlBitSet<M, FlagType2, auto_free2> &left, const ObSqlBitSet<L, FlagType3, auto_free3> &right)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid() || !left.is_valid() || !right.is_valid()) {
@@ -568,7 +590,7 @@ public:
   }
 
   template <int64_t M, typename FlagType2, bool auto_free2, int64_t L, typename FlagType3, bool auto_free3>
-  int except(const ObSqlBitSet<M, FlagType2, auto_free2>& left, const ObSqlBitSet<L, FlagType3, auto_free3>& right)
+  int except(const ObSqlBitSet<M, FlagType2, auto_free2> &left, const ObSqlBitSet<L, FlagType3, auto_free3> &right)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid() || !left.is_valid() || !right.is_valid()) {
@@ -602,17 +624,17 @@ public:
     return ret;
   }
 
-  static int databuff_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const int64_t& obj)
+  static int databuff_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const int64_t &obj)
   {
     return common::databuff_print_obj(buf, buf_len, pos, obj);
   }
 
-  static int databuff_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const ObExprInfoFlag& flag)
+  static int databuff_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const ObExprInfoFlag &flag)
   {
     return common::databuff_printf(buf, buf_len, pos, "\"%s\"", get_expr_info_flag_str(flag));
   }
 
-  int64_t to_string(char* buf, const int64_t buf_len) const
+  int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int ret = common::OB_SUCCESS;
     int64_t pos = 0;
@@ -635,7 +657,7 @@ public:
     return pos;
   }
 
-  ObSqlBitSet<N, FlagType, auto_free>& operator=(const ObSqlBitSet<N, FlagType, auto_free>& other)
+  ObSqlBitSet<N, FlagType, auto_free> &operator=(const ObSqlBitSet<N, FlagType, auto_free> &other)
   {
     int ret = OB_SUCCESS;
     if (!other.is_valid() || !is_valid()) {
@@ -668,14 +690,14 @@ private:
   {
     int ret = OB_SUCCESS;
     int64_t words_size = sizeof(BitSetWord) * word_cnt;
-    BitSetWord* new_buf = NULL;
-    ObIAllocator* allocator = get_block_allocator();
+    BitSetWord *new_buf = NULL;
+    ObIAllocator *allocator = get_block_allocator();
     if (!is_valid()) {
       ret = OB_NOT_INIT;
       SQL_RESV_LOG(WARN, "not inited", K(ret));
     } else if (OB_ISNULL(allocator)) {
       SQL_RESV_LOG(WARN, "invalid allocator", K(ret));
-    } else if (OB_ISNULL(new_buf = (BitSetWord*)allocator->alloc(words_size))) {
+    } else if (OB_ISNULL(new_buf = (BitSetWord *)allocator->alloc(words_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(WARN, "failed to alloc memory", K(ret));
     } else {
@@ -689,9 +711,9 @@ private:
     return ret;
   }
 
-  ObIAllocator* get_block_allocator()
+  ObIAllocator *get_block_allocator()
   {
-    ObIAllocator* ret_alloc = NULL;
+    ObIAllocator *ret_alloc = NULL;
     if (!is_valid()) {
       // do nothing
     } else {
@@ -707,9 +729,9 @@ private:
       ret = OB_INIT_TWICE;
       SQL_RESV_LOG(WARN, "init twice", K(ret));
     } else if (auto_free) {
-      block_allocator_ = &CURRENT_CONTEXT.get_arena_allocator();
+      block_allocator_ = &CURRENT_CONTEXT->get_arena_allocator();
     } else {
-      void* alloc_buf = NULL;
+      void *alloc_buf = NULL;
       if (OB_ISNULL(alloc_buf = ob_malloc(sizeof(ObArenaAllocator), ObModIds::OB_BIT_SET))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(WARN, "failed to allocate memory", K(ret));
@@ -736,8 +758,8 @@ private:
   };
 
 private:
-  ObIAllocator* block_allocator_;
-  BitSetWord* bit_set_word_array_;
+  ObIAllocator *block_allocator_;
+  BitSetWord *bit_set_word_array_;
   SqlBitSetDesc desc_;
 };
 
@@ -766,13 +788,13 @@ public:
   ObObjAccessIdent()
       : type_(UNKNOWN), access_name_(), access_index_(common::OB_INVALID_INDEX), sys_func_expr_(NULL), params_()
   {}
-  ObObjAccessIdent(const common::ObString& name, int64_t index = common::OB_INVALID_INDEX)
+  ObObjAccessIdent(const common::ObString &name, int64_t index = common::OB_INVALID_INDEX)
       : type_(UNKNOWN), access_name_(name), access_index_(index), sys_func_expr_(NULL), params_()
   {}
   virtual ~ObObjAccessIdent()
   {}
 
-  int assign(const ObObjAccessIdent& other)
+  int assign(const ObObjAccessIdent &other)
   {
     type_ = other.type_;
     access_name_ = other.access_name_;
@@ -780,7 +802,7 @@ public:
     sys_func_expr_ = other.sys_func_expr_;
     return params_.assign(other.params_);
   }
-  ObObjAccessIdent& operator=(const ObObjAccessIdent& other)
+  ObObjAccessIdent &operator=(const ObObjAccessIdent &other)
   {
     assign(other);
     return *this;
@@ -848,17 +870,17 @@ public:
     return is_local_type();
   }
 
-  int extract_params(int64_t level, common::ObIArray<ObRawExpr*>& params) const;
-  int replace_params(ObRawExpr* from, ObRawExpr* to);
+  int extract_params(int64_t level, common::ObIArray<ObRawExpr *> &params) const;
+  int replace_params(ObRawExpr *from, ObRawExpr *to);
 
   TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
 
   AccessNameType type_;
   common::ObString access_name_;
   int64_t access_index_;
-  ObSysFunRawExpr* sys_func_expr_;
+  ObSysFunRawExpr *sys_func_expr_;
   // x/y/m/n are parameters of a.f, but the param_level of x/y is 0, and m/n is 1.
-  common::ObSEArray<std::pair<ObRawExpr*, int64_t>, 4, common::ModulePageAllocator, true> params_;
+  common::ObSEArray<std::pair<ObRawExpr *, int64_t>, 4, common::ModulePageAllocator, true> params_;
 };
 
 class ObColumnRefRawExpr;
@@ -878,7 +900,7 @@ public:
   virtual ~ObQualifiedName()
   {}
 
-  int assign(const ObQualifiedName& other)
+  int assign(const ObQualifiedName &other)
   {
     database_name_ = other.database_name_;
     tbl_name_ = other.tbl_name_;
@@ -890,7 +912,7 @@ public:
     is_access_root_ = other.is_access_root_;
     return access_idents_.assign(other.access_idents_);
   }
-  ObQualifiedName& operator=(const ObQualifiedName& other)
+  ObQualifiedName &operator=(const ObQualifiedName &other)
   {
     assign(other);
     return *this;
@@ -910,7 +932,7 @@ public:
     return is_access_root_;
   }
 
-  int replace_access_ident_params(ObRawExpr* from, ObRawExpr* to);
+  int replace_access_ident_params(ObRawExpr *from, ObRawExpr *to);
 
   TO_STRING_KV(N_DATABASE_NAME, database_name_, N_TABLE_NAME, tbl_name_, N_COLUMN, col_name_, K_(is_star), K_(ref_expr),
       K_(parents_expr_info), K_(parent_aggr_level), K_(access_idents), K_(is_access_root));
@@ -920,7 +942,7 @@ public:
   common::ObString tbl_name_;  // used for package name for UDF
   common::ObString col_name_;  // used for function name for UDF
   bool is_star_;
-  ObColumnRefRawExpr* ref_expr_;
+  ObColumnRefRawExpr *ref_expr_;
   ObExprInfo parents_expr_info_;
   int64_t parent_aggr_level_;
   // all identifiers will be stored here, like a/f/c in a.f(x,y).c
@@ -954,9 +976,9 @@ struct OrderItem {
   {
     reset();
   }
-  explicit OrderItem(ObRawExpr* expr) : expr_(expr), order_type_(default_asc_direction())
+  explicit OrderItem(ObRawExpr *expr) : expr_(expr), order_type_(default_asc_direction())
   {}
-  OrderItem(ObRawExpr* expr, ObOrderDirection order_type) : expr_(expr), order_type_(order_type)
+  OrderItem(ObRawExpr *expr, ObOrderDirection order_type) : expr_(expr), order_type_(order_type)
   {}
 
 public:
@@ -967,11 +989,11 @@ public:
     expr_ = NULL;
     order_type_ = default_asc_direction();
   }
-  inline bool operator==(const OrderItem& other) const
+  inline bool operator==(const OrderItem &other) const
   {
     return (expr_ == other.expr_ && order_type_ == other.order_type_);
   }
-  inline bool operator!=(const OrderItem& other) const
+  inline bool operator!=(const OrderItem &other) const
   {
     return !(*this == other);
   }
@@ -1000,12 +1022,12 @@ public:
     return NULLS_FIRST_DESC == order_type_ || NULLS_LAST_DESC == order_type_;
   }
 
-  int deep_copy(ObRawExprFactory& expr_factory, const OrderItem& other, const uint64_t copy_types,
+  int deep_copy(ObRawExprFactory &expr_factory, const OrderItem &other, const uint64_t copy_types,
       bool use_new_allocator = false);
 
-  static const char* order_type2name(const ObOrderDirection direction)
+  static const char *order_type2name(const ObOrderDirection direction)
   {
-    const char* name = NULL;
+    const char *name = NULL;
     switch (direction) {
       case NULLS_FIRST_ASC:
         name = N_NULLS_FIRST_ASC;
@@ -1027,7 +1049,7 @@ public:
 
   TO_STRING_KV(N_EXPR, expr_, N_ASCENDING, order_type2name(order_type_));
 
-  ObRawExpr* expr_;
+  ObRawExpr *expr_;
   ObOrderDirection order_type_;
 };
 
@@ -1043,25 +1065,25 @@ struct ObExprEqualCheckContext {
   virtual ~ObExprEqualCheckContext()
   {}
   struct ParamExprPair {
-    ParamExprPair(int64_t param_idx, const ObRawExpr* expr) : param_idx_(param_idx), expr_(expr)
+    ParamExprPair(int64_t param_idx, const ObRawExpr *expr) : param_idx_(param_idx), expr_(expr)
     {}
     ParamExprPair() : param_idx_(-1), expr_(NULL)
     {}
     TO_STRING_KV(K_(param_idx), K_(expr));
     int64_t param_idx_;
-    const ObRawExpr* expr_;
+    const ObRawExpr *expr_;
   };
-  inline int add_param_pair(int64_t param_idx, const ObRawExpr* expr)
+  inline int add_param_pair(int64_t param_idx, const ObRawExpr *expr)
   {
     return param_expr_.push_back(ParamExprPair(param_idx, expr));
   }
 
   // only compare the result type of two columns
-  virtual bool compare_column(const ObColumnRefRawExpr& left, const ObColumnRefRawExpr& right);
+  virtual bool compare_column(const ObColumnRefRawExpr &left, const ObColumnRefRawExpr &right);
 
-  virtual bool compare_const(const ObConstRawExpr& left, const ObConstRawExpr& right);
+  virtual bool compare_const(const ObConstRawExpr &left, const ObConstRawExpr &right);
 
-  virtual bool compare_query(const ObQueryRefRawExpr& left, const ObQueryRefRawExpr& right);
+  virtual bool compare_query(const ObQueryRefRawExpr &left, const ObQueryRefRawExpr &right);
 
   void reset()
   {
@@ -1088,14 +1110,14 @@ struct ObExprParamCheckContext : ObExprEqualCheckContext {
   }
   virtual ~ObExprParamCheckContext()
   {}
-  int init(const ObQueryCtx* context);
-  bool compare_const(const ObConstRawExpr& left, const ObConstRawExpr& right) override;
+  int init(const ObQueryCtx *context);
+  bool compare_const(const ObConstRawExpr &left, const ObConstRawExpr &right) override;
 
-  int get_calc_expr(const int64_t param_idx, const ObRawExpr*& expr);
+  int get_calc_expr(const int64_t param_idx, const ObRawExpr *&expr);
 
-  int is_pre_calc_item(const ObConstRawExpr& const_expr, bool& is_calc);
+  int is_pre_calc_item(const ObConstRawExpr &const_expr, bool &is_calc);
 
-  const ObQueryCtx* context_;
+  const ObQueryCtx *context_;
 };
 
 enum ObVarType {
@@ -1110,8 +1132,8 @@ struct ObVarInfo final {
 public:
   ObVarInfo() : type_(INVALID_VAR), name_()
   {}
-  int deep_copy(common::ObIAllocator& allocator, ObVarInfo& var_info) const;
-  bool operator==(const ObVarInfo& other) const
+  int deep_copy(common::ObIAllocator &allocator, ObVarInfo &var_info) const;
+  bool operator==(const ObVarInfo &other) const
   {
     return (type_ == other.type_ && name_ == other.name_);
   }
@@ -1129,8 +1151,8 @@ struct ObSubQueryInfo {
   }
   TO_STRING_KV(K_(ref_expr));
 
-  const ParseNode* sub_query_;
-  ObQueryRefRawExpr* ref_expr_;
+  const ParseNode *sub_query_;
+  ObQueryRefRawExpr *ref_expr_;
   ObExprInfo parents_expr_info_;
 };
 class ObAggFunRawExpr;
@@ -1145,7 +1167,7 @@ struct ObResolveContext {
     {}
     bool is_win_agg_;
   };
-  ObResolveContext(ExprFactoryT& expr_factory, const common::ObTimeZoneInfo* tz_info, const common::ObNameCaseMode mode)
+  ObResolveContext(ExprFactoryT &expr_factory, const common::ObTimeZoneInfo *tz_info, const common::ObNameCaseMode mode)
       : expr_factory_(expr_factory),
         stmt_(NULL),
         connection_charset_(common::CHARSET_INVALID),
@@ -1172,33 +1194,33 @@ struct ObResolveContext {
         is_for_dbms_sql_(false)
   {}
 
-  ExprFactoryT& expr_factory_;
-  ObStmt* stmt_;
+  ExprFactoryT &expr_factory_;
+  ObStmt *stmt_;
   common::ObCharsetType connection_charset_;
   common::ObCollationType dest_collation_;
-  const common::ObTimeZoneInfo* tz_info_;
+  const common::ObTimeZoneInfo *tz_info_;
   common::ObNameCaseMode case_mode_;
   ObExprInfo parents_expr_info_;
-  common::ObIArray<ObQualifiedName>* columns_;
-  common::ObIArray<ObVarInfo>* sys_vars_;
-  common::ObIArray<ObSubQueryInfo>* sub_query_info_;
-  common::ObIArray<ObAggFunRawExpr*>* aggr_exprs_;
-  common::ObIArray<ObWinFunRawExpr*>* win_exprs_;
-  common::ObIArray<ObOpRawExpr*>* op_exprs_;
-  common::ObIArray<ObUserVarIdentRawExpr*>* user_var_exprs_;
+  common::ObIArray<ObQualifiedName> *columns_;
+  common::ObIArray<ObVarInfo> *sys_vars_;
+  common::ObIArray<ObSubQueryInfo> *sub_query_info_;
+  common::ObIArray<ObAggFunRawExpr *> *aggr_exprs_;
+  common::ObIArray<ObWinFunRawExpr *> *win_exprs_;
+  common::ObIArray<ObOpRawExpr *> *op_exprs_;
+  common::ObIArray<ObUserVarIdentRawExpr *> *user_var_exprs_;
   bool is_extract_param_type_;
-  const ParamStore* param_list_;
+  const ParamStore *param_list_;
   int64_t prepare_param_count_;
-  common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>>* external_param_info_;  // for anonymous + ps
+  common::ObIArray<std::pair<ObRawExpr *, ObConstRawExpr *>> *external_param_info_;  // for anonymous + ps
   ObStmtScope current_scope_;
   common::ObArenaAllocator local_allocator_;
   typedef common::ObDList<ObAggResolveLinkNode> ObAggResolveLink;
   ObAggResolveLink agg_resolve_link_;
   bool is_win_agg_;
-  ObSchemaChecker* schema_checker_;       // we use checker to get udf function name.
-  const ObSQLSessionInfo* session_info_;  // we use to get tenant id
-  share::schema::ObSchemaGetterGuard* schema_guard_;
-  ObQueryCtx* query_ctx_;
+  ObSchemaChecker *schema_checker_;       // we use checker to get udf function name.
+  const ObSQLSessionInfo *session_info_;  // we use to get tenant id
+  share::schema::ObSchemaGetterGuard *schema_guard_;
+  ObQueryCtx *query_ctx_;
   bool is_for_pivot_;
   bool is_for_dynamic_sql_;
   bool is_for_dbms_sql_;
@@ -1210,8 +1232,8 @@ struct ObHiddenColumnItem;
 
 class ObRawExpr : virtual public jit::expr::ObExpr {
 public:
-  friend sql::ObExpr* ObStaticEngineExprCG::get_rt_expr(const ObRawExpr& raw_expr);
-  friend sql::ObExpr* ObExprOperator::get_rt_expr(const ObRawExpr& raw_expr) const;
+  friend sql::ObExpr *ObStaticEngineExprCG::get_rt_expr(const ObRawExpr &raw_expr);
+  friend sql::ObExpr *ObExprOperator::get_rt_expr(const ObRawExpr &raw_expr) const;
 
   explicit ObRawExpr(ObItemType expr_type = T_INVALID)
       : ObExpr(expr_type),
@@ -1232,7 +1254,7 @@ public:
         is_deterministic_(true)
   {}
 
-  explicit ObRawExpr(common::ObIAllocator& alloc, ObItemType expr_type = T_INVALID)
+  explicit ObRawExpr(common::ObIAllocator &alloc, ObItemType expr_type = T_INVALID)
       : ObExpr(alloc, expr_type),
         magic_num_(0x13572468),
         info_(),
@@ -1251,11 +1273,11 @@ public:
         is_deterministic_(true)
   {}
   virtual ~ObRawExpr();
-  int assign(const ObRawExpr& other);
+  int assign(const ObRawExpr &other);
   int deep_copy(
-      ObRawExprFactory& expr_factory, const ObRawExpr& other, const uint64_t types, bool use_new_allocator = false);
+      ObRawExprFactory &expr_factory, const ObRawExpr &other, const uint64_t types, bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) = 0;
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) = 0;
   virtual void clear_child() = 0;
 
   virtual void reset();
@@ -1264,58 +1286,58 @@ public:
   bool has_generalized_column() const;
   bool has_enum_set_column() const;
   bool has_specified_pseudocolumn() const;
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const = 0;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const = 0;
 
   bool is_generalized_column() const;
   void unset_result_flag(uint32_t result_flag);
   // void set_op_factory(ObExprOperatorFactory &factory) { op_factory_ = &factory; }
-  void set_allocator(common::ObIAllocator& alloc);
-  void set_expr_factory(ObRawExprFactory& factory)
+  void set_allocator(common::ObIAllocator &alloc);
+  void set_expr_factory(ObRawExprFactory &factory)
   {
     expr_factory_ = &factory;
   }
-  ObRawExprFactory* get_expr_factory()
+  ObRawExprFactory *get_expr_factory()
   {
     return expr_factory_;
   }
 
-  void set_expr_info(const ObExprInfo& info);
+  void set_expr_info(const ObExprInfo &info);
   int add_flag(int32_t flag);
-  int add_flags(const ObExprInfo& flags);
-  int add_child_flags(const ObExprInfo& flags);
+  int add_flags(const ObExprInfo &flags);
+  int add_child_flags(const ObExprInfo &flags);
   bool has_flag(ObExprInfoFlag flag) const;
   int clear_flag(int32_t flag);
   bool has_const_or_const_expr_flag() const;
   bool has_hierarchical_query_flag() const;
-  const ObExprInfo& get_expr_info() const;
-  ObExprInfo& get_expr_info();
+  const ObExprInfo &get_expr_info() const;
+  ObExprInfo &get_expr_info();
 
-  void set_relation_ids(const ObRelIds& rel_ids);
+  void set_relation_ids(const ObRelIds &rel_ids);
   int add_relation_id(int64_t rel_idx);
-  int add_relation_ids(const ObRelIds& rel_ids);
-  ObRelIds& get_relation_ids();
-  const ObRelIds& get_relation_ids() const;
+  int add_relation_ids(const ObRelIds &rel_ids);
+  ObRelIds &get_relation_ids();
+  const ObRelIds &get_relation_ids() const;
 
-  int add_expr_levels(const ObExprLevels& expr_levels)
+  int add_expr_levels(const ObExprLevels &expr_levels)
   {
     return expr_levels_.add_members(expr_levels);
   }
-  ObExprLevels& get_expr_levels()
+  ObExprLevels &get_expr_levels()
   {
     return expr_levels_;
   }
-  const ObExprLevels& get_expr_levels() const
+  const ObExprLevels &get_expr_levels() const
   {
     return expr_levels_;
   }
 
   // implemented base on get_param_count() and get_param_expr() interface,
   // children are visited in get_param_expr() return order.
-  int preorder_accept(ObRawExprVisitor& visitor);
-  int postorder_accept(ObRawExprVisitor& visitor);
-  int postorder_replace(ObRawExprVisitor& visitor);
+  int preorder_accept(ObRawExprVisitor &visitor);
+  int postorder_accept(ObRawExprVisitor &visitor);
+  int postorder_replace(ObRawExprVisitor &visitor);
 
-  virtual int do_visit(ObRawExprVisitor& visitor) = 0;
+  virtual int do_visit(ObRawExprVisitor &visitor) = 0;
 
   // skip visit child for expr visitor. (ObSetIterRawExpr)
   virtual bool skip_visit_child() const
@@ -1324,8 +1346,8 @@ public:
   }
 
   virtual int64_t get_param_count() const = 0;
-  virtual const ObRawExpr* get_param_expr(int64_t index) const = 0;
-  virtual ObRawExpr*& get_param_expr(int64_t index) = 0;
+  virtual const ObRawExpr *get_param_expr(int64_t index) const = 0;
+  virtual ObRawExpr *&get_param_expr(int64_t index) = 0;
   virtual int64_t get_output_column() const
   {
     return -1;
@@ -1351,28 +1373,30 @@ public:
   {
     return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type();
   }
-  void set_alias_column_name(const common::ObString& alias_name)
+  bool is_non_pure_sys_func_expr() const;
+  bool is_specified_pseudocolumn_expr() const;
+  void set_alias_column_name(const common::ObString &alias_name)
   {
     alias_column_name_ = alias_name;
   }
-  const common::ObString& get_alias_column_name() const
+  const common::ObString &get_alias_column_name() const
   {
     return alias_column_name_;
   }
-  inline const common::ObString& get_root_alias_column_name() const
+  inline const common::ObString &get_root_alias_column_name() const
   {
     return OB_NOT_NULL(orig_expr_) ? orig_expr_->get_root_alias_column_name() : alias_column_name_;
   }
-  inline ObRawExpr* get_orig_expr() const
+  inline ObRawExpr *get_orig_expr() const
   {
     return orig_expr_;
   }
-  inline const ObRawExpr* get_root_orig_expr() const
+  inline const ObRawExpr *get_root_orig_expr() const
   {
     return OB_NOT_NULL(orig_expr_) ? orig_expr_->get_root_orig_expr() : this;
   }
-  int set_expr_name(const common::ObString& expr_name);
-  const common::ObString& get_expr_name() const
+  int set_expr_name(const common::ObString &expr_name);
+  const common::ObString &get_expr_name() const
   {
     return expr_name_;
   }
@@ -1399,21 +1423,22 @@ public:
   }
   virtual uint64_t hash_internal(uint64_t seed) const = 0;
 
-  int get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type = EXPLAIN_UNINITIALIZED) const;
-  int get_type_and_length(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  virtual int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const = 0;
+  int get_name(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type = EXPLAIN_UNINITIALIZED) const;
+  int get_type_and_length(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
+  virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const = 0;
 
   // post-processing for expressions
-  int formalize(const ObSQLSessionInfo* my_session);
+  int formalize(const ObSQLSessionInfo *my_session);
   int pull_relation_id_and_levels(int32_t cur_stmt_level);
   int extract_info();
   int deduce_type(const ObSQLSessionInfo* my_session = NULL);
+  bool is_bool_expr() const;
   inline ObExprInfo& get_flags()
   {
     return info_;
   }
-  int set_enum_set_values(const common::ObIArray<common::ObString>& values);
-  const common::ObIArray<common::ObString>& get_enum_set_values() const
+  int set_enum_set_values(const common::ObIArray<common::ObString> &values);
+  const common::ObIArray<common::ObString> &get_enum_set_values() const
   {
     return enum_set_values_;
   }
@@ -1447,7 +1472,7 @@ public:
   {
     is_for_generated_column_ = false;
   }
-  void set_rt_expr(sql::ObExpr* expr)
+  void set_rt_expr(sql::ObExpr *expr)
   {
     rt_expr_ = expr;
   }
@@ -1471,7 +1496,7 @@ public:
   {
     return is_calculated_;
   }
-  void set_orig_expr(ObRawExpr* expr)
+  void set_orig_expr(ObRawExpr *expr)
   {
     orig_expr_ = expr;
   }
@@ -1499,8 +1524,8 @@ protected:
   ObRelIds rel_ids_;  // related table idx
   // means the raw expr contain which level variables(column, aggregate expr, set expr or subquery expr)
   ObExprLevels expr_levels_;
-  common::ObIAllocator* inner_alloc_;
-  ObRawExprFactory* expr_factory_;
+  common::ObIAllocator *inner_alloc_;
+  ObRawExprFactory *expr_factory_;
   common::ObString alias_column_name_;
   int32_t expr_level_;
   common::ObArray<common::ObString> enum_set_values_;  // string_map
@@ -1509,17 +1534,17 @@ protected:
   bool is_explicited_reference_;
   int64_t ref_count_;
   bool is_for_generated_column_;
-  sql::ObExpr* rt_expr_;
+  sql::ObExpr *rt_expr_;
 
   uint64_t extra_;
-  ObRawExpr* orig_expr_;   // orig raw expr before pre cast of pre calc.
+  ObRawExpr *orig_expr_;   // orig raw expr before pre cast of pre calc.
   bool is_calculated_;     // for code gerenation in static engine.
   bool is_deterministic_;  // expr is deterministic, given the same inputs, returns the same result
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
 
-inline void ObRawExpr::set_allocator(ObIAllocator& alloc)
+inline void ObRawExpr::set_allocator(ObIAllocator &alloc)
 {
   inner_alloc_ = &alloc;
   result_type_.set_allocator(&alloc);
@@ -1529,7 +1554,7 @@ inline void ObRawExpr::unset_result_flag(uint32_t result_flag)
 {
   result_type_.unset_result_flag(result_flag);
 }
-inline void ObRawExpr::set_relation_ids(const ObRelIds& rel_ids)
+inline void ObRawExpr::set_relation_ids(const ObRelIds &rel_ids)
 {
   rel_ids_ = rel_ids;
 }
@@ -1545,7 +1570,7 @@ inline int ObRawExpr::add_relation_id(int64_t rel_idx)
   return ret;
 }
 
-inline int ObRawExpr::add_relation_ids(const ObRelIds& rel_ids)
+inline int ObRawExpr::add_relation_ids(const ObRelIds &rel_ids)
 {
   return rel_ids_.add_members(rel_ids);
 }
@@ -1581,7 +1606,7 @@ inline bool ObRawExpr::has_hierarchical_query_flag() const
   ;
 }
 
-inline int ObRawExpr::add_flags(const ObExprInfo& flags)
+inline int ObRawExpr::add_flags(const ObExprInfo &flags)
 {
   return info_.add_members(flags);
 }
@@ -1590,29 +1615,29 @@ inline bool ObRawExpr::has_flag(ObExprInfoFlag flag) const
 {
   return info_.has_member(flag);
 }
-inline bool ObRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+inline bool ObRawExpr::same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context) const
 {
   UNUSED(check_context);
   return (get_expr_type() == expr.get_expr_type() && get_result_type() == expr.get_result_type());
 }
 
-inline void ObRawExpr::set_expr_info(const ObExprInfo& info)
+inline void ObRawExpr::set_expr_info(const ObExprInfo &info)
 {
   info_ = info;
 }
-inline ObExprInfo& ObRawExpr::get_expr_info()
+inline ObExprInfo &ObRawExpr::get_expr_info()
 {
   return info_;
 }
-inline const ObExprInfo& ObRawExpr::get_expr_info() const
+inline const ObExprInfo &ObRawExpr::get_expr_info() const
 {
   return info_;
 }
-inline ObRelIds& ObRawExpr::get_relation_ids()
+inline ObRelIds &ObRawExpr::get_relation_ids()
 {
   return rel_ids_;
 }
-inline const ObRelIds& ObRawExpr::get_relation_ids() const
+inline const ObRelIds &ObRawExpr::get_relation_ids() const
 {
   return rel_ids_;
 }
@@ -1622,7 +1647,7 @@ class ObTerminalRawExpr : public ObRawExpr {
 public:
   explicit ObTerminalRawExpr(ObItemType expr_type = T_INVALID) : ObRawExpr(expr_type)
   {}
-  explicit ObTerminalRawExpr(common::ObIAllocator& alloc, ObItemType expr_type = T_INVALID)
+  explicit ObTerminalRawExpr(common::ObIAllocator &alloc, ObItemType expr_type = T_INVALID)
       : ObRawExpr(alloc, expr_type)
   {}
   virtual ~ObTerminalRawExpr()
@@ -1634,12 +1659,12 @@ public:
   {
     return 0;
   }
-  virtual const ObRawExpr* get_param_expr(int64_t index) const
+  virtual const ObRawExpr *get_param_expr(int64_t index) const
   {
     UNUSED(index);
     return NULL;
   }
-  virtual ObRawExpr*& get_param_expr(int64_t index);
+  virtual ObRawExpr *&get_param_expr(int64_t index);
   virtual uint64_t hash_internal(uint64_t seed) const
   {
     return seed;
@@ -1653,40 +1678,50 @@ private:
 ////////////////////////////////////////////////////////////////
 class ObConstRawExpr : public ObTerminalRawExpr, public jit::expr::ObConstExpr {
 public:
-  ObConstRawExpr() : is_date_unit_(false) /*: precalc_expr_(NULL)*/
-  {
-    ObExpr::set_expr_class(ObExpr::EXPR_CONST);
+  ObConstRawExpr() 
+    : is_date_unit_(false), 
+      is_literal_bool_(false)/*: precalc_expr_(NULL)*/
+  { 
+    ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST); 
   }
   ObConstRawExpr(common::ObIAllocator& alloc)
-      : ObExpr(alloc), ObTerminalRawExpr(alloc), ObConstExpr(), is_date_unit_(false)
+      : ObExpr(alloc), 
+        ObTerminalRawExpr(alloc), 
+        ObConstExpr(), 
+        is_date_unit_(false),
+        is_literal_bool_(false)
   {
-    ObExpr::set_expr_class(ObExpr::EXPR_CONST);
+    ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST);
   }
   ObConstRawExpr(const oceanbase::common::ObObj& val, ObItemType expr_type = T_INVALID)
-      : ObExpr(expr_type), ObTerminalRawExpr(expr_type), ObConstExpr(), is_date_unit_(false)
+      : ObExpr(expr_type), 
+        ObTerminalRawExpr(expr_type), 
+        ObConstExpr(), 
+        is_date_unit_(false),
+        is_literal_bool_(false)
   {
     set_value(val);
     set_expr_class(ObExpr::EXPR_CONST);
   }
   virtual ~ObConstRawExpr()
   {}
-  int assign(const ObConstRawExpr& other);
+  int assign(const ObConstRawExpr &other);
 
-  int deep_copy(ObRawExprFactory& expr_factory, const ObConstRawExpr& other, const uint64_t copy_types,
+  int deep_copy(ObRawExprFactory &expr_factory, const ObConstRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  void set_value(const oceanbase::common::ObObj& val);
-  void set_literal_prefix(const common::ObString& name);
-  void set_expr_obj_meta(const common::ObObjMeta& meta)
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  void set_value(const oceanbase::common::ObObj &val);
+  void set_literal_prefix(const common::ObString &name);
+  void set_expr_obj_meta(const common::ObObjMeta &meta)
   {
     obj_meta_ = meta;
   }
-  const common::ObObjMeta& get_expr_obj_meta() const
+  const common::ObObjMeta &get_expr_obj_meta() const
   {
     return obj_meta_;
   }
-  const common::ObString& get_literal_prefix() const
+  const common::ObString &get_literal_prefix() const
   {
     return literal_prefix_;
   }
@@ -1696,19 +1731,23 @@ public:
   {
     return true == is_date_unit_;
   }
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
+  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const override;
+  void set_is_literal_bool(const bool is_literal_bool) { is_literal_bool_ = is_literal_bool; }
+  bool is_literal_bool() const { return is_literal_bool_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
   common::ObString literal_prefix_;  // used in compile phase.
   common::ObObjMeta obj_meta_;
   bool is_date_unit_;
+  // for mysql mode to distinguish tinyint and literal bool
+  bool is_literal_bool_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);
@@ -1721,7 +1760,7 @@ public:
   {
     ObExpr::set_expr_class(ObExpr::EXPR_VAR);
   }
-  ObVarRawExpr(common::ObIAllocator& alloc)
+  ObVarRawExpr(common::ObIAllocator &alloc)
       : ObExpr(alloc), ObTerminalRawExpr(alloc), ObVarExpr(), result_type_assigned_(false)
   {
     ObExpr::set_expr_class(ObExpr::EXPR_VAR);
@@ -1734,17 +1773,17 @@ public:
   virtual ~ObVarRawExpr()
   {}
 
-  int assign(const ObVarRawExpr& other);
+  int assign(const ObVarRawExpr &other);
 
-  int deep_copy(ObRawExprFactory& expr_factory, const ObVarRawExpr& other, const uint64_t copy_types,
+  int deep_copy(ObRawExprFactory &expr_factory, const ObVarRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   void set_result_type_assigned(bool v)
   {
     result_type_assigned_ = v;
@@ -1764,26 +1803,26 @@ class ObUserVarIdentRawExpr : public ObConstRawExpr {
 public:
   ObUserVarIdentRawExpr() : is_contain_assign_(false), query_has_udf_(false)
   {}
-  ObUserVarIdentRawExpr(common::ObIAllocator& alloc)
+  ObUserVarIdentRawExpr(common::ObIAllocator &alloc)
       : ObConstRawExpr(alloc), is_contain_assign_(false), query_has_udf_(false)
   {}
-  ObUserVarIdentRawExpr(const oceanbase::common::ObObj& val, ObItemType expr_type = T_INVALID)
+  ObUserVarIdentRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
       : ObConstRawExpr(val, expr_type), is_contain_assign_(false), query_has_udf_(false)
   {}
   virtual ~ObUserVarIdentRawExpr()
   {}
-  int assign(const ObUserVarIdentRawExpr& other);
+  int assign(const ObUserVarIdentRawExpr &other);
 
-  int deep_copy(ObRawExprFactory& expr_factory, const ObUserVarIdentRawExpr& other, const uint64_t copy_types,
+  int deep_copy(ObRawExprFactory &expr_factory, const ObUserVarIdentRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
 
   bool get_is_contain_assign() const
   {
@@ -1801,7 +1840,7 @@ public:
   {
     query_has_udf_ = query_has_udf;
   }
-  bool is_same_variable(const ObObj& obj) const;
+  bool is_same_variable(const ObObj &obj) const;
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -1829,7 +1868,7 @@ public:
     set_expr_class(ObExpr::EXPR_QUERY_REF);
   }
 
-  ObQueryRefRawExpr(common::ObIAllocator& alloc)
+  ObQueryRefRawExpr(common::ObIAllocator &alloc)
       : ObTerminalRawExpr(alloc),
         ref_id_(common::OB_INVALID_ID),
         output_column_(0),
@@ -1855,28 +1894,28 @@ public:
   }
   virtual ~ObQueryRefRawExpr()
   {}
-  int assign(const ObQueryRefRawExpr& other);
-  int deep_copy(ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObQueryRefRawExpr& other);
+  int assign(const ObQueryRefRawExpr &other);
+  int deep_copy(ObStmtFactory &stmt_factory, ObRawExprFactory &expr_factory, const ObQueryRefRawExpr &other);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
   int64_t get_ref_id() const;
   void set_ref_id(int64_t id);
-  ObSelectStmt* get_ref_stmt();
-  const ObSelectStmt* get_ref_stmt() const;
-  void set_ref_stmt(ObSelectStmt* ref_stmt)
+  ObSelectStmt *get_ref_stmt();
+  const ObSelectStmt *get_ref_stmt() const;
+  void set_ref_stmt(ObSelectStmt *ref_stmt)
   {
     ref_stmt_ = ref_stmt;
     ref_type_ = OB_STMT;
   }
-  ObLogicalOperator* get_ref_operator()
+  ObLogicalOperator *get_ref_operator()
   {
     return (OB_LOGICAL_OPERATOR == ref_type_ ? ref_operator_ : NULL);
   }
-  const ObLogicalOperator* get_ref_operator() const
+  const ObLogicalOperator *get_ref_operator() const
   {
     return (OB_LOGICAL_OPERATOR == ref_type_ ? ref_operator_ : NULL);
   }
-  void set_ref_operator(ObLogicalOperator* ref_opeator)
+  void set_ref_operator(ObLogicalOperator *ref_opeator)
   {
     ref_operator_ = ref_opeator;
     ref_type_ = OB_LOGICAL_OPERATOR;
@@ -1890,16 +1929,16 @@ public:
     return OB_LOGICAL_OPERATOR == ref_type_;
   }
   void set_output_column(int64_t output_column);
-  int64_t get_output_column() const;
-  int add_column_type(const ObExprResType& type)
+  int64_t get_output_column() const override;
+  int add_column_type(const ObExprResType &type)
   {
     return column_types_.push_back(type);
   }
-  const common::ObIArray<ObExprResType>& get_column_types() const
+  const common::ObIArray<ObExprResType> &get_column_types() const
   {
     return column_types_;
   }
-  common::ObIArray<ObExprResType>& get_column_types()
+  common::ObIArray<ObExprResType> &get_column_types()
   {
     return column_types_;
   }
@@ -1919,17 +1958,17 @@ public:
   {
     return is_cursor_;
   }
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const
+  virtual uint64_t hash_internal(uint64_t seed) const override
   {
     return common::do_hash(ref_id_, seed);
   }
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_ID,
       ref_id_, K_(expr_level), K_(expr_levels), K_(output_column), K_(is_set), K_(is_cursor), K_(column_types),
       K_(enum_set_values));
@@ -1938,8 +1977,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRefRawExpr);
   int64_t ref_id_;
   union {
-    ObSelectStmt* ref_stmt_;
-    ObLogicalOperator* ref_operator_;
+    ObSelectStmt *ref_stmt_;
+    ObLogicalOperator *ref_operator_;
   };
   enum RefType { OB_STMT = 0, OB_LOGICAL_OPERATOR = 1 };
   int64_t output_column_;
@@ -1987,12 +2026,13 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
   }
 
-  ObColumnRefRawExpr(common::ObIAllocator& alloc)
+  ObColumnRefRawExpr(common::ObIAllocator &alloc)
       : ObExpr(alloc),
         ObTerminalRawExpr(alloc),
         ObColumnRefExpr(alloc),
@@ -2008,6 +2048,7 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
@@ -2029,6 +2070,7 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
@@ -2036,74 +2078,74 @@ public:
 
   virtual ~ObColumnRefRawExpr()
   {}
-  int assign(const ObColumnRefRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObColumnRefRawExpr& other, bool use_new_allocator = false);
+  int assign(const ObColumnRefRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObColumnRefRawExpr &other, bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
   uint64_t get_table_id() const;
   uint64_t get_column_id() const;
-  uint64_t& get_table_id();
-  uint64_t& get_column_id();
+  uint64_t &get_table_id();
+  uint64_t &get_column_id();
   void set_ref_id(uint64_t table_id, uint64_t column_id);
   void set_table_id(uint64_t table_id);
-  void set_column_attr(const common::ObString& table_name, const common::ObString& column_name);
-  inline void set_table_name(const common::ObString& table_name)
+  void set_column_attr(const common::ObString &table_name, const common::ObString &column_name);
+  inline void set_table_name(const common::ObString &table_name)
   {
     table_name_ = table_name;
   }
-  inline common::ObString& get_table_name()
+  inline common::ObString &get_table_name()
   {
     return table_name_;
   }
-  inline const common::ObString& get_table_name() const
+  inline const common::ObString &get_table_name() const
   {
     return table_name_;
   }
-  inline void set_synonym_name(const common::ObString& synonym_name)
+  inline void set_synonym_name(const common::ObString &synonym_name)
   {
     synonym_name_ = synonym_name;
   }
-  inline common::ObString& get_synonym_name()
+  inline common::ObString &get_synonym_name()
   {
     return synonym_name_;
   }
-  inline const common::ObString& get_synonym_name() const
+  inline const common::ObString &get_synonym_name() const
   {
     return synonym_name_;
   }
-  inline void set_synonym_db_name(const common::ObString& synonym_db_name)
+  inline void set_synonym_db_name(const common::ObString &synonym_db_name)
   {
     synonym_db_name_ = synonym_db_name;
   }
-  inline common::ObString& get_synonym_db_name()
+  inline common::ObString &get_synonym_db_name()
   {
     return synonym_db_name_;
   }
-  inline const common::ObString& get_synonym_db_name() const
+  inline const common::ObString &get_synonym_db_name() const
   {
     return synonym_db_name_;
   }
-  inline void set_column_name(const common::ObString& column_name)
+  inline void set_column_name(const common::ObString &column_name)
   {
     column_name_ = column_name;
   }
-  inline common::ObString& get_column_name()
+  inline common::ObString &get_column_name()
   {
     return column_name_;
   }
-  inline const common::ObString& get_column_name() const
+  inline const common::ObString &get_column_name() const
   {
     return column_name_;
   }
-  inline void set_database_name(const common::ObString& db_name)
+  inline void set_database_name(const common::ObString &db_name)
   {
     database_name_ = db_name;
   }
-  inline const common::ObString& get_database_name() const
+  inline const common::ObString &get_database_name() const
   {
     return database_name_;
   }
-  inline common::ObString& get_database_name()
+  inline common::ObString &get_database_name()
   {
     return database_name_;
   }
@@ -2111,12 +2153,21 @@ public:
   {
     return get_column_id();
   }
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
+
+  bool is_from_alias_table() const
+  {
+    return from_alias_table_;
+  }
+  void set_from_alias_table(bool value)
+  {
+    from_alias_table_ = value;
+  }
   inline bool is_generated_column() const
   {
     return share::schema::ObSchemaUtils::is_generated_column(column_flags_);
@@ -2157,15 +2208,15 @@ public:
   {
     return column_flags_;
   }
-  inline const ObRawExpr* get_dependant_expr() const
+  inline const ObRawExpr *get_dependant_expr() const
   {
     return dependant_expr_;
   }
-  inline ObRawExpr* get_dependant_expr()
+  inline ObRawExpr *get_dependant_expr()
   {
     return dependant_expr_;
   }
-  inline void set_dependant_expr(ObRawExpr* expr)
+  inline void set_dependant_expr(ObRawExpr *expr)
   {
     dependant_expr_ = expr;
   }
@@ -2194,16 +2245,16 @@ public:
     is_hidden_ = value;
   }
 
-  inline ObRawExpr* get_real_expr()
+  inline ObRawExpr *get_real_expr()
   {
     return real_expr_;
   }
-  inline void set_real_expr(ObRawExpr* expr)
+  inline void set_real_expr(ObRawExpr *expr)
   {
     real_expr_ = expr;
   }
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_TID,
       table_id_, N_CID, column_id_, K_(database_name), K_(table_name), K_(synonym_name), K_(synonym_db_name),
@@ -2220,11 +2271,12 @@ private:
   common::ObString synonym_db_name_;
   common::ObString column_name_;
   uint64_t column_flags_;          // same as flags in ObColumnSchemaV2
-  ObRawExpr* dependant_expr_;      // TODO
+  ObRawExpr *dependant_expr_;      // TODO
   bool is_lob_column_;             // TODO add lob column
   bool is_unpivot_mocked_column_;  // used for unpivot
   bool is_hidden_;                 // used for print hidden column
-  ObRawExpr* real_expr_;           // for oracle virtual table that is mapping a real table
+  bool from_alias_table_;
+  ObRawExpr *real_expr_;  // for oracle virtual table that is mapping a real table
 };
 
 inline void ObColumnRefRawExpr::set_ref_id(uint64_t table_id, uint64_t column_id)
@@ -2248,12 +2300,12 @@ inline uint64_t ObColumnRefRawExpr::get_column_id() const
   return column_id_;
 }
 
-inline uint64_t& ObColumnRefRawExpr::get_table_id()
+inline uint64_t &ObColumnRefRawExpr::get_table_id()
 {
   return table_id_;
 }
 
-inline uint64_t& ObColumnRefRawExpr::get_column_id()
+inline uint64_t &ObColumnRefRawExpr::get_column_id()
 {
   return column_id_;
 }
@@ -2265,22 +2317,22 @@ public:
   {
     set_expr_class(ObExpr::EXPR_SET_OP);
   }
-  ObSetOpRawExpr(common::ObIAllocator& alloc) : ObTerminalRawExpr(alloc), idx_(-1)
+  ObSetOpRawExpr(common::ObIAllocator &alloc) : ObTerminalRawExpr(alloc), idx_(-1)
   {
     set_expr_class(ObExpr::EXPR_SET_OP);
   }
   virtual ~ObSetOpRawExpr()
   {}
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
   int deep_copy(
-      ObRawExprFactory& expr_factory, const ObSetOpRawExpr& other, const uint64_t copy_types, bool use_new_allocator);
+      ObRawExprFactory &expr_factory, const ObSetOpRawExpr &other, const uint64_t copy_types, bool use_new_allocator);
 
-  int assign(const ObSetOpRawExpr& other);
+  int assign(const ObSetOpRawExpr &other);
 
   void set_idx(int64_t idx)
   {
@@ -2305,21 +2357,21 @@ public:
   {
     set_expr_class(ObExpr::EXPR_ALIAS_REF);
   }
-  ObAliasRefRawExpr(common::ObIAllocator& alloc) : ObRawExpr(alloc), ref_expr_(NULL), project_index_(OB_INVALID_INDEX)
+  ObAliasRefRawExpr(common::ObIAllocator &alloc) : ObRawExpr(alloc), ref_expr_(NULL), project_index_(OB_INVALID_INDEX)
   {
     set_expr_class(ObExpr::EXPR_ALIAS_REF);
   }
 
   virtual ~ObAliasRefRawExpr()
   {}
-  int assign(const ObAliasRefRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObAliasRefRawExpr& other, const uint64_t copy_types,
+  int assign(const ObAliasRefRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObAliasRefRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  const ObRawExpr* get_ref_expr() const;
-  ObRawExpr* get_ref_expr();
-  void set_ref_expr(ObRawExpr* ref_expr)
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  const ObRawExpr *get_ref_expr() const;
+  ObRawExpr *get_ref_expr();
+  void set_ref_expr(ObRawExpr *ref_expr)
   {
     ref_expr_ = ref_expr;
   }
@@ -2331,7 +2383,7 @@ public:
   {
     return project_index_;
   }
-  void set_query_output(ObQueryRefRawExpr* query_ref, int64_t project_index)
+  void set_query_output(ObQueryRefRawExpr *query_ref, int64_t project_index)
   {
     ref_expr_ = query_ref;
     project_index_ = project_index;
@@ -2345,18 +2397,18 @@ public:
   {
     return 1;
   }
-  virtual const ObRawExpr* get_param_expr(int64_t index) const override;
-  virtual ObRawExpr*& get_param_expr(int64_t index) override;
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  virtual uint64_t hash_internal(uint64_t seed) const;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE,
+  virtual const ObRawExpr *get_param_expr(int64_t index) const override;
+  virtual ObRawExpr *&get_param_expr(int64_t index) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE,
       ref_expr_, K_(enum_set_values));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAliasRefRawExpr);
-  ObRawExpr* ref_expr_;
+  ObRawExpr *ref_expr_;
   int64_t project_index_;  // project index of the subquery
 };
 
@@ -2365,32 +2417,32 @@ class ObNonTerminalRawExpr : public ObRawExpr {
 public:
   ObNonTerminalRawExpr() : ObRawExpr(), op_(NULL), input_types_()
   {}
-  ObNonTerminalRawExpr(common::ObIAllocator& alloc) : ObRawExpr(alloc), op_(NULL), input_types_()
+  ObNonTerminalRawExpr(common::ObIAllocator &alloc) : ObRawExpr(alloc), op_(NULL), input_types_()
   {}
   virtual ~ObNonTerminalRawExpr()
   {
     free_op();
   }
 
-  int assign(const ObNonTerminalRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObNonTerminalRawExpr& other, const uint64_t copy_types,
+  int assign(const ObNonTerminalRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObNonTerminalRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  virtual void reset()
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  virtual void reset() override
   {
     free_op();
     input_types_.reset();
   }
 
-  virtual ObExprOperator* get_op();
+  virtual ObExprOperator *get_op();
   void free_op();
   /*
    * store the target type of paramters.
    */
-  int set_input_types(const ObIExprResTypes& input_types);
+  int set_input_types(const ObIExprResTypes &input_types);
 
-  inline const ObExprResTypes& get_input_types()
+  inline const ObExprResTypes &get_input_types()
   {
     return input_types_;
   }
@@ -2399,14 +2451,14 @@ public:
     return input_types_.count();
   }
 
-  virtual uint64_t hash_internal(uint64_t seed) const
+  virtual uint64_t hash_internal(uint64_t seed) const override
   {
     return seed;
   }
 
 protected:
   // data members
-  ObExprOperator* op_;
+  ObExprOperator *op_;
   ObExprResTypes input_types_;
   DISALLOW_COPY_AND_ASSIGN(ObNonTerminalRawExpr);
 };
@@ -2425,7 +2477,7 @@ public:
     set_expr_class(ObExpr::EXPR_OPERATOR);
   }
 
-  ObOpRawExpr(common::ObIAllocator& alloc)
+  ObOpRawExpr(common::ObIAllocator &alloc)
       : ObExpr(alloc),
         ObNonTerminalRawExpr(alloc),
         ObOpExpr(alloc),
@@ -2436,20 +2488,20 @@ public:
     set_expr_class(ObExpr::EXPR_OPERATOR);
   }
 
-  ObOpRawExpr(ObRawExpr* first_expr, ObRawExpr* second_expr, ObItemType type);  // binary op
+  ObOpRawExpr(ObRawExpr *first_expr, ObRawExpr *second_expr, ObItemType type);  // binary op
   virtual ~ObOpRawExpr()
   {}
-  int assign(const ObOpRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObOpRawExpr& other, const uint64_t copy_types,
+  int assign(const ObOpRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObOpRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  int set_param_expr(ObRawExpr* expr);                                                        // unary op
-  int set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr);                         // binary op
-  int set_param_exprs(ObRawExpr* first_expr, ObRawExpr* second_expr, ObRawExpr* third_expr);  // triple op
-  int add_param_expr(ObRawExpr* expr);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  int set_param_expr(ObRawExpr *expr);                                                        // unary op
+  int set_param_exprs(ObRawExpr *first_expr, ObRawExpr *second_expr);                         // binary op
+  int set_param_exprs(ObRawExpr *first_expr, ObRawExpr *second_expr, ObRawExpr *third_expr);  // triple op
+  int add_param_expr(ObRawExpr *expr);
   int remove_param_expr(int64_t index);
-  int replace_param_expr(int64_t index, ObRawExpr* expr);
+  int replace_param_expr(int64_t index, ObRawExpr *expr);
 
   bool deduce_type_adding_implicit_cast() const
   {
@@ -2462,36 +2514,36 @@ public:
 
   void set_expr_type(ObItemType type);
 
-  common::ObIArray<ObRawExpr*>& get_param_exprs()
+  common::ObIArray<ObRawExpr *> &get_param_exprs()
   {
     return exprs_;
   }
-  const common::ObIArray<ObRawExpr*>& get_param_exprs() const
+  const common::ObIArray<ObRawExpr *> &get_param_exprs() const
   {
     return exprs_;
   }
 
-  int64_t get_param_count() const;
-  const ObRawExpr* get_param_expr(int64_t index) const;
-  ObRawExpr*& get_param_expr(int64_t index);
-  virtual int64_t get_output_column() const
+  int64_t get_param_count() const override;
+  const ObRawExpr *get_param_expr(int64_t index) const override;
+  ObRawExpr *&get_param_expr(int64_t index) override;
+  virtual int64_t get_output_column() const override
   {
     return T_OP_ROW == get_expr_type() ? get_param_count() : -1;
   }
 
-  virtual void clear_child();
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void clear_child() override;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
   // used for jit expr
-  virtual int64_t get_children_count() const
+  virtual int64_t get_children_count() const override
   {
     return exprs_.count();
   }
   // used for jit expr
-  virtual int get_children(jit::expr::ExprArray& jit_exprs) const;
+  virtual int get_children(jit::expr::ExprArray &jit_exprs) const override;
 
-  void set_subquery_key(ObSubQueryKey& key)
+  void set_subquery_key(ObSubQueryKey &key)
   {
     subquery_key_ = key;
   }
@@ -2500,18 +2552,18 @@ public:
     return subquery_key_;
   }
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   int get_subquery_comparison_name(
-      const common::ObString& symbol, char* buf, int64_t buf_len, int64_t& pos, ExplainType type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_levels), N_CHILDREN, exprs_);
+      const common::ObString &symbol, char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_levels), N_CHILDREN, exprs_);
 
 protected:
-  common::ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
+  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
   ObSubQueryKey subquery_key_;
 
   bool deduce_type_adding_implicit_cast_;
@@ -2520,9 +2572,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObOpRawExpr);
 };
 
-inline const ObRawExpr* ObOpRawExpr::get_param_expr(int64_t index) const
+inline const ObRawExpr *ObOpRawExpr::get_param_expr(int64_t index) const
 {
-  const ObRawExpr* expr = NULL;
+  const ObRawExpr *expr = NULL;
   if (index >= 0 && index < exprs_.count()) {
     expr = exprs_.at(index);
   }
@@ -2530,7 +2582,7 @@ inline const ObRawExpr* ObOpRawExpr::get_param_expr(int64_t index) const
 }
 
 // here must return in two branch, because ret value is a *&
-inline ObRawExpr*& ObOpRawExpr::get_param_expr(int64_t index)
+inline ObRawExpr *&ObOpRawExpr::get_param_expr(int64_t index)
 {
   if (index >= 0 && index < exprs_.count()) {
     return exprs_.at(index);
@@ -2539,7 +2591,7 @@ inline ObRawExpr*& ObOpRawExpr::get_param_expr(int64_t index)
   }
 }
 
-inline int ObOpRawExpr::add_param_expr(ObRawExpr* expr)
+inline int ObOpRawExpr::add_param_expr(ObRawExpr *expr)
 {
   return exprs_.push_back(expr);
 }
@@ -2555,13 +2607,13 @@ inline int ObOpRawExpr::remove_param_expr(int64_t index)
   return ret;
 }
 
-inline int ObOpRawExpr::replace_param_expr(int64_t index, ObRawExpr* expr)
+inline int ObOpRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (index < 0 || index >= exprs_.count()) {
     ret = common::OB_INVALID_ARGUMENT;
   } else {
-    ObRawExpr*& target_expr = exprs_.at(index);
+    ObRawExpr *&target_expr = exprs_.at(index);
     if (OB_NOT_NULL(expr) && expr != target_expr) {
       expr->set_orig_expr(target_expr);
     }
@@ -2601,7 +2653,7 @@ public:
   {
     set_expr_class(ObExpr::EXPR_CASE_OPERATOR);
   }
-  ObCaseOpRawExpr(common::ObIAllocator& alloc)
+  ObCaseOpRawExpr(common::ObIAllocator &alloc)
       : ObExpr(alloc),
         ObNonTerminalRawExpr(alloc),
         ObCaseOpExpr(),
@@ -2615,34 +2667,34 @@ public:
   }
   virtual ~ObCaseOpRawExpr()
   {}
-  int assign(const ObCaseOpRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObCaseOpRawExpr& other, const uint64_t copy_types,
+  int assign(const ObCaseOpRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObCaseOpRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  const ObRawExpr* get_arg_param_expr() const;
-  const ObRawExpr* get_default_param_expr() const;
-  const ObRawExpr* get_when_param_expr(int64_t index) const;
-  const ObRawExpr* get_then_param_expr(int64_t index) const;
-  ObRawExpr*& get_arg_param_expr();
-  inline common::ObIArray<ObRawExpr*>& get_when_param_exprs()
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  const ObRawExpr *get_arg_param_expr() const;
+  const ObRawExpr *get_default_param_expr() const;
+  const ObRawExpr *get_when_param_expr(int64_t index) const;
+  const ObRawExpr *get_then_param_expr(int64_t index) const;
+  ObRawExpr *&get_arg_param_expr();
+  inline common::ObIArray<ObRawExpr *> &get_when_param_exprs()
   {
     return when_exprs_;
   }
-  inline common::ObIArray<ObRawExpr*>& get_then_param_exprs()
+  inline common::ObIArray<ObRawExpr *> &get_then_param_exprs()
   {
     return then_exprs_;
   }
-  ObRawExpr*& get_default_param_expr();
-  ObRawExpr*& get_when_param_expr(int64_t index);
-  ObRawExpr*& get_then_param_expr(int64_t index);
-  void set_arg_param_expr(ObRawExpr* expr);
-  void set_default_param_expr(ObRawExpr* expr);
-  int add_when_param_expr(ObRawExpr* expr);
-  int add_then_param_expr(ObRawExpr* expr);
-  int replace_when_param_expr(int64_t index, ObRawExpr* expr);
-  int replace_then_param_expr(int64_t index, ObRawExpr* expr);
-  int replace_param_expr(int64_t index, ObRawExpr* new_expr);
+  ObRawExpr *&get_default_param_expr();
+  ObRawExpr *&get_when_param_expr(int64_t index);
+  ObRawExpr *&get_then_param_expr(int64_t index);
+  void set_arg_param_expr(ObRawExpr *expr);
+  void set_default_param_expr(ObRawExpr *expr);
+  int add_when_param_expr(ObRawExpr *expr);
+  int add_then_param_expr(ObRawExpr *expr);
+  int replace_when_param_expr(int64_t index, ObRawExpr *expr);
+  int replace_then_param_expr(int64_t index, ObRawExpr *expr);
+  int replace_param_expr(int64_t index, ObRawExpr *new_expr);
   int64_t get_when_expr_size() const;
   int64_t get_then_expr_size() const;
   bool is_arg_case() const
@@ -2654,77 +2706,77 @@ public:
     return is_decode_func_;
   }
 
-  virtual void clear_child();
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void clear_child() override;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual int64_t get_param_count() const;
-  virtual const ObRawExpr* get_param_expr(int64_t index) const;
-  virtual ObRawExpr*& get_param_expr(int64_t index);
+  virtual int64_t get_param_count() const override;
+  virtual const ObRawExpr *get_param_expr(int64_t index) const override;
+  virtual ObRawExpr *&get_param_expr(int64_t index) override;
 
   // used for jit
-  virtual int64_t get_children_count() const
+  virtual int64_t get_children_count() const override
   {
     return get_param_count();
   }
 
-  virtual int get_children(jit::expr::ExprArray& jit_exprs) const;
+  virtual int get_children(jit::expr::ExprArray &jit_exprs) const override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_levels), N_ARG_CASE, arg_expr_, N_DEFAULT, default_expr_, N_WHEN, when_exprs_, N_THEN, then_exprs_,
       N_DECODE, is_decode_func_);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCaseOpRawExpr);
-  ObRawExpr* arg_expr_;
-  common::ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, common::ModulePageAllocator, true> when_exprs_;
-  common::ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, common::ModulePageAllocator, true> then_exprs_;
-  ObRawExpr* default_expr_;
+  ObRawExpr *arg_expr_;
+  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> when_exprs_;
+  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> then_exprs_;
+  ObRawExpr *default_expr_;
   bool is_decode_func_;
 };
 
-inline const ObRawExpr* ObCaseOpRawExpr::get_arg_param_expr() const
+inline const ObRawExpr *ObCaseOpRawExpr::get_arg_param_expr() const
 {
   return arg_expr_;
 }
-inline const ObRawExpr* ObCaseOpRawExpr::get_default_param_expr() const
+inline const ObRawExpr *ObCaseOpRawExpr::get_default_param_expr() const
 {
   return default_expr_;
 }
-inline const ObRawExpr* ObCaseOpRawExpr::get_when_param_expr(int64_t index) const
+inline const ObRawExpr *ObCaseOpRawExpr::get_when_param_expr(int64_t index) const
 {
-  ObRawExpr* expr = NULL;
+  ObRawExpr *expr = NULL;
   if (OB_LIKELY(index >= 0 && index < when_exprs_.count())) {
     expr = when_exprs_.at(index);
   } else {
   }
   return expr;
 }
-inline const ObRawExpr* ObCaseOpRawExpr::get_then_param_expr(int64_t index) const
+inline const ObRawExpr *ObCaseOpRawExpr::get_then_param_expr(int64_t index) const
 {
-  ObRawExpr* expr = NULL;
+  ObRawExpr *expr = NULL;
   if (OB_LIKELY(index >= 0 || index < then_exprs_.count())) {
     expr = then_exprs_.at(index);
   } else {
   }
   return expr;
 }
-inline ObRawExpr*& ObCaseOpRawExpr::get_arg_param_expr()
+inline ObRawExpr *&ObCaseOpRawExpr::get_arg_param_expr()
 {
   return arg_expr_;
 }
-inline ObRawExpr*& ObCaseOpRawExpr::get_default_param_expr()
+inline ObRawExpr *&ObCaseOpRawExpr::get_default_param_expr()
 {
   return default_expr_;
 }
 
 // here must return in two branch, because ret value is a *&
-inline ObRawExpr*& ObCaseOpRawExpr::get_when_param_expr(int64_t index)
+inline ObRawExpr *&ObCaseOpRawExpr::get_when_param_expr(int64_t index)
 {
   if (OB_LIKELY(index >= 0 && index < when_exprs_.count())) {
     return when_exprs_.at(index);
@@ -2734,7 +2786,7 @@ inline ObRawExpr*& ObCaseOpRawExpr::get_when_param_expr(int64_t index)
 }
 
 // here must return in two branch, because ret value is a *&
-inline ObRawExpr*& ObCaseOpRawExpr::get_then_param_expr(int64_t index)
+inline ObRawExpr *&ObCaseOpRawExpr::get_then_param_expr(int64_t index)
 {
   if (OB_LIKELY(index >= 0 && index < then_exprs_.count())) {
     return then_exprs_.at(index);
@@ -2742,26 +2794,26 @@ inline ObRawExpr*& ObCaseOpRawExpr::get_then_param_expr(int64_t index)
     return USELESS_POINTER;
   }
 }
-inline void ObCaseOpRawExpr::set_arg_param_expr(ObRawExpr* expr)
+inline void ObCaseOpRawExpr::set_arg_param_expr(ObRawExpr *expr)
 {
   arg_expr_ = expr;
 }
-inline void ObCaseOpRawExpr::set_default_param_expr(ObRawExpr* expr)
+inline void ObCaseOpRawExpr::set_default_param_expr(ObRawExpr *expr)
 {
   default_expr_ = expr;
 }
-inline int ObCaseOpRawExpr::add_when_param_expr(ObRawExpr* expr)
+inline int ObCaseOpRawExpr::add_when_param_expr(ObRawExpr *expr)
 {
   int ret = when_exprs_.push_back(expr);
   return ret;
 }
-inline int ObCaseOpRawExpr::add_then_param_expr(ObRawExpr* expr)
+inline int ObCaseOpRawExpr::add_then_param_expr(ObRawExpr *expr)
 {
   int ret = then_exprs_.push_back(expr);
   return ret;
 }
 
-inline int ObCaseOpRawExpr::replace_when_param_expr(int64_t index, ObRawExpr* expr)
+inline int ObCaseOpRawExpr::replace_when_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY((index < 0 || index >= when_exprs_.count()))) {
@@ -2772,7 +2824,7 @@ inline int ObCaseOpRawExpr::replace_when_param_expr(int64_t index, ObRawExpr* ex
   return ret;
 }
 
-inline int ObCaseOpRawExpr::replace_then_param_expr(int64_t index, ObRawExpr* expr)
+inline int ObCaseOpRawExpr::replace_then_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY((index < 0 || index >= then_exprs_.count()))) {
@@ -2840,7 +2892,7 @@ public:
     set_expr_class(ObExpr::EXPR_AGGR);
     order_items_.set_label(common::ObModIds::OB_SQL_AGGR_FUNC_ARR);
   }
-  ObAggFunRawExpr(common::ObIAllocator& alloc)
+  ObAggFunRawExpr(common::ObIAllocator &alloc)
       : ObRawExpr(alloc),
         real_param_exprs_(),
         push_down_sum_expr_(NULL),
@@ -2856,7 +2908,7 @@ public:
     set_expr_class(ObExpr::EXPR_AGGR);
     order_items_.set_label(common::ObModIds::OB_SQL_AGGR_FUNC_ARR);
   }
-  ObAggFunRawExpr(const common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true>& real_param_exprs,
+  ObAggFunRawExpr(const common::ObSEArray<ObRawExpr *, 1, common::ModulePageAllocator, true> &real_param_exprs,
       bool is_distinct, ObItemType expr_type = T_INVALID)
       : ObRawExpr(expr_type),
         real_param_exprs_(real_param_exprs),
@@ -2875,78 +2927,78 @@ public:
   }
   virtual ~ObAggFunRawExpr()
   {}
-  int assign(const ObAggFunRawExpr& other);
+  int assign(const ObAggFunRawExpr &other);
 
-  int deep_copy(ObRawExprFactory& expr_factory, const ObAggFunRawExpr& other, const uint64_t copy_types,
+  int deep_copy(ObRawExprFactory &expr_factory, const ObAggFunRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  int add_real_param_expr(ObRawExpr* expr);
-  int replace_real_param_expr(int64_t index, ObRawExpr* expr);
-  int replace_param_expr(int64_t index, ObRawExpr* expr);
-  void set_push_down_sum_expr(ObRawExpr* expr);
-  void set_push_down_count_expr(ObRawExpr* expr);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  int add_real_param_expr(ObRawExpr *expr);
+  int replace_real_param_expr(int64_t index, ObRawExpr *expr);
+  int replace_param_expr(int64_t index, ObRawExpr *expr);
+  void set_push_down_sum_expr(ObRawExpr *expr);
+  void set_push_down_count_expr(ObRawExpr *expr);
   bool contain_nested_aggr() const;
   bool is_param_distinct() const;
   void set_param_distinct(bool is_distinct);
-  void set_separator_param_expr(ObRawExpr* separator_param_expr);
-  void set_linear_inter_expr(ObRawExpr* linear_inter_expr);
+  void set_separator_param_expr(ObRawExpr *separator_param_expr);
+  void set_linear_inter_expr(ObRawExpr *linear_inter_expr);
   bool is_nested_aggr() const;
   void set_in_nested_aggr(bool is_nested);
-  int add_order_item(const OrderItem& order_item);
-  virtual void clear_child();
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  int add_order_item(const OrderItem &order_item);
+  virtual void clear_child() override;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int64_t get_param_count() const
+  virtual int64_t get_param_count() const override
   {
     return real_param_exprs_.count() + order_items_.count();
   }
-  virtual const ObRawExpr* get_param_expr(int64_t index) const;
-  virtual ObRawExpr*& get_param_expr(int64_t index);
+  virtual const ObRawExpr *get_param_expr(int64_t index) const override;
+  virtual ObRawExpr *&get_param_expr(int64_t index) override;
   inline int64_t get_real_param_count() const
   {
     return real_param_exprs_.count();
   }
-  inline const common::ObIArray<ObRawExpr*>& get_real_param_exprs() const
+  inline const common::ObIArray<ObRawExpr *> &get_real_param_exprs() const
   {
     return real_param_exprs_;
   }
-  inline common::ObIArray<ObRawExpr*>& get_real_param_exprs_for_update()
+  inline common::ObIArray<ObRawExpr *> &get_real_param_exprs_for_update()
   {
     return real_param_exprs_;
   }
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  inline ObRawExpr*& get_push_down_sum_expr()
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  inline ObRawExpr *&get_push_down_sum_expr()
   {
     return push_down_sum_expr_;
   }
-  inline ObRawExpr*& get_push_down_count_expr()
+  inline ObRawExpr *&get_push_down_count_expr()
   {
     return push_down_count_expr_;
   }
-  inline ObRawExpr*& get_push_down_synopsis_expr()
+  inline ObRawExpr *&get_push_down_synopsis_expr()
   {
     return push_down_synopsis_expr_;
   }
-  inline ObRawExpr* get_separator_param_expr() const
+  inline ObRawExpr *get_separator_param_expr() const
   {
     return separator_param_expr_;
   }
-  inline ObRawExpr* get_linear_inter_expr() const
+  inline ObRawExpr *get_linear_inter_expr() const
   {
     return linear_inter_expr_;
   }
-  inline const common::ObIArray<OrderItem>& get_order_items() const
+  inline const common::ObIArray<OrderItem> &get_order_items() const
   {
     return order_items_;
   }
-  inline common::ObIArray<OrderItem>& get_order_items_for_update()
+  inline common::ObIArray<OrderItem> &get_order_items_for_update()
   {
     return order_items_;
   }
 
-  virtual uint64_t hash_internal(uint64_t seed) const
+  virtual uint64_t hash_internal(uint64_t seed) const override
   {
     for (int64_t i = 0; i < real_param_exprs_.count(); ++i) {
       if (OB_LIKELY(NULL != real_param_exprs_.at(i))) {
@@ -2964,38 +3016,39 @@ public:
   }
 
   // set udf meta to this expr
-  int set_udf_meta(const share::schema::ObUDF& udf);
+  int set_udf_meta(const share::schema::ObUDF &udf);
   const share::schema::ObUDFMeta get_udf_meta()
   {
     return udf_meta_;
   }
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  const char* get_name_dblink(ObItemType expr_type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_level), K_(expr_levels), N_CHILDREN, real_param_exprs_, N_DISTINCT, distinct_, N_ORDER_BY, order_items_,
-      N_SEPARATOR_PARAM_EXPR, separator_param_expr_, K_(udf_meta), N_LINEAR_INTER_EXPR, linear_inter_expr_);
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  const char *get_name_dblink(ObItemType expr_type) const;
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_level), K_(expr_levels), N_CHILDREN, real_param_exprs_, N_DISTINCT, distinct_,
+      N_ORDER_BY, order_items_, N_SEPARATOR_PARAM_EXPR, separator_param_expr_, K_(udf_meta), N_LINEAR_INTER_EXPR,
+      linear_inter_expr_);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
-  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> real_param_exprs_;
-  ObRawExpr* push_down_sum_expr_;
-  ObRawExpr* push_down_count_expr_;
-  ObRawExpr* push_down_synopsis_expr_;
+  common::ObSEArray<ObRawExpr *, 1, common::ModulePageAllocator, true> real_param_exprs_;
+  ObRawExpr *push_down_sum_expr_;
+  ObRawExpr *push_down_count_expr_;
+  ObRawExpr *push_down_synopsis_expr_;
   bool distinct_;
   // used for group_concat/rank/percent rank/dense rank/cume dist
   common::ObArray<OrderItem, common::ModulePageAllocator, true> order_items_;
-  ObRawExpr* separator_param_expr_;
+  ObRawExpr *separator_param_expr_;
   // use for udf function info
   share::schema::ObUDFMeta udf_meta_;
   // a pre allocated expr used to compute linear interpolation
   // not contain any sharable expr, no need to deep copy
-  ObRawExpr* linear_inter_expr_;
+  ObRawExpr *linear_inter_expr_;
   bool is_nested_aggr_;
 };
 
-inline int ObAggFunRawExpr::add_real_param_expr(ObRawExpr* expr)
+inline int ObAggFunRawExpr::add_real_param_expr(ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(NULL == expr)) {
@@ -3006,7 +3059,7 @@ inline int ObAggFunRawExpr::add_real_param_expr(ObRawExpr* expr)
   return ret;
 }
 
-inline int ObAggFunRawExpr::replace_real_param_expr(int64_t index, ObRawExpr* expr)
+inline int ObAggFunRawExpr::replace_real_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(index < 0 || index >= real_param_exprs_.count())) {
@@ -3014,13 +3067,13 @@ inline int ObAggFunRawExpr::replace_real_param_expr(int64_t index, ObRawExpr* ex
   } else if (OB_UNLIKELY(NULL == expr)) {
     ret = common::OB_INVALID_ARGUMENT;
   } else {
-    ObRawExpr*& target_expr = real_param_exprs_.at(index);
+    ObRawExpr *&target_expr = real_param_exprs_.at(index);
     target_expr = expr;
   }
   return ret;
 }
 
-inline int ObAggFunRawExpr::replace_param_expr(int64_t index, ObRawExpr* expr)
+inline int ObAggFunRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(index < 0 || index >= get_param_count())) {
@@ -3028,20 +3081,20 @@ inline int ObAggFunRawExpr::replace_param_expr(int64_t index, ObRawExpr* expr)
   } else if (OB_UNLIKELY(NULL == expr)) {
     ret = common::OB_INVALID_ARGUMENT;
   } else if (index >= real_param_exprs_.count()) {
-    ObRawExpr*& target_expr = order_items_.at(index - real_param_exprs_.count()).expr_;
+    ObRawExpr *&target_expr = order_items_.at(index - real_param_exprs_.count()).expr_;
     target_expr = expr;
   } else {
-    ObRawExpr*& target_expr = real_param_exprs_.at(index);
+    ObRawExpr *&target_expr = real_param_exprs_.at(index);
     target_expr = expr;
   }
   return ret;
 }
 
-inline void ObAggFunRawExpr::set_push_down_sum_expr(ObRawExpr* expr)
+inline void ObAggFunRawExpr::set_push_down_sum_expr(ObRawExpr *expr)
 {
   push_down_sum_expr_ = expr;
 }
-inline void ObAggFunRawExpr::set_push_down_count_expr(ObRawExpr* expr)
+inline void ObAggFunRawExpr::set_push_down_count_expr(ObRawExpr *expr)
 {
   push_down_count_expr_ = expr;
 }
@@ -3072,15 +3125,15 @@ inline void ObAggFunRawExpr::set_in_nested_aggr(bool is_nested)
 {
   is_nested_aggr_ = is_nested;
 }
-inline void ObAggFunRawExpr::set_separator_param_expr(ObRawExpr* separator_param_expr)
+inline void ObAggFunRawExpr::set_separator_param_expr(ObRawExpr *separator_param_expr)
 {
   separator_param_expr_ = separator_param_expr;
 }
-inline void ObAggFunRawExpr::set_linear_inter_expr(ObRawExpr* linear_inter_expr)
+inline void ObAggFunRawExpr::set_linear_inter_expr(ObRawExpr *linear_inter_expr)
 {
   linear_inter_expr_ = linear_inter_expr;
 }
-inline int ObAggFunRawExpr::add_order_item(const OrderItem& order_item)
+inline int ObAggFunRawExpr::add_order_item(const OrderItem &order_item)
 {
   return order_items_.push_back(order_item);
 }
@@ -3090,7 +3143,7 @@ inline int ObAggFunRawExpr::add_order_item(const OrderItem& order_item)
 // for special system function, ObRawExpr::type_ can be reset. Such function may not need name
 class ObSysFunRawExpr : public ObOpRawExpr {
 public:
-  ObSysFunRawExpr(common::ObIAllocator& alloc) : ObOpRawExpr(alloc), func_name_(), operator_id_(common::OB_INVALID_ID)
+  ObSysFunRawExpr(common::ObIAllocator &alloc) : ObOpRawExpr(alloc), func_name_(), operator_id_(common::OB_INVALID_ID)
   {
     set_expr_class(ObExpr::EXPR_SYS_FUNC);
   }
@@ -3100,28 +3153,29 @@ public:
   }
   virtual ~ObSysFunRawExpr()
   {}
-  virtual int assign(const ObSysFunRawExpr& other);
-  virtual int deep_copy(ObRawExprFactory& expr_factory, const ObSysFunRawExpr& other, const uint64_t copy_types,
+  virtual int assign(const ObSysFunRawExpr &other);
+  virtual int deep_copy(ObRawExprFactory &expr_factory, const ObSysFunRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  void set_func_name(const common::ObString& name);
-  const common::ObString& get_func_name() const;
-  virtual void clear_child();
+  void set_func_name(const common::ObString &name);
+  const common::ObString &get_func_name() const;
+  virtual void clear_child() override;
   int check_param_num();
-  virtual ObExprOperator* get_op();
-  virtual void reset();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  int check_param_num(int param_count);
+  virtual ObExprOperator* get_op() override;
+  virtual void reset() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const
+  virtual uint64_t hash_internal(uint64_t seed) const override
   {
     uint64_t hash_ret = common::do_hash(func_name_, seed);
     return hash_ret;
   }
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  int get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos) const;
-  int get_column_conv_name(char* buf, int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  int get_cast_type_name(char *buf, int64_t buf_len, int64_t &pos) const;
+  int get_column_conv_name(char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
   void set_op_id(int64_t operator_id)
   {
     operator_id_ = operator_id;
@@ -3131,40 +3185,41 @@ public:
     return operator_id_;
   }
 
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
 
 private:
+  int check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type);
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
   uint64_t operator_id_;
 };
 
-inline void ObSysFunRawExpr::set_func_name(const common::ObString& name)
+inline void ObSysFunRawExpr::set_func_name(const common::ObString &name)
 {
   func_name_ = name;
 }
-inline const common::ObString& ObSysFunRawExpr::get_func_name() const
+inline const common::ObString &ObSysFunRawExpr::get_func_name() const
 {
   return func_name_;
 }
 
 class ObSequenceRawExpr : public ObSysFunRawExpr {
 public:
-  ObSequenceRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), name_(), action_(), sequence_id_(0)
+  ObSequenceRawExpr(common::ObIAllocator &alloc) : ObSysFunRawExpr(alloc), name_(), action_(), sequence_id_(0)
   {}
   ObSequenceRawExpr() : ObSysFunRawExpr(), name_(), action_(), sequence_id_(0)
   {}
   virtual ~ObSequenceRawExpr() = default;
-  virtual int assign(const ObSequenceRawExpr& other);
-  virtual int deep_copy(ObRawExprFactory& expr_factory, const ObSequenceRawExpr& other, const uint64_t copy_types,
+  virtual int assign(const ObSequenceRawExpr &other);
+  virtual int deep_copy(ObRawExprFactory &expr_factory, const ObSequenceRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  int set_sequence_meta(const common::ObString& name, const common::ObString& action, uint64_t sequence_id);
-  const common::ObString& get_name()
+  int set_sequence_meta(const common::ObString &name, const common::ObString &action, uint64_t sequence_id);
+  const common::ObString &get_name()
   {
     return name_;
   }
-  const common::ObString& get_action()
+  const common::ObString &get_action()
   {
     return action_;
   }
@@ -3172,8 +3227,8 @@ public:
   {
     return sequence_id_;
   }
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
-  virtual int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
+  virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
 
 private:
   common::ObString name_;    // sequence object name
@@ -3183,23 +3238,23 @@ private:
 
 class ObNormalDllUdfRawExpr : public ObSysFunRawExpr {
 public:
-  ObNormalDllUdfRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_()
+  ObNormalDllUdfRawExpr(common::ObIAllocator &alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_()
   {}
   ObNormalDllUdfRawExpr() : ObSysFunRawExpr(), udf_meta_(), udf_attributes_()
   {}
   virtual ~ObNormalDllUdfRawExpr()
   {}
-  virtual int assign(const ObNormalDllUdfRawExpr& other);
-  virtual int deep_copy(ObRawExprFactory& expr_factory, const ObNormalDllUdfRawExpr& other, const uint64_t copy_types,
+  virtual int assign(const ObNormalDllUdfRawExpr &other);
+  virtual int deep_copy(ObRawExprFactory &expr_factory, const ObNormalDllUdfRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  int set_udf_meta(const share::schema::ObUDF& udf);
-  int add_udf_attribute_name(const common::ObString& name);
-  int add_udf_attribute(const ObRawExpr* expr, const ParseNode* node);
-  const share::schema::ObUDFMeta& get_udf_meta() const
+  int set_udf_meta(const share::schema::ObUDF &udf);
+  int add_udf_attribute_name(const common::ObString &name);
+  int add_udf_attribute(const ObRawExpr *expr, const ParseNode *node);
+  const share::schema::ObUDFMeta &get_udf_meta() const
   {
     return udf_meta_;
   }
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
 private:
   // for udf function info
@@ -3209,26 +3264,26 @@ private:
 
 class ObPLSQLCodeSQLErrmRawExpr : public ObSysFunRawExpr {
 public:
-  ObPLSQLCodeSQLErrmRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), is_sqlcode_(true)
+  ObPLSQLCodeSQLErrmRawExpr(common::ObIAllocator &alloc) : ObSysFunRawExpr(alloc), is_sqlcode_(true)
   {}
   ObPLSQLCodeSQLErrmRawExpr() : ObSysFunRawExpr(), is_sqlcode_(true)
   {}
   virtual ~ObPLSQLCodeSQLErrmRawExpr()
   {}
-  virtual int assign(const ObPLSQLCodeSQLErrmRawExpr& other);
-  virtual int deep_copy(ObRawExprFactory& expr_factory, const ObPLSQLCodeSQLErrmRawExpr& other,
+  virtual int assign(const ObPLSQLCodeSQLErrmRawExpr &other);
+  virtual int deep_copy(ObRawExprFactory &expr_factory, const ObPLSQLCodeSQLErrmRawExpr &other,
       const uint64_t copy_types, bool use_new_allocator = false);
-  virtual ObExprOperator* get_op() override;
+  virtual ObExprOperator *get_op() override;
   void set_is_sqlcode(bool is_sqlcode)
   {
     is_sqlcode_ = is_sqlcode;
   }
-  bool get_is_sqlcode()
+  bool get_is_sqlcode() const
   {
     return is_sqlcode_;
   }
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_level), K_(expr_levels), K_(is_sqlcode), N_CHILDREN, exprs_);
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_level), K_(expr_levels), K_(is_sqlcode), N_CHILDREN, exprs_);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLSQLCodeSQLErrmRawExpr);
@@ -3239,19 +3294,19 @@ private:
 
 class ObObjAccessRawExpr : public ObOpRawExpr {
 public:
-  ObObjAccessRawExpr(common::ObIAllocator& alloc)
+  ObObjAccessRawExpr(common::ObIAllocator &alloc)
       : ObOpRawExpr(alloc), get_attr_func_(0), func_name_(), var_indexs_(), for_write_(false)
   {}
   ObObjAccessRawExpr() : ObOpRawExpr(), get_attr_func_(0), func_name_(), var_indexs_(), for_write_(false)
   {}
   virtual ~ObObjAccessRawExpr()
   {}
-  int assign(const ObObjAccessRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObObjAccessRawExpr& other, const uint64_t copy_types,
+  int assign(const ObObjAccessRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObObjAccessRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  const common::ObIArray<int64_t>& get_var_indexs() const
+  const common::ObIArray<int64_t> &get_var_indexs() const
   {
     return var_indexs_;
   }
@@ -3263,11 +3318,11 @@ public:
   {
     return get_attr_func_;
   }
-  void set_func_name(const common::ObString& func_name)
+  void set_func_name(const common::ObString &func_name)
   {
     func_name_ = func_name;
   }
-  const common::ObString& get_func_name() const
+  const common::ObString &get_func_name() const
   {
     return func_name_;
   }
@@ -3308,7 +3363,7 @@ enum ObMultiSetModifier {
 
 class ObMultiSetRawExpr : public ObOpRawExpr {
 public:
-  ObMultiSetRawExpr(common::ObIAllocator& alloc)
+  ObMultiSetRawExpr(common::ObIAllocator &alloc)
       : ObOpRawExpr(alloc),
         ms_modifier_(ObMultiSetModifier::MULTISET_MODIFIER_INVALID),
         ms_type_(ObMultiSetType::MULTISET_TYPE_INVALID)
@@ -3322,10 +3377,10 @@ public:
   virtual ~ObMultiSetRawExpr()
   {}
 
-  int assign(const ObMultiSetRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObMultiSetRawExpr& other, const uint64_t copy_types,
+  int assign(const ObMultiSetRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObMultiSetRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
   inline ObMultiSetModifier get_multiset_modifier() const
   {
@@ -3353,15 +3408,15 @@ private:
 
 class ObCollPredRawExpr : public ObMultiSetRawExpr {
 public:
-  ObCollPredRawExpr(common::ObIAllocator& alloc) : ObMultiSetRawExpr(alloc)
+  ObCollPredRawExpr(common::ObIAllocator &alloc) : ObMultiSetRawExpr(alloc)
   {}
   virtual ~ObCollPredRawExpr()
   {}
 
-  int assign(const ObCollPredRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObCollPredRawExpr& other, const uint64_t copy_types,
+  int assign(const ObCollPredRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObCollPredRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCollPredRawExpr);
@@ -3380,7 +3435,7 @@ public:
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
   }
-  ObFunMatchAgainst(common::ObIAllocator& alloc)
+  ObFunMatchAgainst(common::ObIAllocator &alloc)
       : ObNonTerminalRawExpr(alloc),
         mode_flag_(NATURAL_LANGUAGE_MODE),
         match_columns_(NULL),
@@ -3394,10 +3449,10 @@ public:
 
   virtual ~ObFunMatchAgainst()
   {}
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  virtual uint64_t hash_internal(uint64_t seed) const;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
   inline void set_mode_flag(ObMatchAgainstMode mode_flag)
   {
     mode_flag_ = mode_flag;
@@ -3406,71 +3461,71 @@ public:
   {
     return mode_flag_;
   }
-  inline void set_match_columns(ObRawExpr* match_columns)
+  inline void set_match_columns(ObRawExpr *match_columns)
   {
     match_columns_ = match_columns;
   }
-  inline const ObRawExpr* get_match_columns() const
+  inline const ObRawExpr *get_match_columns() const
   {
     return match_columns_;
   }
-  inline ObRawExpr* get_match_columns()
+  inline ObRawExpr *get_match_columns()
   {
     return match_columns_;
   }
-  inline void set_search_key(ObRawExpr* search_key)
+  inline void set_search_key(ObRawExpr *search_key)
   {
     search_key_ = search_key;
   }
-  inline const ObRawExpr* get_search_key() const
+  inline const ObRawExpr *get_search_key() const
   {
     return search_key_;
   }
-  inline ObRawExpr* get_search_key()
+  inline ObRawExpr *get_search_key()
   {
     return search_key_;
   }
-  inline void set_real_column(ObColumnRefRawExpr* real_column)
+  inline void set_real_column(ObColumnRefRawExpr *real_column)
   {
     real_column_ = real_column;
   }
-  inline const ObColumnRefRawExpr* get_real_column() const
+  inline const ObColumnRefRawExpr *get_real_column() const
   {
     return real_column_;
   }
   //  inline void set_search_tree(ObRawExpr *search_tree) { search_tree_ = search_tree; }
   //  inline const ObRawExpr *get_search_tree() const { return search_tree_; }
-  inline void set_fulltext_filter(ObRawExpr* fulltext_key)
+  inline void set_fulltext_filter(ObRawExpr *fulltext_key)
   {
     fulltext_filter_ = fulltext_key;
   }
-  inline const ObRawExpr* get_fulltext_filter() const
+  inline const ObRawExpr *get_fulltext_filter() const
   {
     return fulltext_filter_;
   }
-  inline ObRawExpr* get_fulltext_filter()
+  inline ObRawExpr *get_fulltext_filter()
   {
     return fulltext_filter_;
   }
-  int64_t get_param_count() const
+  int64_t get_param_count() const override
   {
     return 2;
   }
-  const ObRawExpr* get_param_expr(int64_t index) const;
-  ObRawExpr*& get_param_expr(int64_t index);
-  void clear_child();
+  const ObRawExpr *get_param_expr(int64_t index) const override;
+  ObRawExpr *&get_param_expr(int64_t index) override;
+  void clear_child() override;
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
   VIRTUAL_TO_STRING_KV(
       N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, K_(mode_flag));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFunMatchAgainst);
   ObMatchAgainstMode mode_flag_;
-  ObRawExpr* match_columns_;
-  ObColumnRefRawExpr* real_column_;
-  ObRawExpr* search_key_;
-  ObRawExpr* fulltext_filter_;
+  ObRawExpr *match_columns_;
+  ObColumnRefRawExpr *real_column_;
+  ObRawExpr *search_key_;
+  ObRawExpr *fulltext_filter_;
 };
 
 class ObSetIterRawExpr : public ObNonTerminalRawExpr {
@@ -3479,36 +3534,36 @@ public:
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
   }
-  ObSetIterRawExpr(common::ObIAllocator& alloc) : ObNonTerminalRawExpr(alloc), left_iter_(NULL), right_iter_(NULL)
+  ObSetIterRawExpr(common::ObIAllocator &alloc) : ObNonTerminalRawExpr(alloc), left_iter_(NULL), right_iter_(NULL)
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
   }
 
   virtual ~ObSetIterRawExpr()
   {}
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  int64_t get_param_count() const
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  int64_t get_param_count() const override
   {
     return 2;
   }
-  const ObRawExpr* get_param_expr(int64_t index) const;
-  ObRawExpr*& get_param_expr(int64_t index);
-  void set_left_expr(ObRawExpr* left_iter)
+  const ObRawExpr *get_param_expr(int64_t index) const override;
+  ObRawExpr *&get_param_expr(int64_t index) override;
+  void set_left_expr(ObRawExpr *left_iter)
   {
     left_iter_ = left_iter;
   }
-  void set_right_expr(ObRawExpr* right_iter)
+  void set_right_expr(ObRawExpr *right_iter)
   {
     right_iter_ = right_iter;
   }
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override
   {
     UNUSED(expr);
     UNUSED(check_context);
     return false;
   }
-  inline void clear_child()
+  inline void clear_child() override
   {
     left_iter_ = NULL;
     right_iter_ = NULL;
@@ -3517,8 +3572,8 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetIterRawExpr);
-  ObRawExpr* left_iter_;
-  ObRawExpr* right_iter_;
+  ObRawExpr *left_iter_;
+  ObRawExpr *right_iter_;
 };
 
 class ObRowIterRawExpr : public ObTerminalRawExpr {
@@ -3527,21 +3582,21 @@ public:
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
   }
-  ObRowIterRawExpr(common::ObIAllocator& alloc) : ObTerminalRawExpr(alloc), iter_idx_(common::OB_INVALID_INDEX)
+  ObRowIterRawExpr(common::ObIAllocator &alloc) : ObTerminalRawExpr(alloc), iter_idx_(common::OB_INVALID_INDEX)
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
   }
 
   virtual ~ObRowIterRawExpr()
   {}
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override
   {
     UNUSED(expr);
     UNUSED(check_context);
     return false;
   }
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   inline void set_iter_idx(int64_t iter_idx)
   {
     iter_idx_ = iter_idx;
@@ -3586,22 +3641,24 @@ public:
         interval_expr_(NULL),
         date_unit_expr_(NULL)
   {
-    MEMSET(exprs_, 0, sizeof(ObRawExpr*) * BOUND_EXPR_MAX);
+    MEMSET(exprs_, 0, sizeof(ObRawExpr *) * BOUND_EXPR_MAX);
   }
 
   int deep_copy(
-      ObRawExprFactory& expr_factory, const Bound& other, const uint64_t copy_types, bool use_new_allocator = false);
+      ObRawExprFactory &expr_factory, const Bound &other, const uint64_t copy_types, bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs);
+
+  bool same_as(const Bound &other, ObExprEqualCheckContext *check_context) const;
 
   BoundType type_;
   bool is_preceding_;
   bool is_nmb_literal_;
-  ObRawExpr* interval_expr_;
-  ObRawExpr* date_unit_expr_;
+  ObRawExpr *interval_expr_;
+  ObRawExpr *date_unit_expr_;
   ;
 
-  ObRawExpr* exprs_[BOUND_EXPR_MAX];
+  ObRawExpr *exprs_[BOUND_EXPR_MAX];
   TO_STRING_KV(K_(type), K_(is_preceding), K_(is_nmb_literal), KP_(interval_expr), K_(date_unit_expr));
 };
 
@@ -3618,32 +3675,32 @@ public:
   {
     is_between_ = is_between;
   }
-  inline void set_upper(const Bound& upper)
+  inline void set_upper(const Bound &upper)
   {
     upper_ = upper;
   }
-  inline void set_lower(const Bound& lower)
+  inline void set_lower(const Bound &lower)
   {
     lower_ = lower;
   }
-  inline WindowType get_window_type()
+  inline WindowType get_window_type() const
   {
     return win_type_;
   }
-  inline bool is_between()
+  inline bool is_between() const
   {
     return is_between_;
   }
-  inline Bound& get_upper()
+  inline Bound &get_upper()
   {
     return upper_;
   }
-  inline Bound& get_lower()
+  inline Bound &get_lower()
   {
     return lower_;
   }
 
-  int assign(const ObFrame& other);
+  int assign(const ObFrame &other);
 
   WindowType win_type_;
   bool is_between_;
@@ -3658,15 +3715,15 @@ public:
     partition_exprs_.set_label(common::ObModIds::OB_SQL_WINDOW_FUNC);
     order_items_.set_label(common::ObModIds::OB_SQL_WINDOW_FUNC);
   }
-  inline int set_partition_exprs(const common::ObIArray<ObRawExpr*>& exprs)
+  inline int set_partition_exprs(const common::ObIArray<ObRawExpr *> &exprs)
   {
     return partition_exprs_.assign(exprs);
   }
-  inline int set_order_items(const common::ObIArray<OrderItem>& items)
+  inline int set_order_items(const common::ObIArray<OrderItem> &items)
   {
     return order_items_.assign(items);
   }
-  inline void set_win_name(common::ObString& win_name)
+  inline void set_win_name(common::ObString &win_name)
   {
     win_name_ = win_name;
   }
@@ -3674,7 +3731,7 @@ public:
   {
     has_frame_orig_ = has_frame_orig;
   }
-  inline common::ObString& get_win_name()
+  inline common::ObString &get_win_name()
   {
     return win_name_;
   }
@@ -3686,26 +3743,26 @@ public:
   {
     return order_items_.count() > 0;
   }
-  inline const common::ObIArray<ObRawExpr*>& get_partition_exprs() const
+  inline const common::ObIArray<ObRawExpr *> &get_partition_exprs() const
   {
     return partition_exprs_;
   }
-  inline common::ObIArray<ObRawExpr*>& get_partition_exprs()
+  inline common::ObIArray<ObRawExpr *> &get_partition_exprs()
   {
     return partition_exprs_;
   }
-  inline const common::ObIArray<OrderItem>& get_order_items() const
+  inline const common::ObIArray<OrderItem> &get_order_items() const
   {
     return order_items_;
   }
-  inline common::ObIArray<OrderItem>& get_order_items()
+  inline common::ObIArray<OrderItem> &get_order_items()
   {
     return order_items_;
   }
 
-  int assign(const ObWindow& other);
+  int assign(const ObWindow &other);
 
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> partition_exprs_;
+  common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> partition_exprs_;
   common::ObArray<OrderItem, common::ModulePageAllocator, true> order_items_;
   // used in resolver
   common::ObString win_name_;
@@ -3725,7 +3782,7 @@ public:
   {
     set_expr_class(ObExpr::EXPR_WINDOW);
   }
-  ObWinFunRawExpr(common::ObIAllocator& alloc)
+  ObWinFunRawExpr(common::ObIAllocator &alloc)
       : ObRawExpr(alloc),
         ObWindow(),
         func_type_(T_MAX),
@@ -3739,12 +3796,12 @@ public:
   virtual ~ObWinFunRawExpr()
   {}
 
-  int assign(const ObWinFunRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObWinFunRawExpr& other, const uint64_t copy_types,
+  int assign(const ObWinFunRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObWinFunRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
-  int replace_param_expr(int64_t partition_expr_index, ObRawExpr* expr);
+  int replace_param_expr(int64_t partition_expr_index, ObRawExpr *expr);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
   inline void set_func_type(ObItemType func_type)
   {
     func_type_ = func_type;
@@ -3761,11 +3818,11 @@ public:
   {
     is_from_first_ = is_from_first;
   }
-  inline int set_func_params(const common::ObIArray<ObRawExpr*>& params)
+  inline int set_func_params(const common::ObIArray<ObRawExpr *> &params)
   {
     return func_params_.assign(params);
   }
-  inline void set_agg_expr(ObAggFunRawExpr* agg_expr)
+  inline void set_agg_expr(ObAggFunRawExpr *agg_expr)
   {
     agg_expr_ = agg_expr;
   }
@@ -3785,33 +3842,33 @@ public:
   {
     return is_from_first_;
   }
-  inline const common::ObIArray<ObRawExpr*>& get_func_params() const
+  inline const common::ObIArray<ObRawExpr *> &get_func_params() const
   {
     return func_params_;
   }
-  inline common::ObIArray<ObRawExpr*>& get_func_params()
+  inline common::ObIArray<ObRawExpr *> &get_func_params()
   {
     return func_params_;
   }
-  inline ObAggFunRawExpr* get_agg_expr()
+  inline ObAggFunRawExpr *get_agg_expr()
   {
     return agg_expr_;
   }
-  inline ObAggFunRawExpr* get_agg_expr() const
+  inline ObAggFunRawExpr *get_agg_expr() const
   {
     return agg_expr_;
   }
 
-  virtual void clear_child();
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+  virtual void clear_child() override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int64_t get_param_count() const
+  virtual int64_t get_param_count() const override
   {
     int64_t cnt = (agg_expr_ != NULL ? agg_expr_->get_param_count() : 0) + func_params_.count() +
                   partition_exprs_.count() + order_items_.count() + (upper_.interval_expr_ != NULL ? 1 : 0) +
                   (lower_.interval_expr_ != NULL ? 1 : 0);
     for (int64_t i = 0; i < 2; ++i) {
-      const Bound* bound = 0 == i ? &upper_ : &lower_;
+      const Bound *bound = 0 == i ? &upper_ : &lower_;
       for (int64_t j = 0; j < BOUND_EXPR_MAX; ++j) {
         if (NULL != bound->exprs_[j]) {
           cnt++;
@@ -3820,14 +3877,14 @@ public:
     }
     return cnt;
   }
-  virtual const ObRawExpr* get_param_expr(int64_t index) const;
-  virtual ObRawExpr*& get_param_expr(int64_t index);
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
+  virtual const ObRawExpr *get_param_expr(int64_t index) const override;
+  virtual ObRawExpr *&get_param_expr(int64_t index) override;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
 
-  virtual uint64_t hash_internal(uint64_t seed) const;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
 
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_level), K_(expr_levels), K_(func_type), K_(is_distinct), K_(func_params), K_(partition_exprs),
       K_(order_items), K_(win_type), K_(is_between), K_(upper), K_(lower), KPC_(agg_expr));
 
@@ -3840,8 +3897,8 @@ private:
   bool is_distinct_;
   bool is_ignore_null_;
   bool is_from_first_;
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> func_params_;
-  ObAggFunRawExpr* agg_expr_;
+  common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> func_params_;
+  ObAggFunRawExpr *agg_expr_;
 };
 
 ////////////////////////////////////////////////////////////////
@@ -3851,21 +3908,21 @@ public:
   {
     set_expr_class(ObExpr::EXPR_PSEUDO_COLUMN);
   }
-  ObPseudoColumnRawExpr(common::ObIAllocator& alloc) : ObTerminalRawExpr(alloc), table_id_(common::OB_INVALID_ID)
+  ObPseudoColumnRawExpr(common::ObIAllocator &alloc) : ObTerminalRawExpr(alloc), table_id_(common::OB_INVALID_ID)
   {
     set_expr_class(ObExpr::EXPR_PSEUDO_COLUMN);
   }
   virtual ~ObPseudoColumnRawExpr(){};
-  int assign(const ObPseudoColumnRawExpr& other);
-  int deep_copy(ObRawExprFactory& expr_factory, const ObPseudoColumnRawExpr& other, const uint64_t copy_types,
+  int assign(const ObPseudoColumnRawExpr &other);
+  int deep_copy(ObRawExprFactory &expr_factory, const ObPseudoColumnRawExpr &other, const uint64_t copy_types,
       bool use_new_allocator = false);
   virtual int replace_expr(
-      const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
-  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const;
+      const common::ObIArray<ObRawExpr *> &other_exprs, const common::ObIArray<ObRawExpr *> &new_exprs) override;
+  virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
-  virtual int do_visit(ObRawExprVisitor& visitor) override;
-  virtual uint64_t hash_internal(uint64_t seed) const;
-  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
+  virtual int do_visit(ObRawExprVisitor &visitor) override;
+  virtual uint64_t hash_internal(uint64_t seed) const override;
+  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   bool is_hierarchical_query_type() const
   {
     return type_ == T_LEVEL || type_ == T_CONNECT_BY_ISCYCLE || type_ == T_CONNECT_BY_ISLEAF;
@@ -3874,12 +3931,12 @@ public:
   {
     return T_CTE_SEARCH_COLUMN == type_ || T_CTE_CYCLE_COLUMN == type_;
   }
-  void set_cte_cycle_value(ObRawExpr* v, ObRawExpr* d_v)
+  void set_cte_cycle_value(ObRawExpr *v, ObRawExpr *d_v)
   {
     cte_cycle_value_ = v;
     cte_cycle_default_value_ = d_v;
   };
-  void get_cte_cycle_value(ObRawExpr*& v, ObRawExpr*& d_v)
+  void get_cte_cycle_value(ObRawExpr *&v, ObRawExpr *&d_v)
   {
     v = cte_cycle_value_;
     d_v = cte_cycle_default_value_;
@@ -3897,8 +3954,8 @@ public:
       N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_TABLE_ID, table_id_);
 
 private:
-  ObRawExpr* cte_cycle_value_;
-  ObRawExpr* cte_cycle_default_value_;
+  ObRawExpr *cte_cycle_value_;
+  ObRawExpr *cte_cycle_default_value_;
   int64_t table_id_;
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
@@ -3911,56 +3968,56 @@ public:
   {}
 
   // OP types: constants, ? etc.
-  virtual int visit(ObConstRawExpr& expr) = 0;
+  virtual int visit(ObConstRawExpr &expr) = 0;
   // OP types: ObObjtypes
-  virtual int visit(ObVarRawExpr& expr) = 0;
+  virtual int visit(ObVarRawExpr &expr) = 0;
   // OP types: subquery, cell index
-  virtual int visit(ObQueryRefRawExpr& expr) = 0;
+  virtual int visit(ObQueryRefRawExpr &expr) = 0;
   // OP types: identify, table.column
-  virtual int visit(ObColumnRefRawExpr& expr) = 0;
+  virtual int visit(ObColumnRefRawExpr &expr) = 0;
   // unary OP types: exists, not, negative, positive
   // binary OP types: +, -, *, /, >, <, =, <=>, IS, IN etc.
   // triple OP types: like, not like, btw, not btw
   // multi OP types: and, or, ROW
-  virtual int visit(ObOpRawExpr& expr) = 0;
+  virtual int visit(ObOpRawExpr &expr) = 0;
   // OP types: case, arg case
-  virtual int visit(ObCaseOpRawExpr& expr) = 0;
+  virtual int visit(ObCaseOpRawExpr &expr) = 0;
   // OP types: aggregate functions e.g. max, min, avg, count, sum
-  virtual int visit(ObAggFunRawExpr& expr) = 0;
+  virtual int visit(ObAggFunRawExpr &expr) = 0;
   // OP types: system functions
-  virtual int visit(ObSysFunRawExpr& expr) = 0;
-  virtual int visit(ObSetOpRawExpr& expr) = 0;
-  virtual int visit(ObAliasRefRawExpr& expr)
+  virtual int visit(ObSysFunRawExpr &expr) = 0;
+  virtual int visit(ObSetOpRawExpr &expr) = 0;
+  virtual int visit(ObAliasRefRawExpr &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual int visit(ObFunMatchAgainst& expr)
+  virtual int visit(ObFunMatchAgainst &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual int visit(ObSetIterRawExpr& expr)
+  virtual int visit(ObSetIterRawExpr &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual int visit(ObRowIterRawExpr& expr)
+  virtual int visit(ObRowIterRawExpr &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual int visit(ObWinFunRawExpr& expr)
+  virtual int visit(ObWinFunRawExpr &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual int visit(ObPseudoColumnRawExpr& expr)
+  virtual int visit(ObPseudoColumnRawExpr &expr)
   {
     UNUSED(expr);
     return common::OB_SUCCESS;
   }
-  virtual bool skip_child(ObRawExpr& expr)
+  virtual bool skip_child(ObRawExpr &expr)
   {
     UNUSED(expr);
     return false;
@@ -3973,7 +4030,7 @@ private:
 
 class ObRawExprFactory {
 public:
-  explicit ObRawExprFactory(common::ObIAllocator& alloc) : allocator_(alloc), expr_store_(alloc)
+  explicit ObRawExprFactory(common::ObIAllocator &alloc) : allocator_(alloc), expr_store_(alloc)
   {}
   ~ObRawExprFactory()
   {
@@ -3984,10 +4041,10 @@ public:
   //~ObRawExprFactory() { }
 
   template <typename ExprType>
-  inline int create_raw_expr(ObItemType expr_type, ExprType*& raw_expr)
+  inline int create_raw_expr(ObItemType expr_type, ExprType *&raw_expr)
   {
     int ret = common::OB_SUCCESS;
-    void* ptr = allocator_.alloc(sizeof(ExprType));
+    void *ptr = allocator_.alloc(sizeof(ExprType));
     raw_expr = NULL;
     if (OB_UNLIKELY(NULL == ptr)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -4019,15 +4076,15 @@ public:
     expr_store_.destory();
   }
 
-  inline common::ObIAllocator& get_allocator()
+  inline common::ObIAllocator &get_allocator()
   {
     return allocator_;
   }
   TO_STRING_KV("", "");
 
 private:
-  common::ObIAllocator& allocator_;
-  common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> expr_store_;
+  common::ObIAllocator &allocator_;
+  common::ObObjStore<ObRawExpr *, common::ObIAllocator &, true> expr_store_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
@@ -4038,13 +4095,13 @@ public:
   ObRawExprPointer();
 
   virtual ~ObRawExprPointer();
-  int get(ObRawExpr*& expr);
-  int set(ObRawExpr* expr);
-  int add_ref(ObRawExpr** expr);
+  int get(ObRawExpr *&expr);
+  int set(ObRawExpr *expr);
+  int add_ref(ObRawExpr **expr);
   TO_STRING_KV("", "");
 
 private:
-  common::ObSEArray<ObRawExpr**, 1> expr_group_;
+  common::ObSEArray<ObRawExpr **, 1> expr_group_;
 };
 
 }  // namespace sql

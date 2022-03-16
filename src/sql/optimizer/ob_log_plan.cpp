@@ -305,7 +305,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }
@@ -320,7 +320,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }
@@ -1128,7 +1128,7 @@ int ObLogPlan::generate_semi_join_detectors(const ObIArray<SemiInfo*>& semi_info
       LOG_WARN("unexpect null conflict detector", K(ret));
     } else if (OB_FAIL(detector->L_DS_.add_members(left_rel_ids))) {
       LOG_WARN("failed to add members", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, info->right_table_id_, right_rel_ids))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(info->right_table_id_, right_rel_ids))) {
       LOG_WARN("failed to get table ids", K(ret));
     } else if (OB_FAIL(detector->R_DS_.add_members(right_rel_ids))) {
       LOG_WARN("failed to add members", K(ret));
@@ -1590,12 +1590,12 @@ int ObLogPlan::pushdown_on_conditions(
       if (OB_ISNULL(qual = joined_table->join_conditions_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
-      } else if (RIGHT_OUTER_JOIN == join_type && !qual->get_relation_ids().is_empty() &&
+      } else if (RIGHT_OUTER_JOIN == join_type && 
                  qual->get_relation_ids().is_subset(left_table_set)) {
         if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (LEFT_OUTER_JOIN == join_type && !qual->get_relation_ids().is_empty() &&
+      } else if (LEFT_OUTER_JOIN == join_type && 
                  qual->get_relation_ids().is_subset(right_table_set)) {
         if (OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
@@ -2382,7 +2382,7 @@ int ObLogPlan::init_leading_info_from_tables(
     right_rel_ids.reuse();
     if (OB_ISNULL(semi_info)) {
       LOG_WARN("unexpect null semi info", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, semi_info->right_table_id_, right_rel_ids))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
       LOG_WARN("failed to get table ids", K(ret));
     } else if (OB_FAIL(hint_info.left_table_set_.add_members(leading_tables_))) {
       LOG_WARN("failed to add table ids", K(ret));
@@ -3405,6 +3405,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr* query_ref)
       ObArray<std::pair<int64_t, ObRawExpr*>> exec_params;
       ObLogPlan* logical_plan = NULL;
       if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create plan", K(ret), K(subquery->get_sql_stmt()));
       } else if (OB_FAIL(logical_plan->init_plan_info())) {
         LOG_WARN("failed to init equal sets", K(ret));
@@ -4145,12 +4146,6 @@ int ObLogPlan::allocate_access_path(AccessPath* ap, ObLogicalOperator*& out_acce
           OZ(scan->get_part_exprs(table_id, ref_table_id, part_level, part_expr, subpart_expr));
           scan->set_part_expr(part_expr);
           scan->set_subpart_expr(subpart_expr);
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(append(scan->get_startup_exprs(), get_startup_filters()))) {
-          LOG_WARN("failed to append startup filters", K(ret));
         }
       }
 
@@ -5364,7 +5359,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
   } else {
     NumberingCtx numbering_ctx;                   // operator numbering context
     NumberingExchangeCtx numbering_exchange_ctx;  // operator numbering context
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("PlanTreeTraver");
     ObAllocExprContext alloc_expr_ctx(allocator);  // expr allocation context
     AllocExchContext alloc_exch_ctx(parallel);     // exchange allocation context
@@ -5451,6 +5446,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
       case EXPLAIN_WRITE_BUFFER_OUTPUT:
       case EXPLAIN_WRITE_BUFFER_OUTLINE:
       case EXPLAIN_INDEX_SELECTION_INFO:
+      case ALLOC_STARTUP_EXPR:
       default:
         break;
     }
@@ -5748,6 +5744,8 @@ int ObLogPlan::extract_onetime_exprs(
   } else if (is_onetime_expr) {
     if (OB_FAIL(extract_subquery_ids(expr, idxs))) {
       LOG_WARN("fail to extract param from raw expr", K(ret));
+    } else if (0 <= ObOptimizerUtil::find_exec_param(onetime_exprs, expr)) {
+      /* expr has added */
     } else {
       int64_t param_num = ObOptimizerUtil::find_exec_param(get_onetime_exprs(), expr);
       if (param_num >= 0) {
@@ -6054,8 +6052,6 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
   } else {
     ObSEArray<SubPlanInfo*, 4> subplan_infos;
     ObSEArray<SubPlanInfo*, 4> temp_subplan_infos;
-    ObBitSet<> temp_onetime_idxs;
-    ObSEArray<std::pair<int64_t, ObRawExpr*>, 4> temp_onetime_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
       ObRawExpr* temp_expr = NULL;
       temp_subplan_infos.reuse();
@@ -6099,20 +6095,12 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
     }
     if (OB_SUCC(ret) && !subquery_ops.empty()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
-        temp_onetime_exprs.reuse();
-        temp_onetime_idxs.reuse();
         if (OB_ISNULL(subquery_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), temp_onetime_exprs, temp_onetime_idxs))) {
+        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), onetime_exprs, onetime_idxs))) {
           LOG_WARN("failed to extract onetime exprs", K(ret));
-        } else if (OB_FAIL(append(onetime_exprs, temp_onetime_exprs))) {
-          LOG_WARN("failed to append onetime exprs", K(ret));
-        } else if (OB_FAIL(onetime_idxs.add_members(temp_onetime_idxs))) {
-          LOG_WARN("failed to add member", K(ret));
-        } else {
-          LOG_TRACE("succeed to get onetime exprs", K(*subquery_exprs.at(i)), K(temp_onetime_idxs));
-        }
+        } else { /*do nothing*/ }
       }
     }
     if (OB_SUCC(ret)) {
@@ -6461,11 +6449,13 @@ int ObLogPlan::classify_rownum_exprs(const ObIArray<ObRawExpr*>& rownum_exprs, O
   ObItemType limit_rownum_type = T_INVALID;
   limit_expr = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < rownum_exprs.count(); i++) {
-    ObRawExpr* rownum_expr = rownum_exprs.at(i);
-    ObRawExpr* const_expr = NULL;
+    ObRawExpr *rownum_expr = rownum_exprs.at(i);
+    ObRawExpr *dummy = NULL;
+    ObRawExpr *const_expr = NULL;
     ObItemType expr_type = T_INVALID;
     bool dummy_flag = false;
-    if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(rownum_expr, expr_type, const_expr, dummy_flag))) {
+    if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(
+                  rownum_expr, expr_type, dummy, const_expr, dummy_flag))) {
       LOG_WARN("failed to check is rownum expr used as filter", K(ret));
     } else if (OB_FAIL(
                    classify_rownum_expr(expr_type, rownum_expr, const_expr, filter_exprs, start_exprs, limit_expr))) {
@@ -7055,7 +7045,7 @@ int ObLogPlan::calc_plan_resource()
     if (OB_FAIL(analyzer.analyze(*plan_root, max_parallel_thread_group_count))) {
       LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
     } else {
-      LOG_INFO("max parallel thread group count", K(max_parallel_thread_group_count));
+      LOG_TRACE("max parallel thread group count", K(max_parallel_thread_group_count));
       set_expected_worker_count(max_parallel_thread_group_count);
     }
   }
@@ -7260,8 +7250,6 @@ int ObLogPlan::check_enable_plan_expiration(bool& enable) const
     LOG_WARN("stmt is null", K(ret));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-  } else if (get_phy_plan_type() != OB_PHY_PLAN_LOCAL && get_phy_plan_type() != OB_PHY_PLAN_REMOTE) {
-    // do nothing
   } else if (OB_FAIL(session->get_adaptive_cursor_sharing(use_acs))) {
     LOG_WARN("failed to check is acs enabled", K(ret));
   } else if (use_acs) {
@@ -7270,21 +7258,10 @@ int ObLogPlan::check_enable_plan_expiration(bool& enable) const
     LOG_WARN("failed to check is spm enabled", K(ret));
   } else if (use_spm) {
     // do nothing
+  } else if (get_phy_plan_type() != OB_PHY_PLAN_LOCAL && get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+    // do nothing
   } else {
-    const ObLogicalOperator* node = root_;
-    while (OB_SUCC(ret)) {
-      if (OB_ISNULL(node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", K(ret));
-      } else if (node->get_num_of_child() == 1) {
-        node = node->get_child(ObLogicalOperator::first_child);
-      } else {
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && node->is_table_scan()) {
-      enable = (static_cast<const ObLogTableScan*>(node)->get_diverse_path_count() >= 2);
-    }
+    enable = true;
   }
   return ret;
 }

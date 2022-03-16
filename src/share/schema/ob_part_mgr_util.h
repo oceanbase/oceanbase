@@ -445,10 +445,17 @@ int ObPartIdsGeneratorForAdd<T>::gen(common::ObIArray<int64_t>& part_ids)
     max_used_part_id = table_.get_part_option().get_part_num() - 1;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
-    ObPartition* part = part_array[i];
     if (PARTITION_LEVEL_TWO == part_level) {
       if (!table_.is_sub_part_template()) {
-        if (OB_ISNULL(part)) {
+        ObPartition* part = NULL;
+        if (OB_ISNULL(part_array)) {
+          ret = common::OB_ERR_UNEXPECTED;
+          SHARE_LOG(WARN, "Empty partition", KR(ret), K(table_));
+        } else {
+          part = part_array[i];
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(part)) {
           ret = common::OB_ERR_UNEXPECTED;
           SHARE_LOG(WARN, "part_array[i] is null", KR(ret), K(i));
         } else {

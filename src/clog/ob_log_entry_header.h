@@ -237,7 +237,7 @@ private:
   int64_t data_checksum_;
   common::ObVersion freeze_version_;
 
-  // The checksum of log header, acquirements:
+  // The checksum of log header, acquirement:
   // 1. Must locate in the last line of class declaration
   // 2. Must not exist virtual funtion
   // 3. Must keep the variable before this is 64-bit aligned

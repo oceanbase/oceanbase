@@ -32,7 +32,7 @@ public:
   int add_table_item(const obrpc::ObTableItem& table_item);
   void set_tablegroup_name(const common::ObString& tablegroup_name);
   obrpc::ObAlterTablegroupArg& get_alter_tablegroup_arg();
-  virtual obrpc::ObDDLArg& get_ddl_arg()
+  virtual obrpc::ObDDLArg& get_ddl_arg() override
   {
     return alter_tablegroup_arg_;
   }

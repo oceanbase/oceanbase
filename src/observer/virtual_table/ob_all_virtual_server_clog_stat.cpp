@@ -149,6 +149,25 @@ int ObAllVirtualServerClogStat::inner_get_next_row(ObNewRow*& row)
             cells[cell_idx].set_varchar(ObZoneStatus::get_status_str(locality_info.local_zone_status_));
             break;
           }
+          case SVR_MIN_LOG_TIMESTAMP: {
+            if (OB_ISNULL(clog_mgr)) {
+              cells[cell_idx].set_int(OB_INVALID_TIMESTAMP);
+            } else {
+              // display server_min_log_ts 60s ahead of ts get from clog_mgr
+              static int64_t DISPLAY_AHEAD_TIME = 60 * 1000 * 1000;
+              int64_t svr_min_log_ts = OB_INVALID_TIMESTAMP;
+              if (OB_FAIL(clog_mgr->get_server_min_log_ts(svr_min_log_ts))) {
+                SERVER_LOG(WARN, "get_svr_min_log_ts failed", KR(ret), K(svr_min_log_ts));
+                svr_min_log_ts = OB_INVALID_TIMESTAMP;
+                ret = OB_SUCCESS;
+              } else {
+                // svr_min_log_ts is min clog ts on this server, the log may not confirmed
+                svr_min_log_ts += DISPLAY_AHEAD_TIME;
+              }
+              cells[cell_idx].set_int(svr_min_log_ts);
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));

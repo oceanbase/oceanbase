@@ -642,7 +642,7 @@ int64_t ObHashDistinct::ObHashDistinctCtx::get_total_based_mem_used()
 int ObHashDistinct::ObHashDistinctCtx::open_cur_partition(ObChunkRowStore* row_store)
 {
   int ret = OB_SUCCESS;
-  int chunk_size = (NULL == ha_row_store_) ? row_store->get_file_size()
+  int64_t chunk_size = (NULL == ha_row_store_) ? row_store->get_file_size()
                                            : (ha_row_store_->get_mem_limit() > OB_DEFAULT_MACRO_BLOCK_SIZE
                                                      ? OB_DEFAULT_MACRO_BLOCK_SIZE
                                                      : ha_row_store_->get_mem_limit());
@@ -839,7 +839,6 @@ int ObHashDistinct::ObHashDistinctCtx::get_dist_row_from_in_mem_partitions(
   ObNewRow* cur_row = NULL;
   uint64_t hash_value = 0;
   uint64_t bucket_idx = 0;
-  ObChunkRowStore* store;
   if (first_read_part_) {
     first_read_part_ = false;
     if (OB_FAIL(get_next_mem_partition())) {
@@ -935,7 +934,7 @@ int ObHashDistinct::ObHashDistinctCtx::assign_sub_ctx(
           ObModIds::OB_SQL_HASH_DIST,
           ObCtxIds::WORK_AREA)
       .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-  if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("fail to create entity", K(ret));
   } else if (OB_ISNULL(mem_context_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1023,11 +1022,11 @@ int ObHashDistinct::init_op_ctx(ObExecContext& ctx) const
   } else if (OB_FAIL(init_cur_row(*op_ctx, need_copy_row_for_compute()))) {
     LOG_WARN("init current row failed", K(ret));
   } else {
-    lib::MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(), ObModIds::OB_SQL_HASH_DIST, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;

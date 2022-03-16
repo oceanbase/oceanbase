@@ -36,9 +36,9 @@ public:
   explicit ObExprRandom(common::ObIAllocator& alloc);
   virtual ~ObExprRandom();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   inline void set_seed_const(bool is_seed_const);
 
   // engine 3.0

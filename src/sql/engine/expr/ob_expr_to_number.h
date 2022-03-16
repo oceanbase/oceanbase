@@ -38,7 +38,7 @@ public:
   virtual ~ObExprToNumber();
 
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_(const ObString& in_str, const ObString& in_fmt_str, ObIAllocator& alloc, number::ObNumber& res_nmb);
   // for engine 3.0
@@ -54,9 +54,9 @@ public:
   virtual ~ObExprToBinaryFloat();
 
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_(const ObString& in_str, const ObString& in_fmt_str, ObIAllocator& alloc, number::ObNumber& res_nmb);
   static int calc_to_binaryfloat_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
@@ -71,9 +71,9 @@ public:
   virtual ~ObExprToBinaryDouble();
 
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_binarydouble_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 

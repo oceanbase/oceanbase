@@ -251,7 +251,8 @@ bool ObDistributedTaskSpliter::ObSliceComparer::operator()(const ObSliceEvent* s
 }
 
 ObDistributedTaskSpliter::ObDistributedTaskSpliter()
-    : table_locations_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
+    : schema_guard_(),
+      table_locations_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
       part_shuffle_keys_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
       part_idxs_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
       child_slices_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -450,10 +451,7 @@ int ObDistributedTaskSpliter::init_table_locations(ObPhyOperator* root_op)
       if (PHY_MV_TABLE_SCAN == scan_op->get_type()) {
         const ObMVTableScan* mv_scan_op = static_cast<const ObMVTableScan*>(scan_op);
         table_loc = NULL;
-        if (OB_ISNULL(mv_scan_op)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("mv scan op is NULL", K(ret), K(scan_op), K(mv_scan_op));
-        } else if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(*exec_ctx_,
+        if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(*exec_ctx_,
                        mv_scan_op->get_right_table_location_key(),
                        mv_scan_op->get_right_table_location_key(),
                        table_loc))) {
@@ -569,10 +567,10 @@ int ObDistributedTaskSpliter::check_table_locations()
 int ObDistributedTaskSpliter::init_part_shuffle_keys()
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema* table_schema = NULL;
   const ObPhyTableLocation* table_loc = NULL;
   const ObPartitionReplicaLocationIArray* part_locs = NULL;
+  schema_guard_.reset();
   part_shuffle_keys_.reset();
   part_idxs_.reset();
   if (table_locations_.count() < 1) {
@@ -583,9 +581,9 @@ int ObDistributedTaskSpliter::init_part_shuffle_keys()
   } else if (FALSE_IT(part_locs = &table_loc->get_partition_location_list())) {
     // nothing.
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-                 exec_ctx_->get_my_session()->get_effective_tenant_id(), schema_guard))) {
+                 exec_ctx_->get_my_session()->get_effective_tenant_id(), schema_guard_))) {
     LOG_WARN("faile to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(table_loc->get_ref_table_id(), table_schema))) {
+  } else if (OB_FAIL(schema_guard_.get_table_schema(table_loc->get_ref_table_id(), table_schema))) {
     LOG_WARN("faile to get table schema", K(ret), K(table_loc->get_ref_table_id()));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_SCHEMA_ERROR;

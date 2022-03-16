@@ -78,3 +78,27 @@ int ObBackupSetDecryptionStmt::add_passwd(const ObString& passwd)
 
   return ret;
 }
+
+ObAddRestoreSourceStmt::ObAddRestoreSourceStmt() : ObSystemCmdStmt(stmt::T_ADD_RESTORE_SOURCE)
+{
+  restore_source_array_[0] = '\0';
+  pos_ = 0;
+}
+
+int ObAddRestoreSourceStmt::add_restore_source(const common::ObString& source)
+{
+  int ret = OB_SUCCESS;
+  if (pos_ != 0) {
+    if (OB_FAIL(databuff_printf(restore_source_array_, sizeof(restore_source_array_), pos_, ","))) {
+      COMMON_LOG(WARN, "failed to add comma", KR(ret), K(pos_), K(restore_source_array_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(databuff_printf(
+                 restore_source_array_, sizeof(restore_source_array_), pos_, "%.*s", source.length(), source.ptr()))) {
+    COMMON_LOG(WARN, "failed to add restore source", KR(ret), K(pos_), K(restore_source_array_));
+  }
+  COMMON_LOG(INFO, "add restore source", KR(ret), K(source), K(restore_source_array_));
+  return ret;
+}

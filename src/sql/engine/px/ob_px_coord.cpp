@@ -673,6 +673,7 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
   int64_t timeout_us = 0;
   const ObNewRow* row = NULL;
   int64_t nth_channel = OB_INVALID_INDEX_INT64;
+  bool collect_trans_result_ok = false;
 
   if (OB_ISNULL(px_ctx_ptr = GET_PHY_OPERATOR_CTX(ObPxCoordCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -684,6 +685,7 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
     LOG_WARN("phy plan ctx NULL", K(ret));
   } else if (OB_UNLIKELY(!px_ctx_ptr->first_row_fetched_)) {
     // no dfo sent, do nothing.
+    collect_trans_result_ok = true;
     ret = OB_ITER_END;
   }
 
@@ -710,6 +712,8 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
     loop.ignore_interrupt();
 
     ObPxControlChannelProc control_channels;
+    int64_t times_offset = 0;
+    int64_t last_timestamp = 0;
     bool wait_msg = true;
     while (OB_SUCC(ret) && wait_msg) {
       ObDtlChannelLoop& loop = px_ctx.msg_loop_;
@@ -718,12 +722,13 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
       /**
        * start to get next msg.
        */
-      if (OB_FAIL(check_all_sqc(active_dfos, all_dfo_terminate))) {
+      if (OB_FAIL(check_all_sqc(active_dfos, times_offset++, all_dfo_terminate, last_timestamp))) {
         LOG_WARN("fail to check sqc");
       } else if (all_dfo_terminate) {
         wait_msg = false;
+        collect_trans_result_ok = true;
         LOG_TRACE("all dfo has been terminate", K(ret));
-      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      } else if (OB_FAIL(ctx.fast_check_status())) {
         LOG_WARN("fail check status, maybe px query timeout", K(ret));
       } else if (OB_FAIL(loop.process_one_if(&control_channels, timeout_us, nth_channel))) {
         if (OB_EAGAIN == ret) {
@@ -759,10 +764,29 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
       OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER != px_ctx_ptr->coord_info_.first_error_code_) {
     ret = px_ctx_ptr->coord_info_.first_error_code_;
   }
+
+  if (!collect_trans_result_ok) {
+    ObSQLSessionInfo* session = ctx.get_my_session();
+    if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null or px_ctx is null", K(ret));
+    } else {
+      session->get_trans_result().set_incomplete();
+      LOG_WARN("collect trans_result fail",
+          K(ret),
+          "session_id",
+          session->get_sessid(),
+          "trans_result",
+          session->get_trans_result());
+    }
+  }
   return ret;
 }
 
-int ObPxCoord::check_all_sqc(ObIArray<ObDfo*>& active_dfos, bool& all_dfo_terminate) const
+int ObPxCoord::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
+                             int64_t times_offset,
+                             bool &all_dfo_terminate, 
+                             int64_t &last_timestamp) const
 {
   int ret = OB_SUCCESS;
   all_dfo_terminate = true;
@@ -781,6 +805,15 @@ int ObPxCoord::check_all_sqc(ObIArray<ObDfo*>& active_dfos, bool& all_dfo_termin
           LOG_WARN("NULL unexpected sqc", K(ret));
         } else if (sqc->need_report()) {
           LOG_DEBUG("wait for sqc", K(sqc));
+          int64_t cur_timestamp = ObTimeUtility::current_time();
+          // > 1s, increase gradually
+          // In order to get the dfo to propose as soon as possible and 
+          // In order to avoid the interruption that is not received, 
+          // So the interruption needs to be sent repeatedly
+          if (cur_timestamp - last_timestamp > (1000000 + min(times_offset, 10) * 1000000)) { 
+            last_timestamp = cur_timestamp;
+            ObInterruptUtil::broadcast_dfo(active_dfos.at(i), OB_GOT_SIGNAL_ABORTING);
+          }
           all_dfo_terminate = false;
           break;
         }

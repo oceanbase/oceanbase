@@ -283,7 +283,7 @@ int ObClusterInfoProxy::load(ObISQLClient& sql_proxy, ObClusterInfo& cluster_inf
     LOG_WARN("fail to load core table", K(ret));
   } else if (OB_FAIL(core_table.next())) {
     if (OB_ITER_END == ret) {
-      LOG_WARN("get empty cluster info, maybe in bootstarp", K(ret));
+      LOG_WARN("get empty cluster info, maybe in bootstrap", K(ret));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to next", K(ret));

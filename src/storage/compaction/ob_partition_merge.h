@@ -136,7 +136,7 @@ public:
       KP_(table_schema), K_(need_fuse_generate));
 
 protected:
-  virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param);
+  virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param) override;
   virtual int inner_init(const storage::ObMergeParameter& merge_param) override;
   virtual int fuse_generate_exprs();
   virtual int fuse_old_row(ObMacroRowIterator* row_iter, storage::ObStoreRow* row);
@@ -205,9 +205,9 @@ public:
   virtual ~ObMinorPartitionMergeFuser();
   virtual void reset() override;
   virtual bool is_valid() const override;
-  virtual int fuse_row(MERGE_ITER_ARRAY& macro_row_iters) = 0;
+  virtual int fuse_row(MERGE_ITER_ARRAY& macro_row_iters) override = 0;
   virtual int find_minimum_iters(const MERGE_ITER_ARRAY& macro_row_iters, MERGE_ITER_ARRAY& minimum_iters) override;
-  virtual inline const common::ObIArray<share::schema::ObColDesc>& get_column_ids() const
+  virtual inline const common::ObIArray<share::schema::ObColDesc>& get_column_ids() const override
   {
     return column_ids_;
   }
@@ -230,8 +230,8 @@ protected:
   int set_multi_version_row_flag(const MERGE_ITER_ARRAY& macro_row_iters, storage::ObStoreRow& store_row);
   void set_dml(const MERGE_ITER_ARRAY& macro_row_iters, storage::ObStoreRow& store_row);
   virtual int fuse_delete_row(
-      ObMacroRowIterator* row_iter, storage::ObStoreRow* row, const int64_t rowkey_column_cnt) = 0;
-  virtual int malloc_row(int64_t column_count, storage::ObStoreRow*& row) = 0;
+      ObMacroRowIterator* row_iter, storage::ObStoreRow* row, const int64_t rowkey_column_cnt) override = 0;
+  virtual int malloc_row(int64_t column_count, storage::ObStoreRow*& row) override = 0;
   bool is_committed_row_(const storage::ObStoreRow& row) const;
 
 protected:

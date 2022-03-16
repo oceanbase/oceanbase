@@ -34,8 +34,8 @@ void ObLogSimpleBitMap::reset_all()
 
 void ObLogSimpleBitMap::reset_map(const int64_t idx)
 {
-  uint16_t mask = static_cast<uint16_t>(~(1 << idx));
-  uint16_t map = ATOMIC_LOAD(&val_);
+  uint32_t mask = static_cast<uint32_t>(~(1 << idx));
+  uint32_t map = ATOMIC_LOAD(&val_);
   while (!ATOMIC_BCAS(&val_, map, map & mask)) {
     map = ATOMIC_LOAD(&val_);
     PAUSE();
@@ -44,14 +44,14 @@ void ObLogSimpleBitMap::reset_map(const int64_t idx)
 
 void ObLogSimpleBitMap::reset_map_unsafe(const int64_t idx)
 {
-  uint16_t mask = static_cast<uint16_t>(~(1 << idx));
+  uint32_t mask = static_cast<uint32_t>(~(1 << idx));
   val_ = (val_ & mask);
 }
 
 void ObLogSimpleBitMap::set_map(const int64_t idx)
 {
-  uint16_t mask = static_cast<uint16_t>(1 << idx);
-  uint16_t map = ATOMIC_LOAD(&val_);
+  uint32_t mask = static_cast<uint32_t>(1 << idx);
+  uint32_t map = ATOMIC_LOAD(&val_);
   while (!ATOMIC_BCAS(&val_, map, map | mask)) {
     map = ATOMIC_LOAD(&val_);
     PAUSE();
@@ -60,7 +60,7 @@ void ObLogSimpleBitMap::set_map(const int64_t idx)
 
 void ObLogSimpleBitMap::set_map_unsafe(const int64_t idx)
 {
-  uint16_t mask = static_cast<uint16_t>(1 << idx);
+  uint32_t mask = static_cast<uint32_t>(1 << idx);
   val_ = (val_ | mask);
 }
 
@@ -77,9 +77,9 @@ bool ObLogSimpleBitMap::test_map_unsafe(const int64_t idx) const
 bool ObLogSimpleBitMap::test_and_set(const int64_t idx)
 {
   bool bret = true;
-  uint16_t mask = static_cast<uint16_t>(1 << idx);
+  uint32_t mask = static_cast<uint32_t>(1 << idx);
   do {
-    uint16_t val = ATOMIC_LOAD(&val_);
+    uint32_t val = ATOMIC_LOAD(&val_);
     if (ATOMIC_BCAS(&val_, val, val | mask)) {
       if ((val & mask) != 0) {
         bret = false;
@@ -196,6 +196,7 @@ int ObLogTask::set_log(const ObLogEntryHeader& header, const char* buff, const b
     }
     state_map_.set_map(SUBMIT_LOG_EXIST);
     state_map_.reset_map(LOCAL_FLUSHED);
+    state_map_.reset_map(WITH_ARCHIVE_ACCUM_CHECKSUM);
     state_map_.reset_map(ALREADY_SEND_TO_STANDBY);
     if (true == need_copy) {
       state_map_.set_map(SUBMIT_LOG_BODY_EXIST);
@@ -228,6 +229,7 @@ int ObLogTask::reset_log()
   state_map_.reset_map(SUBMIT_LOG_EXIST);
   state_map_.reset_map(SUBMIT_LOG_BODY_EXIST);
   state_map_.reset_map(IS_TRANS_LOG);
+  state_map_.reset_map(WITH_ARCHIVE_ACCUM_CHECKSUM);
   return ret;
 }
 
@@ -406,6 +408,7 @@ int ObLogTask::reset_state(const bool need_reset_confirmed_info)
   int ret = OB_SUCCESS;
   state_map_.reset_map(MAJORITY_FINISHED);
   state_map_.reset_map(STANDBY_MAJORITY_FINISHED);
+  state_map_.reset_map(WITH_ARCHIVE_ACCUM_CHECKSUM);
   ack_list_.reset();
   if (!is_submit_log_exist() || need_reset_confirmed_info) {
     state_map_.reset_map(CONFIRMED_INFO_EXIST);
@@ -655,15 +658,19 @@ void ObLogTask::set_confirmed_info(const ObConfirmedInfo& confirmed_info)
 {
   state_map_.set_map(CONFIRMED_INFO_EXIST);
   const int64_t arg_data_checksum = confirmed_info.get_data_checksum();
+  const int64_t arg_accum_checksum = confirmed_info.get_accum_checksum();
+  const int64_t arg_epoch_id = confirmed_info.get_epoch_id();
+  const int64_t arg_submit_timestamp = confirmed_info.get_submit_timestamp();
   if (is_submit_log_exist()) {
     // check data_checksum_ and epoch_id_ when log exists
-    if (data_checksum_ != arg_data_checksum || epoch_id_ != confirmed_info.get_epoch_id()) {
+    if (data_checksum_ != arg_data_checksum || epoch_id_ != arg_epoch_id ||
+        (OB_INVALID_TIMESTAMP != arg_submit_timestamp && submit_timestamp_ != arg_submit_timestamp)) {
       CLOG_LOG(ERROR, "set_confirmed_info meta info not match", K(data_checksum_), K(epoch_id_), K(confirmed_info));
     }
   }
-  epoch_id_ = confirmed_info.get_epoch_id();
+  epoch_id_ = arg_epoch_id;
   data_checksum_ = arg_data_checksum;
-  accum_checksum_ = confirmed_info.get_accum_checksum();
+  accum_checksum_ = arg_accum_checksum;
 }
 
 void ObLogTask::set_log_confirmed()
@@ -671,7 +678,18 @@ void ObLogTask::set_log_confirmed()
   state_map_.set_map(IS_CONFIRMED);
 }
 
-// int ObLogTask::report_trace()
+void ObLogTask::set_archive_accum_checksum(const int64_t accum_checksum)
+{
+  if (!state_map_.test_map(WITH_ARCHIVE_ACCUM_CHECKSUM)) {
+    state_map_.set_map(WITH_ARCHIVE_ACCUM_CHECKSUM);
+    accum_checksum_ = accum_checksum;
+  } else if (accum_checksum != accum_checksum_) {
+    CLOG_LOG(ERROR, "set_accum_checksum failed, accum_checksum not match",
+        K(accum_checksum), KPC(this));
+  } else {}
+}
+
+//int ObLogTask::report_trace()
 //{
 //  int ret = OB_SUCCESS;
 //  if (NULL != trace_profile_) {
@@ -683,6 +701,11 @@ void ObLogTask::set_log_confirmed()
 bool ObLogTask::is_confirmed_info_exist() const
 {
   return state_map_.test_map(CONFIRMED_INFO_EXIST);
+}
+
+bool ObLogTask::is_archive_accum_checksum_exist() const
+{
+  return state_map_.test_map(WITH_ARCHIVE_ACCUM_CHECKSUM);
 }
 
 bool ObLogTask::try_pre_index_log_submitted()

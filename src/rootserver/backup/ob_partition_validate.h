@@ -113,7 +113,7 @@ private:
       const uint64_t tenant_id, common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos);
   int get_extern_backup_set_infos(const int64_t backup_set_id,
       const common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos, int64_t& full_backup_set_id,
-      int64_t& inc_backup_set_id, int64_t& cluster_version);
+      int64_t& inc_backup_set_id, int64_t& cluster_version, int64_t& backup_date, int64_t& compatible);
   int check_need_validate_clog(const share::ObBackupValidateTaskInfo& task_info,
       const share::ObPGValidateTaskInfo& pg_task_info, const common::ObArray<share::ObLogArchiveBackupInfo>& log_infos,
       const common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos, bool& need_validate_clog);
@@ -149,7 +149,7 @@ private:
       const int64_t backup_set_id, const int64_t log_archive_round,
       const share::ObTenantValidateTaskInfo& tenant_task_info, const common::ObPartitionKey& pg_key,
       const common::ObAddr& server, const share::ObTaskId& trace_id, const int64_t cluster_version,
-      share::ObPhysicalValidateArg& arg);
+      const int64_t backup_date, const int64_t compatible, share::ObPhysicalValidateArg& arg);
   int build_pg_validate_task_info(const common::ObAddr& addr, const share::ObTaskId& trace_id,
       const share::ObPGValidateTaskInfo& src_pg_info, share::ObPGValidateTaskInfo& pg_task_info);
   int batch_update_pg_task_infos(

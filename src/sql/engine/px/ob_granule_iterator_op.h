@@ -232,6 +232,9 @@ private:
   const ObGITaskSet* rescan_taskset_ = NULL;
   common::ObSEArray<ObGITaskSet::Pos, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_;
   int64_t rescan_task_idx_;
+  // full pwj场景下, 在执行过程中缓存住了自己的任务队列.
+  // 供GI rescan使用
+  common::ObSEArray<ObGranuleTaskInfo, 2> pwj_rescan_task_infos_;
 };
 
 }  // end namespace sql

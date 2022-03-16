@@ -215,7 +215,7 @@ int ObPartitionMetaRedoModule::replay(const ObRedoModuleReplayParam& param)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_REDO_LOG_PARTITION != main_type) {
@@ -451,13 +451,22 @@ int ObPartitionMetaRedoModule::parse(const int64_t subcmd, const char* buf, cons
         ObPGKey pgkey;
         ObITable::TableKey table_key;
         blocksstable::ObMacroBlockMetaV2 meta;
+        common::ObObj *endkey = static_cast<common::ObObj *>(ob_malloc(sizeof(ObObj) * common::OB_MAX_COLUMN_NUMBER));
         MacroBlockId macro_block_id;
         ObPGMacroBlockMetaLogEntry entry(pgkey, table_key, 0, 0, macro_block_id, meta);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
+        if (OB_UNLIKELY(nullptr == endkey)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory fail", K(ret));
+        } else if (FALSE_IT(meta.endkey_ = endkey)) {
+        } else if (OB_FAIL(entry.deserialize(buf, len, pos))) {
           LOG_WARN("Fail to deserialize ObPGMacroBlockMetaLogEntry", K(ret));
         } else if (0 > fprintf(stream, "ObPGMacroBlockMetaLogEntry\n%s\n", to_cstring(entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("failed to print ObPGMacroBlockMetaLogEntry", K(ret), K(entry));
+        }
+
+        if (nullptr != endkey) {
+          ob_free(endkey);
         }
         break;
       }
@@ -766,8 +775,21 @@ int ObPartitionMetaRedoModule::inner_del_partition_for_replay(const ObPartitionK
     } else {
       LOG_WARN("fail to get partition", K(ret), K(pkey));
     }
+  } else if (OB_ISNULL(guard.get_partition_group())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition group is null", K(ret), K(pkey));
   } else if (OB_FAIL(inner_del_partition_impl(pkey, OB_INVALID_DATA_FILE_ID == file_id ? nullptr : &file_id))) {
     LOG_WARN("fail to inner del partition", K(ret));
+  } else if (OB_INVALID_DATA_FILE_ID == file_id) {
+    // replay slog before 3.1, need to remove pg from file mgr explicitly
+    const ObIPartitionGroup& pg = *guard.get_partition_group();
+    const ObStorageFile* file = pg.get_storage_file();
+    if (OB_ISNULL(file)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition group has null file", K(ret), K(pkey));
+    } else if (OB_FAIL(file_mgr_->remove_pg(ObTenantFileKey(file->get_tenant_id(), file->get_file_id()), pkey))) {
+      LOG_WARN("remove pg key from file fail", K(ret), K(pkey));
+    }
   }
   return ret;
 }
@@ -821,7 +843,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -907,6 +929,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
   LOG_INFO("replay base storage log::add_partition", K(param), K(log_entry), K(sub_type), K(ret));
 
   if (OB_FAIL(ret) && NULL != ptt && REDO_LOG_ADD_PARTITION_TO_PG != sub_type) {
+    int origin_ret = ret;
     // remove from pg_mgr
     if (is_ptt_in_mgr) {
       ObIPartitionGroupGuard partition_guard;
@@ -923,6 +946,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
       cp_fty_->free(ptt);
     }
     ptt = NULL;
+    ret = origin_ret;
   }
   return ret;
 }
@@ -938,7 +962,7 @@ int ObPartitionMetaRedoModule::replay_create_partition_group(const ObRedoModuleR
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -970,10 +994,15 @@ int ObPartitionMetaRedoModule::replay_create_partition_group(const ObRedoModuleR
           LOG_WARN("fail to open file", K(ret));
         }
       } else {
+        // replay a slog entry before 3.1, need to add pg_key to map
         const bool sys_table = is_sys_table(log_entry.meta_.pg_key_.get_table_id());
         if (OB_FAIL(file_mgr_->alloc_file(
                 log_entry.meta_.pg_key_.get_tenant_id(), sys_table, file_handle, false /*write slog*/))) {
           LOG_WARN("fail to open pg file", K(ret));
+        } else if (OB_FAIL(file_mgr_->add_pg(ObTenantFileKey(file_handle.get_storage_file()->get_tenant_id(),
+                                                 file_handle.get_storage_file()->get_file_id()),
+                       log_entry.meta_.pg_key_))) {
+          LOG_WARN("fail to add pg to tenant file", K(ret), K(log_entry), "file", *file_handle.get_storage_file());
         }
       }
       if (OB_FAIL(ret)) {
@@ -1007,7 +1036,7 @@ int ObPartitionMetaRedoModule::replay_remove_partition(const ObRedoModuleReplayP
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1063,7 +1092,7 @@ int ObPartitionMetaRedoModule::replay_replica_type(const ObRedoModuleReplayParam
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1110,7 +1139,7 @@ int ObPartitionMetaRedoModule::replay_set_split_state(const ObRedoModuleReplayPa
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1162,7 +1191,7 @@ int ObPartitionMetaRedoModule::replay_set_split_info(const ObRedoModuleReplayPar
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1271,7 +1300,7 @@ int ObPartitionMetaRedoModule::replay_drop_index_of_store(const ObRedoModuleRepl
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1325,7 +1354,7 @@ int ObPartitionMetaRedoModule::replay_update_partition_group_meta(const ObRedoMo
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1366,7 +1395,7 @@ int ObPartitionMetaRedoModule::replay_create_pg_partition_store(const ObRedoModu
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1404,7 +1433,7 @@ int ObPartitionMetaRedoModule::replay_update_pg_partition_meta(const ObRedoModul
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition service is not initialized", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1458,7 +1487,7 @@ int ObPartitionMetaRedoModule::replay_add_sstable(const ObRedoModuleReplayParam&
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMetaRedoModule has not been inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1498,7 +1527,7 @@ int ObPartitionMetaRedoModule::replay_remove_sstable(const ObRedoModuleReplayPar
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMetaRedoModule has not been inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize log entry", K(ret));
@@ -1534,7 +1563,7 @@ int ObPartitionMetaRedoModule::replay_macro_meta(const ObRedoModuleReplayParam& 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMetaRedoModule has not been inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1579,7 +1608,9 @@ int ObPartitionMetaRedoModule::get_create_pg_param(const ObCreatePartitionGroupL
     param.file_mgr_ = file_mgr;
     param.create_frozen_version_ = log_entry.meta_.create_frozen_version_;
     param.last_restore_log_id_ = log_entry.meta_.last_restore_log_id_;
+    param.last_restore_log_ts_ = log_entry.meta_.last_restore_log_ts_;
     param.restore_snapshot_version_ = log_entry.meta_.restore_snapshot_version_;
+    param.restore_schema_version_ = log_entry.meta_.restore_schema_version_;
   }
   return ret;
 }
@@ -1594,7 +1625,7 @@ int ObPartitionMetaRedoModule::replay_update_tenant_file_info(const ObRedoModule
   if (OB_ISNULL(file_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("file mgr is null", K(ret), KP(file_mgr_));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1635,7 +1666,7 @@ int ObPartitionMetaRedoModule::replay_add_recovery_point_data(const ObRedoModule
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMetaRedoModule has not been inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
@@ -1672,7 +1703,7 @@ int ObPartitionMetaRedoModule::replay_remove_recovery_point_data(const ObRedoMod
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMetaRedoModule has not been inited", K(ret));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {

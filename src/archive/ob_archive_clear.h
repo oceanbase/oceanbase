@@ -20,11 +20,23 @@ namespace oceanbase {
 namespace archive {
 class ObArchiveClear {
 public:
+  /// get max boundary files to clean by log_id and retention_timestamp
+  ///
+  /// @param dest                 archive file basic path
+  /// @param log_id               log's id >= this log_id must be retain
+  /// @param retention_timestamp  logs' submit_timestamp >= retention_timestamp must be retain
   int get_clean_max_clog_file_id_by_log_id(const share::ObClusterBackupDest& dest, const int64_t archive_round,
-      const common::ObPGKey& pg_key, const uint64_t log_id, uint64_t& index_file_id, uint64_t& data_file_id);
+      const int64_t piece_id, const int64_t piece_create_date, const common::ObPGKey& pg_key, const uint64_t log_id,
+      const int64_t retention_timestamp, uint64_t& index_file_id, uint64_t& data_file_id);
 
+  /// get max boundary files to clean by log_ts and retention_timestamp
+  ///
+  /// @param dest                 archive file basic path
+  /// @param log_ts               log's ts >= this log_id must be retain
+  /// @param retention_timestamp  log's submit_timestamp >= retention_timestamp must be retain
   int get_clean_max_clog_file_id_by_log_ts(const share::ObClusterBackupDest& dest, const int64_t archive_round,
-      const common::ObPGKey& pg_key, const int64_t log_ts, uint64_t& index_file_id, uint64_t& data_file_id);
+      const int64_t piece_id, const int64_t piece_create_date, const common::ObPGKey& pg_key, const int64_t log_ts,
+      const int64_t retention_timestamp, uint64_t& index_file_id, uint64_t& data_file_id);
 };
 }  // namespace archive
 }  // namespace oceanbase

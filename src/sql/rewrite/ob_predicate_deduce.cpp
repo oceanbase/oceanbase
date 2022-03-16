@@ -589,6 +589,8 @@ int ObPredicateDeduce::find_similar_expr(
     ObRawExpr* pred, ObIArray<ObRawExpr*>& general_preds, ObIArray<ObRawExpr*>& first_params)
 {
   int ret = OB_SUCCESS;
+  ObExprEqualCheckContext equal_ctx;
+  equal_ctx.override_const_compare_ = true;
   if (OB_ISNULL(pred)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param expr", K(ret), K(pred));
@@ -609,7 +611,7 @@ int ObPredicateDeduce::find_similar_expr(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param expr is null", K(ret));
         } else {
-          is_similar = param1->same_as(*param2);
+          is_similar = param1->same_as(*param2, &equal_ctx);
         }
       }
     }

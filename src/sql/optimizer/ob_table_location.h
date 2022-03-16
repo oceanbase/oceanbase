@@ -482,7 +482,8 @@ public:
         range_part_id_arr_(NULL),
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
-        is_valid_range_columns_subpart_range_(false)
+        is_valid_range_columns_subpart_range_(false),
+        report_err_for_pruned_partition_not_exist_(false)
   {}
 
   // Used in situations where the optimizer does not adjust the destructor, to ensure that
@@ -555,7 +556,8 @@ public:
         hash_part_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator_)),
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
-        is_valid_range_columns_subpart_range_(false)
+        is_valid_range_columns_subpart_range_(false),
+        report_err_for_pruned_partition_not_exist_(false)
   {}
   virtual ~ObTableLocation()
   {
@@ -646,9 +648,9 @@ public:
       share::schema::ObSchemaGetterGuard& schema_guard, uint64_t table_id, const common::ObIArray<ObRowkey>& rowkeys,
       common::ObIArray<int64_t>& part_ids, common::ObIArray<RowkeyArray>& rowkey_lists);
   int init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id, ObDMLStmt& stmt,
-      RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
+      const RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
   int init_table_location_with_rowkey(ObSqlSchemaGuard& schema_guard, uint64_t table_id, ObSQLSessionInfo& session_info,
-      const bool is_dml_table = false);
+      const bool is_dml_table = true);
   int calculate_partition_ids_by_row(ObExecContext& exec_ctx, ObPartMgr* part_mgr, const common::ObNewRow& row,
       ObIArray<int64_t>& part_ids, int64_t& part_idx) const;
   int calculate_partition_id_by_row(
@@ -817,7 +819,8 @@ public:
       const ObSqlExpression* gen_col_expr = NULL) const;
 
   int init_table_location_with_row_desc(
-      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info);
+      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info,
+      const bool is_dml_table);
 
   int generate_row_desc_from_row_desc(ObDMLStmt& stmt, const uint64_t data_table_id, ObRawExprFactory& expr_factory,
       const RowDesc& input_row_desc, RowDesc& row_desc);
@@ -837,6 +840,13 @@ public:
 
   int calculate_partition_ids_with_rowid(ObExecContext& exec_ctx, share::schema::ObSchemaGetterGuard& schema_guard,
       const ParamStore& params, common::ObIArray<int64_t>& part_ids) const;
+
+  inline bool is_all_partition() const
+  {
+    return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
+           (part_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_ONE)) ||
+           (part_get_all_ && subpart_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_TWO));
+  }
 
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(part_num), K_(is_global_index), K_(duplicate_type),
       K_(part_expr_param_idxs), K_(part_projector), K_(part_expr), K_(gen_col_expr));
@@ -1133,6 +1143,8 @@ private:
   bool use_calc_part_by_rowid_;
   bool is_valid_range_columns_part_range_;
   bool is_valid_range_columns_subpart_range_;
+
+  bool report_err_for_pruned_partition_not_exist_;
 };
 
 }  // namespace sql

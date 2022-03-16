@@ -489,7 +489,7 @@ private:
   static const int64_t MAX_BUCKET_NUM = 131072;  // 1M = 131072 * 8
   static const int64_t MAX_PART_LEVEL = 4;
   uint64_t tenant_id_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator* alloc_;
   common::ObArenaAllocator* arena_alloc_;
   ObPartitionExtendHashTable<HashCol> hash_table_;
@@ -544,7 +544,7 @@ inline int ObBasicHashPartInfrastructure<HashCol, HashRowStore>::init_mem_contex
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_ARENA_HASH_JOIN, common::ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));

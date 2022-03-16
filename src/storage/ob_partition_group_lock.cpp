@@ -192,7 +192,7 @@ int ObPGLockWithPendingReplayGuard::wait_follower_no_pending_task_()
   int64_t cnt = 0;
   int64_t task_cnt = replay_status_.get_pending_task_count();
 
-  while (replay_status_.has_pending_task(pkey_) && OB_SUCC(ret)) {
+  while (replay_status_.has_pending_task(pkey_) && !replay_status_.has_encount_fatal_error() && OB_SUCC(ret)) {
     usleep(SLEEP_FOR_PENDING_REPLAY);
     cnt++;
 
@@ -207,6 +207,13 @@ int ObPGLockWithPendingReplayGuard::wait_follower_no_pending_task_()
 
       cnt = 0;
     }
+  }
+
+  if (replay_status_.has_encount_fatal_error()) {
+    // We just return the success because there will be no pending replay task.
+    // While we report the ERROR to notify the user
+    TRANS_LOG(ERROR, "encounter fatal error", K(replay_status_), K(ret), K(pkey_));
+    ret = OB_SUCCESS;
   }
 
   return ret;

@@ -1408,7 +1408,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg& index_arg,
           index_arg.index_option_.parser_name_ = common::ObString::make_string(common::OB_DEFAULT_FULLTEXT_PARSER_NAME);
         }
       } else {
-        global_ = (index_scope_ != LOCAL_INDEX);
+        global_ = (GLOBAL_INDEX == index_scope_);
         if (is_unique_key) {
           if (global_) {
             type = INDEX_TYPE_UNIQUE_GLOBAL;
@@ -3302,6 +3302,9 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode& node)
         } else if (!share::is_oracle_mode() && ob_is_text_tc(alter_column_schema.get_data_type())) {
           ret = OB_INVALID_DEFAULT;
           SQL_RESV_LOG(WARN, "BLOB/TEXT can't set default value!", K(ret));
+        } else if (!share::is_oracle_mode() && ob_is_json_tc(alter_column_schema.get_data_type())) {
+          ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+          SQL_RESV_LOG(WARN, "BLOB/TEXT or JSON can't set default value!", K(ret));
         } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
@@ -3421,6 +3424,16 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode& node)
               K(ret),
               K(alter_column_schema.get_accuracy()),
               KPC(origin_col_schema));
+        } else if ((ObTimestampType == origin_col_schema->get_data_type()
+                      || ObDateTimeType == origin_col_schema->get_data_type()
+                      || ObTimeType == origin_col_schema->get_data_type())
+                  && origin_col_schema->get_data_type() == alter_column_schema.get_data_type()
+                  && origin_col_schema->get_accuracy().get_precision() >
+                    alter_column_schema.get_accuracy().get_precision()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease scale of timestamp type");
+          LOG_WARN("Decrease scale of timestamp type not supported", K(ret),
+                  K(origin_col_schema->get_accuracy()), K(alter_column_schema.get_accuracy()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -3531,6 +3544,17 @@ int ObAlterTableResolver::resolve_modify_column(
               K(ret),
               K(alter_column_schema.get_accuracy()),
               KPC(origin_col_schema));
+        } else if ((ObTimestampNanoType == origin_col_schema->get_data_type()
+                        || ObTimestampType == origin_col_schema->get_data_type()
+                        || ObDateTimeType == origin_col_schema->get_data_type()
+                        || ObTimeType == origin_col_schema->get_data_type())
+                    && origin_col_schema->get_data_type() == alter_column_schema.get_data_type()
+                    && origin_col_schema->get_accuracy().get_precision() >
+                      alter_column_schema.get_accuracy().get_precision()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease scale of timestamp type");
+          LOG_WARN("Decrease scale of timestamp type not supported", K(ret),
+                  K(origin_col_schema->get_accuracy()), K(alter_column_schema.get_accuracy()));
         } else if (share::is_oracle_mode() &&
                    ((origin_col_schema->get_data_type() != alter_column_schema.get_data_type()) ||
                        (origin_col_schema->get_data_length() != alter_column_schema.get_data_length()))) {

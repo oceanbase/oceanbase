@@ -164,7 +164,7 @@ int ObPartitionTableUtil::check_merge_progress(
         } else if (is_restore && !is_inner_table(this_partition_entity_id)) {
           need_check = false;  // user table do not suspend merge during restore
         } else if (!is_tablegroup_id(this_partition_entity_id)) {
-          const share::schema::ObTableSchema* table_schema = nullptr;
+          const share::schema::ObSimpleTableSchemaV2* table_schema = nullptr;
           if (OB_FAIL(schema_guard.get_table_schema(this_partition_entity_id, table_schema))) {
             LOG_WARN("fail to get table schema", K(ret), "table_id", this_partition_entity_id);
           } else if (nullptr == table_schema) {

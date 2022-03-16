@@ -137,22 +137,21 @@ public:
   }
 };
 
-struct SCond {
+template <int PRIO>
+struct SCondTemp {
 public:
   typedef SimpleCond CondPerCpu;
   typedef SCondReadyFlag Lock;
   typedef SCondCounter Counter;
   typedef SCondSimpleIdGen IdGen;
   enum { CPU_COUNT = OB_MAX_CPU_NUM, COND_COUNT = CPU_COUNT, LOOP_LIMIT = 8 };
-  SCond()
-  {}
-  ~SCond()
-  {}
-  void signal(uint32_t x = 1)
+  void signal(uint32_t x = 1, int prio=0)
   {
-    uint32_t v = conds_[id_gen_.get() % COND_COUNT].signal(x);
-    if (v < x) {
-      n2wakeup_.add(x - v);
+    for (int p = PRIO-1; p >= prio && x > 0; p--) {
+      x -= conds_[id_gen_.get() % COND_COUNT][p].signal(x);
+    }
+    if (x > 0) {
+      n2wakeup_.add(x);
       lock_.set_ready();
       int64_t loop_cnt = 0;
       while (loop_cnt++ < LOOP_LIMIT && lock_.lock()) {
@@ -164,11 +163,12 @@ public:
       }
     }
   }
-  void prepare()
+  void prepare(int prio=0)
   {
     uint32_t id = 0;
-    uint32_t key = get_key(id);
-    get_wait_key() = ((uint64_t)id << 32) + key;
+    uint32_t key = get_key(prio, id);
+    id += (prio << 16);
+    get_wait_key() = ((uint64_t)id<<32) + key;
   }
   void wait(int64_t timeout)
   {
@@ -177,15 +177,14 @@ public:
   }
 
 protected:
-  uint32_t get_key(uint32_t& id)
-  {
-    return conds_[id = (id_gen_.next() % COND_COUNT)].get_key();
+  uint32_t get_key(int prio, uint32_t& id)
+  { 
+    return conds_[id = (id_gen_.next() % COND_COUNT)][prio].get_key();
   }
   void wait(uint32_t id, uint32_t key, int64_t timeout)
   {
-    conds_[id % COND_COUNT].wait(key, timeout);
+    conds_[((uint16_t)id) % COND_COUNT][id >> 16].wait(key, timeout);
   }
-
 private:
   static uint64_t& get_wait_key()
   {
@@ -194,20 +193,27 @@ private:
   }
   void do_wakeup()
   {
-    uint32_t n2wakeup = n2wakeup_.fetch();
-    for (int i = 0; n2wakeup > 0 && i < COND_COUNT; i++) {
-      n2wakeup -= conds_[i].signal(n2wakeup);
+    uint32_t n2wakeup = 0;
+    //for (int p = PRIO - 1; p >= 0; p--) {
+      n2wakeup = n2wakeup_.fetch();
+      //    }
+    for (int p = PRIO - 1; n2wakeup > 0 && p >= 0; p--) {
+      for(int i = 0; n2wakeup > 0 && i < COND_COUNT; i++) {
+        n2wakeup -= conds_[i][p].signal(n2wakeup);
+      }
     }
   }
 
 private:
   Lock lock_ CACHE_ALIGNED;
-  CondPerCpu conds_[COND_COUNT];
+  CondPerCpu conds_[COND_COUNT][PRIO];
   Counter n2wakeup_;
   IdGen id_gen_;
 };
 
-};  // end namespace common
-};  // end namespace oceanbase
+using SCond = SCondTemp<1>;
+
+}; // end namespace common
+}; // end namespace oceanbase
 
 #endif /* OCEANBASE_LOCK_OB_SCOND_H_ */

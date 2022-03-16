@@ -564,7 +564,8 @@ struct ObMaterializedViewContext {
 typedef common::ObSEArray<ObAssignment, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> ObAssignments;
 /// all assignments of one table
 struct ObTableAssignment {
-  ObTableAssignment() : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false)
+  ObTableAssignment()
+      : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false), is_update_unique_key_(false)
   {}
 
   int deep_copy(ObRawExprFactory& expr_factory, const ObTableAssignment& other);
@@ -579,14 +580,15 @@ struct ObTableAssignment {
       seed = do_hash(assignments_.at(j), seed);
     }
     seed = do_hash(is_update_part_key_, seed);
-
+    seed = do_hash(is_update_unique_key_, seed);
     return seed;
   }
 
   uint64_t table_id_;
   ObAssignments assignments_;
   bool is_update_part_key_;
-  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key));
+  bool is_update_unique_key_;
+  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key), K_(is_update_unique_key));
 };
 /// multi-table assignments
 typedef common::ObSEArray<ObTableAssignment, 3, common::ModulePageAllocator, true> ObTablesAssignments;
@@ -993,6 +995,15 @@ public:
   TableItem* get_table_item(const FromItem item);
   const TableItem* get_table_item(const FromItem item) const;
   int get_table_item_idx(const TableItem* child_table, int64_t& idx) const;
+
+  int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
+  int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
+  int get_from_tables(ObRelIds &table_set) const;
+  int get_from_tables(ObSqlBitSet<> &table_set) const;
+
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item);
   int add_table_item(const ObSQLSessionInfo* session_info, ObIArray<TableItem*>& table_items);
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item, bool& have_same_table_name);
@@ -1004,9 +1015,10 @@ public:
   int append_id_to_view_name(char* buf, int64_t buf_len, int64_t& pos, bool is_temp = false);
   int32_t get_table_bit_index(uint64_t table_id) const;
   int set_table_bit_index(uint64_t table_id);
-  ColumnItem* get_column_item(uint64_t table_id, const common::ObString& col_name);
-  int add_column_item(ColumnItem& column_item);
-  int add_column_item(ObIArray<ColumnItem>& column_items);
+  ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
+  ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  int add_column_item(ColumnItem &column_item);
+  int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);
   int remove_column_item(uint64_t table_id);
   int remove_column_item(const ObRawExpr* column_expr);

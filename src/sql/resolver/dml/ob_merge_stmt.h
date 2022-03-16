@@ -105,7 +105,7 @@ public:
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
+  virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker) override;
 
 private:
   uint64_t source_table_id_;

@@ -325,6 +325,10 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_VALIDATE_BACKUP_BATCH_RES, ObRpcValidateBackupBatchResP, receive_batch_balance_over(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_STANDBY_CUTDATA_BATCH_TASK_RES, ObRpcStandbyCutDataBatchTaskResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_BACKUPSET_BATCH_RES, ObRpcBackupBackupsetBatchResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_ARCHIVE_LOG_BATCH_RES, ObRpcBackupArchiveLogBatchResP, handle_backup_archive_log_batch_res(arg_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_REBUILD_REPLICA, ObRpcAdminRebuildReplicaP, admin_rebuild_replica(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_DS_ACTION, ObBroadcastDSActionP, broadcast_ds_action(arg_));
@@ -388,10 +392,10 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TENANT, ObRpcFlashBackTenantP, f
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_TENANT, ObRpcPurgeTenantP, purge_tenant(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_EXPIRE_RECYCLE_OBJECTS, ObRpcPurgeExpireRecycleObjectsP,
     purge_expire_recycle_objects(arg_, result_));
-DEFINE_RS_RPC_PROCESSOR(
-    obrpc::OB_FLASHBACK_TABLE_TO_SCN, ObRpcFlashBackTableToScnP, flashback_table_to_time_point(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ROOT_SPLIT_PARTITION, ObRpcRootSplitPartitionP, root_split_partition(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_CLUSTER_ATTR_DDL, ObRpcAlterClusterAttrP, alter_cluster_attr(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(
+    obrpc::OB_SUBMIT_BUILD_INDEX_TASK, ObRpcSubmitBuildIndexTaskP, submit_build_index_task(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ALTER_CLUSTER_INFO, ObRpcAlterClusterInfoP, alter_cluster_info(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_GET_TENANT_SCHEMA_VERSIONS, ObGetTenantSchemaVersionsP, get_tenant_schema_versions(arg_, result_));
@@ -538,6 +542,9 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_PHYSICAL_RESTORE_RES, ObRpcPhysicalRestoreResultP, send_physical_restore_result(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_UPDATE_STANDBY_CLUSTER_INFO, ObUpdateStandbyClusterInfoP, update_standby_cluster_info(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_ARCHIVE_LOG, ObBackupArchiveLogP, handle_backup_archive_log(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPSET, ObBackupBackupsetP, handle_backup_backupset(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPPIECE, ObBackupBackupPieceP, handle_backup_backuppiece(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

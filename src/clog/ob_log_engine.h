@@ -143,7 +143,7 @@ protected:
   // the clog_writer is returned to be busy
   static const int64_t BUFFER_ITEM_CONGESTED_PERCENTAGE = 50;
   bool cluster_version_before_2000_() const;
-  int init_log_file_writer(const char* log_dir, const char* shm_path, const ObILogFileStore* file_store);
+  int init_log_file_writer(const char* log_dir, const ObILogFileStore* file_store);
 
   bool is_inited_;
   Config config_;
@@ -434,6 +434,8 @@ public:
       const common::ObProposalID proposal_id) override;
   int broadcast_info(const common::ObMemberList& mem_list, const common::ObPartitionKey& key,
       const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id) override;
+  int send_restore_check_rqst(const common::ObAddr& server, const int64_t dst_cluster_id,
+      const common::ObPartitionKey& key, const ObRestoreCheckType restore_type) override;
   // confirmed_info msg is special that no need compare proposal_id
   int submit_confirmed_info(const share::ObCascadMemberList& mem_list, const common::ObPartitionKey& key,
       const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed) override;
@@ -473,6 +475,8 @@ public:
       bool& remote_replica_is_normal) override;
   int get_remote_mc_ctx_array(
       const common::ObAddr& server, const common::ObPartitionArray& partition_array, McCtxArray& mc_ctx_array);
+  int send_query_restore_end_id_resp(const common::ObAddr& server, const int64_t cluster_id,
+      const common::ObPartitionKey& partition_key, const uint64_t last_restore_log_id) override;
   int update_min_using_file_id();
   uint32_t get_clog_min_using_file_id() const override;
   uint32_t get_clog_min_file_id() const override;
@@ -491,6 +495,9 @@ public:
       const uint64_t log_id, transaction::ObTransID& trans_id, int64_t& submit_timestamp) override;
   int get_clog_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) override;
   int delete_all_clog_files();
+  int check_clog_exist(const common::ObPartitionKey &partition_key,
+                       const uint64_t log_id,
+                       bool &exist);
   // ================== interface for ObIlogStorage begin====================
   int get_cursor_batch(
       const common::ObPartitionKey& pkey, const uint64_t query_log_id, ObGetCursorResult& result) override;
@@ -518,7 +525,7 @@ public:
   int ensure_log_continuous_in_file_id_cache(
       const common::ObPartitionKey& partition_key, const uint64_t log_id) override;
   int get_index_info_block_map(const file_id_t file_id, IndexInfoBlockMap& index_info_block_map) override;
-  int check_need_block_log(bool& is_need) const override;
+  int check_need_block_log(const file_id_t cur_file_id, bool &is_need) const;
   int delete_all_ilog_files();
   ObLogCache* get_ilog_log_cache() override
   {
@@ -527,10 +534,10 @@ public:
 
   int check_is_clog_obsoleted(const common::ObPartitionKey& partition_key, const file_id_t file_id,
       const offset_t offset, bool& is_obsoleted) const override;
-  // ================== interface for ObIlogStorage end  ====================
-  int get_clog_using_disk_space(int64_t& space) const;
-  int get_ilog_using_disk_space(int64_t& space) const;
-  bool is_clog_disk_error() const override;
+  int get_clog_using_disk_space(int64_t &space) const;
+  int get_ilog_using_disk_space(int64_t &space) const;
+  bool is_clog_disk_hang() const;
+  int get_server_min_log_ts(int64_t &server_min_log_ts);
 
 private:
   int fetch_log_from_server(

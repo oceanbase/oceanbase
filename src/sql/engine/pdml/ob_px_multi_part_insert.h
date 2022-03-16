@@ -42,7 +42,12 @@ private:
   class ObPDMLRowIteratorWrapper : public common::ObNewRowIterator {
   public:
     ObPDMLRowIteratorWrapper(ObPxMultiPartInsertCtx& op_ctx)
-        : op_ctx_(op_ctx), iter_(nullptr), insert_projector_(nullptr), insert_projector_size_(0), insert_row_()
+        : op_ctx_(op_ctx),
+          iter_(nullptr),
+          insert_projector_(nullptr),
+          insert_projector_size_(0),
+          insert_row_(),
+          insert_op_(nullptr)
     {}
     virtual ~ObPDMLRowIteratorWrapper() = default;
 
@@ -55,6 +60,10 @@ private:
     void set_iterator(ObPDMLRowIterator& iter)
     {
       iter_ = &iter;
+    }
+    void set_insert_op(const ObPxMultiPartInsert* insert_op)
+    {
+      insert_op_ = insert_op;
     }
     int get_next_row(common::ObNewRow*& row) override;
     void reset() override
@@ -69,6 +78,7 @@ private:
     int32_t* insert_projector_;
     int64_t insert_projector_size_;
     common::ObNewRow insert_row_;
+    const ObPxMultiPartInsert* insert_op_;
   };
   class ObPxMultiPartInsertCtx : public ObTableModifyCtx {
   public:
@@ -123,7 +133,7 @@ public:
 private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
-  int process_row(ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow*& insert_row) const;
+  int process_row(ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow& insert_row) const;
 
 private:
   ObDMLRowDesc row_desc_;

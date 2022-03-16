@@ -115,7 +115,7 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
-  char trace_id_[128];
+  char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
   bool is_first_get_;
   bool is_use_index_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;

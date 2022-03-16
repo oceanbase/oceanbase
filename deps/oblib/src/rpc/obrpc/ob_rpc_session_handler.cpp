@@ -90,7 +90,7 @@ int ObRpcSessionHandler::prepare_for_next_request(int64_t sessid)
   wait_object.thid_ = get_itid();
   wait_object.req_ = NULL;
 
-  if (wait_object.thid_ < 0 || wait_object.thid_ >= MAX_COND_COUNT) {
+  if (wait_object.thid_ < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Thread id no valid", K(ret), "thread id", wait_object.thid_);
   } else {

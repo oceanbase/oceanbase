@@ -351,7 +351,7 @@ private:
   int64_t dec_ref_count(const CacheRefHandleID ref_handle);
 
 protected:
-  lib::MemoryContext& mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator& allocator_;
   ObCacheObjType type_;
   volatile int64_t ref_count_;

@@ -1313,6 +1313,7 @@ def is_sys_table(table_id):
   OB_TENANT_ID_SHIFT = 40;
   UINT64_MAX= 0xffffffffffffffff;
   OB_MAX_SYS_TABLE_ID = 10000;
+  table_id = int(table_id)
   pure_table_id=(table_id & (~(UINT64_MAX << OB_TENANT_ID_SHIFT)));
   return ((UINT64_MAX != pure_table_id) and (pure_table_id <= OB_MAX_SYS_TABLE_ID));
 

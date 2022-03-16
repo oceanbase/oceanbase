@@ -99,7 +99,6 @@ ob_set_subtarget(ob_sql engine
   engine/cmd/ob_resource_executor.cpp
   engine/cmd/ob_restore_executor.cpp
   engine/cmd/ob_sequence_executor.cpp
-  engine/cmd/ob_set_names_executor.cpp
   engine/cmd/ob_set_password_executor.cpp
   engine/cmd/ob_synonym_executor.cpp
   engine/cmd/ob_table_executor.cpp
@@ -165,6 +164,10 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr.cpp
   engine/expr/ob_expr_frame_info.cpp
   engine/expr/ob_expr_user_can_access_obj.cpp
+  engine/expr/ob_expr_any_value.h
+  engine/expr/ob_expr_any_value.cpp
+  engine/expr/ob_expr_uuid_short.h
+  engine/expr/ob_expr_uuid_short.cpp
   engine/pdml/ob_batch_row_cache.cpp
   engine/pdml/ob_pdml_data_driver.cpp
   engine/pdml/ob_px_multi_part_modify.cpp
@@ -195,6 +198,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_tan.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_cot.cpp
   engine/expr/ob_expr_between.cpp
   engine/expr/ob_expr_bit_and.cpp
   engine/expr/ob_expr_bit_count.cpp
@@ -221,6 +225,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_conv.cpp
   engine/expr/ob_expr_convert.cpp
   engine/expr/ob_expr_cosh.cpp
+  engine/expr/ob_expr_crc32.cpp
   engine/expr/ob_expr_timezone.cpp
   engine/expr/ob_expr_tz_offset.cpp
   engine/expr/ob_expr_from_tz.cpp
@@ -266,6 +271,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_greatest.cpp
   engine/expr/ob_expr_hex.cpp
   engine/expr/ob_expr_hextoraw.cpp
+  engine/expr/ob_expr_weight_string.h
+  engine/expr/ob_expr_weight_string.cpp
   engine/expr/ob_expr_host_ip.cpp
   engine/expr/ob_expr_ifnull.cpp
   engine/expr/ob_expr_in.cpp
@@ -277,7 +284,37 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_int_div.cpp
   engine/expr/ob_expr_interval.cpp
   engine/expr/ob_expr_ip2int.cpp
+  engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_is.cpp
+  engine/expr/ob_expr_json_func_helper.cpp
+  engine/expr/ob_expr_json_extract.cpp
+  engine/expr/ob_expr_json_contains.cpp
+  engine/expr/ob_expr_json_contains_path.cpp
+  engine/expr/ob_expr_json_depth.cpp
+  engine/expr/ob_expr_json_keys.cpp
+  engine/expr/ob_expr_json_overlaps.cpp
+  engine/expr/ob_expr_json_remove.cpp
+  engine/expr/ob_expr_json_replace.cpp
+  engine/expr/ob_expr_json_insert.cpp
+  engine/expr/ob_expr_json_member_of.cpp
+  engine/expr/ob_expr_json_merge_preserve.cpp
+  engine/expr/ob_expr_json_merge_patch.cpp
+  engine/expr/ob_expr_json_merge.cpp
+  engine/expr/ob_expr_json_pretty.cpp
+  engine/expr/ob_expr_json_object.cpp
+  engine/expr/ob_expr_json_search.cpp
+  engine/expr/ob_expr_json_array.cpp
+  engine/expr/ob_expr_json_array_append.cpp
+  engine/expr/ob_expr_json_array_insert.cpp
+  engine/expr/ob_expr_json_quote.cpp
+  engine/expr/ob_expr_json_unquote.cpp
+  engine/expr/ob_expr_json_valid.cpp
+  engine/expr/ob_expr_json_value.cpp
+  engine/expr/ob_expr_json_type.cpp
+  engine/expr/ob_expr_json_length.cpp
+  engine/expr/ob_expr_json_storage_size.cpp
+  engine/expr/ob_expr_json_storage_free.cpp
+  engine/expr/ob_expr_json_set.cpp
   engine/expr/ob_expr_is_serving_tenant.cpp
   engine/expr/ob_expr_last_exec_id.cpp
   engine/expr/ob_expr_last_insert_id.cpp
@@ -306,6 +343,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_neg.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
   engine/expr/ob_expr_not.cpp
+  engine/expr/ob_expr_convert_tz.cpp
   engine/expr/ob_expr_not_between.cpp
   engine/expr/ob_expr_not_equal.cpp
   engine/expr/ob_expr_not_exists.cpp
@@ -345,8 +383,13 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_regexp_like.cpp
   engine/expr/ob_expr_repeat.cpp
   engine/expr/ob_expr_replace.cpp
+  engine/expr/ob_expr_export_set.cpp
   engine/expr/ob_expr_translate.cpp
+  engine/expr/ob_expr_pi.cpp
+  engine/expr/ob_expr_pi.h
   engine/expr/ob_expr_radians.cpp
+  engine/expr/ob_expr_degrees.cpp
+  engine/expr/ob_expr_degrees.h
   engine/expr/ob_expr_res_type_map.cpp
   engine/expr/ob_expr_result_type_util.cpp
   engine/expr/ob_expr_reverse.cpp
@@ -383,6 +426,9 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_tanh.cpp
   engine/expr/ob_expr_time.cpp
   engine/expr/ob_expr_time_diff.cpp
+  engine/expr/ob_expr_time_diff.h
+  engine/expr/ob_expr_time_format.cpp
+  engine/expr/ob_expr_time_format.h
   engine/expr/ob_expr_time_to_usec.cpp
   engine/expr/ob_expr_timestamp.cpp
   engine/expr/ob_expr_timestamp_add.cpp
@@ -436,6 +482,9 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_bool.cpp
   engine/expr/ob_expr_eval_functions.cpp
   engine/expr/ob_expr_maketime.cpp
+  engine/expr/ob_expr_makedate.h
+  engine/expr/ob_expr_makedate.cpp
+  engine/join/ob_join_op.h
   engine/join/ob_join_op.cpp
   engine/join/ob_basic_nested_loop_join_op.cpp
   engine/join/ob_nested_loop_join_op.cpp
@@ -446,6 +495,12 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_calc_urowid.cpp
   engine/expr/ob_expr_cardinality.cpp
   engine/expr/ob_expr_coll_pred.cpp
+  engine/expr/ob_expr_validate_password_strength.cpp
+  engine/expr/ob_expr_validate_password_strength.h
+  engine/expr/ob_expr_benchmark.cpp
+  engine/expr/ob_expr_benchmark.h
+  engine/expr/ob_expr_to_base64.cpp
+  engine/expr/ob_expr_from_base64.cpp
   engine/join/ob_basic_nested_loop_join.cpp
   engine/join/ob_block_based_nested_loop_join.cpp
   engine/join/ob_hash_join.cpp
@@ -818,7 +873,6 @@ ob_set_subtarget(ob_sql resolver
   resolver/cmd/ob_load_data_resolver.cpp
   resolver/cmd/ob_load_data_stmt.cpp
   resolver/cmd/ob_resource_resolver.cpp
-  resolver/cmd/ob_set_names_resolver.cpp
   resolver/cmd/ob_set_transaction_resolver.cpp
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp
@@ -895,6 +949,9 @@ ob_set_subtarget(ob_sql resolver
   resolver/ddl/ob_drop_tenant_stmt.cpp
   resolver/ddl/ob_explain_resolver.cpp
   resolver/ddl/ob_explain_stmt.cpp
+  resolver/ddl/ob_flashback_resolver.cpp		
+  resolver/ddl/ob_flashback_resolver.h		
+  resolver/ddl/ob_flashback_stmt.h
   resolver/ddl/ob_lock_tenant_resolver.cpp
   resolver/ddl/ob_lock_tenant_stmt.cpp
   resolver/ddl/ob_modify_tenant_resolver.cpp
@@ -935,6 +992,8 @@ ob_set_subtarget(ob_sql resolver
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
   resolver/dml/ob_multi_table_insert_resolver.cpp
+  resolver/dml/ob_any_value_checker.h
+  resolver/dml/ob_any_value_checker.cpp
   resolver/expr/ob_expr_relation_analyzer.cpp
   resolver/expr/ob_raw_expr.cpp
   resolver/expr/ob_expr.cpp
@@ -1022,6 +1081,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sql_session_info.cpp
   session/ob_sql_session_mgr.cpp
   session/ob_sys_params_mgr.cpp
+  session/ob_user_resource_mgr.cpp
 )
 
 ob_server_add_pchs(sql
@@ -1112,4 +1172,9 @@ ob_server_add_pchs(sql
 
 ob_server_add_target(ob_sql)
 
+execute_process(
+  COMMAND bash gen_parser.sh
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/sql/parser
+  OUTPUT_FILE _gen_parser.output
+  ERROR_FILE _gen_parser.error)
 add_subdirectory(parser)

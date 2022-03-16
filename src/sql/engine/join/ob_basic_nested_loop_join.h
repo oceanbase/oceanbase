@@ -73,8 +73,8 @@ protected:
 public:
   explicit ObBasicNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObBasicNestedLoopJoin();
-  virtual void reset();
-  virtual void reuse();
+  virtual void reset() override;
+  virtual void reuse() override;
   int init_param_count(int64_t count)
   {
     return init_array_size<>(rescan_params_, count);
@@ -95,7 +95,7 @@ public:
       other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_);
 
 protected:
-  int get_next_left_row(ObJoinCtx& join_ctx) const;
+  int get_next_left_row(ObJoinCtx& join_ctx) const override;
   int prepare_rescan_params(ObBasicNestedLoopJoinCtx& join_ctx) const;
   inline bool use_batch_index_join(ObPhyOperatorType right_op_type) const
   {

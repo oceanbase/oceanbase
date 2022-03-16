@@ -277,6 +277,20 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             }
             break;
           }
+          case TRACE_ID: {
+            if (obmysql::OB_MYSQL_COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::OB_MYSQL_COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::OB_MYSQL_COM_STMT_PREPARE == sess_info->get_mysql_cmd()) {
+              int len = sess_info->get_last_trace_id().to_string(trace_id_, sizeof(trace_id_));
+              cur_row_->cells_[cell_idx].set_varchar(trace_id_, len);
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              // when cmd=Sleep, we don't want to display its last query trace id
+              // as it is weird, not the meaning for 'processlist'
+              cur_row_->cells_[cell_idx].set_null();
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(i), K(output_column_ids_), K(col_id));
@@ -301,6 +315,7 @@ void ObShowProcesslist::FillScanner::reset()
   scanner_ = NULL;
   cur_row_ = NULL;
   my_session_ = NULL;
+  trace_id_[0] = '\0';
   output_column_ids_.reset();
 }
 

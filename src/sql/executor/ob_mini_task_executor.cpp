@@ -22,8 +22,6 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
-REGISTER_CREATOR(ObAPMiniTaskMgrGFactory, ObAPMiniTaskMgr, ObAPMiniTaskMgr, 0);
-
 int ObAPMiniTaskMgr::save_task_result(
     const ObAddr& task_addr, int64_t task_id, int32_t ret_code, const ObMiniTaskResult& result)
 {
@@ -87,8 +85,7 @@ int ObAPMiniTaskMgr::init(ObSQLSessionInfo& session, ObExecutorRpcImpl* exec_rpc
 void ObAPMiniTaskMgr::reset()
 {
   int ret = OB_SUCCESS;
-  ObDLinkBase<ObAPMiniTaskMgr>::reset();
-  void* p = NULL;
+  void *p = NULL;
   while (OB_SUCC(finish_queue_.pop(p, 0))) {
     if (p != NULL) {
       ObMiniTaskEvent* task_event = static_cast<ObMiniTaskEvent*>(p);

@@ -78,11 +78,11 @@ public:
   int push_task(const ObGtsReplicaTask* task);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
 
 private:
   const static int64_t TASK_QUEUE_LIMIT = 1 << 16;

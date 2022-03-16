@@ -667,6 +667,9 @@ int ObRawExprUtils::function_alias(ObRawExprFactory& expr_factory, ObSysFunRawEx
   } else if (0 == expr->get_func_name().case_compare("ws")) {
     // ws is synonym for word_segment
     expr->set_func_name("word_segment");
+  } else if (0 == expr->get_func_name().case_compare("inet_ntoa")) {
+    // inet_ntoa is synonym for int2ip
+    expr->set_func_name("int2ip");
   } else {
   }
   return ret;
@@ -1014,7 +1017,7 @@ int ObRawExprUtils::parse_bool_expr_node_from_str(
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns,
-    const ObSchemaChecker* schema_checker)
+    const ObSchemaChecker* schema_checker, const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   const ParseNode* node = NULL;
@@ -1023,15 +1026,73 @@ int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawE
   } else if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null");
-  } else if (OB_FAIL(build_generated_column_expr(expr_factory, session_info, *node, expr, columns, schema_checker))) {
+  } else if (OB_FAIL(build_generated_column_expr(
+                 expr_factory, session_info, *node, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_deterministic(
+    const ObRawExpr* expr, ObIAllocator& allocator, const ObResolverUtils::PureFunctionCheckStatus check_status)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(expr));
+  CK(expr->get_children_count() >= 0);
+  ObList<const ObRawExpr*, ObIAllocator> expr_queue(allocator);
+  OZ(expr_queue.push_back(expr));
+  const ObRawExpr* cur_expr = NULL;
+  while (OB_SUCC(ret) && expr_queue.size() > 0) {
+    OZ(expr_queue.pop_front(cur_expr));
+    CK(OB_NOT_NULL(cur_expr));
+    OZ(check_deterministic_single(cur_expr, check_status));
+    for (int i = 0; OB_SUCC(ret) && i < cur_expr->get_param_count(); ++i) {
+      OZ(expr_queue.push_back(cur_expr->get_param_expr(i)));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_deterministic_single(
+    const ObRawExpr* expr, const ObResolverUtils::PureFunctionCheckStatus check_status)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(expr));
+  if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
+    if (expr->is_sys_func_expr()) {
+      if (expr->is_non_pure_sys_func_expr()) {
+        if (ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION;
+        } else if (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+        }
+        LOG_WARN("only pure sys function can be indexed", K(ret), K(check_status), K(*expr));
+      } else if (T_FUN_SYS_ROWNUM == expr->get_expr_type()) {
+        ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+        LOG_WARN("ROWNUM is not allowed", K(ret), K(*expr));
+      }
+    } else if (expr->is_pseudo_column_expr()) {
+      if (expr->is_specified_pseudocolumn_expr()) {
+        ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+        LOG_WARN("not allowed pesudo column", K(ret), K(*expr));
+      }
+    } else if (expr->is_udf_expr()) {
+      if (lib::is_mysql_mode()) {
+        ret = OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION;
+        LOG_WARN("user-defined functions are not allowd in generated column", K(ret), K(*expr));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("user-defined function is not supported", K(ret), K(*expr));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The user-defined function");
+      }
+    }
   }
   return ret;
 }
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, const ObTableSchema& table_schema, ObRawExpr*& expr,
-    const ObSchemaChecker* schema_checker)
+    const ObSchemaChecker* schema_checker, const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   const ParseNode* node = NULL;
@@ -1042,9 +1103,11 @@ int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawE
   } else if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null");
-  } else if (OB_FAIL(build_generated_column_expr(expr_factory, session_info, *node, expr, columns, schema_checker))) {
+  } else if (OB_FAIL(build_generated_column_expr(
+                 expr_factory, session_info, *node, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret), K(expr_str));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     const ObQualifiedName& q_name = columns.at(i);
     if (OB_UNLIKELY(!q_name.database_name_.empty())) {
@@ -1121,7 +1184,8 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory& expr_factory, 
 }
 
 int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
-    const ParseNode& node, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns, const ObSchemaChecker* schema_checker)
+    const ParseNode& node, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns, const ObSchemaChecker* schema_checker,
+    const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   ObArray<ObVarInfo> sys_vars;
@@ -1187,6 +1251,10 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory& expr_factory, 
       columns.reuse();
       OZ(columns.assign(real_columns), real_columns);
     }
+  }
+  // check whether the expression is deterministic recursively
+  if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
+    OZ(check_deterministic(expr, expr_factory.get_allocator(), check_status));
   }
   return ret;
 }
@@ -1259,12 +1327,14 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory& expr_factory, const ObSQLSe
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, uint64_t table_id, const ObTableSchema& table_schema,
-    const ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr, const ObSchemaChecker* schema_checker)
+    const ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr, const ObSchemaChecker* schema_checker,
+    const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   ObArray<ObQualifiedName> columns;
   const ObColumnSchemaV2* col_schema = NULL;
-  if (OB_FAIL(build_generated_column_expr(expr_str, expr_factory, session_info, expr, columns, schema_checker))) {
+  if (OB_FAIL(build_generated_column_expr(
+          expr_str, expr_factory, session_info, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
@@ -1345,8 +1415,9 @@ int ObRawExprUtils::replace_all_ref_column(
 }
 
 // if %expr_factory is not NULL, will deep copy %to expr. default behavior is shallow copy
-int ObRawExprUtils::replace_ref_column(
-    ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to, ObRawExprFactory* expr_factory)
+// if except_exprs is not NULL, will skip the expr in except_exprs
+int ObRawExprUtils::replace_ref_column(ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to,
+    ObRawExprFactory* expr_factory, const ObIArray<ObRawExpr*>* except_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(raw_expr) || OB_ISNULL(from) || OB_ISNULL(to)) {
@@ -1356,6 +1427,8 @@ int ObRawExprUtils::replace_ref_column(
     // do nothing
     // in case:    parent(child) = to (from)
     // replace as: parenet(child) = to (to)
+  } else if (NULL != except_exprs && is_contain(*except_exprs, raw_expr)) {
+    // do nothing
   } else if (raw_expr == from) {
     if (NULL != expr_factory) {
       ObRawExpr* new_to = NULL;
@@ -1379,14 +1452,14 @@ int ObRawExprUtils::replace_ref_column(
       LOG_WARN("get unexpected null", K(ret), K(ref_stmt));
     } else if (OB_FAIL(ref_stmt->get_relation_exprs(relation_exprs))) {
       LOG_WARN("failed to get relation exprs", K(ret));
-    } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to)))) {
+    } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to, except_exprs)))) {
       LOG_WARN("replace reference column failed", K(ret));
     }
   } else {
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr*& child_expr = raw_expr->get_param_expr(i);
-      if (OB_FAIL(SMART_CALL(replace_ref_column(child_expr, from, to, expr_factory)))) {
+      if (OB_FAIL(SMART_CALL(replace_ref_column(child_expr, from, to, expr_factory, except_exprs)))) {
         LOG_WARN("replace reference column failed", K(ret));
       }
     }  // end for
@@ -1394,7 +1467,8 @@ int ObRawExprUtils::replace_ref_column(
   return ret;
 }
 
-int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to)
+int ObRawExprUtils::replace_ref_column(
+    ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to, const ObIArray<ObRawExpr*>* except_exprs)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -1412,7 +1486,7 @@ int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr*>& exprs, ObRawExpr* f
       ObRawExpr*& raw_expr = tmp_raw_expr;
       if (OB_FAIL(exprs.at(i, raw_expr))) {
         LOG_WARN("failed to get raw expr", K(i), K(ret));
-      } else if (OB_FAIL(SMART_CALL(replace_ref_column(raw_expr, from, to)))) {
+      } else if (OB_FAIL(SMART_CALL(replace_ref_column(raw_expr, from, to, NULL, except_exprs)))) {
         LOG_WARN("failed to replace_ref_column", K(from), K(to), K(ret));
       } else { /*do nothing*/
       }
@@ -1465,6 +1539,24 @@ int ObRawExprUtils::extract_column_exprs(const ObIArray<ObRawExpr*>& exprs, ObIA
       LOG_WARN("Failed to extract column exprs", K(ret));
     } else {
     }  // do nothing
+  }
+  return ret;
+}
+
+int ObRawExprUtils::mark_column_explicited_reference(ObRawExpr& expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> column_exprs;
+  if (OB_FAIL(extract_column_exprs(&expr, column_exprs))) {
+    LOG_WARN("extract column exprs failed", K(ret), K(expr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    if (!column_exprs.at(i)->is_column_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column expr is unexpected", K(ret));
+    } else {
+      static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))->set_explicited_reference();
+    }
   }
   return ret;
 }
@@ -1957,6 +2049,9 @@ int ObRawExprUtils::create_param_expr(
     if (is_exec_param) {
       c_expr->add_flag(IS_EXEC_PARAM);
     }
+    if (expr->is_bool_expr()) {
+      c_expr->set_is_literal_bool(true);
+    }
     if (ob_is_enumset_tc(expr->get_result_type().get_type())) {
       if (OB_FAIL(c_expr->set_enum_set_values(expr->get_enum_set_values()))) {
         LOG_WARN("failed to set enum_set_values", K(*expr), K(ret));
@@ -1996,6 +2091,7 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
   int ret = OB_SUCCESS;
   bool need_copy = true;
   bool copy_share_expr = (COPY_REF_SHARED == copy_types) || use_new_allocator;
+  bool is_stack_overflow = false;
   if (NULL == origin) {
     need_copy = false;
     dest = NULL;
@@ -2009,7 +2105,13 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
     need_copy = false;
   }
 
-  if (OB_SUCC(ret) && need_copy) {
+  if (OB_FAIL(ret) || !need_copy) {
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else {
     // deep copy here
     ObRawExpr::ExprClass expr_class = origin->get_expr_class();
     switch (expr_class) {
@@ -2052,14 +2154,26 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
         break;
       }
       case ObRawExpr::EXPR_CONST: {
-        ObConstRawExpr* dest_const = NULL;
-        const ObConstRawExpr* origin_const = static_cast<const ObConstRawExpr*>(origin);
-        if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_const)) || OB_ISNULL(dest_const)) {
-          LOG_WARN("failed to allocate raw expr", K(dest_const), K(ret));
-        } else if (OB_FAIL(dest_const->deep_copy(expr_factory, *origin_const, COPY_REF_DEFAULT, use_new_allocator))) {
-          LOG_WARN("failed to deep copy const expr", K(ret));
+        if (T_USER_VARIABLE_IDENTIFIER == origin->get_expr_type()) {
+          ObUserVarIdentRawExpr* dest_expr = NULL;
+          const ObUserVarIdentRawExpr* origin_expr = static_cast<const ObUserVarIdentRawExpr*>(origin);
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_expr)) || OB_ISNULL(dest_expr)) {
+            LOG_WARN("failed to allocate raw expr", K(dest_expr), K(ret));
+          } else if (OB_FAIL(dest_expr->deep_copy(expr_factory, *origin_expr, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy const expr", K(ret));
+          } else {
+            dest = dest_expr;
+          }
         } else {
-          dest = dest_const;
+          ObConstRawExpr *dest_const = NULL;
+          const ObConstRawExpr *origin_const = static_cast<const ObConstRawExpr *>(origin);
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_const)) || OB_ISNULL(dest_const)) {
+            LOG_WARN("failed to allocate raw expr", K(dest_const), K(ret));
+          } else if (OB_FAIL(dest_const->deep_copy(expr_factory, *origin_const, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy const expr", K(ret));
+          } else {
+            dest = dest_const;
+          }
         }
         break;
       }
@@ -3188,7 +3302,9 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2& column_schema, ObCo
       column_schema.get_column_name_str().ptr(), column_schema.get_column_name_str().length());
   column_expr.set_column_flags(column_schema.get_column_flags());
   column_expr.set_hidden_column(column_schema.is_hidden());
-  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_enumset_tc(column_schema.get_data_type())) {
+  if (ob_is_string_type(column_schema.get_data_type()) 
+      || ob_is_enumset_tc(column_schema.get_data_type())
+      || ob_is_json_tc(column_schema.get_data_type())) {
     column_expr.set_collation_type(column_schema.get_collation_type());
     column_expr.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
@@ -3320,6 +3436,7 @@ int ObRawExprUtils::need_wrap_to_string(
         need_wrap = false;
         break;
       }
+      case ObJsonType:
       case ObDateTimeType:
       case ObTimestampType:
       case ObDateType:

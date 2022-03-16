@@ -45,8 +45,7 @@ int CWLock::unlock() const
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
-
-CRWLock::CRWLock(ELockMode lockMode)
+CRWLock::CRWLock(ELockMode lockMode) : _rlock(&_rwlock), _wlock(&_rwlock)
 {
   pthread_rwlockattr_t attr;
   pthread_rwlockattr_init(&attr);
@@ -56,13 +55,9 @@ CRWLock::CRWLock(ELockMode lockMode)
     pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
   }
   pthread_rwlock_init(&_rwlock, &attr);
-  _rlock = new CRLock(&_rwlock);
-  _wlock = new CWLock(&_rwlock);
 }
 
 CRWLock::~CRWLock()
 {
   pthread_rwlock_destroy(&_rwlock);
-  delete _rlock;
-  delete _wlock;
 }

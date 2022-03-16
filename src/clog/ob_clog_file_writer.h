@@ -37,8 +37,7 @@ public:
   ObCLogBaseFileWriter();
   virtual ~ObCLogBaseFileWriter();
 
-  virtual int init(
-      const char* log_dir, const char* shm_path, const uint32_t align_size, const common::ObILogFileStore* file_store);
+  virtual int init(const char* log_dir, const uint32_t align_size, const common::ObILogFileStore* file_store);
   virtual void destroy();
 
   // When log engine start, need to flush remaining content in shared memory buffer to log file
@@ -109,9 +108,7 @@ protected:
 
 protected:
   bool is_inited_;
-  common::ObBaseLogBufferCtrl* log_ctrl_;
-  common::ObBaseLogBuffer* shm_buf_;
-  char* shm_data_buf_;
+  char* aligned_data_buf_;
   uint32_t buf_write_pos_;
   uint32_t file_offset_;
   // the last aligned part padding size of the buffer
@@ -134,9 +131,9 @@ public:
     destroy();
   }
 
-  virtual int init(const char* log_dir, const char* shm_path, const uint32_t align_size,
-      const common::ObILogFileStore* file_store) override;
-  virtual void destroy();
+virtual int init(const char *log_dir,
+  const uint32_t align_size, const common::ObILogFileStore *file_store) override;
+  virtual void destroy() override;
 
   virtual int load_file(uint32_t& file_id, uint32_t& offset, bool enable_pre_creation = false) override;
   // Local disk format:

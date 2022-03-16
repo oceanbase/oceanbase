@@ -275,6 +275,72 @@ int ObDDLSqlGenerator::gen_set_passwd_sql(
   return ret;
 }
 
+int ObDDLSqlGenerator::gen_set_max_connections_sql(const ObAccountArg &account,
+                                                  const uint64_t max_connections_per_hour,
+                                                  const uint64_t max_user_connections,
+                                                  ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  bool set_max_connections_per_hour = max_connections_per_hour != OB_INVALID_ID;
+  bool set_max_user_connections = max_user_connections != OB_INVALID_ID;
+  const ObString max_connections_per_hour_str = ObString::make_string("MAX_CONNECTIONS_PER_HOUR");
+  const ObString max_user_connections_str = ObString::make_string("MAX_USER_CONNECTIONS");
+  char SET_MAX_CONNECTIONS_SQL[] = "SET %.*s FOR `%.*s` = '%lu' ";
+  char NEW_SET_MAX_CONNECTIONS_SQL[] = "SET %.*s FOR `%.*s`@`%.*s` = '%lu' ";
+  if (OB_UNLIKELY(!account.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("username should not be null", K(account), K(ret));
+  } else {
+    if (set_max_connections_per_hour) {
+      if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+        if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(SET_MAX_CONNECTIONS_SQL),
+                                          max_connections_per_hour_str.length(),
+                                          max_connections_per_hour_str.ptr(),
+                                          account.user_name_.length(),
+                                          account.user_name_.ptr(),
+                                          max_connections_per_hour))) {
+          LOG_WARN("append sql failed", K(account), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(NEW_SET_MAX_CONNECTIONS_SQL),
+                                          max_connections_per_hour_str.length(),
+                                          max_connections_per_hour_str.ptr(),
+                                          account.user_name_.length(),
+                                          account.user_name_.ptr(),
+                                          account.host_name_.length(),
+                                          account.host_name_.ptr(),
+                                          max_connections_per_hour))) {
+          LOG_WARN("append sql failed", K(account), K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && set_max_user_connections) {
+      if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+        if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(SET_MAX_CONNECTIONS_SQL),
+                                          max_user_connections_str.length(),
+                                          max_user_connections_str.ptr(),
+                                          account.user_name_.length(),
+                                          account.user_name_.ptr(),
+                                          max_user_connections))) {
+          LOG_WARN("append sql failed", K(account), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(NEW_SET_MAX_CONNECTIONS_SQL),
+                                          max_user_connections_str.length(),
+                                          max_user_connections_str.ptr(),
+                                          account.user_name_.length(),
+                                          account.user_name_.ptr(),
+                                          account.host_name_.length(),
+                                          account.host_name_.ptr(),
+                                          max_user_connections))) {
+          LOG_WARN("append sql failed", K(account), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLSqlGenerator::gen_alter_user_require_sql(
     const obrpc::ObAccountArg& account, const obrpc::ObSetPasswdArg& arg, common::ObSqlString& sql_string)
 {

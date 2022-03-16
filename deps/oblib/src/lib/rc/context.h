@@ -35,37 +35,38 @@ namespace lib {
 
 #define CURRENT_CONTEXT lib::Flow::current_ctx()
 #define ROOT_CONTEXT lib::MemoryContext::root()
-#define CREATE_CONTEXT(args...) CREATE_CONTEXT_(CONCAT(static_id, __COUNTER__), args)
-#define DESTROY_CONTEXT(context) lib::MemoryContext::destory_context(context)
+#define CREATE_CONTEXT(args...) CREATE_CONTEXT_(CONCAT(static_info, __COUNTER__), args)
+#define DESTROY_CONTEXT(context) lib::__MemoryContext__::destory_context(context)
 #define WITH_CONTEXT(context) WITH_CONTEXT_P(true, context)
 #define WITH_CONTEXT_P(condition, context) CONTEXT_P(condition, lib::ContextSource::WITH, context)
 #define CREATE_WITH_TEMP_CONTEXT(...) CREATE_WITH_TEMP_CONTEXT_P(true, __VA_ARGS__)
 #define CREATE_WITH_TEMP_CONTEXT_P(condition, args...) \
-  CREATE_WITH_TEMP_CONTEXT_P_(CONCAT(static_id, __COUNTER__), condition, args)
+  CREATE_WITH_TEMP_CONTEXT_P_(CONCAT(static_info, __COUNTER__), condition, args)
 // The following are auxiliary macros
-#define CREATE_CONTEXT_(static_id, context, args...)                                                         \
-  create_context(context, lib::DynamicInfo(), args, ({                                                       \
-    const static int static_id = lib::StaticInfos::get_instance().add(__FILENAME__, __LINE__, __FUNCTION__); \
-    static_id;                                                                                               \
+#define CREATE_CONTEXT_(static_info, context, args...)                        \
+  create_context(context, lib::DynamicInfo(), args, ({                        \
+    static lib::StaticInfo static_info{__FILENAME__, __LINE__, __FUNCTION__}; \
+    &static_info;                                                             \
   }))
 #define CONTEXT_P(condition, context_source, ...)                                                \
   for (lib::_S<context_source> _s{condition, __VA_ARGS__}; OB_SUCC(ret) && _s.i_-- > 0; _s.i_--) \
     if (OB_SUCC(_s.get_ret()))
-#define CREATE_WITH_TEMP_CONTEXT_P_(static_id, condition, ...)                                             \
-  const static int static_id = lib::StaticInfos::get_instance().add(__FILENAME__, __LINE__, __FUNCTION__); \
-  CONTEXT_P(condition, lib::ContextSource::CREATE, lib::DynamicInfo(), __VA_ARGS__, static_id)
+#define CREATE_WITH_TEMP_CONTEXT_P_(static_info, condition, ...)            \
+  static lib::StaticInfo static_info{__FILENAME__, __LINE__, __FUNCTION__}; \
+  CONTEXT_P(condition, lib::ContextSource::CREATE, lib::DynamicInfo(), __VA_ARGS__, &static_info)
 
+using std::nullptr_t;
 using lib::ObMemAttr;
 using oceanbase::common::default_memattr;
 class Flow;
-class MemoryContext;
+class __MemoryContext__;
 enum class ContextSource {
   WITH,   // The parameter is already the target Context, switch directly
   CREATE  // Created by parameters
 };
 
 class ContextTLOptGuard {
-  friend class MemoryContext;
+  friend class __MemoryContext__;
   static RLOCAL(bool, enable_tl_opt);
 
 public:
@@ -176,8 +177,7 @@ public:
 };
 
 class ContextParam {
-  friend class MemoryContext;
-
+  friend class __MemoryContext__;
 public:
   ContextParam()
       : properties_(DEFAULT_PROPERTIES),
@@ -233,39 +233,6 @@ struct StaticInfo {
   TO_STRING_KV(K(filename_), K(line_), K(function_));
 };
 
-class StaticInfos {
-public:
-  StaticInfos() : cnt_(0)
-  {}
-  static StaticInfos& get_instance()
-  {
-    static StaticInfos one;
-    return one;
-  }
-  int get_cnt() const
-  {
-    return cnt_;
-  }
-  int add(const char* filename, const int line, const char* function)
-  {
-    int pos = ATOMIC_FAA(&cnt_, 1);
-    abort_unless(pos < MAX_NUM && nullptr == infos_[pos].filename_);
-    infos_[pos] = {filename, line, function};
-    const int static_id = pos;
-    OB_LOG(INFO, "add info", K(static_id), "info", infos_[static_id]);
-    return static_id;
-  }
-  const StaticInfo& get(const int static_id) const
-  {
-    return infos_[static_id];
-  }
-
-private:
-  static const int MAX_NUM = 128;
-  StaticInfo infos_[MAX_NUM];
-  int cnt_;
-};
-
 struct DynamicInfo {
   DynamicInfo()
       : tid_(GETTID()), cid_(CO_IS_ENABLED() ? CO_ID() : 0lu), create_time_(common::ObTimeUtility::fast_current_time())
@@ -276,18 +243,55 @@ struct DynamicInfo {
   int64_t create_time_;
 };
 
-class MemoryContext {
+class MemoryContext
+{
+  friend class __MemoryContext__;
+  constexpr static uint64_t MAGIC_CODE = 0xedde13244231dede;
+public:
+  MemoryContext(__MemoryContext__ *ref_context)
+  {
+    operator=(ref_context);
+  }
+  MemoryContext()
+  {
+    operator=(nullptr);
+  }
+  MemoryContext &operator=(__MemoryContext__ *ref_context);
+  __MemoryContext__* operator->() const
+  { return ref_context_; }
+  __MemoryContext__ *ref_context() const
+  { return ref_context_; }
+  bool check_magic_code() const { return MAGIC_CODE == magic_code_; }
+  static MemoryContext &root();
+private:
+  int64_t magic_code_;
+  int64_t seq_id_;
+  __MemoryContext__ *ref_context_;
+};
+
+class __MemoryContext__
+{
   friend class TreeNode;
+  friend class MemoryContext;
+  constexpr static uint64_t MAGIC_CODE = 0xfddf13244231dfdf;
+public:
+  static int64_t gen_seq_id()
+  {
+    static __thread uint32_t local_id = 0;
+    return common::get_itid() << 32 | local_id++;
+  }
 
 public:
-  MemoryContext(
-      const bool need_free, const DynamicInfo& di, MemoryContext* parent, ContextParam& param, const int static_id)
-      : need_free_(need_free),
+  __MemoryContext__(const bool need_free, const DynamicInfo &di, __MemoryContext__ *parent, ContextParam &param,
+      const StaticInfo *static_info)
+      : magic_code_(-1),
+        seq_id_(-1),
+        need_free_(need_free),
         tree_node_(parent != nullptr ? &parent->tree_node_ : nullptr, param.properties_ & ADD_CHILD_THREAD_SAFE),
         di_(di),
         param_(param),
         properties_(param.properties_),
-        static_id_(static_id),
+        static_id_(reinterpret_cast<int64_t>(static_info)),
         p_alloc_(nullptr),
         p_arena_alloc_(nullptr),
         p_safe_arena_alloc_(nullptr),
@@ -295,19 +299,19 @@ public:
         freeable_alloc_(nullptr),
         default_allocator_(nullptr)
   {}
-  int get_static_id() const
+  int64_t get_static_id() const
   {
     return static_id_;
   }
-  const DynamicInfo& get_dynamic_info() const
+  const DynamicInfo &get_dynamic_info() const
   {
     return di_;
   }
-  const StaticInfo& get_static_info() const
+  const StaticInfo &get_static_info() const
   {
-    return StaticInfos::get_instance().get(static_id_);
+    return *reinterpret_cast<StaticInfo *>(static_id_);
   }
-  void* allocf(const int64_t size, const ObMemAttr& attr = default_memattr)
+  void *allocf(const int64_t size, const ObMemAttr &attr = default_memattr)
   {
     return freeable_alloc_->alloc(size, attr);
   }
@@ -375,14 +379,18 @@ public:
     OB_ASSERT(default_allocator_ != nullptr);
     return *default_allocator_;
   }
-  static MemoryContext& root();
-  TO_STRING_KV(KP(this), "static_id", static_id_, "static_info", StaticInfos::get_instance().get(static_id_),
+  static __MemoryContext__ &root();
+  bool check_magic_code() const
+  {
+    return MAGIC_CODE == magic_code_;
+  }
+  TO_STRING_KV(KP(this), "static_id", static_id_, "static_info", *reinterpret_cast<StaticInfo *>(static_id_),
       "dynamic info", di_, K(properties_), K(attr_));
 
 private:
-  static MemoryContext* node2context(TreeNode* node)
+  static __MemoryContext__ *node2context(TreeNode *node)
   {
-    return reinterpret_cast<MemoryContext*>((char*)node - offsetof(MemoryContext, tree_node_));
+    return reinterpret_cast<__MemoryContext__*>((char*)node - offsetof(__MemoryContext__, tree_node_));
   }
 
 public:
@@ -462,78 +470,101 @@ public:
     }
     tree_node_.deinit();
   }
-  template <typename... Args>
-  int create_context(MemoryContext*& context, const DynamicInfo& di, Args&&... args)
+  template<typename ... Args>
+  int create_context(MemoryContext &context,
+                     const DynamicInfo &di,
+                     Args && ... args)
   {
     int ret = common::OB_SUCCESS;
-    context = nullptr;
+    __MemoryContext__ *ref_context = nullptr;
 
     ObMemAttr attr;
     attr.label_ = "CreateContext";
-    void* ptr = allocf(sizeof(MemoryContext), attr);
+    void *ptr = allocf(sizeof(__MemoryContext__), attr);
     if (OB_UNLIKELY(nullptr == ptr)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      context = new (ptr) MemoryContext(/*need_free*/ true, di, this, args...);
-      if (OB_FAIL(context->init())) {
+      ref_context = new (ptr) __MemoryContext__(/*need_free*/true, di, this, args...);
+      if (OB_FAIL(ref_context->init())) {
         OB_LOG(WARN, "init failed", K(ret));
       }
     }
 
     if (OB_FAIL(ret)) {
-      if (context != nullptr) {
-        context->deinit();
+      if (ref_context != nullptr) {
+        ref_context->deinit();
       }
       if (ptr != nullptr) {
         free(ptr);
       }
+    } else {
+      ref_context->magic_code_ = MAGIC_CODE;
+      ref_context->seq_id_ = gen_seq_id();
+      context = ref_context;
     }
-
     return ret;
   }
-  template <typename... Args>
-  int create_context(MemoryContext& context, const DynamicInfo& di, Args&&... args)
+  template<typename ... Args>
+  int create_context(MemoryContext &context,
+                     __MemoryContext__ &ref_context,
+                     const DynamicInfo &di,
+                     Args && ... args)
   {
     int ret = common::OB_SUCCESS;
 
-    new (&context) MemoryContext(/*need_free*/ false, di, this, args...);
-    if (OB_FAIL(context.init())) {
+    new (&ref_context) __MemoryContext__(/*need_free*/false, di, this, args...);
+    if (OB_FAIL(ref_context.init())) {
       OB_LOG(WARN, "init failed", K(ret));
     }
     if (OB_FAIL(ret)) {
-      context.deinit();
+      ref_context.deinit();
+    } else {
+      ref_context.magic_code_ = MAGIC_CODE;
+      ref_context.seq_id_ = gen_seq_id();
+      context = &ref_context;
     }
 
     return ret;
   }
-  static void destory_context(MemoryContext* mem_context)
+  static void destory_context(__MemoryContext__ *context)
   {
-    if (OB_LIKELY(mem_context != nullptr)) {
-      TreeNode* child_node = nullptr;
-      while ((child_node = mem_context->tree_node_.child_) != nullptr) {
-        MemoryContext* child = node2context(child_node);
-        destory_context(child);
-      }
-      const bool need_free = mem_context->need_free_;
-      TreeNode* parent_node = mem_context->tree_node_.parent_;
-      abort_unless(parent_node != nullptr);
-      mem_context->deinit();
-      mem_context->tree_node_.~TreeNode();
-      if (need_free) {
-        MemoryContext* parent = node2context(parent_node);
-        parent->free(mem_context);
-      }
+    abort_unless(context->check_magic_code());
+    context->magic_code_ = 0;
+    context->seq_id_ = 0;
+    TreeNode *child_node = nullptr;
+    while ((child_node = context->tree_node_.child_) != nullptr) {
+      __MemoryContext__ *child = node2context(child_node);
+      destory_context(child);
+    }
+    const bool need_free = context->need_free_;
+    TreeNode *parent_node = context->tree_node_.parent_;
+    abort_unless(parent_node != nullptr);
+    context->deinit();
+    context->tree_node_.~TreeNode();
+    if (need_free) {
+      __MemoryContext__ *parent = node2context(parent_node);
+      parent->free(context);
     }
   }
-
+  static void destory_context(MemoryContext &context)
+  {
+    abort_unless(context.check_magic_code());
+    auto *ref_context = context.ref_context_;
+    if (OB_LIKELY(ref_context != nullptr)) {
+      abort_unless(context.seq_id_ == ref_context->seq_id_);
+      destory_context(ref_context);
+    }
+  }
 public:
+  int64_t magic_code_;
+  int64_t seq_id_;
   // Assignment is not in the constructor, record who assigns
   const bool need_free_;
   TreeNode tree_node_;
   DynamicInfo di_;
   ContextParam param_;
   int64_t properties_;
-  int static_id_;
+  int64_t static_id_;
   common::ObMemAttr attr_;
 
   // Delayed member
@@ -557,7 +588,38 @@ public:
   ObIAllocator* default_allocator_;
 };
 
-class Flow final {
+inline MemoryContext &MemoryContext::operator=(__MemoryContext__ *ref_context)
+{
+  ref_context_ = ref_context;
+  if (OB_LIKELY(ref_context != nullptr)) {
+    seq_id_ = ref_context->seq_id_;
+  } else {
+    seq_id_ = -1;
+  }
+  magic_code_ = MAGIC_CODE;
+  return *this;
+}
+
+inline bool operator==(const MemoryContext &__a, nullptr_t)
+{ return __a.ref_context() == nullptr; }
+
+inline bool operator==(nullptr_t, const MemoryContext &__b)
+{ return nullptr == __b.ref_context(); }
+
+inline bool operator!=(const MemoryContext &__a, nullptr_t)
+{ return __a.ref_context() != nullptr; }
+
+inline bool operator!=(nullptr_t, const MemoryContext &__b)
+{ return nullptr != __b.ref_context(); }
+
+inline bool operator==(const MemoryContext &__a, const MemoryContext &__b)
+{ return __a.ref_context() == __b.ref_context(); }
+
+inline bool operator!=(const MemoryContext &__a, const MemoryContext &__b)
+{ return __a.ref_context() != __b.ref_context(); }
+
+class Flow final
+{
 public:
   Flow(MemoryContext& ref_context) : ref_context_(ref_context), prev_(nullptr), next_(nullptr), is_inited_(false)
   {}
@@ -599,8 +661,8 @@ public:
   {
     Flow*& cur = g_flow();
     if (OB_UNLIKELY(nullptr == cur)) {
-      static CoVar<char[sizeof(Flow)]> buf;
-      Flow* flow = new (&buf[0]) Flow(MemoryContext::root());
+      static CoVar<char [sizeof(Flow)]> buf;
+      Flow *flow = new (&buf[0]) Flow(ROOT_CONTEXT);
       abort_unless(flow != nullptr);
       int ret = flow->init();
       abort_unless(common::OB_SUCCESS == ret);
@@ -626,25 +688,25 @@ private:
   }
 
 private:
-  MemoryContext& ref_context_;
-  Flow* prev_;
-  Flow* next_;
+  MemoryContext ref_context_;
+  Flow *prev_;
+  Flow *next_;
   bool is_inited_;
 };
 
 inline void* ctxalf(const int64_t size, const ObMemAttr& attr = default_memattr)
 {
-  return CURRENT_CONTEXT.allocf(size, attr);
+  return CURRENT_CONTEXT->allocf(size, attr);
 }
 
 inline void* ctxalp(const int64_t size, const ObMemAttr& attr = default_memattr)
 {
-  return CURRENT_CONTEXT.allocp(size, attr);
+  return CURRENT_CONTEXT->allocp(size, attr);
 }
 
 inline void ctxfree(void* ptr)
 {
-  CURRENT_CONTEXT.free(ptr);
+  CURRENT_CONTEXT->free(ptr);
 }
 
 class _SBase {
@@ -671,13 +733,14 @@ class _S {};
 template <>
 class _S<ContextSource::WITH> : public _SBase {
 public:
-  _S(const bool condition, MemoryContext* context) : _SBase(), flow_(nullptr)
+  _S(const bool condition, MemoryContext &context)
+    : _SBase(), flow_(nullptr)
   {
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(context)) {
       ret = common::OB_INVALID_ARGUMENT;
     } else if (condition) {
-      Flow* tmp_flow = new (buf_) Flow(*context);
+      Flow *tmp_flow = new (buf_) Flow(context);
       if (OB_FAIL(tmp_flow->init())) {
       } else {
         flow_ = tmp_flow;
@@ -699,17 +762,17 @@ public:
 template <>
 class _S<ContextSource::CREATE> : public _SBase {
 public:
-  template <typename... Args>
-  _S(const bool condition, Args&&... args) : _SBase(), context_(nullptr), flow_(nullptr)
+  template<typename ... Args>
+  _S(const bool condition, Args && ... args)
+    : _SBase(), flow_(nullptr)
   {
     int ret = common::OB_SUCCESS;
     if (OB_LIKELY(condition)) {
-      MemoryContext* tmp_context = reinterpret_cast<MemoryContext*>(buf0_);
-      if (OB_FAIL(CURRENT_CONTEXT.create_context(*tmp_context, args...))) {
+      __MemoryContext__ *tmp_context = reinterpret_cast<__MemoryContext__*>(buf0_);
+      if (OB_FAIL(CURRENT_CONTEXT->create_context(context_, *tmp_context, args...))) {
         OB_LOG(WARN, "create context failed", K(ret));
       } else {
-        context_ = tmp_context;
-        Flow* tmp_flow = new (buf1_) Flow(*context_);
+        Flow *tmp_flow = new (buf1_) Flow(context_);
         if (OB_FAIL(tmp_flow->init())) {
         } else {
           flow_ = tmp_flow;
@@ -725,13 +788,13 @@ public:
       flow_->~Flow();
     }
     if (context_ != nullptr) {
-      MemoryContext::destory_context(context_);
+      __MemoryContext__::destory_context(context_);
     }
   }
-  char buf0_[sizeof(MemoryContext)] __attribute__((aligned(16)));
-  char buf1_[sizeof(Flow)] __attribute__((aligned(16)));
-  MemoryContext* context_;
-  Flow* flow_;
+  char buf0_[sizeof(__MemoryContext__)] __attribute__ ((aligned (16)));
+  char buf1_[sizeof(Flow)] __attribute__ ((aligned (16)));
+  MemoryContext context_;
+  Flow *flow_;
 };
 
 }  // end of namespace lib

@@ -145,7 +145,7 @@ T ObExprUtil::trunc_integer(T val, int64_t dec)
     } else if (ObDoubleType == expr.args_[0]->datum_meta_.type_) {                               \
       const double arg = radian->get_double();                                                   \
       if (INVALID_DOUBLE_ARG_CHECK) {                                                            \
-        ret = INVALID_DOUBLE_ARG_ERRNO;                                                          \
+        res_datum.set_null();                                                                    \
       } else {                                                                                   \
         res_datum.set_double(tritype(arg));                                                      \
       }                                                                                          \

@@ -234,10 +234,31 @@ public:
   {
     is_nullable_ = nullable;
   }
-  int assign(const ObColumnParam& other);
+  inline void set_gen_col_flag(const bool is_gen_col, const bool is_virtual)
+  {
+    is_gen_col_ = is_gen_col;
+    is_virtual_gen_col_ = is_virtual;
+  }
+  inline bool is_gen_col() const
+  {
+    return is_gen_col_;
+  }
+  inline bool is_virtual_gen_col() const
+  {
+    return is_virtual_gen_col_;
+  }
+  inline void set_is_hidden(const bool is_hidden)
+  {
+    is_hidden_ = is_hidden;
+  }
+  inline bool is_hidden() const
+  {
+    return is_hidden_;
+  }
+  int assign(const ObColumnParam &other);
 
   TO_STRING_KV(K_(column_id), K_(meta_type), K_(order), K_(accuracy), K_(orig_default_value), K_(cur_default_value),
-      K_(is_nullable));
+               K_(is_nullable), K_(is_gen_col), K_(is_virtual_gen_col), K_(is_hidden));
 
 private:
   int deep_copy_obj(const common::ObObj& src, common::ObObj& dest);
@@ -251,6 +272,41 @@ private:
   common::ObObj orig_default_value_;
   common::ObObj cur_default_value_;
   bool is_nullable_;
+  bool is_gen_col_;
+  bool is_virtual_gen_col_;
+  bool is_hidden_;
+};
+
+class ObVerticalPartitionParam {
+  OB_UNIS_VERSION_V(1);
+
+public:
+  ObVerticalPartitionParam();
+  virtual ~ObVerticalPartitionParam();
+  void reset();
+
+public:
+  DECLARE_TO_STRING;
+  inline uint64_t get_table_id() const
+  {
+    return table_id_;
+  }
+  inline void set_table_id(uint64_t table_id)
+  {
+    table_id_ = table_id;
+  }
+  inline int64_t get_schema_version() const
+  {
+    return schema_version_;
+  }
+  inline void set_schema_version(int64_t version)
+  {
+    schema_version_ = version;
+  }
+
+private:
+  uint64_t table_id_;
+  int64_t schema_version_;
 };
 
 class ObTableSchema;
@@ -281,11 +337,6 @@ public:
   // (right table index back not supported)
   int convert_join_mv_rparam(const ObTableSchema& mv_schema, const ObTableSchema& right_schema,
       const common::ObIArray<uint64_t>& mv_column_ids);
-
-  // convert from table schema param which is used in ObTableModify operators
-  // used to get conflict row only by row keys
-  int convert_schema_param(
-      const share::schema::ObTableSchemaParam& schema_param, const common::ObIArray<uint64_t>& output_column_ids);
 
   inline uint64_t get_table_id() const
   {

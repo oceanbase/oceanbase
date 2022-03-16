@@ -73,7 +73,7 @@ public:
   {}
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "tenant_checker";
   };
@@ -94,7 +94,7 @@ public:
   virtual ~ObTableGroupChecker();
   int init();
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "tablegroup_checker";
   };
@@ -131,15 +131,15 @@ public:
   virtual ~ObDropTenantChecker()
   {}
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "drop_tenant_checker";
   }
 
 private:
   int drop_tenant_force(const common::ObString& tenant_name);
-  int record_log_archive_history_(const uint64_t tenant_id, const int64_t drop_schema_version,
-      const int64_t drop_tenant_time, bool& is_delay_delete);
+  int check_deley_delete_(const uint64_t tenant_id, const int64_t drop_schema_version, const int64_t drop_tenant_time,
+      bool& is_delay_delete);
 
 private:
   static const int64_t CHECK_DROP_TENANT_INTERVAL = 600 * 1000 * 1000L;  // 10min
@@ -173,7 +173,7 @@ public:
   virtual ~ObForceDropSchemaChecker()
   {}
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "drop_schema_checker";
   }
@@ -281,7 +281,7 @@ public:
   virtual ~ObRootInspection();
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "sys_schema_checker";
   };
@@ -420,7 +420,7 @@ public:
   {}
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "primary_checker";
   };

@@ -232,6 +232,8 @@ int databuff_printf(char* buf, const int64_t buf_len, int64_t& pos, const char* 
     __attribute__((format(printf, 4, 5)));
 /// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
 int databuff_vprintf(char* buf, const int64_t buf_len, int64_t& pos, const char* fmt, va_list args);
+/// @return OB_SUCCESS or OB_BUF_NOT_ENOUGH
+int databuff_memcpy(char *buf, const int64_t buf_len, int64_t &pos, const int64_t src_len, const char *src);
 
 /// print object
 template <class T>
