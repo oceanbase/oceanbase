@@ -359,7 +359,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
     } else if (OB_ISNULL(limit_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("limit_expr is null", K(ret));
-    } else if (OB_FAIL(candi_allocate_limit(limit_expr, NULL, NULL, dummy_order_items, false, false, false, false))) {
+    } else if (OB_FAIL(candi_allocate_limit(limit_expr, NULL, NULL, dummy_order_items, false, false, false))) {
       LOG_WARN("failed to allocate limit operator", K(ret));
     } else { /*do nothing*/
     }

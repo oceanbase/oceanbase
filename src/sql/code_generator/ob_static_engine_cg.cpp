@@ -587,36 +587,33 @@ int ObStaticEngineCG::generate_spec(ObLogLimit& op, ObLimitSpec& spec, const boo
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
-  if (OB_FAIL(op.need_calc_found_rows(spec.calc_found_rows_))) {
-    LOG_WARN("get calc found rows failed", K(ret));
-  } else {
-    spec.is_top_limit_ = op.is_top_limit();
-    spec.is_fetch_with_ties_ = op.is_fetch_with_ties();
-    if (NULL != op.get_limit_count()) {
-      CK(op.get_limit_count()->get_result_type().is_integer_type());
-      OZ(generate_rt_expr(*op.get_limit_count(), spec.limit_expr_));
-      OZ(mark_expr_self_produced(op.get_limit_count()));
-    }
-    if (NULL != op.get_limit_offset()) {
-      CK(op.get_limit_offset()->get_result_type().is_integer_type());
-      OZ(generate_rt_expr(*op.get_limit_offset(), spec.offset_expr_));
-      OZ(mark_expr_self_produced(op.get_limit_offset()));
-    }
-    if (NULL != op.get_limit_percent()) {
-      CK(op.get_limit_percent()->get_result_type().is_double());
-      OZ(generate_rt_expr(*op.get_limit_percent(), spec.percent_expr_));
-      OZ(mark_expr_self_produced(op.get_limit_percent()));
-    }
-    if (OB_SUCC(ret) && op.is_fetch_with_ties()) {
-      OZ(spec.sort_columns_.init(op.get_expected_ordering().count()));
-      FOREACH_CNT_X(it, op.get_expected_ordering(), OB_SUCC(ret))
-      {
-        CK(NULL != it->expr_);
-        ObExpr* e = NULL;
-        OZ(generate_rt_expr(*it->expr_, e));
-        OZ(mark_expr_self_produced(it->expr_));
-        OZ(spec.sort_columns_.push_back(e));
-      }
+  spec.calc_found_rows_ = op.get_is_calc_found_rows();
+  spec.is_top_limit_ = op.is_top_limit();
+  spec.is_fetch_with_ties_ = op.is_fetch_with_ties();
+  if (NULL != op.get_limit_count()) {
+    CK(op.get_limit_count()->get_result_type().is_integer_type());
+    OZ(generate_rt_expr(*op.get_limit_count(), spec.limit_expr_));
+    OZ(mark_expr_self_produced(op.get_limit_count()));
+  }
+  if (NULL != op.get_limit_offset()) {
+    CK(op.get_limit_offset()->get_result_type().is_integer_type());
+    OZ(generate_rt_expr(*op.get_limit_offset(), spec.offset_expr_));
+    OZ(mark_expr_self_produced(op.get_limit_offset()));
+  }
+  if (NULL != op.get_limit_percent()) {
+    CK(op.get_limit_percent()->get_result_type().is_double());
+    OZ(generate_rt_expr(*op.get_limit_percent(), spec.percent_expr_));
+    OZ(mark_expr_self_produced(op.get_limit_percent()));
+  }
+  if (OB_SUCC(ret) && op.is_fetch_with_ties()) {
+    OZ(spec.sort_columns_.init(op.get_expected_ordering().count()));
+    FOREACH_CNT_X(it, op.get_expected_ordering(), OB_SUCC(ret))
+    {
+      CK(NULL != it->expr_);
+      ObExpr* e = NULL;
+      OZ(generate_rt_expr(*it->expr_, e));
+      OZ(mark_expr_self_produced(it->expr_));
+      OZ(spec.sort_columns_.push_back(e));
     }
   }
   return ret;
@@ -696,8 +693,6 @@ int ObStaticEngineCG::generate_spec(
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("null pointer", K(ret));
         } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
-            // distinct const value, 这里需要注意：distinct 1被跳过了，
-            // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
             continue;
         } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
           LOG_WARN("failed to generate rt expr", K(ret));
@@ -717,7 +712,7 @@ int ObStaticEngineCG::generate_spec(
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
                                 expr->datum_meta_.type_,
                                 expr->datum_meta_.type_,
-                                NULL_LAST,//这里null last还是first无所谓
+                                NULL_LAST,
                                 expr->datum_meta_.cs_type_,
                                 lib::is_oracle_mode());
           ObHashFunc hash_func;
@@ -746,8 +741,6 @@ int ObStaticEngineCG::generate_spec(
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("null pointer", K(ret));
         } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
-            // distinct const value, 这里需要注意：distinct 1被跳过了，
-            // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
             continue;
         } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
           LOG_WARN("failed to generate rt expr", K(ret));

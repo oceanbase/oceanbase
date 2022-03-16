@@ -2014,12 +2014,9 @@ int ObLogicalOperator::set_sort_topn()
       OB_ISNULL(session = optm_ctx->get_session_info())) {
     LOG_WARN("get unexpected null", K(get_plan()), K(optm_ctx), K(session), K(ret));
   } else if (LOG_LIMIT == get_type()) {
-    bool need_calc = false;
     ObLogLimit* op_limit = static_cast<ObLogLimit*>(this);
     is_fetch_with_ties = op_limit->is_fetch_with_ties();
-    if (OB_FAIL(op_limit->need_calc_found_rows(need_calc))) {
-      LOG_WARN("call need_calc_found_rows failed", K(ret));
-    } else if (need_calc) {
+    if (op_limit->get_is_calc_found_rows()) {
       /*do nothing*/
     } else {
       limit_count_expr = op_limit->get_limit_count();
