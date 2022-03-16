@@ -5,20 +5,8 @@ message(STATUS "DETECT BUILD ARCH: " ${ARCHITECTURE})
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
-ob_define(OB_USE_CLANG ON)
-ob_define(OB_USE_LLVM_LIBTOOLS ON)
-ob_define(OB_COMPRESS_DEBUG_SECTIONS OFF)
-ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
-
-ob_define(OB_USE_CCACHE OFF)
-ob_define(OB_ENABLE_PCH ON)
 ob_define(OB_ENABLE_LIB_PCH ${OB_ENABLE_PCH})
 ob_define(OB_ENABLE_SERVER_PCH ${OB_ENABLE_PCH})
-ob_define(OB_ENABLE_UNITY ON)
-ob_define(OB_MAX_UNITY_BATCH_SIZE 30)
-ob_define(OB_USE_ASAN OFF)
-
-ob_define(OB_RELEASEID 1)
 
 find_program(OBJCOPY_BIN objcopy PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
 find_program(LD_BIN ld PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
