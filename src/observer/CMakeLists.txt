@@ -314,8 +314,8 @@ else()
     PRIVATE
     -Wl,-z,notext
     "${ob_objects}" "${oblib_object_libraries}"
-    -static-libgcc
-    -static-libstdc++
+    -lgcc
+    -lstdc++
     ob_version
     ob_sql_server_parser_objects
     oblib easy)
@@ -326,7 +326,7 @@ target_link_libraries(ob_main PUBLIC ob_base)
 enable_server_pch(ob_main)
 
 if (OB_STATIC_LINK_LGPL_DEPS)
-  set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a -l:libaio.a")
+  set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadbclient -laio")
 endif()
 
 add_executable(observer)
@@ -340,6 +340,8 @@ target_link_libraries(observer
   ob_main
   -Wl,--start-group
   oceanbase_static
+  -lgcc
+  -lstdc++
   ${link_malloc_hook}
   ${LGPL_DEPS}
   oblib

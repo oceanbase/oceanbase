@@ -56,7 +56,7 @@ target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 target_link_libraries(oblib_base_base
   INTERFACE
   -L${DEP_DIR}/lib
-  -l:libisal.a -l:libunwind.a -lpthread -ldl -lrt -l:libssl.a -l:libcrypto.a -l:libcurl.a ${ARCH_LDFLAGS})
+  -lisal -lunwind -lpthread -ldl -lrt -lcrypto -lcurl ${ARCH_LDFLAGS})
 
 add_library(oblib_base INTERFACE)
 target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
