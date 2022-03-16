@@ -13,8 +13,8 @@
 #ifndef OCEANBASE_LIBOBLOG_OB_LOG_MYSQL_CONNECTOR_H_
 #define OCEANBASE_LIBOBLOG_OB_LOG_MYSQL_CONNECTOR_H_
 
-#include <mariadb/mysql.h>
-#include <mariadb/errmsg.h>
+#include <mysql/mysql.h>
+#include <mysql/errmsg.h>
 
 #include "share/ob_define.h"                // OB_MAX_*
 #include "lib/utility/ob_print_utils.h"     // TO_STRING_KV

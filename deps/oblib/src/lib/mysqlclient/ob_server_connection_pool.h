@@ -13,7 +13,7 @@
 #ifndef __COMMON_OB_SERVER_CONNECTION_POOL__
 #define __COMMON_OB_SERVER_CONNECTION_POOL__
 
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/mysqlclient/ob_connection_allocator.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"

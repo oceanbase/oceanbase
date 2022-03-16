@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX LIB_MYSQLC
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_prepared_param.h"

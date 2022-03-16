@@ -13,7 +13,7 @@
 #ifndef __OB_COMMON_SQLCLIENT_OB_MYSQL_PREPARED_STATEMENT__
 #define __OB_COMMON_SQLCLIENT_OB_MYSQL_PREPARED_STATEMENT__
 
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"

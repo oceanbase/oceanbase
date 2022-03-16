@@ -13,7 +13,7 @@
 #ifndef __OB_COMMON_SQLCLIENT_MYSQL_PREPARED_PARAM__
 #define __OB_COMMON_SQLCLIENT_MYSQL_PREPARED_PARAM__
 
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
