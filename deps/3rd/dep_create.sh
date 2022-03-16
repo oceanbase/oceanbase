@@ -115,7 +115,7 @@ function save_content {
         if [[ $(echo "$section" | grep -E "^target\-") != "" ]]
         then
             target_name=$(echo $section | sed 's|^target\-\(.*\)$|\1|g')
-            targets["$target_name"]="$(echo "${content["$section"]}" | grep -Eo "repo=.*" | awk -F '=' '{ print $2 }')"
+            targets["$target_name"]="$(echo "${content}" | grep -Eo "repo=.*" | awk -F '=' '{ print $2 }')"
             echo "target: $target_name, repo: ${targets["$target_name"]}"
         else
             packages["$section"]=$content
@@ -133,7 +133,7 @@ do
         # section=${line//\[\(.*\)\]/\1}
         section=$(echo $line | sed 's|.*\[\(.*\)\].*|\1|g')
     else
-        [[ "$line" != "" ]] && [[ "$line" != '\#*' ]] && content+=$'\n'"$line"
+        [[ "$line" != "" ]] && [[ "$line" != '#'* ]] && content+=$'\n'"$line"
     fi
 done < $DEP_FILE 
 save_content
