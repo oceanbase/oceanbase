@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX LIB_CHARSET
+#include <math.h>
 #include "lib/charset/ob_charset.h"
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
