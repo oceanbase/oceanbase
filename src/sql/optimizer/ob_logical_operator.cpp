@@ -1775,9 +1775,14 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp& op, void* ct
               !static_cast<ObSelectStmt*>(get_stmt())->need_temp_table_trans() &&
               !static_cast<ObSelectStmt*>(get_stmt())->is_temp_table() && get_stmt()->has_order_by() &&
               !get_stmt()->is_order_siblings() && log_op_def::LOG_SORT != top->get_type() &&
-              AllocExchContext::DistrStat::DISTRIBUTED == alloc_exch_ctx->plan_type_ &&
-              OB_FAIL(allocate_stmt_order_by_above(top))) {
-            LOG_WARN("failed to allocate stmt order by", K(ret));
+              AllocExchContext::DistrStat::DISTRIBUTED == alloc_exch_ctx->plan_type_) {
+            if (OB_FAIL(allocate_stmt_order_by_above(top))) {
+              LOG_WARN("failed to allocate stmt order by", K(ret));
+            } else if (OB_FAIL(top->replace_generated_agg_expr(alloc_exch_ctx->group_push_down_replaced_exprs_))) {
+              LOG_WARN("failed to replace generated agg expr", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (NULL == top->get_parent()) {
             // this is the final root operator
             ObExchangeInfo exch_info;
@@ -5216,7 +5221,6 @@ int ObLogicalOperator::allocate_dummy_output_access()
           ObLogExchange *exchange_op = NULL;
           exchange_op = static_cast<ObLogExchange*>(this);
           if (exchange_op->get_is_remote() && exchange_op->is_producer()) {
-            // https://work.aone.alibaba-inc.com/issue/33487009
             // 0. EXCHANGE IN REMOTE
             // 1.  EXCHANGE OUT REMOTE
             // 2.   TABLE SCAN / OTHERS

@@ -370,5 +370,21 @@ int ObLogDistinct::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
   return ret;
 }
 
+int ObLogDistinct::check_output_dep_specific(ObRawExprCheckDep &checker)
+{
+  int ret = OB_SUCCESS;
+  // distinct exprs
+  for (int64_t i = 0; OB_SUCC(ret) && i < distinct_exprs_.count(); ++i) {
+    if (OB_ISNULL(distinct_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("distinct_exprs_.at(i) is null", K(ret), K(i));
+    } else if (OB_FAIL(checker.check(*distinct_exprs_.at(i)))) {
+      LOG_WARN("failed to check distinct_exprs_.at(i)", K(ret), K(i));
+    } else {
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
