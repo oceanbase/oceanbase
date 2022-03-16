@@ -417,8 +417,9 @@ int ObDMLResolver::resolve_into_variables(
       if (OB_SUCC(ret)) {
         if (T_USER_VARIABLE_IDENTIFIER == ch_node->type_) {
           ObString var_name(ch_node->str_len_, ch_node->str_value_);
-          OZ(user_vars.push_back(var_name));
-          OZ(user_var_idx.add_member(i));
+          ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_name);
+          OZ (user_vars.push_back(var_name));
+          OZ (user_var_idx.add_member(i));
         } else {
           if (params_.is_prepare_protocol_) {
             ObSEArray<ObQualifiedName, 1> columns;

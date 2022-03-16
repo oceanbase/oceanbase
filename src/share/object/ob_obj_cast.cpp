@@ -3447,14 +3447,21 @@ static int time_date(
   int ret = OB_SUCCESS;
   const ObTimeZoneInfo* tz_info = params.dtc_params_.tz_info_;
   int32_t value = 0;
+  int64_t datetime_value = 0;
   if (OB_UNLIKELY(ObTimeTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(ObTimeConverter::datetime_to_date(params.cur_time_, tz_info, value))) {
-    LOG_WARN("datetime_to_date failed", K(ret), K(params.cur_time_));
   } else {
-    out.set_date(value);
+    ObTimeConvertCtx cvrt_ctx(tz_info, false);
+    if (OB_FAIL(ObTimeConverter::time_to_datetime(in.get_time(), params.cur_time_, tz_info,
+                                                  datetime_value, ObDateTimeType))) {
+      LOG_WARN("time to datetime failed", K(ret), K(in), K(params.cur_time_));
+    } else if (ObTimeConverter::datetime_to_date(datetime_value, NULL, value)) {
+      LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
+    } else {
+      out.set_date(value);
+    }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   UNUSED(cast_mode);
@@ -4189,9 +4196,12 @@ static int string_year(
   } else if (OB_FAIL(string_int(
                  ObIntType, params, in, int64, CM_UNSET_STRING_INTEGER_TRUNC(CM_SET_WARN_ON_FAIL(cast_mode))))) {
   } else if (0 == int64.get_int()) {
-    const uint8_t base_year = 100;
-    uint8_t value = 4 == in.get_string().length() ? ObTimeConverter::ZERO_YEAR : base_year;
+	  const uint8_t base_year = 100;
+    uint8_t value = OB_SUCCESS == params.warning_ ?
+                    (4 == in.get_string().length() ? ObTimeConverter::ZERO_YEAR : base_year) :
+                    ObTimeConverter::ZERO_YEAR;
     SET_RES_YEAR(out);
+    CAST_FAIL(params.warning_);
   } else if (CAST_FAIL(int_year(ObYearType, params, int64, out, cast_mode))) {
   } else if (CAST_FAIL(params.warning_)) {
   }

@@ -350,10 +350,10 @@ int ObExprBaseLeast::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, 
       const uint32_t real_param_num = param_num / 3;
       for (int64_t i = 0; OB_SUCC(ret) && i < real_param_num; i++) {
         if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                rt_expr.args_[i], rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
+                rt_expr.args_[i], raw_expr.get_param_expr(i), rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
         } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                       rt_expr.args_[i], rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
+                       rt_expr.args_[i], raw_expr.get_param_expr(i), rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
         }
       }

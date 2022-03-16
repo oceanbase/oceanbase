@@ -4405,11 +4405,14 @@ int ObBasicSessionInfo::set_time_zone(
           LOG_INFO(
               "ignore unknow time zone, perhaps in remote/distribute task processer when server start_time is zero",
               K(str_val));
-          ret = OB_SUCCESS;
-          if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().set_tz_name(str_val.ptr(), no_sp_len))) {
-            LOG_WARN("fail to set time zone info name", K(str_val), K(ret));
+          offset = 0;
+          if (OB_FAIL(ObTimeConverter::str_to_offset(ObString("+8:00"), offset, ret_more,
+                                                    is_oralce_mode, check_timezone_valid))) {
+            if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+              LOG_WARN("fail to convert time zone", K(str_val), K(ret));
+            }
           } else {
-            tz_info_wrap_.set_tz_info_position();
+            tz_info_wrap_.set_tz_info_offset(offset);
           }
         }
       }

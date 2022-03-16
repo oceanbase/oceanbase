@@ -972,8 +972,8 @@ int ObStaticEngineExprCG::add_so_check_expr_above(ObIArray<ObExpr>& exprs, ObExp
   return ret;
 }
 
-int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, ObExpr* var_expr, ObExpr* parent_expr,
-    int32_t var_idx)  // child pos of parent_expr
+int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, const ObRawExpr *origin_raw_expr,
+    ObExpr* var_expr, ObExpr* parent_expr, int32_t var_idx)  // child pos of parent_expr
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(origin_expr)) {
@@ -981,13 +981,18 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, ObExpr* var_e
     LOG_WARN("expr is null", K(ret), K(origin_expr));
   } else {
     while (OB_SUCC(ret)) {
-      // from_unixtime may add implicit cast above origin param expr, find origin param.
-      if (T_FUN_SYS_CAST == origin_expr->type_ && CM_IS_EXPLICIT_CAST(origin_expr->extra_)) {
+      if (OB_ISNULL(origin_raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("origin raw expr is null", K(ret));
+        // from_unixtime may add implicit cast above origin param expr, find origin param.
+      } else if (T_FUN_SYS_CAST == origin_expr->type_
+                 && CM_IS_IMPLICIT_CAST(origin_raw_expr->get_extra())) {
         if (OB_UNLIKELY(origin_expr->arg_cnt_ < 1) || OB_ISNULL(origin_expr->args_[0])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid param", KPC(origin_expr));
         } else {
           origin_expr = origin_expr->args_[0];
+          origin_raw_expr = origin_raw_expr->get_param_expr(0);
         }
       } else if (T_FUN_ENUM_TO_STR == origin_expr->type_ || T_FUN_SET_TO_STR == origin_expr->type_) {
         if (OB_UNLIKELY(origin_expr->arg_cnt_ < 2) || OB_ISNULL(origin_expr->args_[1])) {
@@ -995,6 +1000,7 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, ObExpr* var_e
           LOG_WARN("invalid param", K(ret), KPC(origin_expr));
         } else {
           origin_expr = origin_expr->args_[1];
+          origin_raw_expr = origin_raw_expr->get_param_expr(1);
         }
       } else {
         break;
