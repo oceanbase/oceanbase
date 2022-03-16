@@ -1186,9 +1186,6 @@ int ObTransformAggrSubquery::revert_vec_assign_exprs(ObSelectStmt *&child_stmt, 
   return ret;
 }
 
-/**
- * 获取from list中所有基表的primary key
- */
 int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pkeys, const bool is_first_trans)
 {
   int ret = OB_SUCCESS;
@@ -1593,7 +1590,13 @@ int ObTransformAggrSubquery::is_valid_group_by(const ObSelectStmt& subquery, boo
       LOG_WARN("failed to compute const exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery.get_group_expr_size(); ++i) {
-      if (ObOptimizerUtil::is_const_expr(subquery.get_group_exprs().at(i), subquery.get_current_level())) {
+      bool is_correlated = false;
+      if (OB_FAIL(ObTransformUtils::is_correlated_expr(
+                            subquery.get_group_exprs().at(i), subquery.get_current_level() - 1, is_correlated))) {
+        LOG_WARN("judge group expr correlated failed", K(ret));
+      } else if (is_correlated) {
+        is_valid = false;
+      } else if (ObOptimizerUtil::is_const_expr(subquery.get_group_exprs().at(i), subquery.get_current_level())) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(const_exprs, subquery.get_group_exprs().at(i))) {
         // do nothing

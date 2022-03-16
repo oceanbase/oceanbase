@@ -1197,12 +1197,13 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*>& table_i
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->get_relation_ids().is_subset(table_ids)) {
-        // do nothing
+      } else if (!expr->get_relation_ids().is_subset(table_ids) || 
+                 expr->has_flag(CNT_SUB_QUERY)) {
       } else if (OB_FAIL(table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(all_table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else {
       }
     }
     if (OB_SUCC(ret)) {
@@ -1268,8 +1269,6 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*>& table_i
         LOG_WARN("failed to generate R-TES", K(ret));
       }
     }
-    //对于inner join来说，满足交换律，所以不需要区分L_TES、R_TES
-    //为了方便之后统一applicable算法，L_TES、R_TES都等于SES
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(inner_detector->L_TES_.add_members(table_set))) {
       LOG_WARN("failed to generate L-TES", K(ret));
@@ -3715,8 +3714,11 @@ int ObLogPlan::extract_params(ObRawExpr*& expr, const int32_t level, ObIArray<st
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(expr->extract_info())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr->extract_info())) {
     LOG_WARN("failed to extract expr info", K(ret));
+  } else if (OB_FAIL(expr->pull_relation_id_and_levels(get_stmt()->get_current_level()))) {
+    LOG_WARN("pull up rel id and level failed", K(ret));
   }
   return ret;
 }

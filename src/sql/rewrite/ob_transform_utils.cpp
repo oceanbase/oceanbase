@@ -5332,7 +5332,13 @@ int ObTransformUtils::create_simple_view(
     LOG_WARN("failed to create stmt", K(ret));
   } else if (OB_FAIL(view_stmt->ObDMLStmt::assign(*stmt))) {
     LOG_WARN("failed to assign stmt", K(ret));
-  } else {
+  } else if (!stmt->is_select_stmt()) {
+    //do nothing
+  } else if (OB_FAIL(view_stmt->get_sample_infos().assign(static_cast<ObSelectStmt *>(stmt)->get_sample_infos()))) {
+    LOG_WARN("assign array failed", K(ret));
+  } 
+
+  if (OB_SUCC(ret)) {
     view_stmt->set_stmt_type(stmt::T_SELECT);
     // 1. handle table, columns, from
     // dml_stmt: from table, semi table, joined table

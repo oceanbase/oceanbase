@@ -2353,6 +2353,8 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt* stmt, ObQueryRe
       LOG_WARN("failed to merge others to parent stmt", K(ret));
     } else if (OB_FAIL(stmt->get_stmt_hint().add_view_merge_hint(&(subquery->get_stmt_hint())))) {
       LOG_WARN("Failed to add view merge hint", K(ret));
+    } else if (OB_FAIL(append(stmt->get_stmt_hint().part_hints_, subquery->get_stmt_hint().part_hints_))) {
+      LOG_WARN("Failed to append partition hint", K(ret));
     } else if (OB_FAIL(stmt->replace_inner_stmt_expr(query_refs, select_list))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_expr))) {

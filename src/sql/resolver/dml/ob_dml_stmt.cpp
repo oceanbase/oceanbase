@@ -1773,7 +1773,21 @@ int ObDMLStmt::get_order_exprs(ObIArray<ObRawExpr*>& order_exprs)
   return ret;
 }
 
-int ObDMLStmt::formalize_stmt(ObSQLSessionInfo* session_info)
+int ObDMLStmt::get_order_exprs(ObIArray<ObRawExpr*> &order_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); i++) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(order_exprs.push_back(order_items_.at(i).expr_))) {
+      LOG_WARN("failed to push back exprs", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> relation_exprs;

@@ -189,8 +189,13 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt* root_stmt, ObDMLStmt
     LOG_WARN("failed to check can add distinct", K(ret));
   } else if (!is_valid) {
     LOG_TRACE("semi right table output can not add distinct");
-  } else if (OB_FAIL(
-                 check_join_condition_match_index(root_stmt, stmt, semi_info, semi_info.semi_conditions_, is_valid))) {
+  } else if (stmt.get_stmt_hint().enable_unnest()) {
+    //do nothing
+    need_check_cost = false;
+    is_valid = true;
+  } else if (OB_FAIL(check_join_condition_match_index(root_stmt, stmt, semi_info,
+                                                      semi_info.semi_conditions_,
+                                                      is_valid))) {
     LOG_WARN("failed to check join condition match index", K(ret));
   } else {
     need_check_cost = is_valid | need_add_distinct;
