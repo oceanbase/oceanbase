@@ -489,7 +489,7 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(ObIArray<ObTabletID> &tablet
   if (OB_NOT_NULL(table_schema_)) {
     if (!table_schema_->is_partitioned_table()) {
       if (OB_FAIL(get_non_partition_tablet_id(tablet_ids, out_part_ids))) {
-        LOG_WARN("get non partitino tablet id failed", K(ret));
+        LOG_WARN("get non partition tablet id failed", K(ret));
       }
     } else if (PARTITION_LEVEL_ONE == table_schema_->get_part_level()) {
       if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
@@ -894,7 +894,7 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
   candi_tablet_locs.reset();
   int64_t N = tablet_ids.count();
   if (OB_FAIL(candi_tablet_locs.prepare_allocate(N))) {
-    LOG_WARN("Partitoin location list prepare error", K(ret));
+    LOG_WARN("Partition location list prepare error", K(ret));
   } else {
     ObLSLocation location;
     int64_t i = 0;
