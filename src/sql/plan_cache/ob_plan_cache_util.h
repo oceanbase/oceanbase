@@ -385,14 +385,17 @@ struct ObPCParamEqualInfo {
 };
 
 struct ObFastParserResult {
+private:
+  common::ModulePageAllocator inner_alloc_;
+
+public:
   ObFastParserResult()
       : inner_alloc_("FastParserRes"), raw_params_(&inner_alloc_), ps_params_(&inner_alloc_), cache_params_(NULL)
   {}
   ObPlanCacheKey pc_key_;  // plan cache key, parameterized by fast parser
-  common::ModulePageAllocator inner_alloc_;
-  common::ObFixedArray<ObPCParam*, common::ObIAllocator> raw_params_;
-  common::ObFixedArray<const common::ObObjParam*, common::ObIAllocator> ps_params_;
-  ParamStore* cache_params_;
+  common::ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
+  common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> ps_params_;
+  ParamStore *cache_params_;
   void reset()
   {
     pc_key_.reset();

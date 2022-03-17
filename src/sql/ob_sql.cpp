@@ -1071,6 +1071,9 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info, ObSqlCtx 
   // is recorded on the control server, and there is no need to record it here
   // Otherwise it will cause repeated warning messages
   ob_reset_tsi_warning_buffer();
+  if (NULL != pc_ctx) {
+    pc_ctx->~ObPlanCacheCtx();
+  }
   return ret;
 }
 
@@ -1216,12 +1219,8 @@ inline int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, ObR
       LOG_WARN("fail to handle after get plan", K(ret));
     }
   }
-  // for inner sql, release the optimization memory
-  if (!THIS_WORKER.has_req_flag()) {
-    // only for inner sql
-    if (NULL != pc_ctx) {
-      pc_ctx->~ObPlanCacheCtx();
-    }
+  if (NULL != pc_ctx) {
+    pc_ctx->~ObPlanCacheCtx();
   }
 
   return ret;
