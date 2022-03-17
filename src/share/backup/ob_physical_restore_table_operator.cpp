@@ -480,7 +480,6 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     int64_t real_len = 0;  // not used
     EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, "name", name, OB_INNER_TABLE_DEFAULT_KEY_LENTH, real_len);
     EXTRACT_LONGTEXT_FIELD_MYSQL_WITH_ALLOCATOR_SKIP_RET(result, "value", value, allocator, real_len);
-    LOG_DEBUG("retrieve restore option", K(ret), "name", name, "value", value);
 
 #define RETRIEVE_UINT_VALUE(COLUMN_NAME, OBJ)                                       \
   if (OB_SUCC(ret)) {                                                               \
