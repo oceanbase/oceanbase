@@ -2444,7 +2444,6 @@ int ObTransService::insert_xa_lock(
   char trans_id_buf[512];
   trans_id.to_string(trans_id_buf, 512);
   char scheduler_ip_buf[128];
-  self_.ip_to_string(scheduler_ip_buf, 128);
   char gtrid_str[128];
   int64_t gtrid_len = 0;
   char bqual_str[128];
@@ -2455,6 +2454,9 @@ int ObTransService::insert_xa_lock(
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(xid), K(trans_id));
+  } else if (!self_.ip_to_string(scheduler_ip_buf, 128)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get string of self address", K(ret), K_(self));
   } else if (OB_FAIL(hex_print(xid.get_gtrid_str().ptr(), xid.get_gtrid_str().length(), gtrid_str, 128, gtrid_len))) {
     TRANS_LOG(WARN, "fail to convert gtrid to hex", K(ret), K(tenant_id), K(xid));
   } else if (OB_FAIL(sql.assign_fmt(INSERT_XA_LOCK_SQL,
@@ -2508,7 +2510,6 @@ int ObTransService::insert_xa_record(const uint64_t tenant_id, const ObXATransID
   char trans_id_buf[512];
   trans_id.to_string(trans_id_buf, 512);
   char scheduler_ip_buf[128];
-  sche_addr.ip_to_string(scheduler_ip_buf, 128);
   char gtrid_str[128];
   int64_t gtrid_len = 0;
   char bqual_str[128];
@@ -2519,6 +2520,9 @@ int ObTransService::insert_xa_record(const uint64_t tenant_id, const ObXATransID
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(xid), K(trans_id));
+  } else if (!self_.ip_to_string(scheduler_ip_buf, 128)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get string of self address", K(ret), K_(self));
   } else if (OB_FAIL(hex_print(xid.get_gtrid_str().ptr(), xid.get_gtrid_str().length(), gtrid_str, 128, gtrid_len))) {
     TRANS_LOG(WARN, "fail to convert gtrid to hex", K(ret), K(tenant_id), K(xid));
   } else if (OB_FAIL(hex_print(xid.get_bqual_str().ptr(), xid.get_bqual_str().length(), bqual_str, 128, bqual_len))) {

@@ -35,6 +35,8 @@ typedef common::ObList<common::ObPartitionKey, ObArenaAllocator> ObPartitionList
 
 struct ObXABranchInfo {
   ObXABranchInfo()
+      : xid_(), state_(ObXATransState::UNKNOWN), timeout_seconds_(-1), abs_expired_time_(-1),
+        addr_(), unrespond_msg_cnt_(-1), last_hb_ts_(-1)
   {}
   virtual ~ObXABranchInfo()
   {}
