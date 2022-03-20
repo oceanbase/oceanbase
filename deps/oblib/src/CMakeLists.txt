@@ -3,11 +3,18 @@ add_library(oblib_base_base INTERFACE)
 message(STATUS "check deps for oblib")
 
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(RAPIDJSON REQUIRED IMPORTED_TARGET RapidJSON)
+pkg_check_modules(ISAL REQUIRED IMPORTED_TARGET libisal)
+
 target_include_directories(
   oblib_base_base INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${EASY_INCLUDE_DIRS}
   ${DEP_DIR}/include
+  ${RAPIDJSON_INCLUDE_DIRS}
+  ${ISAL_INCLUDE_DIRS}
 )
 
 set(ARCH_COMPILE_OPTIONS "")
@@ -56,7 +63,7 @@ target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 target_link_libraries(oblib_base_base
   INTERFACE
   -L${DEP_DIR}/lib
-  -lisal -lunwind -lpthread -ldl -lrt -lcrypto -lcurl ${ARCH_LDFLAGS})
+  ${ISAL_LIBRARIES} -lunwind -lpthread -ldl -lrt -lcrypto -lcurl ${ARCH_LDFLAGS})
 
 add_library(oblib_base INTERFACE)
 target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
