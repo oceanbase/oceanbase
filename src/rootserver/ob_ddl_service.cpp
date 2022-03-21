@@ -14667,7 +14667,7 @@ int ObDDLService::do_modify_system_variable(
   char value_buf[BUF_SIZE];
   ObString new_value(modify_var.get_value());
 
-  if (0 == MEMCMP(modify_var.get_name().ptr(), PARALLEL_MAX_SERVERS, modify_var.get_name().length())) {
+  if (0 == STRNCMP(modify_var.get_name().ptr(), PARALLEL_MAX_SERVERS, modify_var.get_name().length())) {
     // If the value of parallel_max_servers exceeds the maximum allowed by unit, reduce the configuration
     LOG_INFO("parallel_max_servers update", K(modify_var));
     common::ObArray<share::ObUnitInfo> units;
