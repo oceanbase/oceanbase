@@ -240,7 +240,6 @@ int ObMemtableScanIterator::prepare_scan()
     TRANS_LOG(WARN, "get snapshot info failed", K(ret));
   } else if (OB_FAIL(get_real_range(cur_range_.get_range(), range))) {
     TRANS_LOG(WARN, "fail to get_real_range", K(ret), K(cur_range_));
-    ret = OB_ITER_END;
   } else if (OB_FAIL(ObMemtableKey::build(
                  start_key, param_->table_id_, *param_->out_cols_, &range.get_start_key(), *context_->allocator_))) {
     TRANS_LOG(WARN, "start key build fail", K(param_->table_id_), K(range));
