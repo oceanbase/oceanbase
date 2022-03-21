@@ -1003,6 +1003,7 @@ int ObMPStmtExecute::process()
     int64_t sys_version = 0;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_use_static_typing_engine(false);
+    session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.set_thread_id(GETTID());
     const ObMySQLRawPacket& pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();

@@ -1032,7 +1032,8 @@ public:
 
   // current executing physical plan
   ObPhysicalPlan* get_cur_phy_plan() const;
-  int set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan);
+  void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
+  int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   void reset_cur_phy_plan_to_null();
 
   common::ObObjType get_sys_variable_type(const common::ObString& var_name) const;
@@ -1295,16 +1296,17 @@ public:
   uint32_t get_version() const {return version_;}
   uint32_t get_magic_num() {return magic_num_;}
   int64_t get_current_execution_id() const { return current_execution_id_; }
-  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
+  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
-    if (OB_ISNULL(trace_id)) {
-    } else {
-      last_trace_id_ = *trace_id;
-    }
+    if (OB_NOT_NULL(trace_id)) { last_trace_id_ = *trace_id; }
   }
-
+  const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
+  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
+  {
+    if (OB_NOT_NULL(trace_id)) { curr_trace_id_ = *trace_id; }
+  }
   const ObString& get_app_trace_id() const
   {
     return app_trace_id_;
@@ -2145,6 +2147,8 @@ private:
   // used for calculating which system variables need serialization,
   // set NULL after query is done.
   ObPhysicalPlan* cur_phy_plan_;
+  // sql_id of cur_phy_plan_ sql
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
 
   //=======================ObProxy && OCJ related============================
   obmysql::ObMySQLCapabilityFlags capability_;
@@ -2166,6 +2170,7 @@ private:
   uint32_t magic_num_;
   int64_t current_execution_id_;
   common::ObCurTraceId::TraceId last_trace_id_;
+  common::ObCurTraceId::TraceId curr_trace_id_;
   common::ObString app_trace_id_;
   uint64_t database_id_;
   ObQueryRetryInfo retry_info_;

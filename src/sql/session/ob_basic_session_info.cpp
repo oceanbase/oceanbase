@@ -351,6 +351,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // magic_num_ = 0x86427531;
   current_execution_id_ = -1;
   last_trace_id_.reset();
+  curr_trace_id_.reset();
   app_trace_id_.reset();
   database_id_ = OB_INVALID_ID;
   retry_info_.reset();
@@ -1640,6 +1641,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
     LOG_WARN("current physical plan is NULL", K(lbt()), K(ret));
   } else {
     cur_phy_plan_ = cur_phy_plan;
+    MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
   }
   return ret;
 }
@@ -1647,6 +1649,15 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
 void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
 {
   cur_phy_plan_ = NULL;
+}
+
+void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
+{
+  if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+  } else {
+    sql_id_buf[0] = '\0';
+  }
 }
 
 ObObjType ObBasicSessionInfo::get_sys_variable_type(const ObString& var_name) const

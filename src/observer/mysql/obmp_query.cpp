@@ -124,7 +124,8 @@ int ObMPQuery::process()
     THIS_WORKER.set_session(sess);
     ObSQLSessionInfo& session = *sess;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
-    sess->set_use_static_typing_engine(GCONF.enable_static_engine_for_query());
+    session.set_use_static_typing_engine(GCONF.enable_static_engine_for_query());
+    session.set_current_trace_id(ObCurTraceId::get_trace_id());
     int64_t val = 0;
     const bool check_throttle = extract_pure_id(sess->get_user_id()) != OB_SYS_USER_ID;
     if (check_throttle && !sess->is_inner() && sess->get_raw_audit_record().try_cnt_ == 0 &&
