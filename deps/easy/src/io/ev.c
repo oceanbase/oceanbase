@@ -1274,8 +1274,8 @@ EV_CPP(extern "C" {
 #endif
         WL                      head;
     } ANSIG;
-
-    static ANSIG signals [EV_NSIG - 1];
+    //whitescan for safety hole check
+    static ANSIG signals [EV_NSIG];
 
     /*****************************************************************************/
 
