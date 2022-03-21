@@ -76,7 +76,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-t, --timeout=name  check timeout, default: 600(s).\n' + \
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
-sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
 
 version_str = """version 1.0.0"""
 

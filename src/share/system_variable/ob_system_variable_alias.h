@@ -11,10 +11,9 @@
  */
 
 
-/* 此处定义所有系统变量的名字。初始化@see ob_ddl_operation.cpp和ob_basic_session_info.cpp
- * @note: 所有OB特有的非mysql的系统变量，都以ob_开头，以区别于mysql系统变量的名字空间。
- * 反之，所有不以ob_开头的系统变量都必须和mysql语义完全兼容。 */
-
+/* OB specific system vaiables will start with ob_,
+ * all system vaiables which not start with ob_ should be compatible with mysql
+*/
 #ifndef OCEANBASE_SHARE_SYSTEM_VARIABLE_OB_SYSTEM_VARIABLE_ALIAS_
 #define OCEANBASE_SHARE_SYSTEM_VARIABLE_OB_SYSTEM_VARIABLE_ALIAS_
 namespace oceanbase
