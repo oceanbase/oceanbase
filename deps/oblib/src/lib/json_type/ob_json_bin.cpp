@@ -650,7 +650,7 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
     case ObJsonNodeType::J_DOUBLE: {
       const ObJsonDouble *d = static_cast<const ObJsonDouble*>(json_tree);
       double value = d->value();
-      if (isnan(value) || isinf(value)) {
+      if (std::isnan(value) || std::isinf(value)) {
         ret = OB_INVALID_NUMERIC;
         LOG_WARN("invalid double value", K(ret), K(value));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(double)))) {
