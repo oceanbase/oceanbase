@@ -144,7 +144,7 @@ public:
   int leader_active(const storage::LeaderActiveArg& arg) override;
   bool can_be_freezed() const override;
   int kill_trans(bool& need_convert_to_dist_trans);
-  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly, const MonotonicTs commit_time,
+  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly, const MonotonicTs commit_time,
       const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
       const common::ObString& app_trace_info, bool& need_convert_to_dist_trans) override;
   int set_stmt_info(const ObTransStmtInfo& stmt_info);
