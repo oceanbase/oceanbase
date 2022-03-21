@@ -950,6 +950,10 @@ DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "100", "[0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
+    "enable compaction diagnose function"
+    "Value:  True:turned on;  False: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "2M",
     "[0B,)"
     "the trigger remaining data size within transaction for immediate logging, 0B represents not trigger immediate "

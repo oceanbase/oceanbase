@@ -7691,7 +7691,7 @@ int ObPartitionStorage::validate_sstables(
         } else if (OB_FAIL(validate_sstable(row_count, index_table, column_checksum_map))) {
           if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
             handle_error_index_table(*index_table, index_stats, ret);
-            if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+            if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && GCONF._enable_compaction_diagnose) {
               dump_error_info(*main_sstable, *index_table);
             }
           } else {
