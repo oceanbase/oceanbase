@@ -4677,6 +4677,13 @@ int ObSelectResolver::resolve_column_ref_table_first(
       if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve alias column ref failed", K(ret), K(q_name));
       }
+    } else if (OB_NON_UNIQ_ERROR == ret && share::is_mysql_mode() && T_GROUP_SCOPE == current_scope_) {
+      // in mysql mode, for t1(c1, c2), t2(c1, c2), select t1.c1 from t1, t2 group by c1;
+      // the c1 in group by is resolved as t1.c1 in select items.
+      if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
+        ret = OB_NON_UNIQ_ERROR;
+        LOG_WARN("resolve table column ref failed", K(ret));
+      }
     } else {
       LOG_WARN("resolve table column ref failed", K(ret));
     }
