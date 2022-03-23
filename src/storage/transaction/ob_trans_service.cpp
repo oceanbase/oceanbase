@@ -9259,6 +9259,7 @@ int ObTransService::get_store_ctx_(const ObStandaloneStmtDesc& desc, const ObPar
   bool updated = false;
   bool is_dup_table = false;
   int64_t leader_epoch = 0;
+  bool tls_enable = store_ctx.is_thread_scope_;
 
   if (OB_UNLIKELY(!desc.is_valid() || !pg_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -9280,7 +9281,7 @@ int ObTransService::get_store_ctx_(const ObStandaloneStmtDesc& desc, const ObPar
              OB_FAIL(ts_mgr_->update_local_trans_version(pg_key.get_tenant_id(), snapshot_version, updated))) {
     TRANS_LOG(WARN, "update gts failed", KR(ret), K(pg_key));
   } else {
-    if (OB_FAIL(alloc_memtable_ctx_(pg_key, false, pg_key.get_tenant_id(), mt_ctx))) {
+    if (OB_FAIL(alloc_memtable_ctx_(pg_key, tls_enable, pg_key.get_tenant_id(), mt_ctx))) {
       TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pg_key));
     } else if (!mt_ctx->is_self_alloc_ctx() && OB_FAIL(init_memtable_ctx_(mt_ctx, pg_key.get_tenant_id()))) {
       TRANS_LOG(WARN, "init mem ctx failed", K(ret), K(pg_key));
