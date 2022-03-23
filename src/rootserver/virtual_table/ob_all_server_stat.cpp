@@ -230,16 +230,16 @@ int ObAllServerStat::calc_server_usage(ServerStat& server_stat)
     if (std::fabs(server_stat.get_cpu_capacity()) < EPSLISON) {
       cpu_assigned_percent = INVALID_ASSIGNED_PERCENT;
     } else {
-      server_stat.server_load_.status_.resource_info_.cpu_ =
-          server_stat.server_load_.status_.resource_info_.cpu_;  // just for code layout
+      // server_stat.server_load_.status_.resource_info_.cpu_ =
+      //    server_stat.server_load_.status_.resource_info_.cpu_;  // just for code layout
       cpu_assigned_percent = 100.0 * static_cast<double>(server_stat.get_cpu_assigned()) /
                              static_cast<double>(server_stat.get_cpu_capacity());
     }
     if (INVALID_TOTAL_RESOURCE == server_stat.get_mem_capacity()) {
       mem_assigned_percent = INVALID_ASSIGNED_PERCENT;
     } else {
-      server_stat.server_load_.status_.resource_info_.mem_total_ =
-          server_stat.server_load_.status_.resource_info_.mem_total_;  // just for code layout
+      // server_stat.server_load_.status_.resource_info_.mem_total_ =
+      //    server_stat.server_load_.status_.resource_info_.mem_total_;  // just for code layout
       mem_assigned_percent = 100.0 * static_cast<double>(server_stat.get_mem_assigned()) /
                              static_cast<double>(server_stat.get_mem_capacity());
     }
