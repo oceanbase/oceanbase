@@ -41,6 +41,7 @@ int ObRevokeResolver::resolve_revoke_role_inner(const ParseNode* revoke_role, Ob
   // 1. resolve role list
   ParseNode* role_list = revoke_role->children_[0];
   for (int i = 0; OB_SUCC(ret) && i < role_list->num_child_; ++i) {
+    const ObUserInfo *role_info = NULL;
     uint64_t role_id = OB_INVALID_ID;
     ParseNode* role = role_list->children_[i];
     if (NULL == role) {
@@ -49,17 +50,19 @@ int ObRevokeResolver::resolve_revoke_role_inner(const ParseNode* revoke_role, Ob
     } else {
       ObString role_name;
       role_name.assign_ptr(const_cast<char*>(role->str_value_), static_cast<int32_t>(role->str_len_));
+
       ObString host_name(OB_DEFAULT_HOST_NAME);
-      if (OB_FAIL(params_.schema_checker_->get_user_id(tenant_id, role_name, host_name, role_id))) {
-        if (OB_USER_NOT_EXIST == ret) {
-          ret = OB_ROLE_NOT_EXIST;
-          LOG_USER_ERROR(OB_ROLE_NOT_EXIST, role_name.length(), role_name.ptr());
-        }
-        SQL_RESV_LOG(WARN, "fail to get user id", K(ret), K(role_name), K(host_name));
-      } else if (OB_FAIL(revoke_stmt->add_role(role_id))) {
-        LOG_WARN("failed to add role", K(ret));
+      OZ(params_.schema_checker_->get_user_info(tenant_id, role_name, host_name, role_info), role_name, host_name);
+      if (OB_USER_NOT_EXIST == ret || OB_ISNULL(role_info) || !role_info->is_role()) {
+        ret = OB_ROLE_NOT_EXIST;
+        LOG_USER_ERROR(OB_ROLE_NOT_EXIST, role_name.length(), role_name.ptr());
       } else {
-        OZ(role_id_array.push_back(role_id));
+        role_id = role_info->get_user_id();
+        if (OB_FAIL(revoke_stmt->add_role(role_id))) {
+          LOG_WARN("failed to add role", K(ret));
+        } else {
+          OZ(role_id_array.push_back(role_id));
+        }
       }
     }
   }

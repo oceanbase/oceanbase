@@ -1900,18 +1900,19 @@ int ObSchemaGetterGuard::add_role_id_recursively(uint64_t role_id, ObSessionPriv
   int ret = OB_SUCCESS;
   const ObUserInfo* role_info = NULL;
 
-  /* 1. put itself */
   if (!has_exist_in_array(s_priv.enable_role_id_array_, role_id)) {
+    /* 1. put itself */
     OZ(s_priv.enable_role_id_array_.push_back(role_id));
-  }
-  /* 2. get role recursively */
-  OZ(get_user_info(role_id, role_info));
-  if (OB_SUCC(ret) && role_info != NULL) {
-    const ObSEArray<uint64_t, 8>& role_id_array = role_info->get_role_id_array();
-    for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
-      OZ(add_role_id_recursively(role_info->get_role_id_array().at(i), s_priv));
+    /* 2. get role recursively */
+    OZ(get_user_info(role_id, role_info));
+    if (OB_SUCC(ret) && role_info != NULL) {
+      const ObSEArray<uint64_t, 8> &role_id_array = role_info->get_role_id_array();
+      for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
+        OZ(add_role_id_recursively(role_info->get_role_id_array().at(i), s_priv));
+      }
     }
   }
+
   return ret;
 }
 
