@@ -405,8 +405,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
           break;
         }
         case T_OP_AND:
-        case T_OP_OR: {
-          ObOpRawExpr* m_expr = NULL;
+        case T_OP_OR:
+        case T_OP_XOR: {
+          ObOpRawExpr *m_expr = NULL;
           int64_t num_child = 2;
           if (OB_FAIL(process_node_with_children(node, num_child, m_expr))) {
             LOG_WARN("fail to process node with children", K(ret), K(node));
@@ -439,7 +440,6 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
         case T_OP_GT:
         case T_OP_NE:
         case T_OP_CNN:
-        case T_OP_XOR:
         case T_OP_BIT_AND:
         case T_OP_BIT_OR:
         case T_OP_BIT_XOR:
