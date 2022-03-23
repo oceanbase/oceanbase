@@ -58,7 +58,10 @@ public:
   int cancel_pending_tasks(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id);
 
 private:
-  static const int64_t MAX_BATCH_COUNT = 1024;
+  int start_trans_(ObTimeoutCtx &timeout_ctx, ObMySQLTransaction &trans);
+
+private:
+  static const int64_t MAX_BATCH_COUNT = 128;
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObPGBackupTaskUpdater);
