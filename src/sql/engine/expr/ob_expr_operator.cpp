@@ -3812,13 +3812,22 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(ObExprResType& type, O
 }
 
 int ObMinMaxExprOperator::calc_(ObObj& result, const ObObj* objs_stack, int64_t param_num,
-    const ObExprResType& result_type, ObExprCtx& expr_ctx, ObCmpOp cmp_op, bool need_cast)
+    const ObExprResType& result_type, ObExprCtx& expr_ctx, ObCmpOp cmp_op, bool need_cast, ObExprOperatorType expr_type)
 {
   // todo:
   // we assume that result type / result collation / compare type / compare collation are CORRECT.
   // but who knowns? we should check it ASAP.
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(need_cast)) {
+  if (T_FUN_SYS_LEAST_INNER == expr_type || T_FUN_SYS_GREATEST_INNER == expr_type) {
+    if (0 != param_num % 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param num", K(ret), K(param_num));
+    } else {
+      param_num = param_num / 3;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(need_cast)) {
     ret = calc_with_cast(result, objs_stack, param_num, result_type, expr_ctx, cmp_op);
   } else {
     ret = calc_without_cast(result, objs_stack, param_num, result_type, expr_ctx, cmp_op);

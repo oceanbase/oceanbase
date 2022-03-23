@@ -1554,7 +1554,8 @@ protected:
   // least should set cmp_op to CO_LT.
   // greatest should set cmp_op to CO_GT.
   static int calc_(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op, bool need_cast);
+      const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op, bool need_cast,
+      ObExprOperatorType expr_type);
   OB_INLINE static int calc_without_cast(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
       const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op);
   OB_INLINE static int calc_with_cast(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,

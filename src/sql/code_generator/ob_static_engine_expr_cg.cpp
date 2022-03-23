@@ -972,47 +972,21 @@ int ObStaticEngineExprCG::add_so_check_expr_above(ObIArray<ObExpr>& exprs, ObExp
   return ret;
 }
 
-int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, const ObRawExpr *origin_raw_expr,
+int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr,
     ObExpr* var_expr, ObExpr* parent_expr, int32_t var_idx)  // child pos of parent_expr
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(origin_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(origin_expr));
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_ISNULL(origin_raw_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("origin raw expr is null", K(ret));
-        // from_unixtime may add implicit cast above origin param expr, find origin param.
-      } else if (T_FUN_SYS_CAST == origin_expr->type_
-                 && CM_IS_IMPLICIT_CAST(origin_raw_expr->get_extra())) {
-        if (OB_UNLIKELY(origin_expr->arg_cnt_ < 1) || OB_ISNULL(origin_expr->args_[0])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid param", KPC(origin_expr));
-        } else {
-          origin_expr = origin_expr->args_[0];
-          origin_raw_expr = origin_raw_expr->get_param_expr(0);
-        }
-      } else if (T_FUN_ENUM_TO_STR == origin_expr->type_ || T_FUN_SET_TO_STR == origin_expr->type_) {
-        if (OB_UNLIKELY(origin_expr->arg_cnt_ < 2) || OB_ISNULL(origin_expr->args_[1])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid param", K(ret), KPC(origin_expr));
-        } else {
-          origin_expr = origin_expr->args_[1];
-          origin_raw_expr = origin_raw_expr->get_param_expr(1);
-        }
-      } else {
-        break;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (T_EXEC_VAR == var_expr->type_) {
     if (OB_ISNULL(parent_expr) || OB_UNLIKELY(parent_expr->arg_cnt_ < var_idx + 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param", KPC(parent_expr));
+	  } else if (OB_UNLIKELY(var_expr->datum_meta_.type_ != origin_expr->datum_meta_.type_
+                || var_expr->datum_meta_.cs_type_ != origin_expr->datum_meta_.cs_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec var meta diff from origin expr meta", K(ret), KPC(origin_expr), KPC(var_expr));
     } else {
       parent_expr->args_[var_idx] = origin_expr;
     }
@@ -1022,13 +996,15 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, const ObRawEx
       // May two exprs above ObVarRawExpr:
       // 1. implicit cast add in type deduce
       // 2. ENUM_TO_STR/SET_TO_STR for enum/set
-      if (T_FUN_ENUM_TO_STR == parent_expr->type_ || T_FUN_SET_TO_STR == parent_expr->type_) {
+	    if (T_FUN_ENUM_TO_STR == parent_expr->type_
+          || T_FUN_SET_TO_STR == parent_expr->type_
+          || T_FUN_ENUM_TO_INNER_TYPE == parent_expr->type_
+          || T_FUN_SET_TO_INNER_TYPE == parent_expr->type_) {
         var_idx = 1;
       } else if (T_FUN_SYS_CAST == parent_expr->type_) {
         var_idx = 0;
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected expr added above var expr", K(ret), K(parent_expr->type_));
+        break;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(parent_expr->arg_cnt_ < var_idx + 1) ||
@@ -1036,7 +1012,13 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr, const ObRawEx
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), KPC(parent_expr));
       } else if (T_EXEC_VAR == var_expr->type_) {
-        parent_expr->args_[var_idx] = origin_expr;
+		    if (OB_UNLIKELY(var_expr->datum_meta_.type_ != origin_expr->datum_meta_.type_
+                || var_expr->datum_meta_.cs_type_ != origin_expr->datum_meta_.cs_type_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec var meta diff from origin expr meta", K(ret), KPC(origin_expr), KPC(var_expr));
+        } else {
+          parent_expr->args_[var_idx] = origin_expr;
+        }
         break;
       } else {
         parent_expr = var_expr;

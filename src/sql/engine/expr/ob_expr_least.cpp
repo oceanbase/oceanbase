@@ -151,6 +151,10 @@ int ObExprBaseLeastGreatest::calc_result_typeN_mysql(
             type, types, real_param_num, type_ctx.get_coll_type(), default_length_semantics))) {
       LOG_WARN("calc result meta for comparison failed");
     }
+		// can't cast origin parameters.
+    for (int64_t i = 0; i < real_param_num; i++) {
+      types[i].set_calc_meta(types[i].get_obj_meta());
+    }
     if (!all_integer || !type.is_integer_type()) {
       // compatible with MySQL. compare type and result type may be different.
       // resolver makes two copies of parameters. First for comparison and second for output result.
@@ -284,13 +288,7 @@ int ObExprBaseLeast::calc_result_typeN(
 
 int ObExprBaseLeast::calc_resultN(ObObj& result, const ObObj* objs_stack, int64_t param_num, ObExprCtx& expr_ctx) const
 {
-  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, result_type_, expr_ctx, CO_LT, need_cast_);
-}
-
-int ObExprBaseLeast::calc(
-    ObObj& result, const ObObj* objs_stack, int64_t param_num, const ObExprResType& expected_type, ObExprCtx& expr_ctx)
-{
-  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, expected_type, expr_ctx, CO_LT, true);
+  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, result_type_, expr_ctx, CO_LT, need_cast_, get_type());
 }
 
 ObExprLeastMySQL::ObExprLeastMySQL(ObIAllocator& alloc) : ObExprBaseLeast(alloc, MORE_THAN_ONE)
@@ -350,10 +348,10 @@ int ObExprBaseLeast::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, 
       const uint32_t real_param_num = param_num / 3;
       for (int64_t i = 0; OB_SUCC(ret) && i < real_param_num; i++) {
         if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                rt_expr.args_[i], raw_expr.get_param_expr(i), rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
+                rt_expr.args_[i], rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
         } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                       rt_expr.args_[i], raw_expr.get_param_expr(i), rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
+                       rt_expr.args_[i], rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
         }
       }
