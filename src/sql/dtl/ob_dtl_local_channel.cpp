@@ -96,7 +96,6 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer*& buf)
             KP(buf));
         bool is_eof = buf->is_eof();
         if (OB_FAIL(DTL.get_dfc_server().cache(/*buf->tenant_id(), */ peer_id_, buf, true))) {
-          ret = tmp_ret;
           LOG_WARN("get DTL channel fail", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
         } else {
           // return block after cache first msg
