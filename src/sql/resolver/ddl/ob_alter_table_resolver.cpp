@@ -907,6 +907,9 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode& node)
             }
           }
           if (OB_SUCC(ret)) {
+            create_index_arg->sql_mode_ = session_info_->get_sql_mode();
+          }
+          if (OB_SUCC(ret)) {
             if (table_schema_->is_old_no_pk_table() && table_schema_->is_partitioned_table() &&
                 OB_FAIL(store_part_key(*table_schema_, *create_index_arg))) {
               LOG_WARN("failed to store part key", K(ret));

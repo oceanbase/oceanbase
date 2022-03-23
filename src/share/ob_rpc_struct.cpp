@@ -1701,14 +1701,19 @@ DEF_TO_STRING(ObCreateIndexArg)
       K_(index_table_id),
       K_(if_not_exist),
       K_(index_schema),
-      K_(is_inner));
+      K_(is_inner),
+      K_(nls_date_format),
+      K_(nls_timestamp_format),
+      K_(nls_timestamp_tz_format),
+      K_(sql_mode));
   J_OBJ_END();
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg), index_type_, index_columns_, store_columns_, index_option_,
     index_using_type_, fulltext_columns_, create_mode_, data_table_id_, index_table_id_, if_not_exist_, with_rowid_,
-    index_schema_, is_inner_, hidden_store_columns_);
+    index_schema_, is_inner_, hidden_store_columns_, nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_,
+    sql_mode_);
 
 bool ObAlterIndexArg::is_valid() const
 {

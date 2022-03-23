@@ -579,6 +579,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
+    index_arg.sql_mode_ = session_info_->get_sql_mode();
     create_index_stmt->set_comment(comment_);
   }
   return ret;

@@ -1960,6 +1960,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2& column, ParseNode
       } else {
         column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
       }
+      if (OB_SUCC(ret) && is_pad_char_to_full_length(session_info_->get_sql_mode())) {
+        column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+      }
     }
   }
   if (OB_SUCC(ret)) {

@@ -897,7 +897,9 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr->formalize(&session))) {
+      if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(expr_factory, session, schema, gen_col, expr))) {
+        LOG_WARN("add pad expr failed", K(ret));
+      } else if (OB_FAIL(expr->formalize(&session))) {
         LOG_WARN("formalize expression failed", K(ret));
       }
     }
@@ -1000,6 +1002,7 @@ int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allo
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       exec_ctx = new (exec_ctx) ObExecContext();
+      exec_ctx->set_my_session(default_session);
       expr_ctx.exec_ctx_ = exec_ctx;
     }
   }

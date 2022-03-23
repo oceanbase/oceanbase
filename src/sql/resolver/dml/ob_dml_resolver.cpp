@@ -4889,6 +4889,63 @@ int ObDMLResolver::resolve_assignments(const ParseNode& parse_node, ObTablesAssi
   return ret;
 }
 
+// Check the pad flag on generated_column is consistent with the sql_mode on session.
+// For the upgraded cluster, the flag is not set, so only returns error if the dependent column
+// is char type and the generated column is stored or used by an index
+int ObDMLResolver::check_pad_generated_column(
+    const ObSQLSessionInfo& session_info, const ObTableSchema& table_schema, const ObColumnSchemaV2& column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!column_schema.is_generated_column()) {
+    // do nothing
+  } else if (is_pad_char_to_full_length(session_info.get_sql_mode()) ==
+             column_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
+    // do nothing
+  } else {
+    bool has_char_dep_column = false;
+    bool is_stored_column = column_schema.is_stored_generated_column();
+    ObSEArray<uint64_t, 5> cascaded_columns;
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    if (OB_FAIL(column_schema.get_cascaded_column_ids(cascaded_columns))) {
+      LOG_WARN("failed to get cascaded_column_ids", K(column_schema));
+    } else if (OB_FAIL(table_schema.get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !has_char_dep_column && i < cascaded_columns.count(); ++i) {
+      uint64_t column_id = cascaded_columns.at(i);
+      const ObColumnSchemaV2 *cascaded_col_schema = table_schema.get_column_schema(column_id);
+      if (OB_ISNULL(cascaded_col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column", K(table_schema), K(column_id), K(ret));
+      } else if (ObCharType == cascaded_col_schema->get_data_type() ||
+                 ObNCharType == cascaded_col_schema->get_data_type()) {
+        has_char_dep_column = true;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !is_stored_column && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = NULL;
+      if (OB_FAIL(schema_checker_->get_table_schema(simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("get_table_schema failed", "table id", simple_index_infos.at(i).table_id_, K(ret));
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(ret));
+      } else if (OB_FAIL(index_table_schema->has_column(column_schema.get_column_id(), is_stored_column))) {
+        LOG_WARN("falied to check if column is in index schema", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (has_char_dep_column && is_stored_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("change PAD_CHAR option after created generated column",
+          K(session_info.get_sql_mode()),
+          K(column_schema),
+          K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "change PAD_CHAR option after created generated column");
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo* session, const ColumnItem* column, ObRawExpr*& expr)
 {
   int ret = OB_SUCCESS;
@@ -5702,9 +5759,14 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString& expr_str, const
   ObArray<ObQualifiedName> columns;
   ObRawExprFactory* expr_factory = NULL;
   ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(expr_factory = params_.expr_factory_) || OB_ISNULL(session_info = params_.session_info_)) {
+  const ObTableSchema* table_schema = NULL;
+  if (OB_ISNULL(expr_factory = params_.expr_factory_) || OB_ISNULL(session_info = params_.session_info_) ||
+      OB_ISNULL(schema_checker_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("expr_factory is null", K_(params_.expr_factory), K_(params_.session_info));
+  } else if (OB_NOT_NULL(column_schema) &&
+             OB_FAIL(schema_checker_->get_table_schema(column_schema->get_table_id(), table_schema))) {
+    LOG_WARN("get table schema error", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(
                  expr_str, *expr_factory, *session_info, ref_expr, columns, schema_checker_))) {
     LOG_WARN("build generated column expr failed", K(ret));
@@ -5763,10 +5825,15 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString& expr_str, const
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ref_expr->formalize(session_info))) {
-      LOG_WARN("formailize column reference expr failed", K(ret));
+    if (OB_FAIL(check_pad_generated_column(*session_info, *table_schema, *column_schema))) {
+      LOG_WARN("check pad generated column failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(
+                   *expr_factory, *session_info, *table_schema, *column_schema, ref_expr))) {
+      LOG_WARN("build padding expr for column_ref failed", K(ret));
     } else if (OB_FAIL(build_padding_expr(session_info, column_schema, ref_expr))) {
-      LOG_WARN("build padding expr error", K(ret));
+      LOG_WARN("build padding expr for self failed", K(ret));
+    } else if (OB_FAIL(ref_expr->formalize(session_info))) {
+      LOG_WARN("formailize column reference expr failed", K(ret));
     } else if (ObRawExprUtils::need_column_conv(column.get_result_type(), *ref_expr)) {
       if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*expr_factory, *allocator_, column, ref_expr, session_info))) {
         LOG_WARN("build column convert expr failed", K(ret));

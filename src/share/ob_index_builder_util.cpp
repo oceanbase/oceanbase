@@ -580,7 +580,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
     ObColumnSchemaV2* gen_col = NULL;
     if (new_sort_item.prefix_len_ > 0) {
       // handle prefix column index
-      if (OB_FAIL(generate_prefix_column(new_sort_item, data_schema, gen_col))) {
+      if (OB_FAIL(generate_prefix_column(new_sort_item, arg.sql_mode_, data_schema, gen_col))) {
         LOG_WARN("generate prefix column failed", K(ret));
       } else {
         new_sort_item.column_name_ = gen_col->get_column_name_str();
@@ -626,7 +626,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
         LOG_WARN("only pure functions can be indexed", K(ret));
       } else if (!expr->is_column_ref_expr()) {
         // real index expr, so generate hidden generated column in data table schema
-        if (OB_FAIL(generate_ordinary_generated_column(*expr, data_schema, gen_col))) {
+        if (OB_FAIL(generate_ordinary_generated_column(*expr, arg.sql_mode_, data_schema, gen_col))) {
           LOG_WARN("generate ordinary generated column failed", K(ret));
         } else {
           new_sort_item.column_name_ = gen_col->get_column_name_str();
@@ -787,8 +787,8 @@ int ObIndexBuilderUtil::generate_fulltext_column(
   return ret;
 }
 
-int ObIndexBuilderUtil::generate_ordinary_generated_column(
-    ObRawExpr& expr, ObTableSchema& data_schema, ObColumnSchemaV2*& gen_col, const uint64_t index_id)
+int ObIndexBuilderUtil::generate_ordinary_generated_column(ObRawExpr& expr, const ObSQLMode sql_mode,
+    ObTableSchema& data_schema, ObColumnSchemaV2*& gen_col, const uint64_t index_id)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 tmp_gen_col;
@@ -821,6 +821,9 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
         tmp_gen_col.set_table_id(data_schema.get_table_id());
         tmp_gen_col.set_column_id(data_schema.get_max_used_column_id() + 1);
         tmp_gen_col.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        if (is_pad_char_to_full_length(sql_mode)) {
+          tmp_gen_col.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+        }
         tmp_gen_col.set_is_hidden(true);
         tmp_gen_col.set_data_type(expr.get_data_type());
         tmp_gen_col.set_collation_type(expr.get_collation_type());
@@ -884,8 +887,8 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
   return ret;
 }
 
-int ObIndexBuilderUtil::generate_prefix_column(
-    const ObColumnSortItem& sort_item, ObTableSchema& data_schema, ObColumnSchemaV2*& prefix_col)
+int ObIndexBuilderUtil::generate_prefix_column(const ObColumnSortItem& sort_item, const ObSQLMode sql_mode,
+    ObTableSchema& data_schema, ObColumnSchemaV2*& prefix_col)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2* old_column = NULL;
@@ -963,6 +966,9 @@ int ObIndexBuilderUtil::generate_prefix_column(
         int32_t data_len = static_cast<int32_t>(min(sort_item.prefix_len_, old_column->get_data_length()));
         prefix_column.set_data_length(data_len);
         prefix_column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        if (is_pad_char_to_full_length(sql_mode)) {
+          prefix_column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+        }
         prefix_column.set_is_hidden(true);  // for debug
         old_column->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
         prefix_column.set_prev_column_id(UINT64_MAX);
