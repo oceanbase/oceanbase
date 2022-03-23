@@ -2681,13 +2681,22 @@ int ObDDLResolver::cast_default_value(ObObj& default_value, const ObTimeZoneInfo
         if (OB_SUCC(ret)) {
           default_value.set_number(column_schema.get_data_type(), nmb);
         }
-      }
+		  }
       if (OB_FAIL(ret)) {
         ret = OB_INVALID_DEFAULT;
         LOG_USER_ERROR(OB_INVALID_DEFAULT,
             column_schema.get_column_name_str().length(),
             column_schema.get_column_name_str().ptr());
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (default_value.get_type() == column_schema.get_data_type()
+        && (ObTimeTC == column_schema.get_data_type_class() ||
+            ObDateTimeTC == column_schema.get_data_type_class())) {
+      int64_t value = default_value.get_time();
+      ObTimeConverter::round_datetime(column_schema.get_data_scale(), value);
+      default_value.set_time_value(value);
     }
   }
   return ret;
