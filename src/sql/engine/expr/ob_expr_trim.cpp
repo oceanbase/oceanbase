@@ -411,9 +411,9 @@ inline int ObExprTrim::deduce_result_type(
     // deduce charset
     ObSEArray<ObExprResType, 2> tmp_types;
     OZ(tmp_types.push_back(*str_type));
-    if (NULL != pattern_type) {
-      OZ(tmp_types.push_back(*pattern_type));
-    }
+    // if (NULL != pattern_type) {
+    //  OZ(tmp_types.push_back(*pattern_type));
+    //}
     OZ(aggregate_charsets_for_string_result_with_comparison(
         type, &tmp_types.at(0), tmp_types.count(), type_ctx.get_coll_type()));
     str_type->set_calc_collation_type(type.get_collation_type());
