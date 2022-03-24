@@ -317,9 +317,15 @@ int ObTableApiProcessorBase::init_session()
   static const uint32_t sess_version = 0;
   static const uint32_t sess_id = 1;
   static const uint64_t proxy_sess_id = 1;
-  if (OB_FAIL(session().test_init(sess_version, sess_id, proxy_sess_id, &session_alloc()))) {
+
+  // ensure allocator is constructed before session to
+  // avoid coredump at observer exit
+  ObArenaAllocator *allocator = &session_alloc();
+  oceanbase::sql::ObSQLSessionInfo &sess = session();
+
+  if (OB_FAIL(sess.test_init(sess_version, sess_id, proxy_sess_id, allocator))) {
     LOG_WARN("init session failed", K(ret));
-  } else if (OB_FAIL(session().load_default_sys_variable(false, true))) {
+  } else if (OB_FAIL(sess.load_default_sys_variable(false, true))) {
     LOG_WARN("failed to load default sys var", K(ret));
   }
   return ret;
