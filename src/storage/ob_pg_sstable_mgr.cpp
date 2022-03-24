@@ -965,13 +965,17 @@ int ObPGSSTableMgr::GetCleanOutLogIdFunctor::operator()(ObITable& table, bool& i
 {
   int ret = OB_SUCCESS;
   is_full = false;
-  if (table.get_ref() > 0 && table.is_multi_version_minor_sstable() && table.get_end_log_ts() < clean_out_log_ts_) {
-    clean_out_log_ts_ = table.get_end_log_ts();
+  if (table.get_ref() > 0 && table.is_multi_version_minor_sstable()) {
+    if (table.is_complement_minor_sstable()) {
+      min_complement_log_ts_ = std::min(min_complement_log_ts_, table.get_end_log_ts());
+    } else {
+      clean_out_log_ts_.push_back(table.get_end_log_ts());
+    }
   }
   return ret;
 }
 
-int ObPGSSTableMgr::get_clean_out_log_ts(int64_t& clean_out_log_ts)
+int ObPGSSTableMgr::get_clean_out_log_ts(ObIArray<int64_t> &clean_out_log_ts)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -982,7 +986,21 @@ int ObPGSSTableMgr::get_clean_out_log_ts(int64_t& clean_out_log_ts)
     if (OB_FAIL(table_map_.foreach (functor))) {
       LOG_WARN("fail to foreach table map", K(ret));
     } else {
-      clean_out_log_ts = functor.get_clean_out_log_ts();
+      functor.sort();
+      const ObIArray<int64_t> &log_ts_array = functor.get_clean_out_log_ts();
+      int64_t last_log_ts = -1;
+      // duplicate log ts may exist, need to remove duplicate
+      for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
+        if (log_ts_array.at(i) < functor.get_min_complement_log_ts()) {
+          if (last_log_ts != log_ts_array.at(i)) {
+            if (OB_FAIL(clean_out_log_ts.push_back(log_ts_array.at(i)))) {
+              LOG_WARN("failed to push back log ts", K(ret));
+            } else {
+              last_log_ts = log_ts_array.at(i);
+            }
+          }
+        }
+      }
     }
   }
   return ret;

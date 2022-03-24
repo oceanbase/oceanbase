@@ -10690,6 +10690,8 @@ int ObPartTransCtx::get_trans_state_and_version_without_lock(ObTransStatusInfo& 
   if (trans_info.status_ == ObTransTableStatusType::COMMIT || trans_info.status_ == ObTransTableStatusType::ABORT) {
     trans_info.end_log_ts_ = ATOMIC_LOAD(&end_log_ts_);
   }
+
+  trans_info.start_log_ts_ = ATOMIC_LOAD(&min_log_ts_);
   return ret;
 }
 

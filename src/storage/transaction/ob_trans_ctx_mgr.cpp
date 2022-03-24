@@ -1724,7 +1724,7 @@ int ObPartitionTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartitionTransCtxMgr::clear_unused_trans_status(const int64_t max_cleanout_log_ts)
+int ObPartitionTransCtxMgr::clear_unused_trans_status(const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -5099,7 +5099,8 @@ int ObPartTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartTransCtxMgr::clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_ts)
+int ObPartTransCtxMgr::clear_unused_trans_status(
+    const ObPartitionKey &pkey, const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = nullptr;

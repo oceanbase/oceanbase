@@ -9042,7 +9042,8 @@ int ObTransService::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObTransService::clear_unused_trans_status(const ObPartitionKey& pg_key, const int64_t max_cleanout_log_ts)
+int ObTransService::clear_unused_trans_status(
+    const ObPartitionKey &pg_key, const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
 

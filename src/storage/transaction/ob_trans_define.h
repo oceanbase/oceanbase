@@ -3123,13 +3123,15 @@ public:
       : status_(ObTransTableStatusType::RUNNING),
         trans_version_(common::OB_INVALID_VERSION),
         undo_status_(),
+        start_log_ts_(0),
         end_log_ts_(INT64_MAX)
   {}
   ObTransTableStatusType status_;
   int64_t trans_version_;
   ObTransUndoStatus undo_status_;
+  int64_t start_log_ts_;
   int64_t end_log_ts_;
-  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(end_log_ts));
+  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(start_log_ts), K_(end_log_ts));
 };
 
 class ObTransTableStatusInfo {

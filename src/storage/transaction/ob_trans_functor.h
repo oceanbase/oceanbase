@@ -1752,7 +1752,8 @@ private:
 
 class ObCleanTransTableFunctor {
 public:
-  explicit ObCleanTransTableFunctor(const int64_t max_cleanout_log_ts) : max_cleanout_log_ts_(max_cleanout_log_ts)
+  explicit ObCleanTransTableFunctor(const ObIArray<int64_t> &max_cleanout_log_ts)
+      : max_cleanout_log_ts_(max_cleanout_log_ts)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
   {
@@ -1767,9 +1768,10 @@ public:
         TRANS_LOG(WARN, "failed to get trans table status info", K(ret));
       } else if ((ObTransTableStatusType::COMMIT == trans_info.status_ ||
                      ObTransTableStatusType::ABORT == trans_info.status_) &&
-                 ctx->is_exiting()) {
-        if (trans_info.end_log_ts_ <= max_cleanout_log_ts_) {
-          if (ctx->is_dirty_trans()) {
+                 ctx->is_exiting() && ctx->is_dirty_trans()) {
+        for (int64_t i = 0; i < max_cleanout_log_ts_.count() - 1; i++) {
+          if (trans_info.start_log_ts_ > max_cleanout_log_ts_.at(i) &&
+              trans_info.end_log_ts_ <= max_cleanout_log_ts_.at(i + 1)) {
             ctx->remove_trans_table();
           }
         }
@@ -1779,7 +1781,7 @@ public:
   }
 
 private:
-  int64_t max_cleanout_log_ts_;
+  const ObIArray<int64_t> &max_cleanout_log_ts_;
 };
 
 class ObCheckHasTerminatedTrxBeforeLogFunction {
