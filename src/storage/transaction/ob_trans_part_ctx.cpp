@@ -11367,6 +11367,7 @@ void ObPartTransCtx::set_exiting_()
 {
   if (is_dirty_) {
     partition_log_info_arr_.reset();
+    participants_.reset();
   }
   return ObTransCtx::set_exiting_(is_dirty_);
 }
