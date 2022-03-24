@@ -277,6 +277,8 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to fill job info", K(ret), K(new_job));
   } else if (OB_FAIL(fill_create_tenant_arg(new_job, arg))) {
     LOG_WARN("fail to fill create tenant arg", K(ret), K(new_job));
+  } else if (OB_FAIL(update_sys_table_schema_version_())) {
+    LOG_WARN("fail to update sys table schema version", KR(ret));
   } else if (OB_FAIL(rpc_proxy_->timeout(timeout).create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", K(ret), K(arg));
   } else {
@@ -302,6 +304,35 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     (void)record_rs_event(job_info, PHYSICAL_RESTORE_SYS_REPLICA);
   }
   LOG_INFO("[RESTORE] restore tenant", K(ret), K(arg), K(job_info), K(new_job));
+  return ret;
+}
+
+int ObRestoreScheduler::update_sys_table_schema_version_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
+  const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default time is 2s
+  const int64_t PARTITION_CNT_PER_RPC = 5;
+  const int64_t sys_table_num = ObSysTableChecker::instance().get_tenant_space_sys_table_num();
+  int64_t timeout = (sys_table_num / PARTITION_CNT_PER_RPC) * TIMEOUT_PER_RPC;
+  timeout = max(timeout, DEFAULT_TIMEOUT);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else {
+    ObUpdateTableSchemaVersionArg arg;
+    // make other member is invalid to differ from other rpc
+    arg.init(OB_INVALID_TENANT_ID, /* tenant_id */
+        OB_INVALID_ID,             /* table_id  */
+        OB_INVALID_VERSION,        /* schema_version */
+        false,                     /* is_replay_schema */
+        ObUpdateTableSchemaVersionArg::UPDATE_SYS_TABLE_IN_TENANT_SPACE);
+    if (OB_FAIL(rpc_proxy_->timeout(timeout).update_table_schema_version(arg))) {
+      LOG_WARN("fail to update table schema version", KR(ret), K(timeout), K(arg));
+    }
+  }
   return ret;
 }
 

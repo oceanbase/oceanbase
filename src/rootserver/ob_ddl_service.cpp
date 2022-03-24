@@ -13941,7 +13941,6 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
     } else if (NULL == table) {
       // do-nothing, tenant_space_table can be dropped, ignore it!
     } else if (!table->has_self_partition()) {
-      ;
     } else {
       ObTableSchema copy;
       if (OB_FAIL(copy.assign(*table))) {
@@ -22558,6 +22557,62 @@ int ObDDLService::update_table_schema_version(const ObTableSchema *table_schema)
         LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::update_sys_table_schema_version_in_tenant_space()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get latest schema version in inner table", KR(ret), K(tenant_id));
+  } else {
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObDDLSQLTransaction trans(schema_service_);
+    if (OB_FAIL(trans.start(sql_proxy_))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id));
+    } else {
+      ObArenaAllocator allocator("UpSysTbVer");
+      ObTableSchema *new_table = NULL;
+      int64_t new_schema_version = OB_INVALID_VERSION;
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(tenant_space_tables); i++) {
+        allocator.reuse();
+        const uint64_t table_id = combine_id(tenant_id, tenant_space_tables[i]);
+        const ObTableSchema *table = NULL;
+        if (!is_sys_table(table_id)) {
+          // skip
+        } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(table_id));
+        } else if (OB_ISNULL(table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sys table not exist", KR(ret), K(table_id));
+        } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, *table, new_table))) {
+          LOG_WARN("fail to alloc table schema", KR(ret), K(table_id));
+        } else if (OB_ISNULL(new_table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new table is null", KR(ret), K(table_id));
+        } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+        } else if (FALSE_IT(new_table->set_schema_version(new_schema_version))) {
+        } else if (OB_FAIL(ddl_operator.update_table_schema_version(trans, *new_table))) {
+          LOG_WARN("fail to update table schema version", KR(ret), K(table_id), K(new_schema_version));
+        }
+      }  // end for
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+    if (FAILEDx(publish_schema(tenant_id))) {
+      LOG_WARN("publish schema failed", KR(ret), K(tenant_id));
     }
   }
   return ret;

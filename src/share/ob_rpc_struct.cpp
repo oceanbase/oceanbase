@@ -4744,17 +4744,52 @@ void ObBatchCheckRes::reset()
   index_.reset();
 }
 OB_SERIALIZE_MEMBER(ObRebuildIndexInRestoreArg, tenant_id_);
-OB_SERIALIZE_MEMBER((ObUpdateTableSchemaVersionArg, ObDDLArg), tenant_id_, table_id_, schema_version_);
+OB_SERIALIZE_MEMBER((ObUpdateTableSchemaVersionArg, ObDDLArg), tenant_id_, table_id_, schema_version_, action_);
+
+bool ObUpdateTableSchemaVersionArg::is_allow_when_upgrade() const
+{
+  return UPDATE_SYS_TABLE_IN_TENANT_SPACE != action_;
+}
+
 bool ObUpdateTableSchemaVersionArg::is_valid() const
 {
-  return tenant_id_ > OB_INVALID_TENANT_ID && table_id_ >= 0 && schema_version_ >= OB_INVALID_SCHEMA_VERSION;
+  return (tenant_id_ > OB_INVALID_TENANT_ID && table_id_ >= 0 && schema_version_ >= OB_INVALID_SCHEMA_VERSION) ||
+         UPDATE_SYS_TABLE_IN_TENANT_SPACE == action_;
 }
+
 void ObUpdateTableSchemaVersionArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_SCHEMA_VERSION;
+  action_ = Action::INVALID;
 }
+
+void ObUpdateTableSchemaVersionArg::init(const int64_t tenant_id, const int64_t table_id, const int64_t schema_version,
+    const bool is_replay_schema, const Action action)
+{
+  exec_tenant_id_ = OB_SYS_TENANT_ID;
+  tenant_id_ = tenant_id;
+  table_id_ = table_id;
+  schema_version_ = schema_version;
+  is_replay_schema_ = is_replay_schema;
+  action_ = action;
+}
+
+int ObUpdateTableSchemaVersionArg::assign(const ObUpdateTableSchemaVersionArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ObDDLArg", KR(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    table_id_ = other.table_id_;
+    schema_version_ = other.schema_version_;
+    action_ = other.action_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObRestoreModifySchemaArg, ObDDLArg), type_, schema_id_);
 bool ObRestoreModifySchemaArg::is_valid() const
 {

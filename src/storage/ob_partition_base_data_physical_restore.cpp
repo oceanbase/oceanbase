@@ -309,8 +309,8 @@ int ObRestoreFileUtil::read_table_keys(const ObString &path, const ObString &sto
 }
 
 int ObRestoreFileUtil::read_macroblock_data(const ObString &path, const ObString &storage_info,
-    const ObBackupMacroIndex &meta_index, common::ObArenaAllocator &allocator, ObMacroBlockSchemaInfo *&new_schema,
-    ObMacroBlockMetaV2 *&new_meta, blocksstable::ObBufferReader &macro_data)
+    const ObBackupMacroIndex &meta_index, const int64_t sys_table_schema_version, common::ObArenaAllocator &allocator,
+    ObMacroBlockSchemaInfo *&new_schema, ObMacroBlockMetaV2 *&new_meta, blocksstable::ObBufferReader &macro_data)
 {
   int ret = OB_SUCCESS;
   char *read_buf = NULL;
@@ -364,14 +364,8 @@ int ObRestoreFileUtil::read_macroblock_data(const ObString &path, const ObString
           K(backup_macro_data),
           K(meta_index),
           K(buffer_reader));
-    } else if (is_sys_table(tmp_meta.table_id_)) {
-      // TODO wait for __all_core_table become __all_tenant_core_table
-      // set schema version 0, then next major merge become full major merge
-      tmp_meta.schema_version_ = 0;
-      tmp_schema.schema_version_ = 0;
-    }
-
-    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_sys_table_schema_version_(tmp_meta, sys_table_schema_version))) {
+      LOG_WARN("failed to check sys table schema version", K(ret), K(tmp_meta), K(sys_table_schema_version));
     } else if (OB_FAIL(tmp_meta.deep_copy(new_meta, allocator))) {
       LOG_WARN("failed to copy macro meta", K(ret), K(path), K(meta_index), K(buffer_reader));
     } else if (OB_FAIL(tmp_schema.deep_copy(new_schema, allocator))) {
@@ -385,8 +379,9 @@ int ObRestoreFileUtil::read_macroblock_data(const ObString &path, const ObString
 }
 
 int ObRestoreFileUtil::read_macroblock_data(const ObString &path, const ObString &storage_info,
-    const ObBackupTableMacroIndex &meta_index, common::ObArenaAllocator &allocator, ObMacroBlockSchemaInfo *&new_schema,
-    ObMacroBlockMetaV2 *&new_meta, blocksstable::ObBufferReader &macro_data)
+    const ObBackupTableMacroIndex &meta_index, const int64_t sys_table_schema_version,
+    common::ObArenaAllocator &allocator, ObMacroBlockSchemaInfo *&new_schema, ObMacroBlockMetaV2 *&new_meta,
+    blocksstable::ObBufferReader &macro_data)
 {
   int ret = OB_SUCCESS;
   char *read_buf = NULL;
@@ -441,12 +436,8 @@ int ObRestoreFileUtil::read_macroblock_data(const ObString &path, const ObString
           K(backup_macro_data),
           K(meta_index),
           K(buffer_reader));
-    } else if (is_sys_table(tmp_meta.table_id_)) {
-      tmp_meta.schema_version_ = 0;
-      tmp_schema.schema_version_ = 0;
-    }
-
-    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_sys_table_schema_version_(tmp_meta, sys_table_schema_version))) {
+      LOG_WARN("failed to check sys table schema version", K(ret), K(meta_index), K(tmp_meta));
     } else if (OB_FAIL(tmp_meta.deep_copy(new_meta, allocator))) {
       LOG_WARN("failed to copy macro meta", K(ret), K(path), K(meta_index), K(buffer_reader));
     } else if (OB_FAIL(tmp_schema.deep_copy(new_schema, allocator))) {
@@ -595,6 +586,25 @@ int ObRestoreFileUtil::read_backup_pg_meta_info(const ObString &path, const ObSt
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "read meta buff size not expected", K(ret), K(path), K(meta_index));
     }
+  }
+  return ret;
+}
+
+int ObRestoreFileUtil::check_sys_table_schema_version_(
+    const blocksstable::ObMacroBlockMetaV2 &meta, const int64_t sys_table_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (!meta.is_valid() || sys_table_schema_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check sys table schema version get invalid argument", K(ret), K(meta), K(sys_table_schema_version));
+  } else if (!is_sys_table(meta.table_id_)) {
+    // do nothing
+  } else if (sys_table_schema_version <= meta.schema_version_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("restore sys table schema version is smaller than macro block record",
+        K(ret),
+        K(sys_table_schema_version),
+        K(meta));
   }
   return ret;
 }
@@ -2081,7 +2091,8 @@ ObPartitionMacroBlockRestoreReaderV1::ObPartitionMacroBlockRestoreReaderV1()
       backup_index_id_(OB_INVALID_ID),
       backup_pgkey_(),
       allocator_(),
-      restore_info_(nullptr)
+      restore_info_(nullptr),
+      sys_table_schema_version_(0)
 {}
 
 ObPartitionMacroBlockRestoreReaderV1::~ObPartitionMacroBlockRestoreReaderV1()
@@ -2092,6 +2103,8 @@ int ObPartitionMacroBlockRestoreReaderV1::init(common::ObInOutBandwidthThrottle 
     const ObPhyRestoreMacroIndexStore &macro_indexs, const ObITable::TableKey &table_key)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -2102,6 +2115,16 @@ int ObPartitionMacroBlockRestoreReaderV1::init(common::ObInOutBandwidthThrottle 
   } else if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "table key is invalid", K(ret), K(table_key));
+  } else if (is_sys_table(table_key.pkey_.get_table_id())) {
+    if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("failed to get sys tenant schema gurad", K(ret), K(table_key));
+    } else if (OB_FAIL(
+                   schema_guard.get_table_schema_version(table_key.pkey_.get_table_id(), sys_table_schema_version_))) {
+      LOG_WARN("failed to get table schema version", K(ret), K(table_key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(restore_info.get_backup_pgkey(backup_pgkey_))) {
     LOG_WARN("failed to get backup pgkey", K(ret));
   } else if (OB_FAIL(restore_info.trans_to_backup_schema_id(table_key.table_id_, backup_index_id_))) {
@@ -2205,6 +2228,7 @@ int ObPartitionMacroBlockRestoreReaderV1::read_macro_block_v1_(const ObBackupMac
   } else if (OB_FAIL(ObRestoreFileUtil::read_macroblock_data(path.get_obstr(),
                  backup_path_info_.dest_.get_storage_info(),
                  macro_index,
+                 sys_table_schema_version_,
                  allocator_,
                  new_schema,
                  new_meta,
@@ -2262,6 +2286,7 @@ int ObPartitionMacroBlockRestoreReaderV1::read_macro_block_v2_(const ObBackupMac
     } else if (OB_FAIL(ObRestoreFileUtil::read_macroblock_data(new_path.get_obstr(),
                    simple_path_.get_storage_info(),
                    macro_index,
+                   sys_table_schema_version_,
                    allocator_,
                    new_schema,
                    new_meta,

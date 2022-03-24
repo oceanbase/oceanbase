@@ -184,6 +184,7 @@ private:
   ObITable::TableKey backup_table_key_;
   common::ObArenaAllocator allocator_;
   const ObPhysicalRestoreArg *restore_info_;
+  int64_t sys_table_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMacroBlockRestoreReaderV2);
 };
 

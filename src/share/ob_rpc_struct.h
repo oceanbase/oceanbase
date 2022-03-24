@@ -7938,27 +7938,35 @@ struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
+  enum Action {
+    INVALID = 0,
+    UPDATE_SYS_ALL_INNER_TABLE,
+    UPDATE_SYS_INNER_TABLE,
+    UPDATE_SYS_TABLE_IN_TENANT_SPACE,
+  };
   ObUpdateTableSchemaVersionArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
-        table_id_(common::OB_INVALID_ID),
-        schema_version_(share::OB_INVALID_SCHEMA_VERSION)
+        table_id_(OB_INVALID_ID),
+        schema_version_(share::OB_INVALID_SCHEMA_VERSION),
+        action_(Action::INVALID)
   {}
   ~ObUpdateTableSchemaVersionArg()
   {
     reset();
   }
   bool is_valid() const;
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
+  virtual bool is_allow_when_upgrade() const;
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(schema_version));
   void reset();
+  void init(const int64_t tenant_id, const int64_t table_id, const int64_t schema_version, const bool is_replay_schema,
+      const Action action);
+  int assign(const ObUpdateTableSchemaVersionArg &other);
 
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t schema_version_;
+  Action action_;
 };
 
 struct ObRestoreModifySchemaArg : public ObDDLArg {
