@@ -9247,7 +9247,6 @@ int ObPartitionService::check_schema_version_elapsed(const ObPartitionKey& targe
           K(latest_schema_version),
           K(schema_version));
     } else {
-      refreshed_schema_ts = ObTimeUtility::current_time();
       const int64_t timeout = 10 * 1000 * 1000;
       if (OB_FAIL(guard.get_partition_group()->get_pg_storage().replay_partition_schema_version_change_log(
               schema_version))) {
@@ -9266,7 +9265,7 @@ int ObPartitionService::check_schema_version_elapsed(const ObPartitionKey& targe
         // override ret
         ret = OB_EAGAIN;
       } else if (OB_FAIL(pg_partition->update_build_index_schema_info(
-                     schema_version, refreshed_schema_ts, log_id, log_ts))) {
+                     schema_version, log_id, log_ts, refreshed_schema_ts))) {
         STORAGE_LOG(WARN, "update build index schema info error", K(ret), K(target_pkey), K(pg_key), K(schema_version));
       } else {
         STORAGE_LOG(INFO,

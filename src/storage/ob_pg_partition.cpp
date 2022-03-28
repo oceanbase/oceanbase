@@ -214,39 +214,34 @@ int ObPGPartition::get_refreshed_schema_info(int64_t& schema_version, int64_t& r
 
 // There will be no concurrency here, so there is no need to lock
 int ObPGPartition::update_build_index_schema_info(
-    const int64_t schema_version, const int64_t schema_refreshed_ts, const uint64_t log_id, const int64_t log_ts)
+    const int64_t schema_version, const uint64_t log_id, const int64_t log_ts, int64_t &schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  if (schema_version < 0 || schema_refreshed_ts < 0 || log_id <= 0 || log_ts <= 0) {
+  if (schema_version < 0 || log_id <= 0 || log_ts <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(schema_version), K(schema_refreshed_ts), K(log_id), K(log_ts));
+    TRANS_LOG(WARN, "invalid argument", K(schema_version), K(log_id), K(log_ts));
   } else if (build_index_schema_version_ < schema_version) {
     // First record
     if (INT64_MAX == build_index_schema_version_refreshed_ts_) {
       // Ensure that the schema version is updated at the end
-      build_index_schema_version_refreshed_ts_ = schema_refreshed_ts;
+      build_index_schema_version_refreshed_ts_ = ObTimeUtility::current_time();
       schema_version_change_log_id_ = log_id;
       schema_version_change_log_ts_ = log_ts;
       ATOMIC_STORE(&build_index_schema_version_, schema_version);
-    } else if (build_index_schema_version_refreshed_ts_ > schema_refreshed_ts) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR,
-          "unexpected schema version refreshed ts",
-          K(ret),
-          K_(pkey),
-          K_(build_index_schema_version_refreshed_ts),
-          K(schema_version),
-          K(schema_refreshed_ts));
     } else {
       // Ensure that the schema version is updated at the end
-      build_index_schema_version_refreshed_ts_ = schema_refreshed_ts;
+      build_index_schema_version_refreshed_ts_ =
+          std::max(ObTimeUtility::current_time(), build_index_schema_version_refreshed_ts_);
       schema_version_change_log_id_ = log_id;
       schema_version_change_log_ts_ = log_ts;
       ATOMIC_STORE(&build_index_schema_version_, schema_version);
     }
   } else {
     // do nothing
+  }
+  if (OB_SUCC(ret)) {
+    schema_refreshed_ts = build_index_schema_version_refreshed_ts_;
   }
   return ret;
 }
