@@ -377,7 +377,7 @@ int ObClogAdapter::submit_log(const ObPartitionKey& partition, const ObVersion& 
     int64_t& cur_log_timestamp)
 {
   int ret = OB_SUCCESS;
-  // const int64_t start = ObTimeUtility::current_time();
+  const int64_t start = ObTimeUtility::current_time();
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObClogAdapter not inited");
@@ -396,12 +396,11 @@ int ObClogAdapter::submit_log(const ObPartitionKey& partition, const ObVersion& 
   } else {
     // do nothing
   }
-  /*
   if (OB_SUCCESS == ret) {
     ObTransStatistic::get_instance().add_submit_trans_log_count(partition.get_tenant_id(), 1);
-    ObTransStatistic::get_instance().add_submit_trans_log_time(partition.get_tenant_id(),
-        ObTimeUtility::current_time() - start);
-  }*/
+    ObTransStatistic::get_instance().add_submit_trans_log_time(
+        partition.get_tenant_id(), ObTimeUtility::current_time() - start);
+  }
 
   return ret;
 }
@@ -411,7 +410,7 @@ int ObClogAdapter::submit_log(const ObPartitionKey& partition, const ObVersion& 
     int64_t& cur_log_timestamp)
 {
   int ret = OB_SUCCESS;
-  // const int64_t start = ObTimeUtility::current_time();
+  const int64_t start = ObTimeUtility::current_time();
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObClogAdapter not inited");
@@ -431,12 +430,11 @@ int ObClogAdapter::submit_log(const ObPartitionKey& partition, const ObVersion& 
   } else {
     // do nothing
   }
-  /*
   if (OB_SUCCESS == ret) {
     ObTransStatistic::get_instance().add_submit_trans_log_count(partition.get_tenant_id(), 1);
-    ObTransStatistic::get_instance().add_submit_trans_log_time(partition.get_tenant_id(),
-        ObTimeUtility::current_time() - start);
-  }*/
+    ObTransStatistic::get_instance().add_submit_trans_log_time(
+        partition.get_tenant_id(), ObTimeUtility::current_time() - start);
+  }
 
   return ret;
 }

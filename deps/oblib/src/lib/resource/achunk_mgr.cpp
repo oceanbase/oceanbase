@@ -78,8 +78,8 @@ void* AChunkMgr::direct_alloc(const uint64_t size)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
-  EVENT_INC(MMAP_COUNT);
-  EVENT_ADD(MMAP_SIZE, size);
+  // EVENT_INC(MMAP_COUNT);
+  // EVENT_ADD(MMAP_SIZE, size);
 
   void* ptr = nullptr;
   ptr = low_alloc(size);
