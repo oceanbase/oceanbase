@@ -22,3 +22,6 @@ obdevtools-flex-2.5.35-3.el7.x86_64.rpm
 obdevtools-gcc-5.2.0-3.el7.x86_64.rpm
 obdevtools-llvm-11.0.1-40.el7.x86_64.rpm
 
+[tools-deps]
+devdeps-rocksdb-6.22.1-26.el7.x86_64.rpm
+
