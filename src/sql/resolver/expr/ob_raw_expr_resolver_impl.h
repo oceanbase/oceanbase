@@ -142,6 +142,7 @@ private:
   static int not_row_check(const ObRawExpr* expr);
   static int param_not_row_check(const ObRawExpr* expr);
   int cast_accuracy_check(const ParseNode *node, const char *input);
+  static int not_int_check(const ObRawExpr *expr);
 
 private:
   int transform_ratio_afun_to_arg_div_sum(const ParseNode* ratio_to_report, ParseNode*& div);

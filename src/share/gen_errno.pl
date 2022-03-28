@@ -46,7 +46,7 @@ while(<$fh>) {
     $error_code = $2;
     $sqlstate = $4;
     $error_msg = $5;
-  } elsif (/^DEFINE_ERROR_EXT\(([^,]+),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*("[^"]*")/) {
+  } elsif (/^DEFINE_ERROR_EXT\(([^,]+),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*("[^"]*"),\s*("[^"]*")/) {
     ++$error_count;
     #print "\"$1\", $1, $2, $3, $4, $5, $6, $7, $8\n";
     my $tmp_ora_errmsg=sprintf($print_def_ora_errmsg, "ORA", $def_ora_errno, $2, substr($5, 1, length($5) - 2));
@@ -56,7 +56,7 @@ while(<$fh>) {
     $error_code = $2;
     $sqlstate = $4;
     $error_msg = $5;
-  } elsif (/^DEFINE_ERROR_EXT\(([^,]+),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*("[^"]*")/) {
+  } elsif (/^DEFINE_ERROR_EXT\(([^,]+),\s*([^,]*),\s*([^,]*),\s*([^,]*),\s*("[^"]*"),\s*("[^"]*")/) {
     ++$error_count;
     #print "\"$1\", $1, $2, $3, $4, $5, $6\n";
     my $tmp_ora_errmsg=sprintf($print_def_ora_errmsg, "ORA", $def_ora_errno, $2, substr($5, 1, length($5) - 2));

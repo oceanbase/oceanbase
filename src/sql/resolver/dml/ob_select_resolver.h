@@ -406,6 +406,7 @@ private:
   int check_duplicated_name_window(ObString& name, const ParseNode* node, int64_t resolved);
   int mock_to_named_windows(ObString& name, ParseNode* win_node);
   int can_find_group_column(ObRawExpr* col_expr, const common::ObIArray<ObRawExpr*>& exprs, bool& can_find);
+  int check_orderby_type_validity(ObWinFunRawExpr *win_expr);
   int can_find_group_column(
       ObRawExpr* col_expr, const common::ObIArray<ObGroupingSetsItem>& grouping_sets_items, bool& can_find);
   int can_find_group_column(ObRawExpr* col_expr, const ObIArray<ObMultiRollupItem>& multi_rollup_items, bool& can_find);
