@@ -111,8 +111,8 @@ DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one pha
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEPRECATED_DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "False",
-    "specifies whether to always record the trace log. The default value is False.",
+DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
+    "specifies whether to always record the trace log. The default value is True.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(system_trace_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
     "system trace log level, 0:none, 1:standard, 2:debug. "
