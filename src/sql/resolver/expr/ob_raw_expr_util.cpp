@@ -1939,6 +1939,7 @@ int ObRawExprUtils::create_substr_expr(ObRawExprFactory& expr_factory, ObSQLSess
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("to_type is null");
   } else {
+    out_expr->set_func_name(N_SUBSTR);
     if (NULL == third_expr) {
       if (OB_FAIL(out_expr->set_param_exprs(first_expr, second_expr))) {
         LOG_WARN("add param expr failed", K(ret));
