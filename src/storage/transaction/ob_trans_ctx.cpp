@@ -514,10 +514,12 @@ int ObTransCtx::set_trans_param_(const ObStartTransParam& trans_param)
 
 void ObTransCtx::print_trace_log_if_necessary_()
 {
-  // freectx
-  if (!is_exiting_ && !is_readonly_) {
-    TRANS_LOG(ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
-    FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
+  if (GCONF.enable_record_trace_log) {
+    // freectx
+    if (!is_exiting_ && !is_readonly_) {
+      TRANS_LOG(ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
+      FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
+    }
   }
 
   if (is_slow_query_()) {

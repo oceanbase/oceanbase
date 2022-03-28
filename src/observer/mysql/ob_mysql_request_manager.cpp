@@ -186,9 +186,9 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
         pos += trace_info_len;
       }
       int64_t timestamp = common::ObTimeUtility::current_time();
-      // only print this log if enable_perf_event is enable,
-      // for `receive_ts_` might be invalid if `enable_perf_event` is false
-      if (lib::is_diagnose_info_enabled() &&
+      // only print this log if enable_record_trace_log is enable,
+      // for `receive_ts_` might be invalid if `enable_record_trace_log` is false
+      if (lib::is_trace_log_enabled() &&
           OB_UNLIKELY(timestamp - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
         SERVER_LOG(WARN,
             "record: query too slow ",

@@ -2854,6 +2854,7 @@ public:
     cur_insert_row_count_ = 0;
     cur_delete_row_count_ = 0;
     cur_update_row_count_ = 0;
+    /*
     query_row_count_ = 0;
     insert_sql_count_ = 0;
     delete_sql_count_ = 0;
@@ -2867,6 +2868,7 @@ public:
     rollback_delete_sql_count_ = 0;
     rollback_update_sql_count_ = 0;
     rollback_sql_count_ = 0;
+    */
   }
   int update_audit_info(const enum ObPartitionAuditOperator op, const int32_t count);
   int stmt_end_update_audit_info(bool commit);
@@ -2878,6 +2880,7 @@ public:
   int32_t cur_insert_row_count_;
   int32_t cur_delete_row_count_;
   int32_t cur_update_row_count_;
+  /*
   int32_t query_row_count_;
   int32_t insert_sql_count_;
   int32_t delete_sql_count_;
@@ -2891,6 +2894,7 @@ public:
   int32_t rollback_delete_sql_count_;
   int32_t rollback_update_sql_count_;
   int32_t rollback_sql_count_;
+  */
 };
 
 struct ObPartitionAuditInfo {
@@ -2907,6 +2911,7 @@ public:
     insert_row_count_ = 0;
     delete_row_count_ = 0;
     update_row_count_ = 0;
+    /*
     query_row_count_ = 0;
     insert_sql_count_ = 0;
     delete_sql_count_ = 0;
@@ -2922,6 +2927,7 @@ public:
     rollback_update_sql_count_ = 0;
     rollback_trans_count_ = 0;
     rollback_sql_count_ = 0;
+    */
   }
   void destroy()
   {
@@ -2941,6 +2947,8 @@ public:
   int64_t insert_row_count_;
   int64_t delete_row_count_;
   int64_t update_row_count_;
+  // dead statistic event, need to be removed
+  /*
   int64_t query_row_count_;
   int64_t insert_sql_count_;
   int64_t delete_sql_count_;
@@ -2956,6 +2964,7 @@ public:
   int64_t rollback_update_sql_count_;
   int64_t rollback_trans_count_;
   int64_t rollback_sql_count_;
+  */
 };
 
 class ObCoreLocalPartitionAuditInfo : public common::ObCoreLocalStorage<ObPartitionAuditInfo*> {

@@ -765,10 +765,10 @@ int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask* task, int64_t& gts)
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
   // If the gts acquisition fails, you need to register the wait task,
   // and you don't need to count the total time of the gts acquire at this time.
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::fast_current_time();
     ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
@@ -818,10 +818,10 @@ int ObTsMgr::get_local_trans_version(const uint64_t tenant_id, ObTsCbTask* task,
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
   // If the gts acquisition fails, you need to register the wait task,
   // and you don't need to count the total time of the gts acquire at this time.
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::fast_current_time();
     ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
@@ -874,10 +874,10 @@ int ObTsMgr::get_local_trans_version(
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
   // If the gts acquisition fails, you need to register the wait task,
   // and you don't need to count the total time of the gts acquire at this time.
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::fast_current_time();
     ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
@@ -930,10 +930,10 @@ int ObTsMgr::get_gts(
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
   // If the gts acquisition fails, you need to register the wait task,
   // and you do not need to count the total time of the gts acquire at this time
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::fast_current_time();
     ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
@@ -997,10 +997,10 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us, int
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
   // If the gts acquisition fails, you need to register the wait task,
   // and you don't need to count the total time of the gts acquire at this time.
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::current_time();
     ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
@@ -1239,8 +1239,8 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts, ObTsCbT
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_wait_elapse_total_count(tenant_id, 1);
-  if (OB_SUCC(ret)) {
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_wait_elapse_total_count(tenant_id, 1);
     const int64_t end = ObTimeUtility::fast_current_time();
     ObTransStatistic::get_instance().add_gts_wait_elapse_total_time(tenant_id, end - start);
   }
@@ -1293,7 +1293,9 @@ int ObTsMgr::get_gts_and_type(const uint64_t tenant_id, const MonotonicTs stc, i
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_try_acquire_total_count(tenant_id, 1);
+  if (GCONF.enable_record_trace_log && OB_SUCC(ret)) {
+    ObTransStatistic::get_instance().add_gts_try_acquire_total_count(tenant_id, 1);
+  }
 
   return ret;
 }

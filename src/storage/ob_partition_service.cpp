@@ -112,7 +112,7 @@ namespace storage {
 
 #define AUDIT_PARTITION_V2(mem_ctx, op, count)                                        \
   do {                                                                                \
-    if (OB_SUCC(ret)) {                                                               \
+    if (OB_SUCC(ret) && GCONF.enable_record_trace_log) {                              \
       int tmp_ret = OB_SUCCESS;                                                       \
       if (OB_ISNULL((mem_ctx))) {                                                     \
         tmp_ret = OB_ERR_UNEXPECTED;                                                  \

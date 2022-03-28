@@ -971,15 +971,15 @@ void ObMvccRow::set_row_header(const uint32_t modify_count, const uint32_t acc_c
 
 void ObMvccRow::lock_begin(ObIMvccCtx& ctx) const
 {
-  if (GCONF.enable_sql_audit) {
-    ctx.set_lock_start_time(ObTimeUtility::current_time());
+  if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
+    ctx.set_lock_start_time(OB_TSC_TIMESTAMP.current_time());
   }
 }
 
 void ObMvccRow::lock_for_read_end(ObIMvccCtx& ctx, int64_t ret) const
 {
-  if (!ctx.is_can_elr() && GCONF.enable_sql_audit) {
-    const int64_t lock_use_time = ObTimeUtility::current_time() - ctx.get_lock_start_time();
+  if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
+    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
     EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
     if (OB_FAIL(ret)) {
       EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);
@@ -996,8 +996,8 @@ void ObMvccRow::lock_for_read_end(ObIMvccCtx& ctx, int64_t ret) const
 
 void ObMvccRow::lock_for_write_end(ObIMvccCtx& ctx, int64_t ret) const
 {
-  if (!ctx.is_can_elr() && GCONF.enable_sql_audit) {
-    const int64_t lock_use_time = ObTimeUtility::current_time() - ctx.get_lock_start_time();
+  if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
+    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
     EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, lock_use_time);
     if (OB_FAIL(ret)) {
       EVENT_INC(MEMSTORE_WRITE_LOCK_FAIL_COUNT);
@@ -1246,12 +1246,12 @@ int ObMvccRow::lock_for_write(const ObMemtableKey* key, ObIMvccCtx& ctx)
                            ctx.is_can_elr(),
                            uid))) {}
   }
-  const bool enable_perf_event = GCONF.enable_perf_event;
+  const bool enable_record_trace_log = GCONF.enable_record_trace_log;
   ctx.set_lock_wait_start_ts(0);
   if (OB_SUCC(ret)) {
     // do nothing
   } else if (OB_TRANSACTION_SET_VIOLATION == ret) {
-    if (enable_perf_event && !ctx.is_can_elr()) {
+    if (!ctx.is_can_elr() && enable_record_trace_log) {
       ctx.on_tsc_retry(*key);
     }
     if (EXECUTE_COUNT_PER_SEC(16)) {
@@ -1260,8 +1260,8 @@ int ObMvccRow::lock_for_write(const ObMemtableKey* key, ObIMvccCtx& ctx)
   } else {
     const uint32_t conflict_id = row_lock_.get_exclusive_uid();
     if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-      if (enable_perf_event && !ctx.is_can_elr()) {
-        const char* conflict_ctx = ctx.log_conflict_ctx(conflict_id);
+      if (!ctx.is_can_elr() && enable_record_trace_log) {
+        const char *conflict_ctx = ctx.log_conflict_ctx(conflict_id);
         ctx.on_wlock_retry(*key, conflict_ctx);
         ctx.set_lock_wait_start_ts(lock_wait_start_ts);
       }
