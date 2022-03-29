@@ -327,7 +327,6 @@ int ObServerReloadConfig::operator()()
   share::ObTaskController::get().set_log_rate_limit(GCONF.syslog_io_bandwidth_limit.get_value());
 
   if (nullptr != GCTX.omt_) {
-    GCTX.omt_->set_node_quota(GCONF.cpu_count.get_value());
     GCTX.omt_->set_workers_per_cpu(GCONF.workers_per_cpu_quota.get_value());
   }
 

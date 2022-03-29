@@ -117,7 +117,6 @@ public:
   inline bool has_synced() const;
 
   void set_workers_per_cpu(int64_t v);
-  void set_node_quota(double node_quota);
 
 protected:
   void run1();
