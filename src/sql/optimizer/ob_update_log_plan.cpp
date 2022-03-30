@@ -157,7 +157,7 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
       if (OB_FAIL(candi_allocate_sequence())) {
         LOG_WARN("failed to allocate sequence operator", K(ret));
       } else {
-        LOG_TRACE("succeed to allocate sequance operator",
+        LOG_TRACE("succeed to allocate sequence operator",
             K(candidates_.candidate_plans_.count()));
       }
     }
@@ -212,7 +212,7 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
         if (OB_FAIL(candi_allocate_update())) {
           LOG_WARN("failed to allocate update operator", K(ret));
         } else {
-          LOG_TRACE("succeed to allocate normal update opeartor",
+          LOG_TRACE("succeed to allocate normal update operator",
               K(candidates_.candidate_plans_.count()));
         }
       }
@@ -369,7 +369,7 @@ int ObUpdateLogPlan::allocate_update_as_top(ObLogicalOperator *&top,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate update operator", K(ret));
   } else if (OB_FAIL(update_op->assign_dml_infos(index_dml_infos_))) {
-    LOG_WARN("failed to assgin dml infos", K(ret));
+    LOG_WARN("failed to assign dml infos", K(ret));
   } else {
     update_op->set_child(ObLogicalOperator::first_child, top);
     update_op->set_ignore(update_stmt->is_ignore());
@@ -411,7 +411,7 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
         IndexDMLInfo *index_delete_info = nullptr;
         IndexDMLInfo *index_insert_info = nullptr;
         // 更新了当前索引的分区键，需要做 row-movement
-        // 需要为每一个globa index以及primary index分配各自的 update operator，形成如下的计划:
+        // 需要为每一个global index以及primary index分配各自的 update operator，形成如下的计划:
         //  ....
         //    INSERT INDEX (i3)
         //      DELETE INDEX (i3)
@@ -440,7 +440,7 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
         }
       } else {
         // 在PDML update中，可能包含有多个global index，
-        // 需要为每一个globa index以及primary index分配各自的 update operator，形成如下的计划:
+        // 需要为每一个global index以及primary index分配各自的 update operator，形成如下的计划:
         //  ....
         //    UPDATE INDEX (i3)
         //       UPDATE INDEX (i2)
@@ -475,7 +475,7 @@ int ObUpdateLogPlan::perform_vector_assign_expr_replacement(ObUpdateStmt *stmt)
       if (OB_FAIL(replace_alias_ref_expr(value, replace_happened))) {
         LOG_WARN("failed to replace alias ref expr", K(ret));
       } else if (replace_happened && OB_FAIL(value->formalize(session_info))) {
-        LOG_WARN("failed to foramlize expr", K(ret));
+        LOG_WARN("failed to formalize expr", K(ret));
       }
     }
   }
@@ -624,7 +624,7 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
     LOG_WARN("failed to get table schema", K(table_info), K(ret));
   } else if (!table_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
-    LOG_WARN("faield to check update part key", K(ret));
+    LOG_WARN("failed to check update part key", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_dml_info->ck_cst_exprs_.count(); ++i) {
       if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),
@@ -677,7 +677,7 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
         LOG_WARN("failed to check update unique key", K(ret));
       } else if (!table_info.is_link_table_ &&
                  OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {
-        LOG_WARN("faield to check update part key", K(ret));
+        LOG_WARN("failed to check update part key", K(ret));
       } else if (OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
         LOG_WARN("failed to push back index dml info", K(ret));
       }
