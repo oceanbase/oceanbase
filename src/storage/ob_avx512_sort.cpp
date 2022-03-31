@@ -1539,7 +1539,6 @@ int sort_loop(uint64_t* keys, T** values, int64_t round,
 template <typename T>
 int sort(uint64_t* keys, T** values, const int64_t size)
 {
-  STORAGE_LOG(WARN, "avx512 sort size:", K(size));
   int ret = OB_SUCCESS;
   if (keys == NULL || values == NULL || size < 0) {
     ret = OB_INVALID_ARGUMENT;
