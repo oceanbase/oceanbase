@@ -261,7 +261,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   } else if (OB_FAIL(init_sql())) {
     LOG_ERROR("init sql fail", K(ret));
   } else if (OB_FAIL(init_sql_runner())) {
-    LOG_ERROR("init sql fail", K(ret));
+    LOG_ERROR("init sql runner fail", K(ret));
   } else if (OB_FAIL(init_sequence())) {
     LOG_ERROR("init sequence fail", K(ret));
   } else if (OB_FAIL(init_pl())) {
