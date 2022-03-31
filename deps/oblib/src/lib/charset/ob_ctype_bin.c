@@ -827,6 +827,7 @@ static ObCollationHandler ob_collation_binary_handler = {
     ob_strnncoll_binary,
     ob_strnncollsp_binary,
     ob_strnxfrm_8bit_bin,
+    NULL,
     ob_strnxfrmlen_simple,
     ob_like_range_simple,
     ob_wildcmp_bin,

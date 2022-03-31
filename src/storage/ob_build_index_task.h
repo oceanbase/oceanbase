@@ -126,7 +126,7 @@ private:
   int64_t task_id_;
   compaction::ObBuildIndexParam* param_;
   compaction::ObBuildIndexContext* context_;
-  ObExternalSort<ObStoreRow, ObStoreRowComparer>* local_sorter_;
+  ObExternalSort<ObSortRow, ObSortRowComparer>* local_sorter_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexLocalSortTask);
 };
 
@@ -139,11 +139,11 @@ public:
 
 private:
   int merge_local_sort_index(const compaction::ObBuildIndexParam& param,
-      const ObIArray<ObExternalSort<ObStoreRow, ObStoreRowComparer>*>& local_sorters,
-      ObExternalSort<ObStoreRow, ObStoreRowComparer>& merge_sorter, compaction::ObBuildIndexContext* context,
+      const ObIArray<ObExternalSort<ObSortRow, ObSortRowComparer>*>& local_sorters,
+      ObExternalSort<ObSortRow, ObSortRowComparer>& merge_sorter, compaction::ObBuildIndexContext* context,
       ObTableHandle& new_sstable);
   int add_build_index_sstable(const compaction::ObBuildIndexParam& param,
-      ObExternalSort<ObStoreRow, ObStoreRowComparer>& external_sort, compaction::ObBuildIndexContext* context,
+      ObExternalSort<ObSortRow, ObSortRowComparer>& external_sort, compaction::ObBuildIndexContext* context,
       ObTableHandle& new_sstable);
   int add_new_index_sstable(const compaction::ObBuildIndexParam& param, blocksstable::ObMacroBlockWriter* writer,
       const int64_t* column_checksum, ObTableHandle& new_sstable);
@@ -153,8 +153,8 @@ private:
   bool is_inited_;
   compaction::ObBuildIndexParam* param_;
   compaction::ObBuildIndexContext* context_;
-  const ObIArray<ObExternalSort<ObStoreRow, ObStoreRowComparer>*>* sorters_;
-  ObExternalSort<ObStoreRow, ObStoreRowComparer> merge_sorter_;
+  const ObIArray<ObExternalSort<ObSortRow, ObSortRowComparer>*>* sorters_;
+  ObExternalSort<ObSortRow, ObSortRowComparer> merge_sorter_;
   blocksstable::ObDataStoreDesc data_desc_;
   blocksstable::ObMacroBlockWriter writer_;
 };

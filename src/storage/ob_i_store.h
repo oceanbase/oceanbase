@@ -520,6 +520,29 @@ public:
   transaction::ObTransID lock_trans_id_;
 };
 
+// ObSortRow 
+// replace ObStoreRow for sortting when buiding indexes
+struct ObSortRow {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSortRow(): row_val_(), next_ids_(0), offset_(0)
+  {}
+
+  int64_t to_string(char* buffer, const int64_t length) const;
+  int deep_copy(const ObSortRow& src, char* buf, const int64_t len, int64_t& pos);
+  int get_sort_key(uint64_t* key_ptr);
+  int64_t get_deep_copy_size() const { return row_val_.get_deep_copy_size(); }
+  bool get_sort_key_end() { return next_ids_ >= row_val_.count_; }
+public:
+  common::ObNewRow row_val_;
+  int16_t next_ids_;
+  int16_t offset_;
+  ObSortkeyExtraData extra_data_;
+};
+//=====================
+
+
 struct ObStoreRow {
   OB_UNIS_VERSION(1);
 
@@ -639,6 +662,17 @@ public:
     is_sparse_row_ = false;
     column_ids_ = NULL;
     trans_id_ptr_ = NULL;
+  }
+
+  int get_sort_key(uint64_t* key_ptr __attribute__((unused))) const 
+  {
+    int ret = OB_INVALID_ARGUMENT;
+    return ret;
+  }
+
+  bool get_sort_key_end() 
+  {
+    return true;
   }
 
   static const int64_t DML_BITS = 4;

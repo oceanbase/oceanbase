@@ -32,6 +32,13 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 
+void ObSortkeyExtraData::reset() 
+{
+  extra_buf_size = 0;
+  str_offset = 0;
+  sortkey_offset = 0;
+}
+
 int64_t ObLogicMacroBlockId::hash() const
 {
   int64_t hash_val = 0;
@@ -506,6 +513,498 @@ int ObObj::build_not_strict_default_value()
       break;
     }
     default:
+      ret = OB_INVALID_ARGUMENT;
+      _OB_LOG(WARN, "unexpected data type=%u", data_type);
+  }
+  return ret;
+}
+
+/* 
+ * make sort key:
+ * Convert ob_object data into a byte array that can be to compare ob_object.
+ * (called memcomparable format).
+ * For more information, please refer to the Memcomparable format of MyRocks.
+ *
+ * However, unlike MyRocks, our make sort key only converts part of it at a 
+ * time(from `offset` to `offset+size`).
+ * 
+ * example:
+ * ob_object's data(v_) -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
+ *
+ * to          : buffer to store the converted byte array
+ * offset      : represents the offset of this byte array
+ * size        : represents the length of the buffer(to)
+ * extra_param : help convert multi-byte encoded data to mencomparable format
+ *
+ */
+int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
+                           ObSortkeyExtraData* extra_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf = 0;
+  int32_t copied = 0;
+  char* buf_ptr = reinterpret_cast<char*>(&buf);
+  char* ptr = reinterpret_cast<char*>(&v_);
+  if (offset == 0) {
+    to[0] = 1;
+    offset = 1;
+    copied = 1;
+  }
+  const ObObjType& data_type = meta_.get_type();
+  switch (data_type) {
+    case ObNullType: {
+      to[0] = 0;
+      offset = 0;
+      size = 1;
+      break;
+    }
+    case ObTinyIntType: {
+      buf_ptr[0] = (char)(ptr[0] ^ 128);
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObSmallIntType: {
+      buf_ptr[0] = (char)(ptr[1] ^ 128);
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObMediumIntType:
+    case ObInt32Type: {
+      buf_ptr[0] = (char)(ptr[3] ^ 128);
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObIntType: {
+      buf_ptr[0] = (char)(ptr[7] ^ 128);
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUTinyIntType: {
+      buf_ptr[0] = ptr[0];
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUSmallIntType: {
+      buf_ptr[0] = ptr[1];
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUMediumIntType:
+    case ObUInt32Type: {
+      buf_ptr[0] = ptr[3];
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUInt64Type: {
+      buf_ptr[0] = ptr[7];
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      if (v_.float_ == 0.0f) v_.float_ = 0.0;
+      int32_t tmp;
+      memcpy(&tmp, &(v_.float_), sizeof(v_.float_));
+      tmp = (tmp ^ (tmp >> 31)) | ((~tmp) & 0x80000000);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[3];
+      buf_ptr[1] = ptr1[2];
+      buf_ptr[2] = ptr1[1];
+      buf_ptr[3] = ptr1[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      if (v_.double_ == 0.0) v_.double_ = 0.0;
+      int64_t tmp;
+      memcpy(&tmp, &(v_.double_), sizeof(v_.double_));
+      tmp = (tmp ^ (tmp >> 63)) | ((~tmp) & 0x8000000000000000ULL);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[7];
+      buf_ptr[1] = ptr1[6];
+      buf_ptr[2] = ptr1[5];
+      buf_ptr[3] = ptr1[4];
+      buf_ptr[4] = ptr1[3];
+      buf_ptr[5] = ptr1[2];
+      buf_ptr[6] = ptr1[1];
+      buf_ptr[7] = ptr1[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObBitType:
+    case ObEnumType:
+    case ObSetType:
+    case ObTimeType:
+    case ObDateTimeType:
+    case ObTimestampType: {
+      buf_ptr[0] = ptr[7];
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObDateType: {
+      buf_ptr[0] = ptr[3];
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObYearType: {
+      buf_ptr[0] = ptr[0];
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    /* 
+     * For variable-sized data types it depends on whether the data is 
+     * considered binary data or not. For binary data we break the data in 
+     * groups of 8 bytes to which we append an extra byte that signals the 
+     * number of significant bytes in the previous section. The extra byte can 
+     * range from 1 to 9. Values of 1 to 8 indicate that many bytes were 
+     * significant and this group is the last group - a value of 9 indicates 
+     * that all 8 bytes were significant and there is more data to come.
+     *
+     * example: 
+     *    raw data(v_.string_) : "hello world!"
+     *    memcomparable format : 
+     *(char* arrar) [ null-flag |'h' |'e'|'l'|'l'|'o'|' '|'w'|'o'| 9 |'r'|'l'|'d'|'!'| 0 | 0 | 0 | 0 | 4 ]
+     *
+     * */
+    case ObVarcharType:
+    case ObCharType: {
+      if ((get_meta().get_collation_type() == CS_TYPE_BINARY)) {
+        int32_t ids = 0;
+        int32_t ids1 = offset - 1;
+        int32_t ids2;
+        int32_t t = val_len_ % 8;
+        int32_t mem_len = (val_len_ / 8) * 9 + (t ? 9 : 0);
+        size = std::min(mem_len - offset + 1, size - copied);
+        while (ids < size) {
+          if ((ids1 + 1) % 9 == 0) {
+            if (ids1 == mem_len - 1) {
+              to[ids + copied] = (t == 0) ? 8 : t;
+            } else {
+              to[ids + copied] = 9;
+            }
+          } else {
+            ids2 = (ids1 / 9) * 8 + (ids1 % 9);
+            if (ids2 >= val_len_) {
+              to[ids + copied] = 0;
+            } else {
+              to[ids + copied] = v_.string_[ids2];
+            }
+          }
+          ids1 += 1;
+          ids += 1;
+        }
+        offset += size;
+        size += copied;
+        if (offset > mem_len) {
+          // If all ob_object data is converted to memcomparable format, reset the offset.
+          offset = 0;
+        }
+      } else {
+        /*
+         * For variable-sized data types that are not binary data we need to 
+         * look up the table to convert the original data into a comparable 
+         * byte array, and then refers to the encoding method of the binary data.
+         * 
+         * Here we have three types of data:
+         *   1. raw data
+         *   2. a byte array obtained by looking up the table(the following is called the sortkey)
+         *   3. encode the byte arary into memcomparable format
+         *
+         * */
+
+        // If it is the first time to convert this ob_object, reset extra_param.
+        if (offset == 1) {
+          extra_param->reset();
+        }
+        // for mysql's varchar，'xxx' and 'xxx ' are equal. We need to ignore trailing spaces
+        int32_t val_len = val_len_;
+        if (data_type == ObVarcharType) {
+          while (val_len > 0 && v_.string_[val_len - 1] == ' ') {
+            val_len--;
+          }
+        }
+        int32_t sortkey_offset = extra_param->sortkey_offset;
+        int32_t str_offset = extra_param->str_offset;
+        /* 
+         * In the last conversion, if a character requires two-byte encoding,
+         * sortkey obtained by looking up the table is three bytes, but at this
+         * time buffer(to) only has one byte of space left.
+         *
+         * At this time, we need to save the remaining two bytes to 
+         * `extra_param->extra_buf` to facilitate the next use.
+         *
+         * If the data read last time is not used up, first fill the buffer(to)
+         * with the remaining data from the last time.
+         *
+         * */
+        if (extra_param->extra_buf_size != 0) {
+          int32_t ids = 0;
+          while (copied < size && extra_param->extra_buf_size > 0) {
+            to[copied] = extra_param->extra_buf[ids];
+            copied++;
+            ids++;
+            extra_param->extra_buf_size--;
+          }
+          offset += copied;
+        }
+        if (copied < size) {
+          if (str_offset < val_len) {
+            int32_t need = size - copied;
+            int32_t t1 = (offset - 1) % 9;
+            int32_t t2 = ((offset - 1) + need) % 9;
+            int32_t sortkey_start = (offset - 1) / 9 * 8 + t1;
+            int32_t sortkey_end = ((offset - 1) + need) / 9 * 8 + t2;
+            int64_t sortkey_len = sortkey_end - sortkey_start;
+            int64_t str_len = val_len - str_offset;
+            bool is_valid_collation = false;
+            char buf[16];
+            // convert raw data to sortkey.
+            ObCharset::sortkey_v2(get_collation_type(), 
+                    get_string_ptr() + str_offset, 
+                    str_len, 
+                    buf, 
+                    sortkey_len, 
+                    is_valid_collation, 
+                    16);
+            if (is_valid_collation) {
+              // conversion is successful, encode sortkey into memcomparable format.
+              sortkey_offset += sortkey_len;
+              str_offset += str_len;
+              int32_t ids = 0;
+              int32_t ids1 = 0;
+              while (copied < size) {
+                if (offset % 9 == 0) {
+                  to[copied] = 9;
+                } else if (ids < sortkey_len) {
+                  to[copied] = buf[ids];
+                  ids++;
+                } else {
+                  break;
+                }
+                offset++;
+                copied++;
+              }
+             /*
+              * If a character requires two-byte encoding, sortkey obtained by 
+              * looking up the table is three bytes, but at this time buffer(to) 
+              * only has one byte of space left.
+              *
+              * At this time, we need to save the remaining two bytes to 
+              * `extra_param->extra_buf` to facilitate the next use.
+              *
+              * */
+              extra_param->extra_buf_size = sortkey_len - ids;
+              while (ids < sortkey_len) {
+                extra_param->extra_buf[ids1] = buf[ids];
+                ids++;
+                ids1++;
+              }
+            } else {
+              // conversion failed, encode raw data into memcomparable format.
+              while (copied < size && str_offset < val_len) {
+                if (offset % 9 == 0) {
+                  to[copied] = 9;
+                } else {
+                  to[copied] = v_.string_[str_offset];
+                  str_offset++;
+                }
+                copied++;
+                offset++;
+              }
+            }
+          }
+          extra_param->str_offset = str_offset;
+          extra_param->sortkey_offset = sortkey_offset;
+        }
+        while (str_offset == val_len && copied < size) {
+          if (offset % 9 == 0) {
+            int32_t t = sortkey_offset % 8;
+            to[copied] = t == 0 ? 8 : t;
+            copied++;
+            offset = 0;
+            break;
+          } else {
+            to[copied] = 0;
+            copied++;
+            offset++;
+          }
+        }
+        size = copied;
+      }
+      break;
+    }
+    case ObNumberType: 
+    case ObUNumberType: {
+    /* 
+     * For ObNumberType, we first compare its sign bit(1 bit) and exponent bit(7 bits) 
+     * (total of one byte). If the sign bit and exponent bit are not equal, the result 
+     * can be directly distinguished. If the sign is equal to the exponent bit, 
+     * we need to compare the values in the uint32 array one by one.
+     *
+     * At the same time ObNumber is also variable-sized data. So memcomparable 
+     * format as following:
+     * (char* array)[ null-flag | sign+exp ｜ uint32[0][3] | uint32[0][2] | uint32[0][1] | 
+     * uint32[0][0] | uint32[1][3] | uint32[1][2] | 9 | uint32[1][1] | ...]
+     *
+     * (uint32[i][j] represents the jth byte of the ith element in the array.)
+     *
+     * */
+      int32_t len = nmb_desc_.len_;
+      len = len << 2;
+      int32_t t = (len + 1) % 8;
+      int32_t ids = 0;
+      int32_t ids1 = offset - 1;
+      int32_t ids2;
+      char* num = reinterpret_cast<char*>(v_.nmb_digits_);
+      int32_t mem_len = (len + 1) / 8 * 9 + (t ? 9 : 0);
+      size = std::min(mem_len - offset + 1, size - copied);
+      while (ids < size) {
+        if ((ids1 + 1) % 9 == 0) {
+          if (ids1 == mem_len - 1) {
+            to[ids + copied] = (t == 0) ? 8 : t;
+          } else {
+            to[ids + copied] = 9;
+          }
+        } else {
+          if (ids1 == 0) {
+            to[ids + copied] = nmb_desc_.se_;
+          } else {
+            ids2 = ids1 - (ids1 / 9) - 1;
+            if (ids2 >= len) {
+              to[ids + copied] = 0;
+            } else {
+              int32_t n1 = ids2 / 4;
+              int32_t t1 = ids2 % 4;
+              to[ids + copied] = num[n1 * 4 + (3 - t1)];
+              if (nmb_desc_.sign_ == number::ObNumber::NEGATIVE) {
+                  to[ids + copied] = ~to[ids + copied];
+              }
+            }
+          }
+        }
+        ids += 1;
+        ids1 += 1;
+      }
+      offset += size;
+      size += copied;
+      if (offset > mem_len) {
+        offset = 0;
+      }
+      break;
+    }
+    default:
+      offset = 0;
       ret = OB_INVALID_ARGUMENT;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
   }

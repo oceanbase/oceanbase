@@ -25,6 +25,8 @@ set(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
 set(LD_OPT "-Wl,--build-id=uuid")
 set(BUILD_OPT "${DEBUG_PREFIX}")
 
+option(ENABLE_AVX512F "enable the option of avx512f" OFF)
+
 if (OB_USE_LLVM_LIBTOOLS)
   # use llvm-ar llvm-ranlib llvm-objcopy ld.lld...
   set(_CMAKE_TOOLCHAIN_PREFIX llvm-)

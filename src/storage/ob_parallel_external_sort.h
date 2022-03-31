@@ -25,6 +25,10 @@
 #include "blocksstable/ob_tmp_file.h"
 #include "share/config/ob_server_config.h"
 
+#ifdef ENABLE_AVX512F
+#include "ob_avx512_sort.h"
+#endif
+
 namespace oceanbase {
 namespace storage {
 
@@ -1028,6 +1032,7 @@ public:
   int64_t get_fragment_count();
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSortRound& dest_round);
+  void set_use_memcmp() { use_memcmp_ = true; }
 
 private:
   typedef ObFragmentReaderV2<T> FragmentReader;
@@ -1036,6 +1041,7 @@ private:
   typedef ObFragmentWriterV2<T> FragmentWriter;
   typedef ObFragmentMerge<T, Compare> FragmentMerger;
   bool is_inited_;
+  bool use_memcmp_;
   int64_t merge_count_;
   int64_t file_buf_size_;
   FragmentIteratorList iters_;
@@ -1441,6 +1447,7 @@ public:
   {
     return has_data_;
   }
+  void set_use_memcmp() { use_memcmp_ = true; }
   void reset();
   int transfer_final_sorted_fragment_iter(ExternalSortRound& dest_round);
   TO_STRING_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),
@@ -1453,6 +1460,7 @@ private:
   bool is_inited_;
   bool is_in_memory_;
   bool has_data_;
+  bool use_memcmp_;
   int64_t buf_mem_limit_;
   int64_t expire_timestamp_;
   ExternalSortRound* next_round_;
@@ -1556,16 +1564,52 @@ int ObMemorySortRound<T, Compare>::build_fragment()
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMemorySortRound has not been inited", K(ret));
   } else if (item_list_.size() > 0) {
-    int64_t start = common::ObTimeUtility::current_time();
-    std::sort(item_list_.begin(), item_list_.end(), *compare_);
-    if (OB_FAIL(compare_->result_code_)) {
-      ret = compare_->result_code_;
+    if (use_memcmp_) {
+#ifdef ENABLE_AVX512F
+      uint64_t* keys = NULL;
+      T** values = NULL;
+      int64_t items_size = item_list_.size();
+      if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+      } else if (OB_ISNULL(values = static_cast<T**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+      } 
+      for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+        values[i] = item_list_.at(i);
+      }
+      if (OB_SUCC(ret)) {
+        STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
+        ret = sort(keys, values, items_size);
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+        item_list_.at(i) = values[i];
+      }
+      if (keys != NULL) { allocator_.free(keys); }
+      if (values != NULL) { allocator_.free(values); }
+#else
+      STORAGE_LOG(INFO, "use std::sort");
+      std::sort(item_list_.begin(), item_list_.end(), *compare_);
+      if (OB_FAIL(compare_->result_code_)) {
+        ret = compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+      }
+#endif
     } else {
-      const int64_t sort_fragment_time = common::ObTimeUtility::current_time() - start;
-      STORAGE_LOG(INFO, "ObMemorySortRound", K(sort_fragment_time));
-    }
+      STORAGE_LOG(INFO, "use std::sort");
+      std::sort(item_list_.begin(), item_list_.end(), *compare_);
+      if (OB_FAIL(compare_->result_code_)) {
+        ret = compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+      }
+    } 
+    STORAGE_LOG(INFO, "ObMemorySortRound", K(item_list_.size()));
 
-    start = common::ObTimeUtility::current_time();
+    int64_t start = common::ObTimeUtility::current_time();
     for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
       if (OB_FAIL(next_round_->add_item(*item_list_.at(i)))) {
         STORAGE_LOG(WARN, "fail to add item", K(ret));
@@ -1598,9 +1642,48 @@ int ObMemorySortRound<T, Compare>::finish()
   } else if (0 == next_round_->get_fragment_count()) {
     is_in_memory_ = true;
     has_data_ = true;
-    std::sort(item_list_.begin(), item_list_.end(), *compare_);
-    if (OB_FAIL(compare_->result_code_)) {
-      STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+    if (use_memcmp_) {
+#ifdef ENABLE_AVX512F
+      uint64_t* keys = NULL;
+      T** values = NULL;
+      uint64_t* key_buf = NULL;
+      uint64_t* value_buf = NULL;
+      int64_t items_size = item_list_.size();
+      if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+      } else if (OB_ISNULL(values = static_cast<T**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+        values[i] = item_list_.at(i);
+      }
+      if (OB_SUCC(ret)) {
+        STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
+        ret = sort(keys, values, items_size);
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+        item_list_.at(i) = values[i];
+      }
+#else
+      STORAGE_LOG(INFO, "use std::sort");
+      std::sort(item_list_.begin(), item_list_.end(), *compare_);
+      if (OB_FAIL(compare_->result_code_)) {
+        ret=compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+      }
+#endif
+    } else {
+      STORAGE_LOG(INFO, "use std::sort");
+      std::sort(item_list_.begin(), item_list_.end(), *compare_);
+      if (OB_FAIL(compare_->result_code_)) {
+        ret=compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+      }
     }
   } else {
     is_in_memory_ = false;
@@ -1711,6 +1794,13 @@ public:
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSort<T, Compare>& merge_sorter);
   int get_current_round(ExternalSortRound*& round);
+  void set_use_memcmp() {
+      use_memcmp_ = true;
+      memory_sort_round_.set_use_memcmp();
+      for (int32_t i = 0; i < EXTERNAL_SORT_ROUND_CNT; i++) {
+          sort_rounds_[i].set_use_memcmp();
+      }
+  }  
   TO_STRING_KV(K(is_inited_), K(file_buf_size_), K(buf_mem_limit_), K(expire_timestamp_), K(merge_count_per_round_),
       KP(tenant_id_), KP(compare_));
 
@@ -1727,6 +1817,7 @@ private:
   ExternalSortRound* curr_round_;
   ExternalSortRound* next_round_;
   bool is_empty_;
+  bool use_memcmp_;
   uint64_t tenant_id_;
 };
 
