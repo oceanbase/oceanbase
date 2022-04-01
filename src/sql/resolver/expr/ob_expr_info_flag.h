@@ -56,6 +56,7 @@ enum ObExprInfoFlag {
   IS_VOLATILE_CONST,  // the const expr may be altered by overwrite, non-const in execution.
   IS_ORA_ROWSCN_EXPR,
   IS_VAR_EXPR,
+  IS_ASSIGN_EXPR,
   IS_CONST_EXPR,   // expression contains calculable expression
   CNT_CONST_EXPR,  // IS_CONST_EXPR and CNT_CONST_EXPR at most one is true
 
@@ -98,6 +99,7 @@ enum ObExprInfoFlag {
   CNT_VOLATILE_CONST,
   CNT_ORA_ROWSCN_EXPR,
   CNT_VAR_EXPR,
+  CNT_ASSIGN_EXPR,
 
   BE_USED,         // expression has been applied
   IS_SIMPLE_COND,  // column = const
@@ -117,11 +119,11 @@ enum ObExprInfoFlag {
 };
 
 #define IS_INFO_MASK_BEGIN IS_CONST
-#define IS_INFO_MASK_END IS_VAR_EXPR
+#define IS_INFO_MASK_END IS_ASSIGN_EXPR
 #define CNT_INFO_MASK_BEGIN CNT_CONST
-#define CNT_INFO_MASK_END CNT_VAR_EXPR
+#define CNT_INFO_MASK_END CNT_ASSIGN_EXPR
 #define INHERIT_MASK_BEGIN CNT_CONST_EXPR
-#define INHERIT_MASK_END CNT_VAR_EXPR
+#define INHERIT_MASK_END CNT_ASSIGN_EXPR
 
 inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
 {

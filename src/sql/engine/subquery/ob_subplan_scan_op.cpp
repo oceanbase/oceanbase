@@ -55,6 +55,18 @@ int ObSubPlanScanOp::inner_get_next_row()
       LOG_WARN("get row from child failed", K(ret));
     }
   } else {
+    // eval child's output expr
+    // For some expression in the subquery, we must eval, even if it not output.
+    // e.g.
+    //      select 1 from (select @a=3);
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_->get_spec().output_.count(); i++) {
+      ObExpr *expr = child_->get_spec().output_[i];
+      ObDatum *datum = NULL;
+      if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+        LOG_WARN("expr evaluate failed", K(ret), K(*expr));
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.projector_.count(); i += 2) {
       ObExpr* from = MY_SPEC.projector_[i];
       ObExpr* to = MY_SPEC.projector_[i + 1];

@@ -161,7 +161,8 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr& expr)
           T_FUN_SYS_ROWKEY_TO_ROWID == expr.get_expr_type() || T_OP_CONNECT_BY_ROOT == expr.get_expr_type() ||
           T_FUN_SYS_CONNECT_BY_PATH == expr.get_expr_type() || T_FUN_SYS_GUID == expr.get_expr_type() ||
           T_FUN_SYS_STMT_ID == expr.get_expr_type() || T_FUN_SYS_SLEEP == expr.get_expr_type() ||
-          T_OP_PRIOR == expr.get_expr_type() || T_OP_GET_USER_VAR == expr.get_expr_type())) {
+          T_OP_ASSIGN == expr.get_expr_type() || T_OP_PRIOR == expr.get_expr_type() || 
+          T_OP_GET_USER_VAR == expr.get_expr_type())) {
     is_const_expr = false;
   }
   if (is_const_expr) {
@@ -233,7 +234,7 @@ bool ObRawExprInfoExtractor::not_calculable_expr(const ObRawExpr& expr)
          expr.has_flag(CNT_ALIAS) || expr.has_flag(CNT_ENUM_OR_SET) || expr.has_flag(CNT_VALUES) ||
          expr.has_flag(CNT_SEQ_EXPR) || expr.has_flag(CNT_SYS_CONNECT_BY_PATH) || expr.has_flag(CNT_RAND_FUNC) ||
          expr.has_flag(CNT_SO_UDF) || expr.has_flag(CNT_PRIOR) || expr.has_flag(CNT_EXEC_PARAM) ||
-         expr.has_flag(CNT_VOLATILE_CONST) || expr.has_flag(CNT_VAR_EXPR);
+         expr.has_flag(CNT_VOLATILE_CONST) || expr.has_flag(CNT_VAR_EXPR) || expr.has_flag(CNT_ASSIGN_EXPR);
 }
 
 int ObRawExprInfoExtractor::visit(ObOpRawExpr& expr)
@@ -313,6 +314,10 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr& expr)
         } else if (expr.get_expr_type() == T_OP_OR) {
           if (OB_FAIL(expr.add_flag(IS_OR))) {
             LOG_WARN("failed to add flag IS_OR", K(ret));
+          }
+        } else if (expr.get_expr_type() == T_OP_ASSIGN) {
+          if (OB_FAIL(expr.add_flag(IS_ASSIGN_EXPR))) {
+            LOG_WARN("failed to add flag IS_ASSIGN_EXPR", K(ret));
           }
         }
       } else if (3 == expr.get_param_count()) {
