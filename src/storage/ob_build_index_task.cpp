@@ -831,8 +831,8 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
   } else {
     common::ObArenaAllocator allocator(ObModIds::OB_SSTABLE_CREATE_INDEX);
     const ObSortRow* sort_row = NULL;
-    ObStoreRow tmp_row;
-    tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+    ObStoreRow row;
+    row.flag_ = ObActionFlag::OP_ROW_EXIST;
     int64_t row_count = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(external_sort.get_next_item(sort_row))) {
@@ -842,15 +842,15 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
           ret = OB_SUCCESS;
           break;
         }
-      } else if (OB_FALSE_IT(tmp_row.row_val_ = sort_row->row_val_)) {
+      } else if (OB_FALSE_IT(row.row_val_ = sort_row->row_val_)) {
           // do nothing
-      } else if (OB_FAIL(writer_.append_row(tmp_row))) {
+      } else if (OB_FAIL(writer_.append_row(row))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && param.index_schema_->is_unique_index()) {
           LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
         } else {
           STORAGE_LOG(WARN, "Fail to append row to sstable, ", K(ret));
         }
-      } else if (OB_FAIL(checksum.calc_column_checksum(param.checksum_method_, &tmp_row, NULL, NULL))) {
+      } else if (OB_FAIL(checksum.calc_column_checksum(param.checksum_method_, &row, NULL, NULL))) {
         STORAGE_LOG(WARN, "fail to calc column checksum", K(ret));
       } else {
 #ifdef ERRSIM
