@@ -2335,6 +2335,7 @@ int ObPGStorage::set_pg_replica_type(const ObReplicaType& replica_type, const bo
           storage->get_partition_store().set_replica_type(replica_type);
         }
       }
+      switch_meta_(next_meta_ptr);
       ATOMIC_STORE(&cached_replica_type_, replica_type);
       LOG_INFO("succeed to set replica type", K(*meta_), K(cached_replica_type_));
 
