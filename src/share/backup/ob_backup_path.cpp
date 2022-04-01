@@ -1530,7 +1530,10 @@ int ObBackupMountFile::check_mount_file(const ObLogArchiveBackupInfo& backup_inf
       LOG_WARN("failed to read mount file", K(ret), K(path), K(backup_info));
     } else if (!is_exist) {
       ret = OB_BACKUP_MOUNT_FILE_NOT_VALID;
-      FLOG_WARN("[BACKUP_MOUNT_FILE]check backup mount file is not exist", K(ret), K(path), K(backup_info));
+      LOG_ERROR("[BACKUP_MOUNT_FILE]check backup mount file is not exist, maybe nfs is not mounted properly",
+          K(ret),
+          K(path),
+          K(backup_info));
     }
   }
 
