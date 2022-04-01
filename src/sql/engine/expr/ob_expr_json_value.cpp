@@ -954,7 +954,7 @@ int ObExprJsonValue::cast_to_year(ObIJsonBase *j_base, uint8_t &val)
 int ObExprJsonValue::cast_to_float(ObIJsonBase *j_base, ObObjType dst_type, float &val)
 {
   INIT_SUCC(ret);
-  double tmp_val;
+  double tmp_val = 0;
 
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
