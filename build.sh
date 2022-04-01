@@ -113,7 +113,7 @@ function build
     set -- "${BUILD_ARGS[@]}"
     case "x$1" in
       xrelease)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo 
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo
         ;;
       xdebug)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug
