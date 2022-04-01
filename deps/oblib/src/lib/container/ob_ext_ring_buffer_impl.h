@@ -211,11 +211,11 @@ class ObExtendibleRingBufferBase {
   };
   // Defines.
   typedef ObExtendibleRingBufferBase<ValT, SlotT> MyType;
-  static const int64_t MIN_SEG_CNT = 2;
+  static const int64_t MIN_SEG_CNT = 3;
   static const int64_t INIT_SEG_CNT = MIN_SEG_CNT;
   typedef std::pair<int64_t, int64_t> SlotIdx;  // <Segment index, Slot index on Segment>
 public:
-  static const int64_t DEFAULT_SEG_SIZE = (1LL << 9);  // 512 bytes
+  static const int64_t DEFAULT_SEG_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t DEFAULT_SEG_CAPACITY =
       static_cast<int64_t>((DEFAULT_SEG_SIZE - sizeof(Segment)) / sizeof(SlotT));
   // Interface for subclass.
