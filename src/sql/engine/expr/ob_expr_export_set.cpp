@@ -52,7 +52,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
     int64_t str_num = 2;
     const uint64_t max_len = std::max(on_len, off_len);
     // when bits exceed uint_max or int_min, ob is not compatible to mysql.
-    types_array[0].set_calc_type(common::ObUInt64Type);
+    types_array[0].set_calc_type(common::ObIntType);
     types_array[1].set_calc_type(common::ObVarcharType);
     types_array[2].set_calc_type(common::ObVarcharType);
     if (3 < param_num) {
@@ -121,6 +121,7 @@ int ObExprExportSet::calc_export_set(ObObj& result, const ObObj& bits, const ObO
     ret = OB_NOT_INIT;
     LOG_WARN("varchar buffer not init", K(ret));
   } else {
+    int64_t tmp_local_bits;
     uint64_t local_bits;
     ObString local_on;
     ObString local_off;
@@ -130,8 +131,9 @@ int ObExprExportSet::calc_export_set(ObObj& result, const ObObj& bits, const ObO
     local_on = on.get_string();
     local_off = off.get_string();
     local_sep = sep.get_string();
-    if (OB_FAIL(bits.get_uint64(local_bits))) {
+    if (OB_FAIL(bits.get_int(tmp_local_bits))) {
       LOG_WARN("fail to get bit", K(ret), K(bits));
+    } else if (FALSE_IT(local_bits = static_cast<uint64_t>(tmp_local_bits))) {
     } else if (OB_FAIL(n_bits.get_int(local_n_bits))) {
       LOG_WARN("fail to get int", K(ret), K(n_bits));
     } else if (OB_FAIL(calc_export_set_inner(res, local_bits, local_on, local_off,

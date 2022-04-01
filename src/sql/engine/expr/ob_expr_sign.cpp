@@ -66,7 +66,7 @@ int ObExprSign::calc_result_type1(ObExprResType& type, ObExprResType& text, comm
 
 int ObExprSign::calc(ObObj& result, double val)
 {
-  if (fabs(val) < FLOAT_EPS) {
+  if (0 == val) {
     result.set_int(0);
   } else {
     result.set_int(val < 0 ? -1 : 1);
@@ -193,7 +193,7 @@ int calc_sign_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
       }
       case ObFloatTC: {
         float v = arg_datum->get_float();
-        if (is_mysql_mode() && fabsf(v) < FLOAT_EPS) {
+        if (is_mysql_mode() && 0 == v) {
           res_int = 0;
         } else {
           res_int = v < 0 ? -1 : 1;
@@ -202,7 +202,7 @@ int calc_sign_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
       }
       case ObDoubleTC: {
         double v = arg_datum->get_double();
-        if (is_mysql_mode() && fabs(v) < DOUBLE_EPS) {
+        if (is_mysql_mode() && 0 == v) {
           res_int = 0;
         } else {
           res_int = v < 0 ? -1 : 1;

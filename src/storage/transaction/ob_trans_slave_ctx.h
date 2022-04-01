@@ -62,7 +62,7 @@ public:
   int start_task(const ObTransDesc& trans_desc, const int64_t snapshot_version, const int snapshot_gene_type,
       const bool need_update_gts);
   int end_task(const bool is_rollback, const sql::ObPhyPlanType plan_type, const int64_t sql_no);
-  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly, const MonotonicTs commit_time,
+  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly, const MonotonicTs commit_time,
       const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info, bool& need_convert_to_dist_trans);
   // @fixme
   virtual int commit(const bool, sql::ObIEndTransCallback*, bool, const MonotonicTs, const int64_t,

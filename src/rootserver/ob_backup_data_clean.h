@@ -107,11 +107,10 @@ private:
   int get_server_clean_tenants(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
   int get_server_need_clean_info(const uint64_t tenant_id, bool &need_add);
   int get_all_tenant_ids(common::ObIArray<uint64_t> &tenant_ids);
-  int get_tenant_backup_task_info(const share::ObBackupCleanInfo &clean_info, common::ObISQLClient &trans,
-      common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_infos);
   int get_backup_clean_elements(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant);
+      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant);
   int do_tenant_backup_clean(const share::ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant);
   int do_with_finished_tenant_clean_task(const common::ObIArray<ObSimpleBackupDataCleanTenant> &normal_clean_tenants,
       const share::ObBackupCleanInfo &sys_clean_info, const ObBackupDataCleanTenant &sys_clean_tenant,
@@ -265,20 +264,20 @@ private:
   int add_log_archive_info(const ObLogArchiveBackupInfo &log_archive_info, ObBackupDataCleanTenant &clean_tenant);
   int add_delete_backup_set(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
-      share::ObTenantBackupTaskInfo &min_include_task_info);
+      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &min_include_task_info);
   int add_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
-      share::ObTenantBackupTaskInfo &min_include_task_info);
+      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &min_include_task_info);
   int add_normal_tenant_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
-      share::ObTenantBackupTaskInfo &min_include_task_info);
+      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &min_include_task_info);
   int add_sys_tenant_obsolete_backup_sets(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
-      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant,
-      share::ObTenantBackupTaskInfo &min_include_task_info);
+      const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &min_include_task_info);
   int deal_with_obsolete_backup_set(const share::ObBackupCleanInfo &clean_info, const ObTenantBackupTaskInfo &task_info,
       const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, const int64_t cluster_max_backup_set_id,
       ObBackupSetId &backup_set_id, bool &has_kept_last_succeed_data,
@@ -289,8 +288,8 @@ private:
       share::ObTenantBackupTaskInfo &clog_data_clean_point);
   int add_obsolete_backup_set_with_order(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &reverse_task_infos,
-      const common::ObIArray<ObBackupSetId> &reverse_backup_set_ids, ObBackupDataCleanTenant &clean_tenant,
-      share::ObTenantBackupTaskInfo &clog_data_clean_point);
+      const common::ObIArray<ObBackupSetId> &reverse_backup_set_ids, const bool need_add_event,
+      ObBackupDataCleanTenant &clean_tenant, share::ObTenantBackupTaskInfo &clog_data_clean_point);
 
   int add_delete_backup_piece(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
@@ -386,7 +385,8 @@ private:
   int get_backup_task_info_from_extern_info(const uint64_t tenant_id, const ObClusterBackupDest &cluster_backup_dest,
       const ObExternBackupInfo &extern_backup_info, ObTenantBackupTaskInfo &backup_task_info);
   int upgrade_backup_info();
-  int add_deleting_backup_set_id_into_set(const uint64_t tenant_id, const ObBackupSetId &backup_set_id);
+  int add_deleting_backup_set_id_into_set(
+      const uint64_t tenant_id, const ObBackupSetId &backup_set_id, const bool need_add_event);
   int check_backup_set_id_can_be_deleted(
       const uint64_t tenant_id, const ObBackupSetId &backup_set_id, bool &can_deleted);
   int remove_delete_expired_data_snapshot_(const ObSimpleBackupDataCleanTenant &simple_tenant);

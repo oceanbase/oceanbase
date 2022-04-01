@@ -1726,7 +1726,9 @@ int ObPartitionMergeUtil::merge_partition(memtable::ObIMemtableCtxFactory* memct
                   K(ret),
                   K(partition_fuser->get_compact_type()),
                   K(*partition_fuser->get_result_row()));
-              ObTableDumper::print_error_info(ret, ctx, macro_row_iters);
+              if (GCONF._enable_compaction_diagnose) {
+                ObTableDumper::print_error_info(ret, ctx, macro_row_iters);
+              }
             } else if (OB_FAIL(partition_fuser->calc_column_checksum(false))) {
               LOG_WARN("Failed to calculate column checksum", K(ret));
             }

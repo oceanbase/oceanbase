@@ -24,7 +24,8 @@ class ObPartitionService;
 namespace transaction {
 class ObTransResultInfoFactory;
 
-class ObTransResultInfoLinkNode {
+class ObTransResultInfoLinkNode
+{
 public:
   ObTransResultInfoLinkNode()
   {
@@ -56,7 +57,8 @@ protected:
   ObTransResultInfoLinkNode* prev_;
 };
 
-class ObTransResultInfo : public ObTransResultInfoLinkNode {
+class ObTransResultInfo : public ObTransResultInfoLinkNode
+{
 public:
   ObTransResultInfo()
   {
@@ -129,7 +131,8 @@ private:
   ObTransID trans_id_;
 };
 
-class ObGetMinLogIdFunction {
+class ObGetMinLogIdFunction
+{
 public:
   ObGetMinLogIdFunction() : min_log_id_(UINT64_MAX), min_log_ts_(INT64_MAX)
   {}
@@ -157,7 +160,8 @@ private:
   int64_t min_log_ts_;
 };
 
-class ObITransResultInfoMgr {
+class ObITransResultInfoMgr
+{
 public:
   ObITransResultInfoMgr()
   {}
@@ -173,7 +177,8 @@ public:
   virtual int del(const ObTransID& trans_id) = 0;
 };
 
-struct ObTransResultInfoBucketHeader {
+struct ObTransResultInfoBucketHeader
+{
   ObTransResultInfoBucketHeader()
   {
     reset();
@@ -196,7 +201,8 @@ struct ObTransResultInfoBucketHeader {
   common::SpinRWLock lock_;
 } CACHE_ALIGNED;
 
-class ObTransResultInfoMgr : public ObITransResultInfoMgr {
+class ObTransResultInfoMgr : public ObITransResultInfoMgr
+{
 public:
   ObTransResultInfoMgr()
   {

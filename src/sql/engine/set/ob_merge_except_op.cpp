@@ -72,6 +72,9 @@ int ObMergeExceptOp::inner_get_next_row()
   bool break_outer_loop = false;
   const ObIArray<ObExpr*>* left_row = NULL;
   clear_evaluated_flag();
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  }
   while (OB_SUCC(ret) && OB_SUCC(do_strict_distinct(*left_, last_row_.store_row_, left_row))) {
     break_outer_loop = right_iter_end_;
     while (OB_SUCC(ret) && !right_iter_end_) {
@@ -115,11 +118,13 @@ int ObMergeExceptOp::inner_get_next_row()
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(convert_row(*left_row, MY_SPEC.output_))) {
+    if (OB_FAIL(convert_row(*left_row, MY_SPEC.set_exprs_))) {
       LOG_WARN("failed to convert row", K(ret));
     } else if (OB_FAIL(last_row_.save_store_row(*left_row, eval_ctx_, 0))) {
       LOG_WARN("failed to save right row", K(ret));
     }
+  } else if (OB_ITER_END == ret) {
+    iter_end_ = true;
   }
   return ret;
 }

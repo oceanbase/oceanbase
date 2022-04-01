@@ -1800,7 +1800,11 @@ public:
         if_not_exist_(false),
         with_rowid_(false),
         index_schema_(),
-        is_inner_(false)
+        is_inner_(false),
+        nls_date_format_(),
+        nls_timestamp_format_(),
+        nls_timestamp_tz_format_(),
+        sql_mode_(0)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -1824,6 +1828,10 @@ public:
     with_rowid_ = false;
     index_schema_.reset();
     is_inner_ = false;
+    nls_date_format_.reset();
+    nls_timestamp_format_.reset();
+    nls_timestamp_tz_format_.reset();
+    sql_mode_ = 0;
   }
   bool is_valid() const;
   int assign(const ObCreateIndexArg& other)
@@ -1851,6 +1859,10 @@ public:
       if_not_exist_ = other.if_not_exist_;
       with_rowid_ = other.with_rowid_;
       is_inner_ = other.is_inner_;
+      nls_date_format_ = other.nls_date_format_;
+      nls_timestamp_format_ = other.nls_timestamp_format_;
+      nls_timestamp_tz_format_ = other.nls_timestamp_tz_format_;
+      sql_mode_ = other.sql_mode_;
     }
     return ret;
   }
@@ -1877,6 +1889,11 @@ public:
   bool with_rowid_;
   share::schema::ObTableSchema index_schema_;  // Index table schema
   bool is_inner_;
+  // Nls_xx_format is required when creating a functional index
+  common::ObString nls_date_format_;
+  common::ObString nls_timestamp_format_;
+  common::ObString nls_timestamp_tz_format_;
+  ObSQLMode sql_mode_;
 };
 
 struct ObCreateForeignKeyArg : public ObIndexArg {
@@ -7921,27 +7938,35 @@ struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
+  enum Action {
+    INVALID = 0,
+    UPDATE_SYS_ALL_INNER_TABLE,
+    UPDATE_SYS_INNER_TABLE,
+    UPDATE_SYS_TABLE_IN_TENANT_SPACE,
+  };
   ObUpdateTableSchemaVersionArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
-        table_id_(common::OB_INVALID_ID),
-        schema_version_(share::OB_INVALID_SCHEMA_VERSION)
+        table_id_(OB_INVALID_ID),
+        schema_version_(share::OB_INVALID_SCHEMA_VERSION),
+        action_(Action::INVALID)
   {}
   ~ObUpdateTableSchemaVersionArg()
   {
     reset();
   }
   bool is_valid() const;
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
+  virtual bool is_allow_when_upgrade() const;
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(schema_version));
   void reset();
+  void init(const int64_t tenant_id, const int64_t table_id, const int64_t schema_version, const bool is_replay_schema,
+      const Action action);
+  int assign(const ObUpdateTableSchemaVersionArg &other);
 
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t schema_version_;
+  Action action_;
 };
 
 struct ObRestoreModifySchemaArg : public ObDDLArg {

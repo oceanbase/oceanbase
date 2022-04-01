@@ -136,7 +136,7 @@ ObDtlLinkedBuffer* ObDtlTenantMemManager::alloc(int64_t chid, int64_t size)
     ++n_times;
     buf = mem_mgr->alloc(chid, size);
     if (nullptr == buf) {
-      ret = OB_REACH_MEMORY_LIMIT;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate dtl buffer memory", K(ret));
     }
   }

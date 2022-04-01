@@ -1540,7 +1540,7 @@
   "ob_create_table_strict_mode": {
     "id": 10031,
     "name": "ob_create_table_strict_mode",
-    "value": "1",
+    "value": "0",
     "data_type": "bool",
     "info": "If set true, create all the replicas according to the locality or the operation will fail.",
     "flags": "GLOBAL | SESSION",

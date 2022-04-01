@@ -434,6 +434,7 @@ public:
 
   virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows) override;
   virtual int check_physical_split(bool& finished) override;
+  virtual int update_max_majority_log(const uint64_t log_id, const int64_t log_ts) override;
   TO_STRING_KV(K_(pkey), K_(replay_status), K_(partition_state));
 
 private:

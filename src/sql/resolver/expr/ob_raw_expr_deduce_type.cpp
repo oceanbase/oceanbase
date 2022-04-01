@@ -302,9 +302,11 @@ int ObRawExprDeduceType::calc_result_type(
       if (ObLobType == type->get_type()) {
         type->set_type(ObLongTextType);
       }
-      // ToDo: test and fix, not all sql functions need calc json as long text
-      if (ObJsonType == type->get_type() && need_calc_json_as_text(expr.get_expr_type())) {
-        type->set_calc_type(ObLongTextType);
+      if (ObJsonType == type->get_type()) {
+        if (need_calc_json_as_text(expr.get_expr_type())) {
+          // ToDo: test and fix, not all sql functions need calc json as long text
+          type->set_calc_type(ObLongTextType);  
+        }
       }
     }
     op->set_row_dimension(row_dimension);

@@ -22,7 +22,7 @@ class ObTransService;
 
 class ObXATransHeartbeatWorker : public share::ObThreadPool {
 public:
-  ObXATransHeartbeatWorker() : is_inited_(false), is_running_(false)
+  ObXATransHeartbeatWorker() : is_inited_(false), is_running_(false), trans_service_(NULL)
   {}
   ~ObXATransHeartbeatWorker()
   {

@@ -572,8 +572,6 @@ int ObPartTransCtx::trans_end_(const bool commit, const int64_t commit_version)
   }
 
   const int64_t end_us = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_trans_mt_end_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_trans_mt_end_time(tenant_id_, end_us - start_us);
   // just for debug
   if (end_us - start_us > 5 * 1000 * 1000) {
     TRANS_LOG(WARN,
@@ -765,7 +763,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
       } else {
         can_rollback_stmt_ = true;
       }
-      (void)audit_partition(false, stmt_type);
+      //(void)audit_partition(false, stmt_type);
     } else {
       mt_ctx_.set_read_snapshot(snapshot_version_);
     }
@@ -971,7 +969,7 @@ int ObPartTransCtx::end_task_(
             ctx_dependency_wrap_.clear_cur_stmt_prev_trans_item();
           }
 
-          (void)audit_partition(true, stmt_type);
+          //(void)audit_partition(true, stmt_type);
           TRANS_LOG(
               DEBUG, "rollback stmt success", K(is_rollback), K(plan_type), K_(commit_task_count), "context", *this);
         }
@@ -983,9 +981,10 @@ int ObPartTransCtx::end_task_(
         if (OB_PHY_PLAN_UNCERTAIN == plan_type) {
           need_print_trace_log_ = true;
         }
+        /*
         if (stmt_info_.is_task_match(stmt_min_sql_no)) {
           (void)audit_partition(true, stmt_type);
-        }
+        }*/
       }
     } else {
       // do nothing
@@ -1440,8 +1439,8 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
     REC_TRANS_TRACE_EXT(tlog_, handle_timeout, OB_ID(ret), ret, OB_ID(used), timeguard, OB_ID(uref), get_uref());
   } else {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K_(trans_id));
-    unregister_timeout_task_();
-    register_timeout_task_(delay);
+    (void)unregister_timeout_task_();
+    (void)register_timeout_task_(delay);
   }
 
   return ret;
@@ -1652,7 +1651,7 @@ int ObPartTransCtx::on_sync_log_success(
     const int64_t log_type, const int64_t log_id, const int64_t timestamp, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
-  int64_t start_us = 0;
+  int64_t start_us = ObTimeUtility::fast_current_time();
   int64_t end_us = 0;
   bool has_redo_log = false;
   bool has_pending_cb = true;
@@ -1676,7 +1675,6 @@ int ObPartTransCtx::on_sync_log_success(
     update_durable_log_id_ts_(log_type, log_id, timestamp);
 
     if ((log_type & OB_LOG_SP_TRANS_REDO) != 0) {
-      start_us = ObTimeUtility::fast_current_time();
       has_write_or_replay_mutator_redo_log_ = true;
       ++redo_log_no_;
       if (redo_log_no_ == 1) {
@@ -1696,14 +1694,9 @@ int ObPartTransCtx::on_sync_log_success(
         // coordinator to progress the txn.
         set_status_(OB_TRANS_ROLLBACKED);
       }
-      ObTransStatistic::get_instance().add_sp_redo_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_redo_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
     }
     if ((log_type & OB_LOG_SP_ELR_TRANS_COMMIT) != 0) {
       ++redo_log_no_;
-      start_us = ObTimeUtility::fast_current_time();
       update_last_checkpoint_(quick_checkpoint_);
       if (OB_SUCC(ret)) {
         set_state_(ObSpState::PREPARE);
@@ -1733,10 +1726,6 @@ int ObPartTransCtx::on_sync_log_success(
       }
 
       INC_ELR_STATISTIC(with_dependency_trx_count);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       if (OB_FAIL(ret)) {
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
@@ -1744,7 +1733,6 @@ int ObPartTransCtx::on_sync_log_success(
     }
     if ((log_type & OB_LOG_SP_TRANS_COMMIT) != 0 || (log_type & OB_LOG_SP_TRANS_ABORT) != 0) {
       ++redo_log_no_;
-      start_us = ObTimeUtility::fast_current_time();
       const bool commit = ((log_type & OB_LOG_SP_TRANS_COMMIT) != 0) ? true : false;
       if (commit) {
         // update checkpoint
@@ -1766,10 +1754,6 @@ int ObPartTransCtx::on_sync_log_success(
       }
 
       INC_ELR_STATISTIC(without_dependency_trx_count);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       if (OB_FAIL(ret)) {
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
@@ -1789,7 +1773,6 @@ int ObPartTransCtx::on_sync_log_success(
       }
       // need submit redo_prepare log when log_type equal OB_LOG_TRANS_REDO
       if (OB_LOG_TRANS_REDO == log_type) {
-        start_us = ObTimeUtility::fast_current_time();
         // record the redo log id
         if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
@@ -1832,16 +1815,11 @@ int ObPartTransCtx::on_sync_log_success(
           // coordinator to progress the txn
           set_status_(OB_TRANS_ROLLBACKED);
         }
-        ObTransStatistic::get_instance().add_redo_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_redo_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       } else {
         ret = OB_SUCCESS;
       }
     }
     if ((log_type & OB_LOG_TRANS_PREPARE) != 0) {
-      start_us = ObTimeUtility::fast_current_time();
       // update checkpoint
       update_last_checkpoint_(quick_checkpoint_);
       prepare_log_id_ = log_id;
@@ -1862,10 +1840,6 @@ int ObPartTransCtx::on_sync_log_success(
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
       }
-      ObTransStatistic::get_instance().add_prepare_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_prepare_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
     }
     // ignore ret
     if ((log_type & OB_LOG_TRANS_COMMIT) != 0) {
@@ -1895,10 +1869,6 @@ int ObPartTransCtx::on_sync_log_success(
           is_hazardous_ctx_ = true;
           TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
         }
-        ObTransStatistic::get_instance().add_commit_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_commit_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     // ignore ret
@@ -1921,10 +1891,6 @@ int ObPartTransCtx::on_sync_log_success(
             TRANS_LOG(WARN, "ObPartTransCtx on_abort error", KR(ret), "context", *this);
           }
         }
-        ObTransStatistic::get_instance().add_abort_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_abort_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     // ignore ret
@@ -1934,14 +1900,9 @@ int ObPartTransCtx::on_sync_log_success(
         listener_handler_->set_commit_log_synced(true);
       }
       if (OB_ISNULL(listener_handler_) || listener_handler_->is_listener_ready()) {
-        start_us = ObTimeUtility::fast_current_time();
         if (OB_FAIL(on_clear_(true))) {
           TRANS_LOG(WARN, "ObPartTransCtx on_clear error", KR(ret), "context", *this);
         }
-        ObTransStatistic::get_instance().add_clear_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_clear_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     if ((OB_LOG_MUTATOR & log_type) != 0) {
@@ -2006,9 +1967,6 @@ int ObPartTransCtx::on_sync_log_success(
         // coordinator to progress the txn
         set_status_(OB_TRANS_ROLLBACKED);
       }
-      ObTransStatistic::get_instance().add_redo_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_redo_log_cb_time(tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       TRANS_LOG(DEBUG, "sync transaction mutator log", KR(ret), "context", *this, K(submit_log_type));
     }
     if ((OB_LOG_TRANS_STATE & log_type) != 0) {
@@ -2017,7 +1975,6 @@ int ObPartTransCtx::on_sync_log_success(
       TRANS_LOG(INFO, "sync transaction state log success", "context", *this);
     }
     if (OB_LOG_MUTATOR_ABORT == log_type) {
-      start_us = ObTimeUtility::fast_current_time();
       (void)unregister_timeout_task_();
       set_exiting_();
       const bool commit = false;
@@ -2025,9 +1982,6 @@ int ObPartTransCtx::on_sync_log_success(
       (void)trans_end_(commit, get_global_trans_version_());
       (void)trans_clear_();
       end_trans_callback_(OB_TRANS_KILLED);
-      ObTransStatistic::get_instance().add_abort_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_abort_log_cb_time(tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       ObTransStatus trans_status(trans_id_, OB_TRANS_KILLED);
       (void)trans_status_mgr_->set_status(trans_id_, trans_status);
       TRANS_LOG(INFO, "sync transaction mutator abort log", KR(ret), "context", *this);
@@ -2036,6 +1990,7 @@ int ObPartTransCtx::on_sync_log_success(
 
   dup_table_syncing_log_id_ = UINT64_MAX;
   dup_table_syncing_log_ts_ = INT64_MAX;
+  end_us = ObTimeUtility::fast_current_time();
 
   if (end_us - start_us > 30 * 1000) {
     TRANS_LOG(WARN,
@@ -3416,8 +3371,7 @@ int ObPartTransCtx::replay_sp_redo_log(
         store_ctx.log_ts_ = timestamp;
         store_ctx.cur_pkey_ = self_;
         cluster_id_ = log.get_cluster_id();
-        const ObTransMutator& mutator = log.get_mutator();
-        const int64_t mutator_size = mutator.get_position();
+        const ObTransMutator &mutator = log.get_mutator();
         bool replayed = true;
         if (OB_FAIL(partition_service_->replay_redo_log(
                 self_, store_ctx, timestamp, log_id, mutator.get_data(), mutator.get_position(), replayed))) {
@@ -3436,7 +3390,6 @@ int ObPartTransCtx::replay_sp_redo_log(
         } else {
           TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
         }
-        ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
       }
     }
 
@@ -3475,8 +3428,6 @@ int ObPartTransCtx::replay_sp_redo_log(
   }
 
   const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_redo_log_replay_time(tenant_id_, end - start);
   if (OB_UNLIKELY(end - start > REPLAY_PRINT_TRACE_THRESHOLD) && REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
     need_print_trace_log_ = true;
   }
@@ -3487,8 +3438,8 @@ int ObPartTransCtx::replay_sp_redo_log(
 int ObPartTransCtx::replay_sp_commit_log(const ObSpTransCommitLog& log, const int64_t timestamp, const uint64_t log_id)
 {
   int ret = OB_SUCCESS;
-
   const int64_t start = ObTimeUtility::fast_current_time();
+
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
   if (IS_NOT_INIT) {
@@ -3610,9 +3561,6 @@ int ObPartTransCtx::replay_sp_commit_log(const ObSpTransCommitLog& log, const in
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_commit_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_commit_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -3690,9 +3638,6 @@ int ObPartTransCtx::replay_sp_abort_log(const ObSpTransAbortLog& log, const int6
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObClockGenerator::getClock();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -3702,8 +3647,8 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
   ObWorker::CompatMode mode = ObWorker::CompatMode::INVALID;
+  const int64_t start = ObTimeUtility::fast_current_time();
 
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
@@ -3782,8 +3727,7 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
         is_redo_prepared_ = true;
       }
       if (OB_SUCC(ret)) {
-        const ObTransMutator& mutator = log.get_mutator();
-        const int64_t mutator_size = mutator.get_position();
+        const ObTransMutator &mutator = log.get_mutator();
         bool replayed = true;
         if (0 == mutator.get_position() && is_xa_local_trans()) {
           replayed = false;
@@ -3805,7 +3749,6 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
             TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
           }
         }
-        ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
       }
     }
     REC_TRANS_TRACE_EXT(tlog_,
@@ -3845,10 +3788,8 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
       update_durable_log_id_ts_(OB_LOG_TRANS_REDO, log_id, timestamp);
     }
   }
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_redo_log_replay_time(tenant_id_, end - start);
-  if (OB_UNLIKELY(end - start > REPLAY_PRINT_TRACE_THRESHOLD) && REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
+  if (OB_UNLIKELY(ObTimeUtility::fast_current_time() - start > REPLAY_PRINT_TRACE_THRESHOLD) &&
+      REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
     need_print_trace_log_ = true;
   }
 
@@ -3860,9 +3801,9 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
 {
   UNUSED(checkpoint);
   int ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
   int64_t commit_version = 0;
   bool can_checkpoint = false;
+  const int64_t start = ObTimeUtility::fast_current_time();
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
   if (IS_NOT_INIT) {
@@ -4029,9 +3970,6 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
       can_checkpoint,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_prepare_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_prepare_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4123,9 +4061,6 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_commit_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_commit_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4340,9 +4275,6 @@ int ObPartTransCtx::replay_abort_log(const ObTransAbortLog& log, const int64_t t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4415,9 +4347,6 @@ int ObPartTransCtx::replay_clear_log(const ObTransClearLog& log, const int64_t t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_clear_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_clear_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4602,8 +4531,7 @@ int ObPartTransCtx::replay_trans_mutator_log(
     store_ctx.mem_ctx_ = &mt_ctx_;
     store_ctx.tenant_id_ = self_.get_tenant_id();
     store_ctx.log_ts_ = timestamp;
-    const ObTransMutator& mutator = log.get_mutator();
-    const int64_t mutator_size = mutator.get_position();
+    const ObTransMutator &mutator = log.get_mutator();
     bool replayed = true;
     if (OB_FAIL(partition_service_->replay_redo_log(
             self_, store_ctx, timestamp, log_id, mutator.get_data(), mutator.get_position(), replayed))) {
@@ -4625,7 +4553,6 @@ int ObPartTransCtx::replay_trans_mutator_log(
     } else {
       TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
     }
-    ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
   }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "replay trans mutator log error", KR(ret), "context", *this, K(log), K(log_id));
@@ -4715,9 +4642,6 @@ int ObPartTransCtx::replay_mutator_abort_log(
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObClockGenerator::getClock();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4779,7 +4703,34 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_STAT_ABORT_TRANS_INC(tenant_id_);
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(update_max_majority_log(log_id, timestamp))) {
+      TRANS_LOG(ERROR, "update max majority log failed", K(ret), K(*this));
+    }
+  }
+
   REC_TRANS_TRACE_EXT(tlog_, replay_start_working_log, OB_ID(ret), ret, OB_ID(uref), get_uref());
+
+  return ret;
+}
+
+int ObPartTransCtx::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+  storage::ObIPartitionGroupGuard pg_guard;
+
+  if (OB_NOT_NULL(pg_)) {
+    if (OB_FAIL(pg_->update_max_majority_log(log_id, log_ts))) {
+      TRANS_LOG(WARN, "update max majority log error", K(*this));
+    }
+  } else if (OB_FAIL(partition_service_->get_partition(self_, pg_guard))) {
+    TRANS_LOG(WARN, "get partition error", KR(ret), "context", *this);
+  } else if (NULL == pg_guard.get_partition_group()) {
+    TRANS_LOG(ERROR, "partition is null, unexpected error", KP(pg_guard.get_partition_group()), "context", *this);
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(pg_guard.get_partition_group()->update_max_majority_log(log_id, log_ts))) {
+    TRANS_LOG(WARN, "update max majority log error", K(*this));
+  }
 
   return ret;
 }
@@ -4879,7 +4830,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
   int64_t tmp_pos = pos;
   int64_t available_capacity = 0;
   ObTimeGuard timeguard("fill_redo_log", 10 * 1000);
-  const int64_t start = ObTimeUtility::fast_current_time();
   ObElrTransInfoArray trans_array;
 
   {
@@ -4945,9 +4895,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
             pos = tmp_pos;
             mutator_size = mutator.get_position();
           }
-          ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-          ObTransStatistic::get_instance().add_fill_redo_log_time(
-              tenant_id_, ObTimeUtility::fast_current_time() - start);
         } else if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = log.serialize(buf, size, tmp_pos))) {
@@ -4959,9 +4906,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
             mutator_size = mutator.get_position();
             last_redo_log_mutator_size_ = mutator.get_position();
           }
-          ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-          ObTransStatistic::get_instance().add_fill_redo_log_time(
-              tenant_id_, ObTimeUtility::fast_current_time() - start);
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           last_redo_log_mutator_size_ = 0;
         } else {
@@ -5285,7 +5229,6 @@ int ObPartTransCtx::fill_redo_prepare_commit_clear_log_(
 int ObPartTransCtx::fill_sp_redo_log_(ObSpTransRedoLog& sp_redo_log, const int64_t capacity, int64_t& mutator_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
 
   if (OB_UNLIKELY(!sp_redo_log.is_valid()) || OB_UNLIKELY(capacity < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -5304,9 +5247,6 @@ int ObPartTransCtx::fill_sp_redo_log_(ObSpTransRedoLog& sp_redo_log, const int64
       mutator_size = mutator.get_position();
     }
   }
-
-  ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_fill_redo_log_time(tenant_id_, ObTimeUtility::fast_current_time() - start);
 
   return ret;
 }
@@ -5680,7 +5620,6 @@ int ObPartTransCtx::fill_mutator_log_(char* buf, const int64_t size, int64_t& po
   int64_t available_capacity = 0;
   ObTransMutatorLog log;
   ObTimeGuard timeguard("fill_mutator_log", 10 * 1000);
-  const int64_t start = ObTimeUtility::fast_current_time();
 
   {
     ObElrTransArrGuard guard;
@@ -5728,8 +5667,6 @@ int ObPartTransCtx::fill_mutator_log_(char* buf, const int64_t size, int64_t& po
           pos = tmp_pos;
           mutator_size = mutator.get_position();
         }
-        ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_fill_redo_log_time(tenant_id_, ObTimeUtility::fast_current_time() - start);
       } else if (OB_ENTRY_NOT_EXIST == ret) {
         // do nothing
       } else {
@@ -6587,11 +6524,6 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
           } else {
             inc_submit_log_pending_count_();
             inc_submit_log_count_();
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (mutator_size > 0) {
-            ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
           }
         }
         timeguard.click();
@@ -10080,6 +10012,7 @@ void ObPartTransCtx::check_memtable_ctx_ref()
   }
 }
 
+/*
 void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type)
 {
   int tmp_ret = OB_SUCCESS;
@@ -10120,7 +10053,7 @@ void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::St
       // do ntohing
     }
   }
-}
+}*/
 
 int ObPartTransCtx::post_redo_log_sync_to_not_mask_addr_(
     const uint64_t log_id, const int64_t log_ts, const int64_t log_type)
@@ -10663,6 +10596,8 @@ int ObPartTransCtx::get_trans_state_and_version_without_lock(ObTransStatusInfo& 
   if (trans_info.status_ == ObTransTableStatusType::COMMIT || trans_info.status_ == ObTransTableStatusType::ABORT) {
     trans_info.end_log_ts_ = ATOMIC_LOAD(&end_log_ts_);
   }
+
+  trans_info.start_log_ts_ = ATOMIC_LOAD(&min_log_ts_);
   return ret;
 }
 
@@ -11338,6 +11273,7 @@ void ObPartTransCtx::set_exiting_()
 {
   if (is_dirty_) {
     partition_log_info_arr_.reset();
+    participants_.reset();
   }
   return ObTransCtx::set_exiting_(is_dirty_);
 }

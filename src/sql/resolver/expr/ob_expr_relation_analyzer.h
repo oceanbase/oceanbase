@@ -25,9 +25,9 @@ public:
   int pull_expr_relation_id_and_levels(ObRawExpr* expr, int32_t cur_stmt_level);
 
 private:
-  int init_expr_info(ObRawExpr& expr);
-  int visit_expr(ObRawExpr& expr, int32_t stmt_level);
-  int visit_stmt(ObDMLStmt* stmt);
+  int init_expr_info(ObRawExpr &expr, int64_t &expr_level);
+  int visit_expr(ObRawExpr &expr, int64_t &expr_level);
+  int visit_stmt(ObDMLStmt *stmt);
 
 private:
   // auto_free = false, only used in function stack

@@ -37,13 +37,11 @@ public:
   static int eval_xor(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
 private:
-  static int cacl_res_with_one_param_null(
-      common::ObObj& res, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx);
+  static int calc_res_with_one_param_null(
+      common::ObObj &res, const common::ObObj &left, const common::ObObj &right, common::ObExprCtx &expr_ctx);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprXor);
-
-  static const double FLOAT_BOUND;
 };
 }  // namespace sql
 }  // namespace oceanbase

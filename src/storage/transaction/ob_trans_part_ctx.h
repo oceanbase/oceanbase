@@ -144,7 +144,7 @@ public:
   int leader_active(const storage::LeaderActiveArg& arg) override;
   bool can_be_freezed() const override;
   int kill_trans(bool& need_convert_to_dist_trans);
-  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly, const MonotonicTs commit_time,
+  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly, const MonotonicTs commit_time,
       const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
       const common::ObString& app_trace_info, bool& need_convert_to_dist_trans) override;
   int set_stmt_info(const ObTransStmtInfo& stmt_info);
@@ -277,7 +277,7 @@ public:
   // check early lock release is prepared
   int check_elr_prepared(bool& elr_prepared, int64_t& elr_commit_version);
   int insert_prev_trans(const uint32_t ctx_id, ObTransCtx* prev_trans_ctx);
-  void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
+  // void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
   int handle_redo_log_sync_response(const ObRedoLogSyncResponseMsg& msg);
   bool is_redo_log_sync_finish() const;
   bool is_prepare_leader_revoke() const;
@@ -390,6 +390,7 @@ public:
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
   bool need_update_schema_version(const uint64_t log_id, const int64_t log_ts);
+  int update_max_majority_log(const uint64_t log_id, const int64_t log_ts);
 
 public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),

@@ -197,6 +197,7 @@ public:
   virtual int create_table_like(const obrpc::ObCreateTableLikeArg& arg, const int64_t frozen_version);
 
   int update_table_schema_version(const share::schema::ObTableSchema* table_schema);
+  int update_sys_table_schema_version_in_tenant_space();
   virtual int alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int64_t frozen_version);
   virtual int drop_table(const obrpc::ObDropTableArg& drop_table_arg);
   virtual int force_drop_schema(const obrpc::ObForceDropSchemaArg& arg);

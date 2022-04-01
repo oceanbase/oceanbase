@@ -778,6 +778,7 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
     common::ObIArray<uint64_t> &deleted_and_error_index_ids)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_physical_restore);
   share::schema::ObSchemaGetterGuard schema_guard;
   share::schema::ObMultiVersionSchemaService &schema_service =
       share::schema::ObMultiVersionSchemaService::get_instance();
@@ -814,8 +815,7 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
     LOG_WARN("failed to get full tenant schema guard", K(ret), K(fetch_tenant_id), K(pkey_));
   } else if (OB_FAIL(schema_guard.get_schema_version(fetch_tenant_id, latest_schema_version))) {
     LOG_WARN("failed to get schema version", K(ret), K(fetch_tenant_id), K(pkey_));
-  } else if (latest_schema_version > save_schema_version ||
-             (is_physical_restore && latest_schema_version >= save_schema_version)) {
+  } else if (latest_schema_version >= save_schema_version) {
     // befor check the delete status of index, we should make sure the schema guard is refreshed
     for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
       const share::schema::ObTableSchema *table_schema = NULL;

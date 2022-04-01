@@ -11254,6 +11254,11 @@ int ObRootService::update_table_schema_version(const ObUpdateTableSchemaVersionA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (ObUpdateTableSchemaVersionArg::UPDATE_SYS_TABLE_IN_TENANT_SPACE == arg.action_) {
+    // update sys tables in tenant space for physical restore
+    if (OB_FAIL(ddl_service_.update_sys_table_schema_version_in_tenant_space())) {
+      LOG_WARN("fail to update sys table schema version in tenant space", KR(ret));
+    }
   } else if (OB_SYS_TENANT_ID == arg.tenant_id_ && 0 == arg.table_id_ &&
              OB_INVALID_SCHEMA_VERSION == arg.schema_version_) {
     if (OB_FAIL(update_all_sys_tenant_schema_version())) {

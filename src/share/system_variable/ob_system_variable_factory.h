@@ -1445,7 +1445,7 @@ public:
   static int calc_sys_var_store_idx(ObSysVarClassType sys_var_id, int64_t &store_idx);
   static int calc_sys_var_store_idx_by_name(const common::ObString &sys_var_name, int64_t &store_idx);
   static bool is_valid_sys_var_store_idx(int64_t store_idx);
-  static ObSysVarClassType find_sys_var_id_by_name(const common::ObString &sys_var_name, bool is_from_sys_table = false); //二分查找
+  static ObSysVarClassType find_sys_var_id_by_name(const common::ObString &sys_var_name, bool is_from_sys_table = false); // binary-search
   static int get_sys_var_name_by_id(ObSysVarClassType sys_var_id, common::ObString &sys_var_name);
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
@@ -1454,8 +1454,7 @@ public:
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;
-  // 表示当前OB能够使用的sys var id的最大值，正常情况下，不需要申请大于OB_MAX_SYS_VAR_ID的sys var id，
-  // 如果需要申请大于OB_MAX_SYS_VAR_ID的sys var id，需要先调整ob_max_sys_var_id的值
+  // OB_MAX_SYS_VAR_ID indicate the max sys var id in current values,You should NOT use sys var id bigger than OB_MAX_SYS_VAR_ID
   const static int32_t OB_MAX_SYS_VAR_ID = 20000;
 
 private:

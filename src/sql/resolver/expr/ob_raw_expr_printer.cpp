@@ -356,6 +356,8 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
       }
       case T_OP_AND:
         SET_SYMBOL_IF_EMPTY("and");
+      case T_OP_BIT_NEG:
+        SET_SYMBOL_IF_EMPTY("~");
       case T_OP_OR: {
         SET_SYMBOL_IF_EMPTY("or");
         if (expr->get_param_count() < 2) {

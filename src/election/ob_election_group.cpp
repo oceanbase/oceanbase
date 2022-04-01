@@ -38,10 +38,10 @@ using namespace common;
 
 namespace election {
 
-int ObElectionGroup::init(const ObElectionGroupId& eg_id, const ObAddr& self, const uint64_t tenant_id,
-    const common::ObMemberList& sorted_member_list, const int64_t replica_num, ObIElectionRpc* rpc, ObTimeWheel* tw,
-    ObIElectionMgr* election_mgr, ObElectionGroupCache* election_group_cache, ObIElectionGroupPriorityGetter* eg_cb,
-    ObIElectionGroupMgr* eg_mgr)
+int ObElectionGroup::init(const ObElectionGroupId &eg_id, const ObAddr &self, const uint64_t tenant_id,
+    const common::ObMemberList &sorted_member_list, const int64_t replica_num, ObIElectionRpc *rpc, ObTimeWheel *tw,
+    ObIElectionMgr *election_mgr, ObElectionGroupCache *election_group_cache, ObIElectionGroupPriorityGetter *eg_cb,
+    ObIElectionGroupMgr *eg_mgr)
 {
   // init for leader election group
   int ret = OB_SUCCESS;
@@ -97,11 +97,11 @@ int ObElectionGroup::init(const ObElectionGroupId& eg_id, const ObAddr& self, co
   return ret;
 }
 
-int ObElectionGroup::init(const ObElectionGroupId& eg_id, const ObAddr& self, const uint64_t tenant_id,
-    ObIElectionRpc* rpc, ObTimeWheel* tw, ObIElectionMgr* election_mgr, ObElectionGroupCache* election_group_cache,
-    ObIElectionGroupPriorityGetter* eg_cb, ObIElectionGroupMgr* eg_mgr)
+int ObElectionGroup::init(const ObElectionGroupId &eg_id, const ObAddr &self, const uint64_t tenant_id,
+    ObIElectionRpc *rpc, ObTimeWheel *tw, ObIElectionMgr *election_mgr, ObElectionGroupCache *election_group_cache,
+    ObIElectionGroupPriorityGetter *eg_cb, ObIElectionGroupMgr *eg_mgr)
 {
-  // init for follower elction group
+  // init for follower election group
   int ret = OB_SUCCESS;
 
   if (is_inited_) {
@@ -331,7 +331,7 @@ int ObElectionGroup::try_stop_()
   return ret;
 }
 
-int ObElectionGroup::try_update_eg_version(const int64_t msg_eg_version, const ObPartitionArray& partition_array)
+int ObElectionGroup::try_update_eg_version(const int64_t msg_eg_version, const ObPartitionArray &partition_array)
 {
   // update eg_version
   int ret = OB_SUCCESS;
@@ -357,10 +357,10 @@ bool ObElectionGroup::is_need_check_eg_version(const int64_t msg_eg_version) con
   return (ROLE_LEADER != ATOMIC_LOAD(&role_) && (ATOMIC_LOAD(&eg_version_) != msg_eg_version));
 }
 
-int ObElectionGroup::check_eg_version(const int64_t msg_eg_version, const ObPartitionArray& partition_array,
-    ObPartitionArray& pending_move_out_array, ObPartitionArray& pending_move_in_array)
+int ObElectionGroup::check_eg_version(const int64_t msg_eg_version, const ObPartitionArray &partition_array,
+    ObPartitionArray &pending_move_out_array, ObPartitionArray &pending_move_in_array)
 {
-  // check version before follower group process messsages
+  // check version before follower group process messages
   // is_running may be false for follower group
   int ret = OB_SUCCESS;
 
@@ -420,7 +420,7 @@ int ObElectionGroup::check_eg_version(const int64_t msg_eg_version, const ObPart
   return ret;
 }
 
-bool ObElectionGroup::is_part_array_equal_(const ObPartitionArray& partition_array) const
+bool ObElectionGroup::is_part_array_equal_(const ObPartitionArray &partition_array) const
 {
   bool bool_ret = false;
   if (partition_array_.count() != partition_array.count()) {
@@ -439,8 +439,8 @@ bool ObElectionGroup::is_part_array_equal_(const ObPartitionArray& partition_arr
   return bool_ret;
 }
 
-int ObElectionGroup::gen_pending_move_part_array_(const int64_t msg_eg_version, const ObPartitionArray& partition_array,
-    ObPartitionArray& pending_move_in_array, ObPartitionArray& pending_move_out_array)
+int ObElectionGroup::gen_pending_move_part_array_(const int64_t msg_eg_version, const ObPartitionArray &partition_array,
+    ObPartitionArray &pending_move_in_array, ObPartitionArray &pending_move_out_array)
 {
   // follower group calculate move in/out list according to leader group's message
   int ret = OB_SUCCESS;
@@ -456,7 +456,7 @@ int ObElectionGroup::gen_pending_move_part_array_(const int64_t msg_eg_version, 
     const int64_t self_part_count = partition_array_.count();
     int64_t tmp_idx = -1;
     for (int64_t i = 0; i < self_part_count; ++i) {
-      const ObPartitionKey& tmp_arg_pkey = partition_array_.at(i);
+      const ObPartitionKey &tmp_arg_pkey = partition_array_.at(i);
       if (!is_pkey_in_array_(tmp_arg_pkey, partition_array, tmp_idx)) {
         if (OB_FAIL(pending_move_out_array.push_back(tmp_arg_pkey))) {
           FORCE_ELECT_LOG(WARN, "array push_back failed", K(ret), K(tmp_arg_pkey));
@@ -466,7 +466,7 @@ int ObElectionGroup::gen_pending_move_part_array_(const int64_t msg_eg_version, 
     // calculate move in partitions
     const int64_t arg_part_count = partition_array.count();
     for (int64_t i = 0; i < arg_part_count; ++i) {
-      const ObPartitionKey& tmp_arg_pkey = partition_array.at(i);
+      const ObPartitionKey &tmp_arg_pkey = partition_array.at(i);
       if (!is_partition_exist_unlock_(tmp_arg_pkey, tmp_idx)) {
         if (OB_FAIL(pending_move_in_array.push_back(tmp_arg_pkey))) {
           FORCE_ELECT_LOG(WARN, "array push_back failed", K(ret), K(tmp_arg_pkey));
@@ -477,7 +477,7 @@ int ObElectionGroup::gen_pending_move_part_array_(const int64_t msg_eg_version, 
   return ret;
 }
 
-int ObElectionGroup::batch_move_out_partition_(const ObPartitionArray& pending_move_out_array)
+int ObElectionGroup::batch_move_out_partition_(const ObPartitionArray &pending_move_out_array)
 {
   // handle with move out partitions,
   // no lock protected, call interface of ObElection
@@ -524,7 +524,7 @@ int ObElectionGroup::push_lease_to_part_stat_()
   return push_lease_to_part_skip_pkey_(tmp_pkey);
 }
 
-int ObElectionGroup::push_lease_to_part_skip_pkey_(const ObPartitionKey& skip_pkey)
+int ObElectionGroup::push_lease_to_part_skip_pkey_(const ObPartitionKey &skip_pkey)
 {
   // push group's lease to every partition's state, except skip_pkey
   int ret = OB_SUCCESS;
@@ -550,7 +550,7 @@ int ObElectionGroup::push_lease_to_part_skip_pkey_(const ObPartitionKey& skip_pk
 }
 
 int ObElectionGroup::move_in_partition(
-    const ObPartitionKey& pkey, const lease_t part_lease, const int64_t takeover_t1_timestamp, int64_t& ret_idx)
+    const ObPartitionKey &pkey, const lease_t part_lease, const int64_t takeover_t1_timestamp, int64_t &ret_idx)
 {
   // move in partition, called by ObElection
   // do:add partitions;update group's lease_end.
@@ -618,7 +618,7 @@ int ObElectionGroup::move_in_partition(
   return ret;
 }
 
-int ObElectionGroup::move_out_partition(const ObPartitionKey& pkey, const int64_t target_idx)
+int ObElectionGroup::move_out_partition(const ObPartitionKey &pkey, const int64_t target_idx)
 {
   // move out partition, called by ObElection
   int ret = OB_SUCCESS;
@@ -724,7 +724,7 @@ bool ObElectionGroup::is_empty_() const
   return (partition_array_.count() == 0);
 }
 
-bool ObElectionGroup::is_pkey_exist_(const ObPartitionKey& pkey) const
+bool ObElectionGroup::is_pkey_exist_(const ObPartitionKey &pkey) const
 {
   // read lock added here
   int64_t dummy_idx = -1;
@@ -732,13 +732,13 @@ bool ObElectionGroup::is_pkey_exist_(const ObPartitionKey& pkey) const
   return is_partition_exist_unlock_(pkey, dummy_idx);
 }
 
-bool ObElectionGroup::is_partition_exist_unlock_(const ObPartitionKey& pkey, int64_t& idx) const
+bool ObElectionGroup::is_partition_exist_unlock_(const ObPartitionKey &pkey, int64_t &idx) const
 {
   return is_pkey_in_array_(pkey, partition_array_, idx);
 }
 
 bool ObElectionGroup::is_pkey_in_array_(
-    const ObPartitionKey& pkey, const ObPartitionArray& partition_array, int64_t& idx) const
+    const ObPartitionKey &pkey, const ObPartitionArray &partition_array, int64_t &idx) const
 {
   bool bool_ret = false;
   idx = -1;
@@ -757,7 +757,7 @@ int64_t ObElectionGroup::get_current_ts() const
   return ObTimeUtility::current_time();
 }
 
-int ObElectionGroup::process_vote_prepare_(const ObElectionMsgEGPrepare& msg, const int64_t msg_eg_version)
+int ObElectionGroup::process_vote_prepare_(const ObElectionMsgEGPrepare &msg, const int64_t msg_eg_version)
 {
   // caller need check and add read lock
   int ret = OB_SUCCESS;
@@ -825,7 +825,7 @@ int ObElectionGroup::process_vote_prepare_(const ObElectionMsgEGPrepare& msg, co
   return ret;
 }
 
-int ObElectionGroup::local_handle_vote_prepare_(const ObElectionMsgEGPrepare& msg)
+int ObElectionGroup::local_handle_vote_prepare_(const ObElectionMsgEGPrepare &msg)
 {
   // caller need add read lock
   int ret = OB_SUCCESS;
@@ -859,7 +859,7 @@ int ObElectionGroup::local_handle_vote_prepare_(const ObElectionMsgEGPrepare& ms
 }
 
 int ObElectionGroup::handle_vote_prepare(
-    const ObElectionMsgEGPrepare& msg, const int64_t msg_eg_version, obrpc::ObElectionRpcResult& result)
+    const ObElectionMsgEGPrepare &msg, const int64_t msg_eg_version, obrpc::ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -944,7 +944,7 @@ int ObElectionGroup::try_centralized_voting_(const int64_t lease_time)
   return ret;
 }
 
-int ObElectionGroup::local_handle_vote_vote_(const ObElectionMsgEGVote& msg)
+int ObElectionGroup::local_handle_vote_vote_(const ObElectionMsgEGVote &msg)
 {
   // caller need add read lock
   int ret = OB_SUCCESS;
@@ -1006,9 +1006,9 @@ int ObElectionGroup::local_handle_vote_vote_(const ObElectionMsgEGVote& msg)
   return ret;
 }
 
-int ObElectionGroup::handle_vote_vote(const ObElectionMsgEGVote& msg, const int64_t msg_eg_version,
-    const bool is_array_deserialized, const char* buf, const int64_t buf_len, const int64_t array_start_pos,
-    ObPartitionArray& msg_part_array, obrpc::ObElectionRpcResult& result)
+int ObElectionGroup::handle_vote_vote(const ObElectionMsgEGVote &msg, const int64_t msg_eg_version,
+    const bool is_array_deserialized, const char *buf, const int64_t buf_len, const int64_t array_start_pos,
+    ObPartitionArray &msg_part_array, obrpc::ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1107,7 +1107,7 @@ int ObElectionGroup::handle_vote_vote(const ObElectionMsgEGVote& msg, const int6
   return ret;
 }
 
-int ObElectionGroup::send_vote_vote_(const ObElectionMsgEGVote& msg)
+int ObElectionGroup::send_vote_vote_(const ObElectionMsgEGVote &msg)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -1125,7 +1125,7 @@ int ObElectionGroup::send_vote_vote_(const ObElectionMsgEGVote& msg)
   return ret;
 }
 
-int ObElectionGroup::get_majority_part_idx_array_(ObPartIdxArray& majority_part_idx_array)
+int ObElectionGroup::get_majority_part_idx_array_(ObPartIdxArray &majority_part_idx_array)
 {
   // get the list of partitions who received majority votes
   int ret = OB_SUCCESS;
@@ -1174,7 +1174,7 @@ int ObElectionGroup::check_centralized_majority_()
           new_leader,
           is_all_part_merged_in_,
           is_eg_majority,
-          part_state_array_,  // for counting every singal partition's tick
+          part_state_array_,  // for counting every single partition's tick
           partition_array_,
           eg_version_,
           replica_num_,
@@ -1237,8 +1237,8 @@ int ObElectionGroup::check_centralized_majority_()
   return ret;
 }
 
-bool ObElectionGroup::is_pkey_in_majority_array_(const ObPartitionKey& tmp_pkey, const ObPartitionArray& msg_part_array,
-    const ObPartIdxArray& msg_majority_part_idx_array) const
+bool ObElectionGroup::is_pkey_in_majority_array_(const ObPartitionKey &tmp_pkey, const ObPartitionArray &msg_part_array,
+    const ObPartIdxArray &msg_majority_part_idx_array) const
 {
   bool bool_ret = false;
   const int64_t msg_majority_array_cnt = msg_majority_part_idx_array.count();
@@ -1257,8 +1257,8 @@ bool ObElectionGroup::is_pkey_in_majority_array_(const ObPartitionKey& tmp_pkey,
 }
 
 int ObElectionGroup::parse_majority_part_idx_array_(const bool msg_all_part_merged_in,
-    const ObPartIdxArray& msg_majority_part_idx_array, const ObPartitionArray& msg_part_array,
-    ObPartIdxArray& majority_idx_array) const
+    const ObPartIdxArray &msg_majority_part_idx_array, const ObPartitionArray &msg_part_array,
+    ObPartIdxArray &majority_idx_array) const
 {
   int ret = OB_SUCCESS;
   const int64_t msg_array_cnt = msg_part_array.count();
@@ -1271,7 +1271,7 @@ int ObElectionGroup::parse_majority_part_idx_array_(const bool msg_all_part_merg
     FORCE_ELECT_LOG(ERROR, "two array count not match", K(ret), "election_group", *this);
   } else if (msg_all_part_merged_in) {
     for (int64_t i = 0; OB_SUCC(ret) && i < msg_array_cnt; ++i) {
-      const ObPartitionKey& tmp_pkey = msg_part_array.at(i);
+      const ObPartitionKey &tmp_pkey = msg_part_array.at(i);
       if (is_partition_exist_unlock_(tmp_pkey, tmp_idx) && OB_FAIL(majority_idx_array.push_back(tmp_idx))) {
         FORCE_ELECT_LOG(WARN, "array push_back failed", K(ret));
       }
@@ -1281,7 +1281,7 @@ int ObElectionGroup::parse_majority_part_idx_array_(const bool msg_all_part_merg
     for (int64_t i = 0; OB_SUCC(ret) && i < msg_majority_array_cnt; ++i) {
       int64_t cur_idx = msg_majority_part_idx_array.at(i);
       if (cur_idx >= 0 && cur_idx < msg_array_cnt) {
-        const ObPartitionKey& tmp_pkey = msg_part_array.at(cur_idx);
+        const ObPartitionKey &tmp_pkey = msg_part_array.at(cur_idx);
         if (is_partition_exist_unlock_(tmp_pkey, tmp_idx) && OB_FAIL(majority_idx_array.push_back(tmp_idx))) {
           FORCE_ELECT_LOG(WARN, "array push_back failed", K(ret));
         }
@@ -1293,7 +1293,7 @@ int ObElectionGroup::parse_majority_part_idx_array_(const bool msg_all_part_merg
 }
 
 // leader process vote_success message locally
-int ObElectionGroup::local_handle_vote_success_(const ObElectionMsgEGSuccess& msg)
+int ObElectionGroup::local_handle_vote_success_(const ObElectionMsgEGSuccess &msg)
 {
   // caller need add lock
   int ret = OB_SUCCESS;
@@ -1344,7 +1344,7 @@ int ObElectionGroup::local_handle_vote_success_(const ObElectionMsgEGSuccess& ms
           cur_ts - msg_t1);
     } else {
       ObElectionInfo::StateHelper state_helper(state_);
-      const ObAddr& msg_new_leader = msg.get_new_leader();
+      const ObAddr &msg_new_leader = msg.get_new_leader();
       const bool msg_all_part_merged_in = msg.is_all_part_merged_in();
       // indicate should push election's entire lease or not
       bool need_update_eg_lease = msg_all_part_merged_in;
@@ -1386,9 +1386,9 @@ int ObElectionGroup::local_handle_vote_success_(const ObElectionMsgEGSuccess& ms
   return ret;
 }
 
-int ObElectionGroup::handle_vote_success(const ObElectionMsgEGSuccess& msg, const int64_t msg_eg_version,
-    const bool is_array_deserialized, const char* buf, const int64_t buf_len, const int64_t array_start_pos,
-    ObPartitionArray& msg_part_array, ObPartitionArray& move_in_failed_array, obrpc::ObElectionRpcResult& result)
+int ObElectionGroup::handle_vote_success(const ObElectionMsgEGSuccess &msg, const int64_t msg_eg_version,
+    const bool is_array_deserialized, const char *buf, const int64_t buf_len, const int64_t array_start_pos,
+    ObPartitionArray &msg_part_array, ObPartitionArray &move_in_failed_array, obrpc::ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1444,7 +1444,7 @@ int ObElectionGroup::handle_vote_success(const ObElectionMsgEGSuccess& msg, cons
     }
     if (OB_SUCC(ret)) {
       ObElectionInfo::StateHelper state_helper(state_);
-      const ObAddr& msg_new_leader = msg.get_new_leader();
+      const ObAddr &msg_new_leader = msg.get_new_leader();
       const bool msg_all_part_merged_in = msg.is_all_part_merged_in();
       bool need_update_merged_in_val = false;
 
@@ -1563,8 +1563,8 @@ int ObElectionGroup::handle_vote_success(const ObElectionMsgEGSuccess& msg, cons
   return ret;
 }
 
-int ObElectionGroup::leader_reappoint_(const bool need_update_eg_lease, const ObPartIdxArray& majority_part_idx_array,
-    const ObAddr& leader, const int64_t t1, const int64_t lease_time)
+int ObElectionGroup::leader_reappoint_(const bool need_update_eg_lease, const ObPartIdxArray &majority_part_idx_array,
+    const ObAddr &leader, const int64_t t1, const int64_t lease_time)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -1580,7 +1580,7 @@ int ObElectionGroup::leader_reappoint_(const bool need_update_eg_lease, const Ob
           ObElectionRole::ROLE_LEADER == role_ &&  // need check lease only if I'm leader
           cur_ts > leader_lease_.second) {         // check if lease has been expired
         // maybe lease expired event has been exposed to others, leader epoch should pushed
-        // give up renew lease, group will be destoryed
+        // give up renew lease, group will be destroyed
         ret = OB_ELECTION_WARN_LEADER_LEASE_EXPIRED;
         FORCE_ELECT_LOG(WARN,
             "group leader lease expired, give up reappointing",
@@ -1621,7 +1621,7 @@ int ObElectionGroup::leader_reappoint_(const bool need_update_eg_lease, const Ob
   return ret;
 }
 
-int ObElectionGroup::leader_elected_(const ObAddr& leader, const int64_t t1, const int64_t lease_time)
+int ObElectionGroup::leader_elected_(const ObAddr &leader, const int64_t t1, const int64_t lease_time)
 {
   int ret = OB_SUCCESS;
 
@@ -1667,7 +1667,7 @@ bool ObElectionGroup::lease_expired_too_long_(const int64_t cur_ts) const
 }
 
 int ObElectionGroup::handle_prepare_destroy_msg(
-    const ObElectionMsg& msg, const int64_t msg_eg_version, obrpc::ObElectionRpcResult& result)
+    const ObElectionMsg &msg, const int64_t msg_eg_version, obrpc::ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1748,7 +1748,7 @@ int ObElectionGroup::prepare_destroy()
   return ret;
 }
 
-int ObElectionGroup::get_priority_(ObElectionGroupPriority& priority) const
+int ObElectionGroup::get_priority_(ObElectionGroupPriority &priority) const
 {
   // only leader group need call this to get priority for now
   int ret = OB_SUCCESS;
@@ -2020,7 +2020,7 @@ bool ObElectionGroup::vote_run_time_out_of_range_(const int64_t cur_ts, const in
   return (cur_ts - expect_ts) > T_VOTE_TIMER_DIFF;
 }
 
-int ObElectionGroup::send_vote_prepare_(const ObElectionMsgEGPrepare& msg)
+int ObElectionGroup::send_vote_prepare_(const ObElectionMsgEGPrepare &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -2046,7 +2046,7 @@ int ObElectionGroup::send_vote_prepare_(const ObElectionMsgEGPrepare& msg)
   return ret;
 }
 
-int ObElectionGroup::send_vote_success_(const ObElectionMsgEGSuccess& msg)
+int ObElectionGroup::send_vote_success_(const ObElectionMsgEGSuccess &msg)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -2065,7 +2065,7 @@ int ObElectionGroup::send_vote_success_(const ObElectionMsgEGSuccess& msg)
   return ret;
 }
 
-int ObElectionGroup::get_eg_centralized_candidate_(ObAddr& cur_leader, ObAddr& new_leader)
+int ObElectionGroup::get_eg_centralized_candidate_(ObAddr &cur_leader, ObAddr &new_leader)
 {
   int ret = msg_pool_.get_eg_centralized_candidate(cur_leader, new_leader, T1_timestamp_);
   if (OB_FAIL(ret)) {
@@ -2075,7 +2075,7 @@ int ObElectionGroup::get_eg_centralized_candidate_(ObAddr& cur_leader, ObAddr& n
   return ret;
 }
 
-int ObElectionGroup::get_unconfirmed_leader_info(ObAddr& unconfirmed_leader, lease_t& unconfirmed_leader_lease) const
+int ObElectionGroup::get_unconfirmed_leader_info(ObAddr &unconfirmed_leader, lease_t &unconfirmed_leader_lease) const
 {
   int ret = OB_SUCCESS;
 
@@ -2086,8 +2086,8 @@ int ObElectionGroup::get_unconfirmed_leader_info(ObAddr& unconfirmed_leader, lea
   return ret;
 }
 
-int ObElectionGroup::get_leader_lease_info(const ObPartitionKey& pkey, const int64_t target_idx,
-    const int64_t part_cur_ts, int64_t& eg_lease_end, int64_t& eg_takeover_t1_ts) const
+int ObElectionGroup::get_leader_lease_info(const ObPartitionKey &pkey, const int64_t target_idx,
+    const int64_t part_cur_ts, int64_t &eg_lease_end, int64_t &eg_takeover_t1_ts) const
 {
   // called from election
   int ret = OB_SUCCESS;
@@ -2131,7 +2131,7 @@ int ObElectionGroup::get_leader_lease_info(const ObPartitionKey& pkey, const int
 }
 
 bool ObElectionGroup::part_leader_lease_is_expired(
-    const int64_t part_cur_ts, const ObPartitionKey& pkey, const int64_t target_idx, int64_t& out_lease_end) const
+    const int64_t part_cur_ts, const ObPartitionKey &pkey, const int64_t target_idx, int64_t &out_lease_end) const
 {
   // called from election, checking if lease has been expired
   RLockGuard guard(lock_);
@@ -2139,7 +2139,7 @@ bool ObElectionGroup::part_leader_lease_is_expired(
 }
 
 bool ObElectionGroup::part_leader_lease_is_expired_unlock_(
-    const int64_t part_cur_ts, const ObPartitionKey& pkey, const int64_t target_idx, int64_t& out_lease_end) const
+    const int64_t part_cur_ts, const ObPartitionKey &pkey, const int64_t target_idx, int64_t &out_lease_end) const
 {
   bool bool_ret = true;
   const int64_t cur_ts = get_current_ts();
@@ -2182,7 +2182,7 @@ bool ObElectionGroup::part_leader_lease_is_expired_unlock_(
 }
 
 int ObElectionGroup::check_all_part_leader_lease_(
-    const int64_t cur_ts, bool& is_all_expired, ObPartitionArray& expired_part_array) const
+    const int64_t cur_ts, bool &is_all_expired, ObPartitionArray &expired_part_array) const
 {
   // check all partitions' lease in group
   // will be called when is_all_part_merged_in_=false
@@ -2202,7 +2202,7 @@ int ObElectionGroup::check_all_part_leader_lease_(
     // group is not empty, check every partition's lease
     const int64_t part_array_cnt = partition_array_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_array_cnt; ++i) {
-      const ObPartitionKey& tmp_pkey = partition_array_.at(i);
+      const ObPartitionKey &tmp_pkey = partition_array_.at(i);
       const int64_t tmp_lease_end = part_state_array_.at(i).lease_end_;
       if (cur_ts <= tmp_lease_end) {
         // not expired
@@ -2216,7 +2216,7 @@ int ObElectionGroup::check_all_part_leader_lease_(
   return ret;
 }
 
-bool ObElectionGroup::eg_lease_is_completely_expired_(const int64_t cur_ts, bool& is_all_dropped) const
+bool ObElectionGroup::eg_lease_is_completely_expired_(const int64_t cur_ts, bool &is_all_dropped) const
 {
   bool bool_ret = true;
 
@@ -2237,7 +2237,7 @@ bool ObElectionGroup::eg_lease_is_completely_expired_(const int64_t cur_ts, bool
       is_all_dropped = true;
       const int64_t part_array_cnt = expired_part_array.count();
       for (int64_t i = 0; is_all_dropped && i < part_array_cnt; ++i) {
-        const ObPartitionKey& tmp_pkey = expired_part_array.at(i);
+        const ObPartitionKey &tmp_pkey = expired_part_array.at(i);
         bool is_exist = true;
         if (OB_SUCCESS !=
             (tmp_ret = storage::ObPartitionService::get_instance().check_partition_exist(tmp_pkey, is_exist))) {
@@ -2278,12 +2278,12 @@ bool ObElectionGroup::unconfirmed_leader_lease_is_expired_(const int64_t cur_ts)
   return (cur_ts > unconfirmed_leader_lease_.second);
 }
 
-void ObElectionGroup::set_unconfirmed_leader_(const ObAddr& unconfirmed_leader)
+void ObElectionGroup::set_unconfirmed_leader_(const ObAddr &unconfirmed_leader)
 {
   unconfirmed_leader_ = unconfirmed_leader;
 }
 
-int ObElectionGroup::post_election_msg_(const ObMemberList& mlist, const ObElectionMsg& msg)
+int ObElectionGroup::post_election_msg_(const ObMemberList &mlist, const ObElectionMsg &msg)
 {
   int ret = OB_SUCCESS;
   ObAddr server;
@@ -2325,7 +2325,7 @@ int ObElectionGroup::check_array_buf_()
   return ret;
 }
 
-int ObElectionGroup::post_election_msg_(const ObAddr& server, const ObElectionMsg& msg)
+int ObElectionGroup::post_election_msg_(const ObAddr &server, const ObElectionMsg &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -2343,12 +2343,12 @@ int ObElectionGroup::post_election_msg_(const ObAddr& server, const ObElectionMs
   return ret;
 }
 
-bool ObElectionGroup::is_candidate_(const ObAddr& server) const
+bool ObElectionGroup::is_candidate_(const ObAddr &server) const
 {
   return sorted_member_list_.contains(server);
 }
 
-bool ObElectionGroup::is_real_leader_(const ObAddr& server) const
+bool ObElectionGroup::is_real_leader_(const ObAddr &server) const
 {
   bool bool_ret = false;
   const int64_t cur_ts = get_current_ts();
@@ -2378,7 +2378,7 @@ bool ObElectionGroup::in_reappoint_period_(const int64_t ts)
   return bool_ret;
 }
 
-int ObElectionGroup::get_election_group_info(ObElectionGroupInfo& eg_info) const
+int ObElectionGroup::get_election_group_info(ObElectionGroupInfo &eg_info) const
 {
   RLockGuard guard(lock_);
   eg_info.set_is_running(is_running_);

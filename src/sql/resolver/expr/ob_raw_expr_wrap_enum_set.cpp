@@ -767,14 +767,16 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr& expr)
   int ret = OB_SUCCESS;
   int64_t param_count = expr.get_param_count();
   int64_t input_types_count = expr.get_input_types().count();
+  bool param_copied = false;
   if (OB_UNLIKELY(OB_ISNULL(my_session_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("session is null", K(ret));
   } else if (OB_UNLIKELY(T_FUN_SYS_NULLIF != expr.get_expr_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(expr), K(ret));
-  } else if (OB_UNLIKELY((my_session_->use_static_typing_engine() && 6 != param_count) ||
-                         (!my_session_->use_static_typing_engine() && 2 != param_count))) {
+	} else if (FALSE_IT(param_copied = my_session_->use_static_typing_engine() && !is_oracle_mode())) {
+  } else if (OB_UNLIKELY((param_copied && 6 != param_count)
+             || (!param_copied && 2 != param_count))) {
     // For the new engine, due to the copy of the nullif parameter,
     // there are actually 3 sets of parameters: the original input parameter,
     // the calc type parameter and the result parameter, so there are 6 in total
@@ -784,7 +786,7 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr& expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param_count is not equal to input_types_count", K(param_count), K(input_types_count), K(ret));
   } else {
-    for (int i = 0; i < param_count / 2; ++i) {
+    for (int i = 0; i < param_count && OB_SUCC(ret); i += 2) {
       ObRawExpr* left_param = expr.get_param_expr(i);
       ObRawExpr* right_param = expr.get_param_expr(i + 1);
       if (OB_ISNULL(left_param) || OB_ISNULL(right_param)) {

@@ -323,8 +323,8 @@ public:
       const transaction::ObTransID& data_trans_id, const int32_t sql_sequence,
       storage::ObStoreRowLockState& lock_state);
   int get_max_trans_version_before_given_log_ts(
-      const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const int64_t max_cleanout_log_ts);
+      const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObIArray<int64_t> &max_cleanout_log_ts);
   int has_terminated_trx_in_given_log_ts_range(
       const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   bool is_clog_aggregation_enabled();
@@ -975,8 +975,8 @@ public:
   int get_applied_log_ts(const common::ObPartitionKey& pkey, int64_t& applied_log_ts);
 
   int get_max_trans_version_before_given_log_ts(
-      const ObPartitionKey& pkey, const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_id);
+      const ObPartitionKey &pkey, const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObPartitionKey &pkey, const ObIArray<int64_t> &max_cleanout_log_id);
   int has_terminated_trx_in_given_log_ts_range(
       const ObPartitionKey& pkey, const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   int set_last_restore_log_info(

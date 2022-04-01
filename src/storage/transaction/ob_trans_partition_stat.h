@@ -18,7 +18,8 @@
 
 namespace oceanbase {
 namespace transaction {
-class ObTransPartitionStat {
+class ObTransPartitionStat
+{
 public:
   ObTransPartitionStat()
   {

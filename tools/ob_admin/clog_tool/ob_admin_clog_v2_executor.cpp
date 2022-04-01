@@ -65,9 +65,17 @@ int ObAdminClogV2Executor::execute(int argc, char* argv[])
       LOG_INFO("finish encode", K(ret));
     } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, dump_ilog) : OB_NEED_RETRY)) {
       LOG_INFO("finish encode", K(ret));
+    } else if (OB_NEED_RETRY != (ret = CmdCallSimple(new_argc, new_argv, dump_meta) : OB_NEED_RETRY)) {
+      LOG_INFO("finish encode", K(ret));
     } else {
-      fprintf(stderr, "failed %d", ret);
-      print_usage();
+      if (OB_NEED_RETRY == ret) {
+        LOG_WARN("unrecognized command");
+        fprintf(stdout, "unrecognized command\n");
+        print_usage();
+      } else {
+        LOG_WARN("failed to execute clog tool", K(ret));
+        fprintf(stderr, "failed %d\n", ret);
+      }
     }
   }
   return ret;
@@ -107,15 +115,28 @@ void ObAdminClogV2Executor::print_usage()
       "$ob_admin clog_tool dump_filter filter_str log_files ## ./ob_admin clog_tool dump_filter "
       "'table_id=123;partition_id=123;log_id=123' 1 2 3\n"
       "$ob_admin clog_tool dump_hex log_files ## ./ob_admin clog_tool dump_hex 1 2 3\n"
-      "$ob_admin clog_tool dump_format log_files ## ./ob_admin clog_tool dump_format 1 2 3\n");
+      "$ob_admin clog_tool dump_format log_files ## ./ob_admin clog_tool dump_format 1 2 3\n"
+      "$ob_admin clog_tool dump_meta log_files ## ./ob_admin clog_tool dump_meta 1 2 3\n");
 }
 
 int ObAdminClogV2Executor::dump_all(int argc, char* argv[])
 {
   int ret = OB_SUCCESS;
   const bool is_hex = false;
-  if (OB_FAIL(dump_inner(argc, argv, is_hex))) {
+  const bool without_data = false;
+  if (OB_FAIL(dump_inner(argc, argv, is_hex, without_data))) {
     LOG_WARN("failed to dump all", K(ret));
+  }
+  return ret;
+}
+
+int ObAdminClogV2Executor::dump_meta(int argc, char* argv[])
+{
+  int ret = OB_SUCCESS;
+  const bool is_hex = false;
+  const bool without_data = true;
+  if (OB_FAIL(dump_inner(argc, argv, is_hex, without_data))) {
+    LOG_WARN("failed to dump meta", K(ret));
   }
   return ret;
 }
@@ -124,12 +145,13 @@ int ObAdminClogV2Executor::dump_filter(int argc, char* argv[])
 {
   int ret = OB_SUCCESS;
   const bool is_hex = false;
+  const bool without_data = false;
   if (OB_FAIL(filter_.parse(argv[0]))) {
     LOG_WARN("parse filter failed", K(ret), K(argv[0]));
   } else {
     LOG_INFO("dump with filter", K_(filter), K(argv[0]));
-    if (OB_FAIL(dump_inner(argc - 1, argv + 1, is_hex))) {
-      LOG_WARN("failed to dump all", K(ret));
+    if (OB_FAIL(dump_inner(argc - 1, argv + 1, is_hex, without_data))) {
+      LOG_WARN("failed to dump filter", K(ret));
     }
   }
   return ret;
@@ -139,22 +161,23 @@ int ObAdminClogV2Executor::dump_hex(int argc, char* argv[])
 {
   int ret = OB_SUCCESS;
   const bool is_hex = true;
-  if (OB_FAIL(dump_inner(argc, argv, is_hex))) {
+  const bool without_data = false;
+  if (OB_FAIL(dump_inner(argc, argv, is_hex, without_data))) {
     LOG_WARN("failed to dump hex", K(ret));
   }
   return ret;
 }
 
-int ObAdminClogV2Executor::dump_inner(int argc, char* argv[], bool is_hex)
+int ObAdminClogV2Executor::dump_inner(int argc, char* argv[], bool is_hex, bool without_data)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(argc < 1) || OB_ISNULL(argv)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(argc), K(ret));
   } else {
-    LOG_INFO("begin to dump all ", K(is_hex), K(ret));
+    LOG_INFO("begin to dump all ", K(is_hex), K(without_data), K(ret));
     for (int64_t i = 0; i < argc; ++i) {
-      if (OB_FAIL(dump_single_clog(argv[i], is_hex)) && OB_ITER_END != ret) {
+      if (OB_FAIL(dump_single_clog(argv[i], is_hex, without_data)) && OB_ITER_END != ret) {
         LOG_WARN("failed to dump log ", K(argv[i]), K(ret));
       } else if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
@@ -382,7 +405,7 @@ int ObAdminClogV2Executor::encode_int(
   return ret;
 }
 
-int ObAdminClogV2Executor::dump_single_clog(const char* path, bool is_hex)
+int ObAdminClogV2Executor::dump_single_clog(const char* path, bool is_hex, bool without_data)
 {
   int ret = OB_SUCCESS;
   int fd = -1;
@@ -398,7 +421,7 @@ int ObAdminClogV2Executor::dump_single_clog(const char* path, bool is_hex)
     ObLogEntryParser entry_parser;
     if (OB_FAIL(entry_parser.init(file_id, buf, buf_len, filter_, DB_host_, DB_port_, config_file_, is_ofs))) {
       LOG_WARN("failed to init entry parser", K(path), K(ret));
-    } else if (OB_FAIL(entry_parser.dump_all_entry(is_hex))) {
+    } else if (OB_FAIL(entry_parser.dump_all_entry(is_hex, without_data))) {
       if (OB_ITER_END == ret) {
         LOG_INFO("succ to dump_all_entry", K(path));
       } else {

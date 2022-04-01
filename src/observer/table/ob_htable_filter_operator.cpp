@@ -94,7 +94,8 @@ bool ObHTableColumnTracker::is_done(int64_t timestamp) const
 ObHTableExplicitColumnTracker::ObHTableExplicitColumnTracker()
     :columns_(),
      curr_column_idx_(0),
-     curr_column_(NULL)
+     curr_column_(NULL),
+     current_count_(0)
 {}
 
 int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order)

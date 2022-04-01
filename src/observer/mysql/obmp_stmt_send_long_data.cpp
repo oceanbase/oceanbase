@@ -85,7 +85,7 @@ int ObMPStmtSendLongData::process()
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = NULL;
   bool need_response_error = true;
-  bool async_resp_used = false;  // 由事务提交线程异步回复客户端
+  bool async_resp_used = false;
   int64_t query_timeout = 0;
   ObSMConnection *conn = get_conn();
 
@@ -112,6 +112,7 @@ int ObMPStmtSendLongData::process()
     ObSQLSessionInfo &session = *sess;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_use_static_typing_engine(false);
+    session.set_current_trace_id(ObCurTraceId::get_trace_id());
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket &>(req_->get_packet());
@@ -183,9 +184,7 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
     ObThreadLogLevelUtils::clear();
   }
 
-  //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
-  //清空WARNING BUFFER
   tmp_ret = do_after_process(session, use_sess_trace, ctx_, false);
   UNUSED(tmp_ret);
   return ret;
@@ -218,7 +217,6 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     } else if (OB_FAIL(store_piece(session))) {
       exec_start_timestamp_ = ObTimeUtility::current_time();
     } else {
-      //监控项统计开始
       if (enable_perf_event) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
       }
@@ -244,7 +242,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
   if (OB_SUCC(ret) && is_diagnostics_stmt) {
     // if diagnostic stmt execute successfully, it dosen't clear the warning message
   } else {
-    session.set_show_warnings_buf(ret);  // TODO: 挪个地方性能会更好，减少部分wb拷贝
+    session.set_show_warnings_buf(ret);
   }
 
   // set read_only
@@ -253,7 +251,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
   } else {
     bool is_partition_hit = session.partition_hit().get_bool();
     int err = send_error_packet(ret, NULL, is_partition_hit);
-    if (OB_SUCCESS != err) {  // 发送error包
+    if (OB_SUCCESS != err) {
       LOG_WARN("send error packet failed", K(ret), K(err));
     }
   }
@@ -266,7 +264,6 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
     audit_record.ps_stmt_id_ = stmt_id_;
     audit_record.update_stage_stat();
-    // TODO: 可以这么做么？
     // ObSQLUtils::handle_audit_record(false, EXECUTE_PS_EXECUTE,
     //     session, ctx_);
   }

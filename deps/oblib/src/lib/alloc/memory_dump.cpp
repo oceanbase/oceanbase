@@ -20,6 +20,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/utility/ob_print_utils.h"
+#include "common/ob_clock_generator.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase {
@@ -153,10 +154,13 @@ void ObMemoryDump::destroy()
 int ObMemoryDump::push(void* task)
 {
   int ret = OB_SUCCESS;
+  const bool enable_dump = lib::is_trace_log_enabled();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == task) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (!enable_dump) {
+    free_task(task);
   } else {
     ret = queue_.push(task);
     if (OB_SIZE_OVERFLOW == ret) {

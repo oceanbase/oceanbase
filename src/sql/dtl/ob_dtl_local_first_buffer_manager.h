@@ -566,6 +566,8 @@ private:
   static const int64_t CONCURRENT_CNT = 2048;
   static const int64_t CHANNEL_HASH_BUCKET_NUM = 64 * 1024;
   static const int64_t MAX_BITSET_CNT = 1024 * 1024;  // 1024 * 1024
+  static const int64_t TP_ENABLE_FAILED_SET_HT = -17;
+  static const int64_t TP_ENABLE_FAILED_SET_FIRST_BUFFER = -18;
   int64_t pins_;
   ObDtlDfoKey dfo_key_;
   ObDtlFirstBufferHashTable<uint64_t, ObDtlCacheBufferInfo> buffer_map_;
@@ -603,6 +605,7 @@ public:
 private:
   static const int64_t CONCURRENT_CNT = 1024;
   static const int64_t BUCKET_NUM = 64 * 1024;
+  static const int64_t TP_ENABLE_FAILED_ALLOC_MEM = -16;
   uint64_t tenant_id_;
   common::ObFIFOAllocator allocator_;
   ObDtlTenantMemManager* tenant_mem_mgr_;

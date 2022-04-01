@@ -186,9 +186,9 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
         pos += trace_info_len;
       }
       int64_t timestamp = common::ObTimeUtility::current_time();
-      // only print this log if enable_perf_event is enable,
-      // for `receive_ts_` might be invalid if `enable_perf_event` is false
-      if (lib::is_diagnose_info_enabled() &&
+      // only print this log if enable_record_trace_log is enable,
+      // for `receive_ts_` might be invalid if `enable_record_trace_log` is false
+      if (lib::is_trace_log_enabled() &&
           OB_UNLIKELY(timestamp - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
         SERVER_LOG(WARN,
             "record: query too slow ",
@@ -199,9 +199,12 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
       }
 
       // push into queue
-      if (OB_SUCC(ret) && !is_sensitive) {
+      if (OB_SUCC(ret)) {
         int64_t req_id = 0;
-        if (OB_FAIL(queue_.push(record, req_id))) {
+        if (is_sensitive) {
+          free(record);
+          record = NULL;
+        } else if (OB_FAIL(queue_.push(record, req_id))) {
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
           }

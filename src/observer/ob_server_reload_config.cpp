@@ -124,7 +124,7 @@ int ObServerReloadConfig::operator()()
     }
 
     (void)reload_diagnose_info_config(GCONF.enable_perf_event);
-    (void)reload_trace_log_config(GCONF.enable_sql_audit);
+    (void)reload_trace_log_config(GCONF.enable_record_trace_log);
 
     ObTenantManager::get_instance().reload_config();
   }

@@ -188,7 +188,7 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer*& buffer)
       LOG_WARN("control channel can't drain msg", K(ret));
     }
   } else if (OB_ISNULL(linked_buffer = alloc_buf(buffer->size()))) {
-    ret = OB_REACH_MEMORY_LIMIT;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate buffer", K(ret));
   } else {
     LOG_TRACE("DTL feedup a new msg to msg loop", K(buffer->size()), KP(id_), K(peer_));

@@ -27,8 +27,6 @@ public:
       ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_resultN(
       common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  static int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& expected_type, common::ObExprCtx& expr_ctx);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_greatest(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

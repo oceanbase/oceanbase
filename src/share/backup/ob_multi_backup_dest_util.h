@@ -126,8 +126,6 @@ private:
   static int check_backup_path_is_backup_backup(const char *cluster_name, const int64_t cluster_id,
       const common::ObString &root_path, const common::ObString &storage_info, const uint64_t tenant_id,
       bool &is_backup_backup);
-  static int check_is_snapshot_restore(
-      const share::ObBackupSetFileInfo &backup_set_info, const int64_t restore_timestamp, bool &is_snapshot_restore);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiBackupDestUtil);

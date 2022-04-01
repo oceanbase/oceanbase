@@ -1187,34 +1187,28 @@ int ObTmpFileManager::seek(const int64_t fd, const int64_t offset, const int whe
   return ret;
 }
 
-int ObTmpFileManager::clear(const int64_t fd)
-{
-  int ret = OB_SUCCESS;
-  ObTmpFileHandle file_handle;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(files_.get(fd, file_handle))) {
-    STORAGE_LOG(WARN, "fail to get tmp file handle", K(ret), K(fd));
-  } else if (OB_FAIL(file_handle.get_resource_ptr()->clear())) {
-    STORAGE_LOG(WARN, "fail to clear file", K(ret));
-  }
-  return ret;
-}
-
 int ObTmpFileManager::remove(const int64_t fd)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(clear(fd))) {
-    STORAGE_LOG(WARN, "fail to clear file", K(ret));
-  } else if (OB_FAIL(files_.erase(fd))) {
-    STORAGE_LOG(WARN, "fail to erase from map", K(ret));
   } else {
-    ObTaskController::get().allow_next_syslog();
-    STORAGE_LOG(INFO, "succeed to remove a tmp file", K(fd), K(common::lbt()));
+    common::SpinWLockGuard guard(rm_file_lock_);
+    ObTmpFileHandle file_handle;
+    if (OB_FAIL(files_.get(fd, file_handle))) {
+      if (common::OB_ENTRY_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "fail to get tmp file handle", K(ret), K(fd));
+      } else {
+        ret = OB_SUCCESS;
+        STORAGE_LOG(INFO, "this tmp file has been removed", K(fd), K(common::lbt()));
+      }
+    } else if (OB_FAIL(files_.erase(fd))) {
+      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+    } else {
+      ObTaskController::get().allow_next_syslog();
+      STORAGE_LOG(INFO, "succeed to remove a tmp file", K(fd), K(common::lbt()));
+    }
   }
   return ret;
 }
@@ -1279,7 +1273,7 @@ int ObTmpFileManager::sync(const int64_t fd, const int64_t timeout_ms)
 }
 
 ObTmpFileManager::ObTmpFileManager()
-    : files_(), storage_file_(), file_handle_(), next_fd_(-1), next_dir_(-1), is_inited_(false)
+    : files_(), storage_file_(), file_handle_(), next_fd_(-1), next_dir_(-1), rm_file_lock_(), is_inited_(false)
 {}
 
 ObTmpFileManager::~ObTmpFileManager()

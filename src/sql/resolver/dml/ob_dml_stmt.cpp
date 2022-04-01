@@ -1773,7 +1773,21 @@ int ObDMLStmt::get_order_exprs(ObIArray<ObRawExpr*>& order_exprs)
   return ret;
 }
 
-int ObDMLStmt::formalize_stmt(ObSQLSessionInfo* session_info)
+int ObDMLStmt::get_order_exprs(ObIArray<ObRawExpr*> &order_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); i++) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(order_exprs.push_back(order_items_.at(i).expr_))) {
+      LOG_WARN("failed to push back exprs", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> relation_exprs;
@@ -2831,13 +2845,23 @@ int ObDMLStmt::get_view_output(
     LOG_WARN("the table is not a generated table", K(ret));
   } else if (OB_FAIL(get_column_exprs(table.table_id_, columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(append(column_list, columns))) {
-    LOG_WARN("failed to append columns", K(ret));
-  } else if (OB_FAIL(table.ref_query_->get_select_exprs(select_list))) {
-    LOG_WARN("failed to get select list", K(ret));
-  } else if (OB_UNLIKELY(select_list.count() != column_list.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the select list does match the column list", K(ret), K(select_list.count()), K(column_list.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+      ObColumnRefRawExpr *col_expr = columns.at(i);
+      int64_t idx = OB_INVALID_INDEX;
+      if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FALSE_IT(idx = col_expr->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+      } else if (idx < 0 || idx >= table.ref_query_->get_select_item_size()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid idx", K(ret), K(idx));
+      } else if (OB_FAIL(select_list.push_back(table.ref_query_->get_select_item(idx).expr_))) {
+        LOG_WARN("failed to push back select expr", K(ret));
+      } else if (OB_FAIL(column_list.push_back(col_expr))) {
+        LOG_WARN("failed to push back column expr", K(ret));
+      }
+    }
   }
   return ret;
 }

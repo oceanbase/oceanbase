@@ -512,8 +512,12 @@ int ObDatumHexUtils::unhex(const ObExpr& expr, const ObString& in_str, ObEvalCtx
     while (OB_SUCC(ret) && i < in_str.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = in_str[++i];
-        c2 = in_str[++i];
+        if (i + 2 < in_str.length()) {
+          c1 = in_str[++i];
+          c2 = in_str[++i];
+        } else {
+          break;
+        }
       } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(in_str));
@@ -831,13 +835,14 @@ static OB_INLINE int common_string_year(const ObExpr& expr, const ObString& in_s
   if (OB_FAIL(common_string_int(expr, extra, in_str, is_str_int_cast, tmp_res, warning))) {
     LOG_WARN("common_string_int failed", K(ret), K(in_str));
   } else if (0 == tmp_int) {
-    // cast '0000' to year, result is 0. cast '0'/'00'/'00000' to year, result is 2000.
-    if (4 == in_str.length()) {
+		// cast '0000' to year, result is 0. cast '0'/'00'/'00000' to year, result is 2000.
+    if (OB_SUCCESS != warning || 4 == in_str.length()) {
       SET_RES_YEAR(ObTimeConverter::ZERO_YEAR);
     } else {
       const uint8_t base_year = 100;
       SET_RES_YEAR(base_year);
     }
+    CAST_FAIL(warning);
   } else {
     if (CAST_FAIL(common_int_year(expr, tmp_int, res_datum, warning))) {
       LOG_WARN("common_int_year failed", K(ret), K(tmp_int));
@@ -4279,9 +4284,14 @@ CAST_FUNC_NAME(time, date)
       int32_t out_val = 0;
       ObPhysicalPlanCtx *phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
       int64_t cur_time = phy_plan_ctx ? phy_plan_ctx->get_cur_time().get_datetime() : 0;
-      if (OB_FAIL(ObTimeConverter::datetime_to_date(cur_time, session->get_timezone_info(),
-                                                    out_val))) {
+      int64_t datetime_value = 0;
+      int64_t in_val = child_res->get_time();
+      ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
+      if (OB_FAIL(ObTimeConverter::time_to_datetime(in_val, cur_time, session->get_timezone_info(),
+                    datetime_value, ObDateTimeType))) {
         LOG_WARN("datetime_to_date failed", K(ret), K(cur_time));
+      } else if (ObTimeConverter::datetime_to_date(datetime_value, NULL, out_val)) {
+        LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
       } else {
         res_datum.set_date(out_val);
       }
@@ -8526,6 +8536,11 @@ ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {
     },
     {
         /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*json -> enum_or_set*/
         cast_not_support_enum_set, /*enum*/
         cast_not_support_enum_set, /*set*/
     }

@@ -317,9 +317,15 @@ int ObTableApiProcessorBase::init_session()
   static const uint32_t sess_version = 0;
   static const uint32_t sess_id = 1;
   static const uint64_t proxy_sess_id = 1;
-  if (OB_FAIL(session().test_init(sess_version, sess_id, proxy_sess_id, &session_alloc()))) {
+
+  // ensure allocator is constructed before session to
+  // avoid coredump at observer exit
+  ObArenaAllocator *allocator = &session_alloc();
+  oceanbase::sql::ObSQLSessionInfo &sess = session();
+
+  if (OB_FAIL(sess.test_init(sess_version, sess_id, proxy_sess_id, allocator))) {
     LOG_WARN("init session failed", K(ret));
-  } else if (OB_FAIL(session().load_default_sys_variable(false, true))) {
+  } else if (OB_FAIL(sess.load_default_sys_variable(false, true))) {
     LOG_WARN("failed to load default sys var", K(ret));
   }
   return ret;
@@ -550,7 +556,7 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
   if (trans_state_ptr_->is_start_participant_executed() && trans_state_ptr_->is_start_participant_success()) {
     if (OB_SUCCESS != (end_ret = part_service_->end_participant(
                            is_rollback, *trans_desc_ptr_, participants_ptr_->get_partitions()))) {
-      ret = (OB_SUCCESS == ret) ? end_ret : ret;
+      ret = end_ret;
       LOG_WARN("fail to end participant", K(ret), K(end_ret),
                K(is_rollback));
     }
@@ -705,7 +711,7 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SERVER_LOG(WARN, "fail to alloc memory", K(ret), K(buf_size));
     } else {
-      strcpy(buf, info_name);
+      strncpy(buf, info_name, buf_size);
       audit_name = buf;
       audit_name_length = name_length;
     }
@@ -773,17 +779,18 @@ void ObTableApiProcessorBase::end_audit()
   // append request string to query_sql
   if (NULL != request_string_ && request_string_len_ > 0) {
     static const char request_print_prefix[] = ", \nrequest: ";
-    const int64_t buf_size = audit_record_.sql_len_ + sizeof(request_print_prefix) + request_string_len_;
+    const int64_t request_print_prefix_size = sizeof(request_print_prefix);
+    const int64_t buf_size = audit_record_.sql_len_ + request_print_prefix_size + request_string_len_;
     char *buf = reinterpret_cast<char *>(audit_allocator_.alloc(buf_size));
     if (NULL == buf) {
       SERVER_LOG(WARN, "fail to alloc audit memory", K(buf_size), K(audit_record_.sql_), K(request_string_));
     } else {
       memset(buf, 0, buf_size);
       if (OB_NOT_NULL(audit_record_.sql_)) {
-        strcat(buf, audit_record_.sql_);
+        strncat(buf, audit_record_.sql_, audit_record_.sql_len_);
       }
-      strcat(buf, request_print_prefix);
-      strcat(buf, request_string_);
+      strncat(buf, request_print_prefix, request_print_prefix_size);
+      strncat(buf, request_string_, request_string_len_);
       audit_record_.sql_ = buf;
       audit_record_.sql_len_ = buf_size;
     }
@@ -1249,6 +1256,8 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
   if (0 == now_ms) {
     now_ms = -ObHTableUtils::current_time_millis();
   }
+  // store not set timestamp cell for tmp
+  ObArray<ObObj*> reset_timestamp_obj;
   //ObString htable_row;
   const int64_t N = mutations.count();
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
@@ -1275,6 +1284,7 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
         // update timestamp iff LATEST_TIMESTAMP
         if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) {
           hbase_timestamp.set_int(now_ms);
+          reset_timestamp_obj.push_back(&hbase_timestamp);
         }
       }
     }
@@ -1286,6 +1296,14 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
     if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations, mutations_result_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("failed to multi_delete", K(ret));
+      }
+      if ( OB_TRANSACTION_SET_VIOLATION == ret ) { 
+        // When OB_TRANSACTION_SET_VIOLATION happen, there will not refresh timestamp
+        // and will cover old row data in processor local retry. so here reset timestamp 
+        // to origin LATEST_TIMESTAMP in order to retry in queue and refresh timestamp force.
+        for (int64_t i = 0; i < reset_timestamp_obj.count(); i++) {
+          reset_timestamp_obj.at(i)->set_int(ObHTableConstants::LATEST_TIMESTAMP);
+        }
       }
     } else {
       affected_rows = 1;
@@ -1583,12 +1601,15 @@ int ObHTableIncrementExecutor::add_to_results(table::ObTableQueryResult &results
     objs[1] = cq;
     objs[2] = ts;
     int64_t timestamp = 0;
-    objs[2].get_int(timestamp);
-    objs[2].set_int(-timestamp);  // negate_htable_timestamp
-    objs[3] = value;
-    common::ObNewRow row(objs, 4);
-    if (OB_FAIL(results.add_row(row))) {  // deep copy
-      LOG_WARN("failed to add row to results", K(ret), K(row));
+    if (OB_FAIL(objs[2].get_int(timestamp))) {
+      LOG_WARN("failed to get int from object", K(ret));
+    } else {
+      objs[2].set_int(-timestamp);  // negate_htable_timestamp
+      objs[3] = value;
+      common::ObNewRow row(objs, 4);
+      if (OB_FAIL(results.add_row(row))) {  // deep copy
+        LOG_WARN("failed to add row to results", K(ret), K(row));
+      }
     }
   }
   return ret;

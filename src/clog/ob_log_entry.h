@@ -60,6 +60,7 @@ public:
     return header_.update_proposal_id(new_proposal_id);
   }
   int get_next_replay_ts_for_rg(int64_t& next_replay_ts) const;
+  int64_t get_submit_timestamp() const { return header_.get_submit_timestamp(); }
   TO_STRING_KV(N_HEADER, header_);
   NEED_SERIALIZE_AND_DESERIALIZE;
 

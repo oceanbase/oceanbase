@@ -1465,11 +1465,16 @@ BEGIN(in_c_comment);
     /* skip '@' and quotes like '/"/` */
     node->str_value_ = parse_strdup(yytext + 1, p->malloc_pool_, &(node->str_len_));
     if (NULL != node->str_value_
+        && node->str_len_ > 1
     		&& *(yytext + 1) == *(yytext + node->str_len_)
     		&& (*(yytext + 1) == '\'' || *(yytext + 1) == '\"' || *(yytext + 1) == '`')) {
 			node->str_value_ += 1;
 			node->str_len_ -= 2;
-		}
+    } else if (NULL != node->str_value_
+               && (*(yytext + 1) == '\'' || *(yytext + 1) == '\"' || *(yytext + 1) == '`')) {
+      yyerror(yylloc, yyextra, "unterminated user variable name\n");
+      return PARSER_SYNTAX_ERROR;
+    }
     check_value(node->str_value_);
   } else {
     ParseResult *p = (ParseResult *)yyextra;

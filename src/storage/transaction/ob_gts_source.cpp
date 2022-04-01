@@ -185,7 +185,9 @@ int ObGtsSource::get_gts(ObTsCbTask* task, int64_t& gts)
       }
     }
   }
-  gts_statistics_.inc_get_gts_cache_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_get_gts_cache_cnt();
+  }
 
   return ret;
 }
@@ -274,7 +276,9 @@ int ObGtsSource::get_gts(const MonotonicTs stc, ObTsCbTask* task, int64_t& gts, 
     }
   }
 
-  gts_statistics_.inc_get_gts_with_stc_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_get_gts_with_stc_cnt();
+  }
 
   return ret;
 }
@@ -311,7 +315,9 @@ int ObGtsSource::get_local_trans_version(ObTsCbTask* task, int64_t& gts)
       }
     }
   }
-  gts_statistics_.inc_get_gts_cache_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_get_gts_cache_cnt();
+  }
 
   return ret;
 }
@@ -387,7 +393,9 @@ int ObGtsSource::get_local_trans_version(
     }
   }
 
-  gts_statistics_.inc_get_gts_with_stc_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_get_gts_with_stc_cnt();
+  }
 
   return ret;
 }
@@ -543,7 +551,9 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts, ObTsCbTask* task, bool& need_
     }
   }
 
-  gts_statistics_.inc_wait_gts_elapse_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_wait_gts_elapse_cnt();
+  }
 
   return ret;
 }
@@ -596,7 +606,9 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts)
       }
     }
   }
-  gts_statistics_.inc_try_wait_gts_elapse_cnt();
+  if (GCONF.enable_record_trace_log) {
+    gts_statistics_.inc_try_wait_gts_elapse_cnt();
+  }
 
   return ret;
 }
@@ -756,8 +768,6 @@ int ObGtsSource::query_gts_(const ObAddr& leader)
     TRANS_LOG(WARN, "post gts request failed", KR(ret), K(leader), K(msg));
     (void)refresh_gts_location_();
   } else {
-    gts_statistics_.inc_gts_rpc_cnt();
-    ObTransStatistic::get_instance().add_gts_rpc_count(tenant_id_, 1);
     TRANS_LOG(DEBUG, "post gts request success", K(srr), K_(gts_local_cache));
   }
   return ret;

@@ -426,7 +426,7 @@ int ObLockWaitMgr::post_lock(int tmp_ret, ObRowLock& lock, const Key& key, int64
             timeout,
             key.get_table_id(),
             total_trans_node_cnt,
-            to_cstring(key),
+            GCONF.enable_record_trace_log ? to_cstring(key) : NULL,
             ctx_desc);
 
         if (lock.is_locked()) {

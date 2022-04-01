@@ -1385,10 +1385,6 @@ int ObRebalanceTaskMgr::add_task(const ObRebalanceTask& task)
     if (OB_SUCCESS != (tmp_ret = log_task_result(task, rc_array))) {
       LOG_WARN("fail to log task result", K(ret), K(tmp_ret), K(task));
     }
-    if (OB_SUCCESS != (tmp_ret = process_failed_task(task, rc_array))) {
-      LOG_WARN("fail to process failed task", K(ret), K(task));
-    } else {
-    }  // no more to do
   } else {
     ObThreadCondGuard guard(cond_);
 
@@ -1531,15 +1527,9 @@ int ObRebalanceTaskMgr::do_execute_over(
     if (OB_SUCCESS != (log_ret = log_task_result(*task, rc_array))) {
       LOG_WARN("log task result failed", K(ret), K(log_ret));
     }
-    if (OB_SUCCESS != (log_ret = process_failed_task(*task, rc_array))) {
-      LOG_WARN("failed to process task", K(log_ret), K(*task));
-    }
   } else {
     if (OB_SUCCESS != (log_ret = log_task_result(input_task, rc_array))) {
       LOG_WARN("log task result failed", K(ret), K(log_ret));
-    }
-    if (OB_SUCCESS != (log_ret = process_failed_task(input_task, rc_array))) {
-      LOG_WARN("failed to process task", K(log_ret), K(input_task));
     }
   }
 

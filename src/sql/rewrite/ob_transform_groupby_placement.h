@@ -127,67 +127,80 @@ private:
   int transform_aggregation_expr(ObDMLStmt& stmt, ObAggFunRawExpr& aggr_expr, ObIArray<TableItem*>& eager_aggr_views,
       ObIArray<bool>& table_types, ObRawExpr*& new_aggr_expr);
 
-  int convert_aggr_expr(ObDMLStmt* stmt, ObAggFunRawExpr* aggr_expr, ObRawExpr*& output_expr);
+  int convert_aggr_expr(ObDMLStmt *stmt, ObAggFunRawExpr *aggr_expr, ObRawExpr *&output_expr);
 
   int build_case_when(
-      ObDMLStmt* stmt, ObRawExpr* when_expr, ObRawExpr* value_expr, ObRawExpr* else_expr, ObRawExpr*& case_when);
+      ObDMLStmt *stmt, ObRawExpr *when_expr, ObRawExpr *value_expr, ObRawExpr *else_expr, ObRawExpr *&case_when);
 
-  int has_stmt_column(ObRawExpr* expr, const int64_t stmt_level, bool& has);
+  int has_stmt_column(
+      ObRawExpr *expr, const int64_t stmt_level, bool &has);
 
-  int get_count_star(ObDMLStmt& stmt, TableItem* table_item, bool is_outer_join_table, ObRawExpr*& count_column);
+  int get_count_star(
+      ObDMLStmt &stmt, TableItem *table_item, bool is_outer_join_table, ObRawExpr *&count_column);
 
   int get_view_column(
-      ObDMLStmt& stmt, TableItem* table_item, bool is_outer_join_table, ObRawExpr* aggr_expr, ObRawExpr*& aggr_column);
+      ObDMLStmt &stmt, TableItem *table_item, bool is_outer_join_table, ObRawExpr *aggr_expr, ObRawExpr *&aggr_column);
 
   int wrap_case_when_for_count(
-      ObDMLStmt* stmt, ObColumnRefRawExpr* view_count, ObRawExpr*& output, bool is_count_star = false);
+      ObDMLStmt *stmt, ObColumnRefRawExpr *view_count, ObRawExpr *&output, bool is_count_star = false);
 
-  int update_joined_table(TableItem* table, const TableItem* old_table, TableItem* new_table, bool& is_found);
+  int update_joined_table(
+      TableItem *table, const TableItem *old_table, TableItem *new_table, bool &is_found);
 
-  int check_unique(ObSelectStmt* stmt, PushDownParam& param, bool& is_unique);
+  int check_unique(
+      ObSelectStmt *stmt, PushDownParam &param, bool &is_unique);
 
   int add_exprs(
-      const ObIArray<ObRawExpr*>& exprs, int64_t stmt_level, ObSqlBitSet<>& table_set, ObIArray<ObRawExpr*>& dest);
+      const ObIArray<ObRawExpr *> &exprs, int64_t stmt_level, ObSqlBitSet<> &table_set, ObIArray<ObRawExpr *> &dest);
 
-  int extract_non_agg_columns(ObRawExpr* expr, const int64_t stmt_level, ObIArray<ObRawExpr*>& col_exprs);
-
-  int merge_tables(ObIArray<PushDownParam>& params, const ObSqlBitSet<>& table_set);
+  int merge_tables(ObIArray<PushDownParam> &params, const ObSqlBitSet<> &table_set);
 
   /////////////////////    transform group by pull up    //////////////////////////////
 
   int transform_groupby_pull_up(
-      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened);
+      common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *&stmt, bool &trans_happened);
 
-  int check_groupby_pullup_validity(ObDMLStmt* stmt, ObIArray<PullupHelper>& valid_views);
+  int check_groupby_pullup_validity(
+      ObDMLStmt *stmt, ObIArray<PullupHelper> &valid_views);
 
-  int check_groupby_pullup_validity(ObDMLStmt* stmt, TableItem* table, PullupHelper& helper, bool contain_inner_table,
-      ObSqlBitSet<>& ignore_tables, ObIArray<PullupHelper>& valid_views, bool& is_valid);
+  int check_groupby_pullup_validity(
+      ObDMLStmt *stmt, TableItem *table, PullupHelper &helper, bool contain_inner_table,
+      ObSqlBitSet<> &ignore_tables, ObIArray<PullupHelper> &valid_views, bool &is_valid);
 
-  int check_ignore_views(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& conditions, ObSqlBitSet<>& ignore_tables);
+  int check_ignore_views(
+      ObDMLStmt &stmt, ObIArray<ObRawExpr*> &conditions, ObSqlBitSet<> &ignore_tables);
 
-  int is_contain_aggr_item(ObColumnRefRawExpr* column_expr, TableItem* view_table, bool& is_contain);
+  int is_contain_aggr_item(
+      ObColumnRefRawExpr *column_expr, TableItem *view_table, bool &is_contain);
 
-  int is_valid_group_stmt(ObSelectStmt* sub_stmt, bool& is_valid_group);
+  int is_valid_group_stmt(
+      ObSelectStmt *sub_stmt, bool &is_valid_group);
 
-  int check_null_propagate(ObDMLStmt* parent_stmt, ObSelectStmt* child_stmt, PullupHelper& helper, bool& is_valid);
+  int check_null_propagate(
+      ObDMLStmt *parent_stmt, ObSelectStmt* child_stmt, PullupHelper &helper, bool &is_valid);
 
-  int find_not_null_column(ObDMLStmt& parent_stmt, ObSelectStmt& child_stmt, PullupHelper& helper,
-      ObIArray<ObRawExpr*>& column_exprs, ObRawExpr*& not_null_column);
+  int find_not_null_column(
+      ObDMLStmt &parent_stmt, ObSelectStmt &child_stmt, PullupHelper &helper,
+      ObIArray<ObRawExpr *> &column_exprs, ObRawExpr *&not_null_column);
 
-  int find_not_null_column_with_condition(ObDMLStmt& parent_stmt, ObSelectStmt& child_stmt, PullupHelper& helper,
-      ObIArray<ObRawExpr*>& column_exprs, ObRawExpr*& not_null_column);
-
+  int find_not_null_column_with_condition(
+      ObDMLStmt &parent_stmt, ObSelectStmt &child_stmt, PullupHelper &helper,
+      ObIArray<ObRawExpr *> &column_exprs, ObRawExpr *&not_null_column);
+                                          
   int find_null_propagate_column(
-      ObRawExpr* condition, ObIArray<ObRawExpr*>& columns, ObRawExpr*& null_propagate_column, bool& is_valid);
+      ObRawExpr *condition, ObIArray<ObRawExpr*> &columns, ObRawExpr *&null_propagate_column, bool &is_valid);
 
-  int do_groupby_pull_up(ObSelectStmt* stmt, PullupHelper& helper);
+  int do_groupby_pull_up(ObSelectStmt *stmt, PullupHelper &helper);
 
-  int get_trans_view(ObDMLStmt* stmt, ObSelectStmt*& view_stmt);
+  int get_trans_view(ObDMLStmt *stmt, ObSelectStmt *&view_stmt);
 
-  int wrap_case_when_if_necessary(ObSelectStmt& child_stmt, PullupHelper& helper, ObIArray<ObRawExpr*>& exprs);
+  int wrap_case_when_if_necessary(
+      ObSelectStmt &child_stmt, PullupHelper &helper, ObIArray<ObRawExpr *> &exprs);
 
-  int wrap_case_when(ObSelectStmt& child_stmt, ObRawExpr* not_null_column, ObRawExpr*& expr);
+  int wrap_case_when(
+      ObSelectStmt &child_stmt, ObRawExpr *not_null_column, ObRawExpr *&expr);
 
+  int check_group_by_subset(ObRawExpr *expr, const ObIArray<ObRawExpr *> &group_exprs, bool &bret);
 private:
   // help functions
   int64_t get_count_sum_num(const ObIArray<ObRawExpr*>& exprs)

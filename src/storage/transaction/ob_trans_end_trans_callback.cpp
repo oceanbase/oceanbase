@@ -58,7 +58,6 @@ void ObEndTransCallback::destroy()
 int ObEndTransCallback::callback(const int cb_param)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_us = ObTimeUtility::current_time();
 
   if (NULL == cb_) {
     ret = OB_ERR_UNEXPECTED;
@@ -71,9 +70,6 @@ int ObEndTransCallback::callback(const int cb_param)
     cb_->callback(cb_param);
     cb_ = NULL;
   }
-  const int64_t end_us = ObTimeUtility::current_time();
-  ObTransStatistic::get_instance().add_trans_callback_sql_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_trans_callback_sql_time(tenant_id_, end_us - start_us);
 
   return ret;
 }

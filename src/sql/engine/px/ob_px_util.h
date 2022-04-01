@@ -96,6 +96,8 @@ public:
 
 #define ENG_OP typename ObEngineOpTraits<NEW_ENG>
 
+typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObPartitionIndexMap;
+
 class ObPXServerAddrUtil {
   class ObPxSqcTaskCountMeta {
   public:
@@ -132,8 +134,12 @@ private:
   template <bool NEW_ENG>
   static int find_dml_ops_inner(common::ObIArray<const ENG_OP::TableModify*>& insert_ops, const ENG_OP::Root& op);
   static int check_partition_wise_location_valid(ObPartitionReplicaLocationIArray& tsc_locations);
-
-  static int reorder_all_partitions(int64_t location_key, const ObPartitionReplicaLocationIArray& src_locations,
+  static int build_partition_index_lookup_map(
+      ObTaskExecutorCtx &task_exec_ctx,
+      uint64_t ref_table_id,
+      ObPartitionIndexMap &idx_map);
+  static int reorder_all_partitions(int64_t location_key, int64_t ref_table_id,
+      const ObPartitionReplicaLocationIArray& src_locations,
       ObPartitionReplicaLocationIArray& tsc_locations, bool asc, ObExecContext& exec_ctx,
       ObIArray<int64_t>& base_order);
 

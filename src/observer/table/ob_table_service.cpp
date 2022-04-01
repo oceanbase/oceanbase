@@ -2117,7 +2117,10 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
   } else {
     if (query.get_htable_filter().is_valid()) {
       ctx.htable_result_iterator_->set_scan_result(ctx.scan_result_);
-      if (p_hcolumn_desc->get_time_to_live() > 0) {
+      if (OB_ISNULL(p_hcolumn_desc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null p_hcolumn_desc", K(ret));
+      } else if (p_hcolumn_desc->get_time_to_live() > 0) {
         ctx.htable_result_iterator_->set_ttl(p_hcolumn_desc->get_time_to_live());
       }
     } else {

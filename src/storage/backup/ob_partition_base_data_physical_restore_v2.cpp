@@ -547,7 +547,8 @@ ObPartitionMacroBlockRestoreReaderV2::ObPartitionMacroBlockRestoreReaderV2()
       backup_pgkey_(),
       backup_table_key_(),
       allocator_(),
-      restore_info_(nullptr)
+      restore_info_(nullptr),
+      sys_table_schema_version_(0)
 {}
 
 ObPartitionMacroBlockRestoreReaderV2::~ObPartitionMacroBlockRestoreReaderV2()
@@ -560,16 +561,28 @@ int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle 
   int ret = OB_SUCCESS;
   uint64_t backup_table_id = 0;
   uint64_t backup_index_id = 0;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot init twice", K(ret));
-  } else if (OB_UNLIKELY(!restore_info.is_valid())) {
+  } else if (OB_UNLIKELY(!restore_info.is_valid() || OB_ISNULL(schema_service))) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(restore_info));
+    STORAGE_LOG(WARN, "invalid args", K(ret), K(restore_info), KP(schema_service));
   } else if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "table key is invalid", K(ret), K(table_key));
+  } else if (is_sys_table(table_key.pkey_.get_table_id())) {
+    if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("failed to get sys tenant schema gurad", K(ret), K(table_key));
+    } else if (OB_FAIL(
+                   schema_guard.get_table_schema_version(table_key.pkey_.get_table_id(), sys_table_schema_version_))) {
+      LOG_WARN("failed to get table schema version", K(ret), K(table_key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(restore_info.get_backup_pgkey(backup_pgkey_))) {
     LOG_WARN("failed to get backup pgkey", K(ret));
   } else if (OB_FAIL(restore_info.trans_to_backup_schema_id(table_key.pkey_.get_table_id(), backup_table_id))) {
@@ -641,6 +654,7 @@ int ObPartitionMacroBlockRestoreReaderV2::get_next_macro_block(blocksstable::ObF
   } else if (OB_FAIL(ObRestoreFileUtil::read_macroblock_data(path.get_obstr(),
                  simple_path_.get_storage_info(),
                  macro_index,
+                 sys_table_schema_version_,
                  allocator_,
                  new_schema,
                  new_meta,

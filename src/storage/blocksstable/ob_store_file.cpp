@@ -1349,6 +1349,30 @@ int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new
   return ret;
 }
 
+int ObStoreFile::validate_datafile_size(const char* config_data_file_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("The OB store file instance is not exist", K(ret));
+  } else {
+    bool valid = false;
+    int64_t new_data_file_size = ObConfigCapacityParser::get(config_data_file_size, valid);
+    if(!valid){
+      ret = OB_ERR_PARSE_SQL;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be parsed");
+    } else {
+      const int64_t original_file_size = store_file_system_->get_total_data_size();
+      if (new_data_file_size < original_file_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("datafile_size is smaller than the original configuration", K(ret));
+        LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be smaller than the original configuration");
+      }
+    }  
+  }
+  return ret;
+}
+
 int ObStoreFile::alloc_memory(const int64_t total_macro_block_cnt, uint32_t*& free_block_array,
     uint64_t*& macro_block_bitmap, ObSegmentArray<ObMacroBlockInfo>& macro_block_info_array)
 {

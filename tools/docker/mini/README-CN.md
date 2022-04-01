@@ -1,3 +1,5 @@
+**当前镜像已不在维护，相关能力由 [standalone](../standalone/README-CN.md#启动-oceanbase-实例) 提供**
+
 # 如何使用这个镜像
 
 部署 OceanBase 数据库的方式有很多，使用 Docker 是其中较方便的一种。本仓库提供了 OceanBase 数据库的 Docker 镜像 obce-mini。obce-mini 是 OceanBase 数据库社区版的小规格单机体验镜像，仅供研究、学习和评估使用，不适用于生产环境或性能测试场景。

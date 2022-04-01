@@ -3009,8 +3009,8 @@ int ObTransformSimplify::try_remove_redundent_select(ObSelectStmt& stmt, ObSelec
 /**
  * @brief check_subquery_valid
  * check subquery return equal one row, if empty do nothing
- * has limit 可能使结果为空不做改写;
- * select ... where rownum >2; rownum不包含1必空，包含判断较难，暂不处理
+ * has limit may return empty result, do nothing:
+ * select ... where rownum >2;
  * subquery should in format of:
  * 1. select ... from dual;  no where condition
  * 2. select aggr() ...;  <- no group by, no having
@@ -3030,7 +3030,8 @@ int ObTransformSimplify::check_subquery_valid(ObSelectStmt& stmt, bool& is_valid
       // do nothing
     } else if (0 == stmt.get_from_item_size() && 0 == stmt.get_condition_size()) {
       is_valid = true;
-    } else if (0 == stmt.get_group_expr_size() && 0 == stmt.get_having_expr_size() && sel_expr->has_flag(CNT_AGG)) {
+    } else if (0 == stmt.get_group_expr_size() && 0 == stmt.get_rollup_expr_size() &&
+               0 == stmt.get_having_expr_size() && sel_expr->has_flag(CNT_AGG)) {
       is_valid = true;
     }
   }

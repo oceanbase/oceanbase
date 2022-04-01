@@ -4677,6 +4677,13 @@ int ObSelectResolver::resolve_column_ref_table_first(
       if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve alias column ref failed", K(ret), K(q_name));
       }
+    } else if (OB_NON_UNIQ_ERROR == ret && share::is_mysql_mode() && T_GROUP_SCOPE == current_scope_) {
+      // in mysql mode, for t1(c1, c2), t2(c1, c2), select t1.c1 from t1, t2 group by c1;
+      // the c1 in group by is resolved as t1.c1 in select items.
+      if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
+        ret = OB_NON_UNIQ_ERROR;
+        LOG_WARN("resolve table column ref failed", K(ret));
+      }
     } else {
       LOG_WARN("resolve table column ref failed", K(ret));
     }
@@ -4969,8 +4976,10 @@ int ObSelectResolver::resolve_win_func_exprs(ObRawExpr*& expr, common::ObIArray<
           LOG_WARN("failed to handle compat with mysql ntile.", K(ret));
         } else if (N >= OB_MAX_WINDOW_FUNCTION_NUM) {
           ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
-
           LOG_WARN("invalid window func num", K(ret), K(N), K(OB_MAX_WINDOW_FUNCTION_NUM));
+        } else if (OB_FAIL(check_orderby_type_validity(win_expr))) {
+          // need to check order by here, since the basic column type is resolve
+          LOG_WARN("invalid window func orderby type", K(ret), K(*win_expr));
         } else if (OB_ISNULL(final_win_expr = select_stmt->get_same_win_func_item(win_expr))) {
           ret = select_stmt->add_window_func_expr(win_expr);
         } else if (ObRawExprUtils::replace_ref_column(expr, win_exprs.at(i), final_win_expr)) {
@@ -5535,7 +5544,49 @@ int ObSelectResolver::identify_anchor_member(
   return ret;
 }
 
-int ObSelectResolver::check_ntile_compatiable_with_mysql(ObWinFunRawExpr* win_expr)
+int ObSelectResolver::check_orderby_type_validity(ObWinFunRawExpr *win_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(win_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("win expr is null.", K(ret));
+  } else if (win_expr->has_order_items() && win_expr->win_type_ == WINDOW_RANGE &&
+             (win_expr->get_upper().type_ == BOUND_INTERVAL || win_expr->get_lower().type_ == BOUND_INTERVAL)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < win_expr->order_items_.count(); i++) {
+      const OrderItem order_item = win_expr->order_items_.at(i);
+      if (OB_ISNULL(order_item.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("win expr unexpected null order by", K(ret));
+      } else if (OB_FAIL(order_item.expr_->formalize(session_info_))) {
+        LOG_WARN("order item can't be formalized", K(ret));
+      } else {
+        ObObjType data_type = order_item.expr_->get_data_type();
+        if (share::is_mysql_mode()) {
+          if (data_type == 0 ||  // NULL
+              ob_is_int_tc(data_type) || ob_is_uint_tc(data_type) || ob_is_float_tc(data_type) ||
+              ob_is_double_tc(data_type) || ob_is_number_tc(data_type) || ob_is_datetime_tc(data_type) ||
+              ob_is_date_tc(data_type) || ob_is_otimestampe_tc(data_type) || ob_is_time_tc(data_type) ||
+              ob_is_year_tc(data_type)) {
+            // in mysql, only the above types are allowed in window order by.
+          } else {
+            ret = OB_ERR_WINDOW_RANGE_FRAME_ORDER_TYPE;
+            LOG_WARN("RANGE N PRECEDING/FOLLOWING frame order by type miss match", K(ret), K(data_type));
+          }
+        } else {
+          if (ob_is_number_tc(data_type) || ob_is_datetime_tc(data_type)) {
+            // the above type are allowed in oracle
+          } else {
+            ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+            LOG_WARN("invalid datatype in order by for range clause", K(ret), K(data_type));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_ntile_compatiable_with_mysql(ObWinFunRawExpr *win_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(win_expr)) {

@@ -6917,22 +6917,28 @@ int ObPGStorage::remove_mem_ctx_for_trans_ctx_(memtable::ObMemtable* mt)
   return ret;
 }
 
-int ObPGStorage::get_max_cleanout_log_ts(int64_t& max_cleanout_log_ts)
+int ObPGStorage::get_max_cleanout_log_ts(ObIArray<int64_t> &sstable_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
-  int64_t sstable_clean_out_log_ts = 0;
-  max_cleanout_log_ts = 0;
-  ObTablesHandle handle;
+  sstable_cleanout_log_ts.reset();
+  ObSEArray<int64_t, 10> log_ts_array;
+  int64_t last_replay_log_ts = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
-  } else if (OB_FAIL(sstable_mgr_.get_clean_out_log_ts(sstable_clean_out_log_ts))) {
+  } else if (OB_FAIL(sstable_mgr_.get_clean_out_log_ts(log_ts_array))) {
     LOG_WARN("failed to get clean out log id", K(ret), K(pkey_));
   } else {
     {
       TCRLockGuard lock_guard(lock_);
-      max_cleanout_log_ts =
-          std::min(sstable_clean_out_log_ts, meta_->storage_info_.get_data_info().get_last_replay_log_ts());
+      last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
+      if (log_ts_array.at(i) < last_replay_log_ts) {
+        if (OB_FAIL(sstable_cleanout_log_ts.push_back(log_ts_array.at(i)))) {
+          LOG_WARN("failed to push back log ts", K(ret), K(pkey_));
+        }
+      }
     }
   }
   return ret;
@@ -6981,7 +6987,7 @@ int ObPGStorage::get_min_schema_version(int64_t& min_schema_version)
 int ObPGStorage::clear_unused_trans_status()
 {
   int ret = OB_SUCCESS;
-  int64_t max_cleanout_log_ts = 0;
+  ObSEArray<int64_t, 10> max_cleanout_log_ts;
   if (OB_FAIL(get_max_cleanout_log_ts(max_cleanout_log_ts))) {
     LOG_WARN("failed to get max cleanout log id", K(ret), K_(pkey));
   } else if (OB_FAIL(txs_->clear_unused_trans_status(pkey_, max_cleanout_log_ts))) {

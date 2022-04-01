@@ -49,17 +49,21 @@ int ObExprOr::calc_result2(
 
   bool obj1_is_true = false;
   EXPR_SET_CAST_CTX_MODE(expr_ctx);
-  if (ob_is_json(obj1.get_type())) {
+  bool is_obj1_json = ob_is_json(obj1.get_type());
+  if (is_obj1_json) {
     // cause for json type, in some case can't transform to number type
     // add special process for json type
     // use the some logical as mysql 
     int cmp_result = 0;
-    if (OB_FAIL(ObJsonExprHelper::is_json_zero(obj1.get_string(), cmp_result))) {
+    if (obj1.is_null()) {
+    } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(obj1.get_string(), cmp_result))) {
       LOG_WARN("failed: compare json", K(ret));
     } else {
-      result.set_int32(cmp_result);
+      obj1_is_true = cmp_result != 0;
     }
-  } else if (OB_FAIL(ObLogicalExprOperator::is_true(obj1, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, obj1_is_true))) {
+  }
+  
+  if (!is_obj1_json && OB_FAIL(ObLogicalExprOperator::is_true(obj1, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, obj1_is_true))) {
     LOG_WARN("fail to evaluate obj1", K(obj1), K(ret));
   } else if (obj1_is_true) {
     result.set_int32(static_cast<int32_t>(true));
@@ -73,6 +77,18 @@ int ObExprOr::calc_result2(
     } else {
       // obj1 must be false here.
       bool bool_v2 = false;
+
+      bool is_obj2_json = ob_is_json(obj2.get_type());
+      if (is_obj2_json) {
+        int cmp_result = 0;
+        if (obj1.is_null()) {
+        } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(obj1.get_string(), cmp_result))) {
+          LOG_WARN("failed: compare json", K(ret));
+        } else {
+          bool_v2 = cmp_result != 0;
+        }
+      }
+
       if (OB_FAIL(ObLogicalExprOperator::is_true(obj2, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, bool_v2))) {
         LOG_WARN("fail to evaluate obj2", K(obj2), K(ret));
       } else {

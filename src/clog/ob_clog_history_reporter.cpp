@@ -317,8 +317,6 @@ void ObClogHistoryReporter::handle(void* task)
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = insert_task_head_(partition_task))) {
           CLOG_LOG(WARN, "insert task head fail", K(tmp_ret), KPC(partition_task));
-        } else {
-          CLOG_LOG(INFO, "exec partition task fail, insert task head succ", K(tmp_ret), KPC(partition_task));
         }
       } else {
         CLOG_LOG(INFO, "exec partition task succ", KR(ret), KPC(partition_task));
@@ -813,14 +811,18 @@ int ObClogHistoryReporter::insert_task_tail_(const common::ObPartitionKey& pkey,
             } else {
               CLOG_LOG(WARN, "task_map_ insert task fail", KR(ret), K(task));
             }
-          } else {
-            CLOG_DEBUG("task_map_ insert task succ", KR(ret), K(task));
           }
         } else {
           CLOG_LOG(WARN, "task_map_ apply InsertTaskTailFunctor fail", KR(ret), KPC(op));
         }
       } else {
-        CLOG_DEBUG("task_map_ insert op succ", KR(ret), KPC(op));
+        CLOG_DEBUG("task_map_ insert op succ",
+            KR(ret),
+            K(pkey),
+            K(start_log_id),
+            K(start_log_timestamp),
+            K(end_log_id),
+            K(end_log_timestamp));
       }
 
       if (OB_ENTRY_EXIST == ret) {
@@ -831,7 +833,13 @@ int ObClogHistoryReporter::insert_task_tail_(const common::ObPartitionKey& pkey,
   }
 
   if (OB_SUCC(ret)) {
-    ISTAT("task_map_ insert task tail succ", KR(ret), KPC(op));
+    ISTAT("task_map_ insert task tail succ",
+        KR(ret),
+        K(pkey),
+        K(start_log_id),
+        K(start_log_timestamp),
+        K(end_log_id),
+        K(end_log_timestamp));
   } else {
     CLOG_LOG(WARN, "task_map insert task tail fail", KR(ret), KPC(op));
     if (OB_FAIL(free_partition_op_(op))) {
@@ -871,8 +879,6 @@ int ObClogHistoryReporter::insert_task_head_(PartitionQueueTask* partition_task)
             } else {
               CLOG_LOG(WARN, "task_map_ insert task fail", KR(ret), K(task));
             }
-          } else {
-            CLOG_DEBUG("task_map_ insert task succ", KR(ret), K(task));
           }
         } else {
           CLOG_LOG(WARN, "task_map_ apply InsertTaskHeadFunctor fail", KR(ret), KPC(partition_task));
@@ -892,7 +898,6 @@ int ObClogHistoryReporter::insert_task_head_(PartitionQueueTask* partition_task)
     // reset partition_task, ensure that the memory of PartitionQueueTask is released subsequently, and the memory of op
     // will not be released
     partition_task->reset();
-    ISTAT("task_map_ insert task head succ", KR(ret), KPC(partition_task));
   } else {
     CLOG_LOG(WARN, "task_map insert task head fail", KR(ret), KPC(partition_task));
   }
@@ -951,7 +956,7 @@ int ObClogHistoryReporter::push_task_()
         } else {
           // push work queue succ, partition_task_count_ increased by 1
           ATOMIC_INC(&partition_task_count_);
-          ISTAT("push partition task into work queue", KR(ret), K(partition_task_count_), KPC(partition_task));
+          ISTAT("push partition task into work queue", KR(ret), K(partition_task_count_));
         }
       }
       queue_task = NULL;

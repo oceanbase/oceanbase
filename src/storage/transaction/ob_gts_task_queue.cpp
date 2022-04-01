@@ -69,7 +69,6 @@ int ObGTSTaskQueue::foreach_task(
         break;
       } else {
         const uint64_t tenant_id = task->get_tenant_id();
-        const int64_t request_ts = task->get_request_ts();
         if (GET_GTS == task_type_) {
           if (OB_FAIL(task->get_gts_callback(srr, max(gts, local_trans_version), receive_gts_ts))) {
             if (OB_EAGAIN != ret) {
@@ -100,17 +99,7 @@ int ObGTSTaskQueue::foreach_task(
             break;
           }
         } else {
-          if (GET_GTS == task_type_) {
-            const int64_t total_used = ObTimeUtility::current_time() - request_ts;
-            ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, total_used);
-            ObTransStatistic::get_instance().add_gts_acquire_total_wait_count(tenant_id, 1);
-          } else if (WAIT_GTS_ELAPSING == task_type_) {
-            const int64_t total_used = ObTimeUtility::current_time() - request_ts;
-            ObTransStatistic::get_instance().add_gts_wait_elapse_total_time(tenant_id, total_used);
-            ObTransStatistic::get_instance().add_gts_wait_elapse_total_wait_count(tenant_id, 1);
-          } else {
-            // do nothing
-          }
+          // do nothing
         }
       }
     }

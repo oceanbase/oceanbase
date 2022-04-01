@@ -14,9 +14,8 @@ BOOL = "bool"
 NUMERIC  = "numeric"
 ENUM = "enum"
 
-# `ob_max_sys_var_id`表示当前版本预分配的可以使用的system var id的最大值，
-# 系统会根据ob_max_sys_var_id的值预分配sys var id -> sys var的映射数组，不能将其随意调大，
-# 如果需要分配的系统变量的sys var id必须大于`ob_max_sys_var_id`，需要将`ob_max_sys_var_id`调大
+# `ob_max_sys_var_id` indicates the max value of available pre allocated system vairable
+# DO NOT change this value
 ob_max_sys_var_id = 20000
 
 flag_dict = {}
@@ -61,7 +60,7 @@ type_dict["varchar"] = "ObVarcharType"
 type_dict["bool"] = "ObIntType" # FIXME: tinyint?
 type_dict["enum"] = "ObIntType"
 
-# 这个映射是建立在ObObjType的值不改变的前提的，如果ObObjType的值改变，这里也要跟着改
+# this mapping according ObObjType
 type_value_dict = {}
 type_value_dict["tinyint"] = 1
 type_value_dict["int"] = 5
@@ -74,8 +73,7 @@ type_value_dict["enum"] = 5
 required_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
 ignored_attrs = ["publish_version", "info_cn", "background_cn", "ref_url"]
 
-file_head_annotation = """
-/**
+file_head_annotation = """/**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -102,10 +100,9 @@ def make_alias_file(pdir, alias_file_name, sorted_list):
   alias_file =open(alias_file_name,'w')
   alias_file.write(file_head_annotation);
   alias_file.write("""
-/* 此处定义所有系统变量的名字。初始化@see ob_ddl_operation.cpp和ob_basic_session_info.cpp
- * @note: 所有OB特有的非mysql的系统变量，都以ob_开头，以区别于mysql系统变量的名字空间。
- * 反之，所有不以ob_开头的系统变量都必须和mysql语义完全兼容。 */
-
+/* OB specific system vaiables will start with ob_,
+ * all system vaiables which not start with ob_ should be compatible with mysql
+*/
 """)
   suffix_idx = alias_file_name.find(".h")
   file_def_str = "OCEANBASE_" + pdir.replace("/", "_").upper() + "_" + alias_file_name[0 : suffix_idx].upper() + "_"
@@ -148,7 +145,7 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("{\n");
   head_file.write("namespace share\n");
   head_file.write("{\n");
-  head_file.write("// ObSysVarFlag的值不可随意增删改, 有任何增删改要同时同步到sql/session/gen_ob_sys_variables.py的flag_value_dict变量中\n");
+  head_file.write("// ObSysVarFlag can not modified arbitrarily, all change should be synchronized to sql/session/gen_ob_sys_variables.py flag_value_dict\n");
   head_file.write("struct ObSysVarFlag\n");
   head_file.write("{\n");
   head_file.write("  const static int64_t NONE = 0LL;\n");
@@ -259,8 +256,8 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("static ObObj ObSysVarDefaultValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];\n")
   cpp_file.write("static ObArenaAllocator ObSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);\n")
   cpp_file.write("static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];\n")
-  cpp_file.write("// VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID\n")
-  cpp_file.write("// 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId\n")
+  cpp_file.write("// VarsInit should check the max id is bigger than OB_MAX_SYS_VAR_ID\n")
+  cpp_file.write("// the id bigger than OB_MAX_SYS_VAR_ID is invalid SysVarsId\n")
   cpp_file.write("static bool HasInvalidSysVar = false;\n")
   
   cpp_file.write("\n")
@@ -268,9 +265,9 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("  VarsInit(){\n")
 
   var_num = 0
-  cpp_file.write("    // 保存当前系统变量的最大的id\n")
+  cpp_file.write("    // store the max id for current system variable\n")
   cpp_file.write("    int64_t cur_max_var_id = 0;\n")
-  cpp_file.write("    // ObSysVarsIdToArrayIdx数组默认初始值为-1，-1表示无效索引\n")
+  cpp_file.write("    // ObSysVarsIdToArrayIdx default -1,with is invalid index\n")
   cpp_file.write("    memset(ObSysVarsIdToArrayIdx, -1, sizeof(ObSysVarsIdToArrayIdx));\n")
   for (name,attributes) in sorted_list:
     for required_attr in required_attrs:
@@ -446,7 +443,7 @@ public:
   static int calc_sys_var_store_idx(ObSysVarClassType sys_var_id, int64_t &store_idx);
   static int calc_sys_var_store_idx_by_name(const common::ObString &sys_var_name, int64_t &store_idx);
   static bool is_valid_sys_var_store_idx(int64_t store_idx);
-  static ObSysVarClassType find_sys_var_id_by_name(const common::ObString &sys_var_name, bool is_from_sys_table = false); //二分查找
+  static ObSysVarClassType find_sys_var_id_by_name(const common::ObString &sys_var_name, bool is_from_sys_table = false); // binary-search
   static int get_sys_var_name_by_id(ObSysVarClassType sys_var_id, common::ObString &sys_var_name);
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
@@ -459,8 +456,7 @@ public:
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;
-  // 表示当前OB能够使用的sys var id的最大值，正常情况下，不需要申请大于OB_MAX_SYS_VAR_ID的sys var id，
-  // 如果需要申请大于OB_MAX_SYS_VAR_ID的sys var id，需要先调整ob_max_sys_var_id的值
+  // OB_MAX_SYS_VAR_ID indicate the max sys var id in current values,You should NOT use sys var id bigger than OB_MAX_SYS_VAR_ID
   const static int32_t OB_MAX_SYS_VAR_ID = """)
   wfile.write(str(ob_max_sys_var_id) + ";")
   wfile.write("""
@@ -696,15 +692,12 @@ ObSysVarClassType ObSysVarFactory::find_sys_var_id_by_name(const ObString &sys_v
     LOG_ERROR("invalid lower index", K(ret), K(sys_var_name), K(lower_idx),
               LITERAL_K(ObSysVarFactory::ALL_SYS_VARS_COUNT), K(lbt()));
   } else if (OB_UNLIKELY(ObSysVarFactory::ALL_SYS_VARS_COUNT == lower_idx)) {
-    // std::lower_bound返回ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME +
-    // ObSysVarFactory::ALL_SYS_VARS_COUNT的地址，即是找不到，而不是出错
     ret = OB_SEARCH_NOT_FOUND;
   } else if (0 != sys_var_name.case_compare(
       ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[lower_idx])) {
-    // 找不到
     ret = OB_SEARCH_NOT_FOUND;
   } else {
-    sys_var_id = ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[lower_idx]; // 找到了
+    sys_var_id = ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[lower_idx];
   }
   if (OB_UNLIKELY(OB_SEARCH_NOT_FOUND == ret)) {
     if (is_from_sys_table) {
@@ -730,7 +723,6 @@ int ObSysVarFactory::calc_sys_var_store_idx(ObSysVarClassType sys_var_id, int64_
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid sys var id", K(ret), K(var_id));
   } else {
-    // 直接利用ObSysVarsIdToArrayIdx 索引数组查询到对应的store idx
     real_idx = ObSysVarsToIdxMap::get_store_idx(var_id);
     if (real_idx < 0) {
       ret = OB_SYS_VARS_MAYBE_DIFF_VERSION;
@@ -961,7 +953,7 @@ def gen_sys_vars_dict_script_for_upgrade(filename, list_sorted_by_id):
   wfile.write('#!/usr/bin/env python\n')
   wfile.write('# -*- coding: utf-8 -*-\n')
   wfile.write('\n')
-  wfile.write("# sys_vars_dict.py是由gen_ob_sys_variables.py根据ob_system_variable_init.json和upgrade_sys_var_base_script.py文件生成的，不可修改\n")
+  wfile.write("# sys_vars_dict.py is generated by gen_ob_sys_variables.py, according ob_system_variable_init.json and upgrade_sys_var_base_script.py, DO NOT edited directly\n")
   wfile.write('sys_var_dict = {}\n')
   for (name, attributes) in list_sorted_by_id:
     wfile.write("sys_var_dict[\"" + name + "\"] = {\"id\": " + str(attributes["id"]) + ", \"name\": \"" + attributes["name"] + "\", \"value\": \"" + attributes["value"] + "\", \"data_type\": " + str(type_value_dict[attributes["data_type"]]) + ", \"info\": \"" + attributes["info"] + "\", \"flags\": " + str(calc_flags_from_str(attributes["flags"])) + ((", \"min_val\": \"" + attributes["min_val"] + "\"") if "min_val" in attributes.keys() else "") + ((", \"max_val\": \"" + attributes["max_val"] + "\"") if "max_val" in attributes.keys() else "") + "}\n")

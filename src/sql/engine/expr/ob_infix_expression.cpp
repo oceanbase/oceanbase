@@ -160,8 +160,10 @@ int ObInfixExpression::set_item_count(const int64_t count)
   if (count < 0 || count >= std::numeric_limits<uint16_t>::max()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid item count", K(ret), K(count));
+  } else if (OB_FAIL(exprs_.init(count, alloc_))) {
+    LOG_WARN("exprs init failed", K(ret));
   }
-  return exprs_.init(count, alloc_);
+  return ret;
 }
 
 int ObInfixExpression::assign(const ObInfixExpression& other)

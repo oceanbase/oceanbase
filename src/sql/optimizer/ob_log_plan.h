@@ -640,8 +640,8 @@ public:
   /** @brief Allocate LIMIT on top of plan candidates */
   int candi_allocate_limit(common::ObIArray<OrderItem>& order_items);
   int candi_allocate_limit(ObRawExpr* limit_expr, ObRawExpr* offset_expr, ObRawExpr* percent_expr,
-      common::ObIArray<OrderItem>& expect_ordering, const bool has_union_child, const bool is_calc_found_rows,
-      const bool is_top_limit, const bool is_fetch_with_ties);
+      common::ObIArray<OrderItem>& expect_ordering, const bool is_calc_found_rows, const bool is_top_limit,
+      const bool is_fetch_with_ties);
 
   int is_plan_reliable(const ObLogicalOperator* root, bool& is_reliable);
 
@@ -660,8 +660,8 @@ public:
 
   /** @brief allocate limit as new top(parent)**/
   int allocate_limit_as_top(ObLogicalOperator*& old_top, ObRawExpr* limit_expr, ObRawExpr* offset_expr,
-      ObRawExpr* percent_expr, common::ObIArray<OrderItem>& expect_ordering, const bool has_union_child,
-      const bool is_calc_found_rows, const bool is_top_limit, const bool is_fetch_with_ties);
+      ObRawExpr* percent_expr, common::ObIArray<OrderItem>& expect_ordering, const bool is_calc_found_rows,
+      const bool is_top_limit, const bool is_fetch_with_ties);
 
   /**
    *  Plan tree traversing(both top-down and bottom-up)

@@ -1197,12 +1197,13 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*>& table_i
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (!expr->get_relation_ids().is_subset(table_ids)) {
-        // do nothing
+      } else if (!expr->get_relation_ids().is_subset(table_ids) || 
+                 expr->has_flag(CNT_SUB_QUERY)) {
       } else if (OB_FAIL(table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(all_table_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else {
       }
     }
     if (OB_SUCC(ret)) {
@@ -1268,8 +1269,6 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*>& table_i
         LOG_WARN("failed to generate R-TES", K(ret));
       }
     }
-    //对于inner join来说，满足交换律，所以不需要区分L_TES、R_TES
-    //为了方便之后统一applicable算法，L_TES、R_TES都等于SES
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(inner_detector->L_TES_.add_members(table_set))) {
       LOG_WARN("failed to generate L-TES", K(ret));
@@ -3715,8 +3714,11 @@ int ObLogPlan::extract_params(ObRawExpr*& expr, const int32_t level, ObIArray<st
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(expr->extract_info())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr->extract_info())) {
     LOG_WARN("failed to extract expr info", K(ret));
+  } else if (OB_FAIL(expr->pull_relation_id_and_levels(get_stmt()->get_current_level()))) {
+    LOG_WARN("pull up rel id and level failed", K(ret));
   }
   return ret;
 }
@@ -5028,34 +5030,24 @@ int ObLogPlan::candi_allocate_limit(ObIArray<OrderItem>& order_items)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt* stmt = NULL;
-  bool has_union_child = false;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
-  } else if (stmt->is_set_stmt()) {
-    has_union_child = static_cast<ObSelectStmt*>(stmt)->get_set_op() == ObSelectStmt::UNION;
-  } else { /*do nothing*/
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(candi_allocate_limit(stmt->get_limit_expr(),
-            stmt->get_offset_expr(),
-            stmt->get_limit_percent_expr(),
-            order_items,
-            has_union_child,
-            stmt->is_calc_found_rows(),
-            stmt->has_top_limit(),
-            stmt->is_fetch_with_ties()))) {
-      LOG_WARN("failed to allocate limit operator", K(ret));
-    } else { /*do nothing*/
-    }
-  }
+  } else if (OB_FAIL(candi_allocate_limit(stmt->get_limit_expr(),
+                                          stmt->get_offset_expr(),
+                                          stmt->get_limit_percent_expr(),
+                                          order_items,
+                                          stmt->is_calc_found_rows(),
+                                          stmt->has_top_limit(),
+                                          stmt->is_fetch_with_ties()))) {
+    LOG_WARN("failed to allocate limit operator", K(ret));
+  } else { /*do nothing*/}
   return ret;
 }
 
 int ObLogPlan::candi_allocate_limit(ObRawExpr* limit_expr, ObRawExpr* offset_expr, ObRawExpr* percent_expr,
-    ObIArray<OrderItem>& expect_ordering, const bool has_union_child, const bool is_calc_found_rows,
-    const bool is_top_limit, const bool is_fetch_with_ties)
+    ObIArray<OrderItem>& expect_ordering, const bool is_calc_found_rows, const bool is_top_limit,
+    const bool is_fetch_with_ties)
 {
   int ret = OB_SUCCESS;
   CandidatePlan temp_plan;
@@ -5106,7 +5098,6 @@ int ObLogPlan::candi_allocate_limit(ObRawExpr* limit_expr, ObRawExpr* offset_exp
                                        offset_expr,
                                        percent_expr,
                                        expect_ordering,
-                                       has_union_child,
                                        is_calc_found_rows,
                                        is_top_limit,
                                        is_fetch_with_ties))) {
@@ -5318,8 +5309,8 @@ int ObLogPlan::if_plan_need_limit(ObLogicalOperator* top, ObRawExpr* limit_expr,
 }
 
 int ObLogPlan::allocate_limit_as_top(ObLogicalOperator*& old_top, ObRawExpr* limit_expr, ObRawExpr* offset_expr,
-    ObRawExpr* percent_expr, ObIArray<OrderItem>& expect_ordering, const bool has_union_child,
-    const bool is_calc_found_rows, const bool is_top_limit, const bool is_fetch_with_ties)
+    ObRawExpr* percent_expr, ObIArray<OrderItem>& expect_ordering, const bool is_calc_found_rows,
+    const bool is_top_limit, const bool is_fetch_with_ties)
 {
   int ret = OB_SUCCESS;
   ObLogLimit* limit = NULL;
@@ -5334,8 +5325,7 @@ int ObLogPlan::allocate_limit_as_top(ObLogicalOperator*& old_top, ObRawExpr* lim
     limit->set_limit_offset(offset_expr);
     limit->set_limit_percent(percent_expr);
     limit->set_child(ObLogicalOperator::first_child, old_top);
-    limit->set_has_union_child(has_union_child);
-    limit->set_calc_found_rows(is_calc_found_rows);
+    limit->set_is_calc_found_rows(is_calc_found_rows);
     limit->set_top_limit(is_top_limit);
     limit->set_fetch_with_ties(is_fetch_with_ties);
     if (OB_FAIL(limit->set_expected_ordering(expect_ordering))) {

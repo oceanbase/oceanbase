@@ -26,15 +26,15 @@ static ObSysVarFromJson ObSysVars[ObSysVarFactory::ALL_SYS_VARS_COUNT];
 static ObObj ObSysVarDefaultValues[ObSysVarFactory::ALL_SYS_VARS_COUNT];
 static ObArenaAllocator ObSysVarAllocator(ObModIds::OB_COMMON_SYS_VAR_DEFAULT_VALUE);
 static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];
-// VarsInit中需要判断当前最大的SysVars对应的id，是否大于OB_MAX_SYS_VAR_ID
-// 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId
+// VarsInit should check the max id is bigger than OB_MAX_SYS_VAR_ID
+// the id bigger than OB_MAX_SYS_VAR_ID is invalid SysVarsId
 static bool HasInvalidSysVar = false;
 
 static struct VarsInit{
   VarsInit(){
-    // 保存当前系统变量的最大的id
+    // store the max id for current system variable
     int64_t cur_max_var_id = 0;
-    // ObSysVarsIdToArrayIdx数组默认初始值为-1，-1表示无效索引
+    // ObSysVarsIdToArrayIdx default -1,with is invalid index
     memset(ObSysVarsIdToArrayIdx, -1, sizeof(ObSysVarsIdToArrayIdx));
     ObSysVars[0].info_ = "" ;
     ObSysVars[0].name_ = "auto_increment_increment" ;
@@ -1331,7 +1331,7 @@ static struct VarsInit{
     ObSysVars[115].info_ = "If set true, create all the replicas according to the locality or the operation will fail." ;
     ObSysVars[115].name_ = "ob_create_table_strict_mode" ;
     ObSysVars[115].data_type_ = ObIntType ;
-    ObSysVars[115].value_ = "1" ;
+    ObSysVars[115].value_ = "0" ;
     ObSysVars[115].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
     ObSysVars[115].id_ = SYS_VAR_OB_CREATE_TABLE_STRICT_MODE ;
     cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_CREATE_TABLE_STRICT_MODE)) ;

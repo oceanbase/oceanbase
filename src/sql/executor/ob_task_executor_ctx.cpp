@@ -335,7 +335,6 @@ int ObTaskExecutorCtxUtil::get_part_runner_server(
   return ret;
 }
 
-// 每次调用都会 allocate 一个 table_location
 int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext &ctx, uint64_t table_location_key,
     uint64_t ref_table_id, bool is_weak, ObPhyTableLocationGuard &table_location)
 {
@@ -385,6 +384,8 @@ int ObTaskExecutorCtxUtil::get_full_table_phy_table_location(ObExecContext &ctx,
     LOG_WARN("fail alloc new location", K(ret));
   } else if (OB_FAIL(table_location.get_loc()->add_partition_locations(phy_location_info))) {
     LOG_WARN("add partition locations failed", K(ret), K(phy_location_info));
+  } else {
+    table_location.get_loc()->set_table_location_key(table_location_key, ref_table_id);
   }
   return ret;
 }

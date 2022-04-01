@@ -23,6 +23,8 @@
 #include "ob_backup_path.h"
 #include "ob_backup_file_lock_mgr.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/container/ob_array.h"
+#include "lib/container/ob_array_iterator.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -668,7 +670,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_backup_info(
     } else if (OB_FAIL(result->next()) && OB_ITER_END != ret) {
       OB_LOG(WARN, "fail to get next result", K(ret), K(sql));
     } else if (OB_UNLIKELY(OB_ITER_END == ret)) {
-      // 仅租户级归档backup info未持久化之前获取出现OB_ITER_END的情况
+      // only for tenant:OB_ITER_END happen before backup info is persisted
       ret = OB_ENTRY_NOT_EXIST;
       OB_LOG(WARN, "tenant backup info not exist", K(ret), K(tenant_id), K(sql));
     } else if (OB_ISNULL(result)) {
@@ -1975,6 +1977,8 @@ int ObLogArchiveBackupInfoMgr::delete_log_archive_info(
     LOG_WARN("failed to apend copy id", K(ret), K(sql));
   } else if (OB_FAIL(sql_client.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("succeed to delete log archive info", K(affected_rows), K(sql), K(info));
   }
   return ret;
 }

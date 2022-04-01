@@ -111,8 +111,8 @@ DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one pha
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEPRECATED_DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "False",
-    "specifies whether to always record the trace log. The default value is False.",
+DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
+    "specifies whether to always record the trace log. The default value is True.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(system_trace_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
     "system trace log level, 0:none, 1:standard, 2:debug. "
@@ -950,6 +950,10 @@ DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "100", "[0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
+    "enable compaction diagnose function"
+    "Value:  True:turned on;  False: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "2M",
     "[0B,)"
     "the trigger remaining data size within transaction for immediate logging, 0B represents not trigger immediate "

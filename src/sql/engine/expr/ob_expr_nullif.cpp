@@ -149,7 +149,7 @@ int ObExprNullif::calc_resultN(ObObj& result, const ObObj* objs_stack, int64_t p
   EXPR_DEFINE_CMP_CTX(result_type_.get_calc_meta(), true, expr_ctx);
   EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
   ObObj cmp;
-  if (OB_UNLIKELY(2 != param_num) || OB_ISNULL(objs_stack)) {
+  if (OB_UNLIKELY(2 != param_num && 6 != param_num) || OB_ISNULL(objs_stack)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param_num), K(objs_stack));
   } else {

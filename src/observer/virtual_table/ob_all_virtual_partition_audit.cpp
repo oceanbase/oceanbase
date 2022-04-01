@@ -131,63 +131,63 @@ int ObAllVirtualPartitionAudit::inner_get_next_row(common::ObNewRow*& row)
           break;
         }
         case QUERY_ROW_COUNT: {
-          cells[i].set_int(audit_info.query_row_count_);
+          cells[i].set_int(0);
           break;
         }
         case INSERT_SQL_COUNT: {
-          cells[i].set_int(audit_info.insert_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case DELETE_SQL_COUNT: {
-          cells[i].set_int(audit_info.delete_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case UPDATE_SQL_COUNT: {
-          cells[i].set_int(audit_info.update_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case QUERY_SQL_COUNT: {
-          cells[i].set_int(audit_info.query_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case TRANS_COUNT: {
-          cells[i].set_int(audit_info.trans_count_);
+          cells[i].set_int(0);
           break;
         }
         case SQL_COUNT: {
-          cells[i].set_int(audit_info.sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_INSERT_ROW_COUNT: {
-          cells[i].set_int(audit_info.rollback_insert_row_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_DELETE_ROW_COUNT: {
-          cells[i].set_int(audit_info.rollback_delete_row_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_UPDATE_ROW_COUNT: {
-          cells[i].set_int(audit_info.rollback_update_row_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_INSERT_SQL_COUNT: {
-          cells[i].set_int(audit_info.rollback_insert_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_DELETE_SQL_COUNT: {
-          cells[i].set_int(audit_info.rollback_delete_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_UPDATE_SQL_COUNT: {
-          cells[i].set_int(audit_info.rollback_update_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_TRANS_COUNT: {
-          cells[i].set_int(audit_info.rollback_trans_count_);
+          cells[i].set_int(0);
           break;
         }
         case ROLLBACK_SQL_COUNT: {
-          cells[i].set_int(audit_info.rollback_sql_count_);
+          cells[i].set_int(0);
           break;
         }
         default: {

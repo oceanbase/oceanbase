@@ -607,7 +607,7 @@ SQL: select c1 from t1 union all select c1 from t2 order by c1 limit 1;
 |ID|OPERATOR     |NAME|EST. ROWS|COST|
 --------------------------------------
 |0 |LIMIT        |    |1        |74  |
-|1 | SORT        |    |1        |74  |
+|1 | TOP-N SORT  |    |1        |74  |
 |2 |  UNION ALL  |    |2        |73  |
 |3 |   TABLE SCAN|t1  |1        |36  |
 |4 |   TABLE SCAN|t2  |1        |36  |
@@ -616,7 +616,7 @@ SQL: select c1 from t1 union all select c1 from t2 order by c1 limit 1;
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), limit(1), offset(nil)
-  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(1)
   2 - output([UNION([1])]), filter(nil)
   3 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p0), 
@@ -631,7 +631,7 @@ SQL: select c2 from t2 union all select c2 from t3 order by c2 limit 1;
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
 |0 |LIMIT          |    |1        |228 |
-|1 | SORT          |    |1        |228 |
+|1 | TOP-N SORT    |    |1        |228 |
 |2 |  UNION ALL    |    |2        |227 |
 |3 |   LIMIT       |    |1        |113 |
 |4 |    TOP-N SORT |    |1        |113 |
@@ -644,7 +644,7 @@ SQL: select c2 from t2 union all select c2 from t3 order by c2 limit 1;
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), limit(1), offset(nil)
-  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(1)
   2 - output([UNION([1])]), filter(nil)
   3 - output([t2.c2]), filter(nil), limit(1), offset(nil)
   4 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(1)
@@ -705,7 +705,7 @@ SQL: (select c2, c3 from t2) union all (select c2, c3 from t3 order by c3) order
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
 |0 |LIMIT          |    |1        |308 |
-|1 | SORT          |    |1        |307 |
+|1 | TOP-N SORT    |    |1        |307 |
 |2 |  UNION ALL    |    |2        |306 |
 |3 |   LIMIT       |    |1        |153 |
 |4 |    TOP-N SORT |    |1        |153 |
@@ -718,7 +718,7 @@ SQL: (select c2, c3 from t2) union all (select c2, c3 from t3 order by c3) order
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(1), offset(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(1)
   2 - output([UNION([1])], [UNION([2])]), filter(nil)
   3 - output([t2.c2], [t2.c3]), filter(nil), limit(1), offset(nil)
   4 - output([t2.c2], [t2.c3]), filter(nil), sort_keys([t2.c2, ASC]), topn(1)

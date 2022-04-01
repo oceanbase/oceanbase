@@ -53,8 +53,6 @@ public:
   {
     return parallelism_;
   }
-  int assign_ranges(const common::ObIArray<common::ObNewRange>& ranges);
-  int assign_pkeys(const common::ObIArray<common::ObPartitionKey>& pkeys);
   void set_granule_pump(ObGranulePump* pump)
   {
     pump_ = pump;
@@ -137,9 +135,9 @@ public:
     int64_t tablet_size_;
     int64_t worker_id_;
     uint64_t tsc_op_id_;
-    common::ObSEArray<common::ObNewRange, 16> ranges_;
-    common::ObSEArray<common::ObPartitionKey, 16> pkeys_;
-    ObGranulePump* pump_;
+    common::ObSEArray<common::ObNewRange, 1> ranges_;
+    common::ObSEArray<common::ObPartitionKey, 1> pkeys_;
+    ObGranulePump *pump_;
     ObGranuleIteratorState state_;
 
     bool all_task_fetched_;

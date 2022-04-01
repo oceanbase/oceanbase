@@ -629,7 +629,7 @@ int ObShrinkResourcePoolChecker::check_single_partition_entity_finished(
   } else {
     ObArenaAllocator allocator;
     ObTablePartitionIterator iter;
-    const bool need_fetch_faillist = true;
+    const bool need_fetch_faillist = false;
     iter.set_need_fetch_faillist(need_fetch_faillist);
     ObReplicaFilterHolder partition_filter;
     if (OB_FAIL(partition_filter.set_replica_status(REPLICA_STATUS_NORMAL))) {

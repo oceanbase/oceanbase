@@ -49,6 +49,7 @@ int ObCommonConfig::add_extra_config(const char* config_str, int64_t version /* 
   char* buf = NULL;
   char* saveptr = NULL;
   char* token = NULL;
+  bool split_by_comma = false;
 
   if (OB_ISNULL(config_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -62,7 +63,11 @@ int ObCommonConfig::add_extra_config(const char* config_str, int64_t version /* 
   } else {
     MEMCPY(buf, config_str, config_str_length);
     buf[config_str_length] = '\0';
-    token = STRTOK_R(buf, ",\n", &saveptr);
+    token = STRTOK_R(buf, "\n", &saveptr);
+    if (0 == STRLEN(saveptr)) {
+      token = STRTOK_R(buf, ",\n", &saveptr);
+      split_by_comma = true;
+    }
   }
   char external_info_val[OB_MAX_CONFIG_VALUE_LEN];
   external_info_val[0] = '\0';
@@ -102,7 +107,7 @@ int ObCommonConfig::add_extra_config(const char* config_str, int64_t version /* 
       (*pp_item)->set_version(version);
       LOG_INFO("Load config succ", K(name), K(value));
     }
-    token = STRTOK_R(NULL, ",\n", &saveptr);
+    token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
   }
 
   if (NULL != buf) {

@@ -1371,6 +1371,46 @@ int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawE
   return ret;
 }
 
+int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory, const ObSQLSessionInfo &session,
+    const ObTableSchema &table_schema, const ObColumnSchemaV2 &gen_col_schema, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(expr));
+
+  if (OB_SUCC(ret) && expr->get_param_count() > 0) {
+    for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      OZ(SMART_CALL(
+          build_pad_expr_recursively(expr_factory, session, table_schema, gen_col_schema, expr->get_param_expr(i))));
+    }
+  }
+  if (OB_SUCC(ret) && expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *b_expr = static_cast<ObColumnRefRawExpr *>(expr);
+    uint64_t column_id = b_expr->get_column_id();
+    if (OB_SUCC(ret)) {
+      const ObColumnSchemaV2 *column_schema = table_schema.get_column_schema(column_id);
+      if (NULL == column_schema) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get column schema fail", K(column_schema));
+      } else if (ObObjMeta::is_binary(column_schema->get_data_type(), column_schema->get_collation_type())) {
+        if (OB_FAIL(build_pad_expr(expr_factory, false, column_schema, expr, &session))) {
+          LOG_WARN("fail to build pading expr for binary", K(ret));
+        }
+      } else if (ObCharType == column_schema->get_data_type() || ObNCharType == column_schema->get_data_type()) {
+        if (gen_col_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
+          if (OB_FAIL(build_pad_expr(expr_factory, true, column_schema, expr, &session))) {
+            LOG_WARN("fail to build pading expr for char", K(ret));
+          }
+        } else {
+          if (OB_FAIL(build_trim_expr(column_schema, expr_factory, &session, expr))) {
+            LOG_WARN("fail to build trime expr for char", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // compare two raw expressions
 bool ObRawExprUtils::is_same_raw_expr(const ObRawExpr* src, const ObRawExpr* dst)
 {
@@ -1899,6 +1939,7 @@ int ObRawExprUtils::create_substr_expr(ObRawExprFactory& expr_factory, ObSQLSess
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("to_type is null");
   } else {
+    out_expr->set_func_name(N_SUBSTR);
     if (NULL == third_expr) {
       if (OB_FAIL(out_expr->set_param_exprs(first_expr, second_expr))) {
         LOG_WARN("add param expr failed", K(ret));
@@ -2665,7 +2706,7 @@ int ObRawExprUtils::build_null_expr(ObRawExprFactory& expr_factory, ObRawExpr*& 
 }
 
 int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2* column_schema, ObRawExprFactory& expr_factory,
-    ObSQLSessionInfo* session_info, ObRawExpr*& expr)
+    const ObSQLSessionInfo* session_info, ObRawExpr*& expr)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr* trim_expr = NULL;
@@ -2716,7 +2757,7 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2* column_schema, ObRaw
 }
 
 int ObRawExprUtils::build_pad_expr(ObRawExprFactory& expr_factory, bool is_char, const ObColumnSchemaV2* column_schema,
-    ObRawExpr*& expr, sql::ObSQLSessionInfo* session_info)
+    ObRawExpr*& expr, const sql::ObSQLSessionInfo* session_info)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr* pad_expr = NULL;

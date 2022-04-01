@@ -30,7 +30,7 @@ ObSSTableMultiVersionRowIterator::ObSSTableMultiVersionRowIterator()
       read_newest_(false)
 {
   not_exist_row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-  not_exist_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
+  not_exist_row_.row_val_.cells_ = reinterpret_cast<ObObj *>(obj_buf_);
   not_exist_row_.row_val_.count_ = 0;
 }
 
@@ -72,7 +72,7 @@ int ObSSTableMultiVersionRowIterator::new_iterator(ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (NULL == iter_) {
-    void* buf = NULL;
+    void *buf = NULL;
     if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate iterator", K(ret));
@@ -83,7 +83,7 @@ int ObSSTableMultiVersionRowIterator::new_iterator(ObIAllocator &allocator)
   return ret;
 }
 
-int ObSSTableMultiVersionRowIterator::get_not_exist_row(const common::ObStoreRowkey& rowkey, const ObStoreRow*& row)
+int ObSSTableMultiVersionRowIterator::get_not_exist_row(const common::ObStoreRowkey &rowkey, const ObStoreRow *&row)
 {
   int ret = OB_SUCCESS;
   if (out_cols_cnt_ <= 0) {
@@ -91,7 +91,7 @@ int ObSSTableMultiVersionRowIterator::get_not_exist_row(const common::ObStoreRow
     LOG_WARN("The multi version row iterator has not been inited, ", K(ret), K(out_cols_cnt_));
   } else {
     const int64_t rowkey_cnt = rowkey.get_obj_cnt();
-    not_exist_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
+    not_exist_row_.row_val_.cells_ = reinterpret_cast<ObObj *>(obj_buf_);
     not_exist_row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
     not_exist_row_.row_val_.count_ = out_cols_cnt_;
 
@@ -108,10 +108,10 @@ int ObSSTableMultiVersionRowIterator::get_not_exist_row(const common::ObStoreRow
 }
 
 int ObSSTableMultiVersionRowGetter::inner_open(
-    const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range)
+    const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx, ObITable *table, const void *query_range)
 {
   int ret = OB_SUCCESS;
-  const ObColDescIArray* out_cols = nullptr;
+  const ObColDescIArray *out_cols = nullptr;
   if (OB_ISNULL(query_range) || OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(table), KP(query_range));
@@ -123,7 +123,7 @@ int ObSSTableMultiVersionRowGetter::inner_open(
     if (OB_FAIL(ObVersionStoreRangeConversionHelper::store_rowkey_to_multi_version_range(
             *rowkey_, access_ctx.trans_version_range_, *access_ctx.allocator_, multi_version_range_))) {
       LOG_WARN("convert to multi version range failed", K(ret), K(*rowkey_));
-    } else if (OB_FAIL(new_iterator<ObSSTableRowScanner>(*access_ctx.allocator_))) {
+    } else if (OB_FAIL(new_iterator<ObSSTableRowScanner>(*access_ctx.stmt_allocator_))) {
       LOG_WARN("failed to new iterator", K(ret));
     } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_range_))) {
       LOG_WARN("failed to open scanner", K(ret));
@@ -132,7 +132,7 @@ int ObSSTableMultiVersionRowGetter::inner_open(
   return ret;
 }
 
-int ObSSTableMultiVersionRowGetter::inner_get_next_row(const ObStoreRow*& row)
+int ObSSTableMultiVersionRowGetter::inner_get_next_row(const ObStoreRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter_) || OB_ISNULL(query_range_)) {
@@ -173,7 +173,7 @@ uint8_t ObSSTableMultiVersionRowScannerBase::get_iter_flag()
   uint8_t flag = 0;
   if (!read_newest_) {
     // do nothing
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->get_row_iter_flag_impl(flag))) {
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->get_row_iter_flag_impl(flag))) {
     ret = OB_SUCCESS;
   }
   return flag;
@@ -196,7 +196,7 @@ void ObSSTableMultiVersionRowScannerBase::reuse()
 }
 
 int ObSSTableMultiVersionRowScanner::inner_open(
-    const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range)
+    const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx, ObITable *table, const void *query_range)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_range) || OB_ISNULL(table)) {
@@ -205,7 +205,7 @@ int ObSSTableMultiVersionRowScanner::inner_open(
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    sstable_ = static_cast<ObSSTable*>(table);
+    sstable_ = static_cast<ObSSTable *>(table);
     query_range_ = query_range;
     read_newest_ = access_ctx.trans_version_range_.snapshot_version_ >= sstable_->get_upper_trans_version() &&
                    sstable_->has_compact_row();
@@ -213,7 +213,7 @@ int ObSSTableMultiVersionRowScanner::inner_open(
     if (OB_FAIL(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(
             *range_, access_ctx.trans_version_range_, *access_ctx.allocator_, multi_version_range_))) {
       LOG_WARN("convert to multi version range failed", K(ret), K(*range_));
-    } else if (OB_FAIL(new_iterator<ObSSTableRowScanner>(*access_ctx.allocator_))) {
+    } else if (OB_FAIL(new_iterator<ObSSTableRowScanner>(*access_ctx.stmt_allocator_))) {
       LOG_WARN("failed to new iterator", K(ret));
     } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_range_))) {
       LOG_WARN("failed to open scanner", K(ret));
@@ -222,7 +222,7 @@ int ObSSTableMultiVersionRowScanner::inner_open(
   return ret;
 }
 
-int ObSSTableMultiVersionRowScanner::inner_get_next_row(const ObStoreRow*& row)
+int ObSSTableMultiVersionRowScanner::inner_get_next_row(const ObStoreRow *&row)
 {
   return iter_->get_next_row(row);
 }
@@ -240,21 +240,21 @@ void ObSSTableMultiVersionRowScanner::reuse()
 }
 
 int ObSSTableMultiVersionRowScanner::skip_range(
-    int64_t range_idx, const ObStoreRowkey* gap_rowkey, const bool include_gap_key)
+    int64_t range_idx, const ObStoreRowkey *gap_rowkey, const bool include_gap_key)
 {
   int ret = OB_SUCCESS;
-  ObExtStoreRange* new_range = NULL;
+  ObExtStoreRange *new_range = NULL;
   if (OB_UNLIKELY(range_idx < 0 || NULL == gap_rowkey)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(range_idx), KP(gap_rowkey));
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->generate_new_range(
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->generate_new_range(
                  range_idx, *gap_rowkey, include_gap_key, *range_, new_range))) {
     LOG_WARN("fail to generate new range", K(ret));
   } else if (NULL != new_range) {
     if (OB_FAIL(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(
             *new_range, trans_version_range_, *access_ctx_->allocator_, skip_range_))) {
       LOG_WARN("fail to do range to multi version range", K(ret));
-    } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->skip_range_impl(
+    } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->skip_range_impl(
                    range_idx, multi_version_range_, skip_range_))) {
       LOG_WARN("fail to skip range impl", K(ret), K(range_idx));
     }
@@ -263,12 +263,12 @@ int ObSSTableMultiVersionRowScanner::skip_range(
 }
 
 int ObSSTableMultiVersionRowScanner::get_gap_end(
-    int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size)
+    int64_t &range_idx, const common::ObStoreRowkey *&gap_key, int64_t &gap_size)
 {
   int ret = OB_SUCCESS;
   if (!read_newest_) {
     // do nothing
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->get_gap_end_impl(
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->get_gap_end_impl(
                  multi_version_range_, gap_rowkey_, gap_size))) {
     STORAGE_LOG(WARN, "fail to get gap end impl", K(ret));
   } else {
@@ -279,10 +279,10 @@ int ObSSTableMultiVersionRowScanner::get_gap_end(
 }
 
 int ObSSTableMultiVersionRowMultiGetter::inner_open(
-    const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range)
+    const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx, ObITable *table, const void *query_range)
 {
   int ret = OB_SUCCESS;
-  const ObColDescIArray* out_cols = nullptr;
+  const ObColDescIArray *out_cols = nullptr;
   if (OB_ISNULL(query_range) || OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(table), KP(query_range));
@@ -306,7 +306,7 @@ int ObSSTableMultiVersionRowMultiGetter::inner_open(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.allocator_))) {
+      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to new iterator", K(ret));
       } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_ranges_))) {
         LOG_WARN("failed to open multi scanner", K(ret));
@@ -316,7 +316,7 @@ int ObSSTableMultiVersionRowMultiGetter::inner_open(
   return ret;
 }
 
-int ObSSTableMultiVersionRowMultiGetter::inner_get_next_row(const ObStoreRow*& row)
+int ObSSTableMultiVersionRowMultiGetter::inner_get_next_row(const ObStoreRow *&row)
 {
   int ret = OB_SUCCESS;
   row = NULL;
@@ -360,8 +360,8 @@ int ObSSTableMultiVersionRowMultiGetter::inner_get_next_row(const ObStoreRow*& r
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("row is empty", K(ret), K(range_idx_), K(rowkeys_->at(range_idx_).get_store_rowkey()));
       } else {
-        (const_cast<ObStoreRow*>(row))->scan_index_ = range_idx_;
-        (const_cast<ObStoreRow*>(row))->is_get_ = true;
+        (const_cast<ObStoreRow *>(row))->scan_index_ = range_idx_;
+        (const_cast<ObStoreRow *>(row))->is_get_ = true;
         ++range_idx_;
       }
     }
@@ -384,7 +384,7 @@ void ObSSTableMultiVersionRowMultiGetter::reuse()
 }
 
 int ObSSTableMultiVersionRowMultiScanner::inner_open(
-    const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range)
+    const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx, ObITable *table, const void *query_range)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_range) || OB_ISNULL(table)) {
@@ -393,7 +393,7 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    sstable_ = static_cast<ObSSTable*>(table);
+    sstable_ = static_cast<ObSSTable *>(table);
     read_newest_ = access_ctx.trans_version_range_.snapshot_version_ >= sstable_->get_upper_trans_version() &&
                    sstable_->has_compact_row();
     query_range_ = query_range;
@@ -431,7 +431,7 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.allocator_))) {
+      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to new iterator", K(ret));
       } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_ranges_))) {
         LOG_WARN("failed to open scanner", K(ret));
@@ -442,21 +442,21 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
 }
 
 int ObSSTableMultiVersionRowMultiScanner::skip_range(
-    int64_t range_idx, const ObStoreRowkey* gap_rowkey, const bool include_gap_key)
+    int64_t range_idx, const ObStoreRowkey *gap_rowkey, const bool include_gap_key)
 {
   int ret = OB_SUCCESS;
-  ObExtStoreRange* new_range = NULL;
+  ObExtStoreRange *new_range = NULL;
   if (OB_UNLIKELY(range_idx < 0 || NULL == gap_rowkey)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(range_idx), KP(gap_rowkey));
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->generate_new_range(
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->generate_new_range(
                  range_idx, *gap_rowkey, include_gap_key, ranges_->at(range_idx), new_range))) {
     LOG_WARN("fail to generate new range", K(ret));
   } else if (NULL != new_range) {
     if (OB_FAIL(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(
             *new_range, trans_version_range_, *access_ctx_->allocator_, skip_range_))) {
       LOG_WARN("fail to do range to multi version range", K(ret));
-    } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->skip_range_impl(
+    } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->skip_range_impl(
                    range_idx, multi_version_ranges_.at(range_idx), skip_range_))) {
       LOG_WARN("fail to skip range impl", K(ret), K(range_idx));
     }
@@ -465,14 +465,14 @@ int ObSSTableMultiVersionRowMultiScanner::skip_range(
 }
 
 int ObSSTableMultiVersionRowMultiScanner::get_gap_end(
-    int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size)
+    int64_t &range_idx, const common::ObStoreRowkey *&gap_key, int64_t &gap_size)
 {
   int ret = OB_SUCCESS;
   if (!read_newest_) {
     // do nothing
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->get_gap_range_idx(range_idx))) {
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->get_gap_range_idx(range_idx))) {
     STORAGE_LOG(WARN, "fail to get gap range idx", K(ret));
-  } else if (OB_FAIL(static_cast<ObSSTableRowScanner*>(iter_)->get_gap_end_impl(
+  } else if (OB_FAIL(static_cast<ObSSTableRowScanner *>(iter_)->get_gap_end_impl(
                  multi_version_ranges_.at(range_idx), gap_rowkey_, gap_size))) {
     STORAGE_LOG(WARN, "fail to get gap end impl", K(ret));
   } else {
@@ -481,7 +481,7 @@ int ObSSTableMultiVersionRowMultiScanner::get_gap_end(
   return ret;
 }
 
-int ObSSTableMultiVersionRowMultiScanner::inner_get_next_row(const ObStoreRow*& row)
+int ObSSTableMultiVersionRowMultiScanner::inner_get_next_row(const ObStoreRow *&row)
 {
   int ret = OB_SUCCESS;
   row = NULL;
@@ -539,8 +539,8 @@ int ObSSTableMultiVersionRowMultiScanner::inner_get_next_row(const ObStoreRow*& 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row is NULL", K(ret), K(range_idx_), K(ranges_->count()));
         } else {
-          (const_cast<ObStoreRow*>(row))->scan_index_ = range_idx_;
-          (const_cast<ObStoreRow*>(row))->is_get_ = ranges_->at(range_idx_).is_single_rowkey();
+          (const_cast<ObStoreRow *>(row))->scan_index_ = range_idx_;
+          (const_cast<ObStoreRow *>(row))->is_get_ = ranges_->at(range_idx_).is_single_rowkey();
           range_idx_ = has_empty_range ? range_idx_ + 1 : range_idx_;
         }
       }

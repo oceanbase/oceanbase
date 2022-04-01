@@ -3493,12 +3493,16 @@ int ObBackupCopyPhysicalTask::backup_physical_block(
     int write_idx = 0;
     ObArray<ObBackupTableMacroIndex> macro_indexs;
     ObBackupTableMacroIndex tmp_index;
+    bool is_cancel = false;
 
     while (OB_SUCC(ret)) {
       if (ObPartGroupMigrator::get_instance().is_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         STORAGE_LOG(WARN, "server is stop, interrupts copy data.", K(ret));
         break;
+      } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000) //1s
+          && OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(ctx_->group_task_->get_task_id(), is_cancel))) {
+        STORAGE_LOG(ERROR, "failed to check is group task cancel", K(ret), K(*this));
       } else if (ctx_->partition_guard_.get_partition_group()->is_removed()) {
         ret = OB_PG_IS_REMOVED;
         STORAGE_LOG(WARN, "partition has been removed, can not backup", K(ret), K(ctx_->replica_op_arg_.key_));

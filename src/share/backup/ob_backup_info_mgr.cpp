@@ -1046,6 +1046,7 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
   const int64_t restore_timestamp = param.restore_timestamp_;
   const char *passwd_array = param.passwd_array_;
   ObFakeBackupLeaseService fake_backup_lease;
+  bool is_snapshot_restore = false;
 
   if (OB_ISNULL(backup_dest) || OB_ISNULL(backup_cluster_name) || cluster_id <= 0 || incarnation < 0 ||
       OB_ISNULL(backup_tenant_name) || restore_timestamp <= 0 || OB_ISNULL(passwd_array)) {
@@ -1079,6 +1080,13 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
     LOG_WARN("failed to init backup info mgr", K(ret), K(dest), K(tenant_info));
   } else if (OB_FAIL(backup_info_mgr.find_backup_info(restore_timestamp, passwd_array, backup_info))) {
     LOG_WARN("failed to find backup info", K(ret), K(restore_timestamp), K(tenant_info));
+  } else if (OB_FAIL(check_is_snapshot_restore(backup_info.backup_snapshot_version_,
+                 restore_timestamp,
+                 backup_info.cluster_version_,
+                 is_snapshot_restore))) {
+    LOG_WARN("failed to check is snapshot restore", K(ret), K(backup_info), K(restore_timestamp));
+  } else if (is_snapshot_restore) {
+    LOG_INFO("backup info backup snapshot version equal to restore timestamp", K(backup_info), K(restore_timestamp));
   } else if (OB_FAIL(log_archive_backup_info_mgr.read_extern_log_archive_backup_info(
                  dest, tenant_info.tenant_id_, log_archive_backup_info))) {
     LOG_WARN("failed to read extern log archive backup info", K(ret), K(dest), K(tenant_info));
@@ -1154,7 +1162,10 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
   if (OB_FAIL(
           inner_get_restore_backup_set_info_(param, backup_set_info, tenant_locality_info, info.sys_pg_key_list_))) {
     LOG_WARN("failed to inner get restore backup set info", K(ret));
-  } else if (OB_FAIL(check_is_snapshot_restore_(param, backup_set_info, is_snapshot_restore))) {
+  } else if (OB_FAIL(check_is_snapshot_restore(backup_set_info.snapshot_version_,
+                 param.restore_timestamp_,
+                 backup_set_info.cluster_version_,
+                 is_snapshot_restore))) {
     LOG_WARN("failed to check is snapshot backup", K(ret), K(backup_set_info));
   } else if (!is_snapshot_restore && OB_FAIL(inner_get_restore_backup_piece_info_(param, piece_info))) {
     LOG_WARN("failed to inner get restore backup piece info", K(ret));
@@ -1186,18 +1197,6 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
       info.physical_restore_info_.log_archive_round_ = piece_info.key_.round_id_;
     }
     FLOG_INFO("get_restore_backup_info", K(info), K(piece_info), K(backup_set_info));
-  }
-  return ret;
-}
-
-int ObRestoreBackupInfoUtil::check_is_snapshot_restore_(
-    const GetRestoreBackupInfoParam &param, const ObBackupSetFileInfo &backup_set_info, bool &is_snapshot_restore)
-{
-  int ret = OB_SUCCESS;
-  is_snapshot_restore = false;
-  if (param.backup_piece_path_list_.empty() && !param.backup_set_path_list_.empty()) {
-    is_snapshot_restore = backup_set_info.snapshot_version_ == param.restore_timestamp_;
-    LOG_INFO("check is snapshot backup", K(backup_set_info.snapshot_version_), K(param.restore_timestamp_));
   }
   return ret;
 }
@@ -1264,6 +1263,30 @@ int ObRestoreBackupInfoUtil::get_restore_sys_table_ids(
 {
   UNUSEDx(info, pkey_list);
   return OB_SUCCESS;
+}
+
+int ObRestoreBackupInfoUtil::check_is_snapshot_restore(const int64_t backup_snapshot, const int64_t restore_timestamp,
+    const uint64_t cluster_version, bool &is_snapshot_restore)
+{
+  int ret = OB_SUCCESS;
+  is_snapshot_restore = false;
+
+  if (backup_snapshot <= 0 || restore_timestamp <= 0 || 0 == cluster_version) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check is restore snapshot restore get invalid argument",
+        K(ret),
+        K(backup_snapshot),
+        K(restore_timestamp),
+        K(cluster_version));
+  } else {
+    is_snapshot_restore = backup_snapshot == restore_timestamp && cluster_version > CLUSTER_VERSION_3000;
+  }
+  LOG_INFO("check is snapshot restore",
+      K(is_snapshot_restore),
+      K(backup_snapshot),
+      K(restore_timestamp),
+      K(cluster_version));
+  return ret;
 }
 
 ObRestoreFatalErrorReporter &ObRestoreFatalErrorReporter::get_instance()
@@ -1639,7 +1662,8 @@ int ObBackupDestDetector::check_backup_dest()
 
   if (OB_SUCC(ret) && info.is_valid() && ObLogArchiveStatus::STOP != info.status_.status_) {
     if (is_bad) {
-      LOG_ERROR("backup dest is bad, skip check backup dest", K(info));
+      LOG_ERROR("backup dest is bad, skip check backup dest. Please check if nfs is mounted and granted W/R permission",
+          K(info));
     } else if (OB_FAIL(check_backup_dest_(info, is_bad))) {
       LOG_WARN("failed to check backup dest", K(ret), K(info));
     } else if (is_bad) {
@@ -1647,7 +1671,7 @@ int ObBackupDestDetector::check_backup_dest()
       if (0 == STRNCMP(info.backup_dest_, info_.backup_dest_, sizeof(info_.backup_dest_)) &&
           info.status_.round_ == info_.status_.round_) {
         is_bad_ = true;
-        LOG_ERROR("[BACKUP_MOUNT_FILE]backup mount file not file, mark backup dest bad", K(info));
+        LOG_ERROR("[BACKUP_MOUNT_FILE]backup mount file not found, mark backup dest bad", K(info));
       } else {
         FLOG_WARN("[BACKUP_MOUNT_FILE]backup info is changed, cannot set bad", K(info), K(info_));
       }

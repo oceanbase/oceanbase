@@ -2869,9 +2869,11 @@ int ObAdminUpdateTableSchemaVersion::execute(const obrpc::ObRunJobArg& arg)
   int ret = OB_SUCCESS;
   LOG_INFO("execute update table schema version request", K(arg));
   ObUpdateTableSchemaVersionArg schema_arg;
-  schema_arg.tenant_id_ = OB_SYS_TENANT_ID;
-  schema_arg.table_id_ = 0;
-  schema_arg.schema_version_ = OB_INVALID_SCHEMA_VERSION;
+  schema_arg.init(OB_SYS_TENANT_ID,
+      0 /*table_id*/,
+      OB_INVALID_SCHEMA_VERSION /*schema_version*/,
+      false /*is_replay_schema*/,
+      ObUpdateTableSchemaVersionArg::UPDATE_SYS_ALL_INNER_TABLE);
 
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;

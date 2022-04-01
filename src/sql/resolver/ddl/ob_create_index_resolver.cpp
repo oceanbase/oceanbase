@@ -255,8 +255,8 @@ int ObCreateIndexResolver::resolve_index_column_node(ParseNode* index_column_nod
 }
 
 // child 3 of root node, resolve index option node
-int ObCreateIndexResolver::resolve_index_option_node(
-    ParseNode* index_option_node, ObCreateIndexStmt* crt_idx_stmt, const ObTableSchema* tbl_schema)
+int ObCreateIndexResolver::resolve_index_option_node(ParseNode* index_option_node, ObCreateIndexStmt* crt_idx_stmt,
+    const ObTableSchema* tbl_schema, bool is_partitioned)
 {
   int ret = OB_SUCCESS;
   const bool is_index = true;
@@ -320,7 +320,7 @@ int ObCreateIndexResolver::resolve_index_option_node(
     if (has_index_using_type_) {
       crt_idx_stmt->set_index_using_type(index_using_type_);
     }
-    if (OB_FAIL(set_table_option_to_stmt())) {
+    if (OB_FAIL(set_table_option_to_stmt(is_partitioned))) {
       LOG_WARN("fail to set table option to stmt", K(ret));
     }
   }
@@ -429,7 +429,10 @@ int ObCreateIndexResolver::resolve(const ParseNode& parse_tree)
   } else if (NULL != parse_node.children_[4] &&
              OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index method node", K(ret));
-  } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3], crt_idx_stmt, tbl_schema))) {
+  } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3],
+					       crt_idx_stmt,
+					       tbl_schema,
+					       NULL != parse_node.children_[5]))) {
     LOG_WARN("fail to resolve index option node", K(ret));
   } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
     LOG_WARN("fail to generate index schema", K(ret));
@@ -518,7 +521,7 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem& sort_column)
   return ret;
 }
 
-int ObCreateIndexResolver::set_table_option_to_stmt()
+int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexStmt* create_index_stmt = static_cast<ObCreateIndexStmt*>(stmt_);
@@ -535,7 +538,13 @@ int ObCreateIndexResolver::set_table_option_to_stmt()
     }
     index_arg.tenant_id_ = session_info_->get_effective_tenant_id();
     index_arg.index_option_.index_status_ = INDEX_STATUS_UNAVAILABLE;
-    global_ = (index_scope_ != LOCAL_INDEX);
+    if (NOT_SPECIFIED == index_scope_) {
+      // partitioned index must be global,
+      // MySQL default index mode is local
+      global_ = is_partitioned;
+    } else {
+      global_ = (GLOBAL_INDEX == index_scope_);
+    }
     if (!fulltext_column_names_.empty()) {
       if (index_keyname_ != DOMAIN_KEY) {
         ret = OB_NOT_SUPPORTED;
@@ -570,6 +579,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt()
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
+    index_arg.sql_mode_ = session_info_->get_sql_mode();
     create_index_stmt->set_comment(comment_);
   }
   return ret;

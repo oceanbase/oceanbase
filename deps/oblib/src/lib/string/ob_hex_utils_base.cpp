@@ -55,8 +55,12 @@ int ObHexUtilsBase::unhex(const ObString& text, ObIAllocator& alloc, ObObj& resu
     while (OB_SUCC(ret) && all_valid_char && i < text.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = text[++i];
-        c2 = text[++i];
+        if (i + 2 < text.length()) {
+          c1 = text[++i];
+          c2 = text[++i];
+        } else {
+          break;
+        }
       } else if (lib::is_oracle_mode()) {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(text));

@@ -179,7 +179,7 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
 |0 |LIMIT          |    |2        |161 |
-|1 | SORT          |    |2        |161 |
+|1 | TOP-N SORT    |    |2        |161 |
 |2 |  UNION ALL    |    |4        |159 |
 |3 |   TABLE SCAN  |t1  |2        |37  |
 |4 |   LIMIT       |    |2        |122 |
@@ -190,7 +190,7 @@ SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2;
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
   2 - output([UNION([1])]), filter(nil)
   3 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p0), 
@@ -206,7 +206,7 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
 |ID|OPERATOR     |NAME|EST. ROWS|COST|
 --------------------------------------
 |0 |LIMIT        |    |2        |77  |
-|1 | SORT        |    |2        |76  |
+|1 | TOP-N SORT  |    |2        |76  |
 |2 |  UNION ALL  |    |4        |74  |
 |3 |   TABLE SCAN|t1  |2        |37  |
 |4 |   TABLE SCAN|t2  |2        |37  |
@@ -215,7 +215,7 @@ SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by 
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
   2 - output([UNION([1])], [UNION([2])]), filter(nil)
   3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0), 
@@ -230,7 +230,7 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
 |ID|OPERATOR     |NAME|EST. ROWS|COST|
 --------------------------------------
 |0 |LIMIT        |    |2        |79  |
-|1 | SORT        |    |2        |79  |
+|1 | TOP-N SORT  |    |2        |79  |
 |2 |  UNION ALL  |    |7        |76  |
 |3 |   TABLE SCAN|t1  |5        |37  |
 |4 |   TABLE SCAN|t2  |2        |37  |
@@ -239,7 +239,7 @@ SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 l
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC]), topn(2)
   2 - output([UNION([1])], [UNION([2])]), filter(nil)
   3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0), 

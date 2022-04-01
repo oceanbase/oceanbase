@@ -73,6 +73,7 @@ protected:
   ObChunkDatumStore::LastStoredRow<> last_row_;
   Compare cmp_;
   bool need_skip_init_row_;
+  bool iter_end_;
 };
 
 template <typename T>

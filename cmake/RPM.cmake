@@ -60,7 +60,7 @@ install(FILES
   COMPONENT server)
 
 ## oceanbase-devel
-# liboblog.so and libob_sql_proxy_parser_static.a
+# libobcdc.so and libob_sql_proxy_parser_static.a
 set(OCEANBASE_DEVEL_LIB_FILES "")
 set(OCEANBASE_DEVEL_INCLUDE_FILES deps/oblib/src/lib/ob_errno.h)
 set(OCEANBASE_DEVEL_BIN_FILES "")
@@ -81,16 +81,16 @@ endif()
 
 if (OB_BUILD_LIBOBLOG)
   # lib
-  # list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.a)
-  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so)
-  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1)
-  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1.0.0)
+  # list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/tools/libobcdc/src/libobcdc.a)
+  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/tools/obcdc/src/libobcdc.so)
+  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/tools/obcdc/src/libobcdc.so.1)
+  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/tools/obcdc/src/libobcdc.so.1.0.0)
 
   # include lilboblog header
-  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/liboblog/src/liboblog.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES tools/obcdc/src/libobcdc.h)
 
   # bin
-  list(APPEND OCEANBASE_DEVEL_BIN_FILES ${CMAKE_BINARY_DIR}/src/liboblog/tests/oblog_tailf)
+  list(APPEND OCEANBASE_DEVEL_BIN_FILES ${CMAKE_BINARY_DIR}/tools/obcdc/tests/obcdc_tailf)
 endif()
 
 set(CPACK_RPM_DEVEL_DEFAULT_USER "root")
