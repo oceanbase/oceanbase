@@ -2281,6 +2281,7 @@ int ObPartitionService::create_batch_partition_groups(
 
     if (OB_FAIL(ret)) {
       // do some rollback work
+      SLOGGER.abort();  // abort slogger transaction anyway
       tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; i < batch_arg.count(); ++i) {
         rollback_partition_register(batch_arg.at(i).partition_key_, txs_add_success, rp_eg_add_success);
