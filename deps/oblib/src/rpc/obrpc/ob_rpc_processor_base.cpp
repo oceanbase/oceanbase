@@ -451,29 +451,33 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
     RPC_OBRPC_LOG(WARN, "prepare stream session fail", K(ret));
   } else if (OB_FAIL(part_response(common::OB_SUCCESS, false))) {
     RPC_OBRPC_LOG(WARN, "response part result to peer fail", K(ret));
-  } else if (FALSE_IT({ NG_TRACE(transmit); })) {
-  } else if (OB_FAIL(sc_->wait(req, wait_timeout))) {
-    NG_TRACE(receive);
-    req_ = NULL;  // wait fail, invalid req_
-    reuse();
-    is_stream_end_ = true;
-    RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret), K(wait_timeout));
-  } else if (OB_ISNULL(req)) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_OBRPC_LOG(ERROR, "Req should not be NULL", K(ret));
+  // } else if (FALSE_IT({ NG_TRACE(transmit); })) {
   } else {
-    NG_TRACE(receive);
-    reuse();
-    set_ob_request(*req);
-    if (!rpc_pkt_) {
-      wakeup_request();
+     NG_TRACE(transmit);
+  // } else if (OB_FAIL(sc_->wait(req, wait_timeout))) {
+    if (OB_FAIL(sc_->wait(req, wait_timeout))) {
+      NG_TRACE(receive);
+      req_ = NULL;  // wait fail, invalid req_
+      reuse();
       is_stream_end_ = true;
+      RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret), K(wait_timeout));
+    } else if (OB_ISNULL(req)) {
       ret = OB_ERR_UNEXPECTED;
-      RPC_OBRPC_LOG(ERROR, "rpc packet is NULL in stream", K(ret));
-    } else if (rpc_pkt_->is_stream_last()) {
-      ret = OB_ITER_END;
+      RPC_OBRPC_LOG(ERROR, "Req should not be NULL", K(ret));
     } else {
-      // do nothing
+      NG_TRACE(receive);
+      reuse();
+      set_ob_request(*req);
+      if (!rpc_pkt_) {
+        wakeup_request();
+        is_stream_end_ = true;
+        ret = OB_ERR_UNEXPECTED;
+        RPC_OBRPC_LOG(ERROR, "rpc packet is NULL in stream", K(ret));
+      } else if (rpc_pkt_->is_stream_last()) {
+        ret = OB_ITER_END;
+      } else {
+        // do nothing
+      }
     }
   }
 
