@@ -83,6 +83,10 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      # add for openEuler by Shylock
+      openEuler)
+        version_ge "20.03" && OS_RELEASE=8 && return
+        ;;
     esac
   fi
   not_supported && return 1 
