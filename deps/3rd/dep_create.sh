@@ -142,6 +142,18 @@ do
 done < $DEP_FILE 
 save_content
 
+echo "download bisheng compiler "
+if [[ -f "${PWD}/bisheng-compiler-2.1.0-aarch64-linux.tar.gz" ]]; then
+  echo "find package bisheng compiler in cache"
+else
+  wget https://mirrors.huaweicloud.com/kunpeng/archive/compiler/bisheng_compiler/bisheng-compiler-2.1.0-aarch64-linux.tar.gz
+fi
+tar -zxvf bisheng-compiler-2.1.0-aarch64-linux.tar.gz
+rm -rf ${PWD}/usr
+mkdir -p ${PWD}/usr/local/oceanbase/devtools
+mv bisheng-compiler-2.1.0-aarch64-linux/* ${PWD}/usr/local/oceanbase/devtools
+rm -rf bisheng-compiler-2.1.0-aarch64-linux
+
 echo "download dependencies..."
 for sect in "${!packages[@]}"
 do
