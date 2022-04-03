@@ -58,7 +58,8 @@ if (OB_USE_CLANG)
     NO_DEFAULT_PATH)
   set(BUILD_OPT "${BUILD_OPT} --gcc-toolchain=${DEVTOOLS_DIR} -fcolor-diagnostics")
   # just make embedded clang and ccache happy...
-  set(BUILD_OPT "${BUILD_OPT} -I${DEVTOOLS_DIR}/lib/clang/11.0.1/include")
+  #set(BUILD_OPT "${BUILD_OPT} -I${DEVTOOLS_DIR}/lib/clang/11.0.1/include")
+  set(BUILD_OPT "${BUILD_OPT} -I${DEVTOOLS_DIR}/lib/clang/12.0.0/include")
   set(LD_OPT "${LD_OPT} -Wl,-z,noexecstack")
 
   if (OB_USE_ASAN)
