@@ -1232,6 +1232,7 @@ int ObSortRow::get_sort_key(uint64_t* key_ptr)
     ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size, &extra_data_);
     if (OB_FAIL(ret)) {
       STORAGE_LOG(WARN, "failed to make sort key", K(ret), K(buf), K(offset_), K(size));
+      break;
     }
     buf += size;
     if (offset_ == 0) {
