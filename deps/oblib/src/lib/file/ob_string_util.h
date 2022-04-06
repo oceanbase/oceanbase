@@ -9,35 +9,27 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#ifndef TBSYS_FILE_UTIL_H
-#define TBSYS_FILE_UTIL_H
+#ifndef OCEANBASE_OB_STRING_UTIL_H_
+#define OCEANBASE_OB_STRING_UTIL_H_
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <errno.h>
+#include <string.h>
+#include <string>
+#include <time.h>
+#include <vector>
 
-namespace oceanbase {
 namespace obsys {
 
-#ifndef S_IRWXUGO
-#define S_IRWXUGO (S_IRWXU | S_IRWXG | S_IRWXO)
-#endif
-
-class CFileUtil {
+class ObStringUtil {
 public:
-  /** Create a multi-level directory */
-  static bool mkdirs(char* szDirPath);
-  /** Is it a directory */
-  static bool isDirectory(const char* szDirPath);
-  /** Is it a SymLink file */
-  static bool isSymLink(const char* szDirPath);
+    static int str_to_int(const char *str, int d);
+    static bool is_int(const char *p);
+    static char *str_to_lower(char *str);
+    static char *str_to_upper(char *str);
+    static void split(char *str, const char *delim, std::vector<char *> &list);
 };
-}  // namespace obsys
-}  // namespace oceanbase
+
+}
 
 #endif
-
-//////////////////END

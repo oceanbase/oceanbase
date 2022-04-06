@@ -30,7 +30,7 @@
 #include "lib/io/ob_io_benchmark.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/hash_func/murmur_hash.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "lib/alloc/memory_dump.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
@@ -895,10 +895,10 @@ int ObServer::init_config()
     int32_t local_port = static_cast<int32_t>(config_.rpc_port);
     if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = {'\0'};
-      obsys::CNetUtil::getLocalAddr6(config_.devname, ipv6, sizeof(ipv6));
+      obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
       self_addr_.set_ip_addr(ipv6, local_port);
     } else {
-      int32_t ipv4 = ntohl(obsys::CNetUtil::getLocalAddr(config_.devname));
+      int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
       self_addr_.set_ipv4_addr(ipv4, local_port);
     }
 

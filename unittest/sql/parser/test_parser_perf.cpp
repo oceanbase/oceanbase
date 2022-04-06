@@ -61,9 +61,9 @@ void TestParserPerf::do_parse(const char* query_str)
   parse_result.is_fp_ = IS_FP;
   ObString query = ObString::make_string(query_str);
   int ret = OB_SUCCESS;
-  t0 = obsys::CTimeUtil::getTime();
+  t0 = obsys::ObSysTimeUtil::getTime();
   ret = parser.parse(query, parse_result, pmode);
-  t1 = obsys::CTimeUtil::getTime();
+  t1 = obsys::ObSysTimeUtil::getTime();
   if (OB_SUCC(ret)) {
     succ_cnt_++;
   }

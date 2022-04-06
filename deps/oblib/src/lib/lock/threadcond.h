@@ -10,77 +10,42 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef TBSYS_COND_H_
-#define TBSYS_COND_H_
+#ifndef THREAD_COND_H_
+#define THREAD_COND_H_
 
 #include "lib/lock/ob_thread_cond.h"
 
 namespace oceanbase {
 namespace obsys {
-class CThreadCond {
+class ThreadCond {
 public:
-  CThreadCond()
-  {
+  ThreadCond() {
     cond_.init();
   }
-
-  ~CThreadCond()
-  {
-    cond_.destroy();
+  ~ThreadCond() {
+      cond_.destroy();
   }
-
-  int lock()
-  {
+  int lock() {
     return cond_.lock();
   }
-
-  int unlock()
-  {
+  int unlock() {
     return cond_.unlock();
   }
-
-  bool wait(int milliseconds = 0)
-  {
-    return OB_SUCCESS == cond_.wait(milliseconds);
+  bool wait(int milliseconds = 0) {
+    return oblib::OB_SUCCESS == cond_.wait(milliseconds);
   }
-
-  void signal()
-  {
-    cond_.signal();
+  void signal() {
+      cond_.signal();
   }
-
-  void broadcast()
-  {
-    cond_.broadcast();
+  void broadcast() {
+      cond_.broadcast();
   }
 
 private:
   oceanbase::common::ObThreadCond cond_;
 };
 
-class CCondGuard {
-public:
-  explicit CCondGuard(CThreadCond* cond)
-  {
-    cond_ = NULL;
-    if (NULL != cond) {
-      cond_ = cond;
-      cond_->lock();
-    }
-  }
-
-  ~CCondGuard()
-  {
-    if (NULL != cond_) {
-      cond_->unlock();
-    }
-  }
-
-private:
-  CThreadCond* cond_;
-};
-
 }  // namespace obsys
 }  // namespace oceanbase
 
-#endif /*COND_H_*/
+#endif /*THREAD_COND_H_*/

@@ -9,43 +9,36 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#ifndef TBSYS_TIMEUTIL_H_
-#define TBSYS_TIMEUTIL_H_
+#ifndef OCEANBASE_NET_UTIL_H_
+#define OCEANBASE_NET_UTIL_H_
 
 #include <stdint.h>
-#include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <ifaddrs.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <netdb.h>
 #include <sys/time.h>
-#include <stdio.h>
-#include <string.h>
+#include <net/if.h>
+#include <inttypes.h>
+#include <sys/types.h>
+#include <linux/unistd.h>
+#include <string>
 
 namespace oceanbase {
 namespace obsys {
 
-/**
- * @brief Simple encapsulation of linux time operation
- */
-class ObSysTimeUtil {
+class ObNetUtil {
 public:
-  /**
-   * ms timestamp
-   */
-  static int64_t getTime();
-  /**
-   * get current time
-   */
-  static int64_t getMonotonicTime();
-  /**
-   * format int into 20080101101010
-   */
-  static char* timeToStr(time_t t, char* dest);
-  /**
-   * format string to time(local)
-   */
-  // static int strToTime(char *str);
+    static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len);
+    static uint32_t get_local_addr_ipv4(const char *dev_name);
+    static std::string addr_to_string(uint64_t ipport);
+    static uint64_t ip_to_addr(uint32_t ip, int port);
 };
 
-}  // namespace obsys
-}  // namespace oceanbase
-
+}
+}
 #endif

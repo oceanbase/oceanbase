@@ -11,9 +11,9 @@
  */
 
 #include <sys/time.h>
-#include "lib/lock/Cond.h"
+#include "lib/lock/cond.h"
 #include "lib/oblog/ob_log.h"
-namespace tbutil {
+namespace obutil {
 Cond::Cond()
 {
   int rt = pthread_cond_init(&_cond, NULL);
@@ -45,4 +45,4 @@ void Cond::broadcast()
     _OB_LOG(WARN, "Failed to broadcast condition, err=%d", rt);
   }
 }
-}  // end namespace tbutil
+} //end namespace obutil

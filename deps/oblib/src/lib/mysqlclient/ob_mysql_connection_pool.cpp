@@ -56,7 +56,7 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
 ObMySQLConnectionPool::~ObMySQLConnectionPool()
 {
   ObServerConnectionPool* pool = NULL;
-  obsys::CWLockGuard lock(get_lock_);
+  obsys::ObWLockGuard lock(get_lock_);
   for (ClusterList::iterator cluster_iter = cluster_list_.begin(); cluster_iter != cluster_list_.end();
        cluster_iter++) {
     ClusterServerList*& cluster_server_list = *cluster_iter;
@@ -163,7 +163,7 @@ void ObMySQLConnectionPool::signal_refresh()
 void ObMySQLConnectionPool::close_all_connection()
 {
   int ret = OB_SUCCESS;
-  obsys::CWLockGuard lock(get_lock_);
+  obsys::ObWLockGuard lock(get_lock_);
   ObServerConnectionPool* pool = NULL;
   for (ClusterList::iterator cluster_iter = cluster_list_.begin(); cluster_iter != cluster_list_.end();
        cluster_iter++) {
@@ -397,7 +397,7 @@ int ObMySQLConnectionPool::acquire(const int64_t cluster_id, ObMySQLConnection*&
 
   if (OB_ISNULL(connection)) {
     LOG_WARN("failed to acquire connection", K(cluster_id), K(this), K(server_count), K(busy_conn_count_), K(ret));
-    obsys::CRLockGuard lock(get_lock_);
+    obsys::ObRLockGuard lock(get_lock_);
     for (ClusterList::iterator cluster_iter = cluster_list_.begin(); cluster_iter != cluster_list_.end();
          cluster_iter++) {
       ClusterServerList*& cluster_server_list = *cluster_iter;
@@ -421,7 +421,7 @@ int64_t ObMySQLConnectionPool::get_server_count(const int64_t cluster_id) const
 {
   int64_t count = 0;
   int ret = OB_SUCCESS;
-  obsys::CRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard lock(get_lock_);
   ClusterServerList* cluster_server_list = NULL;
   if (OB_FAIL(get_cluster_server_list_(cluster_id, cluster_server_list))) {
     LOG_WARN("fail to get cluster_server_list", K(ret), K(cluster_id));
@@ -436,7 +436,7 @@ int64_t ObMySQLConnectionPool::get_server_count(const int64_t cluster_id) const
 int ObMySQLConnectionPool::do_acquire(const int64_t cluster_id, ObMySQLConnection*& connection)
 {
   int ret = OB_SUCCESS;
-  obsys::CRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard lock(get_lock_);
   ObServerConnectionPool* pool = NULL;
   if (OB_FAIL(get_pool(cluster_id, pool))) {
     LOG_WARN("failed to get pool", K(ret));
@@ -520,7 +520,7 @@ int ObMySQLConnectionPool::execute_init_sql(ObMySQLConnection* connection)
 int ObMySQLConnectionPool::release(ObMySQLConnection* connection, const bool succ)
 {
   int ret = OB_SUCCESS;
-  obsys::CRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard lock(get_lock_);
   ObServerConnectionPool* pool = NULL;
   if (OB_ISNULL(connection)) {
     ret = OB_INVALID_ARGUMENT;
@@ -570,7 +570,7 @@ void ObMySQLConnectionPool::runTimerTask()
       // Ignore the error code and does not affect the subsequent process
       LOG_WARN("failed to prepare refresh", K(ret), K(tmp_ret));
     }
-    obsys::CWLockGuard lock(get_lock_);
+    obsys::ObWLockGuard lock(get_lock_);
     if (OB_FAIL(server_provider_->refresh_server_list())) {
       if (!is_updated_) {  // has never successfully updated, it is in startup time, should not print ERROR
         LOG_INFO("fail to refresh mysql server list in startup time, it's normal", K(ret));
@@ -724,7 +724,7 @@ int ObDbLinkConnectionPool::create_dblink_pool(uint64_t dblink_id, const ObAddr&
 {
   int ret = OB_SUCCESS;
   ObServerConnectionPool* dblink_pool = NULL;
-  obsys::CRLockGuard lock(get_lock_);
+  obsys::ObRLockGuard lock(get_lock_);
   if (OB_FAIL(get_dblink_pool(dblink_id, dblink_pool))) {
     LOG_WARN("fail to get dblink connection pool", K(dblink_id));
   } else if (OB_NOT_NULL(dblink_pool)) {

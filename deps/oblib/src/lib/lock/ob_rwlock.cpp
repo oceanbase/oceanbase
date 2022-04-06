@@ -9,43 +9,41 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#include "lib/lock/tbrwlock.h"
+#include "lib/lock/ob_rwlock.h"
 
 using namespace oceanbase::obsys;
 
-int CRLock::lock() const
+int ObRLock::lock() const
 {
-  return pthread_rwlock_rdlock(_rlock);
+  return pthread_rwlock_rdlock(rlock_);
 }
 
-int CRLock::tryLock() const
+int ObRLock::trylock() const
 {
-  return pthread_rwlock_tryrdlock(_rlock);
+  return pthread_rwlock_tryrdlock(rlock_);
 }
 
-int CRLock::unlock() const
+int ObRLock::unlock() const
 {
-  return pthread_rwlock_unlock(_rlock);
+  return pthread_rwlock_unlock(rlock_);
 }
 
-int CWLock::lock() const
+int ObWLock::lock() const
 {
-  return pthread_rwlock_wrlock(_wlock);
+  return pthread_rwlock_wrlock(wlock_);
 }
 
-int CWLock::tryLock() const
+int ObWLock::trylock() const
 {
-  return pthread_rwlock_trywrlock(_wlock);
+  return pthread_rwlock_trywrlock(wlock_);
 }
 
-int CWLock::unlock() const
+int ObWLock::unlock() const
 {
-  return pthread_rwlock_unlock(_wlock);
+  return pthread_rwlock_unlock(wlock_);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////
-CRWLock::CRWLock(ELockMode lockMode) : _rlock(&_rwlock), _wlock(&_rwlock)
+ObRWLock::ObRWLock(LockMode lockMode)
 {
   pthread_rwlockattr_t attr;
   pthread_rwlockattr_init(&attr);
@@ -54,10 +52,14 @@ CRWLock::CRWLock(ELockMode lockMode) : _rlock(&_rwlock), _wlock(&_rwlock)
   } else if (lockMode == WRITE_PRIORITY) {
     pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
   }
-  pthread_rwlock_init(&_rwlock, &attr);
+  pthread_rwlock_init(&rwlock_, &attr);
+  rlock_ = new ObRLock(&rwlock_);
+  wlock_ = new ObWLock(&rwlock_);
 }
 
-CRWLock::~CRWLock()
+ObRWLock::~ObRWLock()
 {
-  pthread_rwlock_destroy(&_rwlock);
+  pthread_rwlock_destroy(&rwlock_);
+  delete rlock_;
+  delete wlock_;
 }

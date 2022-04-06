@@ -149,7 +149,7 @@ void ObEliminateTask::runTimerTask()
     }
   }
   if (OB_SUCC(ret)) {
-    int64_t start_time = obsys::CTimeUtil::getTime();
+    int64_t start_time = obsys::ObSysTimeUtil::getTime();
     int64_t evict_batch_count = 0;
     // Eliminate by memory
     if (evict_high_level < allocator->allocated()) {
@@ -188,7 +188,7 @@ void ObEliminateTask::runTimerTask()
     if (true == is_change) {
       allocator->set_total_limit(config_mem_limit_);
     }
-    int64_t end_time = obsys::CTimeUtil::getTime();
+    int64_t end_time = obsys::ObSysTimeUtil::getTime();
     LOG_INFO("sql audit evict task end",
         K(evict_high_level),
         K(evict_batch_count),

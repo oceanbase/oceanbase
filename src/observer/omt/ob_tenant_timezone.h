@@ -46,7 +46,7 @@ public:
     void runTimerTask(void) override;
     ObTenantTimezoneMgr* tenant_tz_mgr_;
     ObTenantTimezone* tenant_tz_;
-    tbutil::Mutex task_lock_;
+    obutil::Mutex task_lock_;
     const uint64_t SLEEP_USECONDS = 5000000;
   };
   friend class TenantTZUpdateTask;
