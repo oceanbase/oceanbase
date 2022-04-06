@@ -18,6 +18,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_mysql_global.h"
+#include "lib/signal/ob_libunwind.h"
 
 namespace oceanbase {
 namespace common {
@@ -31,94 +32,6 @@ void safe_sleep_micros(int64_t usec)
   constexpr static int64_t k1E9 = 1000000000;
   timespec ts{nsec / k1E9, nsec % k1E9};
   nanosleep(&ts, nullptr);
-}
-
-bool get_frame_info(unw_cursor_t* cursor, uintptr_t& ip)
-{
-  unw_word_t uip;
-  if (unw_get_reg(cursor, UNW_REG_IP, &uip) < 0) {
-    return false;
-  }
-  int r = unw_is_signal_frame(cursor);
-  if (r < 0) {
-    return false;
-  }
-  // Use previous instruction in normal (call) frames (because the
-  // return address might not be in the same function for noreturn functions)
-  // but not in signal frames.
-  ip = uip - (r == 0);
-  return true;
-}
-
-/* From facebook-folly */
-ssize_t get_stack_trace_inplace(
-    unw_context_t& context, unw_cursor_t& cursor, uintptr_t* addresses, size_t max_addresses)
-{
-  if (max_addresses == 0) {
-    return 0;
-  }
-  if (unw_init_local(&cursor, &context) < 0) {
-    return -1;
-  }
-  if (!get_frame_info(&cursor, *addresses)) {
-    return -1;
-  }
-  ++addresses;
-  size_t count = 1;
-  for (; count != max_addresses; ++count, ++addresses) {
-    int r = unw_step(&cursor);
-    if (r < 0) {
-      return -1;
-    }
-    if (r == 0) {
-      break;
-    }
-    if (!get_frame_info(&cursor, *addresses)) {
-      return -1;
-    }
-  }
-  return count;
-}
-
-int safe_backtrace(char* buf, int64_t len, int64_t& pos)
-{
-  int ret = OB_SUCCESS;
-  unw_context_t context;
-  if (unw_getcontext(&context) < 0) {
-    ret = OB_ERROR;
-  } else {
-    ret = safe_backtrace(context, buf, len, pos);
-  }
-  return ret;
-}
-
-static const int MAX_BT_ADDRESS_CNT = 100;
-
-int safe_backtrace(unw_context_t& context, char* buf, int64_t len, int64_t& pos)
-{
-  int ret = OB_SUCCESS;
-  unw_cursor_t cursor;
-  uintptr_t addrs[MAX_BT_ADDRESS_CNT];
-  int n = get_stack_trace_inplace(context, cursor, addrs, ARRAYSIZEOF(addrs));
-  pos = 0;
-  if (n < 0) {
-    ret = OB_ERROR;
-  } else {
-    for (int i = 0; i < n; i++) {
-      int count = safe_snprintf(buf + pos, len - pos, "0x%lx", addrs[i]);
-      count++;  // for space
-      if (count > 0 && pos + count < len) {
-        pos += count;
-        buf[pos - 1] = ' ';
-      } else {
-        // buf not enough
-        break;
-      }
-    }
-    pos--;
-  }
-  buf[pos] = '\0';
-  return ret;
 }
 
 __thread ObJumpBuf* g_jmp = nullptr;

@@ -2789,9 +2789,9 @@ int ObSysFunRawExpr::check_param_num_internal(int32_t param_num, int32_t param_c
       }
       break;
     }
-    if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
+  }
+  if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
       LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
-    }
   }
   return ret;
 }

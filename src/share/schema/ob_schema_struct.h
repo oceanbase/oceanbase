@@ -88,6 +88,7 @@ static const uint64_t OB_MIN_ID = 0;  // used for lower_bound
 #define INVISIBLE_COLUMN_FLAG (INT64_C(1) << 6)
 // The logic of the new table without a primary key changes the column (partition key) to the primary key
 #define HEAP_ALTER_ROWKEY_FLAG (INT64_C(1) << 8)
+#define PAD_WHEN_CALC_GENERATED_COLUMN_FLAG (INT64_C(1) << 19)
 // the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
 #define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)

@@ -877,6 +877,7 @@ public:
     return order_items_;
   }
   int get_order_exprs(common::ObIArray<ObRawExpr*>& order_exprs);
+  int get_order_exprs(common::ObIArray<ObRawExpr*> &order_exprs) const;
   inline const ObViewTableIds& get_view_table_id_store() const
   {
     return view_table_id_store_;

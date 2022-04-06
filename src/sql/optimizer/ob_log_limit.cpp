@@ -36,8 +36,7 @@ int ObLogLimit::copy_without_child(ObLogicalOperator*& out)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to cast ObLogicalOperator * to ObLogLimit *", K(ret));
   } else {
-    limit->set_calc_found_rows(is_calc_found_rows_);
-    limit->set_has_union_child(has_union_child_);
+    limit->set_is_calc_found_rows(is_calc_found_rows_);
     limit->set_fetch_with_ties(is_fetch_with_ties());
     limit->set_limit_count(limit_count_);
     limit->set_limit_offset(limit_offset_);
@@ -239,7 +238,6 @@ uint64_t ObLogLimit::hash(uint64_t seed) const
 {
   uint64_t hash_value = seed;
   hash_value = do_hash(is_calc_found_rows_, hash_value);
-  hash_value = do_hash(has_union_child_, hash_value);
   hash_value = do_hash(is_top_limit_, hash_value);
   hash_value = ObOptimizerUtil::hash_expr(limit_count_, hash_value);
   hash_value = ObOptimizerUtil::hash_expr(limit_offset_, hash_value);

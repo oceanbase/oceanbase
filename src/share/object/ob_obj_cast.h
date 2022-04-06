@@ -43,6 +43,7 @@ namespace common {
 #define CM_STRICT_MODE (1ULL << 8)
 #define CM_SET_MIN_IF_OVERFLOW (1ULL << 9)
 #define CM_ERROR_ON_SCALE_OVER (1ULL << 10)
+#define CM_TO_BOOLEAN (1ULL << 11)
 // when casting string to integer, round if not set this flag, otherwise trunc.
 // but ceil will always round to +inf, and floor will always round to -inf.
 #define CM_STRING_INTEGER_TRUNC (1ULL << 57)
@@ -84,6 +85,7 @@ typedef uint64_t ObCastMode;
 #define CM_IS_SET_MIN_IF_OVERFLOW(mode) ((CM_SET_MIN_IF_OVERFLOW & (mode)) != 0)
 #define CM_IS_ERROR_ON_SCALE_OVER(mode) ((CM_ERROR_ON_SCALE_OVER & (mode)) != 0)
 #define CM_IS_JSON_VALUE(mode)  CM_IS_ERROR_ON_SCALE_OVER(mode)
+#define CM_HAS_BOOLEAN_FLAG(mode) ((CM_TO_BOOLEAN & (mode)) != 0)
 
 struct ObObjCastParams {
   // add params when necessary

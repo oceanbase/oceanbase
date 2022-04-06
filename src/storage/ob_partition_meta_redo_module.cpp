@@ -781,7 +781,9 @@ int ObPartitionMetaRedoModule::inner_del_partition_for_replay(const ObPartitionK
   } else if (OB_FAIL(inner_del_partition_impl(pkey, OB_INVALID_DATA_FILE_ID == file_id ? nullptr : &file_id))) {
     LOG_WARN("fail to inner del partition", K(ret));
   } else if (OB_INVALID_DATA_FILE_ID == file_id) {
-    // replay slog before 3.1, need to remove pg from file mgr explicitly
+    // OB_INVALID_DATA_FILE_ID means the slog is written before 3.1,
+    // need to remove pg from file mgr explicitly
+    // Otherwise, pg would be removed from file mgr in tenant file slog replay
     const ObIPartitionGroup& pg = *guard.get_partition_group();
     const ObStorageFile* file = pg.get_storage_file();
     if (OB_ISNULL(file)) {

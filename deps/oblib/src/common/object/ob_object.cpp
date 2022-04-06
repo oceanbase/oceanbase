@@ -582,7 +582,7 @@ void* ObObj::get_deep_copy_obj_ptr()
     }
   } else if (ob_is_raw(this->get_type())) {
     ptr = (void *)v_.string_;
-  } else if (ob_is_number_tc(this->get_type())) {
+  } else if (ob_is_number_tc(this->get_type()) && 0 != nmb_desc_.len_ && NULL != v_.nmb_digits_) {
     ptr = (void *)v_.nmb_digits_;
   } else if (ob_is_rowid_tc(this->get_type())) {
     ptr = (void *)v_.string_;

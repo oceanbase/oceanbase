@@ -1278,6 +1278,15 @@ bit_expr '|' bit_expr %prec '|'
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
             &@1, result);
 }
+| INTERVAL expr date_unit '+' bit_expr
+{
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $5, $2, $3);
+  make_name_node($$, result->malloc_pool_, "date_add");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+  check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
+            &@1, result);
+}
 | bit_expr '-' INTERVAL expr date_unit %prec '-'
 {
   ParseNode *params = NULL;
@@ -4812,6 +4821,15 @@ string_length_i:
       $$[0] = DEFAULT_STR_LENGTH;
     } else {
       $$[0] = val;
+    }
+  } else if (T_UINT64 == $2->type_) {
+    uint64_t value = $2->value_;
+    if (value > UINT32_MAX) {
+      $$[0] = OUT_OF_STR_LEN;;
+    } else if (value > INT32_MAX) {
+      $$[0] = DEFAULT_STR_LENGTH;
+    } else {
+      $$[0] = $2->value_;
     }
   } else if ($2->value_ < 0) {
     yyerror(&@2, result, "length cannot < 0\n");
@@ -8986,14 +9004,19 @@ table_reference inner_join_type opt_full_table_factor %prec LOWER_ON
   if ($1->type_ == T_ORG) {
     ParseNode *name_node = NULL;
     make_name_node(name_node, result->malloc_pool_, "full");
-    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
-    for (int i = 0; i <= $1->num_child_; ++i) {
-      if (i == 0) {
-        $$->children_[i] = $1->children_[i];
-      } else if (i == 1) {
-        $$->children_[i] = name_node;
-      } else {
-        $$->children_[i] = $1->children_[i - 1];
+    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    if (OB_UNLIKELY($$ == NULL)) {
+      yyerror(NULL, result, "No more space for malloc\n");
+      YYABORT_NO_MEMORY;
+    } else {
+      for (int i = 0; i <= $1->num_child_; ++i) {
+        if (i == 0) {
+          $$->children_[i] = $1->children_[i];
+        } else if (i == 1) {
+          $$->children_[i] = name_node;
+        } else {
+          $$->children_[i] = $1->children_[i - 1];
+        }
       }
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
@@ -9028,14 +9051,19 @@ table_factor %prec LOWER_COMMA
   if ($1->type_ == T_ORG) {
     ParseNode *name_node = NULL;
     make_name_node(name_node, result->malloc_pool_, "full");
-    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
-    for (int i = 0; i <= $1->num_child_; ++i) {
-      if (i == 0) {
-        $$->children_[i] = $1->children_[i];
-      } else if (i == 1) {
-        $$->children_[i] = name_node;
-      } else {
-        $$->children_[i] = $1->children_[i - 1];
+    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    if (OB_UNLIKELY($$ == NULL)) {
+      yyerror(NULL, result, "No more space for malloc\n");
+      YYABORT_NO_MEMORY;
+    } else {
+      for (int i = 0; i <= $1->num_child_; ++i) {
+        if (i == 0) {
+          $$->children_[i] = $1->children_[i];
+        } else if (i == 1) {
+          $$->children_[i] = name_node;
+        } else {
+          $$->children_[i] = $1->children_[i - 1];
+        }
       }
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&

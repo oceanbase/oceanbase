@@ -1,0 +1,9 @@
+oceanbase-ce:
+  servers:
+    - 127.0.0.1
+  global:
+    home_path: @OB_HOME_PATH@ # default: /root/ob
+    devname: lo
+    mysql_port: @OB_MYSQL_PORT@ # default: 2881
+    rpc_port: @OB_RPC_PORT@ # default: 2882
+    root_password: @OB_ROOT_PASSWORD@ # default: null

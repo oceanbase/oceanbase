@@ -684,6 +684,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       *ps_params,
       tenant_id);
   if (OB_SUCC(ret)) {
+    remote_sql_info_->ps_param_cnt_ = static_cast<int32_t>(ps_params->count());
     if (OB_FAIL(exec_ctx_->create_my_session(tenant_id))) {
       LOG_WARN("create my session failed", K(ret), K(tenant_id));
     } else {

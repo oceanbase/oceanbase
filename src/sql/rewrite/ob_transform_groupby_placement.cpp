@@ -177,20 +177,45 @@ int ObTransformGroupByPlacement::check_groupby_validity(const ObSelectStmt& stmt
   ObSEArray<ObRawExpr*, 4> exprs;
   if (OB_FAIL(stmt.get_select_exprs(exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(append(exprs, stmt.get_having_exprs()))) {
-    LOG_WARN("failed to get having exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_order_item_size(); ++i) {
-      if (OB_FAIL(exprs.push_back(stmt.get_order_item(i).expr_))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
+  } else if (OB_FAIL(stmt.get_order_exprs(exprs))) {
+    LOG_WARN("failed to get order exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < exprs.count(); i++) {
+    if (OB_FAIL(check_group_by_subset(exprs.at(i), stmt.get_group_exprs(), is_valid))) {
+      LOG_WARN("check group by exprs failed", K(ret));
     }
-    ObSEArray<ObRawExpr*, 4> col_exprs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-      if (OB_FAIL(extract_non_agg_columns(exprs.at(i), stmt.get_current_level(), col_exprs))) {
-        LOG_WARN("failed to extract non agg columns", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt.get_having_exprs().count(); i++) {
+    if (OB_FAIL(check_group_by_subset(stmt.get_having_exprs().at(i), stmt.get_group_exprs(), is_valid))) {
+      LOG_WARN("check group by exprs failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformGroupByPlacement::check_group_by_subset(ObRawExpr *expr, 
+                                                       const ObIArray<ObRawExpr *> &group_exprs, 
+                                                       bool &bret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    bret = true;
+    int64_t idx = -1;
+    if (expr->has_flag(IS_AGG) || expr->has_flag(IS_CONST) 
+        || expr->has_flag(IS_EXEC_PARAM) || expr->has_flag(IS_PARAM)) {
+      //do nothing
+    } else if (!ObRawExprUtils::find_expr(group_exprs, expr)) {
+      if (expr->get_param_count() == 0) {
+        bret = false;
       } else {
-        is_valid = ObOptimizerUtil::subset_exprs(col_exprs, stmt.get_group_exprs());
+        for (int64_t i = 0; OB_SUCC(ret) && bret && i < expr->get_param_count(); i++) {
+          if (SMART_CALL(check_group_by_subset(expr->get_param_expr(i), group_exprs, bret))) {
+            LOG_WARN("check group by subset faield", K(ret));
+          }
+        }
       }
     }
   }
@@ -397,39 +422,8 @@ int ObTransformGroupByPlacement::get_null_side_tables(
   return ret;
 }
 
-int ObTransformGroupByPlacement::extract_non_agg_columns(
-    ObRawExpr* expr, const int64_t stmt_level, ObIArray<ObRawExpr*>& col_exprs)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (!expr->get_expr_levels().has_member(stmt_level)) {
-    // do nothing
-  } else if (expr->is_column_ref_expr()) {
-    if (OB_FAIL(col_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    }
-  } else if (expr->is_aggr_expr()) {
-    // do nothing
-  } else if (expr->has_flag(CNT_COLUMN)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(extract_non_agg_columns(expr->get_param_expr(i), stmt_level, col_exprs)))) {
-        LOG_WARN("failed to extract non agg columns", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTransformGroupByPlacement::is_filterable_join(
-    ObSelectStmt* stmt, ObRawExpr* join_cond, ObIArray<PushDownParam>& params, bool& is_valid)
+  ObSelectStmt *stmt, ObRawExpr *join_cond, ObIArray<PushDownParam> &params, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -1603,7 +1597,6 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
       // do nothing
     } else if (OB_FAIL(sub_stmt->has_rand(has_rand))) {
       LOG_WARN("failed to check stmt has rand func", K(ret));
-      // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
     } else if (!(can_pullup = !has_rand)) {
       // do nothing
     } else if (OB_FALSE_IT(helper.need_merge_ = sub_stmt->get_stmt_hint().enable_view_merge())) {

@@ -991,9 +991,7 @@ private:
   int remove_pg_from_mgr(const ObIPartitionGroup* partition, const bool write_slog);
   int inner_add_partition(ObIPartitionGroup& partition, const bool need_check_tenant, const bool is_replay,
       const bool allow_multi_value) override;
-  int inner_del_partition(const common::ObPartitionKey& pkey) override;
-  int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id) override;
-  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id);
+  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id) override;
   int create_sstables(const obrpc::ObCreatePartitionArg& arg, const bool in_slog_trans,
       ObIPartitionGroup& partition_group, ObTablesHandle& handle);
   int create_sstables(const ObCreatePartitionParam& arg, const bool in_slog_trans, ObIPartitionGroup& partition_group,
@@ -1015,7 +1013,6 @@ private:
       const int64_t schema_version, const uint64_t index_id, const int64_t timeout, uint64_t& log_id, int64_t& log_ts);
   int check_partition_state_(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg,
       common::ObIArray<obrpc::ObCreatePartitionArg>& target_batch_arg, common::ObIArray<int>& batch_res);
-  void free_partition_list(ObArray<ObIPartitionGroup*>& partition_list);
   void submit_pt_update_task_(const ObPartitionKey& pkey, const bool need_report_checksum = true);
   int submit_pg_pt_update_task_(const ObPartitionKey& pkey);
   int try_inc_total_partition_cnt(const int64_t new_partition_cnt, const bool need_check);

@@ -3122,11 +3122,16 @@ int ObAggregateCalcFunc::add_calc(const ObDatum& left_value, const ObDatum& righ
         break;
       }
       case ObNumberTC: {
-        if (left_value.is_null() && OB_FAIL(clone_number_cell(right_value.get_number(), result_datum, out_allocator))) {
-          LOG_WARN("fail to clone number cell", K(ret));
-        } else if (right_value.is_null() &&
-                   OB_FAIL(clone_number_cell(left_value.get_number(), result_datum, out_allocator))) {
-          LOG_WARN("fail to clone number cell", K(ret));
+        if (left_value.is_null()) {
+          if (OB_FAIL(clone_number_cell(right_value.get_number(),
+              result_datum, out_allocator))) {
+            LOG_WARN("fail to clone number cell", K(ret));
+          }
+        } else if (right_value.is_null()) {
+          if (OB_FAIL(clone_number_cell(left_value.get_number(),
+              result_datum, out_allocator))) {
+            LOG_WARN("fail to clone number cell", K(ret));
+          }
         } else {
           char buf_alloc[ObNumber::MAX_CALC_BYTE_LEN];
           ObDataBuffer allocator(buf_alloc, ObNumber::MAX_CALC_BYTE_LEN);

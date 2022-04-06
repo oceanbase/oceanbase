@@ -28,7 +28,8 @@ ObMergeSetOp::ObMergeSetOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpIn
       alloc_(ObModIds::OB_SQL_MERGE_GROUPBY, OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SERVER_TENANT_ID, ObCtxIds::WORK_AREA),
       last_row_(alloc_),
       cmp_(),
-      need_skip_init_row_(false)
+      need_skip_init_row_(false),
+      iter_end_(false)
 {}
 
 int ObMergeSetOp::inner_open()
@@ -57,6 +58,7 @@ int ObMergeSetOp::rescan()
   last_row_.reset();
   alloc_.reset();
   need_skip_init_row_ = false;
+  iter_end_ = false;
   if (OB_FAIL(ObOperator::rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }

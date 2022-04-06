@@ -354,9 +354,15 @@ int ObUpdateResolver::check_multi_update_table_conflict()
         if (OB_ISNULL(table1) || OB_ISNULL(table2)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tables are null", K(table1), K(table2));
-        } else if (ta1.table_id_ != ta2.table_id_ && table1->ref_id_ == table2->ref_id_) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple aliases to same table");
+        } else if (ta1.table_id_ != ta2.table_id_) {
+          uint64_t base_table_id1 = table1->is_generated_table() ?
+                                    table1->get_base_table_item().ref_id_ : table1->ref_id_;
+          uint64_t base_table_id2 = table2->is_generated_table() ?
+                                    table2->get_base_table_item().ref_id_ : table2->ref_id_;
+          if (base_table_id1 == base_table_id2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple aliases to same table");
+          }
         }
       }
     }

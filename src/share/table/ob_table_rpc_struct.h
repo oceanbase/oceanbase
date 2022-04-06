@@ -87,7 +87,7 @@ class ObTableOperationRequest final
   OB_UNIS_VERSION(1);
 public:
   ObTableOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
-      partition_id_(common::OB_INVALID_ID), entity_type_(), table_operation_(),
+      partition_id_(common::OB_INVALID_ID), entity_type_(ObTableEntityType::ET_DYNAMIC), table_operation_(),
       consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
       returning_affected_rows_(false),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
@@ -137,7 +137,7 @@ class ObTableBatchOperationRequest final
   OB_UNIS_VERSION(1);
 public:
   ObTableBatchOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
-      partition_id_(common::OB_INVALID_ID), entity_type_(), batch_operation_(),
+      partition_id_(common::OB_INVALID_ID), entity_type_(ObTableEntityType::ET_DYNAMIC), batch_operation_(),
       consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
       returning_affected_rows_(false),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
@@ -223,6 +223,7 @@ public:
   ObTableQueryAndMutateRequest()
       :table_id_(common::OB_INVALID_ID),
       partition_id_(common::OB_INVALID_ID),
+      entity_type_(ObTableEntityType::ET_DYNAMIC),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
   {}
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),

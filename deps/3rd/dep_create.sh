@@ -76,10 +76,11 @@ function get_os_release() {
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
       alios)
+        version_ge "8.0" && compat_centos8 && return
         version_ge "7.0" && compat_centos7 && return
         ;;
       centos)
-        version_ge "8.0" && compat_centos7 && return
+        version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
     esac
@@ -114,7 +115,7 @@ function save_content {
         if [[ $(echo "$section" | grep -E "^target\-") != "" ]]
         then
             target_name=$(echo $section | sed 's|^target\-\(.*\)$|\1|g')
-            targets["$target_name"]="$(echo "${content["$section"]}" | grep -Eo "repo=.*" | awk -F '=' '{ print $2 }')"
+            targets["$target_name"]="$(echo "${content}" | grep -Eo "repo=.*" | awk -F '=' '{ print $2 }')"
             echo "target: $target_name, repo: ${targets["$target_name"]}"
         else
             packages["$section"]=$content
@@ -132,7 +133,7 @@ do
         # section=${line//\[\(.*\)\]/\1}
         section=$(echo $line | sed 's|.*\[\(.*\)\].*|\1|g')
     else
-        [[ "$line" != "" ]] && [[ "$line" != '\#*' ]] && content+=$'\n'"$line"
+        [[ "$line" != "" ]] && [[ "$line" != '#'* ]] && content+=$'\n'"$line"
     fi
 done < $DEP_FILE 
 save_content

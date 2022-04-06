@@ -1960,6 +1960,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2& column, ParseNode
       } else {
         column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
       }
+      if (OB_SUCC(ret) && is_pad_char_to_full_length(session_info_->get_sql_mode())) {
+        column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2681,13 +2684,22 @@ int ObDDLResolver::cast_default_value(ObObj& default_value, const ObTimeZoneInfo
         if (OB_SUCC(ret)) {
           default_value.set_number(column_schema.get_data_type(), nmb);
         }
-      }
+		  }
       if (OB_FAIL(ret)) {
         ret = OB_INVALID_DEFAULT;
         LOG_USER_ERROR(OB_INVALID_DEFAULT,
             column_schema.get_column_name_str().length(),
             column_schema.get_column_name_str().ptr());
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (default_value.get_type() == column_schema.get_data_type()
+        && (ObTimeTC == column_schema.get_data_type_class() ||
+            ObDateTimeTC == column_schema.get_data_type_class())) {
+      int64_t value = default_value.get_time();
+      ObTimeConverter::round_datetime(column_schema.get_data_scale(), value);
+      default_value.set_time_value(value);
     }
   }
   return ret;

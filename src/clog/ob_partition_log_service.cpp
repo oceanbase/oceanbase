@@ -8161,6 +8161,11 @@ int ObPartitionLogService::process_check_rebuild_req(
   return ret;
 }
 
+void ObPartitionLogService::try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  sw_.try_update_max_majority_log(log_id, log_ts);
+}
+
 void ObPartitionLogService::get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const
 {
   sw_.get_max_majority_log(log_id, log_ts);

@@ -134,7 +134,7 @@ private:
     void runTimerTask(void) override;
 
     ObConnectResourceMgr& conn_res_mgr_;
-    const uint64_t SLEEP_USECONDS = 3600000000;  // one hour
+    static const uint64_t SLEEP_USECONDS = 3600000000;  // one hour
   };
   friend class ConnResourceCleanUpTask;
   friend class CleanUpUserResourceFunc;

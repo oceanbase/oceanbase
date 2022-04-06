@@ -30,6 +30,7 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/oblog/ob_async_log_struct.h"
+#include "lib/thread/ob_thread_name.h"
 
 using namespace oceanbase::lib;
 

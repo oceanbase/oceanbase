@@ -59,8 +59,8 @@ DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 10
     "the number of microseconds an internal DML request is permitted to "
     "execute before it is terminated. Range: [1000us, 10m]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,128]",
-    "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 128] in integer, 0 stands for max(6, CPU_NUM/8)",
+DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
+    "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 64] in integer, 0 stands for max(6, CPU_NUM/8)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,100]",
     "the number of rpc I/O threads for high priority messages, 0 means set off. Range: [0, 100] in integer",
@@ -111,8 +111,8 @@ DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one pha
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEPRECATED_DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "False",
-    "specifies whether to always record the trace log. The default value is False.",
+DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
+    "specifies whether to always record the trace log. The default value is True.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(system_trace_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
     "system trace log level, 0:none, 1:standard, 2:debug. "
@@ -950,6 +950,10 @@ DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "100", "[0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
+    "enable compaction diagnose function"
+    "Value:  True:turned on;  False: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "2M",
     "[0B,)"
     "the trigger remaining data size within transaction for immediate logging, 0B represents not trigger immediate "

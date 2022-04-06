@@ -47,14 +47,14 @@ public:
       common::ObIArray<storage::ObITable::TableKey>& table_keys);
 
   static int read_macroblock_data(const ObString& path, const ObString& storage_info,
-      const ObBackupMacroIndex& meta_index, common::ObArenaAllocator& allocator,
-      blocksstable::ObMacroBlockSchemaInfo*& new_schema, blocksstable::ObMacroBlockMetaV2*& new_meta,
-      blocksstable::ObBufferReader& macro_data);
+      const ObBackupMacroIndex& meta_index, const int64_t sys_table_schema_version, 
+      common::ObArenaAllocator& allocator, blocksstable::ObMacroBlockSchemaInfo*& new_schema, 
+      blocksstable::ObMacroBlockMetaV2*& new_meta, blocksstable::ObBufferReader& macro_data);
 
   static int read_macroblock_data(const ObString& path, const ObString& storage_info,
-      const ObBackupTableMacroIndex& meta_index, common::ObArenaAllocator& allocator,
-      blocksstable::ObMacroBlockSchemaInfo*& new_schema, blocksstable::ObMacroBlockMetaV2*& new_meta,
-      blocksstable::ObBufferReader& macro_data);
+      const ObBackupTableMacroIndex& meta_index, const int64_t sys_table_schema_version,
+      common::ObArenaAllocator& allocator, blocksstable::ObMacroBlockSchemaInfo*& new_schema,
+      blocksstable::ObMacroBlockMetaV2*& new_meta, blocksstable::ObBufferReader& macro_data);
 
   static int fetch_max_backup_file_id(const ObString& path, const ObString& storage_info, const int64_t& backup_set_id,
       int64_t& max_index_id, int64_t& max_data_id);
@@ -69,6 +69,10 @@ public:
 
   static int read_backup_pg_meta_info(const ObString& path, const ObString& storage_info,
       const ObBackupMetaIndex& meta_index, ObBackupPGMetaInfo& backup_pg_meta_info);
+
+private:
+  static int check_sys_table_schema_version_(
+      const blocksstable::ObMacroBlockMetaV2 &meta, const int64_t sys_table_schema_version);
 };
 
 class ObPhyRestoreMetaIndexStore final {
@@ -322,6 +326,7 @@ private:
   ObPartitionKey backup_pgkey_;
   common::ObArenaAllocator allocator_;
   const ObPhysicalRestoreArg* restore_info_;
+  int64_t sys_table_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMacroBlockRestoreReaderV1);
 };
 

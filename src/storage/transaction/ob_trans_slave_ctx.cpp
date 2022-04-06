@@ -510,8 +510,8 @@ int ObSlaveTransCtx::handle_timeout(const int64_t delay)
     REC_TRANS_TRACE_EXT(tlog_, handle_timeout, OB_ID(ret), ret, OB_ID(used), timeguard, OB_ID(uref), get_uref());
   } else {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K_(trans_id));
-    unregister_timeout_task_();
-    register_timeout_task_(delay);
+    (void)unregister_timeout_task_();
+    (void)register_timeout_task_(delay);
   }
 
   return ret;

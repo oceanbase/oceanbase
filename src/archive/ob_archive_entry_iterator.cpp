@@ -456,7 +456,7 @@ int ObArchiveEntryIterator::extract_block_meta_()
   if (OB_FAIL(meta.deserialize(buf_cur_, buf_end_ - buf_cur_, pos))) {
     handle_serialize_ret_(ret);
   } else if (!meta.check_magic_number(meta.magic_) || !meta.check_meta_checksum()) {
-    ret = OB_ITER_END;
+    ret = OB_CHECKSUM_ERROR;
     ARCHIVE_LOG(WARN, "archive block meta is not valid", KR(ret), K(meta), KPC(this));
   } else if (buf_end_ - buf_cur_ < meta.get_total_len()) {
     ret = OB_BUF_NOT_ENOUGH;

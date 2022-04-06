@@ -900,7 +900,7 @@ int ObMPBase::before_response()
 int ObMPBase::after_process()
 {
   int ret = OB_SUCCESS;
-  if (!lib::is_diagnose_info_enabled()) {
+  if (!lib::is_trace_log_enabled()) {
   } else {
     NG_TRACE_EXT(process_end, OB_ID(run_ts), get_run_timestamp());
     const int64_t elapsed_time = common::ObTimeUtility::current_time() - get_receive_timestamp();
@@ -1671,7 +1671,7 @@ int ObMPBase::do_after_process(
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
   // trace end
-  if (lib::is_diagnose_info_enabled()) {
+  if (lib::is_trace_log_enabled()) {
     NG_TRACE(query_end);
 
     if (use_session_trace) {

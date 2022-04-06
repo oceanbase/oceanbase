@@ -920,6 +920,15 @@ int ObCoordTransCtx::check_and_response_scheduler_(const int64_t msg_type)
     already_response_ = true;
   }
 #endif
+  // for error sim test
+  ret = E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    if (get_state_() != Ob2PCState::CLEAR) {
+      // don't response scheduler
+      return OB_SUCCESS;
+    }
+    ret = OB_SUCCESS;
+  }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (!ObTransMsgTypeChecker::is_valid_msg_type(msg_type)) {

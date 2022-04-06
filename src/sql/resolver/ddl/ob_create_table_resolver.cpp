@@ -1710,7 +1710,7 @@ int ObCreateTableResolver::generate_index_arg()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_) || OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "variables are not inited.", K(ret), KP(stmt_));
   } else if (OB_FAIL(set_index_name())) {
@@ -1727,7 +1727,7 @@ int ObCreateTableResolver::generate_index_arg()
     if (is_oracle_temp_table_) {
       index_scope_ = LOCAL_INDEX;
     }
-    global_ = (index_scope_ != LOCAL_INDEX);
+    global_ = (GLOBAL_INDEX == index_scope_);
     ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema& table_schema = create_table_stmt->get_create_table_arg().schema_;
     if (OB_SUCC(ret)) {
@@ -1766,6 +1766,7 @@ int ObCreateTableResolver::generate_index_arg()
       // create table with index .the status of index is available
       index_arg_.index_option_.index_status_ = INDEX_STATUS_AVAILABLE;
       index_arg_.index_option_.index_attributes_set_ = index_attributes_set_;
+      index_arg_.sql_mode_ = session_info_->get_sql_mode();
     }
     if (OB_FAIL(ret)) {
       // skip
@@ -2182,8 +2183,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
                   LOG_WARN("build generated column expr failed", K(ret));
                 } else if (!expr->is_column_ref_expr()) {
                   // real index expr, so generate hidden generated column in data table schema
-                  if (OB_FAIL(
-                          ObIndexBuilderUtil::generate_ordinary_generated_column(*expr, tbl_schema, column_schema))) {
+                  if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(
+                          *expr, session_info_->get_sql_mode(), tbl_schema, column_schema))) {
                     LOG_WARN("generate ordinary generated column failed", K(ret));
                   } else {
                     sort_item.column_name_ = column_schema->get_column_name_str();

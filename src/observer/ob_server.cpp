@@ -261,7 +261,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   } else if (OB_FAIL(init_sql())) {
     LOG_ERROR("init sql fail", K(ret));
   } else if (OB_FAIL(init_sql_runner())) {
-    LOG_ERROR("init sql fail", K(ret));
+    LOG_ERROR("init sql runner fail", K(ret));
   } else if (OB_FAIL(init_sequence())) {
     LOG_ERROR("init sequence fail", K(ret));
   } else if (OB_FAIL(init_pl())) {
@@ -321,7 +321,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   } else if (OB_FAIL(user_col_stat_service_.init(&sql_proxy_, &config_))) {
     LOG_WARN("init user table column stat service failed");
   } else if (OB_FAIL(user_table_stat_service_.init(&sql_proxy_, &ObPartitionService::get_instance(), &config_))) {
-    LOG_WARN("init user table column stat service failed");
+    LOG_WARN("init user table stat service failed");
   } else if (OB_FAIL(ObStatManager::get_instance().init(&user_col_stat_service_, &user_table_stat_service_))) {
     LOG_WARN("init user data stat manager failed");
   } else if (OB_FAIL(opt_stat_service_.init(&sql_proxy_, &config_))) {

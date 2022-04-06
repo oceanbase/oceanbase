@@ -1138,7 +1138,7 @@ int ObGlobalIndexBuilder::drive_this_build_single_replica(const share::schema::O
                    is_checksum_equal,
                    *mysql_proxy_))) {
       if (OB_CHECKSUM_ERROR == ret) {
-        LOG_ERROR("fail to query column checksum", K(ret), "index_table_id", index_schema->get_table_id());
+        LOG_WARN("fail to query column checksum", K(ret), "index_table_id", index_schema->get_table_id());
       } else {
         LOG_WARN("fail to query column checksum", K(ret), "index_table_id", index_schema->get_table_id());
       }

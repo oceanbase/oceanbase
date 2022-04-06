@@ -583,7 +583,8 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext& ctx, ObDfo& df
     } else if (OB_FAIL(get_access_partition_order<NEW_ENG>(dfo, phy_op, asc_order))) {
       LOG_WARN("fail to get table scan partition order", K(ret));
     } else if (OB_FAIL(ObPXServerAddrUtil::reorder_all_partitions(
-                   table_location_key, locations, temp_locations, asc_order, ctx, base_order))) {
+                   table_location_key, table_loc->get_ref_table_id(),
+                   locations, temp_locations, asc_order, ctx, base_order))) {
       LOG_WARN("fail to reorder all partitions", K(ret));
     } else {
       LOG_TRACE("sqc partition order is", K(asc_order));
@@ -619,24 +620,106 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext& ctx, ObDfo& df
   return ret;
 }
 
-int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
+
+// used to fast lookup from phy partition id to partition order(index)
+// for a range partition, the greater the range, the greater the partition_index
+// for a hash partition, the index means nothing
+int ObPXServerAddrUtil::build_partition_index_lookup_map(ObTaskExecutorCtx &task_exec_ctx,
+                                                uint64_t ref_table_id,
+                                                ObPartitionIndexMap &idx_map)
+{
+  int ret = OB_SUCCESS;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
+  if (OB_ISNULL(task_exec_ctx.schema_service_)) {
+  } else if (OB_FAIL(task_exec_ctx.schema_service_->get_schema_guard(schema_guard))) {
+    LOG_WARN("fail get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("fail get table schema", K(ref_table_id), K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("fail get schema", K(ref_table_id), K(ret));
+  } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "PartOrderIdx"))) {
+    LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else {
+    schema::ObTablePartItemIterator iter(*table_schema);
+    schema::ObPartitionItem item;
+    do {
+      if (OB_FAIL(iter.next(item))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail get next partition item from iterator", K(ref_table_id), K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(idx_map.set_refactored(item.partition_id_, item.partition_idx_))) {
+        LOG_WARN("fail set value to hashmap", K(item), K(ret));
+      }
+    } while (OB_SUCC(ret));
+  }
+  return ret;
+}
+
+
+class ObPXPartitionOrderIndexCmp
+{
+public:
+  ObPXPartitionOrderIndexCmp(bool asc, ObPartitionIndexMap *map)
+      : asc_(asc), map_(map)
+  {}
+  bool operator() (const ObPartitionReplicaLocation &left, const ObPartitionReplicaLocation &right)
+  {
+    int ret = OB_SUCCESS;
+    bool bret = false;
+    int64_t lv, rv;
+    if (OB_FAIL(map_->get_refactored(left.get_partition_id(), lv))) {
+      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
+    } else if (OB_FAIL(map_->get_refactored(right.get_partition_id(), rv))) {
+      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
+    } else {
+      bret = asc_ ? (lv < rv) : (lv > rv);
+    }
+    return bret;
+  }
+private:
+  bool asc_;
+  ObPartitionIndexMap *map_;
+};
+
+int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key, int64_t ref_table_id,
     const ObPartitionReplicaLocationIArray& src_locations, ObPartitionReplicaLocationIArray& dst_locations, bool asc,
     ObExecContext& exec_ctx, ObIArray<int64_t>& base_order)
 {
   int ret = OB_SUCCESS;
   dst_locations.reset();
   if (src_locations.count() > 1) {
+    ObPartitionIndexMap part_order_map;
+    if (OB_FAIL(build_partition_index_lookup_map(exec_ctx.get_task_exec_ctx(),
+                                                 ref_table_id, part_order_map))) {
+      LOG_WARN("fail build index lookup map", K(ret));
+    }
     for (int i = 0; i < src_locations.count() && OB_SUCC(ret); ++i) {
       if (OB_FAIL(dst_locations.push_back(src_locations.at(i)))) {
         LOG_WARN("fail to push dst locations", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(&dst_locations.at(0),
-          &dst_locations.at(0) + dst_locations.count(),
-          asc ? ObPartitionReplicaLocation::compare_part_loc_asc : ObPartitionReplicaLocation::compare_part_loc_desc);
-      PWJPartitionIdMap* pwj_map = NULL;
-      if (OB_NOT_NULL(pwj_map = exec_ctx.get_pwj_map())) {
+      try {
+        std::sort(&dst_locations.at(0),
+                  &dst_locations.at(0) + dst_locations.count(),
+                  ObPXPartitionOrderIndexCmp(asc, &part_order_map));
+      } catch (OB_BASE_EXCEPTION &except) {
+        if (OB_HASH_NOT_EXIST == (ret = except.get_errno())) {
+          // schema changed during execution, notify to retry
+          ret = OB_SCHEMA_ERROR;
+        }
+      }
+      PWJPartitionIdMap *pwj_map = NULL;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to sort  locations", K(ret));
+      } else if (OB_NOT_NULL(pwj_map = exec_ctx.get_pwj_map())) {
         PartitionIdArray partition_id_array;
         if (OB_FAIL(pwj_map->get_refactored(table_location_key, partition_id_array))) {
           if (OB_HASH_NOT_EXIST == ret) {

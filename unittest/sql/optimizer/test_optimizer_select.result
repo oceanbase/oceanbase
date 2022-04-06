@@ -11222,9 +11222,9 @@ SQL: select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where least(t1.c2, a
 ============================================================
 |ID|OPERATOR                       |NAME    |EST. ROWS|COST|
 ------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |100      |1556|
-|1 | EXCHANGE OUT DISTR            |:EX10001|100      |1537|
-|2 |  MERGE JOIN                   |        |100      |1537|
+|0 |PX COORDINATOR                 |        |100      |1531|
+|1 | EXCHANGE OUT DISTR            |:EX10001|100      |1512|
+|2 |  MERGE JOIN                   |        |100      |1512|
 |3 |   SORT                        |        |500      |1074|
 |4 |    PX PARTITION ITERATOR      |        |500      |342 |
 |5 |     TABLE SCAN                |t1      |500      |342 |
@@ -11308,7 +11308,7 @@ SQL: select a2.c2, t1.c2, a1.c2 from t1  left join t2 a1 on (a1.c1 = t1.c1), t2 
 =============================================================
 |ID|OPERATOR                        |NAME    |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |HASH JOIN                       |        |450      |2621|
+|0 |HASH JOIN                       |        |450      |2674|
 |1 | PX COORDINATOR                 |        |300      |227 |
 |2 |  EXCHANGE OUT DISTR            |:EX10000|300      |198 |
 |3 |   PX PARTITION ITERATOR        |        |300      |198 |
@@ -11457,7 +11457,7 @@ SQL: select f_acc.c2, a1.c2, a2.c2 from t2 left join t2 f1 on (f1.c1 =1 and f1.c
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|        |3        |767 |
+|0 |NESTED-LOOP JOIN CARTESIAN|        |3        |784 |
 |1 | NESTED-LOOP JOIN         |        |3        |505 |
 |2 |  PX COORDINATOR          |        |1        |53  |
 |3 |   EXCHANGE OUT DISTR     |:EX10000|1        |52  |
@@ -11466,8 +11466,8 @@ SQL: select f_acc.c2, a1.c2, a2.c2 from t2 left join t2 f1 on (f1.c1 =1 and f1.c
 |6 |   EXCHANGE OUT DISTR     |:EX20000|300      |198 |
 |7 |    PX PARTITION ITERATOR |        |300      |198 |
 |8 |     TABLE SCAN           |t2      |300      |198 |
-|9 | MATERIAL                 |        |1        |261 |
-|10|  NESTED-LOOP JOIN        |        |1        |260 |
+|9 | MATERIAL                 |        |1        |278 |
+|10|  NESTED-LOOP JOIN        |        |1        |277 |
 |11|   PX COORDINATOR         |        |1        |53  |
 |12|    EXCHANGE OUT DISTR    |:EX30000|1        |52  |
 |13|     TABLE GET            |a1      |1        |52  |
@@ -19310,17 +19310,19 @@ Outputs & filters:
 
 SQL: Select distinct 1, 1 + (@var:=1) from t7; 
 
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t7  |1        |36  |
-===================================
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH DISTINCT|    |1        |122 |
+|1 | TABLE SCAN  |t7  |100      |88  |
+======================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([?], [?]), filter(nil), 
+  0 - output([?], [? + (T_OP_ASSIGN, 'var', ?)]), filter(nil), 
+      distinct([? + (T_OP_ASSIGN, 'var', ?)])
+  1 - output([? + (T_OP_ASSIGN, 'var', ?)]), filter(nil), 
       access([t7.c1]), partitions(p0), 
-      limit(1), offset(nil), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
 

@@ -171,7 +171,9 @@ int BtreeNode::get_next_active_child(int pos, int64_t version, int64_t* cnt, Mul
     ++pos;
   } else {
     while (++pos < size(index)) {
-      if (!get_tag(pos, index)) {
+      if (!get_tag(pos, index)
+          // double check if condition stil hold, prevent the use of future tag
+          || version < max_del_version_) {
         break;
       }
       if (OB_NOT_NULL(cnt)) {
@@ -188,7 +190,9 @@ int BtreeNode::get_prev_active_child(int pos, int64_t version, int64_t* cnt, Mul
     --pos;
   } else {
     while (--pos >= 0) {
-      if (!get_tag(pos, index)) {
+      if (!get_tag(pos, index)
+          // double check if condition stil hold, prevent the use of future tag
+          || version < max_del_version_) {
         break;
       }
       if (OB_NOT_NULL(cnt)) {
@@ -716,8 +720,8 @@ int ScanHandle::scan_forward(bool skip_inactive, int64_t* skip_cnt)
   int ret = OB_SUCCESS;
   BtreeNode* node = nullptr;
   int pos = 0;
-  int64_t version = skip_inactive ? version_ : 0;
-  MultibitSet* index = &this->index_;
+  int64_t version = skip_inactive ? version_ : -1;
+  MultibitSet *index = &this->index_;
   while (OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;
@@ -744,8 +748,8 @@ int ScanHandle::scan_backward(bool skip_inactive, int64_t* skip_cnt)
   int ret = OB_SUCCESS;
   BtreeNode* node = nullptr;
   int pos = 0;
-  int64_t version = skip_inactive ? version_ : 0;
-  MultibitSet* index = &this->index_;
+  int64_t version = skip_inactive ? version_ : -1;
+  MultibitSet *index = &this->index_;
   while (OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;

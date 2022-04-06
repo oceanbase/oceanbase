@@ -1283,7 +1283,7 @@ int ObWindowFunction::ObWindowFunctionCtx::get_next_row(const ObNewRow*& row)
           func->reset_for_restart();
           const ObNewRow* func_row = NULL;
           ObNewRow row;
-          ObObj cells[OB_MAX_WINDOW_FUNCTION_NUM];
+          ObObj cells[func_list_.get_size()];
           ObObj& res_cell = cells[0];
           row.cells_ = cells;
           FuncCtx* prev_func_ctx = NULL;

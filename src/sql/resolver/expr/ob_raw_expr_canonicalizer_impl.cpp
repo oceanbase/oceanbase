@@ -33,6 +33,8 @@ int ObRawExprCanonicalizerImpl::canonicalize(ObRawExpr*& expr)
     LOG_WARN("cluster and or failed", K(ret));
   } else if (OB_FAIL(pull_similar_expr(expr))) {
     LOG_WARN("pull similar expr failed", K(ret));
+  } else if (OB_FAIL(expr->extract_info())) {
+    LOG_WARN("failed to extract info", K(ret), K(*expr));
   }
   return ret;
 }

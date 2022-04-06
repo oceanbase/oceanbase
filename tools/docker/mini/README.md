@@ -1,3 +1,5 @@
+**This image is no longer maintained, and related capabilities are provided by [standalone](../standalone/README.md##start-an-oceanbase-instance)**
+
 # How to use this image
 
 You can deploy OceanBase databases by using many methods. But Docker is the easiest method. This repository gives you an obce-mini image for deploying OceanBase database by using Docker. obce-mini is a mini standalone test image for OceanBase Database Community Edition. You can use it only for research/study/evaluation.  DO NOT use it for production or performance testing.
@@ -6,7 +8,7 @@ You can deploy OceanBase databases by using many methods. But Docker is the easi
 
 Before you deploy obce-mini image, do a check of these:
 
-- Make sure that your machine has at least 2 physical core and 10GB memory.
+- Make sure that your machine has at least 2 physical core and 8GB memory.
 - Your machine has installed these applications:
 
     Application | Recommended version | Documentation

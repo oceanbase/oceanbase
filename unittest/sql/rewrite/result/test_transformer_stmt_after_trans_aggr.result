@@ -86426,6 +86426,7 @@ SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1);
               "CNT_AGG"
             ],
             "rel_id": [
+              1
             ],
             "expr_levels": [
               0
@@ -96957,6 +96958,7 @@ SQL: select * from (select c1 as col from t1) as L where col = (select max(c1) f
                 "IS_RANGE_COND"
               ],
               "rel_id": [
+                1
               ],
               "expr_levels": [
                 0

@@ -986,7 +986,9 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(t_mblk)) {
       tmp_block_manager_.free_macro_block(t_mblk->get_block_id());
+      t_mblk->~ObTmpMacroBlock();
       allocator_.free(t_mblk);
+      t_mblk = nullptr;
     }
   }
 

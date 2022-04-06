@@ -1740,6 +1740,7 @@ int ObSSTableRowIterator::check_row_locked(ObSSTableReadHandle& read_handle, ObS
 {
   int ret = OB_SUCCESS;
   lock_state.is_locked_ = false;
+  lock_state.trans_version_ = 0;
 
   switch (read_handle.state_) {
     case ObSSTableRowState::NOT_EXIST:
@@ -1778,7 +1779,11 @@ int ObSSTableRowIterator::check_block_row_lock(ObSSTableReadHandle& read_handle,
   }
 
   if (OB_SUCC(ret)) {
-    for (int64_t i = read_handle.micro_begin_idx_; OB_SUCC(ret) && i <= read_handle.micro_end_idx_; ++i) {
+    // there is only one trans in one sstable,
+    // when 0 != lock_state.trans_version_ means cur trans is commit or abort, no need loop
+    for (int64_t i = read_handle.micro_begin_idx_;
+         OB_SUCC(ret) && i <= read_handle.micro_end_idx_ && !lock_state.is_locked_ && 0 == lock_state.trans_version_;
+         ++i) {
       if (OB_FAIL(get_block_data(i, block_data))) {
         STORAGE_LOG(WARN, "Fail to get block data, ", K(ret), K(read_handle));
       } else {

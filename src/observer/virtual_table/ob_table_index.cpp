@@ -648,9 +648,7 @@ int ObTableIndex::add_normal_index_column(const ObString& database_name, const O
           }
             // null
           case OB_APP_MIN_COLUMN_ID + 12: {
-            if (column_schema->is_rowkey_column()) {
-              cells[cell_idx].set_varchar(ObString(""));
-            } else if (column_schema->is_nullable()) {
+            if (column_schema->is_nullable()) {
               cells[cell_idx].set_varchar(ObString("YES"));
             } else {
               cells[cell_idx].set_varchar(ObString(""));

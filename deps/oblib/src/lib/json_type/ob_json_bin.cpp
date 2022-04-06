@@ -650,7 +650,7 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
     case ObJsonNodeType::J_DOUBLE: {
       const ObJsonDouble *d = static_cast<const ObJsonDouble*>(json_tree);
       double value = d->value();
-      if (isnan(value) || isinf(value)) {
+      if (std::isnan(value) || std::isinf(value)) {
         ret = OB_INVALID_NUMERIC;
         LOG_WARN("invalid double value", K(ret), K(value));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(double)))) {
@@ -1783,7 +1783,7 @@ int ObJsonBin::move_parent_iter()
 }
 
 // inlined will reuse value entry offset which length is type_size
-int ObJsonBin::set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type)
+int ObJsonBin::set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type, uint8_t entry_size)
 {
   INIT_SUCC(ret);
   char *ptr = curr_.ptr();
@@ -1820,7 +1820,7 @@ int ObJsonBin::set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t ty
       }
       case ObJsonNodeType::J_INT: {
         if (is_inlined) {
-          int_val_ = ObJsonVar::var_uint2int(val_offset);
+          int_val_ = ObJsonVar::var_uint2int(val_offset, entry_size);
           bytes_ = 0;
         } else {
           int64_t val = 0;
@@ -2141,7 +2141,7 @@ int ObJsonBin::get_element_in_array_v0(size_t index, char **get_addr_only)
         } else {
           pos_ = pos_ + val_offset;
         }
-        if (OB_FAIL(set_curr_by_type(pos_, val_offset, val_type))) {
+        if (OB_FAIL(set_curr_by_type(pos_, val_offset, val_type, type))) {
           LOG_WARN("failed to move iter to sub obj.", K(ret), K(index));
         }
       }
@@ -2212,7 +2212,7 @@ int ObJsonBin::get_element_in_object_v0(size_t i, char **get_addr_only)
         } else {
           pos_ = pos_ + value_offset;
         }
-        if (OB_FAIL(set_curr_by_type(pos_, value_offset, val_type))) {
+        if (OB_FAIL(set_curr_by_type(pos_, value_offset, val_type, type))) {
           LOG_WARN("failed to move iter to sub obj.", K(ret), K(i));
         }
       }
@@ -3305,7 +3305,7 @@ int ObJsonBin::remove_v0(size_t index)
   ObJsonNodeType node_type = this->json_type();
   ObJBVerType ver_type = this->get_vertype();
   // 1. move into element index, get used bytes
-  uint64_t used_bytes;
+  uint64_t used_bytes = 0;
   if (OB_FAIL(this->element(index))) {
     LOG_WARN("failed to get element ", K(index), K(ret));
   } else {
@@ -3685,12 +3685,21 @@ int ObJsonBin::rebuild_json_value(const char *data,
       break;
     }
     case ObJsonNodeType::J_DECIMAL: {
+      ObPrecision prec = -1;
+      ObScale scale = -1;
+      number::ObNumber num;
       int64_t pos = 0;
-      number::ObNumber temp_number;
-      if (OB_FAIL(temp_number.deserialize(data, length, pos))) {
-        LOG_WARN("failed to deserialize decimal data", K(ret));
+      if (OB_FAIL(serialization::decode_i16(data, length, pos, &prec))) {
+        LOG_WARN("fail to deserialize decimal precision.", K(ret), K(length));
+      } else if (OB_FAIL(serialization::decode_i16(data, length, pos, &scale))) {
+        LOG_WARN("fail to deserialize decimal scale.", K(ret), K(length), K(prec));
+      } else if (OB_FAIL(num.deserialize(data, length, pos))) {
+        LOG_WARN("fail to deserialize number.", K(ret), K(length));
       } else {
-        ret = result.append(data, pos);
+        ObJsonDecimal decimal(num, prec, scale);
+        if (OB_FAIL(serialize_json_decimal(&decimal, result))) {
+          LOG_WARN("failed to seialize json decimal", K(ret));
+        }
       }
       break;
     }
@@ -4342,9 +4351,9 @@ uint64_t ObJsonVar::var_int2uint(int64_t var)
   return val;
 }
 
-int64_t ObJsonVar::var_uint2int(uint64_t var)
+int64_t ObJsonVar::var_uint2int(uint64_t var, uint8_t entry_size)
 {
-  ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(ObJsonVar::get_var_type(var));
+  ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(max(ObJsonVar::get_var_type(var), entry_size));
   int64_t val = 0;
   switch (size) {
     case JBLS_UINT8: {

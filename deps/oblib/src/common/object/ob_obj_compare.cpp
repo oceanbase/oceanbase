@@ -963,9 +963,9 @@ bool is_calc_with_end_space(
     OBJ_TYPE_CLASS_CHECK(obj2, ObJsonTC);                                                       \
     UNUSED(cmp_ctx);                                                                            \
     int ret = OB_SUCCESS;                                                                       \
-    int result = 0;                                                                             \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                        \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                        \
+    int result = CR_OB_ERROR;                                                                   \
+    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
+    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
     ObIJsonBase *j_base1 = &j_bin1;                                                             \
     ObIJsonBase *j_base2 = &j_bin2;                                                             \
     if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
@@ -974,6 +974,8 @@ bool is_calc_with_end_space(
       LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
     } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
       LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    } else {                                                                                    \
+      result = INT_TO_CR(result);                                                               \
     }                                                                                           \
                                                                                                 \
     return result;                                                                              \

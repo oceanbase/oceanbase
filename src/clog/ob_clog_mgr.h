@@ -300,6 +300,7 @@ public:
       const common::ObPartitionKey& pkey, const int64_t incarnation, const int64_t archive_round) = 0;
   virtual int get_archive_pg_map(archive::PGArchiveMap*& map) = 0;
   virtual bool is_server_archive_stop(const int64_t incarnation, const int64_t archive_round) = 0;
+  virtual int get_server_min_log_ts(int64_t &server_min_log_ts) = 0;
 };
 
 class ObCLogMgr : public ObICLogMgr {
@@ -429,6 +430,8 @@ public:
   {
     return cb_engine_;
   }
+
+  virtual int get_server_min_log_ts(int64_t &server_min_log_ts);
   // ==================== physical flashback =====================
   int delete_all_log_files() override;
   // ==================== log archive =====================

@@ -17,11 +17,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-namespace oceanbase {
-namespace common {
 #include <sys/types.h>
 #include <stdarg.h>
+#include "lib/utility/ob_macro_utils.h"
+
+EXTERN_C_BEGIN
 
 /**
    A (very) limited version of snprintf.
@@ -41,6 +41,6 @@ int _safe_snprintf(char* to, size_t n, const char* fmt, ...);
 
 #define safe_vsnprintf(_s, _n, _f, _a) _safe_vsnprintf((char*)(_s), (size_t)(_n), _f, _a)
 
-}  // namespace common
-}  // namespace oceanbase
+EXTERN_C_END
+
 #endif  // OCEANBASE_SAFE_SNPRINTF_H_

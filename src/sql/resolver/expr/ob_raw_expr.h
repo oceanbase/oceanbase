@@ -53,6 +53,27 @@ class ObRawExprFactory;
 class ObSelectStmt;
 extern ObRawExpr *USELESS_POINTER;
 
+// If is_stack_overflow is true, the printing will not continue
+#define DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW(body)                               \
+  DECLARE_VIRTUAL_TO_STRING                                                               \
+  {                                                                                       \
+    int ret = common::OB_SUCCESS;                                                         \
+    int64_t pos = 0;                                                                      \
+    bool is_stack_overflow = false;                                                       \
+    if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {                               \
+      SQL_RESV_LOG(WARN, "failed to check stack overflow", K(ret), K(is_stack_overflow)); \
+    } else if (is_stack_overflow) {                                                       \
+      SQL_RESV_LOG(DEBUG, "too deep recursive", K(ret), K(is_stack_overflow));            \
+    } else {                                                                              \
+      J_OBJ_START();                                                                      \
+      body;                                                                               \
+      J_OBJ_END();                                                                        \
+    }                                                                                     \
+    return pos;                                                                           \
+  }
+
+#define VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(args...) DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW(J_KV(args))
+
 // ObSqlBitSet is a simple bitset, in order to avoid memory explosure
 // ObBitSet is too large just for a simple bitset
 const static int64_t DEFAULT_SQL_BITSET_SIZE = 32;
@@ -2382,7 +2403,7 @@ public:
   virtual uint64_t hash_internal(uint64_t seed) const override;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE,
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE,
       ref_expr_, K_(enum_set_values));
 
 private:
@@ -2538,8 +2559,8 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   int get_subquery_comparison_name(
       const common::ObString &symbol, char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_levels), N_CHILDREN, exprs_);
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_levels), N_CHILDREN, exprs_);
 
 protected:
   common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
@@ -2706,7 +2727,7 @@ public:
   virtual uint64_t hash_internal(uint64_t seed) const override;
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_levels), N_ARG_CASE, arg_expr_, N_DEFAULT, default_expr_, N_WHEN, when_exprs_, N_THEN, then_exprs_,
       N_DECODE, is_decode_func_);
 
@@ -3003,9 +3024,10 @@ public:
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
   const char *get_name_dblink(ObItemType expr_type) const;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_level), K_(expr_levels), N_CHILDREN, real_param_exprs_, N_DISTINCT, distinct_, N_ORDER_BY, order_items_,
-      N_SEPARATOR_PARAM_EXPR, separator_param_expr_, K_(udf_meta), N_LINEAR_INTER_EXPR, linear_inter_expr_);
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_level), K_(expr_levels), N_CHILDREN, real_param_exprs_, N_DISTINCT, distinct_,
+      N_ORDER_BY, order_items_, N_SEPARATOR_PARAM_EXPR, separator_param_expr_, K_(udf_meta), N_LINEAR_INTER_EXPR,
+      linear_inter_expr_);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
@@ -3163,8 +3185,8 @@ public:
     return operator_id_;
   }
 
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
 
 private:
   int check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type);
@@ -3256,12 +3278,12 @@ public:
   {
     is_sqlcode_ = is_sqlcode;
   }
-  bool get_is_sqlcode()
+  bool get_is_sqlcode() const
   {
     return is_sqlcode_;
   }
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
-      K_(expr_level), K_(expr_levels), K_(is_sqlcode), N_CHILDREN, exprs_);
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_,
+      N_REL_ID, rel_ids_, K_(expr_level), K_(expr_levels), K_(is_sqlcode), N_CHILDREN, exprs_);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLSQLCodeSQLErrmRawExpr);
@@ -3862,7 +3884,7 @@ public:
   virtual uint64_t hash_internal(uint64_t seed) const override;
 
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
-  VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_level), K_(expr_levels), K_(func_type), K_(is_distinct), K_(func_params), K_(partition_exprs),
       K_(order_items), K_(win_type), K_(is_between), K_(upper), K_(lower), KPC_(agg_expr));
 

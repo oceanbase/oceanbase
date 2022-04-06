@@ -19,6 +19,7 @@
 #include "blocksstable/ob_block_sstable_struct.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_sstable.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase {
 namespace storage {
@@ -56,7 +57,7 @@ public:
   {
     return file_handle_.assign(file_handle);
   }
-  int get_clean_out_log_ts(int64_t& clean_out_log_ts);
+  int get_clean_out_log_ts(ObIArray<int64_t> &clean_out_log_ts);
 
 private:
   static const int64_t DEFAULT_HASH_BUCKET_COUNT = 100;
@@ -130,17 +131,29 @@ private:
   };
   class GetCleanOutLogIdFunctor : public TableMap::ForeachFunctor {
   public:
-    GetCleanOutLogIdFunctor() : clean_out_log_ts_(INT64_MAX)
-    {}
+    GetCleanOutLogIdFunctor() : clean_out_log_ts_()
+    {
+      min_complement_log_ts_ = INT64_MAX;
+      clean_out_log_ts_.push_back(0);
+    }
     virtual ~GetCleanOutLogIdFunctor() = default;
-    int64_t get_clean_out_log_ts() const
+    const common::ObIArray<int64_t> &get_clean_out_log_ts() const
     {
       return clean_out_log_ts_;
     }
-    virtual int operator()(ObITable& table, bool& is_full) override;
+    void sort()
+    {
+      std::sort(clean_out_log_ts_.begin(), clean_out_log_ts_.end());
+    }
+    int64_t get_min_complement_log_ts()
+    {
+      return min_complement_log_ts_;
+    }
+    virtual int operator()(ObITable &table, bool &is_full) override;
 
   private:
-    int64_t clean_out_log_ts_;
+    int64_t min_complement_log_ts_;
+    common::ObSEArray<int64_t, 10> clean_out_log_ts_;
   };
   void destroy();
   int write_add_sstable_log(ObSSTable& sstable);

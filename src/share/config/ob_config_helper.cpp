@@ -336,38 +336,41 @@ int64_t ObConfigIntParser::get(const char* str, bool& valid)
 int64_t ObConfigCapacityParser::get(const char* str, bool& valid)
 {
   char* p_unit = NULL;
+  double split_num = 0.0;
   int64_t value = 0;
 
   if (OB_ISNULL(str) || '\0' == str[0]) {
     valid = false;
   } else {
     valid = true;
-    value = strtol(str, &p_unit, 0);
-
+    split_num = strtod(str, &p_unit);
     if (OB_ISNULL(p_unit)) {
       valid = false;
-    } else if (value < 0) {
+    } else if (split_num < 0) {
+      valid = false;
+    } else if ('.' == p_unit[0]){
       valid = false;
     } else if ('\0' == *p_unit) {
-      value <<= CAP_MB;  // default
+      split_num *= (int64_t)1<<CAP_MB;  // default
     } else if (0 == STRCASECMP("b", p_unit) || 0 == STRCASECMP("byte", p_unit)) {
       // do nothing
     } else if (0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
-      value <<= CAP_KB;
+      split_num *= (int64_t)1<<CAP_KB;
     } else if (0 == STRCASECMP("mb", p_unit) || 0 == STRCASECMP("m", p_unit)) {
-      value <<= CAP_MB;
+      split_num *= (int64_t)1<<CAP_MB;
     } else if (0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
-      value <<= CAP_GB;
+      split_num *= (int64_t)1<<CAP_GB;
     } else if (0 == STRCASECMP("tb", p_unit) || 0 == STRCASECMP("t", p_unit)) {
-      value <<= CAP_TB;
+      split_num *= (int64_t)1<<CAP_TB;
     } else if (0 == STRCASECMP("pb", p_unit) || 0 == STRCASECMP("p", p_unit)) {
-      value <<= CAP_PB;
+      split_num *= (int64_t)1<<CAP_PB;
     } else {
       valid = false;
       OB_LOG(ERROR, "set capacity error", K(str), K(p_unit));
     }
   }
-
+  // 0.xxx bit is insignificant, lose the data after point
+  value = floor(split_num);
   return value;
 }
 

@@ -405,8 +405,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
           break;
         }
         case T_OP_AND:
-        case T_OP_OR: {
-          ObOpRawExpr* m_expr = NULL;
+        case T_OP_OR:
+        case T_OP_XOR: {
+          ObOpRawExpr *m_expr = NULL;
           int64_t num_child = 2;
           if (OB_FAIL(process_node_with_children(node, num_child, m_expr))) {
             LOG_WARN("fail to process node with children", K(ret), K(node));
@@ -439,7 +440,6 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
         case T_OP_GT:
         case T_OP_NE:
         case T_OP_CNN:
-        case T_OP_XOR:
         case T_OP_BIT_AND:
         case T_OP_BIT_OR:
         case T_OP_BIT_XOR:
@@ -3876,7 +3876,17 @@ int ObRawExprResolverImpl::not_row_check(const ObRawExpr* expr)
   return ret;
 }
 
-int ObRawExprResolverImpl::param_not_row_check(const ObRawExpr* expr)
+int ObRawExprResolverImpl::not_int_check(const ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (share::is_mysql_mode() && NULL != expr && T_INT == expr->get_expr_type()) {
+    ret = OB_ERR_WINDOW_ILLEGAL_ORDER_BY;
+    LOG_WARN("int not expected in window function's orderby ", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::param_not_row_check(const ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && NULL != expr && i < expr->get_param_count(); i++) {
@@ -4299,6 +4309,10 @@ int ObRawExprResolverImpl::process_sort_list_node(const ParseNode* node, ObIArra
           LOG_WARN("fail to recursive resolve order item expr", K(ret));
         } else {
           OZ(not_row_check(order_item.expr_));
+          // check order_item.expr_:
+          // 1. shouldn't be int,
+          // 2. if is number, ignore the order_item.(all group are in same group);
+          OZ(not_int_check(order_item.expr_));
           OZ(order_items.push_back(order_item));
         }
       }
@@ -4341,6 +4355,21 @@ int ObRawExprResolverImpl::process_frame_node(const ParseNode* node, ObFrame& fr
         ParseNode* lower_bound_node = node->children_[2];
         if (OB_FAIL(process_bound_node(lower_bound_node, false, frame.get_lower()))) {
           LOG_WARN("process lower bound node failed", K(ret));
+        }
+      }
+      /* check the frame
+       * In mysql, ROWS can't coexists with (INTERVAL expr unit).
+       * mysql: select c1, sum(c1) over(order by c1 rows interval 5 day preceding) from t1;
+       * mysql will raise error: ERROR 3596 (HY000): INTERVAL can only be used with RANGE frames.
+       */
+      if (OB_SUCC(ret) && share::is_mysql_mode() && frame.win_type_ == WINDOW_ROWS) {
+        if (frame.get_upper().type_ == BOUND_INTERVAL && !frame.get_upper().is_nmb_literal_) {
+          // upper is a (INTERVAL expr unit)
+          ret = OB_ERR_WINDOW_ROWS_INTERVAL_USE;
+          LOG_WARN("INTERVAL can only be used with RANGE frames.", K(ret));
+        } else if (frame.get_lower().type_ == BOUND_INTERVAL && !frame.get_lower().is_nmb_literal_) {
+          ret = OB_ERR_WINDOW_ROWS_INTERVAL_USE;
+          LOG_WARN("INTERVAL can only be used with RANGE frames.", K(ret));
         }
       }
     }
@@ -4524,9 +4553,16 @@ int ObRawExprResolverImpl::check_and_canonicalize_window_expr(ObRawExpr* expr)
       }
     }
 
-    if (OB_SUCC(ret) && share::is_mysql_mode() && w_expr->has_frame_orig() &&
-        WINDOW_RANGE == win_type && 0 == order_items.count()) {
-      ret = OB_ERR_MISS_ORDER_BY_EXPR;
+    if (OB_SUCC(ret) && share::is_mysql_mode() && w_expr->has_frame_orig() && WINDOW_RANGE == win_type &&
+        0 == order_items.count() &&
+        (w_expr->get_upper().type_ == BOUND_INTERVAL || w_expr->get_lower().type_ == BOUND_INTERVAL)) {
+      /* if preceding or following has a specific value (not the default unbounded)
+       * in mysql:
+       * @OK: select c1, sum(c1) over(range between current row and current row) from t1;
+       * @OK: select c1, sum(c1) over(range unbounded preceding) from t1;
+       * @error: select c1, sum(c1) over(range 1 preceding) from t1; --error 3587
+       */
+      ret = OB_ERR_WINDOW_RANGE_FRAME_ORDER_TYPE;
       LOG_WARN("missing ORDER BY expression in the window specification", K(ret));
     }
 

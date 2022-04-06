@@ -7364,6 +7364,7 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
                      pg_key,
                      file_handle))) {
         STORAGE_LOG(WARN, "Fail to init data store desc, ", K(ret));
+      } else if (FALSE_IT(data_desc.is_unique_index_ = index_schema->is_unique_index())) {
       } else if (OB_FAIL(writer.open(data_desc, ObMacroDataSeq((INT64_MAX / param.task_cnt_) * param.task_id_)))) {
         STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
       } else {
@@ -7690,7 +7691,7 @@ int ObPartitionStorage::validate_sstables(
         } else if (OB_FAIL(validate_sstable(row_count, index_table, column_checksum_map))) {
           if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
             handle_error_index_table(*index_table, index_stats, ret);
-            if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+            if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && GCONF._enable_compaction_diagnose) {
               dump_error_info(*main_sstable, *index_table);
             }
           } else {

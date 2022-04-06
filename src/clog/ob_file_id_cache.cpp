@@ -409,8 +409,12 @@ int ObFileIdList::get_front_log2file_max_timestamp(int64_t& front_log2file_max_t
 {
   int ret = OB_SUCCESS;
   Log2File log_2_file;
-  if (OB_FAIL(container_ptr_->top_front(log_2_file)) && OB_ENTRY_NOT_EXIST != ret) {
-    CSR_LOG(ERROR, "container_ptr_ is empty", K(ret));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == container_ptr_->is_empty()) {
+    front_log2file_max_timestamp = OB_INVALID_TIMESTAMP;
+  } else if (OB_FAIL(container_ptr_->top_front(log_2_file))) {
+    CSR_LOG(WARN, "container_ptr_ is empty", K(ret));
   } else if (OB_UNLIKELY(!log_2_file.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CSR_LOG(ERROR, "container_ptr_ unexpected error", K(ret));
@@ -1350,7 +1354,9 @@ bool ObFileIdCache::ObPurgeFunctor::operator()(const ObPartitionKey& pkey, ObFil
       CSR_LOG(TRACE, "dead pkey", K(pkey), KP(list));
     }
   } else if (OB_FAIL(list->get_front_log2file_max_timestamp(front_log2file_max_log_timestamp))) {
-    CSR_LOG(ERROR, "get_log2file_max_timestamp unexpected error", K(ret));
+    CSR_LOG(WARN, "get_log2file_max_timestamp failed", K(ret));
+  } else if (OB_INVALID_TIMESTAMP == front_log2file_max_log_timestamp) {
+    CSR_LOG(INFO, "file_id_list is empty, no need consider this partition", K(pkey));
   } else if (OB_INVALID_TIMESTAMP == next_can_purge_log2file_timestamp_) {
     next_can_purge_log2file_timestamp_ = front_log2file_max_log_timestamp;
   } else {

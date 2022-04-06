@@ -63,7 +63,6 @@ int ObDtlSendMessageP::process_msg(ObDtlRpcDataResponse& response, ObDtlSendArgs
     } else if (arg.buffer_.is_data_msg() && 1 == arg.buffer_.seq_no()) {
       ObDtlLinkedBuffer* buf = &arg.buffer_;
       if (OB_FAIL(DTL.get_dfc_server().cache(arg.buffer_.tenant_id(), arg.chid_, buf))) {
-        ret = tmp_ret;
         LOG_WARN("get DTL channel fail",
             KP(arg.chid_),
             K(ret),

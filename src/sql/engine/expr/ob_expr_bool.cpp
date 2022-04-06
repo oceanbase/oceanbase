@@ -101,7 +101,9 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
   {
     if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {
       int cmp_result = 0;
-      if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
+      if (child_datum->is_null()) {
+        res_datum.set_int32(1);;
+      } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
         LOG_WARN("failed: compare json", K(ret));
       } else {
         res_datum.set_int32(cmp_result);

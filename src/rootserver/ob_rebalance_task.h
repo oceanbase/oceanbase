@@ -313,7 +313,7 @@ public:
   virtual ObRebalanceTaskType get_rebalance_task_type() const = 0;
   virtual bool need_process_failed_task() const
   {
-    return true;
+    return false;
   }
   /* rebalance task mgr related virtual interface
    */
@@ -1863,7 +1863,7 @@ public:
     UNUSED(curr_leader);
     return true;
   }
-  /* all_virtual_rebalance_task_stat虚接口
+  /* all_virtual_rebalance_task_stat virtual interface 
    */
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
@@ -3230,7 +3230,7 @@ public:
       const bool tenant_dropped, const char* comment);
 
 public:
-  /* general虚接口
+  /* general virtual interface
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
       const int64_t min_task_timeout_us, int64_t& timeout_us) const override;
@@ -3258,7 +3258,7 @@ public:
     }
     return ptr;
   }
-  /* rebalance task mgr相关虚接口
+  /* rebalance task mgr relation virtual interface
    */
   virtual bool skip_put_to_queue() const override
   {
@@ -3273,7 +3273,7 @@ public:
   virtual int clone(void* input_ptr, ObRebalanceTask*& out_task) const override;
   virtual void notify_cancel() const override
   {}
-  /* rebalance task executor虚接口implement
+  /* rebalance task executor virtual interface implement
    */
   virtual int check_before_execute(share::ObPartitionTableOperator& pt_operator, common::ObAddr& leader) const override;
   virtual int execute(obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& dummy_leader,

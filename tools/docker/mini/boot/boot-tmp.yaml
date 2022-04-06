@@ -1,5 +1,6 @@
 #FROM https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-local-example.yaml
 oceanbase-ce:
+  tags: test
   servers:
     - 127.0.0.1
   global:
@@ -9,8 +10,8 @@ oceanbase-ce:
     rpc_port: @OB_RPC_PORT@ # default: 2882
     zone: zone1
     cluster_id: 1
-    memory_limit: 8G
-    system_memory: 4G
+    memory_limit: 6G
+    system_memory: 3G
     stack_size: 512K
     cpu_count: 16
     cache_wash_threshold: 1G
@@ -25,10 +26,12 @@ oceanbase-ce:
     enable_auto_leader_switch: FALSE
     enable_one_phase_commit: FALSE
     weak_read_version_refresh_interval: 5s
+    balancer_idle_time: 10m
     trace_log_slow_query_watermark: 1s
     large_query_threshold: 1s
     clog_sync_time_warn_threshold: 1s
     syslog_io_bandwidth_limit: 10M
+    _cache_wash_interval: 1m
     enable_sql_audit: FALSE
     enable_perf_event: FALSE
     clog_max_unconfirmed_log_count: 5000

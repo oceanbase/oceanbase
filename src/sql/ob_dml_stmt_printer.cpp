@@ -459,8 +459,12 @@ int ObDMLStmtPrinter::print_table(
             ObIArray<ObString>* column_list = NULL;
             bool is_set_subquery = false;
             bool is_generated_table = true;
-            const bool force_col_alias =
-                stmt_->is_select_stmt() && (static_cast<const ObSelectStmt*>(stmt_)->is_star_select());
+            // force print alias name for select item in generated table. Otherwise,
+            // create view v as select 1 from dual where 1 > (select `abs(c1)` from (select abs(c1) from t));
+            // Definition of v would be:
+            // CREATE VIEW `v` AS select 1 AS `1` from DUAL where (1 > (select `abs(c1)` from ((select abs(`test`.`t`.`c1`) from `test`.`t`)) ))
+            // `abs(c1)` would be an unknown column.
+            const bool force_col_alias = stmt_->is_select_stmt();
             ObSelectStmtPrinter stmt_printer(buf_,
                 buf_len_,
                 pos_,

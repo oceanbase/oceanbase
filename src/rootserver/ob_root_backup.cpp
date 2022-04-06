@@ -327,8 +327,10 @@ int ObRootBackup::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
     if (OB_FAIL(info_manager.get_backup_info(OB_SYS_TENANT_ID, updater, sys_backup_info))) {
       LOG_WARN("failed to get backup info", K(ret));
     } else if (0 == sys_backup_info.backup_schema_version_) {
-      // do nothing
       // The schema_version of the backup is 0, indicating that the backup has not yet started, so skip
+      if (sys_backup_info.backup_status_.is_prepare_status() && OB_FAIL(tenant_ids.push_back(OB_SYS_TENANT_ID))) {
+        LOG_WARN("failed to push tenant id into array", K(ret));
+      }
     } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                    OB_SYS_TENANT_ID, *schema_service_, sys_backup_info.backup_schema_version_, guard))) {
       LOG_WARN("failed to get tenant schema guard", K(ret), K(sys_backup_info));
@@ -1708,8 +1710,8 @@ void ObRootBackup::cleanup_prepared_infos()
       // normal tenants, skip sys tenant
       for (int64_t i = 1; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
         const uint64_t tenant_id = tenant_ids.at(i);
-        if (OB_FAIL(cleanup_tenant_prepared_infos(tenant_id, updater.get_trans(), info_manager))) {
-          LOG_WARN("failed to cleanup stoppped tenant infos", K(ret), K(tenant_id));
+        if (OB_FAIL(cleanup_tenant_prepared_infos(tenant_id, sys_backup_info, updater.get_trans(), info_manager))) {
+          LOG_WARN("failed to cleanup stopped tenant infos", K(ret), K(tenant_id));
         }
       }
 
@@ -1750,8 +1752,8 @@ int ObRootBackup::check_need_cleanup_prepared_infos(
   return ret;
 }
 
-int ObRootBackup::cleanup_tenant_prepared_infos(
-    const uint64_t tenant_id, ObISQLClient &sys_tenant_trans, ObBackupInfoManager &info_manager)
+int ObRootBackup::cleanup_tenant_prepared_infos(const uint64_t tenant_id, const ObBaseBackupInfoStruct &sys_backup_info,
+    ObISQLClient &sys_tenant_trans, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo task_info;
@@ -1768,9 +1770,11 @@ int ObRootBackup::cleanup_tenant_prepared_infos(
   } else if (stop_) {
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("observer is stopping", K(ret));
-  } else if (OB_INVALID_ID == tenant_id) {
+  } else if (OB_INVALID_ID == tenant_id || !sys_backup_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant is is invalid", K(ret), K(tenant_id));
+    LOG_WARN("tenant is is invalid", K(ret), K(tenant_id), K(sys_backup_info));
+  } else if (OB_FAIL(drop_backup_point(tenant_id, sys_backup_info.backup_snapshot_version_))) {
+    LOG_WARN("failed to drop backup point", K(ret), K(info));
   } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
     LOG_WARN("failed to set trx timeout", K(ret), K(stmt_timeout));
   } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
@@ -1787,8 +1791,6 @@ int ObRootBackup::cleanup_tenant_prepared_infos(
       // do nothing
     } else if (OB_FAIL(ObBackupUtil::check_sys_tenant_trans_alive(info_manager, sys_tenant_trans))) {
       LOG_WARN("failed to check sys tenant trans alive", K(ret), K(info));
-    } else if (OB_FAIL(drop_backup_point(tenant_id, info.backup_snapshot_version_))) {
-      LOG_WARN("failed to drop backup point", K(ret), K(info));
     } else {
       dest_info = info;
       dest_info.backup_status_.set_backup_status_stop();

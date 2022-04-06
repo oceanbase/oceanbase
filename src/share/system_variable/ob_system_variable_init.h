@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace share
 {
-// ObSysVarFlag的值不可随意增删改, 有任何增删改要同时同步到sql/session/gen_ob_sys_variables.py的flag_value_dict变量中
+// ObSysVarFlag can not modified arbitrarily, all change should be synchronized to sql/session/gen_ob_sys_variables.py flag_value_dict
 struct ObSysVarFlag
 {
   const static int64_t NONE = 0LL;

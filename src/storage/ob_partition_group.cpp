@@ -3451,8 +3451,7 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
         // max_log_ts as overflow(the requirement from the storage layer). while
         // the data may already synced and we have no chance to mark the data
         // except traversing all data in the memtable. So we choose to mark the
-        // end_log_ts as the max_majority_log_ts as well. The detailed issue can
-        // be found in https://work.aone.alibaba-inc.com/issue/33865988
+        // end_log_ts as the max_majority_log_ts as well.
         //
         // NB: we never maintain the max_mjority_log_ts for follower, so we just
         // use the variable for the corner case of leader transfer.
@@ -3940,11 +3939,8 @@ int ObPartitionGroup::freeze(const bool emergency, const bool force, int64_t& fr
   ObPartitionGroupLockGuard guard(lock_, 0, PGLOCKSTORAGE);
 
   if (with_data_()) {
-    // https://open.oceanbase.com/docs/community/oceanbase-database/V3.1.1/replica-overview
-    // FULL（F）/ READONLY（R）replica have sstable and memtable, need to be frozen
     ret = freeze_log_and_data_v2_(emergency, force, freeze_snapshot);
   } else {
-    // LOGONLY（L）replica or empty PG
     ret = freeze_log_(force);
   }
 
@@ -6119,6 +6115,20 @@ int ObPartitionGroup::inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, con
     if (OB_FAIL(pg_storage_.inc_pending_elr_count(mt_ctx, log_ts))) {
       STORAGE_LOG(WARN, "failed to inc_pending_elr_count", K(ret), K_(pkey), K(log_ts));
     }
+  }
+
+  return ret;
+}
+
+int ObPartitionGroup::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "Partition object not initialized", K(ret), K(is_inited_));
+  } else {
+    pls_->try_update_max_majority_log(log_id, log_ts);
   }
 
   return ret;

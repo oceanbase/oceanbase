@@ -24,7 +24,7 @@ int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool& is_ip_format_i
 {
   is_ip_format_invalid = false;
   int ret = OB_SUCCESS;
-  //Shortest IPv4 address："x.x.x.x"，length:7
+  //Shortest IPv4 address:"x.x.x.x",length:7
   if (7 > len || INET_ADDRSTRLEN - 1 < len) {
     is_ip_format_invalid = true;
     LOG_WARN("ip format invalid, too short or too long", K(len));
@@ -33,6 +33,7 @@ int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool& is_ip_format_i
     LOG_WARN("ip_str or ipv4addr is null", K(ret), K(str), K(ipv4addr));
   } else {
     unsigned char byte_addr[4];
+    memset(byte_addr,0,sizeof(byte_addr));
     int dotcnt = 0, numcnt = 0;
     int byte = 0;
     char c;
@@ -89,7 +90,7 @@ int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool& is_ip_format_i
   int ret = OB_SUCCESS;
   is_ip_format_invalid = false;
   //Ipv6 length of mysql support: 2~39
-  //Shortest IPv6 address："::"，length:2
+  //Shortest IPv6 address:"::",length:2
   if (2 > len || INET6_ADDRSTRLEN - 1 < len) {
     is_ip_format_invalid = true;
     LOG_WARN("ip format invalid, too short or too long", K(len));

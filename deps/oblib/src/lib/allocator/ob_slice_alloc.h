@@ -159,7 +159,8 @@ public:
   }
   bool recyle()
   {
-    return inc_if_lt(2 * K, -K + total_) == -K + total_;
+    int32_t total = total_;
+    return inc_if_lt(2 * K, -K + total) == -K + total;
   }
   bool alloc_stock()
   {
@@ -167,9 +168,10 @@ public:
   }
   bool free_stock(bool& first_free)
   {
-    int32_t ov = cas_or_inc(K + total_ - 1, -K + total_, 1);
+    int32_t total = total_;
+    int32_t ov = cas_or_inc(K + total - 1, -K + total, 1);
     first_free = (ov == -K);
-    return ov == K + total_ - 1;
+    return ov == K + total - 1;
   }
 
 private:

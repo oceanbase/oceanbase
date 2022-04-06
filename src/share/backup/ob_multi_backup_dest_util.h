@@ -89,18 +89,19 @@ private:
   static int get_backup_set_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t restore_timestamp, const common::ObString &backup_dest_str,
       common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
-      bool &is_compat_path);
+      bool &is_compat_path, bool &is_snapshot_restore);
   static int do_get_backup_set_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t restore_timestamp, const ObBackupDest &backup_dest,
       common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
-      bool &is_compat_path);
+      bool &is_compat_path, bool &is_snapshot_restore);
   static int do_get_backup_set_list_from_cluster_level(const bool is_preview, const char *cluster_name,
       const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
       const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
-      int64_t &start_replay_log_ts);
+      int64_t &start_replay_log_ts, bool &is_snapshot_restore);
   static int do_inner_get_backup_set_list(const char *cluster_name, const int64_t cluster_id,
       const int64_t restore_timestamp, const ObBackupDest &backup_dest, const ObArray<ObBackupSetFileInfo> &file_infos,
-      common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts);
+      common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
+      bool &is_snapshot_restore);
   static int get_backup_piece_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t snapshot_version, const int64_t start_replay_log_ts,
       const int64_t restore_timestamp, const common::ObString &backup_dest_str,

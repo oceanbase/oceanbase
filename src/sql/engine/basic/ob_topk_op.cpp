@@ -14,6 +14,7 @@
 #include "sql/engine/basic/ob_topk_op.h"
 #include "sql/engine/basic/ob_limit_op.h"
 #include "sql/engine/sort/ob_sort_op.h"
+#include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 
 namespace oceanbase {
@@ -101,15 +102,15 @@ int ObTopKOp::get_topk_final_count()
     ObPhyOperatorType op_type = child_->get_spec().get_type();
     switch (op_type) {
       case PHY_SORT: {
-        ObSortOp* sort_op = static_cast<ObSortOp*>(child_);
-        if (OB_FAIL(row_count = sort_op->get_sort_row_count())) {
-          LOG_WARN("get sort row count failed", K(ret));
-        }
+        ObSortOp *sort_op = static_cast<ObSortOp *>(child_);
+        row_count = sort_op->get_sort_row_count();
         break;
       }
       case PHY_MATERIAL: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("material not implimented yet", K(ret));
+        ObMaterialOp *mtrl_op = static_cast<ObMaterialOp *>(child_);
+        if (OB_FAIL(mtrl_op->get_material_row_count(row_count))) {
+          LOG_WARN("get material row count failed", K(ret));
+        }
         break;
       }
       case PHY_HASH_GROUP_BY: {

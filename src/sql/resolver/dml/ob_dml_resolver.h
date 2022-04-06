@@ -253,6 +253,8 @@ protected:
   int build_partition_key_info(const share::schema::ObTableSchema& table_schema, ObRawExpr*& part_expr);
   virtual int expand_view(TableItem& view_item);
   int do_expand_view(TableItem& view_item, ObChildStmtResolver& view_resolver);
+  int check_pad_generated_column(const ObSQLSessionInfo& session_info, const share::schema::ObTableSchema& table_schema,
+      const share::schema::ObColumnSchemaV2& column_schema);
   int build_padding_expr(const ObSQLSessionInfo* session, const ColumnItem* column, ObRawExpr*& expr);
 
   int build_padding_expr(

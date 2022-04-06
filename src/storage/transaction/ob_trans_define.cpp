@@ -2298,6 +2298,7 @@ ObPartitionAuditInfo& ObPartitionAuditInfo::operator=(const ObPartitionAuditInfo
     this->insert_row_count_ = other.insert_row_count_;
     this->delete_row_count_ = other.delete_row_count_;
     this->update_row_count_ = other.update_row_count_;
+    /*
     this->query_row_count_ = other.query_row_count_;
     this->insert_sql_count_ = other.insert_sql_count_;
     this->delete_sql_count_ = other.delete_sql_count_;
@@ -2313,6 +2314,7 @@ ObPartitionAuditInfo& ObPartitionAuditInfo::operator=(const ObPartitionAuditInfo
     this->rollback_update_sql_count_ = other.rollback_update_sql_count_;
     this->rollback_trans_count_ = other.rollback_trans_count_;
     this->rollback_sql_count_ = other.rollback_sql_count_;
+    */
   }
   return *this;
 }
@@ -2323,6 +2325,7 @@ ObPartitionAuditInfo& ObPartitionAuditInfo::operator+=(const ObPartitionAuditInf
   this->insert_row_count_ += other.insert_row_count_;
   this->delete_row_count_ += other.delete_row_count_;
   this->update_row_count_ += other.update_row_count_;
+  /*
   this->query_row_count_ += other.query_row_count_;
   this->insert_sql_count_ += other.insert_sql_count_;
   this->delete_sql_count_ += other.delete_sql_count_;
@@ -2338,6 +2341,7 @@ ObPartitionAuditInfo& ObPartitionAuditInfo::operator+=(const ObPartitionAuditInf
   this->rollback_update_sql_count_ += other.rollback_update_sql_count_;
   this->rollback_trans_count_ += other.rollback_trans_count_;
   this->rollback_sql_count_ += other.rollback_sql_count_;
+  */
   return *this;
 }
 
@@ -2345,30 +2349,38 @@ int ObPartitionAuditInfo::update_audit_info(const ObPartitionAuditInfoCache& cac
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> guard(lock_);
+  /*
   query_row_count_ += cache.query_row_count_;
   insert_sql_count_ += cache.insert_sql_count_;
   delete_sql_count_ += cache.delete_sql_count_;
   update_sql_count_ += cache.update_sql_count_;
   query_sql_count_ += cache.query_sql_count_;
   sql_count_ += cache.sql_count_;
+  */
   if (commit) {
     insert_row_count_ += cache.insert_row_count_;
     delete_row_count_ += cache.delete_row_count_;
     update_row_count_ += cache.update_row_count_;
+    /*
     rollback_insert_row_count_ += cache.rollback_insert_row_count_;
     rollback_delete_row_count_ += cache.rollback_delete_row_count_;
     rollback_update_row_count_ += cache.rollback_update_row_count_;
     trans_count_ += 1;
+    */
   } else {
+    /*
     rollback_insert_row_count_ += (cache.insert_row_count_ + cache.rollback_insert_row_count_);
     rollback_delete_row_count_ += (cache.delete_row_count_ + cache.rollback_delete_row_count_);
     rollback_update_row_count_ += (cache.update_row_count_ + cache.rollback_update_row_count_);
     rollback_trans_count_ += 1;
+    */
   }
+  /*
   rollback_insert_sql_count_ += cache.rollback_insert_sql_count_;
   rollback_delete_sql_count_ += cache.rollback_delete_sql_count_;
   rollback_update_sql_count_ += cache.rollback_update_sql_count_;
   rollback_sql_count_ += cache.rollback_sql_count_;
+  */
   return ret;
 }
 
@@ -2397,6 +2409,7 @@ int ObPartitionAuditInfoCache::update_audit_info(const enum ObPartitionAuditOper
         cur_update_row_count_ += count;
         break;
       }
+      /*
       case PART_AUDIT_QUERY_ROW: {
         query_row_count_ += count;
         break;
@@ -2462,6 +2475,7 @@ int ObPartitionAuditInfoCache::update_audit_info(const enum ObPartitionAuditOper
         rollback_sql_count_ += count;
         break;
       }
+      */
       default: {
         ret = OB_NOT_SUPPORTED;
         TRANS_LOG(WARN, "operation not supported", KR(ret), K(op));
@@ -2481,9 +2495,11 @@ int ObPartitionAuditInfoCache::stmt_end_update_audit_info(bool commit)
     delete_row_count_ += cur_delete_row_count_;
     update_row_count_ += cur_update_row_count_;
   } else {
+    /*
     rollback_insert_row_count_ += cur_insert_row_count_;
     rollback_delete_row_count_ += cur_delete_row_count_;
     rollback_update_row_count_ += cur_update_row_count_;
+    */
   }
   cur_insert_row_count_ = 0;
   cur_delete_row_count_ = 0;

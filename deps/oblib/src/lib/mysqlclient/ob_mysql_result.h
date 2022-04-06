@@ -537,7 +537,6 @@
     } else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {                                     \
       ret = OB_SUCCESS;                                                                                          \
       real_length = 0;                                                                                           \
-      field[0] = '\0';                                                                                           \
     } else {                                                                                                     \
       SQL_LOG(WARN, "fail to extract strbuf field mysql. ", K(ret));                                             \
     }                                                                                                            \

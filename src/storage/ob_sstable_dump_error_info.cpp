@@ -228,8 +228,18 @@ int ObSSTableDumpErrorInfo::find_extra_row(
           STORAGE_LOG(WARN, "failed to check row", K(ret));
         }
         ++iter_row_cnt;
+        if (nullptr != getter) {
+          allocator_.free(getter);
+          getter = nullptr;
+        }
       }  // end of while
     }
+
+    if (nullptr != scanner) {
+      allocator_.free(scanner);
+      scanner = nullptr;
+    }
+
     if (OB_SUCC(ret)) {
       if (found_row_cnt + sstable2.get_meta().row_count_ != sstable1.get_meta().row_count_) {
         ret = OB_ERR_UNEXPECTED;

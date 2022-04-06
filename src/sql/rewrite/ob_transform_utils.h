@@ -313,6 +313,10 @@ public:
       const ObColumnRefRawExpr* col_expr, bool& is_match, EqualSets* equal_sets = NULL,
       ObIArray<ObColumnRefRawExpr*>* col_exprs = NULL);
 
+  static int extract_inseparable_query_ref_expr(ObIArray<ObRawExpr*> &exprs, ObIArray<ObRawExpr*> &target_exprs);
+
+  static int extract_inseparable_query_ref_expr(ObRawExpr *expr, ObIArray<ObRawExpr*> &target_exprs);
+
   static int extract_query_ref_expr(ObIArray<ObRawExpr*>& exprs, ObIArray<ObQueryRefRawExpr*>& subqueries);
 
   static int extract_query_ref_expr(ObRawExpr* expr, ObIArray<ObQueryRefRawExpr*>& subqueries);
@@ -753,9 +757,6 @@ public:
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
 private:
-  static int create_select_item_for_subquery(
-      ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
-
   static int add_non_duplicated_select_expr(
       ObIArray<ObRawExpr*>& add_select_exprs, ObIArray<ObRawExpr*>& org_select_exprs);
 };

@@ -10876,8 +10876,7 @@ int ObMigratePrepareTask::create_pg_partition(
   } else {
     ObTablesHandle sstables_handle;  // empty
     obrpc::ObCreatePartitionArg arg;
-    const ObSavedStorageInfoV2 &saved_storage_info = ctx_->pg_meta_.storage_info_;
-    arg.schema_version_ = saved_storage_info.get_data_info().get_schema_version();
+    arg.schema_version_ = meta.create_schema_version_;
     arg.lease_start_ = meta.create_timestamp_;
     arg.restore_ = ctx_->is_restore_;
     const int64_t multi_version_start = meta.multi_version_start_;

@@ -302,9 +302,11 @@ int ObRawExprDeduceType::calc_result_type(
       if (ObLobType == type->get_type()) {
         type->set_type(ObLongTextType);
       }
-      // ToDo: test and fix, not all sql functions need calc json as long text
-      if (ObJsonType == type->get_type() && need_calc_json_as_text(expr.get_expr_type())) {
-        type->set_calc_type(ObLongTextType);
+      if (ObJsonType == type->get_type()) {
+        if (need_calc_json_as_text(expr.get_expr_type())) {
+          // ToDo: test and fix, not all sql functions need calc json as long text
+          type->set_calc_type(ObLongTextType);  
+        }
       }
     }
     op->set_row_dimension(row_dimension);
@@ -1768,7 +1770,11 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr& expr)
           LOG_WARN("fail to visit for column_conv", K(ret), K(i));
         }
       } else {
-        if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
+        ObExprResType res_type = param_expr->get_result_type();
+        if (param_expr->is_bool_expr()) {
+          res_type.set_result_flag(IS_BOOL_FLAG);
+        }
+        if (OB_FAIL(types.push_back(res_type))) {
           LOG_WARN("push back param type failed", K(ret));
         }
       }

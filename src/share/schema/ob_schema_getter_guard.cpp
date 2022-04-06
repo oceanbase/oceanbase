@@ -1900,18 +1900,19 @@ int ObSchemaGetterGuard::add_role_id_recursively(uint64_t role_id, ObSessionPriv
   int ret = OB_SUCCESS;
   const ObUserInfo* role_info = NULL;
 
-  /* 1. put itself */
   if (!has_exist_in_array(s_priv.enable_role_id_array_, role_id)) {
+    /* 1. put itself */
     OZ(s_priv.enable_role_id_array_.push_back(role_id));
-  }
-  /* 2. get role recursively */
-  OZ(get_user_info(role_id, role_info));
-  if (OB_SUCC(ret) && role_info != NULL) {
-    const ObSEArray<uint64_t, 8>& role_id_array = role_info->get_role_id_array();
-    for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
-      OZ(add_role_id_recursively(role_info->get_role_id_array().at(i), s_priv));
+    /* 2. get role recursively */
+    OZ(get_user_info(role_id, role_info));
+    if (OB_SUCC(ret) && role_info != NULL) {
+      const ObSEArray<uint64_t, 8> &role_id_array = role_info->get_role_id_array();
+      for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
+        OZ(add_role_id_recursively(role_info->get_role_id_array().at(i), s_priv));
+      }
     }
   }
+
   return ret;
 }
 
@@ -5011,8 +5012,9 @@ int ObSchemaGetterGuard::get_sequence_schema(
   } else if (OB_FAIL(get_schema_v2(SEQUENCE_SCHEMA, sequence_id, sequence_schema))) {
     LOG_WARN("get sequence schema failed", K(sequence_id), K(ret));
   } else if (OB_ISNULL(sequence_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL ptr", K(ret), K(sequence_id));
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("sequence schema not exists", K(ret), K(sequence_id),
+             "pure_sequence_id", extract_pure_id(sequence_id));
   }
   return ret;
 }
@@ -5357,7 +5359,7 @@ int ObSchemaGetterGuard::check_tablegroup_exist(const uint64_t tablegroup_id, bo
   return ret;
 }
 
-/* https://docs.oracle.com/cd/E18283_01/server.112/e17118/sql_elements008.htm
+/*
  * Within a namespace, no two objects can have the same name.
    In oracle mode, the following schema objects share one namespace:
    Tables(create, rename, flashback)

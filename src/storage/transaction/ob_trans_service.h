@@ -554,8 +554,8 @@ public:
     return &trans_status_mgr_;
   }
   int get_max_trans_version_before_given_log_ts(
-      const ObPartitionKey& pkey, const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const ObPartitionKey& pg_key, const int64_t max_cleanout_log_ts);
+      const ObPartitionKey &pkey, const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObPartitionKey &pg_key, const ObIArray<int64_t> &max_cleanout_log_ts);
   virtual int has_terminated_trx_in_given_log_ts_range(
       const ObPartitionKey& pkey, const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   ObPartTransSameLeaderBatchRpcMgr* get_part_trans_same_leader_batch_rpc_mgr()

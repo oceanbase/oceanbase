@@ -1564,9 +1564,7 @@ int ObPartitionTransCtxMgr::audit_partition(ObPartitionAuditInfoCache& cache, bo
   int ret = OB_SUCCESS;
   ObPartitionAuditInfo* partition_audit_info = NULL;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
+  if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "audit partition type unexpected", KR(ret), K_(partition));
   } else if (OB_ISNULL(core_local_partition_audit_info_)) {
@@ -1622,9 +1620,7 @@ int ObPartitionTransCtxMgr::set_partition_audit_base_row_count(const int64_t cou
   int ret = OB_SUCCESS;
   ObPartitionAuditInfo* partition_audit_info = NULL;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
+  if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "audit partition type unexpected", KR(ret), K_(partition));
   } else if (OB_ISNULL(core_local_partition_audit_info_)) {
@@ -1724,7 +1720,7 @@ int ObPartitionTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartitionTransCtxMgr::clear_unused_trans_status(const int64_t max_cleanout_log_ts)
+int ObPartitionTransCtxMgr::clear_unused_trans_status(const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -5099,7 +5095,8 @@ int ObPartTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartTransCtxMgr::clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_ts)
+int ObPartTransCtxMgr::clear_unused_trans_status(
+    const ObPartitionKey &pkey, const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = nullptr;

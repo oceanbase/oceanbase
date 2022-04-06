@@ -194,7 +194,8 @@ private:
   void cleanup_prepared_infos();
   int check_need_cleanup_prepared_infos(const share::ObBaseBackupInfoStruct& sys_backup_info, bool& need_clean);
   int cleanup_tenant_prepared_infos(
-      const uint64_t tenant_id, common::ObISQLClient& sys_tenant_trans, share::ObBackupInfoManager& info_manager);
+      const uint64_t tenant_id, const ObBaseBackupInfoStruct &sys_backup_info, common::ObISQLClient& sys_tenant_trans, 
+      share::ObBackupInfoManager& info_manager);
   int check_tenants_backup_task_failed(const share::ObBaseBackupInfoStruct& info,
       share::ObBackupInfoManager& info_manager, common::ObISQLClient& sys_tenant_trans);
   int update_tenant_backup_task(common::ObISQLClient& trans, const share::ObTenantBackupTaskInfo& src_info,

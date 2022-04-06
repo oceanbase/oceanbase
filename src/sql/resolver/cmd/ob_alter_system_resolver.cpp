@@ -36,6 +36,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/ob_server.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1547,6 +1548,23 @@ int check_backup_dest(const ObString& backup_dest)
     }
   }
 
+  if (OB_SUCC(ret)) {
+    share::ObBackupDest old_dest;
+    if (OB_FAIL(GCONF.backup_dest.copy(backup_dest_buf, sizeof(backup_dest_buf)))) {
+      LOG_WARN("failed to set backup dest buf", K(ret));
+    } else if (0 == strlen(backup_dest_buf)) {
+      LOG_INFO("[BACKUP_DEST]set new backup dest", K(dest));
+      ROOTSERVICE_EVENT_ADD(
+          "backup_dest", "backup_dest", "old_backup_dest", "null", "new_backup_dest", dest.root_path_);
+    } else if (OB_FAIL(old_dest.set(backup_dest_buf))) {
+      LOG_WARN("failed to set conf backup dest", K(ret), K(backup_dest_buf));
+    } else {
+      LOG_INFO("[BACKUP_DEST]set new backup dest", K(old_dest), K(dest));
+      ROOTSERVICE_EVENT_ADD(
+          "backup_dest", "backup_dest", "old_backup_dest", old_dest.root_path_, "new_backup_dest", dest.root_path_);
+    }
+  }
+
   return ret;
 }
 
@@ -1726,6 +1744,31 @@ int check_backup_backup_dest(const ObString& backup_backup_dest)
   } else if (!is_empty_dir) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_ERROR("cannot use backup backup dest with non empty directory", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    share::ObBackupDest old_dest;
+    if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_backup_dest_buf, sizeof(backup_backup_dest_buf)))) {
+      LOG_WARN("failed to set backup backup dest buf", K(ret));
+    } else if (0 == strlen(backup_backup_dest_buf)) {
+      LOG_INFO("[BACKUP_DEST]set new backup backup dest", K(dst_dest));
+      ROOTSERVICE_EVENT_ADD("backup_dest",
+          "backup_backup_dest",
+          "old_backup_backup_dest",
+          "null",
+          "new_backup_backup_dest",
+          dst_dest.root_path_);
+    } else if (OB_FAIL(old_dest.set(backup_backup_dest_buf))) {
+      LOG_WARN("failed to set conf backup backup dest", K(ret), K(backup_backup_dest_buf));
+    } else {
+      LOG_INFO("[BACKUP_DEST]set new backup backup dest", K(old_dest), K(dst_dest));
+      ROOTSERVICE_EVENT_ADD("backup_dest",
+          "backup_backup_dest",
+          "old_backup_backup_dest",
+          old_dest.root_path_,
+          "new_backup_backup_dest",
+          dst_dest.root_path_);
+    }
   }
   return ret;
 }
@@ -2148,7 +2191,8 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
                   LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_FALSE_VALUE)) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_STRING))) {
                   if (GCONF.enable_sql_audit) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
@@ -2159,7 +2203,9 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                     LOG_WARN("add config item failed", K(ret), K(item));
                   }
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_TRUE_VALUE) && !GCONF.enable_perf_event) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_STRING)) &&
+                           !GCONF.enable_perf_event) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
                   LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
@@ -2252,6 +2298,12 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id, const ObString& na
         LOG_WARN("ERRSIM, fail to set ssl invite node", K(ret));
       }
 #endif
+    }
+    else if (0 == name.case_compare("datafile_size")) {
+      if(OB_FAIL(OB_STORE_FILE.validate_datafile_size(value.ptr()))){
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("datafile_size is not valid", K(ret));
+      }
     }
   }
   return ret;

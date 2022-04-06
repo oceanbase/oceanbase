@@ -74,7 +74,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
-sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
 
 version_str = """version 1.0.0"""
 

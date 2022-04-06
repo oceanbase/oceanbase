@@ -139,7 +139,7 @@ public:
 public:
   static bool need_retry(const int ret)
   {
-    return OB_ALLOCATE_MEMORY_FAILED == ret || OB_EAGAIN == ret;
+    return OB_ALLOCATE_MEMORY_FAILED == ret || OB_EAGAIN == ret || OB_LOG_OUTOF_DISK_SPACE == ret;
   }
 
 private:

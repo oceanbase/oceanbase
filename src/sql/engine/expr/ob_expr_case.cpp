@@ -97,6 +97,9 @@ int ObExprCase::calc_result_typeN(
           types_stack[i].set_calc_meta(types_stack[i].get_obj_meta());
         } else {
           types_stack[i].set_calc_meta(type.get_obj_meta());
+          if (ob_is_json(types_stack[i].get_type())) {
+            types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          }
         }
       }
     }

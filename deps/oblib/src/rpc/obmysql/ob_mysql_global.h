@@ -88,6 +88,7 @@ namespace obmysql {
 #define OB_MYSQL_BINCMP_FLAG (1 << 17)
 #define OB_MYSQL_GET_FIXED_FIELDS_FLAG (1 << 18)
 #define OB_MYSQL_FIELD_IN_PART_FUNC_FLAG (1 << 19)
+#define IS_BOOL_FLAG (1 << 20)
 
 enum EMySQLFieldType {
   MYSQL_TYPE_DECIMAL,

@@ -659,7 +659,7 @@ int ObMacroBlockWriter::save_root_micro_block()
     }
     if (OB_SUCC(ret)) {
       ObStoreRow row;
-      IndexMicroBlockDesc* task_top_block_descs;
+      IndexMicroBlockDesc* task_top_block_descs = NULL;
       if (OB_FAIL(micro_reader.init(block_data, &index_column_map_))) {
         STORAGE_LOG(WARN, "failed to init micro block reader", K(ret));
       } else if (OB_FAIL(sstable_index_writer_->get_index_block_desc(task_top_block_descs))) {

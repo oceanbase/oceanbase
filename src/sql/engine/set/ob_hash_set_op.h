@@ -58,6 +58,7 @@ protected:
   ObSqlWorkAreaProfile profile_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   ObHashPartInfrastructure<ObHashPartCols, ObHashPartStoredRow> hp_infras_;
+  bool iter_end_;
 };
 
 }  // end namespace sql

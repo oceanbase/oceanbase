@@ -136,7 +136,8 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
 }
 
 int ObRestorePointService::create_backup_point(
-    const uint64_t tenant_id, const char* name, const int64_t snapshot_version, const int64_t schema_version)
+    const uint64_t tenant_id, const char *name, const int64_t snapshot_version, const int64_t schema_version, 
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
@@ -147,14 +148,12 @@ int ObRestorePointService::create_backup_point(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("restore point service do not init", K(ret));
-  } else if (OB_ISNULL(name) || OB_INVALID_ID == tenant_id || snapshot_version <= 0) {
+  } else if (OB_ISNULL(name) || OB_INVALID_ID == tenant_id || snapshot_version <= 0 || !trans.is_started()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create recovery point get invalid argument", K(ret), KP(name), K(snapshot_version));
-  } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
-                          tenant_id,
-                          share::ObSnapShotType::SNAPSHOT_FOR_BACKUP_POINT,
-                          snapshot_version,
-                          tmp_info))) {
+  } else if (FALSE_IT(
+                 get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(
+                     trans, tenant_id, share::ObSnapShotType::SNAPSHOT_FOR_BACKUP_POINT, snapshot_version, tmp_info))) {
   } else if (OB_SUCCESS == get_snapshot_ret) {
     ret = OB_ERR_BACKUP_POINT_EXIST;
     char tmp_name[OB_MAX_RESERVED_POINT_NAME_LENGTH + 2];
@@ -177,23 +176,8 @@ int ObRestorePointService::create_backup_point(
     info.table_id_ = 0;
     info.comment_ = name;
 
-    ObMySQLTransaction trans;
-    common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(trans.start(&proxy))) {
-      LOG_WARN("fail to start trans", K(ret));
-    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info))) {
+    if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info))) {
       LOG_WARN("fail to acquire snapshot", K(ret), K(info));
-    }
-    if (trans.is_started()) {
-      bool is_commit = (ret == OB_SUCCESS);
-      int tmp_ret = trans.end(is_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to end trans", K(ret), K(is_commit));
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
-      }
     }
   }
   return ret;

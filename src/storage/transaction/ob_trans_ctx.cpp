@@ -357,16 +357,16 @@ int ObTransCtx::set_partition_trans_ctx_mgr(ObPartitionTransCtxMgr* partition_mg
 int ObTransCtx::alloc_audit_rec_and_trace_log_(ObTransService* trans_service, ObTransTraceLog*& trace_log)
 {
   int ret = OB_SUCCESS;
-  // 1. sql_audit is on. If fail to get recod but revert successfully,
+  // 1. enable_record_trace_log is on. If fail to get recod but revert successfully,
   //    it needs to be allocated dynamically. Return error if fail to revert.
-  // 2. sql_audit is off. Trace log is not required to be recorded
+  // 2. enable_record_trace_log is off. Trace log is not required to be recorded
   bool need_alloc = true;
   ObTransTraceLog* tmp_tlog = NULL;
 
   if (OB_ISNULL(trans_service)) {
     TRANS_LOG(WARN, "invalid argument", K(trans_service));
     ret = OB_INVALID_ARGUMENT;
-  } else if (!GCONF.enable_sql_audit) {
+  } else if (!oceanbase::lib::is_trace_log_enabled()) {
     need_alloc = false;
     ret = OB_SUCCESS;
   } else {
@@ -514,10 +514,12 @@ int ObTransCtx::set_trans_param_(const ObStartTransParam& trans_param)
 
 void ObTransCtx::print_trace_log_if_necessary_()
 {
-  // freectx
-  if (!is_exiting_ && !is_readonly_) {
-    TRANS_LOG(ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
-    FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
+  if (GCONF.enable_record_trace_log) {
+    // freectx
+    if (!is_exiting_ && !is_readonly_) {
+      TRANS_LOG(ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
+      FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
+    }
   }
 
   if (is_slow_query_()) {

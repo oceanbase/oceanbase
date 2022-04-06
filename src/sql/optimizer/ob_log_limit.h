@@ -21,7 +21,6 @@ public:
   ObLogLimit(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         is_calc_found_rows_(false),
-        has_union_child_(false),
         is_top_limit_(false),
         is_fetch_with_ties_(false),
         limit_count_(NULL),
@@ -55,26 +54,11 @@ public:
   {
     limit_percent_ = limit_percent;
   }
-  void set_calc_found_rows(bool found_rows)
+  void set_is_calc_found_rows(bool found_rows)
   {
     is_calc_found_rows_ = found_rows;
   }
-  int need_calc_found_rows(bool& need_calc)
-  {
-    int ret = common::OB_SUCCESS;
-    need_calc = false;
-    if (is_top_limit_ && is_calc_found_rows_) {
-      need_calc = true;
-    } else if (is_top_limit_ && has_union_child_) {
-      need_calc = true;
-    } else { /* Do nothing */
-    }
-    return ret;
-  }
-  void set_has_union_child(bool has_union_child)
-  {
-    has_union_child_ = has_union_child;
-  }
+  bool get_is_calc_found_rows() { return is_calc_found_rows_; }
   void set_top_limit(bool is_top_limit)
   {
     is_top_limit_ = is_top_limit;
@@ -82,10 +66,6 @@ public:
   inline bool is_top_limit()
   {
     return is_top_limit_;
-  }
-  bool has_union_child()
-  {
-    return has_union_child_;
   }
   virtual int est_cost() override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
@@ -110,7 +90,6 @@ public:
 
 private:
   bool is_calc_found_rows_;
-  bool has_union_child_;
   bool is_top_limit_;
   bool is_fetch_with_ties_;
   ObRawExpr* limit_count_;

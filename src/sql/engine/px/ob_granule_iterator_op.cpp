@@ -48,31 +48,7 @@ void ObGIOpInput::set_deserialize_allocator(common::ObIAllocator* allocator)
   deserialize_allocator_ = allocator;
 }
 
-int ObGIOpInput::assign_ranges(const common::ObIArray<common::ObNewRange>& ranges)
-{
-  int ret = OB_SUCCESS;
-  FOREACH_CNT_X(it, ranges, OB_SUCC(ret))
-  {
-    if (OB_FAIL(ranges_.push_back(*it))) {
-      LOG_WARN("failed to push range", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObGIOpInput::assign_pkeys(const common::ObIArray<common::ObPartitionKey>& pkeys)
-{
-  int ret = OB_SUCCESS;
-  FOREACH_CNT_X(it, pkeys, OB_SUCC(ret))
-  {
-    if (OB_FAIL(pkeys_.push_back(*it))) {
-      LOG_WARN("failed to push range", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObGIOpInput::deep_copy_range(ObIAllocator* allocator, const ObNewRange& src, ObNewRange& dst)
+int ObGIOpInput::deep_copy_range(ObIAllocator *allocator, const ObNewRange &src, ObNewRange &dst)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator)) {
@@ -362,8 +338,6 @@ int ObGranuleIteratorOp::rescan()
       state_ = GI_GET_NEXT_GRANULE_TASK;
     }
   } else {
-    // 在partition_wise_join的情况, 按woker第一次完整执行所抢占的任务执行.
-    // 在执行过程中缓存住了自己的任务队列.
     if (GI_UNINITIALIZED == state_ || GI_PREPARED == state_) {
       /*do nothing*/
     } else {

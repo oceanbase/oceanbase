@@ -140,7 +140,8 @@ public:
 // For Example: If you change the signature of the function `commit` in
 // `ObTransCtx`, you should also modify the signature of function `commit` in
 // `ObPartTransCtx`, `ObSlaveTransCtx`, `ObScheTransCtx` and `ObCoordTransCtx`
-class ObTransCtx : public TransCtxHashValue {
+class ObTransCtx : public TransCtxHashValue
+{
   friend class CtxLock;
 
 protected:
@@ -183,6 +184,7 @@ public:
         part_trans_action_(ObPartTransAction::UNKNOWN),
         trans_audit_record_(NULL),
         pending_callback_param_(common::OB_SUCCESS),
+        elr_prepared_state_(ELRState::ELR_INIT),
         p_mt_ctx_(NULL),
         replay_clear_clog_ts_(0),
         is_dup_table_trans_(false),
@@ -381,7 +383,7 @@ public:
   virtual int leader_active(const storage::LeaderActiveArg& arg) = 0;
   virtual int leader_revoke(const bool first_check, bool& need_release, ObEndTransCallbackArray& cb_array) = 0;
   virtual bool can_be_freezed() const = 0;
-  virtual int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly,
+  virtual int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly,
       const MonotonicTs commit_time, const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
       const common::ObString& app_trace_info, bool& need_convert_to_dist_trans) = 0;
   virtual void set_exiting_();
