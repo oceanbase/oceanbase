@@ -1,7 +1,7 @@
 FROM oceanbase/centos7:latest
 ARG GIT_SOURCE=github
 
-RUN yum-config-manager --add-repo https://mirrors.aliyun.com/oceanbase/OceanBase.repo && yum install -y ob-deploy obclient ob-sysbench wget rpm* cpio make glibc-devel glibc-headers m4 git obclient && mkdir /root/pkg && cd /root/pkg && rm -rf /usr/obd/mirror/remote/* && yumdownloader oceanbase-ce oceanbase-ce-libs && obd mirror clone *rpm && obd mirror list local && rm -rf * && yum clean all
+RUN yum-config-manager --add-repo https://mirrors.aliyun.com/oceanbase/OceanBase.repo && yum install -y ob-deploy-1.2.1 obclient ob-sysbench wget rpm* cpio make glibc-devel glibc-headers m4 git obclient && mkdir /root/pkg && cd /root/pkg && rm -rf /usr/obd/mirror/remote/* && yumdownloader oceanbase-ce oceanbase-ce-libs && obd mirror clone *rpm && obd mirror list local && rm -rf * && yum clean all
 
 WORKDIR /root/.obd/plugins/oceanbase/3.1.0
 RUN sed -i 's/system_memory = max(4 << 30, system_memory)/system_memory = max(3 << 30, system_memory)/g' generate_config.py || echo 'system_memory changed'
