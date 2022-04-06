@@ -1221,6 +1221,8 @@ int ObSortRow::get_sort_key(uint64_t* key_ptr)
   int ret = OB_SUCCESS;
   if (key_ptr == NULL) {
     ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(ERROR, "failed to get sort key, key is NULL", K(ret));
+    return ret;
   }
   char* buf = reinterpret_cast<char*>(key_ptr);
   char* buf_end = buf + 8;
