@@ -72,6 +72,9 @@ function get_os_release() {
       uos)
         version_ge "20" && compat_centos7 && return
         ;;
+      arch)
+        compat_centos8 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
@@ -169,8 +172,11 @@ do
             fi
         fi
         echo -e "unpack package <${pkg}>... \c"
-        rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
-
+        if [ "$ID" = "arch" ]; then
+          rpmextract.sh "${PWD}/pkg/${pkg}"
+        else
+          rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
+        fi
         if [[ $? -eq 0 ]]; then
           echo "SUCCESS"
         else
