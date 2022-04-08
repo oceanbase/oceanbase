@@ -168,8 +168,10 @@ public:
 
   static int replace_equal_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
-  static int replace_equal_expr(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& current_exprs, ObRawExpr*& expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, ObRawExpr *&expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, common::ObIArray<ObRawExpr *> &exprs);
 
   static int replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 

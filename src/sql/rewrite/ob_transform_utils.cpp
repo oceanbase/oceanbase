@@ -916,6 +916,18 @@ int ObTransformUtils::replace_equal_expr(const common::ObIArray<ObRawExpr*>& oth
   return ret;
 }
 
+int ObTransformUtils::replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+    const common::ObIArray<ObRawExpr *> &current_exprs, common::ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(replace_equal_expr(other_exprs, current_exprs, exprs.at(i)))) {
+      LOG_WARN("fail replace equal exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr)
 {
   int ret = OB_SUCCESS;

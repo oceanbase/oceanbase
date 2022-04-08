@@ -921,10 +921,8 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   ObSEArray<ObRawExpr*, 8> left_keys;
   ObSEArray<ObRawExpr*, 8> right_keys;
   ObShardingInfo output_sharding;
-  ObSEArray<ObShardingInfo*, 2> input_sharding;
-  EqualSets sharding_input_esets;
-  ObInsertStmt* stmt = static_cast<ObInsertStmt*>(get_stmt());
-
+  ObSEArray<ObShardingInfo *, 2> input_sharding;
+  ObInsertStmt *stmt = static_cast<ObInsertStmt *>(get_stmt());
   if (OB_ISNULL(ctx) || OB_ISNULL(get_plan()) || OB_ISNULL(stmt) || OB_ISNULL(table_columns_) ||
       OB_ISNULL(column_convert_exprs_) || OB_ISNULL(all_table_columns_) || OB_ISNULL(child = get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
@@ -935,7 +933,7 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   } else if (FALSE_IT(get_sharding_info().set_location_type(OB_TBL_LOCATION_DISTRIBUTED))) {
   } else if (FALSE_IT(calc_phy_location_type())) {
     LOG_WARN("fail calc phy location type for insert", K(ret));
-  } else if (OB_FAIL(sharding_info_.get_all_partition_keys(left_keys))) {
+  } else if (OB_FAIL(sharding_info_.get_all_partition_ref_columns(left_keys))) {
     LOG_WARN("failed to get all partition keys", K(ret));
   } else if (OB_FAIL(get_right_key(left_keys,
                  *column_convert_exprs_,
@@ -945,12 +943,13 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   } else {
     // allocate pkey below insert operator
     ObExchangeInfo exch_info;
-    ObRawExprFactory& expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-    if (!left_keys.empty() &&
-        OB_FAIL(compute_repartition_func_info(
-            sharding_input_esets, right_keys, left_keys, sharding_info_, expr_factory, exch_info))) {
+    ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
+    if (!left_keys.empty() && OB_FAIL(compute_repartition_func_info_for_insert(right_keys,  // select from columns
+                                  left_keys,                                                // insert into columns
+                                  sharding_info_,
+                                  expr_factory,
+                                  exch_info))) {
       LOG_WARN("failed to compute repartition func info", K(ret));
-
     } else if (OB_FAIL(set_hash_dist_column_exprs(exch_info, get_index_tid()))) {
       LOG_WARN("fail set hash dist column exprs", K(ret));
     } else {
