@@ -24,20 +24,20 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 
-ObExprTimeDiff::ObExprTimeDiff(ObIAllocator& alloc)
+ObExprTimeDiff::ObExprTimeDiff(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_DIFF, N_TIME_DIFF, 2, NOT_ROW_DIMENSION)
 {}
 
 ObExprTimeDiff::~ObExprTimeDiff()
 {}
 
-int ObExprTimeDiff::calc_result2(ObObj& result, const ObObj& left, const ObObj& right, ObExprCtx& expr_ctx) const
+int ObExprTimeDiff::calc_result2(ObObj &result, const ObObj &left, const ObObj &right, ObExprCtx &expr_ctx) const
 {
   EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
   return calc(result, left, right, cast_ctx);
 }
 
-int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime& ot1, ObTime& ot2, const ObTimeZoneInfo* tz_info, int64_t& diff)
+int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime &ot1, ObTime &ot2, const ObTimeZoneInfo *tz_info, int64_t &diff)
 {
   int ret = OB_SUCCESS;
   int64_t value1 = 0;
@@ -63,7 +63,7 @@ int ObExprTimeDiff::get_diff_value_with_ob_time(ObTime& ot1, ObTime& ot2, const 
   return ret;
 }
 
-int ObExprTimeDiff::get_diff_value(const ObObj& obj1, const ObObj& obj2, const ObTimeZoneInfo* tz_info, int64_t& diff)
+int ObExprTimeDiff::get_diff_value(const ObObj &obj1, const ObObj &obj2, const ObTimeZoneInfo *tz_info, int64_t &diff)
 {
   int ret = OB_INVALID_DATE_VALUE;
   ObTime ot1;
@@ -77,7 +77,7 @@ int ObExprTimeDiff::get_diff_value(const ObObj& obj1, const ObObj& obj2, const O
   return ret;
 }
 
-int ObExprTimeDiff::calc(ObObj& result, const ObObj& left, const ObObj& right, ObCastCtx& cast_ctx)
+int ObExprTimeDiff::calc(ObObj &result, const ObObj &left, const ObObj &right, ObCastCtx &cast_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t int64_diff = 0;
@@ -99,7 +99,7 @@ int ObExprTimeDiff::calc(ObObj& result, const ObObj& left, const ObObj& right, O
   return ret;
 }
 
-int ObExprTimeDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprTimeDiff::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -116,13 +116,13 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, O
   return ret;
 }
 
-int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   bool calc_param_failure = false;
-  ObDatum* param_datum1 = NULL;
-  ObDatum* param_datum2 = NULL;
-  const ObSQLSessionInfo* session = NULL;
+  ObDatum *param_datum1 = NULL;
+  ObDatum *param_datum2 = NULL;
+  const ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -133,8 +133,8 @@ int ObExprTimeDiff::calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
     expr_datum.set_null();
   } else {
     int64_t int64_diff = 0;
-    ObTime ot1;
-    ObTime ot2;
+    ObTime ot1(DT_TYPE_TIME);
+    ObTime ot2(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(
             *param_datum1, expr.args_[0]->datum_meta_.type_, get_timezone_info(session), ot1))) {
       LOG_WARN("cast the first param failed", K(ret));
