@@ -5,9 +5,7 @@ DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
 TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
 CMAKE_COMMAND=${TOOLS_DIR}/bin/cmake
 CPU_CORES=`grep -c ^processor /proc/cpuinfo`
-
-HAS_AVX512F=`lscpu | grep avx512f`
-ENABLE_AVX512F=$([ -n "$HAS_AVX512F" ] && echo ON || echo OFF )
+ENABLE_AVX512F=ON
 
 ALL_ARGS=("$@")
 BUILD_ARGS=()

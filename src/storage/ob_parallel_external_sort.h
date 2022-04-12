@@ -27,6 +27,7 @@
 
 #ifdef ENABLE_AVX512F
 #include "ob_avx512_sort.h"
+//#include "bli_cpuid.c"
 #endif
 
 namespace oceanbase {
@@ -1032,7 +1033,17 @@ public:
   int64_t get_fragment_count();
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSortRound& dest_round);
-  void set_use_memcmp() { use_memcmp_ = true; }
+  void set_use_memcmp() { 
+    #ifdef ENABLE_AVX512F
+       if (__builtin_cpu_supports("avx512f")) {
+          use_avx512_ = true; 
+       } else {
+          use_avx512_ = false; 
+       }
+    #else
+      use_avx512_ = false; 
+    #endif    
+  }
 
 private:
   typedef ObFragmentReaderV2<T> FragmentReader;
@@ -1041,7 +1052,7 @@ private:
   typedef ObFragmentWriterV2<T> FragmentWriter;
   typedef ObFragmentMerge<T, Compare> FragmentMerger;
   bool is_inited_;
-  bool use_memcmp_;
+  bool use_avx512_;
   int64_t merge_count_;
   int64_t file_buf_size_;
   FragmentIteratorList iters_;
@@ -1447,7 +1458,17 @@ public:
   {
     return has_data_;
   }
-  void set_use_memcmp() { use_memcmp_ = true; }
+  void set_use_memcmp() { 
+    #ifdef ENABLE_AVX512F
+       if (__builtin_cpu_supports("avx512f")) {
+          use_avx512_ = true; 
+       } else {
+          use_avx512_ = false; 
+       }
+    #else
+      use_avx512_ = false;
+    #endif
+  }
   void reset();
   int transfer_final_sorted_fragment_iter(ExternalSortRound& dest_round);
   TO_STRING_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),
@@ -1460,7 +1481,7 @@ private:
   bool is_inited_;
   bool is_in_memory_;
   bool has_data_;
-  bool use_memcmp_;
+  bool use_avx512_;
   int64_t buf_mem_limit_;
   int64_t expire_timestamp_;
   ExternalSortRound* next_round_;
@@ -1572,7 +1593,7 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       STORAGE_LOG(WARN, "fail to sort item list", K(ret));
     }    
 #else
-    if (use_memcmp_) {
+    if (use_avx512_) {
       uint64_t* keys = NULL;
       T** values = NULL;
       int64_t items_size = item_list_.size();
@@ -1650,7 +1671,7 @@ int ObMemorySortRound<T, Compare>::finish()
       STORAGE_LOG(WARN, "fail to sort item list", K(ret));
     }
 #else
-    if (use_memcmp_) {
+    if (use_avx512_) {
       uint64_t* keys = NULL;
       T** values = NULL;
       int64_t items_size = item_list_.size();
@@ -1793,7 +1814,15 @@ public:
   int transfer_final_sorted_fragment_iter(ObExternalSort<T, Compare>& merge_sorter);
   int get_current_round(ExternalSortRound*& round);
   void set_use_memcmp() {
-      use_memcmp_ = true;
+      #ifdef ENABLE_AVX512F
+        if (__builtin_cpu_supports("avx512f")) {
+          use_avx512_ = true; 
+        } else {
+          use_avx512_ = false; 
+        }
+      #else
+        use_avx512_ = false; 
+      #endif
       memory_sort_round_.set_use_memcmp();
       for (int32_t i = 0; i < EXTERNAL_SORT_ROUND_CNT; i++) {
           sort_rounds_[i].set_use_memcmp();
@@ -1815,7 +1844,7 @@ private:
   ExternalSortRound* curr_round_;
   ExternalSortRound* next_round_;
   bool is_empty_;
-  bool use_memcmp_;
+  bool use_avx512_;
   uint64_t tenant_id_;
 };
 

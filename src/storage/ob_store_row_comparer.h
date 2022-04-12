@@ -74,6 +74,7 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
             K(right->row_val_.count_),
             K(sort_column_index_.count()),
             K(i));
+        break;
       }
     }
   }
