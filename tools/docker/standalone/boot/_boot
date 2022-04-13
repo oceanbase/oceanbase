@@ -8,7 +8,7 @@ STAMP="$(date +%s)"
 [[ -f boot.yaml ]] && echo "find boot.yaml, skip configuring..." || {
   echo "generate boot.yaml ..."
   TMPFILE="boot.${STAMP}.yaml"
-  if ${MINI_MODE}
+  if [[ $MINI_MODE == 1 ]]
   then
   cp -f boot-mini-tmp.yaml $TMPFILE
   else
@@ -22,7 +22,7 @@ STAMP="$(date +%s)"
   [ "${OB_REDO_DIR}" ] && echo "    redo_dir: ${OB_REDO_DIR}" >> $TMPFILE
   echo "create boot dirs and deploy ob cluster ..."
   mkdir -p $OB_HOME_PATH
-  if ${MINI_MODE}
+  if [[ $MINI_MODE == 1 ]]
   then
   obd cluster deploy "${OB_CLUSTER_NAME}" -c $TMPFILE && obd cluster tenant create "${OB_CLUSTER_NAME}" -n ${OB_TENANT_NAME} && obd cluster start "${OB_CLUSTER_NAME}" && obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql && mv -f $TMPFILE boot.yaml
   else
