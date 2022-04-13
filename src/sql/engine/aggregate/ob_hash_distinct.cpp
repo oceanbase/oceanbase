@@ -716,7 +716,7 @@ int ObHashDistinct::ObHashDistinctCtx::process_one_partition(const ObHashDistinc
             LOG_WARN("fail to create hash group buckets", K(ret));
           } else {
             int64_t part_idx = get_part_idx(hash_value);
-            if (OB_FAIL(part_row_stores_[part_idx].copy_row(sr))) {
+            if (OB_FAIL(part_row_stores_[part_idx].copy_row(sr, row_store))) {
               LOG_WARN("add row to ChunkRowStore failed", K(ret), K(bucket_idx), K(part_idx));
             }
           }

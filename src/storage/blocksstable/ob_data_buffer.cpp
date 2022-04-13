@@ -42,12 +42,14 @@ ObSelfBufferWriter::~ObSelfBufferWriter()
 char *ObSelfBufferWriter::alloc(const int64_t size)
 {
   char *data = NULL;
+#ifndef OB_USE_ASAN
   if (size == macro_block_mem_ctx_.get_block_size()) {
     data = (char *)macro_block_mem_ctx_.alloc();
     if (OB_ISNULL(data)) {
       STORAGE_LOG(WARN, "fail to alloc buf from mem ctx", K(size));
     }
   }
+#endif
 
   // alloc from mem ctx fail
   if (OB_ISNULL(data)) {
