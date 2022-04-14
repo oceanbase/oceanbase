@@ -40,5 +40,5 @@ oceanbase-ce:
     enable_early_lock_release: false tenant=all
     default_compress_func: lz4_1.0
     root_password: @OB_ROOT_PASSWORD@
-    clog_disk_utilization_threshold: 98
+    clog_disk_utilization_threshold: 95
     clog_disk_usage_limit_percentage: 98
