@@ -453,6 +453,9 @@ int ObStorageLogReader::check_switch_file(const int get_ret, const LogCommand cm
         if (OB_READ_NOTHING != ret) {
           STORAGE_REDO_LOG(WARN, "open next log failed", K_(file_id), K(ret));
         }
+      } else if (fetch_log_again) {
+        ret = OB_EAGAIN;
+        STORAGE_REDO_LOG(INFO, "fetch log again", K(file_id_), K(log_buffer_));
       }
     }
   }
