@@ -1871,7 +1871,7 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
                         : TIMESTAMPTZ_PART_LENS_YEAR2;
         }
       } else {} */
-      if ('.' != *first_delim && first_delim < end) {
+      if (first_delim < end && '.' != *first_delim) {
         expect_lens = DATETIME_PART_LENS_MAX;
       } else {
         expect_lens = is_year4(first_delim - first_digit) ? DATETIME_PART_LENS_YEAR4 : DATETIME_PART_LENS_YEAR2;
@@ -5735,9 +5735,16 @@ int ObTimeConverter::date_add_nmonth(
     ob_time.parts_[DT_YEAR] = static_cast<int32_t>((total_month - 1) / MONTHS_PER_YEAR);
     ob_time.parts_[DT_MON] = static_cast<int32_t>((total_month - 1) % MONTHS_PER_YEAR + 1);
     if (auto_adjust_mday) {
-      int32_t max_mday = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
-      if (ob_time.parts_[DT_MDAY] > max_mday || is_last_day) {
-        ob_time.parts_[DT_MDAY] = max_mday;
+      if (OB_UNLIKELY(ob_time.parts_[DT_YEAR] < TZ_PART_MIN[DT_YEAR] ||
+                      ob_time.parts_[DT_YEAR] > TZ_PART_MAX[DT_YEAR] || ob_time.parts_[DT_MON] < TZ_PART_MIN[DT_MON] ||
+                      ob_time.parts_[DT_MON] > TZ_PART_MAX[DT_MON])) {
+        ret = OB_ERR_DAY_OF_MONTH_RANGE;
+        LOG_WARN("ob time part out of range", K(ret), K(ob_time));
+      } else {
+        int32_t max_mday = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
+        if (ob_time.parts_[DT_MDAY] > max_mday || is_last_day) {
+          ob_time.parts_[DT_MDAY] = max_mday;
+        }
       }
     }
     if (OB_FAIL(validate_basic_part_of_ob_time_oracle(ob_time))) {
