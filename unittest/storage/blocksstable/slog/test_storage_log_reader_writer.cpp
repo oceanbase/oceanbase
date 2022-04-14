@@ -227,6 +227,137 @@ TEST_F(TestStorageLogReaderWriter, normal)
   OB_LOG(INFO, "read log ", K(read_cursor));
 }
 
+TEST_F(TestStorageLogReaderWriter, two_slog_files)
+{
+  int ret = OB_SUCCESS;
+  const char LOG_DIR[512] = "./test_storage_log_rw";
+  const int64_t LOG_FILE_SIZE = 64 << 20;  // 64MB
+  const int64_t CONCURRENT_TRANS_CNT = 128;
+  const int64_t LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
+
+  // write part
+  ObLogCursor start_cursor;
+  start_cursor.file_id_ = 1;
+  start_cursor.log_id_ = 1;
+  start_cursor.offset_ = 0;
+
+  char write_data[1024] = "this is slog read write test.";
+  ObBaseStorageLogBuffer log_buf;
+  ret = log_buf.assign(write_data, 1024);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = log_buf.set_pos(strlen(write_data));
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObStorageLogWriter writer;
+  writer.init(LOG_DIR, LOG_FILE_SIZE, LOG_BUFFER_SIZE, CONCURRENT_TRANS_CNT);
+
+  ret = writer.start_log(start_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // write dummy log
+  start_cursor.reset();
+  ret = writer.flush_log(LogCommand::OB_LOG_DUMMY_LOG, log_buf, start_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1, start_cursor.file_id_);
+  ASSERT_EQ(1, start_cursor.log_id_);
+
+  // write checkpoint log
+  start_cursor.reset();
+  start_cursor.file_id_ = 2;
+  start_cursor.log_id_ = 3;
+  start_cursor.offset_ = 0;
+
+  ObStorageLogWriter sec_writer;
+  sec_writer.init(LOG_DIR, LOG_FILE_SIZE, LOG_BUFFER_SIZE, CONCURRENT_TRANS_CNT);
+  ret = sec_writer.start_log(start_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  start_cursor.reset();
+  ret = sec_writer.flush_log(LogCommand::OB_LOG_CHECKPOINT, log_buf, start_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // read part
+  LogCommand cmd = LogCommand::OB_LOG_UNKNOWN;
+  start_cursor.reset();
+  start_cursor.file_id_ = 1;
+  start_cursor.log_id_ = 1;
+  start_cursor.offset_ = 0;
+  uint64_t seq = 0;
+  int64_t read_len = 0;
+  char* read_data = NULL;
+  ObLogCursor read_cursor;
+
+  ObStorageLogReader reader;
+  ret = reader.init(LOG_DIR, start_cursor.file_id_, 0);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // read dummy log
+  ret = reader.read_log(cmd, seq, read_data, read_len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ASSERT_EQ(LogCommand::OB_LOG_DUMMY_LOG, cmd);
+  ASSERT_EQ(1, seq);
+  ASSERT_EQ(strlen(write_data), read_len);
+  ASSERT_TRUE(0 == strncmp(write_data, read_data, read_len - 1));
+
+  ret = reader.get_cursor(read_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1, read_cursor.file_id_);
+  ASSERT_EQ(1, read_cursor.log_id_);
+  OB_LOG(INFO, "read log ", K(read_cursor));
+
+  // read NOP log
+  ret = reader.read_log(cmd, seq, read_data, read_len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(LogCommand::OB_LOG_NOP, cmd);
+  ASSERT_EQ(2, seq);
+
+  ret = reader.get_cursor(read_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1, read_cursor.file_id_);
+  ASSERT_EQ(2, read_cursor.log_id_);
+  OB_LOG(INFO, "read log ", K(read_cursor));
+  ASSERT_TRUE(0 == read_cursor.offset_ % OB_DIRECT_IO_ALIGN);
+
+  // read checkpoint log
+  read_data = NULL;
+  ret = reader.read_log(cmd, seq, read_data, read_len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ASSERT_EQ(LogCommand::OB_LOG_CHECKPOINT, cmd);
+  ASSERT_EQ(3, seq);
+  ASSERT_EQ(strlen(write_data), read_len);
+  ASSERT_TRUE(0 == strncmp(write_data, read_data, read_len - 1));
+
+  ret = reader.get_cursor(read_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(2, read_cursor.file_id_);
+  ASSERT_EQ(3, read_cursor.log_id_);
+  OB_LOG(INFO, "read log ", K(read_cursor));
+
+  // read NOP log
+  read_data = NULL;
+  ret = reader.read_log(cmd, seq, read_data, read_len);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(LogCommand::OB_LOG_NOP, cmd);
+  ASSERT_EQ(4, seq);
+
+  ret = reader.get_cursor(read_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(2, read_cursor.file_id_);
+  ASSERT_EQ(4, read_cursor.log_id_);
+  OB_LOG(INFO, "read log ", K(read_cursor));
+  ASSERT_TRUE(0 == read_cursor.offset_ % OB_DIRECT_IO_ALIGN);
+
+  // read end of file
+  read_data = NULL;
+  ret = reader.read_log(cmd, seq, read_data, read_len);
+  ASSERT_EQ(OB_READ_NOTHING, ret);
+  ret = reader.get_cursor(read_cursor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  OB_LOG(INFO, "read log ", K(read_cursor));
+}
+
 TEST_F(TestStorageLogReaderWriter, large_buf)
 {
   int ret = OB_SUCCESS;
