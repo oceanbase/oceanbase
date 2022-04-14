@@ -980,6 +980,7 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
     }
     ret = OB_EAGAIN;
   } else {
+    int tmp_ret = OB_SUCCESS;
     obrpc::ObServerCopyLocalIndexSSTableArg arg;
     ObAddr rs_addr;
     ObSchemaGetterGuard schema_guard;
@@ -990,12 +991,14 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
     arg.pkey_ = pkey_;
     arg.index_table_id_ = index_id_;
     arg.cluster_id_ = GCONF.cluster_id;
+    if (OB_SUCCESS != (tmp_ret = get_data_size(arg.data_size_))) {
+      arg.data_size_ = 0;
+      STORAGE_LOG(INFO, "fail to get data size, will use data table size to estimate", K(tmp_ret));
+    }
     if (arg.data_src_ == arg.dst_) {
       // if the source and destination are the same, it means that this replica builds the index sstable itself,
       // just retry the scheduling process will get the right way to next state
       ret = OB_EAGAIN;
-    } else if (OB_FAIL(get_data_size(arg.data_size_))) {
-      STORAGE_LOG(WARN, "fail to get data size", K(ret));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
                    extract_tenant_id(index_id_), schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(schema_version_));
