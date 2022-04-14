@@ -860,7 +860,7 @@ int ObTimeConverter::str_to_year(const ObString &str, uint8_t &value)
     const char *pos = str.ptr();
     const char *end = pos + str.length();
     ObTimeDigits digits;
-    for (; !isdigit(*pos) && pos < end; ++pos) {}
+    for (; pos < end && !isdigit(*pos); ++pos) {}
     if (OB_FAIL(get_datetime_digits(pos, end, INT32_MAX, digits))) {
       LOG_WARN("failed to get digits from year string", K(ret));
     } else {
@@ -1854,12 +1854,12 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
     const int32_t *expect_lens = NULL;
     ObTimeDelims delims[DATETIME_PART_CNT];
     // find first digit and delimiter.
-    for (; isspace(*pos) && pos < end; ++pos) {}
+    for (; pos < end && isspace(*pos); ++pos) {}
     if (!isdigit(*pos)) {
       ret = OB_INVALID_DATE_FORMAT;
     } else {
       const char *first_digit = pos;
-      for (; isdigit(*pos) && pos < end; ++pos) {}
+      for (; pos < end && isdigit(*pos); ++pos) {}
       const char *first_delim = pos;
       // year is separated by delimiter, or 4 digits, or 2?
       /*if (HAS_TYPE_ORACLE(ob_time.mode_)) {
@@ -2011,7 +2011,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
     const char *pos = str.ptr();
     const char *end = pos + str.length();
     // find first digit.
-    for (; isspace(*pos) && pos < end; ++pos) {}
+    for (; pos < end && isspace(*pos); ++pos) {}
     const char *first_digit = pos;
     if (!('-' == *pos || isdigit(*pos))) {
       for (int i = 0; OB_SUCC(ret) && i < TOTAL_PART_CNT; ++i) {
@@ -2163,9 +2163,9 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
       *scale = 0;
     }
     while (OB_SUCC(ret) && fmt_pos < fmt_end) {
-      for (; isspace(*fmt_pos) && fmt_pos < fmt_end; ++fmt_pos)
+      for (; fmt_pos < fmt_end && isspace(*fmt_pos); ++fmt_pos)
         ;
-      for (; isspace(*str_pos) && str_pos < str_end; ++str_pos)
+      for (; str_pos < str_end && isspace(*str_pos); ++str_pos)
         ;
       if (fmt_pos == fmt_end || str_pos == str_end) {
         break;
