@@ -1237,7 +1237,7 @@ int ObSortRow::get_sort_key(uint64_t* key_ptr)
     buf += size;
     if (offset_ == 0) {
       next_ids_++;
-      }
+    }
   }
   if (OB_SUCC(ret)) {
     buf = reinterpret_cast<char*>(key_ptr);

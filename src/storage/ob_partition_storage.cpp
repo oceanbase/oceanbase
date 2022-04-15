@@ -5654,7 +5654,6 @@ int ObPartitionStorage::local_sort_index_by_range(
     index_schema = index_param.index_schema_;
     dep_table = index_param.dep_table_schema_;
     local_sort = index_context.sorters_.at(idx);
-    local_sort->set_use_memcmp();
     tenant_id = extract_tenant_id(table_schema->get_table_id());
     if (index_schema->is_materialized_view()) {
       query_flag.join_type_ = sql::LEFT_OUTER_JOIN;

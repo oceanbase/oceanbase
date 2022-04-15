@@ -13,6 +13,7 @@
 #define OCEANBASE_STORAGE_OB_AVX512_SORT_H_
 
 #include <immintrin.h>
+#include <avx512fintrin.h>
 #include <climits>
 #include <cfloat>
 #include <cstring>
