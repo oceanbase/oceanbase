@@ -105,7 +105,7 @@ int ObLogTopk::est_cost()
   if (OB_ISNULL(child = get_child(first_child)) || OB_ISNULL(get_stmt()) ||
       OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpeced null", K(child), K(get_stmt()), K(get_plan()),K(ret));
+    LOG_WARN("get unexpected null", K(child), K(get_stmt()), K(get_plan()),K(ret));
   } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(ret)); 

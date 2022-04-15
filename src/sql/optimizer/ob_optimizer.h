@@ -56,7 +56,7 @@ namespace sql
      */
     PROJECT_PRUNING,
     /**
-     * Exchange allocation is also known as parallel optimzation. Though there
+     * Exchange allocation is also known as parallel optimization. Though there
      * are multiple possible optimization that can happen in this step, at the
      * moment we just perform simple check on table location and insert pairs of
      * exchange nodes at places where data exchange needs to happen(local
