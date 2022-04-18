@@ -423,6 +423,7 @@ DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
 DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
 DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
+DEFINE_ERROR(OB_STACK_OVERFLOW, -4385, -1, "HY000", "stack overflow");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000

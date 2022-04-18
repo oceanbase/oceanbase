@@ -238,6 +238,7 @@ constexpr int OB_DISK_ERROR = -4375;
 constexpr int OB_UNIMPLEMENTED_FEATURE = -4376;
 constexpr int OB_ERR_DEFENSIVE_CHECK = -4377;
 constexpr int OB_CLUSTER_NAME_HASH_CONFLICT = -4378;
+constexpr int OB_STACK_OVERFLOW = -4385;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1572,6 +1573,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UNIMPLEMENTED_FEATURE__USER_ERROR_MSG "unimplemented feature"
 #define OB_ERR_DEFENSIVE_CHECK__USER_ERROR_MSG "fatal internal error in [%.*s]"
 #define OB_CLUSTER_NAME_HASH_CONFLICT__USER_ERROR_MSG "cluster name conflict"
+#define OB_STACK_OVERFLOW__USER_ERROR_MSG "stack overflow"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -3029,6 +3031,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UNIMPLEMENTED_FEATURE__ORA_USER_ERROR_MSG "ORA-03001: unimplemented feature"
 #define OB_ERR_DEFENSIVE_CHECK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4377, fatal internal error in [%.*s]"
 #define OB_CLUSTER_NAME_HASH_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4378, cluster name conflict"
+#define OB_STACK_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4385, stack overflow"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"

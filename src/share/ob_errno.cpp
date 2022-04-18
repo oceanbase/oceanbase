@@ -3318,6 +3318,16 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_CLUSTER_NAME_HASH_CONFLICT] = 600;
     ORACLE_STR_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "ORA-00600: internal error code, arguments: -4378, cluster name conflict";
     ORACLE_STR_USER_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "ORA-00600: internal error code, arguments: -4378, cluster name conflict";
+    ERROR_NAME[-OB_STACK_OVERFLOW] = "OB_STACK_OVERFLOW";
+    ERROR_CAUSE[-OB_STACK_OVERFLOW] = "Internal Error";
+    ERROR_SOLUTION[-OB_STACK_OVERFLOW] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_STACK_OVERFLOW] = -1;
+    SQLSTATE[-OB_STACK_OVERFLOW] = "HY000";
+    STR_ERROR[-OB_STACK_OVERFLOW] = "stack overflow";
+    STR_USER_ERROR[-OB_STACK_OVERFLOW] = "stack overflow";
+    ORACLE_ERRNO[-OB_STACK_OVERFLOW] = 600;
+    ORACLE_STR_ERROR[-OB_STACK_OVERFLOW] = "ORA-00600: internal error code, arguments: -4385, stack overflow";
+    ORACLE_STR_USER_ERROR[-OB_STACK_OVERFLOW] = "ORA-00600: internal error code, arguments: -4385, stack overflow";
     ERROR_NAME[-OB_IMPORT_NOT_IN_SERVER] = "OB_IMPORT_NOT_IN_SERVER";
     ERROR_CAUSE[-OB_IMPORT_NOT_IN_SERVER] = "Internal Error";
     ERROR_SOLUTION[-OB_IMPORT_NOT_IN_SERVER] = "Contact OceanBase Support";
