@@ -1179,103 +1179,104 @@ void ObStoreRowLockState::reset()
   lock_trans_id_.reset();
 }
 
-OB_DEF_SERIALIZE(ObSortRow)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, row_val_);
-  return ret;
-}
+// OB_DEF_SERIALIZE(ObSortRow)
+// {
+//   int ret = OB_SUCCESS;
+//   LST_DO_CODE(OB_UNIS_ENCODE, row_val_);
+//   return ret;
+// }
 
-OB_DEF_DESERIALIZE(ObSortRow)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE, row_val_);
-  return ret;
-}
+// OB_DEF_DESERIALIZE(ObSortRow)
+// {
+//   int ret = OB_SUCCESS;
+//   LST_DO_CODE(OB_UNIS_DECODE, row_val_);
+//   return ret;
+// }
 
-OB_DEF_SERIALIZE_SIZE(ObSortRow)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, row_val_);
-  return len;
-}
+// OB_DEF_SERIALIZE_SIZE(ObSortRow)
+// {
+//   int64_t len = 0;
+//   LST_DO_CODE(OB_UNIS_ADD_LEN, row_val_);
+//   return len;
+// }
 
-int ObSortRow::deep_copy(const ObSortRow& src, char* buf, const int64_t len, int64_t& pos)
-{
-  int ret = common::OB_SUCCESS;
-  if (NULL == buf || len <= 0) {
-    ret = common::OB_INVALID_ARGUMENT;
-  } else {
-    next_ids_ = src.next_ids_;
-    offset_ = src.offset_;
-    extra_data_ = src.extra_data_;
-    if (OB_FAIL(row_val_.deep_copy(src.row_val_, buf, len, pos))) {
-      STORAGE_LOG(WARN, "failed to deep copy row_val", K(ret));
-    }
-  }
-  return ret;
-}
+// int ObSortRow::deep_copy(const ObSortRow& src, char* buf, const int64_t len, int64_t& pos)
+// {
+//   int ret = common::OB_SUCCESS;
+//   if (NULL == buf || len <= 0) {
+//     ret = common::OB_INVALID_ARGUMENT;
+//   } else {
+//     next_ids_ = src.next_ids_;
+//     offset_ = src.offset_;
+//     extra_data_ = src.extra_data_;
+//     if (OB_FAIL(row_val_.deep_copy(src.row_val_, buf, len, pos))) {
+//       STORAGE_LOG(WARN, "failed to deep copy row_val", K(ret));
+//     }
+//   }
+//   return ret;
+// }
 
-int ObSortRow::get_sort_key(uint64_t* key_ptr)
-{
-  int ret = OB_SUCCESS;
-  if (key_ptr == NULL) {
-    ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(ERROR, "failed to get sort key, key is NULL", K(ret));
-    return ret;
-  }
-  char* buf = reinterpret_cast<char*>(key_ptr);
-  char* buf_end = buf + 8;
-  int32_t size;
-  while (OB_SUCC(ret) && next_ids_ < row_val_.count_ && buf < buf_end) {
-    size = buf_end - buf;
-    ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size, &extra_data_);
-    if (OB_FAIL(ret)) {
-      STORAGE_LOG(WARN, "failed to make sort key", K(ret), K(buf), K(offset_), K(size));
-      break;
-    }
-    buf += size;
-    if (offset_ == 0) {
-      next_ids_++;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    buf = reinterpret_cast<char*>(key_ptr);
-    std::swap(buf[0], buf[7]);
-    std::swap(buf[1], buf[6]);
-    std::swap(buf[2], buf[5]);
-    std::swap(buf[3], buf[4]);
-  }
-  return ret;
-}
+// int ObSortRow::get_sort_key(uint64_t* key_ptr)
+// {
+//   int ret = OB_SUCCESS;
+//   if (key_ptr == NULL) {
+//     ret = common::OB_INVALID_ARGUMENT;
+//     STORAGE_LOG(ERROR, "failed to get sort key, key is NULL", K(ret));
+//     return ret;
+//   }
+//   char* buf = reinterpret_cast<char*>(key_ptr);
+//   char* buf_end = buf + 8;
+//   int32_t size;
+//   while (OB_SUCC(ret) && next_ids_ < row_val_.count_ && buf < buf_end) {
+//     size = buf_end - buf;
+//     ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size, &extra_data_);
+//     if (OB_FAIL(ret)) {
+//       STORAGE_LOG(WARN, "failed to make sort key", K(ret), K(buf), K(offset_), K(size));
+//       break;
+//     }
+//     buf += size;
+//     if (offset_ == 0) {
+//       next_ids_++;
+//     }
+//   }
+//   if (OB_SUCC(ret)) {
+//     buf = reinterpret_cast<char*>(key_ptr);
+//     std::swap(buf[0], buf[7]);
+//     std::swap(buf[1], buf[6]);
+//     std::swap(buf[2], buf[5]);
+//     std::swap(buf[3], buf[4]);
+//   }
+//   return ret;
+// }
 
-int64_t ObSortRow::to_string(char* buffer, const int64_t length) const 
-{
-  int64_t pos = 0;
-  if (NULL != buffer && length >= 0) {
-    common::databuff_printf(buffer, length, pos, "next_ids=%d ", next_ids_);
-    common::databuff_printf(buffer, length, pos, "offset=%d ", offset_);
-    common::databuff_printf(buffer, length, pos, "extra_data={extra_buf_size=%d ", extra_data_.extra_buf_size);
-    common::databuff_printf(buffer, length, pos, "str_offset=%d ", extra_data_.str_offset);
-    common::databuff_printf(buffer, length, pos, "sortkey_offset=%d} ", extra_data_.str_offset);
-    common::databuff_printf(buffer, length, pos, "row_val={count=%ld,", row_val_.count_);
-    common::databuff_printf(buffer, length, pos, "cells=[");
-    if (NULL != row_val_.cells_) {
-      for (int64_t i = 0; i < row_val_.count_; ++i) {
-        common::databuff_print_obj(buffer, length, pos, row_val_.cells_[i]);
-        common::databuff_printf(buffer, length, pos, ",");
-      }
-    }
-    common::databuff_printf(buffer, length, pos, "]} ");
-  }
-  return pos;
-}
+// int64_t ObSortRow::to_string(char* buffer, const int64_t length) const 
+// {
+//   int64_t pos = 0;
+//   if (NULL != buffer && length >= 0) {
+//     common::databuff_printf(buffer, length, pos, "next_ids=%d ", next_ids_);
+//     common::databuff_printf(buffer, length, pos, "offset=%d ", offset_);
+//     common::databuff_printf(buffer, length, pos, "extra_data={extra_buf_size=%d ", extra_data_.extra_buf_size);
+//     common::databuff_printf(buffer, length, pos, "str_offset=%d ", extra_data_.str_offset);
+//     common::databuff_printf(buffer, length, pos, "sortkey_offset=%d} ", extra_data_.str_offset);
+//     common::databuff_printf(buffer, length, pos, "row_val={count=%ld,", row_val_.count_);
+//     common::databuff_printf(buffer, length, pos, "cells=[");
+//     if (NULL != row_val_.cells_) {
+//       for (int64_t i = 0; i < row_val_.count_; ++i) {
+//         common::databuff_print_obj(buffer, length, pos, row_val_.cells_[i]);
+//         common::databuff_printf(buffer, length, pos, ",");
+//       }
+//     }
+//     common::databuff_printf(buffer, length, pos, "]} ");
+//   }
+//   return pos;
+// }
 
 
 
 OB_DEF_SERIALIZE(ObStoreRow)
 {
   int ret = OB_SUCCESS;
+
   LST_DO_CODE(OB_UNIS_ENCODE,
       row_val_,
       flag_,
@@ -1387,6 +1388,11 @@ int ObStoreRow::deep_copy(const ObStoreRow& src, char* buf, const int64_t len, i
     is_sparse_row_ = src.is_sparse_row_;
     trans_id_ptr_ = src.trans_id_ptr_;
     fast_filter_skipped_ = src.fast_filter_skipped_;
+
+    next_ids_ = src.next_ids_;
+    offset_ = src.offset_;
+    extra_data_ = src.extra_data_;
+
     if (OB_FAIL(row_val_.deep_copy(src.row_val_, buf, len, pos))) {
       STORAGE_LOG(WARN, "failed to deep copy row_val", K(ret));
     } else if (is_sparse_row_) {
@@ -1398,7 +1404,11 @@ int ObStoreRow::deep_copy(const ObStoreRow& src, char* buf, const int64_t len, i
         pos += src.get_column_id_size();
       }
     }
+
   }
+
+  
+
   return ret;
 }
 
@@ -1422,6 +1432,13 @@ int64_t ObStoreRow::to_string(char* buffer, const int64_t length) const
     common::databuff_printf(buffer, length, pos, "multi_version_row_flag=%d ", row_type_flag_.flag_);
     pos += row_type_flag_.to_string(buffer + pos, length - pos);
     common::databuff_printf(buffer, length, pos, "row_val={count=%ld,", row_val_.count_);
+
+    common::databuff_printf(buffer, length, pos, "next_ids=%d ", next_ids_);
+    common::databuff_printf(buffer, length, pos, "offset=%d ", offset_);
+    common::databuff_printf(buffer, length, pos, "extra_data={extra_buf_size=%d ", extra_data_.extra_buf_size);
+    common::databuff_printf(buffer, length, pos, "str_offset=%d ", extra_data_.str_offset);
+    common::databuff_printf(buffer, length, pos, "sortkey_offset=%d} ", extra_data_.str_offset);
+
     common::databuff_printf(buffer, length, pos, "cells=[");
     if (NULL != row_val_.cells_) {
       for (int64_t i = 0; i < row_val_.count_; ++i) {

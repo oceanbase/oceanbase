@@ -1548,8 +1548,8 @@ int sort(uint64_t* keys, T** values, const int64_t size)
   return ret;
 }
 
-template int sort(uint64_t* keys, ObSortRow** values,
-                    const int64_t size);
+// template int sort(uint64_t* keys, ObSortRow** values,
+//                     const int64_t size);
 template int sort(uint64_t* keys, ObStoreRow** values,
                     const int64_t size);
 }  // end namespace storage

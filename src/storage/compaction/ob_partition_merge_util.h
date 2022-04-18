@@ -122,7 +122,7 @@ public:
 
 struct ObBuildIndexContext {
 public:
-  typedef storage::ObExternalSort<storage::ObSortRow, storage::ObSortRowComparer> ExternalSort;
+  typedef storage::ObExternalSort<storage::ObStoreRow, storage::ObStoreRowComparer> ExternalSort;
   ObBuildIndexContext()
       : is_report_succ_(false),
         update_sstore_snapshot_version_(0),

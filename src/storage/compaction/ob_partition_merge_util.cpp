@@ -120,7 +120,7 @@ int ObBuildIndexContext::preallocate_local_sorters(const int64_t concurrent_cnt)
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(concurrent_cnt));
   } else {
     void* buf = NULL;
-    ObExternalSort<ObSortRow, ObSortRowComparer>* local_sort = NULL;
+    ObExternalSort<ObStoreRow, ObStoreRowComparer>* local_sort = NULL;
     if (OB_FAIL(sorters_.reserve(concurrent_cnt))) {
       STORAGE_LOG(WARN, "fail to reserve memory for sorters array", K(ret), K(concurrent_cnt));
     }
