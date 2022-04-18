@@ -125,7 +125,7 @@ public:
   static size_t caseup(const ObCollationType collation_type, char* src, size_t src_len, char* dest, size_t dest_len);
   static size_t sortkey(ObCollationType collation_type, const char* str, int64_t str_len, char* key, int64_t key_len,
       bool& is_valid_unicode);
-  static void sortkey_v2(ObCollationType collation_type, const char* str, int64_t& str_len, char* key, int64_t& key_len,
+  static void sortkey(ObCollationType collation_type, const char* str, int64_t& str_len, char* key, int64_t& key_len,
         bool& is_valid_unicode, int buf_size);      
   static uint64_t hash(ObCollationType collation_type, const char* str, int64_t str_len, uint64_t seed,
       const bool calc_end_space, hash_algo hash_algo);

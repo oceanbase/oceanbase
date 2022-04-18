@@ -889,7 +889,7 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
   return result;
 }
 
-void ObCharset::sortkey_v2(ObCollationType collation_type, const char* str, int64_t& str_len, char* key, int64_t& key_len,
+void ObCharset::sortkey(ObCollationType collation_type, const char* str, int64_t& str_len, char* key, int64_t& key_len,
     bool& is_valid_unicode, int buf_size)
 {
   int is_valid_unicode_tmp = 0;

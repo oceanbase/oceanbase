@@ -870,7 +870,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
             bool is_valid_collation = false;
             char buf[16];
             // convert raw data to sortkey.
-            ObCharset::sortkey_v2(get_collation_type(), 
+            ObCharset::sortkey(get_collation_type(), 
                     get_string_ptr() + str_offset, 
                     str_len, 
                     buf, 
