@@ -24,6 +24,7 @@
 #include "observer/ob_server_struct.h"
 #include "storage/ob_file_system_util.h"
 #include "storage/ob_pg_storage.h"
+#include "lib/net/ob_net_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
@@ -175,7 +176,7 @@ int ObAdminDumpsstExecutor::load_config()
   } else {
     ObServerConfig &config = config_mgr_.get_config();
     int32_t local_port = static_cast<int32_t>(config.rpc_port);
-    int32_t ipv4 = ntohl(obsys::CNetUtil::getLocalAddr(config.devname));
+    int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config.devname));
     GCTX.self_addr_.set_ipv4_addr(ipv4, local_port);
   }
   return ret;
