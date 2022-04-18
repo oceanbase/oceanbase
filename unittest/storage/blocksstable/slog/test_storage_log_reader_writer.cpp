@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include <thread>
+
 #include "lib/file/file_directory_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/blocksstable/slog/ob_storage_log_reader.h"
@@ -1094,6 +1095,8 @@ TEST_F(TestStorageLogReaderWriter, read_multiple_files)
 
 int main(int argc, char** argv)
 {
+  system("rm -f test_storage_log_reader_writer.log*");
+  OB_LOGGER.set_file_name("test_storage_log_reader_writer.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

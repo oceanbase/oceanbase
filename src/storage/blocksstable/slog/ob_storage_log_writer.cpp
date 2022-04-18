@@ -517,8 +517,8 @@ int ObStorageLogWriter::get_log_item(
     const LogCommand cmd, const ObBaseStorageLogBuffer& data, ObStorageLogItem*& log_item)
 {
   int ret = OB_SUCCESS;
-  void* log_buffer = nullptr;
-  log_item = nullptr;
+  void *log_buffer = NULL;
+  ObStorageLogItem *item = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -543,16 +543,16 @@ int ObStorageLogWriter::get_log_item(
       LOG_ERROR("log item too long", K(ret), K(total_item_size), LITERAL_K(LOG_ITEM_MAX_LENGTH));
     } else if (!alloc_locally && OB_FAIL(log_buffers_.pop(log_buffer))) {
       LOG_WARN("pop failed", K(ret));
-    } else if (OB_FAIL(slog_items_.pop(log_item))) {
-      LOG_WARN("pop log_item failed", K(ret));
-    } else if (OB_FAIL(log_item->init(reinterpret_cast<char*>(log_buffer), total_item_size))) {
-      LOG_WARN("init log_item failed", K(ret));
+    } else if (OB_FAIL(slog_items_.pop(item))) {
+      LOG_WARN("pop log item failed", K(ret));
+    } else if (OB_FAIL(item->init(reinterpret_cast<char *>(log_buffer), total_item_size))) {
+      LOG_WARN("init log item failed", K(ret));
     } else {
-      log_item->start_cursor_ = build_cursor_;
-      if (OB_FAIL(build_log_item(cmd, data, log_item))) {
+      item->start_cursor_ = build_cursor_;
+      if (OB_FAIL(build_log_item(cmd, data, item))) {
         LOG_WARN("build_log_item failed", K(ret), K(cmd), K(data));
       } else {
-        log_item->end_cursor_ = build_cursor_;
+        item->end_cursor_ = build_cursor_;
       }
     }
   }
@@ -564,12 +564,14 @@ int ObStorageLogWriter::get_log_item(
         LOG_ERROR("push log_buffer failed", K(temp_ret), KP(log_buffer));
       }
     }
-    if (NULL != log_item) {
-      log_item->reset();
-      if (OB_SUCCESS != (temp_ret = slog_items_.push(log_item))) {
-        LOG_ERROR("push log_item failed", K(temp_ret), KP(log_item));
+    if (NULL != item) {
+      item->reset();
+      if (OB_SUCCESS != (temp_ret = slog_items_.push(item))) {
+        LOG_ERROR("push log item failed", K(temp_ret), KP(item));
       }
     }
+  } else {
+    log_item = item;
   }
   return ret;
 }
