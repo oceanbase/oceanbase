@@ -101,12 +101,7 @@ OB_INLINE int ObResultSet::open_plan()
       if (OB_FAIL(ObPxAdmission::enter_query_admission(
               my_session_, get_exec_context(), *get_physical_plan(), worker_count_))) {
         // query is not admitted to run
-        if (OB_EAGAIN == ret) {
-          ret = OB_ERR_SCHEDULER_THREAD_NOT_ENOUGH;
-          LOG_DEBUG("Query is not admitted to run, try again", K(ret));
-        } else {
-          LOG_WARN("Fail to get admission to use px", K(ret));
-        }
+        LOG_DEBUG("Query is not admitted to run, try again", K(ret));
       } else if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
         LOG_WARN("query is timeout",
@@ -1108,7 +1103,6 @@ void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool 
   }
 }
 
-// obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
 int ObResultSet::refresh_location_cache(bool is_nonblock)
 {
   return ObTaskExecutorCtxUtil::refresh_location_cache(get_exec_context().get_task_exec_ctx(), is_nonblock);

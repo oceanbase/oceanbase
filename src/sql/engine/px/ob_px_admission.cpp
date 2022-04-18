@@ -70,8 +70,7 @@ int ObPxAdmission::enter_query_admission(
       LOG_WARN("fail check query status", K(ret));
     } else if (!ObPxAdmission::admit(req_worker_count, admit_worker_count)) {
       plan.inc_delayed_px_querys();
-      THIS_WORKER.set_retry_flag();
-      ret = OB_EAGAIN;
+      ret = OB_ERR_SCHEDULER_THREAD_NOT_ENOUGH;
       LOG_INFO("It's a px query, out of px worker resource, "
                "need delay, do not need disconnect",
           K(req_worker_count),

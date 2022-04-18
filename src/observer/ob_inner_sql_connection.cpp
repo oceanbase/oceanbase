@@ -474,6 +474,13 @@ int ObInnerSQLConnection::process_retry(
     THIS_WORKER.sched_wait();
     usleep(static_cast<unsigned int>(sleep_time_us));
     THIS_WORKER.sched_run();
+  } else if (repeatable_stmt && is_scheduler_thread_not_enough_err(last_ret)) {
+    const int64_t sleep_time_us = 10 * 1000; // 10ms
+    need_retry = true;
+    LOG_WARN("scheduler thread not enough, need retry", K(ret), K(last_ret), K(retry_cnt));
+    THIS_WORKER.sched_wait();
+    usleep(static_cast<unsigned int>(sleep_time_us));
+    THIS_WORKER.sched_run();
   }
   if (get_session().is_nested_session()) {
     /**
