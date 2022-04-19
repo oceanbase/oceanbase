@@ -329,6 +329,8 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
         SET_SYMBOL_IF_EMPTY("not");
       case T_OP_NOT_EXISTS:
         SET_SYMBOL_IF_EMPTY("not exists");
+      case T_OP_BIT_NEG:
+        SET_SYMBOL_IF_EMPTY("~");
       case T_OP_EXISTS: {
         SET_SYMBOL_IF_EMPTY("exists");
         if (1 != expr->get_param_count()) {
@@ -356,8 +358,6 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
       }
       case T_OP_AND:
         SET_SYMBOL_IF_EMPTY("and");
-      case T_OP_BIT_NEG:
-        SET_SYMBOL_IF_EMPTY("~");
       case T_OP_OR: {
         SET_SYMBOL_IF_EMPTY("or");
         if (expr->get_param_count() < 2) {
