@@ -13183,6 +13183,13 @@ int ObDDLService::update_sys_variables(const common::ObIArray<obrpc::ObSysVarIdV
           if (SYS_VAR_OB_COMPATIBILITY_MODE == ObSysVarFactory::find_sys_var_id_by_name(new_sysvar.get_name())) {
             ret = OB_OP_NOT_ALLOW;
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "change tenant compatibility mode");
+          } else if (new_sysvar.is_read_only()) {
+            ret = OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR;
+            LOG_USER_ERROR(OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR,
+                new_sysvar.get_name().length(),
+                new_sysvar.get_name().ptr(),
+                (int)strlen("read only"),
+                "read only");
           } else if (new_sysvar.get_value() != sysvar_value.value_) {
             value_changed = true;
             if (OB_FAIL(new_sysvar.set_value(sysvar_value.value_))) {
