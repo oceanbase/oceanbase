@@ -53,6 +53,7 @@ public:
   bool is_single_stmt(const common::ObString& stmt);
   int split_multiple_stmt(const common::ObString& stmt, common::ObIArray<common::ObString>& queries,
       ObMPParseStat& parse_fail, bool is_ret_first_stmt = false);
+  void get_single_sql(const common::ObString &stmt, int64_t offset, int64_t remain, int64_t &str_len);
   //@param:
   //  no_throw_parser_error is used to mark not throw parser error. in the split multi stmt
   //  situation we will try find ';' delimiter to parser part of string in case of save memory,

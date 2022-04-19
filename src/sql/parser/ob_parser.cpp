@@ -97,24 +97,12 @@ int ObParser::split_multiple_stmt(
       ObIAllocator *bak_allocator = allocator_;
       allocator_ = &allocator;
       int64_t str_len = 0;
-      // for save memory allocate in parser, we need try find the single stmt length in advance
-      while (str_len < remain) {
-        if (';' == stmt[str_len + offset]) {
-          break;
-        } else if ('#' == stmt[str_len + offset]) {
-          while (str_len + 1 < remain && '\n' != stmt[str_len + offset + 1]) {
-            ++str_len;
-          }
-        } else if ('-' == stmt[str_len + offset]) {
-          if (str_len + 1 < remain && '-' == stmt[str_len + offset + 1]) {
-            ++str_len;
-            while (str_len + 1 < remain && '\n' != stmt[str_len + offset + 1]) {
-              ++str_len;
-            }
-          }
-        }
-        ++str_len;
-      }
+
+      //for save memory allocate in parser, we need try find the single stmt length in advance
+      
+      //calc the end position of a single sql.
+      get_single_sql(stmt, offset, remain, str_len);
+
       str_len = str_len == remain ? str_len : str_len + 1;
       ObString part(str_len, stmt.ptr() + offset);
       ObString remain_part(remain, stmt.ptr() + offset);
@@ -155,7 +143,80 @@ int ObParser::split_multiple_stmt(
   return ret;
 }
 
-int ObParser::parse_sql(const ObString &stmt, ParseResult &parse_result, const bool no_throw_parser_error)
+// avoid separeting sql by semicolons in quotes or comment.
+void ObParser::get_single_sql(const common::ObString &stmt, int64_t offset, int64_t remain, int64_t &str_len) {
+  /* following two flags are used to mark wether we are in comment, if in comment, ';' can't be used to split sql*/
+  // in -- comment
+  bool comment_flag = false;
+  // in /*! comment */ or /* comment */
+  bool c_comment_flag = false;
+  /* follwing three flags are used to mark wether we are in quotes.*/
+  // in '', single quotes
+  bool sq_flag = false;
+  // in "", double quotes
+  bool dq_flag = false;
+  // in ``, backticks.
+  bool bt_flag = false;
+  bool is_escape = false;
+
+  bool in_comment = false;
+  bool in_string  = false;
+  while ((in_comment || (stmt[str_len + offset] != ';')) && str_len < remain) {
+    if (!in_comment && !in_string) {
+      if (str_len + 1 >= remain) {
+      } else if ((stmt[str_len + offset] == '-' && stmt[str_len + offset + 1] == '-') || stmt[str_len + offset + 1] == '#') {
+        comment_flag = true;
+      } else if (stmt[str_len + offset] == '/' && stmt[str_len + offset + 1] == '*') {
+        c_comment_flag = true;
+      } else if (stmt[str_len + offset] == '\'') {
+        sq_flag = true;
+      } else if (stmt[str_len + offset] == '"') {
+        dq_flag = true;
+      } else if (stmt[str_len + offset] == '`') {
+        bt_flag = true;
+      }
+    } else if (in_comment) {
+      if (comment_flag) {
+        if (stmt[str_len + offset] == '\r' || stmt[str_len + offset] == '\n') {
+          comment_flag = false;
+        }
+      } else if (c_comment_flag) {
+        if (str_len + 1 >= remain) {
+
+        } else if (stmt[str_len + offset] == '*' && (str_len + 1 < remain) && stmt[str_len + offset + 1] == '/') {
+          c_comment_flag = false;
+        }
+      }
+    } else if (in_string) {
+      if (str_len + 1 >= remain) {
+      } else if (share::is_mysql_mode() && !bt_flag && stmt[str_len + offset] == '\\') {
+        // in mysql mode, handle the escape char in '' and ""
+        ++ str_len;
+      } else if (sq_flag) {
+        if (stmt[str_len + offset] == '\'') {
+          sq_flag = false;
+        }
+      } else if (dq_flag) {
+        if (stmt[str_len + offset] == '"') {
+          dq_flag = false;
+        }
+      } else if (bt_flag) {
+        if (stmt[str_len + offset] == '`') {
+          bt_flag = false;
+        }
+      }
+    }
+    ++ str_len;
+    
+    // update states.
+    in_comment = comment_flag || c_comment_flag;
+    in_string = sq_flag || bt_flag || dq_flag;
+  }
+}
+
+int ObParser::parse_sql(const ObString &stmt,
+                        ParseResult &parse_result,
+                        const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
   ObSQLParser sql_parser(*(ObIAllocator *)(parse_result.malloc_pool_), sql_mode_);
