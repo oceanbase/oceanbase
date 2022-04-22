@@ -242,8 +242,8 @@ void ObColumnSchemaV2::reset()
   prev_column_id_ = UINT64_MAX;
   next_column_id_ = UINT64_MAX;
   encoding_type_ = INT64_MAX;
-  ObSchema::reset();
   reset_string_array(extended_type_info_);
+  ObSchema::reset();
 }
 
 OB_DEF_SERIALIZE(ObColumnSchemaV2)
