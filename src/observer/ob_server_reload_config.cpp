@@ -348,5 +348,9 @@ int ObServerReloadConfig::operator()()
       LOG_WARN("fail to set location updater's thread cnt", KR(ret), K(location_thread_cnt));
     }
   }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
+  }
   return real_ret;
 }
