@@ -202,6 +202,7 @@ private:
   CoRoutine();
 
   static void __start(boost::context::detail::transfer_t from);
+  void start_without_jump();
 
 private:
   CoIdx idx_;
