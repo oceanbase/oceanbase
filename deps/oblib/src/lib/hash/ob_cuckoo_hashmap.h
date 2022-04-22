@@ -792,6 +792,12 @@ int ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::overflow_set(
           overflow_array_ = new_overflow_array;
           overflow_capacity_ = overflow_capacity_ + OVERFLOW_EXPAND_COUNT;
           done = true;
+        } else {
+          for (int64_t i = 0; i < overflow_capacity_ + OVERFLOW_EXPAND_COUNT; ++i) {
+            new_overflow_array[i].~pair_type();
+          }
+          allocator_->free(new_overflow_array);
+          new_overflow_array = nullptr;
         }
       }
     } else {
