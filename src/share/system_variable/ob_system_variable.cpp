@@ -1457,11 +1457,12 @@ int ObSqlModeVar::do_check_and_convert(ObExecContext& ctx, const ObSetVar& set_v
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected type", K(ret), K(in_val));
       }
+      ObString val_without_space = str_val.trim_space_only();
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(find_set(str_val))) {
-        LOG_WARN("fail to find type", K(ret), K(str_val), K(in_val));
-      } else if (OB_FAIL(ob_str_to_sql_mode(str_val, sql_mode))) {
-        LOG_WARN("fail to convert str to sql mode", K(ret), K(str_val), K(in_val));
+      } else if (OB_FAIL(find_set(val_without_space))) {
+        LOG_WARN("fail to find type", K(ret), K(val_without_space), K(in_val));
+      } else if (OB_FAIL(ob_str_to_sql_mode(val_without_space, sql_mode))) {
+        LOG_WARN("fail to convert str to sql mode", K(ret), K(val_without_space), K(in_val));
       }
     } else if (ob_is_int_tc(in_val.get_type())) {
       int64_t int64_val = 0;
