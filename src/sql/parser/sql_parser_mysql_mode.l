@@ -865,6 +865,7 @@ FALSE {
     yylloc->first_column = p->start_col_;
     char *tmp_literal = p->tmp_literal_;
     tmp_literal[yylval->node->str_len_] = '\0';
+    CHECK_STR_LEN_MATCH(tmp_literal, yylval->node->str_len_);
 
     char *dup_value = NULL;
     if (p->is_not_utf8_connection_) {

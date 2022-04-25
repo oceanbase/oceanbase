@@ -739,4 +739,17 @@ extern int setup_token_pos_info_and_dup_string(ParseNode* node, ParseResult* p, 
 int add_comment_list(ParseResult* p, const TokenPosInfo* info);
 #endif
 
+// avoid '\0' in the middle of a str.
+#define CHECK_STR_LEN_MATCH(src_str, str_len)                                    \
+  do {                                                                           \
+    if (OB_UNLIKELY(src_str == NULL)) {                                          \
+    } else {                                                                     \
+      for (int64_t i = 0; i < str_len; i++) {                                    \
+        if (OB_UNLIKELY(src_str[i] == '\0')) {                                   \
+          yyerror(yylloc, yyextra, "mismatch strlen, may cased by '\0' in str"); \
+        }                                                                        \
+      }                                                                          \
+    }                                                                            \
+  } while (0);
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */
