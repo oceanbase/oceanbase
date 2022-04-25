@@ -256,23 +256,28 @@ int ObTransformUtils::add_new_joined_table(ObTransformerCtx* ctx, ObDMLStmt& stm
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transform context is invalid", K(ret), K(ctx), K(stmt), K(left_table), K(right_table));
   } else {
-    JoinedTable* joined_table = static_cast<JoinedTable*>(ctx->allocator_->alloc(sizeof(JoinedTable)));
-    joined_table = new (joined_table) JoinedTable();
-    joined_table->type_ = TableItem::JOINED_TABLE;
-    joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
-    joined_table->joined_type_ = join_type;
-    joined_table->left_table_ = left_table;
-    joined_table->right_table_ = right_table;
-    if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
-      LOG_WARN("failed to push back join conditions", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
-      LOG_WARN("failed to add left table ids", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
-      LOG_WARN("failed to add right table ids", K(ret));
-    } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
-      LOG_WARN("failed to add joined table into stmt", K(ret));
+    JoinedTable *joined_table = static_cast<JoinedTable *>(ctx->allocator_->alloc(sizeof(JoinedTable)));
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
     } else {
-      new_join_table = joined_table;
+      joined_table = new (joined_table) JoinedTable();
+      joined_table->type_ = TableItem::JOINED_TABLE;
+      joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
+      joined_table->joined_type_ = join_type;
+      joined_table->left_table_ = left_table;
+      joined_table->right_table_ = right_table;
+      if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
+        LOG_WARN("failed to push back join conditions", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
+        LOG_WARN("failed to add left table ids", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
+        LOG_WARN("failed to add right table ids", K(ret));
+      } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
+        LOG_WARN("failed to add joined table into stmt", K(ret));
+      } else {
+        new_join_table = joined_table;
+      }
     }
   }
   return ret;
