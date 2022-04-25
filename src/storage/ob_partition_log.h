@@ -79,6 +79,7 @@ enum ObPartitionRedoLogSubcmd {
   // DATE: 2020-09-21 (since 2.2.70)
   REDO_LOG_ADD_RECOVERY_POINT_DATA = 38,
   REDO_LOG_REMOVE_RECOVERY_POINT_DATA = 39,
+  REDO_LOG_MAX = 40
 };
 
 struct ObBeginTransLogEntry : public blocksstable::ObIBaseStorageLogEntry {
