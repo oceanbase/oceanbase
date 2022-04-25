@@ -2249,8 +2249,13 @@ ObReplicaType ObPGStorage::get_replica_type_() const
 int ObPGStorage::get_replica_type(common::ObReplicaType& replica_type) const
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard lock_guard(lock_);
-  replica_type = meta_->replica_type_;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "partition is not initialized", K_(pkey), K(ret));
+  } else {
+    TCRLockGuard lock_guard(lock_);
+    replica_type = meta_->replica_type_;
+  }
   return ret;
 }
 
