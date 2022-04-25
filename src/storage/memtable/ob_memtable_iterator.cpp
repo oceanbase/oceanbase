@@ -428,7 +428,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObStoreRow*& row)
       }
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_ITER_END != ret) {
     iter_flag_ = 0;
   }
   return ret;
