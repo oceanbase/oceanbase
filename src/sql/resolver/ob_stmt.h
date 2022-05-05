@@ -222,6 +222,11 @@ public:
             stmt_type == stmt::T_EXPLAIN || is_show_stmt(stmt_type));
   }
 
+  static inline bool is_execute_stmt(stmt::StmtType stmt_type)
+  {
+    return stmt_type == stmt::T_EXECUTE;
+  }
+
   static inline bool is_pdml_supported_stmt(stmt::StmtType stmt_type)
   {
     return (stmt_type == stmt::T_INSERT || stmt_type == stmt::T_DELETE || stmt_type == stmt::T_UPDATE);

@@ -52,7 +52,8 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext& gctx, co
   ObSQLSessionInfo* session = result.get_exec_context().get_my_session();
   bool expected_stmt = (ObStmt::is_dml_stmt(result.get_stmt_type()) ||
                         ObStmt::is_ddl_stmt(result.get_stmt_type(), result.has_global_variable()) ||
-                        ObStmt::is_dcl_stmt(result.get_stmt_type()));
+                        ObStmt::is_dcl_stmt(result.get_stmt_type()) ||
+                        ObStmt::is_execute_stmt(result.get_stmt_type()));
   const ObMultiStmtItem& multi_stmt_item = ctx.multi_stmt_item_;
   if (OB_ISNULL(session)) {
     client_ret = err;  // OOM
