@@ -1484,6 +1484,8 @@ int ObBuildIndexScheduleTask::process()
         STORAGE_LOG(INFO, "index schema has been deleted, skip build it", K(pkey_), K(index_id_));
         is_end = true;
       }
+    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
+      STORAGE_LOG(INFO, "index build is already completed, skip it", K(ret), K(index_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret));
     } else if (OB_FAIL(check_partition_need_build_index(pkey_, *index_schema, *table_schema, part_guard, need_build))) {
@@ -1876,6 +1878,8 @@ int ObRetryGhostIndexTask::process()
     STORAGE_LOG(WARN, "rs_rpc_proxy is null", K(ret));
   } else if (OB_FAIL(GCTX.rs_rpc_proxy_->submit_build_index_task(arg))) {
     STORAGE_LOG(WARN, "fail to submit build index task", K(ret), K(arg));
+  } else {
+    STORAGE_LOG(INFO, "retry index submit task success", K(index_id_));
   }
   return ret;
 }

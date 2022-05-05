@@ -365,11 +365,26 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
         LOG_WARN("fail to execute write sql", K(ret));
       } else {
         ret = OB_SUCCESS;
+        // There is a chance that RetryGhostIndexTask finds an unavailable index and sends a build index request,
+        // while the index is actually being built and finished before the build index request reach here.
+        // In this case, we should not add the task back again.
+        skip_set_task_map = true;
+        ObSchemaGetterGuard schema_guard;
+        const ObTableSchema *latest_index_schema = nullptr;
+        const int64_t index_tid = index_schema->get_table_id();
         if (OB_HASH_NOT_EXIST == (tmp_ret = task_map_.get_refactored(index_schema->get_table_id(), tmp_task_ptr))) {
-          LOG_INFO(
-              "global index record in __all_index_build_stat, but not in task_map, add it to avoid unexpected miss");
-        } else {
-          skip_set_task_map = true;
+          if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+                  extract_tenant_id(index_tid), schema_guard))) {
+            LOG_WARN("fail to get schema guard", K(ret), K(index_tid));
+          } else if (OB_FAIL(schema_guard.get_table_schema(index_tid, latest_index_schema))) {
+            LOG_WARN("fail to get table schema", K(ret), K(index_tid));
+          } else if (OB_ISNULL(latest_index_schema)) {
+            LOG_INFO("index schema is deleted, skip it");
+          } else if (latest_index_schema->get_index_status() == INDEX_STATUS_UNAVAILABLE) {
+            skip_set_task_map = false;
+            LOG_INFO(
+                "global index record in __all_index_build_stat, but not in task_map, add it to avoid unexpected miss");
+          }
         }
       }
     }
@@ -1332,6 +1347,8 @@ int ObGlobalIndexBuilder::try_build_single_replica(ObGlobalIndexTask* task)
       LOG_WARN("index schema ptr is null", K(ret));
     } else if (is_error_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
       (void)switch_state(task, GIBS_INDEX_BUILD_FAILED);
+    } else if (is_available_index_status(index_schema->get_index_status())) {
+      (void)switch_state(task, GIBS_INDEX_BUILD_FINISH);
     } else if (task->last_drive_ts_ + BUILD_SINGLE_REPLICA_TIMEOUT > ObTimeUtility::current_time()) {
       if (OB_FAIL(drive_this_build_single_replica(index_schema, schema_guard, task))) {
         LOG_WARN("fail to drive this build single replica", K(ret));
@@ -1758,6 +1775,9 @@ int ObGlobalIndexBuilder::try_copy_multi_replica(ObGlobalIndexTask* task)
     } else if (is_error_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
       SpinWLockGuard item_guard(task->lock_);
       (void)switch_state(task, GIBS_INDEX_BUILD_FAILED);
+    } else if (is_available_index_status(index_schema->get_index_status())) {
+      SpinWLockGuard item_guard(task->lock_);
+      (void)switch_state(task, GIBS_INDEX_BUILD_FINISH);
     } else if (last_drive_ts + COPY_MULTI_REPLICA_TIMEOUT > ObTimeUtility::current_time()) {
       if (OB_FAIL(drive_this_copy_multi_replica(index_schema, schema_guard, task))) {
         LOG_WARN("fail to drive this copy multi replica", K(ret));
@@ -2413,6 +2433,9 @@ int ObGlobalIndexBuilder::try_unique_index_calc_checksum(ObGlobalIndexTask* task
     } else if (is_error_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
       SpinWLockGuard item_guard(task->lock_);
       (void)switch_state(task, GIBS_INDEX_BUILD_FAILED);
+    } else if (is_available_index_status(index_schema->get_index_status())) {
+      SpinWLockGuard item_guard(task->lock_);
+      (void)switch_state(task, GIBS_INDEX_BUILD_FINISH);
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), data_schema))) {
       LOG_WARN("fail to get table schema", K(ret));
     } else if (OB_UNLIKELY(NULL == data_schema)) {
@@ -2479,6 +2502,8 @@ int ObGlobalIndexBuilder::try_unique_index_check(ObGlobalIndexTask* task)
       LOG_WARN("index schema ptr is null", K(ret));
     } else if (is_error_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
       (void)switch_state(task, GIBS_INDEX_BUILD_FAILED);
+    } else if (is_available_index_status(index_schema->get_index_status())) {
+      (void)switch_state(task, GIBS_INDEX_BUILD_FINISH);
     } else {
       uint64_t execution_id = OB_INVALID_ID;
       bool is_equal = false;
@@ -3108,6 +3133,10 @@ int ObGlobalIndexBuilder::try_handle_index_build_take_effect(ObGlobalIndexTask* 
         if (OB_FAIL(switch_state(task, GIBS_INDEX_BUILD_FAILED))) {
           LOG_WARN("fail to switch state", K(ret));
         }
+      } else if (is_available_index_status(index_schema->get_index_status())) {
+        if (OB_FAIL(switch_state(task, GIBS_INDEX_BUILD_FINISH))) {
+          LOG_WARN("fail to switch state", K(ret));
+        }
       } else {
         if (INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
           if (OB_FAIL(switch_state(task, GIBS_INDEX_BUILD_FINISH))) {
@@ -3177,13 +3206,10 @@ int ObGlobalIndexBuilder::try_handle_index_build_failed(ObGlobalIndexTask* task)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema ptr is null", K(ret));
       } else {
-        if (is_error_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
+        if (is_final_index_status(index_schema->get_index_status(), index_schema->is_dropped_schema())) {
           if (OB_FAIL(switch_state(task, GIBS_INDEX_BUILD_FINISH))) {
             LOG_WARN("fail to switch state", K(ret));
           }
-        } else if (INDEX_STATUS_AVAILABLE == index_schema->get_index_status()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("index status not match", K(ret), "index_id", index_schema->get_table_id());
         } else if (INDEX_STATUS_UNAVAILABLE == index_schema->get_index_status()) {
           if (OB_FAIL(try_update_index_status_in_schema(index_schema, task, INDEX_STATUS_INDEX_ERROR))) {
             LOG_WARN("fail to try update index status in schema", K(ret));

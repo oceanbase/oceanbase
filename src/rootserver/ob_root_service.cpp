@@ -4948,6 +4948,8 @@ int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskAr
       LOG_WARN("fail to get table schema", K(ret), K(index_tid));
     } else if (OB_ISNULL(index_schema)) {
       LOG_INFO("index schema is deleted, skip it");
+    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
+      LOG_INFO("index build is already completed, skip it", K(ret), K(index_tid));
     } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
       LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
     } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
