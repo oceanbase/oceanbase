@@ -107,6 +107,7 @@ ObPartitionGroup::ObPartitionGroup()
 
 ObPartitionGroup::~ObPartitionGroup()
 {
+  FLOG_INFO("deconstruct ObPartitionGroup", K(this), K_(pkey));
   destroy();
 }
 

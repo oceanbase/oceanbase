@@ -114,6 +114,7 @@ ObPGStorage::ObPGStorage()
 
 ObPGStorage::~ObPGStorage()
 {
+  FLOG_INFO("deconstruct ObPGStorage", K(this), K_(pkey));
   destroy();
 }
 
@@ -146,13 +147,13 @@ int ObPGStorage::init(const ObPartitionKey& key, ObIPartitionComponentFactory* c
     pg_memtable_mgr_.set_pkey(key);
     is_inited_ = true;
   }
-  STORAGE_LOG(INFO, "partition init", K(ret), K(key));
+  STORAGE_LOG(INFO, "pgstorage init", K(ret), K(key), K(this));
   return ret;
 }
 
 void ObPGStorage::destroy()
 {
-  FLOG_INFO("destroy pg storage", K(*this), K(lbt()));
+  FLOG_INFO("destroy pg storage", K(this), K(*this), K(lbt()));
   clear();
   if (NULL != file_handle_.get_storage_file()) {
     file_handle_.reset();
@@ -161,7 +162,7 @@ void ObPGStorage::destroy()
 
 void ObPGStorage::clear()
 {
-  FLOG_INFO("clear pg storage", K(*this), K(lbt()));
+  FLOG_INFO("clear pg storage", K(this), K(*this), K(lbt()));
 
   int tmp_ret = OB_SUCCESS;
 
