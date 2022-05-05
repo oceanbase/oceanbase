@@ -475,6 +475,7 @@ bool ObChunkRowStore::shrink_block(int64_t size)
             K(item->get_buffer()->mem_size()),
             K(size));
       }
+      dumped_row_cnt_ += item->rows();
       freed_size += item->get_buffer()->mem_size();
       LOG_DEBUG("RowStore shrink dump and free", K(size), K(freed_size), K(item->get_buffer()->mem_size()), K(item));
       free_block(item);
