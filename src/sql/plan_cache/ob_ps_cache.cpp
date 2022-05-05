@@ -39,6 +39,7 @@ ObPsCache::ObPsCache()
       mem_low_pct_(0),
       hit_count_(0),
       access_count_(0),
+      mutex_(),
       mem_context_(NULL),
       inner_allocator_(NULL)
 {}
@@ -46,8 +47,6 @@ ObPsCache::ObPsCache()
 ObPsCache::~ObPsCache()
 {
   int ret = OB_SUCCESS;
-  // ps_stmt_id和ps_stmt_info创建时，会给其增加引用计数
-  // 现在PsCache要析构了，对所有内部对象减去1,如果引用计数到0，会显式free内存
   cache_evict_all_ps();
 
   if (NULL != mem_context_) {
@@ -709,6 +708,12 @@ int ObPsCache::cache_evict_all_ps()
 int ObPsCache::inner_cache_evict(bool is_evict_all)
 {
   int ret = OB_SUCCESS;
+  // There is a concurrency problem between the regularly triggered ps cache evict task and
+  // the manually triggered flush ps cache evict task. There is also a concurrency problem between
+  // the flush ps cache evict tasks triggered at the same time in different sessions.
+  // The same ps stmt may be added to the closed list by different ps cache evict tasks
+  // at the same time, so mutex is used here to make all flush ps cache evict tasks execute serially
+  lib::ObMutexGuard guard(mutex_);
   PsIdClosedTimePairs expired_stmt_ids;
   PsIdClosedTimePairs closed_stmt_ids;
   ObGetClosedStmtIdOp op(&expired_stmt_ids, &closed_stmt_ids);
