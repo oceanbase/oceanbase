@@ -9549,8 +9549,9 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
   value->str_value_ = parse_strndup("SYS", strlen("SYS") + 1, result->malloc_pool_);
   if (NULL == value->str_value_)
   {
-  yyerror(NULL, result, "No more space for mallocing string\n");
-  YYABORT;
+    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT;
   }
   value->str_len_ = strlen("SYS");
   malloc_non_terminal_node(sub_where, result->malloc_pool_, T_OP_NE, 2, column, value);

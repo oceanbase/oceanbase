@@ -59,13 +59,15 @@ int ObSQLParser::parse_and_gen_sqlid(
 
     int64_t new_length = str_len + 1;
     char* buf = (char*)parse_malloc(new_length, parse_result->malloc_pool_);
-
-    parse_result->param_nodes_ = NULL;
-    parse_result->tail_param_node_ = NULL;
-    parse_result->no_param_sql_ = buf;
-    parse_result->no_param_sql_buf_len_ = new_length;
-
-    ret = parse(str_ptr, new_length, *parse_result);
+    if (OB_UNLIKELY(NULL == buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      parse_result->param_nodes_ = NULL;
+      parse_result->tail_param_node_ = NULL;
+      parse_result->no_param_sql_ = buf;
+      parse_result->no_param_sql_buf_len_ = new_length;
+      ret = parse(str_ptr, new_length, *parse_result);
+    }
 
     if (OB_SUCC(ret)) {
       ret = gen_sqlid(parse_result->no_param_sql_, parse_result->no_param_sql_len_, len, sql_id);

@@ -63,7 +63,7 @@ int add_word(t_node* root, const char* str, const int32_t idx)
       if (ch_id >= 0 && NULL == pt->next[ch_id]) {
         t_node* new_node = (t_node*)calloc(1, sizeof(t_node));
         if (OB_UNLIKELY(NULL == new_node)) {
-          ret = 1;
+          ret = OB_PARSER_ERR_NO_MEMORY;
           printf("ERROR malloc memory failed! \n");
         } else {
           new_node->idx = -1;
