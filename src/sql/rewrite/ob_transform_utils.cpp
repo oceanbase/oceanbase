@@ -1743,7 +1743,7 @@ int ObTransformUtils::find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_e
 
 // 1. check is there null rejecting condition
 // 2. check is nullable column, and is not the right table of outer join
-int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable)
+int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope /* = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE */)
 {
   int ret = OB_SUCCESS;
   is_nullable = true;
@@ -1757,12 +1757,14 @@ int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool
     LOG_WARN("failed to check is not null column", K(ret));
   } else if (not_null_col) {
     is_nullable = false;
-  } else if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
-    LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
-    LOG_WARN("failed to check has null reject condition", K(ret));
-  } else if (has_null_reject) {
-    is_nullable = false;
+  } else if (nullable_scope >= ObTransformUtils::NULLABLE_SCOPE::NS_WHERE) {
+    if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
+      LOG_WARN("failed to get equal set conditions", K(ret));
+    } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
+      LOG_WARN("failed to check has null reject condition", K(ret));
+    } else if (has_null_reject) {
+      is_nullable = false;
+    }
   }
   return ret;
 }

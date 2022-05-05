@@ -2074,22 +2074,20 @@ int ObTransformJoinElimination::trans_column_expr(ObDMLStmt* stmt, ObRawExpr* ex
 {
   int ret = OB_SUCCESS;
   new_expr = NULL;
+  bool is_nullable = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
-    LOG_WARN("param has null", K(ret));
+    LOG_WARN("param has null", K(ret), K(stmt), K(expr), K(ctx_));
+  } else if (OB_FAIL(ObTransformUtils::check_expr_nullable(stmt, expr, is_nullable, ObTransformUtils::NULLABLE_SCOPE::NS_FROM))) {
+    LOG_WARN("failed to check whether expr is nullable", K(ret));
+  } else if (!is_nullable) {
+    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, new_expr, true))) {
+      LOG_WARN("build true expr failed", K(ret));
+    } else { /*do nothing*/
+    }
   } else {
-    bool is_nullable = false;
-    if (OB_FAIL(ObTransformUtils::check_expr_nullable(stmt, expr, is_nullable))) {
-      LOG_WARN("failed to check whether expr is nullable", K(ret));
-    } else if (!is_nullable) {
-      if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, new_expr, true))) {
-        LOG_WARN("build true expr failed", K(ret));
-      } else { /*do nothing*/
-      }
-    } else {
-      if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_, expr, new_expr))) {
-        LOG_WARN("build is not null expr failed", K(ret));
-      } else { /*do nothing*/
-      }
+    if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_, expr, new_expr))) {
+      LOG_WARN("build is not null expr failed", K(ret));
+    } else { /*do nothing*/
     }
   }
   return ret;
