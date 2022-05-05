@@ -156,7 +156,7 @@ public:
   // get the min prepare version of trans module in specified partition of current observer
   int get_min_uncommit_prepare_version(int64_t& min_prepare_version);
   int get_min_uncommit_log(uint64_t& min_uncommit_log_id, int64_t& min_uncommit_log_ts);
-  int get_min_prepare_version(const int64_t log_ts, int64_t& min_prepare_version);
+  int get_min_prepare_version(const int64_t freeze_ts, int64_t& min_prepare_version);
   int gc_trans_result_info(const int64_t checkpoint_ts);
 
   // check the partition status
@@ -928,7 +928,7 @@ public:
   int get_min_uncommit_prepare_version(const ObPartitionKey& partition, int64_t& min_prepare_version);
   // get the min log ID of transactions in the specified partition
   int get_min_uncommit_log(const ObPartitionKey& pkey, uint64_t& min_uncommit_log_id, int64_t& min_uncommit_log_ts);
-  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version);
+  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t freeze_ts, int64_t& min_prepare_version);
   int gc_trans_result_info(const ObPartitionKey& pkey, const int64_t checkpoint_ts);
   int checkpoint(
       const ObPartitionKey& pkey, const int64_t checkpoint_base_ts, storage::ObPartitionLoopWorker* lp_worker);
