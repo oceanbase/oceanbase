@@ -256,6 +256,7 @@ int ObDatumHexUtils::rawtohex(const ObExpr& expr, const ObString& in_str, ObEval
   } else {
     ObIAllocator& tmp_alloc = ctx.get_reset_tmp_alloc();
     ObString out_str;
+    ObOTimestampData time_in_val;
     switch (in_type) {
       // TODO::this should same as oracle, and support dump func
       case ObTinyIntType:
@@ -300,16 +301,15 @@ int ObDatumHexUtils::rawtohex(const ObExpr& expr, const ObString& in_str, ObEval
       case ObTimestampTZType:
       case ObTimestampLTZType:
       case ObTimestampNanoType: {
-        ObOTimestampData in_val;
         // ObTimestampTZType is 12 bytes, ObTimestampLTZType and ObTimestampNanoType is 10 bytes
         // so it needs to be distinguished
         ObDatum tmp_datum;
         tmp_datum.ptr_ = in_str.ptr();
         tmp_datum.pack_ = static_cast<uint32_t>(in_str.length());
-        if (OB_FAIL(common_construct_otimestamp(in_type, tmp_datum, in_val))) {
+        if (OB_FAIL(common_construct_otimestamp(in_type, tmp_datum, time_in_val))) {
           LOG_WARN("common_construct_otimestamp failed", K(ret));
         } else {
-          out_str.assign_ptr(reinterpret_cast<char*>(&in_val), static_cast<int32_t>(in_str.length()));
+          out_str.assign_ptr(reinterpret_cast<char*>(&time_in_val), static_cast<int32_t>(in_str.length()));
         }
         break;
       }
