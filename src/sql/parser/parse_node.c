@@ -720,7 +720,7 @@ int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char 
   } else {
     if (NULL == ctx->name_ && 0 == ctx->capacity_) {
       ctx->capacity_ = MAX_QUESTION_MARK;
-      // the errocde will be ignored here. TO BE FIXED.
+      // the errcode will be ignored here. TO BE FIXED.
       ctx->name_ = (char **)parse_malloc(sizeof(char*) * MAX_QUESTION_MARK, malloc_pool);
     }
     if (ctx->name_ != NULL) {
