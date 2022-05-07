@@ -8,9 +8,6 @@ ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 ob_define(OB_ENABLE_LIB_PCH ${OB_ENABLE_PCH})
 ob_define(OB_ENABLE_SERVER_PCH ${OB_ENABLE_PCH})
 
-find_program(OBJCOPY_BIN objcopy PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
-find_program(LD_BIN ld PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
-
 # share compile cache between different directories
 set(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
 
@@ -28,11 +25,29 @@ if(${ARCHITECTURE} STREQUAL "sw_64")
 endif()
 
 if (OB_USE_LLVM_LIBTOOLS)
+# create ld symlink to ld.lld for gcc
+if(EXISTS "${DEVTOOLS_DIR}/bin/ld.lld")
+    execute_process(COMMAND cmake -E create_symlink
+        "${DEVTOOLS_DIR}/bin/ld.lld" # Old name
+        "${CMAKE_SOURCE_DIR}/deps/3rd/compile/ld" # New name
+        )
+elseif(EXISTS "/usr/bin/ld.lld")
+    execute_process(COMMAND cmake -E create_symlink
+        "/usr/bin/ld.lld" # Old name
+        "${CMAKE_SOURCE_DIR}/deps/3rd/compile/ld" # New name
+        )
+endif()
+endif()
+
+if(OB_USE_LLVM_LIBTOOLS)
   # use llvm-ar llvm-ranlib llvm-objcopy ld.lld...
   set(_CMAKE_TOOLCHAIN_PREFIX llvm-)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
   find_program(LD_BIN ld.lld PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
   find_program(OBJCOPY_BIN llvm-objcopy PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
+else()
+  find_program(LD_BIN ld PATHS "${CMAKE_SOURCE_DIR}/deps/3rd/compile" "${DEVTOOLS_DIR}/bin" "/usr/bin")
+  find_program(OBJCOPY_BIN objcopy PATHS "${DEVTOOLS_DIR}/bin" "/usr/bin")
 endif()
 
 if (OB_USE_CCACHE)
