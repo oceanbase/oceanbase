@@ -117,7 +117,7 @@ int ObGrantStmt::add_role(const common::ObString &role)
 
 // Pust the first user_name and host_name into role[0] and role[1]
 // And the rest of user_names and host_names shall be saved in remain_roles
-// The remain_roles is used to keep compatibility with previouse logic
+// The remain_roles is used to keep compatibility with previous logic
 int ObGrantStmt::add_user(const common::ObString &user_name,
                           const common::ObString &host_name)
 {

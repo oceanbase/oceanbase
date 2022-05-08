@@ -103,7 +103,7 @@ int ObDCLResolver::check_password_strength(common::ObString &password, common::O
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the value of password policy is unexpectd", K(ret));
+    LOG_WARN("the value of password policy is unexpected", K(ret));
   }
   return ret;
 }
