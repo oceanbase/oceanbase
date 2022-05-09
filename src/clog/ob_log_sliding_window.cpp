@@ -119,7 +119,7 @@ int ObLogSlidingWindow::init(ObLogReplayEngineWrapper *replay_engine, ObILogEngi
     CLOG_LOG(
         WARN, "max_log_meta_info_ init failed", "partition_key", key, K(ret), K(last_replay_log_id), K(last_submit_ts));
   } else if (REPLICA_TYPE_LOGONLY != mm->get_replica_type() && !is_inner_table(key.get_table_id()) &&
-             OB_FAIL(init_aggre_buffer_(last_replay_log_id + 1, tenant_id, key.is_pg()))) {
+             OB_FAIL(init_aggre_buffer_(last_replay_log_id + 1, tenant_id, is_pg))) {
     CLOG_LOG(WARN, "init aggre buffer failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
