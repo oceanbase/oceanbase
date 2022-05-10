@@ -701,6 +701,9 @@ int ObStaticEngineExprCG::alloc_const_frame(
         ObDatum* datum = reinterpret_cast<ObDatum*>(frame_mem + j * DATUM_EVAL_INFO_SIZE);
         datum->ptr_ = frame_mem + rt_expr->res_buf_off_;
         datum->from_obj(tmp_obj);
+        if (0 == datum->len_) {
+          datum->ptr_ = NULL;
+        }
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(frame_ptrs.push_back(frame_mem))) {

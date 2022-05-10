@@ -2232,7 +2232,11 @@ int ObWhereSubQueryPullup::get_single_set_subquery(
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL) || expr->has_hierarchical_query_flag() ||
+  } else if (expr->has_flag(IS_WITH_ANY) ||
+             expr->has_flag(IS_WITH_ALL) || 
+             T_OP_EXISTS == expr->get_expr_type() ||
+             T_OP_NOT_EXISTS == expr->get_expr_type() ||
+             expr->has_hierarchical_query_flag() ||
              !expr->has_flag(CNT_SUB_QUERY)) {
   } else if (!expr->is_query_ref_expr()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
