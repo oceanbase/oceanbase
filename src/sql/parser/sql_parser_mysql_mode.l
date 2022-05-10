@@ -156,7 +156,7 @@ DESCRIBE                      { REPUT_TOKEN_NEG_SIGN(DESCRIBE); }
 DETERMINISTIC                 { REPUT_TOKEN_NEG_SIGN(DETERMINISTIC); }
 DIV                           { REPUT_TOKEN_NEG_SIGN(DIV); }
 DISTINCT                      { REPUT_TOKEN_NEG_SIGN(DISTINCT); }
-DISTINCTROW                   { REPUT_TOKEN_NEG_SIGN(DISTINCTROW); }
+DISTINCTROW                   { REPUT_TOKEN_NEG_SIGN(DISTINCT); }
 DOUBLE                        { REPUT_TOKEN_NEG_SIGN(DOUBLE); }
 DROP                          { REPUT_TOKEN_NEG_SIGN(DROP); }
 DUAL                          { REPUT_TOKEN_NEG_SIGN(DUAL); }
