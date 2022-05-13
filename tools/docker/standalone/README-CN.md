@@ -1,12 +1,12 @@
 # 如何使用这个镜像
 
-部署 OceanBase 数据库的方式有很多，使用 Docker 是其中较方便的一种。本仓库提供了 OceanBase 数据库的 Docker 镜像 oceanbase-standalone。oceanbase-standalone 是 OceanBase 数据库的单机镜像。默认会根据当前容器情况部署最大规格的实例，也可以通过环境变量指定MINI MODE部署最小规格实例。
+部署 OceanBase 数据库的方式有很多，使用 Docker 是其中较方便的一种。本仓库提供了 OceanBase 数据库的 Docker 镜像 [oceanbase-standalone](https://hub.docker.com/r/oceanbase/oceanbase-ce)。oceanbase-standalone 是 OceanBase 数据库的单机镜像。默认会根据当前容器情况部署最大规格的实例，也可以通过环境变量指定MINI MODE部署最小规格实例。
 
 ## 前提条件
 
 在部署 oceanbase-standalone 镜像之前，您需要确认以下信息：
 
-- 确保您的机器至少提供 2 核 10GB 以上的资源。
+- 确保您机器的资源至少可以运行 2 核 8GB 以上Docker。
 - 您的机器已经安装以下程序：
 
     应用程序 | 推荐版本 | 参考文档
@@ -20,10 +20,10 @@
 
 ```bash
 # 根据当前容器情况部署最大规格的实例
-docker run -p 2881:2881 --name obstandalone -d oceanbase/oceanbase-ce-standalone
+docker run -p 2881:2881 --name obstandalone -d oceanbase/oceanbase-ce
 
 # 部署最小规格实例
-docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce-standalone
+docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
 ```
 
 启动预计需要 2-5 分钟。执行以下命令，如果返回 `boot success!`，则启动成功。
@@ -85,6 +85,6 @@ OB_TENANT_NAME | test | OceanBase 数据库实例默认初始化的用户租户�
 oceanbase-standalone 镜像默认安装了 Sysbench 工具，并进行了简单配置。您可以依次执行以下命令，使用默认配置运行 Sysbench 脚本。
 
 ```bash
-docker exec -it obstandalone obd test sysbench [OB_CLUSTER_NAME]
+docker exec -it obstandalone obd test sysbench obcluster
 ```
 
