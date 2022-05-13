@@ -72,11 +72,11 @@ Variable name | Default value | Description
 MINI_MODE | false | If ture, will use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing.
 OB_HOME_PATH | /root/ob | Home path for an OceanBase Database instance.
 OB_MYSQL_PORT | 2881 | The MySQL protocol port for an OceanBase Database instance.
+OB_RPC_PORT | 2882 | The RPC communication port for an OceanBase Database instance.
 OB_DATA_DIR | empty | The directory for data storage. The default value is $OB_HOME_PATH/store.
 OB_REDO_DIR | empty | The directory for clog, ilog, and slog. The default value is the same as the OB_DATA_DIR value.
-OB_RPC_PORT | 2882 | The RPC communication port for an OceanBase Database instance.
 OB_ROOT_PASSWORD | empty |  The password for the system tenant in an OceanBase Database instance.
-OB_CLUSTER_NAME | mini-ce | Instance name for OceanBase Database instance. OBD uses this value as its cluster name.
+OB_CLUSTER_NAME |obcluster | Instance name for OceanBase Database instance. OBD uses this value as its cluster name.
 OB_TENANT_NAME | test | The default initialized general tenant name for an OceanBase Database instance.
 
 ## Run the Sysbench script
