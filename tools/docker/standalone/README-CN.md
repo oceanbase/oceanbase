@@ -1,6 +1,6 @@
 # 如何使用这个镜像
 
-部署 OceanBase 数据库的方式有很多，使用 Docker 是其中较方便的一种。本仓库提供了 OceanBase 数据库的 Docker 镜像 [oceanbase-standalone](https://hub.docker.com/r/oceanbase/oceanbase-ce)。oceanbase-standalone 是 OceanBase 数据库的单机镜像。默认会根据当前容器情况部署最大规格的实例，也可以通过环境变量指定MINI MODE部署最小规格实例。
+部署 [OceanBase](https://github.com/oceanbase/oceanbase) 数据库的方式有很多，使用 Docker 是其中较方便的一种。本仓库提供了 OceanBase 数据库的 Docker 镜像 [oceanbase-standalone](https://hub.docker.com/r/oceanbase/oceanbase-ce)。oceanbase-standalone 是 OceanBase 数据库的单机镜像。默认会根据当前容器情况部署最大规格的实例，也可以通过环境变量指定MINI MODE部署最小规格实例。
 
 ## 前提条件
 
@@ -71,10 +71,10 @@ mysql>
 ------- | ----- | ---
 MINI_MODE | false | OceanBase 数据库实例是否采用mini模式部署，该模式仅供研究、学习和评估使用，不适用于生产环境或性能测试场景。
 OB_HOME_PATH | /root/ob | OceanBase 数据库实例的部署路径。
-OB_DATA_DIR | empty | OceanBase 数据库使用的数据存储路径。默认在部署路径下的 `store` 目录
-OB_REDO_DIR | empty | OceanBase 数据库使用的clog，ilog，slog路径。默认与数据存储路径一致。
 OB_MYSQL_PORT | 2881 | OceanBase 数据库实例的 MySQL 协议端口。
 OB_RPC_PORT | 2882 | OceanBase 数据库实例的 RPC 通信端口。
+OB_DATA_DIR | empty | OceanBase 数据库使用的数据存储路径。默认在部署路径下的 `store` 目录
+OB_REDO_DIR | empty | OceanBase 数据库使用的clog，ilog，slog路径。默认与数据存储路径一致。
 OB_ROOT_PASSWORD | empty |  OceanBase 数据库实例 sys 租户的密码。
 OB_CLUSTER_NAME | obcluster | OceanBase 数据库实例名称，OBD 将使用这个名称作为集群名。
 OB_TENANT_NAME | test | OceanBase 数据库实例默认初始化的用户租户的名称。
