@@ -1,6 +1,6 @@
 # How to use this image
 
-You can deploy OceanBase databases by using many methods. But Docker is the easiest method. This repository gives you an [oceanbase-standalone](https://hub.docker.com/r/oceanbase/oceanbase-ce) image for deploying OceanBase database by using Docker. oceanbase-standalone is a standalone test image for OceanBase Database. By default, this image deploys an instance of the largest size according to the current container. You can also deploy a mini standalone instance through the environment variable MINI_MODE.
+You can deploy [OceanBase](https://github.com/oceanbase/oceanbase) databases by using many methods. But Docker is the easiest method. This repository gives you an [oceanbase-standalone](https://hub.docker.com/r/oceanbase/oceanbase-ce) image for deploying OceanBase database by using Docker. oceanbase-standalone is a standalone test image for OceanBase Database. By default, this image deploys an instance of the largest size according to the current container. You can also deploy a mini standalone instance through the environment variable MINI_MODE.
 
 ## Prerequisite
 
