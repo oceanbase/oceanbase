@@ -6,7 +6,7 @@ You can deploy OceanBase databases by using many methods. But Docker is the easi
 
 Before you deploy oceanbase-standalone image, do a check of these:
 
-- Make sure that your machine has at least 2 physical core and 10GB memory.
+- Make sure that your machine has enough resource that can execute at least 2 phycical core and 8GB memory.
 - Your machine has installed these applications:
 
     Application | Recommended version | Documentation
@@ -20,10 +20,10 @@ To start an OceanBase instance, run this command:
 
 ```bash
 # deploy an instance of the largest size according to the current container
-docker run -p 2881:2881 --name obstandalone -d oceanbase/oceanbase-ce-standalone
+docker run -p 2881:2881 --name obstandalone -d oceanbase/oceanbase-ce
 
 # deploy mini standalone instance
-docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce-standalone
+docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
 ```
 
 Two to five minutes are necessary for the boot procedure. To make sure that the boot procedure is successful, run this command:
@@ -84,6 +84,6 @@ OB_TENANT_NAME | test | The default initialized general tenant name for an Ocean
 oceanbase-standalone image installs the Sysbench tool by default. And the Sysbench tool is configured. You can run these commands in sequence to run the Sysbench script with the default configurations.
 
 ```bash
-docker exec -it obstandalone obd test sysbench [OB_CLUSTER_NAME]
+docker exec -it obstandalone obd test sysbench obcluster
 ```
 
