@@ -47,6 +47,7 @@ public:
   static const uint32_t NON_DURABLE_VALUE = 0;
   static const uint32_t MAX_VERSION = UINT8_MAX;  // 255
   static const uint32_t SERVER_SESSID_TAG = 1ULL << 31;
+  static const uint32_t LOCAL_SESSID_TAG = 0;  // used for sessions overflow
   typedef SessionInfoKey Key;
   explicit ObSQLSessionMgr(storage::ObPartitionService* partition_service)
       :  // null_callback_(),
@@ -121,11 +122,11 @@ public:
   }
   static int is_need_clear_sessid(const observer::ObSMConnection* conn, bool& is_need);
   int fetch_first_sessid();
-  int create_sessid(uint32_t& sessid);
+  //  in_mgr = false means fail back to local session allocating, avoid remote/distribute executing fail
+  int create_sessid(uint32_t& sessid, bool in_mgr = true);
   int mark_sessid_used(uint32_t sess_id);
   int mark_sessid_unused(uint32_t sess_id);
   // inline ObNullEndTransCallback &get_null_callback() { return null_callback_; }
-private:
   int create_session_by_version(
       uint64_t tenant_id, uint32_t sessid, uint64_t proxy_sessid, ObSQLSessionInfo*& sess_info, uint32_t& out_version);
   int get_avaiable_local_seq(uint32_t& local_seq);

@@ -175,7 +175,7 @@ public:
   HashMap* hashmap;
 
 private:
-  obsys::CThreadMutex mutex;
+  obsys::ThreadMutex mutex;
   int finished_count;
 };
 

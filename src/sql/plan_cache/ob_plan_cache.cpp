@@ -396,7 +396,8 @@ int ObPlanCache::get_plan(
 
   if (OB_SUCC(ret)) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
-    MEMCPY(pc_ctx.sql_ctx_.sql_id_, plan->stat_.bl_info_.sql_id_.ptr(), plan->stat_.bl_info_.sql_id_.length());
+    const ObString &plan_stat_sql_id = plan->stat_.sql_id_;
+    MEMCPY(pc_ctx.sql_ctx_.sql_id_, plan_stat_sql_id.ptr(), plan_stat_sql_id.length());
     uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
     bool read_only = false;
     if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
@@ -1568,8 +1569,8 @@ int ObPlanCache::get_ps_plan(
   if (OB_SUCC(ret)) {
     if (cache_obj->is_sql_crsr()) {
       ObPhysicalPlan *sql_plan = static_cast<ObPhysicalPlan *>(cache_obj);
-      MEMCPY(
-          pc_ctx.sql_ctx_.sql_id_, sql_plan->stat_.bl_info_.sql_id_.ptr(), sql_plan->stat_.bl_info_.sql_id_.length());
+      const ObString &plan_stat_sql_id = sql_plan->stat_.sql_id_;
+      MEMCPY(pc_ctx.sql_ctx_.sql_id_, plan_stat_sql_id.ptr(), plan_stat_sql_id.length());
     }
   }
 

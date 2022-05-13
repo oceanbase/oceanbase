@@ -368,9 +368,10 @@ int ObInnerSQLConnection::process_retry(
                                     (OB_NOT_MASTER == last_ret || OB_PARTITION_NOT_EXIST == last_ret);
   ObQueryRetryInfo& retry_info = inner_session_.get_retry_info_for_update();
   const bool non_blocking_refresh = false;
-  bool repeatable_stmt = (ObStmt::is_dml_stmt(result_set.get_stmt_type()) ||
-                          ObStmt::is_ddl_stmt(result_set.get_stmt_type(), result_set.has_global_variable()) ||
-                          ObStmt::is_dcl_stmt(result_set.get_stmt_type()));
+  bool repeatable_stmt =
+      (ObStmt::is_dml_stmt(result_set.get_stmt_type()) ||
+          ObStmt::is_ddl_stmt(result_set.get_stmt_type(), result_set.has_global_variable()) ||
+          ObStmt::is_dcl_stmt(result_set.get_stmt_type()) || ObStmt::is_execute_stmt(result_set.get_stmt_type()));
   int64_t now = ObTimeUtility::current_time();
   if (now >= abs_timeout_us) {
     ret = OB_TIMEOUT;
@@ -471,6 +472,13 @@ int ObInnerSQLConnection::process_retry(
     const int64_t sleep_time_us = 10 * 1000;  // 10ms
     need_retry = true;
     LOG_WARN("conncurrent update autoinc cache, need retry", K(ret), K(last_ret), K(retry_cnt));
+    THIS_WORKER.sched_wait();
+    usleep(static_cast<unsigned int>(sleep_time_us));
+    THIS_WORKER.sched_run();
+  } else if (repeatable_stmt && is_scheduler_thread_not_enough_err(last_ret)) {
+    const int64_t sleep_time_us = 10 * 1000; // 10ms
+    need_retry = true;
+    LOG_WARN("scheduler thread not enough, need retry", K(ret), K(last_ret), K(retry_cnt));
     THIS_WORKER.sched_wait();
     usleep(static_cast<unsigned int>(sleep_time_us));
     THIS_WORKER.sched_run();

@@ -15,11 +15,11 @@
 #include <sstream>
 #include "lib/oblog/ob_log.h"
 
-namespace tbutil {
-Time::Time() : _usec(0)
+namespace obutil {
+ObSysTime::ObSysTime() : _usec(0)
 {}
 
-Time Time::now(Clock clock)
+ObSysTime ObSysTime::now(Clock clock)
 {
   if (clock == Realtime) {
     struct timeval tv;
@@ -31,7 +31,7 @@ Time Time::now(Clock clock)
       throw SyscallException(__FILE__, __LINE__, errno);
 #endif
     }
-    return Time(tv.tv_sec * INT64_C(1000000) + tv.tv_usec);
+    return ObSysTime(tv.tv_sec * INT64_C(1000000) + tv.tv_usec);
   } else  // Monotonic
   {
     struct timespec ts;
@@ -43,26 +43,26 @@ Time Time::now(Clock clock)
       throw SyscallException(__FILE__, __LINE__, errno);
 #endif
     }
-    return Time(ts.tv_sec * INT64_C(1000000) + ts.tv_nsec / INT64_C(1000));
+    return ObSysTime(ts.tv_sec * INT64_C(1000000) + ts.tv_nsec / INT64_C(1000));
   }
 }
 
-Time Time::seconds(int64_t t)
+ObSysTime ObSysTime::seconds(int64_t t)
 {
-  return Time(t * INT64_C(1000000));
+  return ObSysTime(t * INT64_C(1000000));
 }
 
-Time Time::milliSeconds(int64_t t)
+ObSysTime ObSysTime::milliSeconds(int64_t t)
 {
-  return Time(t * INT64_C(1000));
+  return ObSysTime(t * INT64_C(1000));
 }
 
-Time Time::microSeconds(int64_t t)
+ObSysTime ObSysTime::microSeconds(int64_t t)
 {
-  return Time(t);
+  return ObSysTime(t);
 }
 
-Time::operator timeval() const
+ObSysTime::operator timeval() const
 {
   timeval tv;
   tv.tv_sec = static_cast<long>(_usec / 1000000);
@@ -70,37 +70,37 @@ Time::operator timeval() const
   return tv;
 }
 
-int64_t Time::toSeconds() const
+int64_t ObSysTime::toSeconds() const
 {
   return _usec / 1000000;
 }
 
-int64_t Time::toMilliSeconds() const
+int64_t ObSysTime::toMilliSeconds() const
 {
   return _usec / 1000;
 }
 
-int64_t Time::toMicroSeconds() const
+int64_t ObSysTime::toMicroSeconds() const
 {
   return _usec;
 }
 
-double Time::toSecondsDouble() const
+double ObSysTime::toSecondsDouble() const
 {
   return static_cast<double>(_usec) / 1000000.0;
 }
 
-double Time::toMilliSecondsDouble() const
+double ObSysTime::toMilliSecondsDouble() const
 {
   return static_cast<double>(_usec) / 1000.0;
 }
 
-double Time::toMicroSecondsDouble() const
+double ObSysTime::toMicroSecondsDouble() const
 {
   return static_cast<double>(_usec);
 }
 
-std::string Time::toDateTime() const
+std::string ObSysTime::toDateTime() const
 {
   time_t time = static_cast<long>(_usec / 1000000);
 
@@ -121,7 +121,7 @@ std::string Time::toDateTime() const
   return os.str();
 }
 
-std::string Time::toDuration() const
+std::string ObSysTime::toDuration() const
 {
   int64_t usecs = _usec % 1000000;
   int64_t secs = _usec / 1000000 % 60;
@@ -143,7 +143,7 @@ std::string Time::toDuration() const
   return os.str();
 }
 
-Time::Time(int64_t usec) : _usec(usec)
+ObSysTime::ObSysTime(int64_t usec) : _usec(usec)
 {}
 
-}  // end namespace tbutil
+}  // end namespace obutil

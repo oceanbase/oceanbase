@@ -82,7 +82,7 @@ int ObMySQLStatement::execute_update(int64_t& affected_rows)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), K_(sql_str), K(ret));
   } else {
-    int64_t begin = obsys::CTimeUtil::getMonotonicTime();
+    int64_t begin = obsys::ObSysTimeUtil::getMonotonicTime();
     if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
       ret = -mysql_errno(stmt_);
       LOG_WARN("fail to query server",
@@ -101,7 +101,7 @@ int ObMySQLStatement::execute_update(int64_t& affected_rows)
     } else {
       affected_rows = mysql_affected_rows(stmt_);
     }
-    int64_t end = obsys::CTimeUtil::getMonotonicTime();
+    int64_t end = obsys::ObSysTimeUtil::getMonotonicTime();
     LOG_TRACE("execute stat", "excute time(us)", (end - begin), "SQL:", sql_str_);
   }
   return ret;
@@ -115,7 +115,7 @@ ObMySQLResult* ObMySQLStatement::execute_query()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), K_(sql_str), K(ret));
   } else {
-    int64_t begin = obsys::CTimeUtil::getMonotonicTime();
+    int64_t begin = obsys::ObSysTimeUtil::getMonotonicTime();
     if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
       ret = -mysql_errno(stmt_);
       const int ER_LOCK_WAIT_TIMEOUT = -1205;
@@ -136,7 +136,7 @@ ObMySQLResult* ObMySQLStatement::execute_query()
       result = &result_;
     }
     conn_->set_last_error(ret);
-    int64_t end = obsys::CTimeUtil::getMonotonicTime();
+    int64_t end = obsys::ObSysTimeUtil::getMonotonicTime();
     LOG_TRACE("execute stat", "time(us)", (end - begin), "SQL", sql_str_, K(ret));
   }
   return result;

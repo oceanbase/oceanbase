@@ -23,14 +23,14 @@ namespace obsys {
 /*
  * get current time
  */
-int64_t CTimeUtil::getTime()
+int64_t ObSysTimeUtil::getTime()
 {
-  struct timeval t;
-  (void)gettimeofday(&t, NULL);
-  return (static_cast<int64_t>(t.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(t.tv_usec));
+    struct timeval t;
+    (void)gettimeofday(&t, NULL);
+    return (static_cast<int64_t>(t.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(t.tv_usec));
 }
 
-int64_t CTimeUtil::getMonotonicTime()
+int64_t ObSysTimeUtil::getMonotonicTime()
 {
   timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
@@ -40,7 +40,7 @@ int64_t CTimeUtil::getMonotonicTime()
 /**
  * format int into 20080101101010
  */
-char* CTimeUtil::timeToStr(time_t t, char* dest)
+char* ObSysTimeUtil::timeToStr(time_t t, char* dest)
 {
   struct tm r;
   memset(&r, 0, sizeof(r));
@@ -57,7 +57,7 @@ char* CTimeUtil::timeToStr(time_t t, char* dest)
  * format string to time(local)
  */
 /*
-int CTimeUtil::strToTime(char *str)
+int ObSysTimeUtil::strToTime(char *str)
 {
   if (str == NULL || strlen(str) != 14) {
     return 0;

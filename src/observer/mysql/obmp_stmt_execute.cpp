@@ -1341,6 +1341,9 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
       break;
     }
   }
+  if (OB_SUCC(ret) && share::is_mysql_mode()) {
+    param.set_collation_level(CS_LEVEL_COERCIBLE);
+  }
   return ret;
 }
 

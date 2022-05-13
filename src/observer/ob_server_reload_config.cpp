@@ -327,6 +327,7 @@ int ObServerReloadConfig::operator()()
   share::ObTaskController::get().set_log_rate_limit(GCONF.syslog_io_bandwidth_limit.get_value());
 
   if (nullptr != GCTX.omt_) {
+    GCTX.omt_->set_node_quota(common::get_cpu_count());
     GCTX.omt_->set_workers_per_cpu(GCONF.workers_per_cpu_quota.get_value());
   }
 
@@ -346,6 +347,10 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("fail to set location updater's thread cnt", KR(ret), K(location_thread_cnt));
     }
+  }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
   }
   return real_ret;
 }

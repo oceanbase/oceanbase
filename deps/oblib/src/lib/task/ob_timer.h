@@ -16,8 +16,8 @@
 #include <pthread.h>
 #include <typeinfo>
 #include "lib/time/Time.h"
-#include "lib/lock/Mutex.h"
-#include "lib/lock/Monitor.h"
+#include "lib/lock/mutex.h"
+#include "lib/lock/ob_monitor.h"
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/thread/thread_pool.h"
@@ -131,7 +131,7 @@ private:
   bool is_inited_;
   bool is_stopped_;
   bool is_destroyed_;
-  tbutil::Monitor<tbutil::Mutex> monitor_;
+  obutil::ObMonitor<obutil::Mutex> monitor_;
   Token tokens_[MAX_TASK_NUM];
   bool has_running_task_;
   bool has_running_repeat_task_;

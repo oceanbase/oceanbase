@@ -58,6 +58,7 @@ private:
   int check_log_archive_status();
   int check_tenant_backup_data_version(const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& can_backup);
   int prepare_backup_point_(const common::ObIArray<uint64_t> &tenant_ids, ObBackupInfoManager &info_manager);
+  int prepare_tenant_schema_version_(const uint64_t tenant_id);
 
 private:
   static const int64_t MAX_TENANT_BUCKET = 1024;

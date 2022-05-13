@@ -89,7 +89,7 @@ private:
   int64_t current_version_;
   char dump_path_[OB_MAX_FILE_NAME_LENGTH];
   ObReloadConfig& reload_config_func_;
-  tbutil::Mutex mutex_;
+  obutil::Mutex mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigManager);
 };
 

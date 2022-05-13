@@ -5067,7 +5067,7 @@ int ObNumber::mul_v3(const ObNumber& other, ObNumber& value, ObIAllocator& alloc
     int offset = 0;
     bool check_sum_len = true;
 
-    uint32_t tmp_res_digits[OB_CALC_BUFFER_SIZE];
+    uint32_t tmp_res_digits[OB_CALC_BUFFER_SIZE] = {0};
     uint32_t* res_digits = NULL;
     if (strict_mode) {
       res_digits = tmp_res_digits;

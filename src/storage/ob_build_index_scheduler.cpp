@@ -696,7 +696,8 @@ int ObBuildIndexScheduleTask::check_trans_end(bool& is_trans_end, int64_t& snaps
     STORAGE_LOG(INFO, "wait trans already end", K(index_id_));
   } else if (OB_FAIL(ObPartitionService::get_instance().check_schema_version_elapsed(
                  pkey_, schema_version_, index_id_, status.snapshot_version_))) {
-    if (OB_EAGAIN != ret) {
+    if (OB_EAGAIN != ret && OB_ENTRY_NOT_EXIST != ret && OB_PG_PARTITION_NOT_EXIST != ret &&
+        OB_PARTITION_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "fail to check schema version eclapsed", K(ret), K(pkey_), K(index_id_));
     } else {
       ret = OB_SUCCESS;
@@ -757,7 +758,7 @@ int ObBuildIndexScheduleTask::check_rs_snapshot_elapsed(const int64_t snapshot_v
       STORAGE_LOG(WARN, "fail to wait gts elapse", K(ret), K(pkey_), K(index_id_));
     }
   } else if (OB_FAIL(ObPartitionService::get_instance().check_ctx_create_timestamp_elapsed(pkey_, snapshot_version))) {
-    if (OB_EAGAIN == ret) {
+    if (OB_EAGAIN == ret || OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST) {
       ret = OB_SUCCESS;
     } else {
       STORAGE_LOG(WARN, "fail to check ctx create timestmap elapsed", K(ret), K(pkey_), K(index_id_));
@@ -823,6 +824,9 @@ int ObBuildIndexScheduleTask::copy_build_index_data(const bool is_leader)
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       need_copy = true;
+    } else if (OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+      // partition is no longer on this server
+      ret = OB_SUCCESS;
     } else {
       STORAGE_LOG(WARN, "fail to check replica has major sstable", K(ret), K(pkey_), K(index_id_));
     }
@@ -980,6 +984,7 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
     }
     ret = OB_EAGAIN;
   } else {
+    int tmp_ret = OB_SUCCESS;
     obrpc::ObServerCopyLocalIndexSSTableArg arg;
     ObAddr rs_addr;
     ObSchemaGetterGuard schema_guard;
@@ -990,12 +995,14 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
     arg.pkey_ = pkey_;
     arg.index_table_id_ = index_id_;
     arg.cluster_id_ = GCONF.cluster_id;
+    if (OB_SUCCESS != (tmp_ret = get_data_size(arg.data_size_))) {
+      arg.data_size_ = 0;
+      STORAGE_LOG(INFO, "fail to get data size, will use data table size to estimate", K(tmp_ret));
+    }
     if (arg.data_src_ == arg.dst_) {
       // if the source and destination are the same, it means that this replica builds the index sstable itself,
       // just retry the scheduling process will get the right way to next state
       ret = OB_EAGAIN;
-    } else if (OB_FAIL(get_data_size(arg.data_size_))) {
-      STORAGE_LOG(WARN, "fail to get data size", K(ret));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
                    extract_tenant_id(index_id_), schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(schema_version_));
@@ -1046,7 +1053,7 @@ int ObBuildIndexScheduleTask::get_candidate_source_replica(const bool need_refre
     // first check self
     if (OB_SUCC(ret) && !candidate_replica_.is_valid()) {
       if (OB_FAIL(ObPartitionService::get_instance().check_single_replica_major_sstable_exist(pkey_, index_id_))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
+        if (OB_ENTRY_NOT_EXIST != ret && OB_PG_PARTITION_NOT_EXIST != ret && OB_PARTITION_NOT_EXIST != ret) {
           STORAGE_LOG(WARN, "fail to check single replica major sstable exist", K(ret));
         } else {
           ret = OB_SUCCESS;
@@ -1097,7 +1104,11 @@ int ObBuildIndexScheduleTask::check_need_choose_replica(bool& need)
       STORAGE_LOG(WARN, "fail to get current build index server", K(ret), K(pkey_), K(index_id_));
     }
   } else if (OB_FAIL(ObPartitionService::get_instance().get_leader_curr_member_list(pkey_, member_list))) {
-    STORAGE_LOG(WARN, "fail to get leader current member list", K(ret), K(pkey_), K(index_id_));
+    if (OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "fail to get leader current member list", K(ret), K(pkey_), K(index_id_));
+    }
   } else if (!member_list.contains(build_index_server)) {
     need = true;
   }
@@ -1231,7 +1242,7 @@ int ObBuildIndexScheduleTask::check_build_index_end(bool& build_index_end, bool&
         need_copy = true;
         if (need_copy) {
           if (OB_FAIL(ObPartitionService::get_instance().check_single_replica_major_sstable_exist(pkey_, index_id_))) {
-            if (OB_ENTRY_NOT_EXIST == ret) {
+            if (OB_ENTRY_NOT_EXIST == ret || OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
             } else {
               STORAGE_LOG(WARN, "fail to check replica has major sstable", K(ret), K(pkey_), K(index_id_));
@@ -1258,7 +1269,11 @@ int ObBuildIndexScheduleTask::check_build_index_end(bool& build_index_end, bool&
         }
         if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
           if (OB_FAIL(ObPartitionService::get_instance().get_curr_member_list(pkey_, member_list))) {
-            STORAGE_LOG(WARN, "fail to get current member list", K(ret), K(pkey_), K(index_id_));
+            if (OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              STORAGE_LOG(WARN, "fail to get current member list", K(ret), K(pkey_), K(index_id_));
+            }
           } else if (!member_list.contains(build_index_server)) {
             if (OB_FAIL(rollback_state(WAIT_TRANS_END))) {
               STORAGE_LOG(WARN, "fail to rollback state", K(ret));
@@ -1313,7 +1328,11 @@ int ObBuildIndexScheduleTask::wait_choose_or_build_index_end(const bool is_leade
         STORAGE_LOG(WARN, "fail to check need schedule dag", K(ret), K(is_leader), K(pkey_), K(index_id_));
       } else if (need_schedule_dag) {
         if (OB_FAIL(schedule_dag())) {
-          STORAGE_LOG(WARN, "fail to schedule dag", K(ret), K(index_id_), K(pkey_));
+          if (OB_PG_PARTITION_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            STORAGE_LOG(WARN, "fail to schedule dag", K(ret), K(index_id_), K(pkey_));
+          }
         } else {
           ObTaskController::get().allow_next_syslog();
           STORAGE_LOG(INFO, "schedule build index dag", K(pkey_), K(index_id_));
@@ -1465,6 +1484,8 @@ int ObBuildIndexScheduleTask::process()
         STORAGE_LOG(INFO, "index schema has been deleted, skip build it", K(pkey_), K(index_id_));
         is_end = true;
       }
+    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
+      STORAGE_LOG(INFO, "index build is already completed, skip it", K(ret), K(index_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret));
     } else if (OB_FAIL(check_partition_need_build_index(pkey_, *index_schema, *table_schema, part_guard, need_build))) {
@@ -1857,6 +1878,8 @@ int ObRetryGhostIndexTask::process()
     STORAGE_LOG(WARN, "rs_rpc_proxy is null", K(ret));
   } else if (OB_FAIL(GCTX.rs_rpc_proxy_->submit_build_index_task(arg))) {
     STORAGE_LOG(WARN, "fail to submit build index task", K(ret), K(arg));
+  } else {
+    STORAGE_LOG(INFO, "retry index submit task success", K(index_id_));
   }
   return ret;
 }

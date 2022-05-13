@@ -165,7 +165,7 @@ public:
       const PartitionLogInfoArray& partition_log_info_arr, const int64_t commit_version, const bool have_prev_trans,
       clog::ObLogInfo& log_info, clog::ObISubmitLogCb*& cb);
   int get_prepare_version_if_prepared(bool& is_prepared, int64_t& prepare_version);
-  int get_prepare_version_before_logts(const int64_t log_ts, bool& has_prepared, int64_t& prepare_version);
+  int get_prepare_version_before_logts(const int64_t freeze_ts, bool& has_prepared, int64_t& prepare_version);
   int64_t get_snapshot_version() const;
   int64_t get_commit_version() const
   {

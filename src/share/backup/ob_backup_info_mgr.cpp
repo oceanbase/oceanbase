@@ -1662,7 +1662,8 @@ int ObBackupDestDetector::check_backup_dest()
 
   if (OB_SUCC(ret) && info.is_valid() && ObLogArchiveStatus::STOP != info.status_.status_) {
     if (is_bad) {
-      LOG_ERROR("backup dest is bad, skip check backup dest", K(info));
+      LOG_ERROR("backup dest is bad, skip check backup dest. Please check if nfs is mounted and granted W/R permission",
+          K(info));
     } else if (OB_FAIL(check_backup_dest_(info, is_bad))) {
       LOG_WARN("failed to check backup dest", K(ret), K(info));
     } else if (is_bad) {
@@ -1670,7 +1671,7 @@ int ObBackupDestDetector::check_backup_dest()
       if (0 == STRNCMP(info.backup_dest_, info_.backup_dest_, sizeof(info_.backup_dest_)) &&
           info.status_.round_ == info_.status_.round_) {
         is_bad_ = true;
-        LOG_ERROR("[BACKUP_MOUNT_FILE]backup mount file not file, mark backup dest bad", K(info));
+        LOG_ERROR("[BACKUP_MOUNT_FILE]backup mount file not found, mark backup dest bad", K(info));
       } else {
         FLOG_WARN("[BACKUP_MOUNT_FILE]backup info is changed, cannot set bad", K(info), K(info_));
       }

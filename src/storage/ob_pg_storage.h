@@ -540,6 +540,9 @@ private:
         } else if (OB_FAIL(map_.del(pkey))) {
           STORAGE_LOG(WARN, "del pg partition from map fail", K(pkey));
         }
+        if (OB_SUCC(ret)) {
+          STORAGE_LOG(INFO, "remove pg partition success", K(pkey), K(part));
+        }
       }
       return ret;
     }

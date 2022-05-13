@@ -882,11 +882,15 @@ int ObRSBuildIndexTask::calc_snapshot_version(const int64_t max_commit_version, 
   }
   if (OB_FAIL(ret)) {
     // nothing todo
-  } else if (OB_FAIL(ddl_service_->get_freeze_info_mgr().get_freeze_info(0L /*latest version*/, frozen_status))) {
-    LOG_WARN("fail to get freeze info", K(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS !=
+        (tmp_ret = ddl_service_->get_freeze_info_mgr().get_freeze_info(0L /*latest version*/, frozen_status))) {
+      LOG_WARN("fail to get freeze info", K(tmp_ret));
+    } else {
+      freeze_snapshot_version = frozen_status.frozen_timestamp_;
+    }
     const int64_t current_time = ObTimeUtility::current_time();
-    freeze_snapshot_version = frozen_status.frozen_timestamp_;
     snapshot_version = std::max(max_commit_version, gc_snapshot_version);
     snapshot_version = std::max(snapshot_version, freeze_snapshot_version);
     // we expected that the snapshot value is not far from the current timestamp

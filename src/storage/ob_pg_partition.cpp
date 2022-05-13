@@ -54,11 +54,13 @@ ObPGPartition::ObPGPartition()
 
 ObPGPartition::~ObPGPartition()
 {
+  FLOG_INFO("deconstruct ObPGPartition", K(this), K_(pkey));
   destroy();
 }
 
 void ObPGPartition::destroy()
 {
+  FLOG_INFO("destroy ObPGPartition", K(this), K_(pkey));
   pkey_.reset();
   if (NULL != cp_fty_) {
     if (NULL != storage_) {
@@ -123,6 +125,7 @@ int ObPGPartition::init(const common::ObPartitionKey& pkey, ObIPartitionComponen
   if (OB_FAIL(ret)) {
     destroy();
   }
+  FLOG_INFO("ObPGPartition::init", K(ret), K(pkey), K(this));
 
   return ret;
 }

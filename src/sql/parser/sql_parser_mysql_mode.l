@@ -156,7 +156,7 @@ DESCRIBE                      { REPUT_TOKEN_NEG_SIGN(DESCRIBE); }
 DETERMINISTIC                 { REPUT_TOKEN_NEG_SIGN(DETERMINISTIC); }
 DIV                           { REPUT_TOKEN_NEG_SIGN(DIV); }
 DISTINCT                      { REPUT_TOKEN_NEG_SIGN(DISTINCT); }
-DISTINCTROW                   { REPUT_TOKEN_NEG_SIGN(DISTINCTROW); }
+DISTINCTROW                   { REPUT_TOKEN_NEG_SIGN(DISTINCT); }
 DOUBLE                        { REPUT_TOKEN_NEG_SIGN(DOUBLE); }
 DROP                          { REPUT_TOKEN_NEG_SIGN(DROP); }
 DUAL                          { REPUT_TOKEN_NEG_SIGN(DUAL); }
@@ -435,7 +435,7 @@ NULL {
       check_value(yylval);
       yylval->node = node;
       node->str_value_ = parse_strdup(yytext, p->malloc_pool_, &(node->str_len_));
-      check_value(node->str_value_);
+      check_malloc(node->str_value_);
       int err_no = 0;
       node->value_ = ob_strntoll(node->str_value_, node->str_len_, 10, NULL, &err_no);
       if (ERANGE == err_no)
@@ -619,6 +619,7 @@ FALSE {
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
+    check_malloc((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -648,7 +649,7 @@ FALSE {
       if (*tmp_literal == NULL)
       {
         *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-        check_value(*tmp_literal);
+        check_malloc(*tmp_literal);
       }
       malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
       yylval->node->str_len_ = 0;
@@ -660,7 +661,7 @@ FALSE {
     if (*tmp_literal == NULL)
     {
       *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-      check_value(*tmp_literal);
+      check_malloc(*tmp_literal);
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
     yylval->node->str_len_ = 0;
@@ -679,8 +680,10 @@ FALSE {
   check_value(yylval);
   tmp_literal[yylval->node->str_len_] = '\0';
   yylval->node->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+  check_malloc(yylval->node->str_value_);
   yylval->node->text_len_ = yylloc->last_column - p->start_col_ + 1;
   yylval->node->raw_text_ = parse_strndup(p->input_sql_ + p->start_col_ - 1, yylval->node->text_len_, p->malloc_pool_);
+  check_malloc(yylval->node->raw_text_);
   if (IS_FAST_PARAMETERIZE) {
     STORE_PARAM_NODE();
   } else {
@@ -755,6 +758,7 @@ FALSE {
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
+    check_malloc((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -806,7 +810,7 @@ FALSE {
     } else {
       dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
     }
-    check_value(dup_value);
+    check_malloc(dup_value);
     yylval->node->str_value_ = dup_value;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
     return NAME_OB;
@@ -830,7 +834,7 @@ FALSE {
     if (NULL == *tmp_literal)
     {
       *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-      check_value(*tmp_literal);
+      check_malloc(*tmp_literal);
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
     yylval->node->str_len_ = 0;
@@ -865,6 +869,7 @@ FALSE {
     yylloc->first_column = p->start_col_;
     char *tmp_literal = p->tmp_literal_;
     tmp_literal[yylval->node->str_len_] = '\0';
+    CHECK_STR_LEN_MATCH(tmp_literal, yylval->node->str_len_);
 
     char *dup_value = NULL;
     if (p->is_not_utf8_connection_) {
@@ -874,7 +879,7 @@ FALSE {
     } else {
       dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
     }
-    check_value(dup_value);
+    check_malloc(dup_value);
     yylval->node->str_value_ = dup_value;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
     return NAME_OB;
@@ -899,7 +904,7 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
   if (len > 0) {
     int64_t dest_len = ob_parse_binary_len(len);
     char *dest = (char *)parse_malloc(dest_len, p->malloc_pool_);
-    check_value(dest);
+    check_malloc(dest);
     ob_parse_binary(src, len, dest);
     node->str_value_ = dest;
     node->str_len_ = dest_len;
@@ -935,7 +940,7 @@ B'([01])*'|0B([01])+ {
   {
     int64_t dest_len = ob_parse_bit_string_len(len);
     char *dest = (char*)parse_malloc(dest_len, p->malloc_pool_);
-    check_value(dest);
+    check_malloc(dest);
     ob_parse_bit_string(src, len, dest);
     node->str_value_ = dest;
     node->str_len_ = dest_len;
@@ -1049,7 +1054,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
     ParseResult *p = (ParseResult *)yyextra;
     malloc_new_node(node, p->malloc_pool_, T_HINT, 0);
     dest = parse_strdup(yytext + 3, p->malloc_pool_, &out_len);
-    check_value(dest);
+    check_malloc(dest);
     dest[out_len - 2] = '\0';
 
     node->str_value_ = dest;
@@ -1207,7 +1212,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
     } else {
       dup_value = parse_strdup(yytext, p->malloc_pool_, &out_len);
     }
-    check_value(dup_value);
+    check_malloc(dup_value);
     node->str_value_ = str_tolower(dup_value, strlen(dup_value));
     node->str_len_ = out_len;
     setup_token_pos_info(node, yylloc->first_column - 1, yylval->node->str_len_);
@@ -1305,7 +1310,7 @@ BEGIN(in_c_comment);
     char *dup_value = NULL;
     int64_t out_len = 0;
     dup_value = parse_strdup(yytext, p->malloc_pool_, &out_len);
-    check_value(dup_value);
+    check_malloc(dup_value);
     node->str_value_ = str_tolower(dup_value, strlen(dup_value));
     node->str_len_ = out_len;
     return STRING_VALUE;
@@ -1413,7 +1418,7 @@ BEGIN(in_c_comment);
   }
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-    check_value(yylval->node->raw_text_);
+    check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
     return QUESTIONMARK;
@@ -1427,7 +1432,7 @@ BEGIN(in_c_comment);
   yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-    check_value(yylval->node->raw_text_);
+    check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
     return QUESTIONMARK;
@@ -1444,7 +1449,7 @@ BEGIN(in_c_comment);
     yylval->node = node;
     /* skip '@@' */
     node->str_value_ = parse_strdup(yytext + 2, p->malloc_pool_, &(node->str_len_));
-    check_value(node->str_value_);
+    check_malloc(node->str_value_);
     //node->value_ = 2;
     node->value_ = 0;
   } else {
@@ -1464,6 +1469,7 @@ BEGIN(in_c_comment);
     yylval->node = node;
     /* skip '@' and quotes like '/"/` */
     node->str_value_ = parse_strdup(yytext + 1, p->malloc_pool_, &(node->str_len_));
+    check_malloc(node->str_value_);
     if (NULL != node->str_value_
         && node->str_len_ > 1
     		&& *(yytext + 1) == *(yytext + node->str_len_)
@@ -1511,7 +1517,7 @@ BEGIN(in_c_comment);
       } else {
         node->str_value_ = parse_strdup(yytext, p->malloc_pool_, &(node->str_len_));
       }
-      check_value(node->str_value_);
+      check_malloc(node->str_value_);
       setup_token_pos_info(node, yylloc->first_column - 1, node->str_len_);
       ret = NAME_OB;
       //CHECK_NODE_STRING_VALUE_ASCII(ret, node->str_value_, node->str_len_);

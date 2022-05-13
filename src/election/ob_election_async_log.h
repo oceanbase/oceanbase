@@ -17,8 +17,8 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <algorithm>
-#include "lib/lock/Mutex.h"
-#include "lib/lock/Monitor.h"
+#include "lib/lock/mutex.h"
+#include "lib/lock/ob_monitor.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_print_kv.h"
 #include "share/ob_errno.h"
@@ -65,7 +65,7 @@ private:
   int start_;
   int end_;
   Type elems_[size];
-  tbutil::Monitor<tbutil::Mutex> monitor_;
+  obutil::ObMonitor<obutil::Mutex> monitor_;
 };
 
 template <typename Type, int size>
@@ -80,7 +80,7 @@ int ObRingBuffer<Type, size>::push(const Type& elem, Type& old_elem, bool& overw
 {
   int ret = common::OB_SUCCESS;
 
-  tbutil::Monitor<tbutil::Mutex>::Lock guard(monitor_);
+  obutil::ObMonitor<obutil::Mutex>::Lock guard(monitor_);
   if (destroyed_) {
     ret = common::OB_NOT_INIT;
   } else if (is_full() && !overwrite) {
@@ -111,7 +111,7 @@ int ObRingBuffer<Type, size>::pop(Type& elem)
 {
   int ret = common::OB_SUCCESS;
 
-  tbutil::Monitor<tbutil::Mutex>::Lock guard(monitor_);
+  obutil::ObMonitor<obutil::Mutex>::Lock guard(monitor_);
   while (!destroyed_ && is_empty()) {
     monitor_.wait();
   }
@@ -128,9 +128,9 @@ int ObRingBuffer<Type, size>::pop(Type& elem)
 template <typename Type, int size>
 void ObRingBuffer<Type, size>::destroy()
 {
-  tbutil::Monitor<tbutil::Mutex>::Lock guard(monitor_);
+  obutil::ObMonitor<obutil::Mutex>::Lock guard(monitor_);
   if (!destroyed_) {
-    monitor_.notifyAll();
+    monitor_.notify_all();
     destroyed_ = true;
   }
 }

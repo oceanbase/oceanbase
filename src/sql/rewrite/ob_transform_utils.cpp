@@ -256,23 +256,28 @@ int ObTransformUtils::add_new_joined_table(ObTransformerCtx* ctx, ObDMLStmt& stm
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transform context is invalid", K(ret), K(ctx), K(stmt), K(left_table), K(right_table));
   } else {
-    JoinedTable* joined_table = static_cast<JoinedTable*>(ctx->allocator_->alloc(sizeof(JoinedTable)));
-    joined_table = new (joined_table) JoinedTable();
-    joined_table->type_ = TableItem::JOINED_TABLE;
-    joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
-    joined_table->joined_type_ = join_type;
-    joined_table->left_table_ = left_table;
-    joined_table->right_table_ = right_table;
-    if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
-      LOG_WARN("failed to push back join conditions", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
-      LOG_WARN("failed to add left table ids", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
-      LOG_WARN("failed to add right table ids", K(ret));
-    } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
-      LOG_WARN("failed to add joined table into stmt", K(ret));
+    JoinedTable *joined_table = static_cast<JoinedTable *>(ctx->allocator_->alloc(sizeof(JoinedTable)));
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
     } else {
-      new_join_table = joined_table;
+      joined_table = new (joined_table) JoinedTable();
+      joined_table->type_ = TableItem::JOINED_TABLE;
+      joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
+      joined_table->joined_type_ = join_type;
+      joined_table->left_table_ = left_table;
+      joined_table->right_table_ = right_table;
+      if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
+        LOG_WARN("failed to push back join conditions", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
+        LOG_WARN("failed to add left table ids", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
+        LOG_WARN("failed to add right table ids", K(ret));
+      } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
+        LOG_WARN("failed to add joined table into stmt", K(ret));
+      } else {
+        new_join_table = joined_table;
+      }
     }
   }
   return ret;
@@ -911,6 +916,18 @@ int ObTransformUtils::replace_equal_expr(const common::ObIArray<ObRawExpr*>& oth
         LOG_WARN("failed to replace general expr", K(ret));
       } else { /*do nothing*/
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+    const common::ObIArray<ObRawExpr *> &current_exprs, common::ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(replace_equal_expr(other_exprs, current_exprs, exprs.at(i)))) {
+      LOG_WARN("fail replace equal exprs", K(ret));
     }
   }
   return ret;
@@ -1726,7 +1743,7 @@ int ObTransformUtils::find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_e
 
 // 1. check is there null rejecting condition
 // 2. check is nullable column, and is not the right table of outer join
-int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable)
+int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope /* = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE */)
 {
   int ret = OB_SUCCESS;
   is_nullable = true;
@@ -1740,12 +1757,14 @@ int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool
     LOG_WARN("failed to check is not null column", K(ret));
   } else if (not_null_col) {
     is_nullable = false;
-  } else if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
-    LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
-    LOG_WARN("failed to check has null reject condition", K(ret));
-  } else if (has_null_reject) {
-    is_nullable = false;
+  } else if (nullable_scope >= ObTransformUtils::NULLABLE_SCOPE::NS_WHERE) {
+    if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
+      LOG_WARN("failed to get equal set conditions", K(ret));
+    } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
+      LOG_WARN("failed to check has null reject condition", K(ret));
+    } else if (has_null_reject) {
+      is_nullable = false;
+    }
   }
   return ret;
 }

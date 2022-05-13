@@ -1422,33 +1422,37 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header
     }
   }
 
-  if (OB_SUCCESS == ret && !log_task_need_update && standby_need_send_follower) {
-    // log_task no need be updated, but standby_leader need transfer it to followers
-    int64_t pos = 0;
-    if (OB_FAIL(new_log.generate_entry(header, buff))) {
-      CLOG_LOG(ERROR, "generate_entry failed", K_(partition_key), K(ret));
-    } else if (NULL != serialize_buff) {
-      // serialize_buff is expected to be empty
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "serialize_buff is not null, unexpected", K_(partition_key), K(ret));
-    } else {
-      int64_t serialize_size = new_log.get_serialize_size();
-      if (NULL == (serialize_buff = static_cast<char *>(alloc_mgr_->ge_alloc(serialize_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        CLOG_LOG(ERROR, "alloc failed", K(ret), K_(partition_key));
-      } else if (OB_FAIL(new_log.serialize(serialize_buff, serialize_size, pos))) {
-        CLOG_LOG(WARN, "serialize log failed", K_(partition_key), K(ret));
-      } else {
-        // do nothing
-      }
-    }
-  }
-
   bool is_log_majority = false;
   if (locked) {
     is_log_majority = (log_task->is_local_majority_flushed() || log_task->is_log_confirmed());
     log_task->unlock();
     locked = false;
+  }
+
+  char *standby_serialize_buff = NULL;
+  if (OB_SUCCESS == ret && !log_task_need_update && standby_need_send_follower) {
+    // log_task no need be updated, but standby_leader need transfer it to followers
+    int64_t pos = 0;
+    if (OB_FAIL(new_log.generate_entry(header, buff))) {
+      CLOG_LOG(ERROR, "generate_entry failed", K_(partition_key), K(ret));
+    } else {
+      const int64_t serialize_size = new_log.get_serialize_size();
+      if (NULL == (standby_serialize_buff = static_cast<char *>(alloc_mgr_->ge_alloc(serialize_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        CLOG_LOG(ERROR, "alloc failed", K(ret), K_(partition_key));
+      } else if (OB_FAIL(new_log.serialize(standby_serialize_buff, serialize_size, pos))) {
+        CLOG_LOG(WARN, "serialize log failed", K_(partition_key), K(ret));
+      } else if (send_slave || cascading_mgr_->has_valid_child() || cascading_mgr_->has_valid_async_standby_child() ||
+                 cascading_mgr_->has_valid_sync_standby_child()) {
+        if (OB_SUCCESS !=
+            (tmp_ret = submit_log_to_net_(
+                 new_log.get_header(), standby_serialize_buff, new_log.get_serialize_size(), is_log_majority))) {
+          CLOG_LOG(WARN, "submit_to_net failed", K(tmp_ret), K_(partition_key), K(header));
+        }
+      } else {
+        // do nothing
+      }
+    }
   }
 
   if (OB_SUCC(ret) && is_confirmed) {
@@ -1489,7 +1493,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header
   }
 
   if (OB_SUCC(ret)) {
-    if ((log_task_need_update || standby_need_send_follower)  // ensure new_log is valid
+    if (log_task_need_update  // ensure new_log is valid
         && (send_slave || cascading_mgr_->has_valid_child() || cascading_mgr_->has_valid_async_standby_child() ||
                cascading_mgr_->has_valid_sync_standby_child())) {
       // send it to member_list/children
@@ -1525,9 +1529,9 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header
     ref = NULL;
   }
 
-  if (NULL != serialize_buff) {
-    alloc_mgr_->ge_free(serialize_buff);
-    serialize_buff = NULL;
+  if (NULL != standby_serialize_buff) {
+    alloc_mgr_->ge_free(standby_serialize_buff);
+    standby_serialize_buff = NULL;
   }
   return ret;
 }

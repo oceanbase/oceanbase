@@ -107,6 +107,7 @@ ObPartitionGroup::ObPartitionGroup()
 
 ObPartitionGroup::~ObPartitionGroup()
 {
+  FLOG_INFO("deconstruct ObPartitionGroup", K(this), K_(pkey));
   destroy();
 }
 
@@ -3148,7 +3149,7 @@ int ObPartitionGroup::check_can_do_merge(bool& can_merge, bool& need_merge)
 ObReplicaType ObPartitionGroup::get_replica_type() const
 {
   int tmp_ret = OB_SUCCESS;
-  ObReplicaType replica_type;
+  ObReplicaType replica_type = ObReplicaType::REPLICA_TYPE_MAX;
 
   if (OB_SUCCESS != (tmp_ret = pg_storage_.get_replica_type(replica_type))) {
     STORAGE_LOG(WARN, "get replica_type error", K(tmp_ret), K_(pkey), K(replica_type));

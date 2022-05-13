@@ -3305,7 +3305,7 @@ int ObJsonBin::remove_v0(size_t index)
   ObJsonNodeType node_type = this->json_type();
   ObJBVerType ver_type = this->get_vertype();
   // 1. move into element index, get used bytes
-  uint64_t used_bytes;
+  uint64_t used_bytes = 0;
   if (OB_FAIL(this->element(index))) {
     LOG_WARN("failed to get element ", K(index), K(ret));
   } else {

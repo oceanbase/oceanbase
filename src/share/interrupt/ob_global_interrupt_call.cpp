@@ -97,6 +97,14 @@ ObGlobalInterruptManager* ObGlobalInterruptManager::getInstance()
   return instance_;
 }
 
+void ObInterruptChecker::clear_interrupt_status()
+{
+  if (ref_count_ > 0) {
+    LIB_LOG(ERROR, "invlid interrupt ref count");
+  }
+  interrupted_ = false;
+}
+
 int ObGlobalInterruptManager::init(const common::ObAddr& local, ObInterruptRpcProxy* rpc_proxy)
 {
   int ret = OB_SUCCESS;

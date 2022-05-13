@@ -15,7 +15,7 @@
 #include "common/ob_clock_generator.h"
 #include "election/ob_election_async_log.h"
 #include "lib/net/ob_addr.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "election/ob_election_base.h"
 
 namespace oceanbase {
@@ -55,7 +55,7 @@ TEST_F(TestObElectionBase, get_self_addr)
       if (ifa->ifa_addr->sa_family == AF_INET) {
         const char *dev = ifa->ifa_name;
         EXPECT_EQ(OB_SUCCESS, get_self_addr(addr, dev, port));
-        uint32_t ip = obsys::CNetUtil::getLocalAddr(dev);
+        uint32_t ip = obsys::ObNetUtil::get_local_addr_ipv4(dev);
         EXPECT_EQ(ip, addr.get_ipv4());
         EXPECT_EQ(port, addr.get_port());
       }

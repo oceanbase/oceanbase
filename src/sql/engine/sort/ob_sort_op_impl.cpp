@@ -1521,6 +1521,10 @@ int ObInMemoryTopnSortImpl::sort_rows()
     LOG_DEBUG("in memory topn sort check topn heap", K_(heap));
     SortStoredRow** first_row = &heap_.top();
     std::sort(first_row, first_row + heap_.count(), ObSortOpImpl::CopyableComparer(cmp_));
+    if (OB_SUCCESS != cmp_.ret_) {
+      ret = cmp_.ret_;
+      LOG_WARN("compare failed", K(ret));
+    }
   }
   return ret;
 }

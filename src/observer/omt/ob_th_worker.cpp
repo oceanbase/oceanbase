@@ -392,6 +392,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
               ret = pm->set_tenant_ctx(tenant_->id(), ObCtxIds::DEFAULT_CTX_ID);
             }
           }
+          CLEAR_INTERRUPTABLE();
           set_th_worker_thread_name(tenant_->id());
           lib::ContextTLOptGuard guard(true);
           lib::ContextParam param;

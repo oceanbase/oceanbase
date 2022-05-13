@@ -103,6 +103,9 @@ void iter_task(task_cb cb, void *data1, void *data2, int64_t exclude_tid)
     char d_name[];
   };
   int fd = ::open("/proc/self/task/", O_DIRECTORY |  O_RDONLY);
+  DEFER(
+    CLOSE(fd);
+  );
   if (-1 == fd) {
   } else {
     int tgid = getpid();

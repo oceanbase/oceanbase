@@ -30,7 +30,7 @@ public:
   int64_t round0_;
   int64_t value0_;
   ObLatch lock0_;
-  obsys::CRWLock lock_;
+  obsys::ObRWLock lock_;
   pthread_mutex_t mutex_;
 };
 
@@ -70,7 +70,7 @@ void TestLatchStress::run(obsys::CThread* thread, void* arg)
       // ASSERT_EQ(0, ret);
       // pthread_mutex_unlock(&mutex_);
 
-      // obsys::CWLockGuard guard(lock_);
+      // obsys::ObWLockGuard guard(lock_);
       // ASSERT_EQ(OB_SUCCESS, ret);
     }
   } else {
@@ -91,7 +91,7 @@ void TestLatchStress::run(obsys::CThread* thread, void* arg)
       // ASSERT_EQ(0, ret);
       // pthread_mutex_unlock(&mutex_);
 
-      // obsys::CRLockGuard guard(lock_);
+      // obsys::ObRLockGuard guard(lock_);
       // ASSERT_EQ(OB_SUCCESS, ret);
     }
   }

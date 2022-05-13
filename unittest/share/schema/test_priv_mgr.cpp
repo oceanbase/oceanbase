@@ -37,7 +37,7 @@ protected:
 
 void TestPrivMgr::SetUp()
 {
-  // obsys::CConfig c1;
+  // obsys::ObSysConfig c1;
   // priv_mgr_.init();
 }
 

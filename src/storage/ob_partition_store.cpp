@@ -137,6 +137,7 @@ int ObPartitionStore::init(
 {
   int ret = OB_SUCCESS;
   ObMultiVersionTableStore *table_store = nullptr;
+  const int64_t page_size = 1024L;
 
   freeze_info_mgr_ = &freeze_info_mgr;
   if (is_inited_) {
@@ -145,6 +146,8 @@ int ObPartitionStore::init(
   } else if (!meta.is_valid() || OB_ISNULL(pg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(meta), KP(pg));
+  } else if (OB_FAIL(allocator_.init(page_size, lib::ObLabel("TableStoreMap")))) {
+    LOG_WARN("fail to init allocator", K(ret));
   } else if (OB_FAIL(create_new_store_map_(store_map_))) {
     LOG_WARN("failed to create table_store_map", K(ret));
   } else {
@@ -4081,10 +4084,7 @@ int ObPartitionStore::create_new_store_map_(TableStoreMap *&new_store_map)
   int ret = OB_SUCCESS;
   new_store_map = nullptr;
   ObMemAttr attr(pkey_.get_tenant_id(), ObModIds::OB_PARTITION_STORE, ObCtxIds::STORAGE_LONG_TERM_META_CTX_ID);
-  const int64_t page_size = 1024L;
-  if (OB_FAIL(allocator_.init(page_size, lib::ObLabel("TableStoreMap")))) {
-    LOG_WARN("fail to init allocator", K(ret));
-  } else if (OB_ISNULL(new_store_map = OB_NEW(TableStoreMap, attr))) {
+  if (OB_ISNULL(new_store_map = OB_NEW(TableStoreMap, attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate table store map", K(ret));
   } else if (OB_FAIL(new_store_map->create(TABLE_STORE_BUCKET_NUM, &allocator_))) {

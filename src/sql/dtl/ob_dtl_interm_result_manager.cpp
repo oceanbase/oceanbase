@@ -185,9 +185,6 @@ int ObDTLIntermResultManager::insert_interm_result_info(ObDTLIntermResultKey& ke
 void ObDTLIntermResultManager::free_interm_result_info(ObDTLIntermResultInfo& result_info)
 {
   if (result_info.is_store_valid()) {
-    if (!result_info.is_read_) {
-      DTL_IR_STORE_DO(result_info, finish_add_row, true);
-    }
     DTL_IR_STORE_DO(result_info, reset);
     if (NULL != result_info.row_store_) {
       result_info.row_store_->~ObChunkRowStore();

@@ -415,7 +415,7 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat /* = 
 
     if (schedule) {
       update_task_.version_ = version;
-      update_task_.scheduled_time_ = obsys::CTimeUtil::getMonotonicTime();
+      update_task_.scheduled_time_ = obsys::ObSysTimeUtil::getMonotonicTime();
       if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, update_task_, 0, false))) {
         LOG_ERROR("Update local config failed", K(ret));
       } else {

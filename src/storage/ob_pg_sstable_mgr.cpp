@@ -968,8 +968,10 @@ int ObPGSSTableMgr::GetCleanOutLogIdFunctor::operator()(ObITable& table, bool& i
   if (table.get_ref() > 0 && table.is_multi_version_minor_sstable()) {
     if (table.is_complement_minor_sstable()) {
       min_complement_log_ts_ = std::min(min_complement_log_ts_, table.get_end_log_ts());
+    } else if (OB_FAIL(clean_out_log_ts_.push_back(table.get_end_log_ts()))) {
+      LOG_WARN("push into the clean out log ts array failed", K(ret));
     } else {
-      clean_out_log_ts_.push_back(table.get_end_log_ts());
+      // do nothing
     }
   }
   return ret;

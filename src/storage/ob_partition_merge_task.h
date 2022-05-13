@@ -364,11 +364,13 @@ public:
   virtual int process() override;
 
 private:
-  static const int64_t FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL = 1000L * 1000L * 3600LL;  // 6h
-  static const int64_t RETRY_WRITE_CHECKPOINT_MIN_INTERVAL = 1000L * 1000L * 300L;     // 5 minutes
-  // Average replay time of 1 slog is 100us. Total replay time should less than 1 minute.
-  // So once log count exceed 50% * (60000000 / 100) = 300000, try to write a checkpoint.
-  static const int64_t MIN_WRITE_CHECKPOINT_LOG_CNT = 300000;
+  int need_write_ckpt(const int64_t checkpoint_version, const int64_t frozen_version,
+      const oceanbase::common::ObLogCursor &cur_cursor, const oceanbase::common::ObLogCursor &slog_cursor,
+      int64_t &offset_interval, bool &need_ckpt);
+
+private:
+  static const int64_t RETRY_WRITE_CHECKPOINT_MIN_INTERVAL = 1000L * 1000L * 300L;  // 5 minutes
+  static const int64_t MIN_WRITE_CHECKPOINT_OFFSET_INTERVAL = 32 << 20;
 
   bool is_inited_;
   int64_t frozen_version_;

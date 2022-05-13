@@ -71,9 +71,12 @@ int CoRoutine::resume(CoRoutine& current)
 
   running_tsc_ = co_rdtscp();
   assert(cc_.get_ctx());
+#ifndef OB_USE_ASAN
   transfer_t transfer = jump_fcontext(cc_.get_ctx(), this);
   cc_.get_ctx() = transfer.fctx;
-
+#else
+  start_without_jump();
+#endif
   return ret;
 }
 
@@ -140,6 +143,24 @@ void CoRoutine::__start(transfer_t from)
   jump_fcontext(sched.get_context().get_ctx(), &routine);
   // routine exit, jump to sched, will not reach here again
   OB_ASSERT(0);
+}
+
+void CoRoutine::start_without_jump()
+{
+  int ret = OB_SUCCESS;
+  CoRoutine &routine = *this;
+  routine.idx_ = alloc_coidx();
+  routine.set_run_status(RunStatus::RUNNING);
+  routine.at_create();
+  MemoryContext *mem_context = GET_TSI0(MemoryContext);
+  assert(mem_context != nullptr && *mem_context != nullptr);
+  WITH_CONTEXT(*mem_context)
+  {
+    routine.run();
+  }
+  routine.at_exit();
+  free_coidx(routine.idx_);
+  routine.set_run_status(RunStatus::FINISHED);
 }
 
 int CoRoutine::at_create()

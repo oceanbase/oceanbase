@@ -1039,7 +1039,7 @@ int ObBasicSessionInfo::inner_get_sys_var(const ObString& sys_var_name, ObBasicS
     LOG_ERROR("got store_idx is invalid", K(ret), K(store_idx));
   } else if (OB_ISNULL(sys_vars_[store_idx])) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(sys_var_name), K(lbt()));
+    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(sys_var_name));
   } else {
     sys_var = sys_vars_[store_idx];
   }
@@ -1060,7 +1060,7 @@ int ObBasicSessionInfo::inner_get_sys_var(const ObSysVarClassType sys_var_id, Ob
     LOG_ERROR("got store_idx is invalid", K(ret), K(store_idx));
   } else if (OB_ISNULL(sys_vars_[store_idx])) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(lbt()));
+    LOG_WARN("sys var is NULL", K(ret), K(store_idx));
   } else {
     sys_var = sys_vars_[store_idx];
   }

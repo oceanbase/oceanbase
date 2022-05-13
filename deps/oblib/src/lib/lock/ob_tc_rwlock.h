@@ -174,7 +174,7 @@ public:
       ATOMIC_STORE(&write_id_, itid);
       get_tcref().sync(&read_ref_);
       int64_t ttl = 0;
-      while (0 != ATOMIC_LOAD(&read_ref_) && (ttl = abs_timeout_us - obsys::CTimeUtil::getTime()) >= 0) {
+      while (0 != ATOMIC_LOAD(&read_ref_) && (ttl = abs_timeout_us - obsys::ObSysTimeUtil::getTime()) >= 0) {
         lcond_.wait(std::min(ttl, (int64_t)10 * 1000));
       }
       if (ttl < 0) {

@@ -14,8 +14,8 @@
 #define OCEANBASE_TRANSACTION_OB_TRANS_COND_
 
 #include <stdint.h>
-#include "lib/lock/Monitor.h"
-#include "lib/lock/Mutex.h"
+#include "lib/lock/ob_monitor.h"
+#include "lib/lock/mutex.h"
 #include "share/ob_define.h"
 
 namespace oceanbase {
@@ -48,7 +48,7 @@ private:
 
 private:
   bool finished_;
-  mutable tbutil::Monitor<tbutil::Mutex> monitor_;
+  mutable obutil::ObMonitor<obutil::Mutex> monitor_;
   int result_;
 };
 

@@ -102,11 +102,17 @@ inline int call_with_new_stack(SContext& sctx)
     ret;                                                                   \
   })
 #else
-#define SMART_CALL(func)  \
-  ({                      \
-    int ret = OB_SUCCESS; \
-    ret = func;           \
-    ret;                  \
+#define SMART_CALL(func)                                                   \
+  ({                                                                       \
+    int ret = OB_SUCCESS;                                                  \
+    bool is_overflow = false;                                              \
+    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) { \
+    } else if (!is_overflow) {                                             \
+      ret = func;                                                          \
+    } else {                                                               \
+      ret = OB_STACK_OVERFLOW;                                             \
+    }                                                                      \
+    ret;                                                                   \
   })
 #endif
 }  // end of namespace common

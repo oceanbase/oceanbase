@@ -14,7 +14,7 @@
 
 #include "ob_tenant_config.h"
 #include "common/ob_common_utility.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "lib/oblog/ob_log.h"
 #include "share/config/ob_server_config.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -122,7 +122,7 @@ int ObTenantConfig::read_config()
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
-  if (!server.set_ipv4_addr(ntohl(obsys::CNetUtil::getLocalAddr(GCONF.devname)), 0)) {
+  if (!server.set_ipv4_addr(ntohl(obsys::ObNetUtil::get_local_addr_ipv4(GCONF.devname)), 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
@@ -239,7 +239,7 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
   } else if (version < current_version_) {
     LOG_WARN("Local tenant config is newer than rs, weird", K_(current_version), K(version));
   } else if (version > current_version_) {
-    if (!mutex_.tryLock()) {
+    if (!mutex_.trylock()) {
       LOG_DEBUG("Processed by other thread!");
     } else {
       if (version > newest_version_) {
@@ -247,7 +247,7 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
         newest_version_ = version;
         update_task_.update_local_ = true;
         update_task_.version_ = version;
-        update_task_.scheduled_time_ = obsys::CTimeUtil::getMonotonicTime();
+        update_task_.scheduled_time_ = obsys::ObSysTimeUtil::getMonotonicTime();
         schedule_task = true;
       } else if (version < newest_version_) {
         LOG_WARN("Receive weird tenant config version", K_(current_version), K_(newest_version), K(version));

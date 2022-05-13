@@ -11,9 +11,9 @@
  */
 
 #include <execinfo.h>
-#include "lib/lock/Monitor.h"
+#include "lib/lock/ob_monitor.h"
 #include "lib/net/ob_addr.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "ob_election_base.h"
 #include "ob_election_async_log.h"
 #include "share/config/ob_server_config.h"
@@ -21,7 +21,7 @@
 namespace oceanbase {
 
 using namespace common;
-using namespace tbutil;
+using namespace obutil;
 
 namespace election {
 // TODO need check versions
@@ -43,12 +43,12 @@ int get_self_addr(ObAddr& self, const char* dev, const int32_t port)
     ret = OB_INVALID_ARGUMENT;
   } else {
     if (GCONF.use_ipv6) {
-      if (OB_FAIL(obsys::CNetUtil::getLocalAddr6(dev, ipv6, sizeof(ipv6)))) {
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv6(dev, ipv6, sizeof(ipv6)))) {
         ELECT_ASYNC_LOG(WARN, "get local ipv6 error", K(dev));
         ret = OB_INVALID_ARGUMENT;
       }
     } else {
-      if (0 == (ipv4 = obsys::CNetUtil::getLocalAddr(dev))) {
+      if (0 == (ipv4 = obsys::ObNetUtil::get_local_addr_ipv4(dev))) {
         ELECT_ASYNC_LOG(WARN, "get local ipv4 error", K(dev));
         ret = OB_INVALID_ARGUMENT;
       } else if (!server.set_ipv4_addr(ipv4, port)) {
@@ -153,8 +153,8 @@ const char* ObElectionStageName(ObElectionStage stage)
 
 void msleep(int64_t ms)
 {
-  tbutil::Monitor<tbutil::Mutex> monitor_;
-  (void)monitor_.timedWait(Time(ms * 1000));
+  obutil::ObMonitor<obutil::Mutex> monitor_;
+  (void)monitor_.timed_wait(ObSysTime(ms * 1000));
 }
 
 }  // namespace election

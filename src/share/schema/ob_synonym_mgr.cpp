@@ -240,7 +240,6 @@ ObSimpleSynonymSchema& ObSimpleSynonymSchema::operator=(const ObSimpleSynonymSch
 
 void ObSimpleSynonymSchema::reset()
 {
-  ObSchema::reset();
   tenant_id_ = OB_INVALID_ID;
   synonym_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
@@ -249,6 +248,7 @@ void ObSimpleSynonymSchema::reset()
   object_database_id_ = OB_INVALID_ID;
   synonym_name_.reset();
   object_name_.reset();
+  ObSchema::reset();
 }
 
 bool ObSimpleSynonymSchema::is_valid() const

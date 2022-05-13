@@ -103,7 +103,7 @@ public:
 
 private:
   static ObMockPacketQueueThread* instance_;
-  static tbutil::Mutex locker_;
+  static obutil::Mutex locker_;
 };
 
 }  // namespace sql

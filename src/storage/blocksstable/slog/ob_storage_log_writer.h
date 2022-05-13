@@ -95,6 +95,11 @@ public:
 
   int delete_log_file(int64_t file_id);
   int get_using_disk_space(int64_t &using_space) const;
+  int64_t get_file_size() const
+  {
+    return file_size_;
+  }
+
   bool is_disk_warning() const;
 
 private:

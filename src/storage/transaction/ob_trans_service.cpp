@@ -7740,7 +7740,7 @@ int ObTransService::get_min_uncommit_prepare_version(const ObPartitionKey& parti
  * get minimum prepare version of transaction whose commit version greate than lg_ts
  * */
 int ObTransService::get_min_prepare_version(
-    const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version)
+    const ObPartitionKey &partition, const int64_t freeze_ts, int64_t &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -7753,13 +7753,13 @@ int ObTransService::get_min_prepare_version(
   } else if (!partition.is_valid()) {
     TRANS_LOG(WARN, "invalid argument", K(partition));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(part_trans_ctx_mgr_.get_min_prepare_version(partition, log_ts, min_prepare_version))) {
-    TRANS_LOG(WARN, "ObPartTransCtxMgr get min prepare version error", KR(ret), K(partition), K(log_ts));
+  } else if (OB_FAIL(part_trans_ctx_mgr_.get_min_prepare_version(partition, freeze_ts, min_prepare_version))) {
+    TRANS_LOG(WARN, "ObPartTransCtxMgr get min prepare version error", KR(ret), K(partition), K(freeze_ts));
   } else if (min_prepare_version <= 0) {
     TRANS_LOG(ERROR, "invalid min prepare version, unexpected error", K(partition), K(min_prepare_version));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    TRANS_LOG(DEBUG, "get min prepare version success", K(partition), K(log_ts), K(min_prepare_version));
+    TRANS_LOG(DEBUG, "get min prepare version success", K(partition), K(freeze_ts), K(min_prepare_version));
   }
 
   return ret;

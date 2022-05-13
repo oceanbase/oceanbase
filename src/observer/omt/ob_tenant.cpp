@@ -20,6 +20,7 @@
 #include "lib/stat/ob_session_stat.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/px/ob_px_admission.h"
+#include "share/interrupt/ob_global_interrupt_call.h"
 #include "ob_th_worker.h"
 #include "ob_worker_pool.h"
 #include "ob_multi_tenant.h"
@@ -133,8 +134,9 @@ void ObPxPool::run1()
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::WORK_AREA);
   }
+  CLEAR_INTERRUPTABLE();
   ObCgroupCtrl* cgroup_ctrl = GCTX.cgroup_ctrl_;
-  LOG_INFO("XXXXX: run px pool", K(group_id_), K(tenant_id_));
+  LOG_INFO("run px pool", K(group_id_), K(tenant_id_));
   if (nullptr != cgroup_ctrl && OB_LIKELY(cgroup_ctrl->is_valid())) {
     pid_t pid = static_cast<pid_t>(syscall(__NR_gettid));
     cgroup_ctrl->add_thread_to_cgroup(tenant_id_, group_id_, pid);

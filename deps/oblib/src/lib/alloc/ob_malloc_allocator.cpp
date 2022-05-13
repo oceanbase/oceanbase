@@ -72,7 +72,7 @@ void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
     LOG_ERROR("invalid argument", K(lbt()), K(inner_attr.tenant_id_), K(ret));
   } else if (OB_UNLIKELY(inner_attr.tenant_id_ >= PRESERVED_TENANT_COUNT)) {
     const int64_t slot = inner_attr.tenant_id_ % PRESERVED_TENANT_COUNT;
-    obsys::CRLockGuard guard(locks_[slot]);
+    obsys::ObRLockGuard guard(locks_[slot]);
     allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
     if (!OB_ISNULL(allocator)) {
       ptr = allocator->alloc(size, inner_attr);
@@ -90,7 +90,7 @@ void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
     } else {
       if (OB_UNLIKELY(inner_attr.tenant_id_ >= PRESERVED_TENANT_COUNT)) {
         const int64_t slot = inner_attr.tenant_id_ % PRESERVED_TENANT_COUNT;
-        obsys::CRLockGuard guard(locks_[slot]);
+        obsys::ObRLockGuard guard(locks_[slot]);
         allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
         if (NULL != allocator) {
           ptr = allocator->alloc(size, inner_attr);
@@ -139,7 +139,7 @@ void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const ocea
     // do nothing
   } else if (OB_UNLIKELY(inner_attr.tenant_id_ >= PRESERVED_TENANT_COUNT)) {
     const int64_t slot = inner_attr.tenant_id_ % PRESERVED_TENANT_COUNT;
-    obsys::CRLockGuard guard(locks_[slot]);
+    obsys::ObRLockGuard guard(locks_[slot]);
     ObIAllocator* allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_);
     if (NULL != allocator) {
       nptr = allocator->realloc(ptr, size, inner_attr);
@@ -258,7 +258,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t 
       ret = create_tenant_ctx_allocator(slot, ctx_id);
     }
     if (OB_SUCC(ret)) {
-      obsys::CWLockGuard guard(locks_[slot]);
+      obsys::ObWLockGuard guard(locks_[slot]);
       ObTenantCtxAllocator** cur = &allocators_[slot][ctx_id];
       while ((NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
         cur = &((*cur)->get_next());
@@ -406,7 +406,7 @@ int64_t ObMallocAllocator::get_tenant_ctx_hold(const uint64_t tenant_id, const u
   int64_t hold = 0;
   if (OB_UNLIKELY(tenant_id >= PRESERVED_TENANT_COUNT)) {
     const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
-    obsys::CRLockGuard guard(locks_[slot]);
+    obsys::ObRLockGuard guard(locks_[slot]);
     ObTenantCtxAllocator* allocator = get_tenant_ctx_allocator(tenant_id, ctx_id);
     if (!OB_ISNULL(allocator)) {
       hold = allocator->get_hold();
@@ -425,7 +425,7 @@ void ObMallocAllocator::get_tenant_mod_usage(uint64_t tenant_id, int mod_id, ObM
   ObTenantCtxAllocator* allocator = NULL;
   if (OB_UNLIKELY(tenant_id >= PRESERVED_TENANT_COUNT)) {
     const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
-    obsys::CRLockGuard guard(locks_[slot]);
+    obsys::ObRLockGuard guard(locks_[slot]);
     for (int64_t i = 0; i < ObCtxIds::MAX_CTX_ID; i++) {
       allocator = get_tenant_ctx_allocator(tenant_id, i);
       if (!OB_ISNULL(allocator)) {
@@ -546,7 +546,7 @@ int ObMallocAllocator::get_chunks(AChunk** chunks, int cap, int& cnt)
 {
   int ret = OB_SUCCESS;
   for (int64_t slot = 0; OB_SUCC(ret) && slot < PRESERVED_TENANT_COUNT; ++slot) {
-    obsys::CRLockGuard guard(locks_[slot]);
+    obsys::ObRLockGuard guard(locks_[slot]);
     for (int64_t ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
       ObTenantCtxAllocator* ta = allocators_[slot][ctx_id];
       while (OB_SUCC(ret) && ta != nullptr) {

@@ -102,7 +102,7 @@ public:
 private:
   int search_entry(const int64_t frozen_version, ObMergeStatEntry*& pentry);
   static const int64_t MAX_KEPT_HISTORY = 16;
-  obsys::CRWLock lock_;
+  obsys::ObRWLock lock_;
   ObMergeStatEntry stats_[MAX_KEPT_HISTORY];
 
 private:
@@ -371,7 +371,7 @@ private:
   int64_t failure_fast_retry_interval_us_;
   int64_t minor_merge_schedule_interval_;
   ObMergeStatistic merge_statistic_;
-  mutable obsys::CRWLock frozen_version_lock_;
+  mutable obsys::ObRWLock frozen_version_lock_;
   mutable lib::ObMutex timer_lock_;
   bool first_most_merged_;
   bool inited_;

@@ -744,6 +744,11 @@ void ObMultiTenant::set_workers_per_cpu(int64_t v)
   LOG_INFO("set max workers", K(max_workers_cnt));
 }
 
+void ObMultiTenant::set_node_quota(double node_quota)
+{
+  node_quota_ = node_quota;
+}
+
 void ObMultiTenant::run1()
 {
   lib::set_thread_name("MultiTenant");

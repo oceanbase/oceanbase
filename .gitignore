@@ -110,3 +110,9 @@ cmake-build-release
 ###### Debug bin and configuration
 tools/deploy/bin
 tools/deploy/config2.py
+tools/deploy/.obd
+tools/deploy/distributed-with-proxy.yaml
+tools/deploy/distributed.yaml
+tools/deploy/obd_profile.sh
+tools/deploy/single-with-proxy.yaml
+tools/deploy/single.yaml

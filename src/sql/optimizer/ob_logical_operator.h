@@ -1741,6 +1741,10 @@ public:
       const common::ObIArray<ObRawExpr*>& target_join_key, const ObShardingInfo& target_sharding,
       ObRawExprFactory& expr_factory, ObExchangeInfo& exch_info);
 
+  int compute_repartition_func_info_for_insert(const ObIArray<ObRawExpr *> &src_keys,
+      const ObIArray<ObRawExpr *> &target_keys, const ObShardingInfo &target_sharding, ObRawExprFactory &expr_factory,
+      ObExchangeInfo &exch_info);
+
   int get_repartition_keys(const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& src_keys,
       const common::ObIArray<ObRawExpr*>& target_keys, const common::ObIArray<ObRawExpr*>& target_part_keys,
       common::ObIArray<ObRawExpr*>& src_part_keys);

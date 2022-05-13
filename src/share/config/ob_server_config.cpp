@@ -18,6 +18,7 @@
 #include "common/ob_common_utility.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/utility/utility.h"
+#include "lib/net/ob_net_util.h"
 #include "common/ob_record_header.h"
 #include "common/ob_zone.h"
 #include "share/ob_dml_sql_splicer.h"

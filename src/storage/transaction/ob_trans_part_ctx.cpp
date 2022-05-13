@@ -9315,9 +9315,9 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool& is_prepared, int64_t& 
 }
 
 /*
- * return prepare logtimestamp if the prepare_logtimestamp smaller than log_ts, but end_log_ts bigger
+ * return prepare logtimestamp if the prepare_logtimestamp smaller than freeze_ts, but end_log_ts bigger
  * */
-int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool& has_prepared, int64_t& prepare_version)
+int ObPartTransCtx::get_prepare_version_before_logts(const int64_t freeze_ts, bool& has_prepared, int64_t& prepare_version)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_US = 100;
@@ -9326,15 +9326,14 @@ int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool&
   int64_t cur_prepare_version = ObTransVersion::INVALID_TRANS_VERSION;
 
   has_prepared = false;
-  while (max_durable_log_ts_ <= log_ts && OB_INVALID_TIMESTAMP == end_log_ts_) {
-    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      STORAGE_LOG(WARN, "wait log durable cost too long", "time", ObTimeUtility::current_time() - begin_time);
-    }
-    usleep(SLEEP_US);
+  if (!is_xa_local_trans() || (is_xa_local_trans() && is_xa_trans_prepared_)) {
+    // cur_prepare_version is the redo log timestamp before prepare.
+    state_.get_state_and_version(cur_state, cur_prepare_version);
   }
-  state_.get_state_and_version(cur_state, cur_prepare_version);
-  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version && !in_xa_prepare_state_ /* always true */ &&
-      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ && prepare_log_timestamp_ <= log_ts && end_log_ts_ > log_ts) {
+  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version &&  // xa really prepared, normal trans has redo log
+      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ &&                // trans really prepared
+      prepare_log_timestamp_ <= freeze_ts &&                           // prepare before freeze ts
+      end_log_ts_ > freeze_ts) {                                       // trans end after freeze ts
     has_prepared = true;
     prepare_version = prepare_log_timestamp_;
   }

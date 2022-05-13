@@ -197,5 +197,12 @@ int ObServerCheckpointWriter::update_tenant_file_super_block(
       LOG_WARN("fail to update tenant file super block", K(ret));
     }
   }
+
+  for (int64_t i = 0; i < tenant_file_infos.count(); ++i) {
+    if (nullptr != tenant_file_infos.at(i)) {
+      tenant_file_infos.at(i)->~ObTenantFileInfo();
+      tenant_file_infos.at(i) = nullptr;
+    }
+  }
   return ret;
 }

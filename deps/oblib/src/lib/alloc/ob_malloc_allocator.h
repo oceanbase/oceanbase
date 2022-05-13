@@ -16,7 +16,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
 #include "lib/alloc/alloc_func.h"
-#include "lib/lock/tbrwlock.h"
+#include "lib/lock/ob_rwlock.h"
 
 namespace oceanbase {
 namespace lib {
@@ -76,7 +76,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
 
 private:
-  obsys::CRWLock locks_[PRESERVED_TENANT_COUNT];
+  obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantCtxAllocator* allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
   int64_t reserved_;
   int64_t urgent_;

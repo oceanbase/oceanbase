@@ -228,6 +228,7 @@ OB_INLINE void ObPGMgr::free_pg(ObIPartitionGroup* pg) const
     cp_fty_->free(pg);
   }
   if (!can_free) {
+    STORAGE_LOG(WARN, "pg can not free now", K(pg), KPC(pg));
     ObPGMemoryGarbageCollector::get_instance().add_pg(pg);
   }
 }

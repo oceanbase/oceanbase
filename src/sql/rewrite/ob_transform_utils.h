@@ -168,8 +168,10 @@ public:
 
   static int replace_equal_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
-  static int replace_equal_expr(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& current_exprs, ObRawExpr*& expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, ObRawExpr *&expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, common::ObIArray<ObRawExpr *> &exprs);
 
   static int replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
@@ -240,7 +242,7 @@ public:
 
   static int find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_expr, bool& is_valid);
 
-  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable);
+  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE);
 
   static int check_is_not_null_column(const ObDMLStmt* stmt, const ObRawExpr* expr, bool& col_not_null);
 

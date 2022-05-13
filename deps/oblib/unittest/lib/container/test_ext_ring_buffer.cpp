@@ -310,13 +310,13 @@ TEST(HazPtr, Basic0)
 
   const int64_t lmt = 10000000;
   int64_t cnt = 0;
-  int64_t start = obsys::CTimeUtil::getTime();
+  int64_t start = obsys::ObSysTimeUtil::getTime();
   while (++cnt < lmt) {
     TypeA* ptr = hazptr.acquire(target, 0);
     EXPECT_EQ(target, ptr);
     hazptr.revert(0);
   }
-  int64_t end = obsys::CTimeUtil::getTime();
+  int64_t end = obsys::ObSysTimeUtil::getTime();
   LIB_LOG(ERROR, ">>>", K(cnt), K(end - start), K((double)cnt / ((double)(end - start) / 1000000)));
 
   err = hazptr.destroy();

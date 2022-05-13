@@ -752,8 +752,8 @@ OB_DEF_SERIALIZE(ObSysVariableSchema)
 int ObSysVariableSchema::add_sysvar_schema(const ObSysVarSchema& sysvar_schema)
 {
   int ret = OB_SUCCESS;
-  ObSysVarSchema* tmp_sysvar_schema = NULL;
   void* ptr = NULL;
+  ObSysVarSchema* tmp_sysvar_schema = NULL;
   ObSysVarClassType var_id = ObSysVarFactory::find_sys_var_id_by_name(sysvar_schema.get_name(), true);
   int64_t var_idx = OB_INVALID_INDEX;
   if (OB_UNLIKELY(SYS_VAR_INVALID == var_id)) {

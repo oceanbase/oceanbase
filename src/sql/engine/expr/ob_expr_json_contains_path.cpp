@@ -83,7 +83,7 @@ int ObExprJsonContainsPath::eval_json_contains_path(const ObExpr &expr,
     LOG_WARN("get_json_doc failed", K(ret));
   } else {
     // get one_or_all flag
-    bool one_flag;
+    bool one_flag = false;
     ObDatum *json_datum = NULL;
     ObExpr *json_arg = expr.args_[1];
     ObObjType val_type = json_arg->datum_meta_.type_;
@@ -175,7 +175,7 @@ int ObExprJsonContainsPath::calc_resultN(common::ObObj &result,
       LOG_WARN("get_json_doc failed", K(ret));
     } else {
       // get one_or_all flag
-      bool one_flag;
+      bool one_flag = false;
       ObObjType val_type = params[1].get_type();
       if (val_type == ObNullType || params[1].is_null()) {
         is_null_result = true;

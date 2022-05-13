@@ -124,6 +124,7 @@ public:
   void clear_status();
 
   void interrupt(ObInterruptCode& interrupt_code);
+  void clear_interrupt_status();
 
 private:
   /*
@@ -339,7 +340,16 @@ OB_INLINE void UNSET_INTERRUPTABLE(const ObInterruptibleTaskID& tid)
   }
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+OB_INLINE void CLEAR_INTERRUPTABLE()
+{
+  if (OB_ISNULL(get_checker())) {
+    LIB_LOG(ERROR, "interrupt checker may not be set correctly");
+  } else {
+    get_checker()->clear_interrupt_status();
+  }
+}
+
+} // end namespace common
+} // end namespace oceanbase
 
 #endif  // OCEANBASE_OBSERVER_OB_REMOTE_INTERRUPT_CALL_H_

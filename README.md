@@ -48,6 +48,7 @@ OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanP
 | OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Arch | Rolling | x86_64 | ✅ | ❌ | ❌ | ❌ |
 | CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |

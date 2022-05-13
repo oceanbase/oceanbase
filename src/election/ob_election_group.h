@@ -307,7 +307,7 @@ private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;
-#elif defined(__sw_64__)
+#elif defined(__sw_64__) || defined(__loongarch64)
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;

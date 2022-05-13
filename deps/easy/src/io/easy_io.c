@@ -55,7 +55,7 @@ easy_io_t* easy_eio_create(easy_io_t* eio, int io_thread_count)
   }
 
   if (io_thread_count <= 0 || io_thread_count > EASY_MAX_THREAD_CNT) {
-    io_thread_count = sysconf(_SC_NPROCESSORS_CONF);
+    io_thread_count = EASY_MAX_THREAD_CNT;
   }
 
   if ((pool = easy_pool_create(0)) == NULL) {

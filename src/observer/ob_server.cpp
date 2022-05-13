@@ -30,7 +30,7 @@
 #include "lib/io/ob_io_benchmark.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/hash_func/murmur_hash.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "lib/alloc/memory_dump.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
@@ -159,7 +159,7 @@ ObServer::~ObServer()
   destroy();
 }
 
-int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
+int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 {
   int ret = OB_SUCCESS;
   opts_ = opts;
@@ -214,7 +214,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
       if (OB_FAIL(ObTableApiProcessorBase::init_session())) {
         LOG_WARN("failed to init static session", K(ret));
       } else if (OB_FAIL(init_loaddata_global_stat())) {
-         LOG_WARN("fail to init global load data stat map", K(ret));
+        LOG_WARN("fail to init global load data stat map", K(ret));
       }
     }
   }
@@ -234,8 +234,10 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
     LOG_ERROR("should never reach here!", K(ret));
   } else if (OB_FAIL(init_restore_ctx())) {
     LOG_ERROR("init restore context fail", K(ret));
+#ifndef OB_USE_ASAN
   } else if (OB_FAIL(ObMemoryDump::get_instance().init())) {
     LOG_ERROR("init memory dumper fail", K(ret));
+#endif
   } else if (OB_FAIL(ObDagScheduler::get_instance().init(OBSERVER.get_self()))) {
     LOG_ERROR("init scheduler fail, ", K(ret));
   } else if (OB_FAIL(init_global_kvcache())) {
@@ -261,7 +263,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   } else if (OB_FAIL(init_sql())) {
     LOG_ERROR("init sql fail", K(ret));
   } else if (OB_FAIL(init_sql_runner())) {
-    LOG_ERROR("init sql fail", K(ret));
+    LOG_ERROR("init sql runner fail", K(ret));
   } else if (OB_FAIL(init_sequence())) {
     LOG_ERROR("init sequence fail", K(ret));
   } else if (OB_FAIL(init_pl())) {
@@ -321,7 +323,7 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   } else if (OB_FAIL(user_col_stat_service_.init(&sql_proxy_, &config_))) {
     LOG_WARN("init user table column stat service failed");
   } else if (OB_FAIL(user_table_stat_service_.init(&sql_proxy_, &ObPartitionService::get_instance(), &config_))) {
-    LOG_WARN("init user table column stat service failed");
+    LOG_WARN("init user table stat service failed");
   } else if (OB_FAIL(ObStatManager::get_instance().init(&user_col_stat_service_, &user_table_stat_service_))) {
     LOG_WARN("init user data stat manager failed");
   } else if (OB_FAIL(opt_stat_service_.init(&sql_proxy_, &config_))) {
@@ -588,7 +590,7 @@ int ObServer::stop()
   LOG_INFO("cache size calcucator has stopped");
 
   LOG_INFO("begin stop distributed scheduler manager");
-  ObDistributedSchedulerManager* dist_sched_mgr = ObDistributedSchedulerManager::get_instance();
+  ObDistributedSchedulerManager *dist_sched_mgr = ObDistributedSchedulerManager::get_instance();
   if (OB_ISNULL(dist_sched_mgr)) {
     LOG_ERROR("distributed scheduler manager instance is NULL");
   } else if (OB_FAIL(dist_sched_mgr->stop())) {
@@ -804,7 +806,7 @@ int ObServer::init_config()
   bool has_config_file = true;
 
   // set dump path
-  const char* dump_path = "etc/observer.config.bin";
+  const char *dump_path = "etc/observer.config.bin";
   config_mgr_.set_dump_path(dump_path);
   if (OB_FILE_NOT_EXIST == (ret = config_mgr_.load_config())) {
     has_config_file = false;
@@ -826,7 +828,7 @@ int ObServer::init_config()
     config_.devname.set_version(start_time_);
   } else {
     if (!has_config_file) {
-      const char* devname = get_default_if();
+      const char *devname = get_default_if();
       if (devname && '\0' != devname[0]) {
         LOG_INFO("guess interface name", K(devname));
         config_.devname.set_value(devname);
@@ -895,10 +897,10 @@ int ObServer::init_config()
     int32_t local_port = static_cast<int32_t>(config_.rpc_port);
     if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = {'\0'};
-      obsys::CNetUtil::getLocalAddr6(config_.devname, ipv6, sizeof(ipv6));
+      obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
       self_addr_.set_ip_addr(ipv6, local_port);
     } else {
-      int32_t ipv4 = ntohl(obsys::CNetUtil::getLocalAddr(config_.devname));
+      int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
       self_addr_.set_ipv4_addr(ipv4, local_port);
     }
 
@@ -1110,7 +1112,7 @@ int ObServer::init_restore_ctx()
 int ObServer::init_interrupt()
 {
   int ret = OB_SUCCESS;
-  ObGlobalInterruptManager* mgr = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *mgr = ObGlobalInterruptManager::getInstance();
   if (OB_ISNULL(mgr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail get interrupt mgr instance", K(ret));
@@ -1123,7 +1125,7 @@ int ObServer::init_interrupt()
 int ObServer::init_loaddata_global_stat()
 {
   int ret = OB_SUCCESS;
-  ObGlobalLoadDataStatMap* map = ObGlobalLoadDataStatMap::getInstance();
+  ObGlobalLoadDataStatMap *map = ObGlobalLoadDataStatMap::getInstance();
   if (OB_ISNULL(map)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail allocate load data map for status", K(ret));
@@ -1253,7 +1255,7 @@ int ObServer::init_multi_tenant()
   // init allocator for OB_SYS_TENANT_ID and OB_SERVER_TENANT_ID
   int64_t min_sys_tenant_memory = config_.get_min_sys_tenant_memory();
   int64_t max_sys_tenant_memory = config_.get_max_sys_tenant_memory();
-  ObMallocAllocator* allocator = ObMallocAllocator::get_instance();
+  ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
   if (OB_SUCC(ret)) {
     if (!OB_ISNULL(allocator)) {
       allocator->set_tenant_limit(OB_SYS_TENANT_ID, max_sys_tenant_memory);
@@ -1262,7 +1264,7 @@ int ObServer::init_multi_tenant()
   }
 
   // set tenant mem limits
-  ObTenantManager& omti = ObTenantManager::get_instance();
+  ObTenantManager &omti = ObTenantManager::get_instance();
   if (OB_SUCC(ret)) {
     if (OB_FAIL(
             omti.init(self_addr_, srv_rpc_proxy_, rs_rpc_proxy_, rs_mgr_, net_frame_.get_req_transport(), &config_))) {
@@ -1433,7 +1435,7 @@ int ObServer::init_sql_runner()
 int ObServer::init_sequence()
 {
   int ret = OB_SUCCESS;
-  ObSequenceCache& cache = ObSequenceCache::get_instance();
+  ObSequenceCache &cache = ObSequenceCache::get_instance();
   if (OB_FAIL(cache.init(schema_service_, sql_proxy_))) {
     LOG_ERROR("init sequence engine failed", K(ret));
   } else {
@@ -1588,7 +1590,7 @@ int ObServer::wait_gts()
 int ObServer::init_ts_mgr()
 {
   int ret = OB_SUCCESS;
-  ObILocationAdapter* location_adapter = ObPartitionService::get_instance().get_trans_service()->get_location_adapter();
+  ObILocationAdapter *location_adapter = ObPartitionService::get_instance().get_trans_service()->get_location_adapter();
 
   if (OB_FAIL(OB_TS_MGR.init(self_addr_, location_adapter, net_frame_.get_req_transport(), &gts_))) {
     LOG_ERROR("gts cache mgr init failed", K_(self_addr), KP(location_adapter), K(ret));
@@ -1633,7 +1635,7 @@ int ObServer::init_storage()
   }
 
   if (OB_SUCC(ret)) {
-    const char* redundancy_level = config_.redundancy_level;
+    const char *redundancy_level = config_.redundancy_level;
     if (0 == strcasecmp(redundancy_level, "EXTERNAL")) {
       storage_env_.redundancy_level_ = ObStorageEnv::EXTERNAL_REDUNDANCY;
     } else if (0 == strcasecmp(redundancy_level, "NORMAL")) {
@@ -1706,7 +1708,7 @@ int ObServer::init_gc_partition_adapter()
   return ret;
 }
 
-int ObServer::get_network_speed_from_sysfs(int64_t& network_speed)
+int ObServer::get_network_speed_from_sysfs(int64_t &network_speed)
 {
   int ret = OB_SUCCESS;
   // sys_bkgd_net_percentage_ = config_.sys_bkgd_net_percentage;
@@ -1722,9 +1724,9 @@ int ObServer::get_network_speed_from_sysfs(int64_t& network_speed)
   return ret;
 }
 
-char* strtrim(char* str)
+char *strtrim(char *str)
 {
-  char* ptr;
+  char *ptr;
 
   if (str == NULL) {
     return NULL;
@@ -1742,9 +1744,9 @@ char* strtrim(char* str)
   return str;
 }
 
-static int64_t nic_rate_parse(const char* str, bool& valid)
+static int64_t nic_rate_parse(const char *str, bool &valid)
 {
-  char* p_unit = nullptr;
+  char *p_unit = nullptr;
   int64_t value = 0;
 
   if (OB_ISNULL(str) || '\0' == str[0]) {
@@ -1776,16 +1778,16 @@ static int64_t nic_rate_parse(const char* str, bool& valid)
   return value;
 }
 
-int ObServer::get_network_speed_from_config_file(int64_t& network_speed)
+int ObServer::get_network_speed_from_config_file(int64_t &network_speed)
 {
   int ret = OB_SUCCESS;
-  const char* nic_rate_path = "etc/nic.rate.config";
+  const char *nic_rate_path = "etc/nic.rate.config";
   const int64_t MAX_NIC_CONFIG_FILE_SIZE = 1 << 10;  // 1KB
-  FILE* fp = nullptr;
-  char* buf = nullptr;
+  FILE *fp = nullptr;
+  char *buf = nullptr;
   static int nic_rate_file_exist = 1;
 
-  if (OB_ISNULL(buf = static_cast<char*>(ob_malloc(MAX_NIC_CONFIG_FILE_SIZE + 1, ObModIds::OB_BUFFER)))) {
+  if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(MAX_NIC_CONFIG_FILE_SIZE + 1, ObModIds::OB_BUFFER)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc buffer failed", LITERAL_K(MAX_NIC_CONFIG_FILE_SIZE), K(ret));
   } else if (OB_ISNULL(fp = fopen(nic_rate_path, "r"))) {
@@ -1810,7 +1812,7 @@ int ObServer::get_network_speed_from_config_file(int64_t& network_speed)
     }
     memset(buf, 0, MAX_NIC_CONFIG_FILE_SIZE + 1);
     fread(buf, 1, MAX_NIC_CONFIG_FILE_SIZE, fp);
-    char* prate = nullptr;
+    char *prate = nullptr;
 
     if (OB_UNLIKELY(0 != ferror(fp))) {
       ret = OB_IO_ERROR;
@@ -1953,7 +1955,7 @@ int ObServer::check_server_can_start_service()
   return ret;
 }
 
-storage::ObPartitionService& ObServer::get_partition_service()
+storage::ObPartitionService &ObServer::get_partition_service()
 {
   return ObPartitionService::get_instance();
 }
@@ -1961,7 +1963,7 @@ storage::ObPartitionService& ObServer::get_partition_service()
 ObServer::ObCTASCleanUpTask::ObCTASCleanUpTask() : obs_(nullptr), is_inited_(false)
 {}
 
-int ObServer::ObCTASCleanUpTask::init(ObServer* obs, int tg_id)
+int ObServer::ObCTASCleanUpTask::init(ObServer *obs, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -2009,7 +2011,7 @@ void ObServer::ObCTASCleanUpTask::runTimerTask()
 
 // Traverse the current session and determine whether the given table schema needs to be deleted according to the
 // session id and last active time
-bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info)
+bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info)
 {
   int ret = OB_SUCCESS;
   if ((ObCTASCleanUp::TEMP_TAB_PROXY_RULE == get_cleanup_type() && get_drop_flag()) ||
@@ -2073,7 +2075,7 @@ bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key, sql::ObS
 
 // Traverse the current session, if the session has updated sess_active_time recently, execute alter system refresh
 // tables in session xxx Synchronously update the last active time of all temporary tables under the current session
-bool ObServer::ObRefreshTime::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info)
+bool ObServer::ObRefreshTime::operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info)
 {
   int ret = OB_SUCCESS;
   UNUSED(key);
@@ -2098,7 +2100,7 @@ bool ObServer::ObRefreshTime::operator()(sql::ObSQLSessionMgr::Key key, sql::ObS
 ObServer::ObRefreshTimeTask::ObRefreshTimeTask() : obs_(nullptr), is_inited_(false)
 {}
 
-int ObServer::ObRefreshTimeTask::init(ObServer* obs, int tg_id)
+int ObServer::ObRefreshTimeTask::init(ObServer *obs, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -2155,7 +2157,7 @@ int ObServer::refresh_temp_table_sess_active_time()
 ObServer::ObRefreshNetworkSpeedTask::ObRefreshNetworkSpeedTask() : obs_(nullptr), is_inited_(false)
 {}
 
-int ObServer::ObRefreshNetworkSpeedTask::init(ObServer* obs, int tg_id)
+int ObServer::ObRefreshNetworkSpeedTask::init(ObServer *obs, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -2271,12 +2273,12 @@ int ObServer::clean_up_invalid_tables()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObDatabaseSchema* database_schema = NULL;
-  ObSEArray<const ObTableSchema*, 512> table_schemas;
+  const ObDatabaseSchema *database_schema = NULL;
+  ObSEArray<const ObTableSchema *, 512> table_schemas;
   const int64_t CONNECT_TIMEOUT_VALUE = 50L * 60L * 60L * 1000L * 1000L;  // default value is 50hrs
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObTableItem table_item;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   char create_host_str[OB_MAX_HOST_NAME_LENGTH];
   if (OB_FAIL(schema_service_.get_schema_guard(schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
@@ -2289,7 +2291,7 @@ int ObServer::clean_up_invalid_tables()
     common_rpc_proxy = GCTX.rs_rpc_proxy_;
     MYADDR.ip_port_to_string(create_host_str, OB_MAX_HOST_NAME_LENGTH);
     for (int64_t i = 0; i < table_schemas.count() && OB_SUCC(tmp_ret); i++) {
-      const ObTableSchema* table_schema = table_schemas.at(i);
+      const ObTableSchema *table_schema = table_schemas.at(i);
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got invalid schema", K(ret), K(i));

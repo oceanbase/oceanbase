@@ -85,7 +85,7 @@ inline void load128(__uint128_t& target, types::uint128_t* source)
       __ATOMIC_SEQ_CST)
 #define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_SEQ_CST)
 
-#elif defined(__sw_64__)
+#elif defined(__sw_64__) || defined(__loongarch64)
 inline bool cas128(volatile types::uint128_t* target, types::uint128_t* cmp, types::uint128_t with)
 {
   int ret = 0;

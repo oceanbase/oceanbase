@@ -69,11 +69,11 @@ ObSimpleUDFSchema::~ObSimpleUDFSchema()
 
 void ObSimpleUDFSchema::reset()
 {
-  ObSchema::reset();
   tenant_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   udf_id_ = OB_INVALID_ID;
   udf_name_.reset();
+  ObSchema::reset();
 }
 
 bool ObSimpleUDFSchema::is_valid() const

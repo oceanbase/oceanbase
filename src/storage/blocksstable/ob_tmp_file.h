@@ -397,7 +397,6 @@ private:
 private:
   ObTmpFileManager();
   virtual ~ObTmpFileManager();
-  int clear(const int64_t fd);
   int get_next_dir(int64_t& next_dir);
   int get_next_fd(int64_t& next_fd);
   void next_value(int64_t& current_val, int64_t& next_val);
@@ -412,6 +411,7 @@ private:
   ObStorageFileHandle file_handle_;
   int64_t next_fd_;
   int64_t next_dir_;
+  common::SpinRWLock rm_file_lock_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileManager);
