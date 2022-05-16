@@ -1270,7 +1270,7 @@ DEF_BOOL(module_test_trx_fake_commit, OB_TENANT_PARAMETER, "false", "module test
 
 DEF_CAP(sql_work_area, OB_TENANT_PARAMETER, "1G", "[10M,)", "Work area memory limitation for tenant",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_CAP(_max_trx_size, OB_CLUSTER_PARAMETER, "100G", "[1M,)",
+DEF_CAP(_max_trx_size, OB_CLUSTER_PARAMETER, "100G", "[0B,)",
     "the limit for memstore memory used per partition involved in each database transaction",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(__easy_memory_limit, OB_CLUSTER_PARAMETER, "4G", "[1G,)",
