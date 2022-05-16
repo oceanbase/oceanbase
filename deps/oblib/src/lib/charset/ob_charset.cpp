@@ -15,6 +15,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
+#include "math.h"
 
 namespace oceanbase {
 namespace common {

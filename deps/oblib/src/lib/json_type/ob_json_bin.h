@@ -460,7 +460,6 @@ private:
                                         uint64_t new_val_entry_offset, uint64_t count, uint8_t var_type, int64_t st_pos,
                                         ObJsonBuffer &result, ObJBVerType cur_vertype, ObJBVerType dest_vertype) const;
   
-  #define JB_PATH_NODE_LEN sizeof(struct ObJBNodeMeta)
 
   void stack_update(ObJsonBuffer& stack, uint32_t idx, const ObJBNodeMeta& new_value);
   int stack_copy(ObJsonBuffer& src, ObJsonBuffer& dst);
