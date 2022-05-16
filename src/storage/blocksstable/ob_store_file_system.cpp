@@ -265,8 +265,8 @@ void ObFileSystemInspectBadBlockTask::inspect_bad_block()
   } else {
     const int64_t macro_block_size = OB_FILE_SYSTEM.get_macro_block_size();
     const int64_t total_macro_block_count = OB_FILE_SYSTEM.get_used_macro_block_count();
-    const int64_t search_num_per_round =
-        std::min(total_macro_block_count / (check_cycle_in_second * check_times_per_second), total_macro_block_count);
+    const int64_t search_num_per_round = std::max((int64_t)1,
+        std::min(total_macro_block_count / (check_cycle_in_second * check_times_per_second), total_macro_block_count));
     const int64_t disk_allowed_iops = get_disk_allowed_iops(macro_block_size);
     const int64_t max_check_count_per_round = std::max(MIN_OPEN_BLOCKS_PER_ROUND, disk_allowed_iops);
     const int64_t inspect_timeout_us =
