@@ -632,7 +632,7 @@ int ObQueryCtx::append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos,
       } else {
         bool find_dup = false;
         for (int64_t i = 0; !find_dup && i < stmt_id_name_map_.count(); ++i) {
-          if (0 == stmt_id_name_map_.at(i).origin_name_.case_compare(buf)) {
+          if (0 == stmt_id_name_map_.at(i).origin_name_.case_compare(ObString(pos, buf))) {
             find_dup = true;
           } else {
           }  // do nothing
