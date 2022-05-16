@@ -108,7 +108,7 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
 
       // 2. Scan table_schema_array
       // After scanning database_schema_array, continue to scan filter_table_schema_array
-      if (database_schema_array_.count() == i) {
+      if (OB_SUCC(ret) && database_schema_array_.count() == i) {
         is_filter_table_schema = true;
         if (OB_FAIL(iterate_table_schema_array(is_filter_table_schema, -1))) {
           SERVER_LOG(WARN, "fail to iterate all table schema. ", K(ret));
@@ -307,7 +307,8 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
       is_filter_db_ = true;
       ObString database_name = start_key_obj_ptr[0].get_varchar();
       const ObDatabaseSchema *filter_database_schema = NULL;
-      if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_name, filter_database_schema))) {
+      if (database_name.empty()) {
+      } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_name, filter_database_schema))) {
         SERVER_LOG(WARN, "fail to get database schema", K(ret), K(tenant_id_), K(database_name));
       } else if (NULL == filter_database_schema) {
       } else if (start_key_obj_ptr[1].is_varchar_or_char() && end_key_obj_ptr[1].is_varchar_or_char() &&
