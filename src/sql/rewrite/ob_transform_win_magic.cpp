@@ -167,6 +167,16 @@ int ObTransformWinMagic::check_subquery_validity(
     LOG_WARN("invalid condition map size", K(ret), K(map_info.cond_map_.count()), K(subquery->get_condition_size()));
   } else if (OB_FAIL(context.init(subquery, stmt, map_info.table_map_))) {
     LOG_WARN("failed to init stmt compare context", K(ret));
+  } else {
+    bool where_subquery = false;
+    if (OB_FAIL(check_is_where_subquery(*stmt, query_ref, where_subquery))) {
+      LOG_WARN("check is where subquery failed", K(ret));
+    } else if (where_subquery || !stmt->is_select_stmt()) {
+      // do nothing
+    } else if (static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
+      is_valid = false;
+    } else {
+    }
   }
   /**
    * all correlated condition must be equal condition
@@ -229,7 +239,40 @@ int ObTransformWinMagic::check_subquery_validity(
   return ret;
 }
 
-int ObTransformWinMagic::check_aggr_expr_validity(ObSelectStmt& subquery, bool& is_valid)
+int ObTransformWinMagic::check_contain_expr(ObRawExpr *base, ObRawExpr *target, bool &has)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(base) || OB_ISNULL(target)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("raw expr is null", K(ret));
+  } else if (base == target) {
+    has = true;
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && !has && j < base->get_param_count(); j++) {
+    if (OB_FAIL(check_contain_expr(base->get_param_expr(j), target, has))) {
+      LOG_WARN("contain expr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformWinMagic::check_is_where_subquery(ObDMLStmt &stmt, ObQueryRefRawExpr *query_ref, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < stmt.get_condition_size(); i++) {
+    ObRawExpr *cond = stmt.get_condition_expr(i);
+    if (OB_ISNULL(cond)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cond is null", K(ret));
+    } else if (OB_FAIL(check_contain_expr(cond, query_ref, is_valid))) {
+      LOG_WARN("check_contain_expr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformWinMagic::check_aggr_expr_validity(ObSelectStmt &subquery, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
