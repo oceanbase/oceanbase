@@ -101,10 +101,92 @@ struct ObGetAllSqlIdOp {
   const CacheRefHandleID ref_handle_;
 };
 
-struct ObGetAllPLIdOp {
-  explicit ObGetAllPLIdOp(common::ObIArray<PCKeyValue> *key_array, const CacheRefHandleID ref_handle)
-      : key_array_(key_array), ref_handle_(ref_handle)
+struct ObGetPcvSetBySQLIDOp
+{
+  explicit ObGetPcvSetBySQLIDOp(uint64_t db_id, common::ObString sql_id,
+        common::ObIArray<PCKeyValue> *key_array, const CacheRefHandleID ref_handle)
+    : db_id_(db_id),
+      sql_id_(sql_id),
+      key_array_(key_array),
+      ref_handle_(ref_handle)
+  {
+  }
+
+  int operator()(common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet *> &entry)
+  {
+    int ret = common::OB_SUCCESS;
+    bool contains = false;
+
+    if (OB_ISNULL(key_array_) || OB_ISNULL(entry.second)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument", K(key_array_), K(entry.second), K(ret));
+    } else if ( NS_INVALID == entry.first.namespace_) {
+      // do nothing 
+    } else if (db_id_ != common::OB_INVALID_ID && db_id_ != entry.first.db_id_) {
+      // skip entry that has non-matched db_id
+    } else if (!contain_sql_id(entry.second->get_sql_id())) {
+      // skip entry which not contains same sql_id
+    } else if (OB_FAIL(key_array_->push_back(ObPCKeyValue(entry.first, entry.second)))) {
+      SQL_PC_LOG(WARN, "fail to push back key", K(ret));
+    } else {
+      entry.second->inc_ref_count(ref_handle_);
+    }
+
+    return ret;
+  }
+
+  bool contain_sql_id(common::ObIArray<common::ObString> &sql_ids){
+    bool contains = false;
+    for (int64_t i = 0; !contains && i < sql_ids.count(); i++) {
+      if (sql_ids.at(i) == sql_id_) {
+        contains = true;
+      }
+    }
+    return contains;
+  }
+
+  uint64_t db_id_;
+  common::ObString sql_id_;
+  common::ObIArray<PCKeyValue> *key_array_;
+  const CacheRefHandleID ref_handle_;
+};
+
+struct ObGetTableIdOp
+{
+  explicit ObGetTableIdOp(uint64_t table_id)
+    : table_id_(table_id)
   {}
+
+  int operator()(common::hash::HashMapPair<ObCacheObjID, ObCacheObject *> &entry)
+  {
+    int ret = common::OB_SUCCESS;
+    ObPhysicalPlan *plan = NULL;
+    int64_t version = -1;
+    if (OB_ISNULL(entry.second)) {
+      ret = common::OB_NOT_INIT;
+      SQL_PC_LOG(WARN, "invalid argument", K(ret));
+    } else if (!entry.second->is_sql_crsr()) {
+      // not sql plan
+      // do nothing
+    } else if (OB_ISNULL(plan = dynamic_cast<ObPhysicalPlan *>(entry.second))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null plan", K(ret), K(plan));
+    } else if (entry.second->get_base_table_version(table_id_, version)) {
+      LOG_WARN("failed to get base table version", K(ret));
+    } else if (version > 0) {
+      static_cast<ObPhysicalPlan *>(entry.second)->set_is_expired(true);
+    }
+    return ret;
+  }
+  const uint64_t table_id_;
+};
+
+
+struct ObGetAllPLIdOp
+{
+  explicit ObGetAllPLIdOp(common::ObIArray<PCKeyValue> *key_array,
+                          const CacheRefHandleID ref_handle)
+    : key_array_(key_array), ref_handle_(ref_handle) {}
   int operator()(common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet *> &entry)
   {
     int ret = OB_SUCCESS;
@@ -515,9 +597,10 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
     SQL_PC_LOG(WARN, "invalid physical plan", K(ret));
   } else if (is_reach_memory_limit()) {
     ret = OB_REACH_MEMORY_LIMIT;
-    if (REACH_TIME_INTERVAL(1000000)) {
-      SQL_PC_LOG(
-          ERROR, "plan cache memory used reach limit", K_(tenant_id), K(get_mem_hold()), K(get_mem_limit()), K(ret));
+    LOG_INFO("reach memory limit.", K(ret), K(get_mem_hold()), K(get_mem_limit()));
+    if (REACH_TIME_INTERVAL(1000000)) { //1s, when memory reach out of limit, set 1s as interval to print log
+      SQL_PC_LOG(ERROR, "plan cache memory used reach limit",
+                        K_(tenant_id), K(get_mem_hold()), K(get_mem_limit()), K(ret));
     }
   } else if (plan->get_mem_size() >= get_mem_high()) {
     // plan mem is too big, do not add plan
@@ -889,6 +972,33 @@ int ObPlanCache::cache_evict_all_pl()
   return ret;
 }
 
+// delete plan by sql_id
+int ObPlanCache::cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql_id)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalReqTimeService::check_req_timeinfo();
+  SQL_PC_LOG(DEBUG, "cache evict plan by sql id start");
+  PCKeyValueArray to_evict_keys;
+  ObGetPcvSetBySQLIDOp get_ids_op(db_id, sql_id, &to_evict_keys, PCV_GET_PLAN_KEY_HANDLE);
+
+  if (OB_FAIL(sql_pcvs_map_.foreach_refactored(get_ids_op))) { 
+    SQL_PC_LOG(WARN, "fail to get all sql_ids in id2value_map", K(ret));
+  } else if (OB_FAIL(remove_pcv_sets(to_evict_keys))) {
+    SQL_PC_LOG(WARN, "fail to remove pcv set", K(ret));
+  }
+
+  //decrease each pcv_set's reference count
+  int64_t N = to_evict_keys.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+    if (NULL != to_evict_keys.at(i).pcv_set_) {
+      to_evict_keys.at(i).pcv_set_->dec_ref_count(PCV_GET_PLAN_KEY_HANDLE);
+    }
+  }
+
+  SQL_PC_LOG(DEBUG, "cache evict plan by sql id end");
+  return ret;
+}
+// rule for evict plan
 // 1. calc evict_num : (mem_used - mem_lwm) / (mem_used / cache_value_count)
 // 2. get evict_sql_id from calc_cache_evict_keys
 // 3. evict value
@@ -1145,6 +1255,7 @@ int ObPlanCache::add_cache_obj_stat(ObPlanCacheCtx &pc_ctx, ObCacheObject *cache
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null plan", K(ret), K(plan));
     } else {
+      plan->stat_.bl_info_.key_.db_id_=pc_ctx.bl_key_.db_id_;
       plan->stat_.plan_id_ = plan->get_plan_id();
       plan->stat_.bl_info_.plan_hash_value_ = plan->get_signature();
       plan->stat_.gen_time_ = ObTimeUtility::current_time();

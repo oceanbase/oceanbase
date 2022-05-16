@@ -1374,6 +1374,7 @@ int get_sys_tenant_alter_system_priv(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
   } else if (OB_SYS_TENANT_ID != session_priv.tenant_id_ &&
+             stmt::T_FLUSH_CACHE != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_SYSTEM_SET_PARAMETER != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation", K(ret), "stmt type", basic_stmt->get_stmt_type());

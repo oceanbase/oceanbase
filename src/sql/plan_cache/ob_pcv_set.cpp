@@ -68,15 +68,23 @@ void ObPCVSet::destroy()
         pcv = NULL;
       }
     }
-    // free key.
     if (NULL != pc_alloc_) {
+      //free key.
       pc_key_.destory(*pc_alloc_);
       pc_key_.reset();
       if (NULL != sql_.ptr()) {
         pc_alloc_->free(sql_.ptr());
       }
+
+      // free sql_id list
+      for (int64_t i = 0; i < sql_ids_.count(); i++) {
+        if (NULL != sql_ids_[i].ptr()) {
+          pc_alloc_->free(sql_ids_[i].ptr());
+        }
+      }
     }
 
+    sql_ids_.reset();
     sql_.reset();
     plan_cache_ = NULL;
     pc_alloc_ = NULL;
@@ -226,6 +234,7 @@ int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
         LOG_WARN("fail to match pcv in pcv_set", K(ret));
       } else if (is_same) {
         is_new = false;
+        LOG_INFO("has identical pcv", K(is_same), K(pcv));
         if (OB_FAIL(pcv->add_plan(*cache_obj, schema_array, pc_ctx))) {
           if (OB_SQL_PC_PLAN_DUPLICATE == ret || is_not_supported_err(ret)) {
             LOG_DEBUG("fail to add plan to pcv", K(ret));
@@ -237,7 +246,6 @@ int ObPCVSet::add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
       }
     }  // for end
   }
-
   if (OB_SUCC(ret) && is_new) {
     ObPlanCacheValue* pcv = NULL;
     if (OB_FAIL(create_pcv_and_add_plan(cache_obj, pc_ctx, schema_array, pcv))) {
@@ -277,8 +285,11 @@ int ObPCVSet::create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& 
 {
   int ret = OB_SUCCESS;
   new_pcv = nullptr;
-  // create pcv and init
-  if (OB_ISNULL(cache_obj) || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+  common::ObString sql_id;
+  common::ObString sql_id_org(common::OB_MAX_SQL_ID_LENGTH, (const char*)&pc_ctx.sql_ctx_.sql_id_);
+  //create pcv and init
+  if (OB_ISNULL(cache_obj) ||
+      OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
   } else if (OB_FAIL(create_new_pcv(new_pcv))) {
@@ -288,6 +299,10 @@ int ObPCVSet::create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& 
     LOG_WARN("unexpected null for new_pcv", K(new_pcv));
   } else if (OB_FAIL(new_pcv->init(this, cache_obj, pc_ctx))) {
     SQL_PC_LOG(WARN, "failed to init plan cache value");
+  } else if (OB_FAIL(ob_write_string(*pc_alloc_, sql_id_org, sql_id))) {
+    SQL_PC_LOG(WARN, "failed to deep copy sql_id_", K(sql_id_org), K(ret));
+  } else if (OB_FAIL(push_sql_id(sql_id))) {
+    SQL_PC_LOG(WARN, "failed to push sql_id_", K(ret));
   } else {
     // do nothing
   }

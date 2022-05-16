@@ -82,6 +82,7 @@ class ObPxSqcHandler;
 class ObOpSpec;
 class ObOperator;
 class ObOpInput;
+class ObSql;
 class ObEvalCtx;
 typedef common::ObArray<const common::ObIArray<int64_t>*> ObRowIdListArray;
 // Physical operator kit: operator specification, operator, operator input

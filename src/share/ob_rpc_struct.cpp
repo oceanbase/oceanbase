@@ -3349,9 +3349,9 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg& other)
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
 
-OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_);
+OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
-OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_);
+OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
 OB_SERIALIZE_MEMBER(ObAdminLoadBaselineArg, tenant_ids_, sql_id_, plan_hash_value_, fixed_, enabled_);
 

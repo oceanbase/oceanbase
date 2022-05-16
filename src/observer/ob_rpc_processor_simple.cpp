@@ -996,7 +996,16 @@ int ObFlushCacheP::process()
       } else if (NULL == (pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid argument", K(pcm), K(ret));
-      } else if (arg_.is_all_tenant_) {  // flush all tenant cache
+      } else if (arg_.is_fine_grained_) { // fine-grained plan cache evict
+        if (arg_.db_ids_.count() == 0) {
+          uint64_t db_id = OB_INVALID_ID;
+          ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, db_id, arg_.sql_id_);
+        } else {
+          for (uint64_t i=0; OB_SUCC(ret) && i<arg_.db_ids_.count(); i++) {
+            ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, arg_.db_ids_.at(i), arg_.sql_id_);
+          }
+        }
+      } else if (arg_.is_all_tenant_) { //flush all tenant cache
         ret = pcm->flush_all_plan_cache();
       } else {  // flush appointed tenant cache
         ret = pcm->flush_plan_cache(arg_.tenant_id_);

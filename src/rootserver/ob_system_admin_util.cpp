@@ -3137,6 +3137,8 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg& arg)
   int64_t tenant_num = arg.tenant_ids_.count();
   ObSEArray<ObAddr, 8> server_list;
   ObFlushCacheArg fc_arg;
+  // fine-grained plan evict only will pass this way. 
+  // This because fine-grained plan evict must specify tenant
   // if tenant num is 0, flush all tenant, else, flush appointed tenant
   if (tenant_num != 0) {  // flush appointed tenant
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_num; ++i) {
@@ -3147,6 +3149,16 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg& arg)
         // call tenant servers;
         fc_arg.is_all_tenant_ = false;
         fc_arg.cache_type_ = arg.cache_type_;
+        // fine-grained plan evict args
+        if (arg.is_fine_grained_) {
+          fc_arg.sql_id_ = arg.sql_id_;
+          fc_arg.is_fine_grained_ = arg.is_fine_grained_;
+          for(int64_t j=0; OB_SUCC(ret) && j<arg.db_ids_.count(); j++) {
+            if (OB_FAIL(fc_arg.push_database(arg.db_ids_.at(j)))) {
+              LOG_WARN("fail to add db ids", K(ret));
+            }
+          }
+        }
         for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); ++j) {
           fc_arg.tenant_id_ = arg.tenant_ids_.at(i);
           LOG_INFO("flush server cache", K(fc_arg), K(server_list.at(j)));

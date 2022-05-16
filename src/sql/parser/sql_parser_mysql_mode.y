@@ -307,7 +307,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
 %type <node> opt_force
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
-%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor
+%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
@@ -3631,6 +3631,24 @@ database_option
 | database_option_list  database_option
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+databases_expr:
+DATABASES opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_LIST, 1, $3);
+};
+
+opt_databases:
+databases_expr
+{
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
 }
 ;
 
@@ -11446,14 +11464,16 @@ ALTER SYSTEM BOOTSTRAP server_info_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BOOTSTRAP, 3, server_list, NULL, NULL);
 }
 |
-ALTER SYSTEM FLUSH cache_type CACHE opt_tenant_list flush_scope
+ALTER SYSTEM FLUSH cache_type CACHE opt_sql_id opt_databases opt_tenant_list flush_scope
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 3, $4, $6, $7);
+  // system tenant use only.
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 5, $4, $6, $7, $8, $9);
 }
 |
+// this just is a Syntactic sugar, only used to be compatible to plan cache's Grammar
 ALTER SYSTEM FLUSH SQL cache_type opt_tenant_list flush_scope
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 3, $5, $6, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 5, $5, NULL, NULL, $6, $7);
 }
 |
 ALTER SYSTEM FLUSH KVCACHE opt_tenant_name opt_cache_name

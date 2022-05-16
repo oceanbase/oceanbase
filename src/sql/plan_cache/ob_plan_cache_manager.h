@@ -87,6 +87,7 @@ public:
   int revert_ps_cache(const uint64_t& tenant_id);
   int flush_all_plan_cache();
   int flush_plan_cache(const uint64_t tenant_id);
+  int flush_plan_cache_by_sql_id(uint64_t tenant_id, uint64_t db_id, common::ObString sql_id);
   int flush_all_pl_cache();
   int flush_pl_cache(const uint64_t tenant_id);
   int flush_all_ps_cache();

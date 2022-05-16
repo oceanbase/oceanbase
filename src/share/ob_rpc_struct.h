@@ -4720,22 +4720,25 @@ struct ObAdminFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObAdminFlushCacheArg() : cache_type_(CACHE_TYPE_INVALID)
-  {}
-  virtual ~ObAdminFlushCacheArg()
-  {}
+  ObAdminFlushCacheArg() :
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false)
+  {
+  }
+  virtual ~ObAdminFlushCacheArg() {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  int push_tenant(uint64_t tenant_id)
-  {
-    return tenant_ids_.push_back(tenant_id);
-  }
-  TO_STRING_KV(K_(tenant_ids), K_(cache_type));
+  int push_tenant(uint64_t tenant_id) { return tenant_ids_.push_back(tenant_id); }
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K_(tenant_ids), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   common::ObSEArray<uint64_t, 8> tenant_ids_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObAdminMigrateUnitArg {
@@ -5456,19 +5459,26 @@ struct ObFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObFlushCacheArg() : is_all_tenant_(false), tenant_id_(common::OB_INVALID_TENANT_ID), cache_type_(CACHE_TYPE_INVALID)
-  {}
+   ObFlushCacheArg() :
+    is_all_tenant_(false),
+    tenant_id_(common::OB_INVALID_TENANT_ID),
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false){};
   virtual ~ObFlushCacheArg()
   {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type));
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   bool is_all_tenant_;
   uint64_t tenant_id_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObGetAllSchemaArg {
