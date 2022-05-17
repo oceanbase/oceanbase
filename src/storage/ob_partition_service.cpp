@@ -499,6 +499,7 @@ int ObPartitionService::init(const blocksstable::ObStorageEnv& env, const ObAddr
       srv_rpc_proxy_ = &srv_rpc_proxy;
       bandwidth_throttle_ = &bandwidth_throttle;
       is_inited_ = true;
+      STORAGE_LOG(INFO,"partition service inited success");
     }
   }
 
