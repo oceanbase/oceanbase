@@ -38,6 +38,7 @@
  *                                                     *
  * *****************************************************/
 
+#if defined(__loongarch64)
 .file "jump_loongarch64_sysv_elf_gas.S"
 .text
 .globl jump_fcontext
@@ -119,3 +120,4 @@ jump_fcontext:
 
 /* Mark that we don't need executable stack.  */
 .section .note.GNU-stack,"",%progbits
+#endif
