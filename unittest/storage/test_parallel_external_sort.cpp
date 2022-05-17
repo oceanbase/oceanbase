@@ -57,13 +57,28 @@ public:
   {
     key_ = 0;
     value_.reset();
+    next_ids_ = 0;
+  } 
+  int get_sort_key(uint64_t* key_ptr) 
+  {
+    char* key_buf = reinterpret_cast<char*>(key_ptr);
+    char* ptr = reinterpret_cast<char*>(&key_);
+    memcpy(key_buf, ptr, 8);
+    next_ids_++;
+    return oceanbase::common::OB_SUCCESS;
   }
+  bool get_sort_key_end() 
+  {
+    return next_ids_ >= 1;
+  }  
+
   TO_STRING_KV(K(key_), K(value_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
   int64_t key_;
   ObString value_;
+  int16_t next_ids_;  
 };
 
 class TestItemCompare {
@@ -87,6 +102,7 @@ void TestItem::set(const int64_t key, const char* buf, const int32_t length)
 {
   key_ = key;
   value_.assign_ptr(buf, length);
+  next_ids_ = 0;
 }
 
 int64_t TestItem::get_deep_copy_size() const
@@ -105,6 +121,8 @@ int TestItem::deep_copy(const TestItem& src, char* buf, int64_t len, int64_t& po
     memcpy(buf + pos, src.value_.ptr(), src.value_.length());
     value_.assign_ptr(buf + pos, src.value_.length());
     pos += src.value_.length();
+
+    next_ids_ = src.next_ids_;
   }
   return ret;
 }
@@ -572,6 +590,7 @@ void TestParallelExternalSort::test_multi_sort_round(
 
 void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limit, const int64_t items_cnt)
 {
+
   int ret = OB_SUCCESS;
   typedef ObExternalSortRound<TestItem, TestItemCompare> SortRound;
   typedef ObMemorySortRound<TestItem, TestItemCompare> MemorySortRound;
@@ -595,6 +614,7 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
     ret = memory_sort_round.add_item(*total_items.at(i));
     ASSERT_EQ(OB_SUCCESS, ret);
   }
+
   ret = memory_sort_round.finish();
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(memory_sort_round.is_in_memory());
@@ -602,6 +622,7 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
   for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
     ret = memory_sort_round.get_next_item(item);
     ASSERT_EQ(OB_SUCCESS, ret);
+    // printf("i %ld total_items.at(i)->get_key(): %ld, item->get_key(): %ld\n", i, total_items.at(i)->get_key(), item->get_key());
     ASSERT_EQ(total_items.at(i)->get_key(), item->get_key());
   }
   ret = SLOGGER.abort();
@@ -956,6 +977,7 @@ TEST_F(TestParallelExternalSort, test_multi_sort_round)
   }
 }
 
+
 TEST_F(TestParallelExternalSort, test_memory_sort_round)
 {
   const int64_t buf_mem_limit = 8 * 1024 * 1024;
@@ -970,6 +992,7 @@ TEST_F(TestParallelExternalSort, test_memory_sort_round)
     test_memory_sort_round(buf_mem_limit, i);
   }
 }
+
 
 TEST_F(TestParallelExternalSort, test_sort)
 {

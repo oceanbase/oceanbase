@@ -1584,7 +1584,8 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       }
       if (OB_SUCC(ret)) {
         STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
-        ret = sort(keys, values, items_size);
+        SortWithAvx512<T> sortWithAvx;
+        ret = sortWithAvx.sort(keys, values, items_size);
         if (OB_FAIL(ret)) {
           STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
         }
@@ -1662,7 +1663,8 @@ int ObMemorySortRound<T, Compare>::finish()
       }
       if (OB_SUCC(ret)) {
         STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
-        ret = sort(keys, values, items_size);
+        SortWithAvx512<T> sortWithAvx;
+        ret = sortWithAvx.sort(keys, values, items_size);
         if (OB_FAIL(ret)) {
           STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
         }

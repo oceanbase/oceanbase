@@ -11,7 +11,6 @@
  */
 #include <climits>
 #include "storage/ob_avx512_sort.h"
-#include "share/ob_define.h"
 #include "ob_i_store.h"
 
 namespace oceanbase {
@@ -1371,14 +1370,14 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
   return left_w;
 }
 
-inline int64_t lg(int64_t n)
+int64_t lg(int64_t n)
 {
   int64_t k;
   for (k = 0; n > 1; n >>= 1) ++k;
   return k;
 }
 
-inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
+int64_t get_pivot(const uint64_t* ptr, const int64_t left,
                            const int64_t right)
 {
   const int64_t middle = ((right-left) / 2) + left;
@@ -1394,7 +1393,7 @@ inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
   return ret;
 }
 
-inline int64_t quick_sort(uint64_t* keys, uint64_t* values, const int64_t left,
+int64_t quick_sort(uint64_t* keys, uint64_t* values, const int64_t left,
                            const int64_t right)
 {
   const int64_t idx = get_pivot(keys, left, right);
@@ -1406,7 +1405,7 @@ inline int64_t quick_sort(uint64_t* keys, uint64_t* values, const int64_t left,
   return cut;
 }
 
-inline void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
+void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
 {
   int i = idx;
   while(true) {
@@ -1427,7 +1426,7 @@ inline void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
   }
 }
 
-inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
+void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
 {
   for (int64_t i = size / 2 - 1; i >= 0; i--) {
     heapify(keys, values, i, size);
@@ -1448,7 +1447,7 @@ inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
  *  interval length is less than 128, the bitontic sorting realized by 
  *  vectorization is needed.
  *  */
-inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left, 
+void do_sort(uint64_t* keys, uint64_t* values, const int64_t left, 
                const int64_t right, int64_t depth_limit)
 {
   const int32_t limit = 128;
@@ -1470,87 +1469,15 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
   }
 }
 
-/*
- * Due to the sorting algorithm implemented by the vectorization method can 
- * only sort numerical arrays.We use key-value to solve this problem. The key 
- * value array is used for comparison and sorting, the value array holds pointers 
- * to sorted elements. When the elements of the key exchanged, the elements 
- * of value are also exchanged.
- *
- * */
-template <typename T>
-int sort_loop(uint64_t* keys, T** values, int64_t round, 
-                int64_t left, int64_t right)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = left; OB_SUCC(ret) && i < right; i++) {
-    // Use the get_sort_key method provided by T to get the key needed for sorting
-    ret = values[i]->get_sort_key(&keys[i]);
-  }
-  if (OB_SUCC(ret)) {
-    // sort the keys array
-    do_sort(keys, (uint64_t*)values, left, right - 1, lg(right - left) * 2);
-  }
-  /*
-   * Process the same key value
-   *
-   * example:
-   * If we use the sorting algorithm to sort the type T:
-   *    struct T {
-   *      uint64_t a,
-   *      uint64_t b
-   *      };
-   * T's comparison function: 
-   *    compare(T& t1, T& t2) {return t1.a == t2.a ? t1.b < t2.b : t1.a < t2.a;}
-   *
-   * Since the sorting algorithm implemented by vectorization can only sort 
-   * numeric types, we first use T.a as the key to sort according to the 
-   * comparison function. After a round of sorting with T.a, the same value 
-   * of T.a will be sorted together, E.g: 
-   *    1 1 1 2 2 3 3 3 3 3
-   *
-   * For the same T as T.a, we need to use T.b as the key for the next round of sorting.
-   *
-   * */
-  int64_t idx = left;
-  while (OB_SUCC(ret)) {
-    while (idx < right - 1 && keys[idx] != keys[idx + 1]) {
-      idx++;
-    }
-    int64_t next_left = idx;
-    while (idx < right - 1 && keys[idx] == keys[idx + 1]) {
-      idx++;
-    }
-    idx++;
-    while (next_left < idx && next_left < right && 
-             values[next_left]->get_sort_key_end()) {
-      next_left++;
-    }
-    if (next_left >= right - 1) {
-      break;
-    }
-    if (idx - next_left > 1) {
-      ret = sort_loop(keys, values, round + 1, next_left, idx);
-    }
-  }
-  return ret;
-}
 
-template <typename T>
-int sort(uint64_t* keys, T** values, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (keys == NULL || values == NULL || size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    ret = sort_loop<T>(keys, values, 0, 0, size);
-  }
-  return ret;
-}
 
-// template int sort(uint64_t* keys, ObSortRow** values,
+// // template int sort(uint64_t* keys, ObSortRow** values,
+// //                     const int64_t size);
+// template <typename T> 
+// int SortWithAvx512::sort(uint64_t* keys, T** values, const int64_t size);
+
+// template int sort(uint64_t* keys, ObStoreRow** values,
 //                     const int64_t size);
-template int sort(uint64_t* keys, ObStoreRow** values,
-                    const int64_t size);
+
 }  // end namespace storage
 }  // end namespace oceanbase
