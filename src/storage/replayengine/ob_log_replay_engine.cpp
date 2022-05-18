@@ -2006,7 +2006,7 @@ void ObLogReplayEngine::process_replay_ret_code_(const int ret_code, const int64
 int ObLogReplayEngine::pre_check_(const ObPartitionKey& pkey, ObReplayStatus& replay_status, ObReplayTask& task)
 {
   // Only set the status of ObReplaystatus to ERROR when encounts fatal error,
-  // to avoid replay tasks of current partiiton run out the memory of tenant, resulting in affecting other
+  // to avoid replay tasks of current partition run out the memory of tenant, resulting in affecting other
   // partitions
   int ret = OB_SUCCESS;
   if (replay_status.get_rwlock().try_rdlock()) {
