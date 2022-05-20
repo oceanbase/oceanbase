@@ -177,6 +177,9 @@ int ObBuildIndexBaseTask::check_partition_need_build_index(const ObPartitionKey&
     need_build = false;
     ObTaskController::get().allow_next_syslog();
     STORAGE_LOG(INFO, "The table does not exist, no need to create index, ", K(index_schema.get_table_id()));
+  } else if (INDEX_STATUS_UNAVAILABLE != new_index_schema->get_index_status()) {
+    need_build = false;
+    STORAGE_LOG(INFO, "index build is already completed, skip it", K(ret), K(new_index_schema->get_table_id()));
   } else if (OB_FAIL(schema_guard.check_partition_exist(
                  pkey.get_table_id(), pkey.get_partition_id(), check_dropped_partition, is_partition_exist))) {
     STORAGE_LOG(WARN, "fail to check partition exist", K(ret), K(pkey), K(index_schema.get_table_id()));
@@ -1484,8 +1487,6 @@ int ObBuildIndexScheduleTask::process()
         STORAGE_LOG(INFO, "index schema has been deleted, skip build it", K(pkey_), K(index_id_));
         is_end = true;
       }
-    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
-      STORAGE_LOG(INFO, "index build is already completed, skip it", K(ret), K(index_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret));
     } else if (OB_FAIL(check_partition_need_build_index(pkey_, *index_schema, *table_schema, part_guard, need_build))) {
