@@ -4325,7 +4325,7 @@ int ObJsonVar::read_var(const char *data, uint8_t type, int64_t *var)
 uint64_t ObJsonVar::var_int2uint(int64_t var)
 {
   ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(ObJsonVar::get_var_type(var));
-  uint64 val = 0;
+  uint64_t val = 0;
   switch (size) {
     case JBLS_UINT8: {
       val = static_cast<uint64_t>(static_cast<int8_t>(var));

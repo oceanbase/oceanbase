@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_backuppiece_operator.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
 
 using namespace oceanbase::share;
 

@@ -1,8 +1,4 @@
 // Copyright 2020 Alibaba Inc. All Rights Reserved
-// Author:
-//     yanfeng <yangyi.yyy@alibaba-inc.com>
-// Normalizer:
-//     yanfeng <yangyi.yyy@alibaba-inc.com>
 
 #ifndef OCEANBASE_SHARE_BACKUP_OB_BACKUP_BACKUPSET_OPERATOR_H_
 #define OCEANBASE_SHARE_BACKUP_OB_BACKUP_BACKUPSET_OPERATOR_H_
@@ -10,6 +6,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/backup/ob_backup_struct.h"
 #include "lib/string/ob_sql_string.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase {
 namespace share {
@@ -114,7 +111,7 @@ public:
   static int delete_task_item(const ObTenantBackupBackupsetTaskItem& task_item, common::ObISQLClient& client);
   static int get_max_succeed_task(const uint64_t tenant_id, const int64_t copy_id,
       ObTenantBackupBackupsetTaskItem& item, common::ObISQLClient& client);
-  // 支持换backup backup dest
+  // support to replace backup backup dest
   static int get_same_backup_set_id_tasks(const bool is_tenant_level, const uint64_t tenant_id,
       const int64_t backup_set_id, common::ObIArray<ObTenantBackupBackupsetTaskItem>& items,
       common::ObISQLClient& client);
