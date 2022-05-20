@@ -169,6 +169,11 @@ void ObBackupDataClean::run3()
     }
 
     set_inner_error(ret);
+    if (OB_SUCCESS != inner_error_) {
+      if (OB_FAIL(update_sys_clean_info())) {
+        LOG_WARN("failed to update sys clean info", K(ret), K(inner_error_));
+      }
+    }
     cleanup_prepared_infos();
 
     if (OB_FAIL(idle())) {
@@ -179,6 +184,22 @@ void ObBackupDataClean::run3()
   }
   FLOG_INFO("[BACKUP_CLEAN]ObBackupDataClean stop");
   is_working_ = false;
+}
+
+int ObBackupDataClean::update_sys_clean_info()
+{
+  int ret = OB_SUCCESS;
+  ObBackupCleanInfo sys_clean_info;
+  if (OB_FAIL(get_backup_clean_info(OB_SYS_TENANT_ID, sys_clean_info))) {
+    LOG_WARN("failed to get sys clean info", K(ret), K(sys_clean_info));
+  } else if (ObBackupCleanInfoStatus::DOING != sys_clean_info.status_) {
+    // do nothing
+  } else if (FALSE_IT(sys_clean_info.result_ = inner_error_)) {
+  } else if (OB_FAIL(
+                 ObTenantBackupCleanInfoOperator::update_clean_info(OB_SYS_TENANT_ID, sys_clean_info, *sql_proxy_))) {
+    LOG_WARN("failed to update sys clean info result", K(ret), K(sys_clean_info));
+  }
+  return ret;
 }
 
 int ObBackupDataClean::get_need_clean_tenants(ObIArray<ObBackupDataCleanTenant> &clean_tenants)

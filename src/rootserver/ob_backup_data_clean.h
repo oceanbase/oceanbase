@@ -259,6 +259,7 @@ private:
   int touch_extern_tenant_name(const ObBackupDataCleanTenant &clean_tenant);
   int touch_extern_clog_info(const ObBackupDataCleanTenant &clean_tenant);
   void set_inner_error(const int32_t result);
+  int update_sys_clean_info();
   int add_log_archive_infos(
       const common::ObIArray<ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant);
   int add_log_archive_info(const ObLogArchiveBackupInfo &log_archive_info, ObBackupDataCleanTenant &clean_tenant);
