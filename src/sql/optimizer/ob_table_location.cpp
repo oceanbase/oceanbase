@@ -1994,8 +1994,10 @@ int ObTableLocation::calculate_partition_ids(ObExecContext& exec_ctx, common::Ob
           LOG_WARN("Get virtual table fake id error", K(ret));
         }
       }
-      if (OB_FAIL(partition_ids.push_back(fake_id))) {
-        LOG_WARN("Add fake partition id error", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(partition_ids.push_back(fake_id))) {
+          LOG_WARN("Add fake partition id error", K(ret));
+        }
       }
     }
   }

@@ -7037,7 +7037,7 @@ int ObPartitionUtils::get_all_part(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid part array", K(part));
     } else {
-      for (int64_t i = 0; i < table_schema.get_part_option().get_part_num(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_part_option().get_part_num(); i++) {
         if (OB_ISNULL(part[i])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid partition info", K(ret), K(i));
