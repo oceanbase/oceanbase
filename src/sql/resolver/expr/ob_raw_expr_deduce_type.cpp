@@ -95,6 +95,8 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr& expr)
       }
     }
   } else {
+    // for enumset query ref `is_set`, need warp enum_to_str/set_to_str expr at
+    // `ObRawExprWrapEnumSet::visit_query_ref_expr`
     expr.set_data_type(ObIntType);
   }
   return ret;
