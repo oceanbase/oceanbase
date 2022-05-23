@@ -985,6 +985,9 @@ int ObStorageOssReader::open(const ObString& uri, const common::ObString& storag
     OB_LOG(WARN, "bucket name of object name is empty", K(ret));
   } else if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_file_exist, remote_md5, file_length))) {
     OB_LOG(WARN, "fail to get file meta", K(bucket_), K(object_), K(ret));
+  } else if (!is_file_exist) {
+    ret = OB_BACKUP_FILE_NOT_EXIST;
+    OB_LOG(WARN, "backup file not exist", K(bucket_), K(object_), K(ret));
   } else if (-1 == file_length) {
     ret = OB_OSS_ERROR;
     OB_LOG(WARN, "fail to get file length", K(bucket_), K(object_), K(ret));
