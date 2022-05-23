@@ -38,6 +38,7 @@
  *                                                     *
  * *****************************************************/
 
+#if defined(__loongarch64)
 .file "make_loongarch64_sysv_elf_gas.S"
 .text
 .globl make_fcontext
@@ -70,3 +71,4 @@ finish:
 .size make_fcontext, .-make_fcontext
 /* Mark that we don't need executable stack.  */
 .section .note.GNU-stack,"",%progbits
+#endif
