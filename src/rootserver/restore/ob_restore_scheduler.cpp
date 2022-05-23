@@ -380,6 +380,8 @@ int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob &job, 
     arg.tenant_schema_.set_compatibility_mode(mode);
     arg.if_not_exist_ = false;
     arg.is_restore_ = true;
+    arg.restore_frozen_status_.frozen_version_ = job.restore_data_version_;
+    arg.restore_frozen_status_.frozen_timestamp_ = job.frozen_snapshot_version_;
     if (OB_FAIL(assign_pool_list(job.pool_list_, arg.pool_list_))) {
       LOG_WARN("fail to get pool list", K(ret), K(job));
     }

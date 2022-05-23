@@ -526,7 +526,8 @@ public:
         if_not_exist_(false),
         sys_var_list_(),
         name_case_mode_(common::OB_NAME_CASE_INVALID),
-        is_restore_(false)
+        is_restore_(false),
+        restore_frozen_status_()
   {}
   virtual ~ObCreateTenantArg(){};
   bool is_valid() const;
@@ -544,6 +545,7 @@ public:
                                                         // is_restore = REPLICA_RESTORE_DATA
   common::ObSArray<ObPartitionKey> restore_log_pkeys_;  // For physical restore, partitions that should be created with
                                                         // is_restore = REPLICA_RESTORE_ARCHIVE_DATA
+  share::ObSimpleFrozenStatus restore_frozen_status_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg {

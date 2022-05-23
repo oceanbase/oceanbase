@@ -481,6 +481,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg& other)
     if_not_exist_ = other.if_not_exist_;
     name_case_mode_ = other.name_case_mode_;
     is_restore_ = other.is_restore_;
+    restore_frozen_status_ = other.restore_frozen_status_;
   }
   return ret;
 }
@@ -495,12 +496,13 @@ DEF_TO_STRING(ObCreateTenantArg)
       K_(name_case_mode),
       K_(is_restore),
       K_(restore_pkeys),
-      K_(restore_log_pkeys));
+      K_(restore_log_pkeys),
+      K_(restore_frozen_status));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg), tenant_schema_, pool_list_, if_not_exist_, sys_var_list_,
-    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_);
+    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_, restore_frozen_status_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {

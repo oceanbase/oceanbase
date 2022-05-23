@@ -13967,6 +13967,7 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
         int64_t non_paxos_replica_num = 0;
         int64_t restore = REPLICA_NOT_RESTORE;
         int64_t table_id = copy.get_table_id();
+        share::ObSimpleFrozenStatus new_frozen_status = frozen_status;
         if (OB_FAIL(ret)) {
         } else if (is_restore) {  // physical restore
           create_mode = OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
@@ -13977,6 +13978,12 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
             int hash_ret = restore_partition_map.get_refactored(extract_pure_id(table_id), status);
             if (OB_SUCCESS == hash_ret) {
               restore = status;
+              // For system tables in physical restore:
+              // 1. REPLICA_RESTORE_DATA: frozen_status will be overwrite by storage, so it's unuseful.
+              // 2. REPLICA_RESTORE_ARCHIVE_DATA: frozen_version will be overwrite so it's unuseful, but
+              // frozen_timestamp should come from backup info to filter clog.
+              // 3. REPLICA_NOT_RESTORE: frozen_status should come from restore cluster.
+              new_frozen_status = arg.restore_frozen_status_;
             } else if (OB_HASH_NOT_EXIST == hash_ret) {
               // create sys table in tenant space which were not backuped in lower version.
               restore = REPLICA_NOT_RESTORE;
@@ -14008,7 +14015,7 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
                        is_standby,
                        create_mode,
                        restore,
-                       frozen_status))) {
+                       new_frozen_status))) {
           LOG_WARN("fail to create partitions", K(ret));
         } else {
         }  // no more to do
