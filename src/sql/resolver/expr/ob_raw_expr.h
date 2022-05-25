@@ -1528,7 +1528,7 @@ protected:
   ObRawExprFactory *expr_factory_;
   common::ObString alias_column_name_;
   int32_t expr_level_;
-  common::ObArray<common::ObString> enum_set_values_;  // string_map
+  common::ObSEArray<common::ObString, 1, common::ModulePageAllocator, true> enum_set_values_;  //string_map
   common::ObString expr_name_;
   // for column expr, agg expr, window function expr and query ref exprs
   bool is_explicited_reference_;
