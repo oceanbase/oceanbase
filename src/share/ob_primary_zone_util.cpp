@@ -40,7 +40,7 @@ int ObPrimaryZoneUtil::init(const common::ObIArray<common::ObString>& zone_list)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
+    int64_t len = primary_zone_.length();
     if (common::MAX_ZONE_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
@@ -77,7 +77,7 @@ int ObPrimaryZoneUtil::init(const common::ObIArray<common::ObZone>& zone_list)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
+    int64_t len = primary_zone_.length();
     if (common::MAX_ZONE_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
@@ -109,7 +109,7 @@ int ObPrimaryZoneUtil::init()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
+    int64_t len = primary_zone_.length();
     if (common::MAX_ZONE_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
