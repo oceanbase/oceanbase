@@ -5593,7 +5593,8 @@ def_table_schema(
       ('cpu_max_assigned', 'double'),
       ('mem_capacity', 'int'),
       ('mem_max_assigned', 'int'),
-      ('ssl_key_expired_time', 'int')
+      ('ssl_key_expired_time', 'int'),
+      ('disk_actual', 'int')
   ],
 )
 

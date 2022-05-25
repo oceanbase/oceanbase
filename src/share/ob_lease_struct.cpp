@@ -59,6 +59,7 @@ void ObServerResourceInfo::reset()
   mem_total_ = 0;
   disk_in_use_ = 0;
   disk_total_ = 0;
+  disk_actual_ = 0;
   partition_cnt_ = -1;  // compatible with old server
   report_cpu_assigned_ = 0;
   report_cpu_max_assigned_ = 0;
@@ -69,7 +70,7 @@ void ObServerResourceInfo::reset()
 bool ObServerResourceInfo::is_valid() const
 {
   return cpu_ > 0 && mem_in_use_ >= 0 && mem_total_ > 0 && disk_in_use_ >= 0 && disk_total_ > 0 &&
-         partition_cnt_ >= -1 && report_cpu_assigned_ >= 0 && report_cpu_max_assigned_ >= 0 &&
+         disk_actual_ >= 0 && partition_cnt_ >= -1 && report_cpu_assigned_ >= 0 && report_cpu_max_assigned_ >= 0 &&
          report_mem_assigned_ >= 0 && report_mem_max_assigned_ >= 0;
 }
 
@@ -77,6 +78,7 @@ bool ObServerResourceInfo::operator==(const ObServerResourceInfo& other) const
 {
   return std::fabs(cpu_ - other.cpu_) < OB_DOUBLE_EPSINON && mem_in_use_ == other.mem_in_use_ &&
          mem_total_ == other.mem_total_ && disk_in_use_ == other.disk_in_use_ && disk_total_ == other.disk_total_ &&
+         disk_actual_ == other.disk_actual_ &&
          partition_cnt_ == other.partition_cnt_ &&
          std::fabs(report_cpu_assigned_ - other.report_cpu_assigned_) < OB_DOUBLE_EPSINON &&
          std::fabs(report_cpu_max_assigned_ - other.report_cpu_max_assigned_) < OB_DOUBLE_EPSINON &&
@@ -88,6 +90,7 @@ bool ObServerResourceInfo::operator!=(const ObServerResourceInfo& other) const
 {
   return std::fabs(cpu_ - other.cpu_) > OB_DOUBLE_EPSINON || mem_in_use_ != other.mem_in_use_ ||
          mem_total_ != other.mem_total_ || disk_in_use_ != other.disk_in_use_ || disk_total_ != other.disk_total_ ||
+         disk_actual_ != other.disk_actual_ ||
          partition_cnt_ != other.partition_cnt_ ||
          std::fabs(report_cpu_assigned_ - other.report_cpu_assigned_) > OB_DOUBLE_EPSINON ||
          std::fabs(report_cpu_max_assigned_ - other.report_cpu_max_assigned_) > OB_DOUBLE_EPSINON ||
@@ -95,8 +98,25 @@ bool ObServerResourceInfo::operator!=(const ObServerResourceInfo& other) const
          report_mem_max_assigned_ != other.report_mem_max_assigned_;
 }
 
+int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
+{
+  int ret = OB_SUCCESS;
+  cpu_ = other.cpu_;
+  mem_in_use_ = other.mem_in_use_;
+  mem_total_ = other.mem_total_;
+  disk_in_use_ = other.disk_in_use_;
+  disk_total_ = other.disk_total_;
+  partition_cnt_ = other.partition_cnt_;
+  report_cpu_assigned_ = other.report_cpu_assigned_;
+  report_cpu_max_assigned_ = other.report_cpu_max_assigned_;
+  report_mem_assigned_ = other.report_mem_assigned_;
+  report_mem_max_assigned_ = other.report_mem_max_assigned_;
+  disk_actual_ = other.disk_actual_;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObServerResourceInfo, cpu_, mem_in_use_, mem_total_, disk_in_use_, disk_total_, partition_cnt_,
-    report_cpu_assigned_, report_cpu_max_assigned_, report_mem_assigned_, report_mem_max_assigned_);
+    report_cpu_assigned_, report_cpu_max_assigned_, report_mem_assigned_, report_mem_max_assigned_, disk_actual_);
 
 ObLeaseRequest::ObLeaseRequest()
 {

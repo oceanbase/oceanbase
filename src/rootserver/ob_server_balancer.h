@@ -560,13 +560,14 @@ private:
   };
 
   struct ServerDiskStatistic {
-    ServerDiskStatistic() : server_(), disk_in_use_(0), disk_total_(0), wild_server_(false)
+    ServerDiskStatistic() : server_(), disk_in_use_(0), disk_total_(0), wild_server_(false), disk_actual_(0)
     {}
     void reset()
     {
       server_.reset();
       disk_in_use_ = 0;
       disk_total_ = 0;
+      disk_actual_ = 0;
       wild_server_ = false;
     }
 
@@ -597,13 +598,14 @@ private:
       return percent;
     }
 
-    TO_STRING_KV(K(server_), K(disk_in_use_), K(disk_total_), K(wild_server_));
+    TO_STRING_KV(K(server_), K(disk_in_use_), K(disk_total_), K(wild_server_), K(disk_actual_));
 
     common::ObAddr server_;
     int64_t disk_in_use_;
     int64_t disk_total_;
     // The permanently offline server and the deleted server are called wild_server_
     bool wild_server_;
+    int64_t disk_actual_;
   };
 
   struct ServerDiskStatisticCmp {

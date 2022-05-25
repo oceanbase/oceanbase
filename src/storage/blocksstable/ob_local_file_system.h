@@ -111,7 +111,8 @@ public:
   virtual int get_marker_status(ObMacroBlockMarkerStatus& status) override;
   virtual int read_old_super_block(ObSuperBlockV2& super_block) override;
   virtual int get_super_block_version(int64_t& super_block_version) override;
-  virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage) override;
+  virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage, const int64_t extend_size = 0) override;
+  virtual int64_t get_total_macro_block_max_count() const override;
 
   OB_INLINE int get_block_file_fd() const { return fd_.fd_; }
 

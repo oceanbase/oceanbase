@@ -736,6 +736,11 @@ int64_t ObStoreFileSystem::get_total_macro_block_count() const
   return super_block_.get_total_macro_block_count();
 }
 
+int64_t ObStoreFileSystem::get_total_macro_block_max_count() const
+{
+  return -1;
+}
+
 int64_t ObStoreFileSystem::get_free_macro_block_count() const
 {
   return -1;
@@ -777,10 +782,11 @@ int ObStoreFileSystem::get_bad_block_infos(common::ObArray<ObBadBlockInfo>& bad_
   return OB_SUCCESS;
 }
 
-int ObStoreFileSystem::resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage)
+int ObStoreFileSystem::resize_file(
+    const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage, const int64_t extend_size)
 {
   int ret = OB_NOT_SUPPORTED;
-  UNUSEDx(new_data_file_size, new_data_file_disk_percentage);
+  UNUSEDx(new_data_file_size, new_data_file_disk_percentage, extend_size);
   LOG_WARN("resize file is not supported in current file system", K(ret));
   return ret;
 }
