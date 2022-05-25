@@ -391,6 +391,7 @@ void ObPartTransCtx::reset()
   has_write_or_replay_mutator_redo_log_ = false;
   is_in_redo_with_prepare_ = false;
   ctx_serialize_size_ = 0;
+  prev_checkpoint_id_ = 0;
 }
 
 int ObPartTransCtx::construct_context(const ObTransMsg& msg)
@@ -1646,6 +1647,11 @@ bool ObPartTransCtx::not_need_write_next_log_(const int64_t log_type)
   return is_dup_table_trans_ && is_prepare_leader_revoke_ && ObStorageLogTypeChecker::is_trans_redo_log(log_type);
 }
 
+void ObPartTransCtx::reset_prev_redo_log_ids()
+{
+  prev_redo_log_ids_.reset();
+}
+
 // when submit log success
 int ObPartTransCtx::on_sync_log_success(
     const int64_t log_type, const int64_t log_id, const int64_t timestamp, const bool batch_committed)
@@ -1674,6 +1680,23 @@ int ObPartTransCtx::on_sync_log_success(
     dec_submit_log_count_();
     update_durable_log_id_ts_(log_type, log_id, timestamp);
 
+    if ((log_type & OB_LOG_TRANS_RECORD) != 0) {
+      reset_prev_redo_log_ids();
+      prev_checkpoint_id_ = log_id;
+      TRANS_LOG(INFO, "succeed to update prev_checkpoint_id ||| ", K(hash()), K(get_partition()), K(prev_checkpoint_id_));
+      // decide and then submit the next log
+      if (need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else {
+        ObStorageLogType next_log_type = ObStorageLogType::OB_LOG_UNKNOWN;
+        if (OB_FAIL(decide_and_submit_next_log_(next_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
+        }
+      }
+    }
+
     if ((log_type & OB_LOG_SP_TRANS_REDO) != 0) {
       has_write_or_replay_mutator_redo_log_ = true;
       ++redo_log_no_;
@@ -1683,8 +1706,12 @@ int ObPartTransCtx::on_sync_log_success(
       }
       if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
         TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
-      } else if (!not_need_write_next_log_(log_type) &&
-                 OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else if (!not_need_write_next_log_(log_type)
+                 && OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
         TRANS_LOG(WARN, "submit sp trans commit log task error", KR(ret), "context", *this);
       } else {
         // do nothing
@@ -1776,6 +1803,10 @@ int ObPartTransCtx::on_sync_log_success(
         // record the redo log id
         if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
+        } else if (cluster_version_after_3100_() && need_record_log()) {
+          if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+            TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+          }
         } else if (not_need_write_next_log_(log_type)) {
           // No need to write log for dup table in order to prevent the leader
           // revoke from getting stuck
@@ -1918,49 +1949,16 @@ int ObPartTransCtx::on_sync_log_success(
         TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if ((OB_LOG_TRANS_STATE & log_type) != 0) {
         // do nothing
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
       } else if (batch_commit_trans_) {
         // do nothing
+      } else if (OB_FAIL(decide_and_submit_next_log_(submit_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
       } else {
-        if (OB_FAIL(decide_log_type_for_mutating_(submit_log_type))) {
-          TRANS_LOG(ERROR, "decide log type for mutating fail", KR(ret), "context", *this);
-        } else if (OB_LOG_MUTATOR == submit_log_type && 0 != GCONF._private_buffer_size &&
-                   !mt_ctx_.pending_log_size_too_large() && !has_pending_cb) {
-          // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
-          // logging if all follows are true
-          // 1. _private_redo_buffer is closed
-          // 2. _private_redo_buffer is opened while pending log size is too small for continuing logging
-          // 3. there exists pending callbacks for minor merge
-        } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == submit_log_type || OB_LOG_TRANS_REDO == submit_log_type) &&
-                   OB_FAIL(alloc_local_trans_version_(submit_log_type))) {
-          if (OB_EAGAIN != ret) {
-            TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this, K(submit_log_type));
-          } else {
-            ret = OB_SUCCESS;
-            if (submit_log_count_ > 0) {
-              TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this, K(submit_log_type));
-              need_print_trace_log_ = true;
-            }
-            inc_submit_log_pending_count_();
-            inc_submit_log_count_();
-          }
-        } else if (OB_FAIL(submit_log_task_(submit_log_type, has_redo_log))) {
-          TRANS_LOG(WARN,
-              "submit log task error",
-              KR(ret),
-              "context",
-              *this,
-              K(submit_log_type),
-              K(is_sp_trans_()),
-              K(is_mini_sp_trans_()));
-        } else {
-          TRANS_LOG(DEBUG,
-              "submit log task success",
-              "context",
-              *this,
-              K(submit_log_type),
-              K(submit_log_type),
-              K(has_redo_log));
-        }
+        // do nothing
       }
       if (OB_FAIL(ret)) {
         // Mark the txn need to rollback, and rely on the timer task of
@@ -2148,8 +2146,8 @@ int ObPartTransCtx::compensate_prepare_no_log_()
     } else {
       log_type = OB_LOG_TRANS_PREPARE;
       if (!stc_.is_valid()) {
-        // maybe crashed and recovered from trans status table, stc is not set.
-        // under such condition, stc is set to current time
+        // maybe crashed and recovered from trans status table, stc is not set.		
+        // under such condition, stc is set to current time		
         stc_ = MonotonicTs::current_time();
       }
       if (OB_FAIL(alloc_local_trans_version_(log_type))) {
@@ -3796,8 +3794,47 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
   return ret;
 }
 
-int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64_t timestamp, const uint64_t log_id,
-    const bool batch_committed, const int64_t checkpoint)
+int ObPartTransCtx::replay_record_log(const ObTransRecordLog &log,
+    const int64_t timestamp, const uint64_t log_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::fast_current_time();
+  CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
+  TRANS_LOG(INFO, "before replaying record log: ", K(log_id), K(prev_redo_log_ids_), K(prev_checkpoint_id_));
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!for_replay_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(!log.is_valid()) || OB_UNLIKELY(timestamp < 0)) {
+    TRANS_LOG(WARN, "invalid argument", K(log), K(timestamp), K(log_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_TRANS_RECORD, timestamp))) {
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log));
+    ret = OB_TRANS_INVALID_STATE;
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(is_hazardous_ctx_)) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(ERROR, "current ctx status is hazardous", K(ret), K(*this));
+  } else {
+    submit_log_count_ = 0;
+    update_durable_log_id_ts_(OB_LOG_TRANS_RECORD, log_id, timestamp);
+    reset_prev_redo_log_ids();
+    prev_checkpoint_id_ = log_id;
+    TRANS_LOG(INFO, "replay record log success", K(prev_redo_log_ids_), K(prev_checkpoint_id_), "context", *this);
+    REC_TRANS_TRACE_EXT(tlog_, replay_record, OB_ID(ret), ret, OB_ID(used), ObTimeUtility::fast_current_time() - start,
+        OB_ID(id), log_id, OB_ID(t), timestamp, OB_ID(uref), get_uref());
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog &log,
+    const int64_t timestamp, const uint64_t log_id, const bool batch_committed,
+    const int64_t checkpoint)
 {
   UNUSED(checkpoint);
   int ret = OB_SUCCESS;
@@ -3950,7 +3987,6 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
         end_log_ts_ = timestamp;
       }
     }
-    TRANS_LOG(DEBUG, "replay prepare log success", "context", *this, K(log));
   }
   REC_TRANS_TRACE_EXT(tlog_,
       replay_prepare,
@@ -4803,7 +4839,25 @@ bool ObPartTransCtx::has_logged_() const
   return (mutator_log_no_ > 0 || has_trans_state_log_ || redo_log_no_ > 0);
 }
 
-int ObPartTransCtx::reserve_log_header_(char* buf, const int64_t size, int64_t& pos)
+bool ObPartTransCtx::need_record_log() const
+{
+  // Record Log will be generated if the number of log ids
+  // is no less than the max size of prev_redo_log_ids_
+  uint64_t prev_log_ids_count = MAX_PREV_LOG_IDS_COUNT;
+
+   #ifdef ERRSIM
+  // Error injection test, used for changing prev_log_ids_count for test
+  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  if (tmp_ret != OB_SUCCESS) {
+    prev_log_ids_count = 2;
+    TRANS_LOG(INFO, "need_record_log: ", K(prev_log_ids_count));
+  }
+  #endif
+
+  return prev_redo_log_ids_.count() >= prev_log_ids_count;
+}
+
+int ObPartTransCtx::reserve_log_header_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -4955,7 +5009,8 @@ int ObPartTransCtx::fill_prepare_log_(char* buf, const int64_t size, int64_t& po
           guard.get_elr_trans_arr(),
           can_elr_,
           trace_info_.get_app_trace_info(),
-          xid_);
+          xid_,
+          prev_checkpoint_id_);
       if (OB_UNLIKELY(!log.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid prepare log", K(ret), K(log));
@@ -5009,7 +5064,38 @@ int ObPartTransCtx::fill_commit_log_(char* buf, const int64_t size, int64_t& pos
   return ret;
 }
 
-int ObPartTransCtx::fill_pre_commit_log_(char* buf, const int64_t size, int64_t& pos)
+int ObPartTransCtx::fill_record_log_(char *buf, const int64_t size, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = pos;
+  int64_t prev_log_ids_count = (int64_t)prev_redo_log_ids_.count();
+
+  // Create a ObTransRecordLog and pass the log_id of prev checkpoint to it
+  ObTransRecordLog log(OB_LOG_TRANS_RECORD, self_, trans_id_, cluster_id_, prev_checkpoint_id_);
+  TRANS_LOG(INFO, "succeed to create record log", K(trans_id_), K(prev_checkpoint_id_), K(log.get_prev_record_log_id()));
+  #ifdef ERRSIM
+  // Error injection test, used for changing prev_log_ids_count for test
+  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  if (tmp_ret != OB_SUCCESS) {
+    prev_log_ids_count = 2;
+    TRANS_LOG(INFO, "set_prev_log_ids_count: ", K(prev_log_ids_count));
+  }
+  #endif
+  // Add current all log_ids to the record log
+  for (int i = 0; i < prev_log_ids_count; ++i) {
+    log.add_log_id(prev_redo_log_ids_.at(i));
+  }
+
+  if (OB_FAIL(log.serialize(buf, size, tmp_pos))) {
+    TRANS_LOG(WARN, "serialize commit log error", K(ret), K(log));
+  } else {
+    pos = tmp_pos;
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::fill_pre_commit_log_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -5379,7 +5465,8 @@ int ObPartTransCtx::fill_sp_commit_log_(const int target_log_type, char* buf, co
                    checkpoint,
                    guard.get_elr_trans_arr(),
                    can_elr_,
-                   trace_info_.get_app_trace_info()))) {
+                   trace_info_.get_app_trace_info(),
+                   prev_checkpoint_id_))) {
       TRANS_LOG(WARN,
           "init commit log error",
           KR(ret),
@@ -6363,6 +6450,10 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
         }
         case OB_LOG_TRANS_COMMIT: {
           ret = fill_commit_log_(buf, size, pos);
+          break;
+        }
+        case OB_LOG_TRANS_RECORD: {
+          ret = fill_record_log_(buf, size, pos);
           break;
         }
         case OB_LOG_TRANS_PREPARE_WITH_COMMIT: {
@@ -10470,6 +10561,8 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     prepare_log_id_ = ctx_info.prepare_log_id_;
     prepare_log_timestamp_ = ctx_info.prepare_log_timestamp_;
     clear_log_base_ts_ = ctx_info.clear_log_base_ts_;
+    // for record log
+    prev_checkpoint_id_ = ctx_info.prev_checkpoint_id_;
 
     (void)mark_dirty_trans();
 
@@ -10551,6 +10644,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.prepare_log_id_ = prepare_log_id_;
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
     info.clear_log_base_ts_ = clear_log_base_ts_;
+    info.prev_checkpoint_id_ = prev_checkpoint_id_;
     TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
   }
 
@@ -11354,7 +11448,7 @@ int ObPartTransCtx::check_if_terminated_in_given_log_range(
 
 // See comments in submit_log_impl to understand the log submission state
 // machine
-int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
+int ObPartTransCtx::decide_log_type_for_mutator_and_record_(ObStorageLogType& log_type)
 {
   int ret = OB_SUCCESS;
   if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::LOGGING_NOT_FINISH) {
@@ -11382,6 +11476,50 @@ int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
   } else {
     log_type = OB_LOG_MUTATOR;
   }
+  return ret;
+}
+
+int ObPartTransCtx::decide_and_submit_next_log_(storage::ObStorageLogType& log_type, 
+                                                bool &has_redo_log,
+                                                bool has_pending_cb)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(decide_log_type_for_mutator_and_record_(log_type))) {
+    TRANS_LOG(ERROR, "decide log type for mutator and record fail", KR(ret), "context", *this);
+  } else if (OB_LOG_MUTATOR == log_type &&
+             0 != GCONF._private_buffer_size &&
+             !mt_ctx_.pending_log_size_too_large() &&
+             !has_pending_cb) {
+  // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
+  // logging if all the followings are true
+  // 1. _private_redo_buffer is opened 
+  // 2. pending log size is too small for continuing logging
+  // 3. there are not pending callbacks for minor merge
+  } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == log_type
+              || OB_LOG_TRANS_REDO == log_type)
+              && OB_FAIL(alloc_local_trans_version_(log_type))) {
+    if (OB_EAGAIN != ret) {
+      TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this,
+                K(log_type));
+    } else {
+      ret = OB_SUCCESS;
+      if (submit_log_count_ > 0) {
+        TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this,
+                  K(log_type));
+        need_print_trace_log_ = true;
+      }
+      inc_submit_log_pending_count_();
+      inc_submit_log_count_();
+    }
+  } else if (OB_FAIL(submit_log_task_(log_type, has_redo_log))) {
+    TRANS_LOG(WARN, "submit log task error", KR(ret), "context", *this,
+              K(log_type), K(is_sp_trans_()), K(is_mini_sp_trans_()));
+  } else {
+    TRANS_LOG(DEBUG, "submit log task success", "context", *this,
+              K(log_type), K(log_type), K(has_redo_log));
+  }
+
   return ret;
 }
 
@@ -11526,6 +11664,10 @@ bool ObPartTransCtx::is_trans_valid_for_replay_(const ObStorageLogType log_type,
       }
     } else if (log_type == OB_LOG_START_MEMBERSHIP_STORAGE) {
       // needn't check
+    } else if (log_type == OB_LOG_TRANS_RECORD) {
+      if (Ob2PCState::INIT != state) {
+        ret = false;
+      }
     } else {
       ret = false;
       TRANS_LOG(ERROR, "unknown log type", K(log_type), K(*this));

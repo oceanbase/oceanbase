@@ -208,6 +208,7 @@ public:
   int replay_sp_abort_log(const ObSpTransAbortLog& log, const int64_t timestamp, const uint64_t log_id);
   int replay_redo_log(const ObTransRedoLog& log, const int64_t trans_version, const uint64_t log_id,
       const bool with_prepare, int64_t& log_table_version);
+  int replay_record_log(const ObTransRecordLog &log, const int64_t trans_version, const uint64_t log_id);
   int replay_prepare_log(const ObTransPrepareLog& log, const int64_t trans_version, const uint64_t log_id,
       const bool batch_committed, const int64_t checkpoint);
   int replay_commit_log(const ObTransCommitLog& log, const int64_t trans_version, const uint64_t log_id);
@@ -391,6 +392,7 @@ public:
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
   bool need_update_schema_version(const uint64_t log_id, const int64_t log_ts);
   int update_max_majority_log(const uint64_t log_id, const int64_t log_ts);
+  void reset_prev_redo_log_ids();
 
 public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),
@@ -414,6 +416,7 @@ private:
   bool is_logging_() const;
   bool has_logged_() const;
   bool is_pre_preparing_() const;
+  bool need_record_log() const;
   int reserve_log_header_(char* buf, const int64_t size, int64_t& pos);
   int fill_sp_redo_log_(ObSpTransRedoLog& sp_redo_log, const int64_t available_capacity, int64_t& mutator_size);
   int fill_sp_commit_log_(const int real_log_type, char* buf, const int64_t size, int64_t& pos, int64_t& log_type,
@@ -422,6 +425,7 @@ private:
   int fill_redo_log_(char* buf, const int64_t size, int64_t& pos, int64_t& mutator_size);
   int fill_prepare_log_(char* buf, const int64_t size, int64_t& pos);
   int fill_commit_log_(char* buf, const int64_t size, int64_t& pos);
+  int fill_record_log_(char *buf, const int64_t size, int64_t &pos);
   int fill_abort_log_(char* buf, const int64_t size, int64_t& pos);
   int fill_clear_log_(char* buf, const int64_t size, int64_t& pos);
   int fill_log_header_(char* buf, const int64_t size, int64_t& pos, const int64_t log_type, const int64_t idx);
@@ -582,7 +586,8 @@ private:
   void debug_slow_on_sync_log_success_(const int64_t log_type);
   void DEBUG_SYNC_slow_txn_before_handle_message_(const int64_t msg_type);
   void DEBUG_SYNC_slow_txn_during_2pc_prepare_phase_for_physical_backup_1055_(const int64_t msg_type);
-  int decide_log_type_for_mutating_(storage::ObStorageLogType& log_type);
+  int decide_log_type_for_mutator_and_record_(storage::ObStorageLogType& log_type);
+  int decide_and_submit_next_log_(storage::ObStorageLogType& log_type, bool &has_redo_log, bool has_pending_cb);
   int get_trans_table_status_info_(ObTransTableStatusInfo& trans_table_status_info);
   int get_trans_table_status_info_(const int64_t log_ts, ObTransTableStatusInfo& trans_table_status_info);
   int get_callback_type_(const int64_t sql_sequence, memtable::TransCallbackType& cb_type);
@@ -623,7 +628,7 @@ private:
   static const int64_t REDO_SYNC_TASK_RETRY_INTERVAL_US = 10 * 1000;  // 10ms
   static const int64_t END_STMT_SLEEP_US = 10 * 1000;                 // 10ms
   static const int64_t MAX_END_STMT_RETRY_TIMES = 100;
-
+  static const uint64_t MAX_PREV_LOG_IDS_COUNT = 80000;
 private:
   bool is_inited_;
   ObIClogAdapter* clog_adapter_;
@@ -748,6 +753,8 @@ ObTransSubmitLogCb submit_log_cb_;
   bool has_write_or_replay_mutator_redo_log_;
   bool is_in_redo_with_prepare_;
   int64_t ctx_serialize_size_;
+  // the log id of prev checkpoint log
+  uint64_t prev_checkpoint_id_;
 };
 
 #if defined(__x86_64__)

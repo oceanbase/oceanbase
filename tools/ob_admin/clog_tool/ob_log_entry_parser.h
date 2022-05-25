@@ -131,6 +131,7 @@ protected:
   int dump_sp_trans_commit_log(const char* data, int64_t len, const uint64_t real_tenant_id);
   int dump_sp_trans_abort_log(const char* data, int64_t len);
   int dump_trans_redo_log(const char* data, int64_t len, const uint64_t real_tenant_id);
+  int dump_trans_record_log(const char *data, int64_t len);
   int dump_trans_prepare_log(const char* data, int64_t len);
   int dump_trans_commit_log(const char* data, int64_t len);
   int dump_trans_abort_log(const char* data, int64_t len);

@@ -445,6 +445,10 @@ protected:
   {
     return cluster_version_ < CLUSTER_VERSION_2271;
   }
+  bool cluster_version_after_3100_() const
+  {
+    return cluster_version_ >= CLUSTER_VERSION_3100;
+  }
   bool is_sp_trans_() const
   {
     return trans_type_ == TransType::SP_TRANS;

@@ -3536,6 +3536,7 @@ public:
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
     clear_log_base_ts_ = 0;
+    prev_checkpoint_id_ = 0;
   }
   void destroy()
   {
@@ -3547,7 +3548,7 @@ public:
       K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),
       K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),
       K_(stmt_info), K_(min_log_ts), K_(min_log_id), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
-      K_(prepare_log_timestamp));
+      K_(prepare_log_timestamp), K_(prev_checkpoint_id));
   ObTransTableStatusInfo trans_table_info_;
   common::ObPartitionKey partition_;
   ObStartTransParam trans_param_;
@@ -3582,6 +3583,7 @@ public:
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
   int64_t clear_log_base_ts_;
+  uint64_t prev_checkpoint_id_;
 };
 
 struct CtxInfo final {

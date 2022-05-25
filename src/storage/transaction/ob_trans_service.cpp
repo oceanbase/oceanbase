@@ -4781,6 +4781,43 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
         }
       }
     }
+    if (OB_SUCCESS == ret && ((log_type & OB_LOG_TRANS_RECORD) != 0)) {
+      ObTransRecordLogHelper helper;
+      ObTransRecordLog log(helper);
+      if (OB_FAIL(log.deserialize(logbuf, size, pos))) {
+        TRANS_LOG(WARN, "log deserialize error", KR(ret), K(partition));
+      } else if (real_tenant_id != log.get_tenant_id()
+          && OB_FAIL(log.replace_tenant_id(real_tenant_id))) {
+        TRANS_LOG(WARN, "replace_tenant_id failed", K(ret), K(partition));
+      } else {
+        const ObTransID &trans_id = log.get_trans_id();
+        bool alloc = false;
+        bool light_mgr_ret = true;
+        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
+          light_mgr_ret = false;
+          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                                                        trans_id,
+                                                        for_replay,
+                                                        is_readonly,
+                                                        is_bounded_staleness_read,
+                                                        need_completed_dirty_txn,
+                                                        alloc,
+                                                        ctx))) {
+            TRANS_LOG(WARN, "get transaction context error",
+                KR(ret), K(partition), K(trans_id), K(alloc));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          part_ctx = static_cast<ObPartTransCtx *>(ctx);
+          if (OB_FAIL(part_ctx->replay_record_log(log, timestamp, log_id))) {
+            TRANS_LOG(WARN, "replay record log error", KR(ret), K(log), K(timestamp), K(log_id));
+          }
+        }
+        if (!light_mgr_ret) {
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
+        }
+      }
+    }
     if (OB_SUCCESS == ret && ((log_type & OB_LOG_TRANS_COMMIT) != 0)) {
       PartitionLogInfoArray partition_log_info_arr;
       ObTransCommitLog log(partition_log_info_arr);

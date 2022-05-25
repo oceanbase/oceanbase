@@ -25,6 +25,9 @@ const char* get_submit_log_type(const int64_t submit_log_type)
     case OB_LOG_TRANS_PREPARE:
       char_ret = "OB_LOG_TRANS_PREPARE";
       break;
+    case OB_LOG_TRANS_RECORD:
+      char_ret = "OB_LOG_TRANS_RECORD";
+      break;
     case OB_LOG_TRANS_REDO_WITH_PREPARE:
       char_ret = "OB_LOG_TRANS_REDO_WITH_PREPARE";
       break;

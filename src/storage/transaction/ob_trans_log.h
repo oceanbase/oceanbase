@@ -345,6 +345,49 @@ private:
   bool is_last_;
 };
 
+class ObTransRecordLogHelper
+{
+public:
+  ObTransRecordLogHelper()
+    : prev_record_log_id_(0) {}
+  ~ObTransRecordLogHelper() {}
+public:
+  uint64_t prev_record_log_id_;
+};
+
+class ObTransRecordLog : public ObTransLog 
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObTransRecordLog(ObTransRecordLogHelper &helper)
+    : ObTransLog(),
+      prev_record_log_id_(helper.prev_record_log_id_),
+      prev_log_ids_(ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE) {}
+
+  ObTransRecordLog(const int64_t log_type, const common::ObPartitionKey &partition,
+      ObTransID &trans_id, const uint64_t cluster_id, 
+      const uint64_t prev_record_log_id)
+    : ObTransLog(log_type, partition, trans_id, cluster_id),
+      prev_record_log_id_(prev_record_log_id), 
+      prev_log_ids_(ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE) {}
+  ~ObTransRecordLog() {}
+public:
+  int replace_tenant_id(const uint64_t new_tenant_id);
+  uint64_t get_prev_record_log_id() const { return prev_record_log_id_; };
+  uint64_t get_log_ids_count() const { return prev_log_ids_.count(); };
+  uint64_t get_log_id(int i) const { return prev_log_ids_.at(i); };
+  void add_log_id(const uint64_t log_id);
+
+  VIRTUAL_TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(prev_record_log_id), K_(prev_log_ids));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTransRecordLog);
+private:
+  // the log_id of the previous record log
+  uint64_t prev_record_log_id_;
+  // the array storing all redo log_ids since the last checkpoint  
+  ObRedoLogIdArray prev_log_ids_;
+};
+
 class ObTransPrepareLogHelper {
 public:
   ObTransPrepareLogHelper()
@@ -362,7 +405,8 @@ public:
         checkpoint_(0),
         prev_trans_arr_(),
         can_elr_(false),
-        xid_()
+        xid_(),
+        prev_record_log_id_(0)
   {}
   ~ObTransPrepareLogHelper()
   {}
@@ -393,6 +437,7 @@ public:
   bool can_elr_;
   common::ObString app_trace_info_;
   ObXATransID xid_;
+  uint64_t prev_record_log_id_;
 };
 
 class ObTransPrepareLog : public ObTransLog {
@@ -404,7 +449,7 @@ public:
       common::ObPartitionArray& participants, ObStartTransParam& trans_param, const int prepare_status,
       ObRedoLogIdArray& prev_redo_log_ids, const uint64_t cluster_id, common::ObString& app_trace_id_str,
       PartitionLogInfoArray& partition_log_info, const int64_t checkpoint, ObElrTransInfoArray& prev_trans_arr,
-      const bool can_elr, const common::ObString& app_trace_info, ObXATransID& xid)
+      const bool can_elr, const common::ObString& app_trace_info, ObXATransID& xid, const uint64_t prev_record_log_id)
       : ObTransLog(log_type, partition, trans_id, cluster_id),
         tenant_id_(tenant_id),
         scheduler_(scheduler),
@@ -421,7 +466,8 @@ public:
         prev_trans_arr_(prev_trans_arr),
         can_elr_(can_elr),
         app_trace_info_(app_trace_info),
-        xid_(xid)
+        xid_(xid),
+        prev_record_log_id_(prev_record_log_id)
   {}
 
   ObTransPrepareLog(ObTransPrepareLogHelper& helper)
@@ -441,7 +487,8 @@ public:
         prev_trans_arr_(helper.prev_trans_arr_),
         can_elr_(false),
         app_trace_info_(helper.app_trace_info_),
-        xid_(helper.xid_)
+        xid_(helper.xid_),
+        prev_record_log_id_(helper.prev_record_log_id_)
   {}
 
   ~ObTransPrepareLog()
@@ -451,6 +498,10 @@ public:
   uint64_t get_tenant_id() const override
   {
     return tenant_id_;
+  }
+  uint64_t get_prev_record_log_id() const
+  {
+    return prev_record_log_id_;
   }
   const common::ObAddr& get_scheduler() const
   {
@@ -515,7 +566,7 @@ public:
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(scheduler), K_(coordinator),
       K_(participants), K_(trans_param), K_(prepare_status), K_(prev_redo_log_ids), K_(cluster_id),
       K_(active_memstore_version), K_(app_trace_id_str), K_(partition_log_info_arr), K_(checkpoint), K_(prev_trans_arr),
-      K_(can_elr), K_(app_trace_info), K_(xid));
+      K_(can_elr), K_(app_trace_info), K_(xid), K_(prev_record_log_id));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransPrepareLog);
@@ -546,6 +597,7 @@ private:
   bool can_elr_;
   common::ObString app_trace_info_;
   ObXATransID& xid_;
+  uint64_t prev_record_log_id_;
 };
 
 class ObTransCommitLog : public ObTransLog {
@@ -797,7 +849,8 @@ public:
         prev_redo_log_ids_(common::ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
         app_trace_id_str_(),
         checkpoint_(0),
-        app_trace_info_()
+        app_trace_info_(),
+        prev_record_log_id_(0)
   {}
   ObSpTransCommitLog(ObSpTransCommitLogHelper& helper)
       : ObSpTransRedoLog(helper),
@@ -806,7 +859,8 @@ public:
         prev_redo_log_ids_(common::ObModIds::OB_TRANS_REDO_LOG_ID_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
         app_trace_id_str_(),
         checkpoint_(0),
-        app_trace_info_()
+        app_trace_info_(),
+        prev_record_log_id_(0)
   {}
   ~ObSpTransCommitLog()
   {}
@@ -814,7 +868,7 @@ public:
       const ObTransID& trans_id, const uint64_t checksum, const uint64_t cluster_id,
       const ObRedoLogIdArray& redo_log_id_arr, const ObStartTransParam& trans_param, const int64_t log_no,
       const common::ObString& app_trace_id_str, const int64_t checkpoint, const ObElrTransInfoArray& prev_trans_arr,
-      const bool can_elr, const common::ObString& app_trace_info);
+      const bool can_elr, const common::ObString& app_trace_info, const uint64_t prev_record_log_id);
 
 public:
   uint64_t get_checksum() const
@@ -825,6 +879,10 @@ public:
   {
     checksum_ = checksum;
     return common::OB_SUCCESS;
+  }
+  uint64_t get_prev_record_log_id() const
+  {
+    return prev_record_log_id_;
   }
   const ObRedoLogIdArray& get_redo_log_ids() const
   {
@@ -850,7 +908,7 @@ public:
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(trans_param), K_(cluster_id),
       K_(active_memstore_version), K_(checksum), K_(prev_redo_log_ids), K_(app_trace_id_str), K_(checkpoint),
-      K_(prev_trans_arr), K_(app_trace_info));
+      K_(prev_trans_arr), K_(app_trace_info),  K_(prev_record_log_id));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSpTransCommitLog);
@@ -869,6 +927,7 @@ private:
   common::ObString app_trace_id_str_;
   int64_t checkpoint_;
   common::ObString app_trace_info_;
+  uint64_t prev_record_log_id_;
 };
 
 class ObSpTransAbortLog : public ObTransLog {

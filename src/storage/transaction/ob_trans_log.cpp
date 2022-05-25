@@ -30,9 +30,10 @@ OB_SERIALIZE_MEMBER((ObTransRedoLog, ObTransLog), tenant_id_, log_no_, scheduler
     trans_param_, mutator_, active_memstore_version_, prev_trans_arr_, can_elr_, xid_, is_last_);
 OB_SERIALIZE_MEMBER((ObTransPrepareLog, ObTransLog), tenant_id_, scheduler_, coordinator_, participants_, trans_param_,
     prepare_status_, prev_redo_log_ids_, local_trans_version_, active_memstore_version_, app_trace_id_str_,
-    partition_log_info_arr_, checkpoint_, prev_trans_arr_, can_elr_, app_trace_info_, xid_);
+    partition_log_info_arr_, checkpoint_, prev_trans_arr_, can_elr_, app_trace_info_, xid_, prev_record_log_id_);
 OB_SERIALIZE_MEMBER(
     (ObTransCommitLog, ObTransLog), partition_log_info_arr_, global_trans_version_, checksum_, split_info_);
+OB_SERIALIZE_MEMBER((ObTransRecordLog, ObTransLog), prev_record_log_id_, prev_log_ids_);
 OB_SERIALIZE_MEMBER((ObTransPreCommitLog, ObTransLog), publish_version_);
 OB_SERIALIZE_MEMBER((ObTransAbortLog, ObTransLog), partition_log_info_arr_, split_info_);
 OB_SERIALIZE_MEMBER((ObTransClearLog, ObTransLog));
@@ -40,7 +41,7 @@ OB_SERIALIZE_MEMBER((ObTransClearLog, ObTransLog));
 OB_SERIALIZE_MEMBER((ObSpTransRedoLog, ObTransLog), tenant_id_, log_no_, trans_param_, mutator_,
     active_memstore_version_, prev_trans_arr_, can_elr_);
 OB_SERIALIZE_MEMBER((ObSpTransCommitLog, ObSpTransRedoLog), global_trans_version_, checksum_, prev_redo_log_ids_,
-    app_trace_id_str_, checkpoint_, app_trace_info_);
+   app_trace_id_str_, checkpoint_, app_trace_info_, prev_record_log_id_);
 OB_SERIALIZE_MEMBER((ObSpTransAbortLog, ObTransLog));
 OB_SERIALIZE_MEMBER(ObCheckpointLog, checkpoint_);
 
@@ -324,6 +325,27 @@ int ObTransMutatorIterator::get_next(ObPartitionKey& pkey, ObTransMutator& mutat
       pos_ = tmp_pos + size;
     }
   }
+  return ret;
+}
+
+void ObTransRecordLog::add_log_id(const uint64_t log_id) 
+{
+  prev_log_ids_.push_back(log_id);
+}
+
+int ObTransRecordLog::replace_tenant_id(const uint64_t new_tenant_id) 
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_valid_tenant_id(new_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(new_tenant_id), K_(partition));
+  } else if (new_tenant_id == partition_.get_tenant_id()) {
+    // no need update tenant_id, skip
+  } else if (OB_FAIL(ObTransLog::inner_replace_tenant_id(new_tenant_id))) {
+    TRANS_LOG(WARN, "inner_replace_tenant_id failed", K(ret));
+  } else {}
+
   return ret;
 }
 
@@ -759,7 +781,7 @@ int ObSpTransCommitLog::init(const int64_t log_type, const ObPartitionKey& parti
     const ObTransID& trans_id, const uint64_t checksum, const uint64_t cluster_id, const ObRedoLogIdArray& redo_log_ids,
     const ObStartTransParam& trans_param, const int64_t log_no, const ObString& app_trace_id_str,
     const int64_t checkpoint, const ObElrTransInfoArray& prev_trans_arr, const bool can_elr,
-    const common::ObString& app_trace_info)
+    const common::ObString& app_trace_info, const uint64_t prev_record_log_id)
 {
   int ret = OB_SUCCESS;
 
@@ -788,6 +810,7 @@ int ObSpTransCommitLog::init(const int64_t log_type, const ObPartitionKey& parti
     (void)app_trace_info_.assign_ptr(app_trace_info.ptr(), app_trace_info.length());
     checksum_ = checksum;
     checkpoint_ = checkpoint;
+    prev_record_log_id_ = prev_record_log_id;
   }
 
   return ret;
