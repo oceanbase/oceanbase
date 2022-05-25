@@ -22386,6 +22386,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
     const uint64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard, int64_t &pz_entity_count)
 {
   int ret = OB_SUCCESS;
+  int64_t table_pz_count = 0, db_pz_count = 0, tg_pz_count = 0;
   common::ObArray<const ObDatabaseSchema *> database_schemas;
   common::ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
   common::ObArray<const ObTablegroupSchema *> tablegroup_schemas;
@@ -22410,6 +22411,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        table_pz_count++;
       }
     }
     // databases
@@ -22422,6 +22424,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        db_pz_count++;
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablegroup_schemas.count(); ++i) {
@@ -22433,9 +22436,19 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        tg_pz_count++;
       }
     }
   }
+
+  LOG_INFO("get tenant primary zone entity count",
+      K(tenant_id),
+      K(pz_entity_count),
+      K(table_pz_count),
+      K(db_pz_count),
+      K(tg_pz_count),
+      KR(ret));
+
   return ret;
 }
 
