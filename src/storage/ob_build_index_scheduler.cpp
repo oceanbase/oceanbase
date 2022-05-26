@@ -1419,42 +1419,18 @@ int ObBuildIndexScheduleTask::schedule_dag()
 int ObBuildIndexScheduleTask::get_data_size(int64_t &data_size)
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql;
-  SMART_VAR(ObMySQLProxy::MySQLResult, res)
-  {
-    sqlclient::ObMySQLResult *result = NULL;
-    char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
-    if (OB_INVALID_ID == index_id_ || !pkey_.is_valid() || !candidate_replica_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), K(index_id_), K(pkey_), K(candidate_replica_));
-    } else if (!candidate_replica_.ip_to_string(ip, sizeof(ip))) {
-      LOG_WARN("fail to convert ObAddr to ip", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt(
-                   "SELECT used_size, MAX(major_version) from %s "
-                   "WHERE tenant_id = %ld AND table_id = %ld AND partition_id = %ld  AND sstable_id = %ld "
-                   "AND svr_ip = '%s' AND svr_port = %d",
-                   OB_ALL_VIRTUAL_STORAGE_STAT_TNAME,
-                   extract_tenant_id(index_id_),
-                   pkey_.get_table_id(),
-                   pkey_.get_partition_id(),
-                   index_id_,
-                   ip,
-                   candidate_replica_.get_port()))) {
-      STORAGE_LOG(WARN, "fail to assign sql", K(ret));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "error unexpected, query result must not be NULL", K(ret));
-    } else if (OB_FAIL(result->next())) {
-      if (OB_LIKELY(OB_ITER_END == ret)) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get next row", K(ret));
-      }
-    } else {
-      EXTRACT_INT_FIELD_MYSQL(*result, "used_size", data_size, int64_t);
-    }
+  data_size = 0;
+  ObFetchSstableSizeArg arg;
+  ObFetchSstableSizeRes res;
+  arg.pkey_ = pkey_;
+  arg.index_id_ = index_id_;
+  if (OB_UNLIKELY(candidate_replica_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "candidate replica is invalid", K(ret), K(candidate_replica_));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(candidate_replica_).fetch_sstable_size(arg, res))) {
+    STORAGE_LOG(WARN, "fail to get sstable size", K(ret), K(arg));
+  } else {
+    data_size = res.size_;
   }
   return ret;
 }

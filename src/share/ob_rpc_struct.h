@@ -8346,6 +8346,47 @@ public:
   uint64_t index_tid_;
 };
 
+struct ObFetchSstableSizeArg final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeArg() : pkey_(), index_id_(-1)
+  {}
+  ~ObFetchSstableSizeArg()
+  {}
+  bool is_valid() const
+  {
+    return pkey_.is_valid() && index_id_ > 0;
+  }
+  int assign(const ObFetchSstableSizeArg &other);
+  TO_STRING_KV(K_(pkey), K_(index_id));
+
+public:
+  common::ObPartitionKey pkey_;
+  int64_t index_id_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeArg);
+};
+
+struct ObFetchSstableSizeRes final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeRes() : size_(0)
+  {}
+  ~ObFetchSstableSizeRes()
+  {}
+  int assign(const ObFetchSstableSizeRes &other);
+  TO_STRING_KV(K_(size));
+
+public:
+  int64_t size_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeRes);
+};
+
 }  // end namespace obrpc
 }  // end namespace oceanbase
 #endif

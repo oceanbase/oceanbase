@@ -7804,7 +7804,10 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
       } else if (OB_FAIL(rebalance_task_mgr_.add_task(task))) {
         LOG_WARN("fail to add task", K(ret), K(task));
       } else {
-        LOG_INFO("add copy local index sstable task", K(ret));
+        ROOTSERVICE_EVENT_ADD("balancer", "add_copy_sstable_task",
+                              "partition", ReplicaInfo(pkey, data_size),
+                              "source", src_member,
+                              "destination", dest_replica);
       }
     }
   }

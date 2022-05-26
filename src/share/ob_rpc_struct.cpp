@@ -4939,5 +4939,30 @@ int ObSubmitBuildIndexTaskArg::assign(const ObSubmitBuildIndexTaskArg &other)
 
 OB_SERIALIZE_MEMBER((ObSubmitBuildIndexTaskArg, ObDDLArg), index_tid_);
 
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeArg, pkey_, index_id_);
+
+int ObFetchSstableSizeArg::assign(const ObFetchSstableSizeArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    pkey_ = other.pkey_;
+    index_id_ = other.index_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeRes, size_);
+
+int ObFetchSstableSizeRes::assign(const ObFetchSstableSizeRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    size_ = other.size_;
+  }
+  return ret;
+}
+
 }  // end namespace obrpc
 }  // namespace oceanbase
