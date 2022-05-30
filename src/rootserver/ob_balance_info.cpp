@@ -524,30 +524,38 @@ TenantBalanceStat::TenantBalanceStat()
       sql_proxy_(NULL),
       filter_logonly_unit_(false),
       gts_partition_pos_(-1)
-{}
+{
+  all_replica_.set_label("TBSReplicaArr");
+  all_partition_.set_label("TBSPartArr");
+  sorted_partition_.set_label("TBSSortPartArr");
+  all_pg_.set_label("TBSPgArr");
+  sorted_pg_.set_label("TBSSortPgArr");
+  all_tg_.set_label("TBSTgArr");
+  all_table_.set_label("TBSTableArr");
+}
 
 void TenantBalanceStat::reuse()
 {
   schema_guard_ = NULL;
   tenant_id_ = OB_INVALID_ID;
-  all_zone_unit_.reuse();
-  all_tg_.reuse();
-  all_table_.reuse();
-  all_pg_.reuse();
-  sorted_pg_.reuse();
-  sorted_partition_.reuse();
-  all_partition_.reuse();
-  all_replica_.reuse();
+  all_zone_unit_.reset();
+  all_tg_.reset();
+  all_table_.reset();
+  all_pg_.reset();
+  sorted_pg_.reset();
+  sorted_partition_.reset();
+  all_partition_.reset();
+  all_replica_.reset();
   server_stat_map_.reuse();
   unit_stat_map_.reuse();
   partition_map_.reuse();
   valid_ = false;
   ru_total_.reset();
   ru_capacity_.reset();
-  readonly_info_.reuse();
-  all_zone_paxos_info_.reuse();
+  readonly_info_.reset();
+  all_zone_paxos_info_.reset();
   gts_partition_pos_ = -1;
-  all_failmsg_.reuse();
+  all_failmsg_.reset();
   min_source_replica_version_ = 0;
   // member not reset:
   // inited_
@@ -1422,7 +1430,7 @@ int TenantBalanceStat::set_unit_capacity_ratio(UnitStat& unit_stat, Partition& g
 int TenantBalanceStat::fill_sorted_partitions()
 {
   int ret = OB_SUCCESS;
-  sorted_partition_.reuse();
+  sorted_partition_.reset();
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1510,8 +1518,8 @@ int TenantBalanceStat::update_partition_statistics()
 int TenantBalanceStat::fill_partition_groups()
 {
   int ret = OB_SUCCESS;
-  all_pg_.reuse();
-  PartitionGroup* pg = NULL;
+  all_pg_.reset();
+  PartitionGroup *pg = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1705,8 +1713,8 @@ int TenantBalanceStat::fill_flag_replicas(const balancer::HashIndexCollection& h
 int TenantBalanceStat::fill_tablegroups()
 {
   int ret = OB_SUCCESS;
-  all_tg_.reuse();
-  TableGroup* tg = NULL;
+  all_tg_.reset();
+  TableGroup *tg = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
