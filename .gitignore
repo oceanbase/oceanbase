@@ -116,3 +116,8 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
+
+###### binary and test logs
+tools/ob-configserver/bin/*
+tools/ob-configserver/tests/*.log
+tools/ob-configserver/tests/*.out
