@@ -47,13 +47,7 @@ int ObExprBaseGreatest::calc_result_typeN(
 int ObExprBaseGreatest::calc_resultN(
     ObObj& result, const ObObj* objs_stack, int64_t param_num, ObExprCtx& expr_ctx) const
 {
-  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, result_type_, expr_ctx, CO_GT, need_cast_);
-}
-
-int ObExprBaseGreatest::calc(
-    ObObj& result, const ObObj* objs_stack, int64_t param_num, const ObExprResType& result_type, ObExprCtx& expr_ctx)
-{
-  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, result_type, expr_ctx, CO_GT, true);
+  return ObMinMaxExprOperator::calc_(result, objs_stack, param_num, result_type_, expr_ctx, CO_GT, need_cast_, get_type());
 }
 
 ObExprGreatestMySQL::ObExprGreatestMySQL(ObIAllocator& alloc) : ObExprBaseGreatest(alloc, MORE_THAN_ONE)
@@ -124,10 +118,12 @@ int ObExprBaseGreatest::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_exp
       const uint32_t real_param_num = param_num / 3;
       for (int64_t i = 0; OB_SUCC(ret) && i < real_param_num; i++) {
         if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                rt_expr.args_[i], rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
+                rt_expr.args_[i], rt_expr.args_[i + real_param_num],
+                &rt_expr, i + real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
-        } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
-                       rt_expr.args_[i], rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
+      } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
+                       rt_expr.args_[i], rt_expr.args_[i + 2 * real_param_num],
+                       &rt_expr, i + 2 * real_param_num))) {
           LOG_WARN("replace var rt expr failed", K(ret));
         }
       }

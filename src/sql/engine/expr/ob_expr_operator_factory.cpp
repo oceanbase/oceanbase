@@ -268,6 +268,43 @@
 #include "sql/engine/expr/ob_expr_quarter.h"
 #include "sql/engine/expr/ob_expr_bit_length.h"
 #include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_degrees.h"
+#include "sql/engine/expr/ob_expr_weight_string.h"
+#include "sql/engine/expr/ob_expr_any_value.h"
+#include "sql/engine/expr/ob_expr_validate_password_strength.h"
+#include "sql/engine/expr/ob_expr_benchmark.h"
+#include "sql/engine/expr/ob_expr_uuid_short.h"
+#include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_to_base64.h"
+#include "sql/engine/expr/ob_expr_from_base64.h"
+#include "sql/engine/expr/ob_expr_json_object.h"
+#include "sql/engine/expr/ob_expr_json_extract.h"
+#include "sql/engine/expr/ob_expr_json_contains.h"
+#include "sql/engine/expr/ob_expr_json_contains_path.h"
+#include "sql/engine/expr/ob_expr_json_depth.h"
+#include "sql/engine/expr/ob_expr_json_keys.h"
+#include "sql/engine/expr/ob_expr_json_search.h"
+#include "sql/engine/expr/ob_expr_json_unquote.h"
+#include "sql/engine/expr/ob_expr_json_quote.h"
+#include "sql/engine/expr/ob_expr_json_array.h"
+#include "sql/engine/expr/ob_expr_json_overlaps.h"
+#include "sql/engine/expr/ob_expr_json_valid.h"
+#include "sql/engine/expr/ob_expr_json_remove.h"
+#include "sql/engine/expr/ob_expr_json_array_append.h"
+#include "sql/engine/expr/ob_expr_json_array_insert.h"
+#include "sql/engine/expr/ob_expr_json_value.h"
+#include "sql/engine/expr/ob_expr_json_replace.h"
+#include "sql/engine/expr/ob_expr_json_type.h"
+#include "sql/engine/expr/ob_expr_json_length.h"
+#include "sql/engine/expr/ob_expr_json_insert.h"
+#include "sql/engine/expr/ob_expr_json_storage_size.h"
+#include "sql/engine/expr/ob_expr_json_storage_free.h"
+#include "sql/engine/expr/ob_expr_json_set.h"
+#include "sql/engine/expr/ob_expr_json_merge_preserve.h"
+#include "sql/engine/expr/ob_expr_json_merge.h"
+#include "sql/engine/expr/ob_expr_json_merge_patch.h"
+#include "sql/engine/expr/ob_expr_json_pretty.h"
+#include "sql/engine/expr/ob_expr_json_member_of.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -608,6 +645,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprAnyValue);
+  REG_OP(ObExprUuidShort);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);
@@ -677,6 +716,41 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprLastDay);
   REG_OP(ObExprTimeFormat);
   REG_OP(ObExprTimestamp);
+  REG_OP(ObExprDegrees);
+  REG_OP(ObExprValidatePasswordStrength);
+  REG_OP(ObExprWeightString);
+  REG_OP(ObExprBenchmark);
+  REG_OP(ObExprDay);
+  REG_OP(ObExprToBase64);
+  REG_OP(ObExprFromBase64);
+  REG_OP(ObExprJsonObject);
+  REG_OP(ObExprJsonExtract);
+  REG_OP(ObExprJsonContains);
+  REG_OP(ObExprJsonContainsPath);
+  REG_OP(ObExprJsonDepth);
+  REG_OP(ObExprJsonKeys);
+  REG_OP(ObExprJsonQuote);
+  REG_OP(ObExprJsonUnquote);
+  REG_OP(ObExprJsonArray);
+  REG_OP(ObExprJsonOverlaps);
+  REG_OP(ObExprJsonRemove);
+  REG_OP(ObExprJsonSearch);
+  REG_OP(ObExprJsonValid);
+  REG_OP(ObExprJsonArrayAppend);
+  REG_OP(ObExprJsonArrayInsert);
+  REG_OP(ObExprJsonValue);
+  REG_OP(ObExprJsonReplace);
+  REG_OP(ObExprJsonType);
+  REG_OP(ObExprJsonLength);
+  REG_OP(ObExprJsonInsert);
+  REG_OP(ObExprJsonStorageSize);
+  REG_OP(ObExprJsonStorageFree);
+  REG_OP(ObExprJsonSet);
+  REG_OP(ObExprJsonMergePreserve);
+  REG_OP(ObExprJsonMerge);
+  REG_OP(ObExprJsonMergePatch);
+  REG_OP(ObExprJsonPretty);
+  REG_OP(ObExprJsonMemberOf);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
@@ -823,8 +897,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprToBinaryDouble);
   REG_OP_ORCL(ObExprOracleNullif);
   REG_OP_ORCL(ObExprStmtId);
-
-  // for SPM
+  REG_OP_ORCL(ObExprEstimateNdv);
+  //for SPM
   REG_OP_ORCL(ObExprSpmLoadPlans);
   REG_OP_ORCL(ObExprSpmAlterBaseline);
   REG_OP_ORCL(ObExprSpmDropBaseline);

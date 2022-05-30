@@ -86,6 +86,9 @@ int ObCreateTableResolver::add_primary_key_part(
     } else if (ob_is_text_tc(col->get_data_type())) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+    } else if (ob_is_json_tc(col->get_data_type())) {
+      ret = OB_ERR_JSON_USED_AS_KEY;
+      LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
     } else if (ObTimestampTZType == col->get_data_type()) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
@@ -209,7 +212,8 @@ int ObCreateTableResolver::set_partitioning_key(
       if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == primary_keys_.count()) {
         ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
         LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-      } else if (ob_is_text_tc(column_schema->get_data_type())) {
+      } else if (ob_is_text_tc(column_schema->get_data_type())
+                 || ob_is_json_tc(column_schema->get_data_type())) {
         ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
         LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
             column_schema->get_column_name_str().length(),
@@ -460,6 +464,9 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         } else if (is_create_as_sel && is_mysql_mode) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+        } else if (is_mysql_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table");
         } else {
           is_temporary_table = true;
           is_oracle_temp_table_ = (is_mysql_mode == false);
@@ -1320,6 +1327,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray
         if (OB_FAIL(resolve_check_constraint_node(*element, csts))) {
           SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
         }
+      } else if (T_EMPTY == element->type_) {
+        // compatible with mysql 5.7 check (expr), do nothing
       } else {
         // won't be here
         ret = OB_ERR_UNEXPECTED;
@@ -1583,7 +1592,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
           } else if (is_oracle_mode() && create_table_column_count > 0) {
             if (column.is_string_type()) {
               if (column.get_meta_type().is_lob()) {
-                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
+                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                   LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                 }
               } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1624,9 +1633,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
                 LOG_DEBUG("reorder column successfully", K(new_column));
               }
             } else {
-              if (column.is_string_type()) {
-                if (column.get_meta_type().is_lob()) {
-                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
+              if (column.is_string_type() || column.is_json()) {
+                if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()) {
+                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
                 } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1701,7 +1710,7 @@ int ObCreateTableResolver::generate_index_arg()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_) || OB_ISNULL(session_info_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "variables are not inited.", K(ret), KP(stmt_));
   } else if (OB_FAIL(set_index_name())) {
@@ -1718,7 +1727,7 @@ int ObCreateTableResolver::generate_index_arg()
     if (is_oracle_temp_table_) {
       index_scope_ = LOCAL_INDEX;
     }
-    global_ = (index_scope_ != LOCAL_INDEX);
+    global_ = (GLOBAL_INDEX == index_scope_);
     ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema& table_schema = create_table_stmt->get_create_table_arg().schema_;
     if (OB_SUCC(ret)) {
@@ -1757,6 +1766,7 @@ int ObCreateTableResolver::generate_index_arg()
       // create table with index .the status of index is available
       index_arg_.index_option_.index_status_ = INDEX_STATUS_AVAILABLE;
       index_arg_.index_option_.index_attributes_set_ = index_attributes_set_;
+      index_arg_.sql_mode_ = session_info_->get_sql_mode();
     }
     if (OB_FAIL(ret)) {
       // skip
@@ -2173,8 +2183,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
                   LOG_WARN("build generated column expr failed", K(ret));
                 } else if (!expr->is_column_ref_expr()) {
                   // real index expr, so generate hidden generated column in data table schema
-                  if (OB_FAIL(
-                          ObIndexBuilderUtil::generate_ordinary_generated_column(*expr, tbl_schema, column_schema))) {
+                  if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(
+                          *expr, session_info_->get_sql_mode(), tbl_schema, column_schema))) {
                     LOG_WARN("generate ordinary generated column failed", K(ret));
                   } else {
                     sort_item.column_name_ = column_schema->get_column_name_str();

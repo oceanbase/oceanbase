@@ -137,6 +137,7 @@ int ObPartitionStore::init(
 {
   int ret = OB_SUCCESS;
   ObMultiVersionTableStore *table_store = nullptr;
+  const int64_t page_size = 1024L;
 
   freeze_info_mgr_ = &freeze_info_mgr;
   if (is_inited_) {
@@ -145,6 +146,8 @@ int ObPartitionStore::init(
   } else if (!meta.is_valid() || OB_ISNULL(pg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(meta), KP(pg));
+  } else if (OB_FAIL(allocator_.init(page_size, lib::ObLabel("TableStoreMap")))) {
+    LOG_WARN("fail to init allocator", K(ret));
   } else if (OB_FAIL(create_new_store_map_(store_map_))) {
     LOG_WARN("failed to create table_store_map", K(ret));
   } else {
@@ -778,6 +781,7 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
     common::ObIArray<uint64_t> &deleted_and_error_index_ids)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_physical_restore);
   share::schema::ObSchemaGetterGuard schema_guard;
   share::schema::ObMultiVersionSchemaService &schema_service =
       share::schema::ObMultiVersionSchemaService::get_instance();
@@ -814,8 +818,7 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
     LOG_WARN("failed to get full tenant schema guard", K(ret), K(fetch_tenant_id), K(pkey_));
   } else if (OB_FAIL(schema_guard.get_schema_version(fetch_tenant_id, latest_schema_version))) {
     LOG_WARN("failed to get schema version", K(ret), K(fetch_tenant_id), K(pkey_));
-  } else if (latest_schema_version > save_schema_version ||
-             (is_physical_restore && latest_schema_version >= save_schema_version)) {
+  } else if (latest_schema_version >= save_schema_version) {
     // befor check the delete status of index, we should make sure the schema guard is refreshed
     for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
       const share::schema::ObTableSchema *table_schema = NULL;
@@ -3419,8 +3422,8 @@ int ObPartitionStore::inner_remove_uncontinues_inc_tables(ObMultiVersionTableSto
                 K(*pg_memtable_mgr_),
                 K(pg_memtable_mgr_->get_memtable_count()),
                 K(param),
-                K(*new_table_store),
-                K(*param.table_));
+                KPC(new_table_store),
+                KPC(param.table_));
             new_table_store = NULL;
           }
         }
@@ -4081,10 +4084,7 @@ int ObPartitionStore::create_new_store_map_(TableStoreMap *&new_store_map)
   int ret = OB_SUCCESS;
   new_store_map = nullptr;
   ObMemAttr attr(pkey_.get_tenant_id(), ObModIds::OB_PARTITION_STORE, ObCtxIds::STORAGE_LONG_TERM_META_CTX_ID);
-  const int64_t page_size = 1024L;
-  if (OB_FAIL(allocator_.init(page_size, lib::ObLabel("TableStoreMap")))) {
-    LOG_WARN("fail to init allocator", K(ret));
-  } else if (OB_ISNULL(new_store_map = OB_NEW(TableStoreMap, attr))) {
+  if (OB_ISNULL(new_store_map = OB_NEW(TableStoreMap, attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate table store map", K(ret));
   } else if (OB_FAIL(new_store_map->create(TABLE_STORE_BUCKET_NUM, &allocator_))) {

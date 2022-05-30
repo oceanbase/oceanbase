@@ -294,9 +294,12 @@ int CoKThreadTemp<Thread>::start()
       Thread* thread = nullptr;
       if (OB_FAIL(create_thread(thread, [this, i] {
             try {
+              common::in_try_stmt = true;
               this->run(i);
+              common::in_try_stmt = false;
             } catch (common::OB_BASE_EXCEPTION& except) {
               UNUSED(except);
+              common::in_try_stmt = false;
             }
           }))) {
         break;

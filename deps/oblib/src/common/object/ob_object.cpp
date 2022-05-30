@@ -458,7 +458,8 @@ int ObObj::build_not_strict_default_value()
     case ObTinyTextType:
     case ObTextType:
     case ObMediumTextType:
-    case ObLongTextType: {
+    case ObLongTextType: 
+    case ObJsonType: {
       ObString null_str;
       set_string(data_type, null_str);
       meta_.set_lob_inrow();
@@ -514,7 +515,7 @@ int ObObj::build_not_strict_default_value()
 int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_string_type(src.get_type())) {
+  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -573,7 +574,7 @@ int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& p
 void* ObObj::get_deep_copy_obj_ptr()
 {
   void * ptr = NULL;
-  if (ob_is_string_type(this->get_type())) {
+  if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
     // Therefore, reset it to NULL
     if (val_len_ != 0) {
@@ -581,7 +582,7 @@ void* ObObj::get_deep_copy_obj_ptr()
     }
   } else if (ob_is_raw(this->get_type())) {
     ptr = (void *)v_.string_;
-  } else if (ob_is_number_tc(this->get_type())) {
+  } else if (ob_is_number_tc(this->get_type()) && 0 != nmb_desc_.len_ && NULL != v_.nmb_digits_) {
     ptr = (void *)v_.nmb_digits_;
   } else if (ob_is_rowid_tc(this->get_type())) {
     ptr = (void *)v_.string_;
@@ -802,7 +803,8 @@ int ObObj::apply(const ObObj& mutation)
   if (OB_UNLIKELY(
           ObMaxType <= mut_type ||
           (ObExtendType != org_type && ObNullType != org_type && ObExtendType != mut_type && ObNullType != mut_type &&
-              org_type != mut_type && !(ObLongTextType == org_type && ObLobType == mut_type)))) {
+              org_type != mut_type && !(ObLongTextType == org_type && 
+              ObLobType == mut_type) && !(ObJsonType == org_type && ObLobType == mut_type)))) {
     _OB_LOG(WARN, "type not coincident or invalid type[this->type:%d,mutation.type:%d]", org_type, mut_type);
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -901,6 +903,7 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] = {
     DEF_FUNC_ENTRY(ObNCharType),          // 44, nchar
     DEF_FUNC_ENTRY(ObURowIDType),         // 45, urowid
     DEF_FUNC_ENTRY(ObLobType),            // 46, lob
+    DEF_FUNC_ENTRY(ObJsonType)            // 47, json
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -988,7 +991,7 @@ int ObObj::print_smart(char* buf, int64_t buf_len, int64_t& pos) const
     bool can_print = true;
     if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (!(meta_.is_string_or_lob_locator_type() && ObHexStringType != meta_.get_type())) {
+    } else if (!(meta_.is_string_or_lob_locator_type() && ObHexStringType != meta_.get_type()) && (!meta_.is_json())) {
       ret = OBJ_FUNCS[meta_.get_type()].print_json(*this, buf, buf_len, pos, params);
     } else if (OB_FAIL(is_printable(get_string_ptr(), get_string_len(), can_print))) {
     } else if (can_print) {
@@ -1377,6 +1380,7 @@ void ParamFlag::reset()
   expected_bool_value_ = false;
   need_to_check_extend_type_ = true;
   is_ref_cursor_type_ = false;
+  is_boolean_ = false;
 }
 
 DEF_TO_STRING(ObHexEscapeSqlStr)
@@ -1394,6 +1398,11 @@ DEF_TO_STRING(ObHexEscapeSqlStr)
         } else {
           buf[buf_pos++] = *cur;
         }
+      }
+    } else if (skip_escape_) {
+      // do not escape_ while in NO_BACKSLASH_ESCAPES mode
+      for (const char *cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {
+        buf[buf_pos++] = *cur;
       }
     } else {
       for (const char* cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {

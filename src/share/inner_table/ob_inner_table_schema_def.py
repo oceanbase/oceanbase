@@ -5619,7 +5619,8 @@ def_table_schema(
       ('cpu_max_assigned', 'double'),
       ('mem_capacity', 'int'),
       ('mem_max_assigned', 'int'),
-      ('ssl_key_expired_time', 'int')
+      ('ssl_key_expired_time', 'int'),
+      ('disk_actual', 'int')
   ],
 )
 
@@ -7259,6 +7260,7 @@ def_table_schema(
   ('zone_type', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('merge_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('zone_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
+  ('svr_min_log_timestamp', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
@@ -7571,7 +7573,7 @@ def_table_schema(
 
   normal_columns = [
   ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH'),
-  ('create_tablegroup', 'varchar:TABLEGROUP_DEFINE_LENGTH'),
+  ('create_tablegroup', 'longtext'),
   ],
 )
 
@@ -10542,7 +10544,7 @@ def_table_schema(
                     b.database_name as TABLE_SCHEMA,
                     a.table_name as TABLE_NAME,
                     case when a.database_id & 0xFFFFFFFFFF = 2 then 'SYSTEM VIEW' when (a.table_type = 1 or a.table_type = 4) then 'VIEW' when a.table_type = 2 then 'SYSTEM TABLE' when a.table_type = 1 then 'INDEX' else 'BASE TABLE' end as TABLE_TYPE,
-                    NULL as ENGINE,
+                    'OceanBase' as ENGINE,
                     NULL as VERSION,
                     NULL as ROW_FORMAT,
                     sum(c.row_count) as TABLE_ROWS,
@@ -23193,11 +23195,12 @@ def_table_schema(
           AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
           WHERE TABLE_TYPE=5 ) C
       JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT D ON C.INDEX_ID=D.TABLE_ID
-          AND D.TENANT_ID = EFFECTIVE_TENANT_ID()) E
+          AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND D.INDEX_POSITION != 0) E
     JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT F ON F.TABLE_ID=E.TABLE_ID
         AND F.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND F.COLUMN_ID=E.COLUMN_ID
-    AND F.COLUMN_FLAGS=1) G
+    AND BITAND(F.COLUMN_FLAGS,3) > 0) G
   JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT H ON G.TABLE_ID=H.TABLE_ID
       AND H.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -23244,11 +23247,12 @@ def_table_schema(
           AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
           WHERE TABLE_TYPE=5 ) C
       JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT D ON C.INDEX_ID=D.TABLE_ID
-        AND D.TENANT_ID = EFFECTIVE_TENANT_ID()) E
+        AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND D.INDEX_POSITION != 0) E
     JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT F ON F.TABLE_ID=E.TABLE_ID
         AND F.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND F.COLUMN_ID=E.COLUMN_ID
-    AND F.COLUMN_FLAGS=1) G
+    AND BITAND(F.COLUMN_FLAGS,3) > 0) G
   JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT H ON G.TABLE_ID=H.TABLE_ID
       AND H.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -23301,11 +23305,12 @@ def_table_schema(
           AND B.DATABASE_NAME != '__recyclebin'
           WHERE TABLE_TYPE=5 ) C
       JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT D ON C.INDEX_ID=D.TABLE_ID
-        AND D.TENANT_ID = EFFECTIVE_TENANT_ID()) E
+        AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND D.INDEX_POSITION != 0) E
     JOIN SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT F ON F.TABLE_ID=E.TABLE_ID
         AND F.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND F.COLUMN_ID=E.COLUMN_ID
-    AND F.COLUMN_FLAGS=1) G
+    AND BITAND(F.COLUMN_FLAGS,3) > 0) G
   JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT H ON G.TABLE_ID=H.TABLE_ID
       AND H.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -27504,6 +27509,7 @@ def_table_schema(
     rowkey_columns  = [],
     normal_columns  = [],
     gm_columns      = [],
+    in_tenant_space = True,
     view_definition = """SELECT
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_CATALOG,
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_SCHEMA,

@@ -124,10 +124,13 @@ int ObMacroBlockBuilder::open(storage::ObSSTableMergeCtx& ctx, const int64_t idx
                 ctx.sstable_version_range_.snapshot_version_,
                 ctx.log_ts_range_.end_log_ts_))) {
           STORAGE_LOG(WARN, "fail to init mark deletion maker, skip maker", K(ret));
+          mark_deletion_maker_->~ObBlockMarkDeletionMaker();
           mark_deletion_maker_ = NULL;
           ret = OB_SUCCESS;
+          desc_.mark_deletion_maker_ = NULL;
+        } else {
+          desc_.mark_deletion_maker_ = mark_deletion_maker_;
         }
-        desc_.mark_deletion_maker_ = mark_deletion_maker_;
       }
     } else {
       desc_.mark_deletion_maker_ = NULL;
@@ -885,6 +888,8 @@ int ObMacroBlockEstimator::update_estimator(const storage::ObStoreRow& row)
         // skip.
       } else if (row.row_val_.cells_[i].is_lob()) {
         // skip lob with colun stat
+      } else if (row.row_val_.cells_[i].is_json()) {
+        // skip json
       } else if (OB_FAIL(column_stats_.at(i)->add_value(row.row_val_.cells_[i]))) {
         LOG_WARN("fill column stat error.", K(ret), K(i), K(row.row_val_.cells_[i]));
       }

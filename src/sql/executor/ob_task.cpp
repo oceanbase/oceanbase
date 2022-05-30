@@ -621,6 +621,9 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
     OB_UNIS_ENCODE(ps_params->at(i).get_param_meta());
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+    OB_UNIS_ENCODE(ps_params->at(i).get_param_flag());
+  }
   return ret;
 }
 
@@ -651,6 +654,9 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     for (int64_t i = 0; i < param_meta_count; ++i) {
       OB_UNIS_ADD_LEN(ps_params->at(i).get_param_meta());
     }
+    for (int64_t i = 0; i < param_meta_count; ++i) {
+      OB_UNIS_ADD_LEN(ps_params->at(i).get_param_flag());
+    }
   }
   return len;
 }
@@ -661,6 +667,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
   int64_t tenant_id = OB_INVALID_ID;
   ParamStore* ps_params = nullptr;
   ObObjMeta tmp_meta;
+  ParamFlag tmp_flag;
   int64_t param_meta_count = 0;
   if (OB_ISNULL(remote_sql_info_) || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
     ret = OB_NOT_INIT;
@@ -677,6 +684,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       *ps_params,
       tenant_id);
   if (OB_SUCC(ret)) {
+    remote_sql_info_->ps_param_cnt_ = static_cast<int32_t>(ps_params->count());
     if (OB_FAIL(exec_ctx_->create_my_session(tenant_id))) {
       LOG_WARN("create my session failed", K(ret), K(tenant_id));
     } else {
@@ -696,6 +704,10 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
         for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
           OB_UNIS_DECODE(tmp_meta);
           ps_params->at(i).set_param_meta(tmp_meta);
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+          OB_UNIS_DECODE(tmp_flag);
+          ps_params->at(i).set_param_flag(tmp_flag);
         }
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {

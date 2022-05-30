@@ -18,7 +18,6 @@
 #include "common/rowkey/ob_rowkey.h"
 #include "common/object/ob_obj_compare.h"
 #include "common/ob_range.h"
-#include "blocksstable/ob_macro_block_meta_mgr.h"
 #include "blocksstable/ob_store_file_system.h"
 #include "lib/number/ob_number_v2.h"
 

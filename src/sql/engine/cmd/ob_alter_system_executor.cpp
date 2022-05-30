@@ -84,13 +84,34 @@ int ObFlushCacheExecutor::execute(ObExecContext& ctx, ObFlushCacheStmt& stmt)
   int ret = OB_SUCCESS;
   if (!stmt.is_global_) {  // flush local
     int64_t tenant_num = stmt.flush_cache_arg_.tenant_ids_.count();
+    int64_t db_num = stmt.flush_cache_arg_.db_ids_.count();
+    common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
       case CACHE_TYPE_PLAN: {
         if (OB_ISNULL(ctx.get_plan_cache_manager())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("plan cache manager is null");
-        } else if (0 == tenant_num) {
-          ret = ctx.get_plan_cache_manager()->flush_all_plan_cache();
+        } else if (stmt.flush_cache_arg_.is_fine_grained_) {
+          // purge in sql_id level, aka. fine-grained plan evict
+          // we assume tenant_list must not be empty and this will be checked in resolve phase
+          if (0 == tenant_num) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tenant_list in fine-grained plan evict", K(tenant_num));
+          } else {
+            for (int64_t i = 0; i < tenant_num; i++) { // ignore ret
+              int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
+              if (db_num == 0) { // not specified db_name, evcit all dbs
+                ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(t_id, OB_INVALID_ID, sql_id);
+              } else { // evict db by db
+                for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                  ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(
+                                    t_id, stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+                }
+              }
+            }
+          }
+        } else if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
+          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_plan_cache();
         } else {
           for (int64_t i = 0; i < tenant_num; ++i) {  // ignore ret
             ret = ctx.get_plan_cache_manager()->flush_plan_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
@@ -177,12 +198,32 @@ int ObFlushCacheExecutor::execute(ObExecContext& ctx, ObFlushCacheStmt& stmt)
       case CACHE_TYPE_BLOCK:
       case CACHE_TYPE_ROW:
       case CACHE_TYPE_BLOOM_FILTER:
-      case CACHE_TYPE_LOCATION:
       case CACHE_TYPE_CLOG:
       case CACHE_TYPE_ILOG:
       case CACHE_TYPE_SCHEMA: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("cache type not supported flush", "type", stmt.flush_cache_arg_.cache_type_, K(ret));
+      } break;
+      case CACHE_TYPE_LOCATION: {
+        share::ObPartitionLocationCache *location_cache = GCTX.location_cache_;
+        if (OB_ISNULL(location_cache)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("location cache ptr is null", KR(ret));
+        } else if (0 == tenant_num) {
+          if (OB_FAIL(location_cache->flush_cache(OB_INVALID_TENANT_ID))) {
+            LOG_WARN("fail to flush all location cache", KR(ret));
+          }
+        } else {
+          int64_t tenant_num = stmt.flush_cache_arg_.tenant_ids_.count();
+          for (int64_t i = 0; i < tenant_num; i++) {  // ingore error
+            const uint64_t tenant_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = location_cache->flush_cache(tenant_id))) {
+              LOG_WARN("fail to flush tenant's cache", KR(ret), K(tenant_id));
+            }
+            ret = OB_SUCC(ret) ? tmp_ret : ret;
+          }  // end for
+        }
       } break;
       default: {
         ret = OB_INVALID_ARGUMENT;

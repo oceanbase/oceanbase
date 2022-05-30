@@ -118,6 +118,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
     uint64_t cell_idx = 0;
     char ip_buf[common::OB_IP_STR_BUFF];
     char peer_buf[common::OB_IP_STR_BUFF];
+    char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
     // If you are in system tenant, you can see all thread.
     // Otherwise, you can show only the threads at the same Tenant with you.
     // If you have the PROCESS privilege, you can show all threads at your Tenant.
@@ -180,8 +181,13 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case SQL_ID: {
-            const char* sql_id =
-                OB_NOT_NULL(sess_info->get_cur_phy_plan()) ? sess_info->get_cur_phy_plan()->stat_.sql_id_ : "";
+            if (obmysql::OB_MYSQL_COM_QUERY == sess_info->get_mysql_cmd() ||
+                obmysql::OB_MYSQL_COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+                obmysql::OB_MYSQL_COM_STMT_PREPARE == sess_info->get_mysql_cmd()) {
+              sess_info->get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1);
+            } else {
+              sql_id[0] = '\0';
+            }
             cur_row_->cells_[cell_idx].set_varchar(ObString::make_string(sql_id));
             cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             break;
@@ -281,7 +287,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             if (obmysql::OB_MYSQL_COM_QUERY == sess_info->get_mysql_cmd() ||
                 obmysql::OB_MYSQL_COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
                 obmysql::OB_MYSQL_COM_STMT_PREPARE == sess_info->get_mysql_cmd()) {
-              int len = sess_info->get_last_trace_id().to_string(trace_id_, sizeof(trace_id_));
+              int len = sess_info->get_current_trace_id().to_string(trace_id_, sizeof(trace_id_));
               cur_row_->cells_[cell_idx].set_varchar(trace_id_, len);
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {

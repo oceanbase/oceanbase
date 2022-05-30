@@ -29,6 +29,7 @@
 #include "observer/ob_server.h"
 #include "storage/ob_partition_scheduler.h"
 #include "storage/ob_partition_migrator.h"
+#include "observer/ob_service.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -123,7 +124,7 @@ int ObServerReloadConfig::operator()()
     }
 
     (void)reload_diagnose_info_config(GCONF.enable_perf_event);
-    (void)reload_trace_log_config(GCONF.enable_sql_audit);
+    (void)reload_trace_log_config(GCONF.enable_record_trace_log);
 
     ObTenantManager::get_instance().reload_config();
   }
@@ -326,6 +327,7 @@ int ObServerReloadConfig::operator()()
   share::ObTaskController::get().set_log_rate_limit(GCONF.syslog_io_bandwidth_limit.get_value());
 
   if (nullptr != GCTX.omt_) {
+    GCTX.omt_->set_node_quota(common::get_cpu_count());
     GCTX.omt_->set_workers_per_cpu(GCONF.workers_per_cpu_quota.get_value());
   }
 
@@ -337,6 +339,18 @@ int ObServerReloadConfig::operator()()
   ObPartitionScheduler::get_instance().reload_minor_merge_schedule_interval();
   {
     OB_STORE_FILE.resize_file(GCONF.datafile_size, GCONF.datafile_disk_percentage);
+  }
+  {
+    const int64_t location_thread_cnt = GCONF.location_refresh_thread_count;
+    if (OB_NOT_NULL(GCTX.ob_service_) &&
+        OB_FAIL(GCTX.ob_service_->get_partition_location_updater().set_thread_cnt(location_thread_cnt))) {
+      real_ret = ret;
+      LOG_WARN("fail to set location updater's thread cnt", KR(ret), K(location_thread_cnt));
+    }
+  }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
   }
   return real_ret;
 }

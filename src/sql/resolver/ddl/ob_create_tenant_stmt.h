@@ -59,15 +59,15 @@ public:
   {
     return true;
   }
-  int add_sys_var_node(const ObVariableSetStmt::VariableSetNode& node)
+  int add_sys_var_node(const ObVariableSetStmt::VariableNamesSetNode& node)
   {
     return sys_var_nodes_.push_back(node);
   }
-  const common::ObIArray<ObVariableSetStmt::VariableSetNode>& get_sys_var_nodes() const
+  const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& get_sys_var_nodes() const
   {
     return sys_var_nodes_;
   }
-  int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode>& other);
+  int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& other);
   int set_default_tablegroup_name(const common::ObString& tablegroup_name);
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
@@ -76,7 +76,7 @@ public:
 
 private:
   obrpc::ObCreateTenantArg create_tenant_arg_;
-  common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
+  common::ObArray<ObVariableSetStmt::VariableNamesSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTenantStmt);
 };
 
@@ -85,7 +85,7 @@ inline obrpc::ObCreateTenantArg& ObCreateTenantStmt::get_create_tenant_arg()
   return create_tenant_arg_;
 }
 
-inline int ObCreateTenantStmt::assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode>& other)
+inline int ObCreateTenantStmt::assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& other)
 {
   return sys_var_nodes_.assign(other);
 }

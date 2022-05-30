@@ -23,8 +23,6 @@ using namespace common;
 using namespace share;
 namespace sql {
 
-const double ObExprXor::FLOAT_BOUND = 0.5;
-
 ObExprXor::ObExprXor(ObIAllocator& alloc)
     : ObLogicalExprOperator(alloc, T_OP_XOR, N_XOR, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
 {
@@ -36,20 +34,14 @@ int ObExprXor::calc_result_typeN(
 {
   UNUSED(types_stack);
   UNUSED(param_num);
+  UNUSED(type_ctx);
   int ret = OB_SUCCESS;
   // just keep enumset as origin
   type.set_int32();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-  const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-  if (OB_ISNULL(session)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid null session", K(type_ctx.get_session()));
-  } else if (session->use_static_typing_engine()) {
-    for (int i = 0; i < param_num; i++) {
-      types_stack[i].set_calc_type(ObDoubleType);
-    }
-  }
+  // for expr and/or/xor, we depend on expr bool to get correct params,
+  // no need to set calc type
   return ret;
 }
 
@@ -82,38 +74,30 @@ int ObExprXor::calc(ObObj& res, const ObObj& left, const ObObj& right, ObExprCtx
     if (OB_UNLIKELY(right.is_null())) {
       res.set_null();
     } else {
-      ret = cacl_res_with_one_param_null(res, left, right, expr_ctx);
+      ret = calc_res_with_one_param_null(res, left, right, expr_ctx);
     }
   } else {
     if (OB_UNLIKELY(right.is_null())) {
-      ret = cacl_res_with_one_param_null(res, right, left, expr_ctx);
+      ret = calc_res_with_one_param_null(res, right, left, expr_ctx);
     } else {
-      double lvalue = 0;
-      double rvalue = 0;
-      EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-      EXPR_GET_DOUBLE_V2(left, lvalue);
-      EXPR_GET_DOUBLE_V2(right, rvalue);
-
-      // in MySQL, values in (-0.5, 0.5) are treated as zero,
-      // other values are treated as non-zero
-      bool bool_v1 = (fabs(lvalue) >= FLOAT_BOUND);
-      bool bool_v2 = (fabs(rvalue) >= FLOAT_BOUND);
-      res.set_bool(bool_v1 ^ bool_v2);
-      //      if (OB_FAIL(ObLogicalExprOperator::is_true(left, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, bool_v1))) {
-      //        LOG_WARN("fail to evaluate left", K(left), K(ret));
-      //      } else if (OB_FAIL(ObLogicalExprOperator::is_true(right, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK,
-      //      bool_v2))) {
-      //        LOG_WARN("fail to evaluate right", K(right), K(ret));
-      //      } else {
-      //        res.set_bool(bool_v1 ^ bool_v2);
-      //      }
+      bool left_is_true = false;
+      bool right_is_true = false;
+      EXPR_SET_CAST_CTX_MODE(expr_ctx);
+      if (OB_FAIL(ObLogicalExprOperator::is_true(left, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, left_is_true))) {
+        LOG_WARN("failed to eval left", K(ret));
+      } else if (OB_FAIL(
+                     ObLogicalExprOperator::is_true(right, expr_ctx.cast_mode_ | CM_NO_RANGE_CHECK, right_is_true))) {
+        LOG_WARN("failed to eval right", K(ret));
+      } else {
+        res.set_int32(left_is_true ^ right_is_true);
+      }
     }
   }
   return ret;
 }
 
-int ObExprXor::cacl_res_with_one_param_null(
-    common::ObObj& res, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx)
+int ObExprXor::calc_res_with_one_param_null(
+    common::ObObj &res, const common::ObObj &left, const common::ObObj &right, common::ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_ctx);
@@ -165,8 +149,7 @@ int ObExprXor::eval_xor(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
       expr_datum.set_null();
       found_null = true;
     } else {
-      // (-0.5, 0.5) are treated as zero
-      cur_bool_v = (fabs(param->get_double()) >= FLOAT_BOUND);
+      cur_bool_v = (param->get_int() != 0);
     }
 
     for (int i = 1; OB_SUCC(ret) && !found_null && i < expr.arg_cnt_; i++) {
@@ -182,7 +165,7 @@ int ObExprXor::eval_xor(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
         expr_datum.set_null();
         found_null = true;
       } else {
-        cur_bool_v = cur_bool_v ^ ((fabs(param->get_double()) >= FLOAT_BOUND));
+        cur_bool_v = cur_bool_v ^ ((param->get_int() != 0));
       }
     }
     if (OB_SUCC(ret) && !found_null) {

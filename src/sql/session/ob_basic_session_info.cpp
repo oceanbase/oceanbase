@@ -351,6 +351,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // magic_num_ = 0x86427531;
   current_execution_id_ = -1;
   last_trace_id_.reset();
+  curr_trace_id_.reset();
   app_trace_id_.reset();
   database_id_ = OB_INVALID_ID;
   retry_info_.reset();
@@ -1038,7 +1039,7 @@ int ObBasicSessionInfo::inner_get_sys_var(const ObString& sys_var_name, ObBasicS
     LOG_ERROR("got store_idx is invalid", K(ret), K(store_idx));
   } else if (OB_ISNULL(sys_vars_[store_idx])) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(sys_var_name), K(lbt()));
+    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(sys_var_name));
   } else {
     sys_var = sys_vars_[store_idx];
   }
@@ -1059,7 +1060,7 @@ int ObBasicSessionInfo::inner_get_sys_var(const ObSysVarClassType sys_var_id, Ob
     LOG_ERROR("got store_idx is invalid", K(ret), K(store_idx));
   } else if (OB_ISNULL(sys_vars_[store_idx])) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys var is NULL", K(ret), K(store_idx), K(lbt()));
+    LOG_WARN("sys var is NULL", K(ret), K(store_idx));
   } else {
     sys_var = sys_vars_[store_idx];
   }
@@ -1640,6 +1641,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
     LOG_WARN("current physical plan is NULL", K(lbt()), K(ret));
   } else {
     cur_phy_plan_ = cur_phy_plan;
+    MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
   }
   return ret;
 }
@@ -1647,6 +1649,15 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
 void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
 {
   cur_phy_plan_ = NULL;
+}
+
+void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
+{
+  if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+  } else {
+    sql_id_buf[0] = '\0';
+  }
 }
 
 ObObjType ObBasicSessionInfo::get_sys_variable_type(const ObString& var_name) const
@@ -3955,7 +3966,7 @@ int ObBasicSessionInfo::store_query_string(const ObString& stmt)
 int ObBasicSessionInfo::store_query_string_(const ObString& stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_CUR_QUERY_LEN - 1, static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -4405,11 +4416,14 @@ int ObBasicSessionInfo::set_time_zone(
           LOG_INFO(
               "ignore unknow time zone, perhaps in remote/distribute task processer when server start_time is zero",
               K(str_val));
-          ret = OB_SUCCESS;
-          if (OB_FAIL(tz_info_wrap_.get_tz_info_pos().set_tz_name(str_val.ptr(), no_sp_len))) {
-            LOG_WARN("fail to set time zone info name", K(str_val), K(ret));
+          offset = 0;
+          if (OB_FAIL(ObTimeConverter::str_to_offset(ObString("+8:00"), offset, ret_more,
+                                                    is_oralce_mode, check_timezone_valid))) {
+            if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+              LOG_WARN("fail to convert time zone", K(str_val), K(ret));
+            }
           } else {
-            tz_info_wrap_.set_tz_info_position();
+            tz_info_wrap_.set_tz_info_offset(offset);
           }
         }
       }

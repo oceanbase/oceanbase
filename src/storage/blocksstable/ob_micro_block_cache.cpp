@@ -640,7 +640,6 @@ int ObIMicroBlockCache::ObMicroBlockIOCallback::inner_process(const bool is_succ
     STORAGE_LOG(WARN, "Invalid micro block cache callback, ", KP_(cache), K(ret));
   } else if (is_success) {
     ObMacroBlockReader* reader = NULL;
-    ObMacroBlockMetaHandle meta_handle;
     if (OB_UNLIKELY(NULL == (reader = GET_TSI_MULT(ObMacroBlockReader, 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Fail to allocate ObMacroBlockReader, ", K(ret));

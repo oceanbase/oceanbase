@@ -63,8 +63,8 @@ class ObColumnSchemaV2;
   (dst)->field.assign(buffer + offset, (src)->field.length()); \
   offset += (src)->field.length() + (skip);
 
-#define ASSIGN_CONST_STRING(dst, src, field, buffer, skip)                              \
-  (const_cast<ObString&>((dst)->field)).assign(buffer + offset, (src)->field.length()); \
+#define ASSIGN_CONST_STRING(dst, src, field, buffer, skip)                               \
+  (const_cast<ObString &>((dst)->field)).assign(buffer + offset, (src)->field.length()); \
   offset += (src)->field.length() + (skip);
 
 // match the default now func
@@ -88,6 +88,7 @@ static const uint64_t OB_MIN_ID = 0;  // used for lower_bound
 #define INVISIBLE_COLUMN_FLAG (INT64_C(1) << 6)
 // The logic of the new table without a primary key changes the column (partition key) to the primary key
 #define HEAP_ALTER_ROWKEY_FLAG (INT64_C(1) << 8)
+#define PAD_WHEN_CALC_GENERATED_COLUMN_FLAG (INT64_C(1) << 19)
 // the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
 #define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
@@ -137,7 +138,7 @@ enum ObPartitionFuncType {
   PARTITION_FUNC_TYPE_MAX,
 };
 
-int get_part_type_str(ObPartitionFuncType type, common::ObString& str, bool can_change = true);
+int get_part_type_str(ObPartitionFuncType type, common::ObString &str, bool can_change = true);
 
 inline bool is_hash_part(const ObPartitionFuncType part_type)
 {
@@ -169,7 +170,7 @@ inline bool is_list_part(const ObPartitionFuncType part_type)
   return PARTITION_FUNC_TYPE_LIST == part_type || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type;
 }
 
-int is_sys_table_name(uint64_t database_id, const common::ObString& table_name, bool& is_sys_table);
+int is_sys_table_name(uint64_t database_id, const common::ObString &table_name, bool &is_sys_table);
 
 // adding new table type, take care ObRootUtils::is_balance_target_schema() interface
 // This structure indicates whether the tableSchema of this type is the object of load balancing,
@@ -193,8 +194,8 @@ enum ObTableType {
 };
 
 // ObTableType=>const char* ; used for show tables
-const char* ob_table_type_str(ObTableType type);
-const char* ob_mysql_table_type_str(ObTableType type);
+const char *ob_table_type_str(ObTableType type);
+const char *ob_mysql_table_type_str(ObTableType type);
 
 ObTableType get_inner_table_type_by_id(const uint64_t tid);
 
@@ -232,7 +233,7 @@ enum ViewCheckOption {
   VIEW_CHECK_OPTION_MAX = 3,
 };
 
-const char* ob_view_check_option_str(const ViewCheckOption option);
+const char *ob_view_check_option_str(const ViewCheckOption option);
 enum ObIndexStatus {
   // this is used in index virtual table:__index_process_info:means the table may be deleted when you get it
   INDEX_STATUS_NOT_FOUND = 0,
@@ -291,7 +292,7 @@ public:
     return common::OB_INVALID_TENANT_ID != tenant_id_;
   }
 
-  bool operator==(const ObRefreshSchemaStatus& other) const
+  bool operator==(const ObRefreshSchemaStatus &other) const
   {
     return ((this == &other) ||
             (this->tenant_id_ == other.tenant_id_ && this->snapshot_timestamp_ == other.snapshot_timestamp_ &&
@@ -320,10 +321,10 @@ public:
         sequence_id_(common::OB_INVALID_ID),
         split_schema_version_(common::OB_INVALID_VERSION)
   {}
-  ObRefreshSchemaInfo(const ObRefreshSchemaInfo& other);
+  ObRefreshSchemaInfo(const ObRefreshSchemaInfo &other);
   virtual ~ObRefreshSchemaInfo()
   {}
-  int assign(const ObRefreshSchemaInfo& other);
+  int assign(const ObRefreshSchemaInfo &other);
   void reset();
   bool is_valid() const;
   void set_tenant_id(const uint64_t tenant_id)
@@ -437,23 +438,23 @@ inline bool is_available_index_status(const ObIndexStatus index_status)
   return INDEX_STATUS_AVAILABLE == index_status;
 }
 
-const char* ob_index_status_str(ObIndexStatus status);
+const char *ob_index_status_str(ObIndexStatus status);
 
 struct ObTenantTableId {
   ObTenantTableId() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID)
   {}
   ObTenantTableId(const uint64_t tenant_id, const uint64_t table_id) : tenant_id_(tenant_id), table_id_(table_id)
   {}
-  bool operator==(const ObTenantTableId& rv) const
+  bool operator==(const ObTenantTableId &rv) const
   {
     return (tenant_id_ == rv.tenant_id_) && (table_id_ == rv.table_id_);
   }
-  ObTenantTableId& operator=(const ObTenantTableId& tenant_table_id);
+  ObTenantTableId &operator=(const ObTenantTableId &tenant_table_id);
   int64_t hash() const
   {
     return table_id_;
   }
-  bool operator<(const ObTenantTableId& rv) const
+  bool operator<(const ObTenantTableId &rv) const
   {
     bool res = tenant_id_ < rv.tenant_id_;
     if (tenant_id_ == rv.tenant_id_) {
@@ -483,7 +484,7 @@ struct ObTenantDatabaseId {
   ObTenantDatabaseId(const uint64_t tenant_id, const uint64_t database_id)
       : tenant_id_(tenant_id), database_id_(database_id)
   {}
-  bool operator==(const ObTenantDatabaseId& rv) const
+  bool operator==(const ObTenantDatabaseId &rv) const
   {
     return ((tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_));
   }
@@ -491,7 +492,7 @@ struct ObTenantDatabaseId {
   {
     return database_id_;
   }
-  bool operator<(const ObTenantDatabaseId& rv) const
+  bool operator<(const ObTenantDatabaseId &rv) const
   {
     bool res = tenant_id_ < rv.tenant_id_;
     if (tenant_id_ == rv.tenant_id_) {
@@ -521,7 +522,7 @@ struct ObTenantTablegroupId {
   ObTenantTablegroupId(const uint64_t tenant_id, const uint64_t tablegroup_id)
       : tenant_id_(tenant_id), tablegroup_id_(tablegroup_id)
   {}
-  bool operator==(const ObTenantTablegroupId& rv) const
+  bool operator==(const ObTenantTablegroupId &rv) const
   {
     return (tenant_id_ == rv.tenant_id_) && (tablegroup_id_ == rv.tablegroup_id_);
   }
@@ -529,7 +530,7 @@ struct ObTenantTablegroupId {
   {
     return tablegroup_id_;
   }
-  bool operator<(const ObTenantTablegroupId& rv) const
+  bool operator<(const ObTenantTablegroupId &rv) const
   {
     bool res = tenant_id_ < rv.tenant_id_;
     if (tenant_id_ == rv.tenant_id_) {
@@ -586,9 +587,9 @@ typedef enum {
 } ObSchemaType;
 
 // The user tenant system table schema is taken from the system tenant, and the schema_id needs to be changed
-int need_change_schema_id(const ObSchemaType schema_type, const uint64_t schema_id, bool& need_change);
+int need_change_schema_id(const ObSchemaType schema_type, const uint64_t schema_id, bool &need_change);
 
-const char* schema_type_str(const ObSchemaType schema_type);
+const char *schema_type_str(const ObSchemaType schema_type);
 
 bool is_normal_schema(const ObSchemaType schema_type);
 
@@ -621,7 +622,7 @@ class PartIdPartitionArrayCmp {
 public:
   PartIdPartitionArrayCmp() : ret_(common::OB_SUCCESS)
   {}
-  bool operator()(const share::schema::ObPartition* left, const share::schema::ObPartition* right);
+  bool operator()(const share::schema::ObPartition *left, const share::schema::ObPartition *right);
 
 public:
   int get_ret() const
@@ -638,7 +639,7 @@ class SubPartIdPartitionArrayCmp {
 public:
   SubPartIdPartitionArrayCmp() : ret_(common::OB_SUCCESS)
   {}
-  bool operator()(const share::schema::ObSubPartition* left, const share::schema::ObSubPartition* right);
+  bool operator()(const share::schema::ObSubPartition *left, const share::schema::ObSubPartition *right);
 
 public:
   int get_ret() const
@@ -705,9 +706,9 @@ enum TenantStatus {
   TENANT_DELETED,
 };
 
-inline const char* print_table_status(const TableStatus status_no)
+inline const char *print_table_status(const TableStatus status_no)
 {
-  const char* status_str = "UNKNOWN";
+  const char *status_str = "UNKNOWN";
   switch (status_no) {
     case TABLE_NOT_CREATE:
       status_str = "TABLE_NOT_CREATE";
@@ -733,9 +734,9 @@ enum PartitionStatus {
   PART_DELETED,  // partition is deleted
 };
 
-inline const char* print_part_status(const PartitionStatus status)
+inline const char *print_part_status(const PartitionStatus status)
 {
-  const char* str = "UNKNOWN";
+  const char *str = "UNKNOWN";
   switch (status) {
     case PART_STATUS_INVALID:
       str = "PART_STATUS_INVALID";
@@ -825,12 +826,12 @@ struct ObSchemaObjVersion {
   {
     return object_type_;
   }
-  inline bool operator==(const ObSchemaObjVersion& other) const
+  inline bool operator==(const ObSchemaObjVersion &other) const
   {
     return object_id_ == other.object_id_ && version_ == other.version_ && object_type_ == other.object_type_ &&
            is_db_explicit_ == other.is_db_explicit_ && is_existed_ == other.is_existed_;
   }
-  inline bool operator!=(const ObSchemaObjVersion& other) const
+  inline bool operator!=(const ObSchemaObjVersion &other) const
   {
     return !operator==(other);
   }
@@ -942,12 +943,12 @@ struct ObSysParam {
   ObSysParam();
   ~ObSysParam();
 
-  int init(const uint64_t tenant_id, const common::ObZone& zone, const common::ObString& name, const int64_t data_type,
-      const common::ObString& value, const common::ObString& min_val, const common::ObString& max_val,
-      const common::ObString& info, const int64_t flags);
+  int init(const uint64_t tenant_id, const common::ObZone &zone, const common::ObString &name, const int64_t data_type,
+      const common::ObString &value, const common::ObString &min_val, const common::ObString &max_val,
+      const common::ObString &info, const int64_t flags);
   void reset();
   inline bool is_valid() const;
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObZone zone_;
@@ -970,13 +971,13 @@ typedef common::ObFixedBitSet<common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> ColumnR
 // Caution: zone_ here doesn't have buffer, users should manange
 //          the buffer memory all by themselves.
 struct ObZoneScore {
-  ObZoneScore(common::ObString& zone, int64_t score) : zone_(zone), score_(score)
+  ObZoneScore(common::ObString &zone, int64_t score) : zone_(zone), score_(score)
   {}
   ObZoneScore() : zone_(), score_(INT64_MAX)
   {}
   virtual ~ObZoneScore()
   {}
-  bool operator<(const ObZoneScore& that)
+  bool operator<(const ObZoneScore &that)
   {
     return score_ < that.score_;
   }
@@ -996,9 +997,9 @@ struct ObZoneScore {
 struct ObZoneRegion {
   ObZoneRegion() : zone_(), region_()
   {}
-  ObZoneRegion(const ObZoneRegion& that) : zone_(that.zone_), region_(that.region_)
+  ObZoneRegion(const ObZoneRegion &that) : zone_(that.zone_), region_(that.region_)
   {}
-  ObZoneRegion(const common::ObZone& zone, const common::ObRegion& region) : zone_(zone), region_(region)
+  ObZoneRegion(const common::ObZone &zone, const common::ObRegion &region) : zone_(zone), region_(region)
   {}
   virtual ~ObZoneRegion()
   {}
@@ -1007,7 +1008,7 @@ struct ObZoneRegion {
     zone_.reset();
     region_.reset();
   }
-  int assign(const ObZoneRegion& that)
+  int assign(const ObZoneRegion &that)
   {
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(zone_.assign(that.zone_.ptr()))) {
@@ -1045,7 +1046,7 @@ public:
   {}
   ~ObCompareNameWithTenantID()
   {}
-  int compare(const common::ObString& str1, const common::ObString& str2);
+  int compare(const common::ObString &str1, const common::ObString &str2);
 
 private:
   uint64_t tenant_id_;
@@ -1059,7 +1060,7 @@ public:
   friend class ObPrimaryZone;
   ObSchema();
   // explicit ObSchema(common::ObDataBuffer &buffer);
-  explicit ObSchema(common::ObIAllocator* allocator);
+  explicit ObSchema(common::ObIAllocator *allocator);
   virtual ~ObSchema();
   virtual void reset();
   virtual bool is_valid() const
@@ -1067,10 +1068,10 @@ public:
     return common::OB_SUCCESS == error_ret_;
   }
   virtual int zone_array2str(
-      const common::ObIArray<common::ObZone>& zone_list, char* str, const int64_t buf_size) const;
+      const common::ObIArray<common::ObZone> &zone_list, char *str, const int64_t buf_size) const;
   virtual int string_array2str(
-      const common::ObIArray<common::ObString>& string_array, char* buf, const int64_t buf_size) const;
-  virtual int str2string_array(const char* str, common::ObIArray<common::ObString>& string_array) const;
+      const common::ObIArray<common::ObString> &string_array, char *buf, const int64_t buf_size) const;
+  virtual int str2string_array(const char *str, common::ObIArray<common::ObString> &string_array) const;
 
   virtual int64_t get_convert_size() const
   {
@@ -1078,18 +1079,18 @@ public:
   };
   template <typename DSTSCHEMA>
   static int set_charset_and_collation_options(
-      common::ObCharsetType src_charset_type, common::ObCollationType src_collation_type, DSTSCHEMA& dst);
+      common::ObCharsetType src_charset_type, common::ObCollationType src_collation_type, DSTSCHEMA &dst);
   static common::ObCollationType get_cs_type_with_cmp_mode(const common::ObNameCaseMode mode);
 
-  ObSchema* get_buffer() const
+  ObSchema *get_buffer() const
   {
     return buffer_;
   }
-  void set_buffer(ObSchema* buffer)
+  void set_buffer(ObSchema *buffer)
   {
     buffer_ = buffer;
   }
-  common::ObIAllocator* get_allocator();
+  common::ObIAllocator *get_allocator();
   void reset_allocator();
   int get_assign_ret()
   {
@@ -1102,35 +1103,35 @@ public:
 
 protected:
   static const int64_t STRING_ARRAY_EXTEND_CNT = 7;
-  void* alloc(const int64_t size);
-  void free(void* ptr);
-  int deep_copy_str(const char* src, common::ObString& dest);
-  int deep_copy_str(const common::ObString& src, common::ObString& dest);
-  int deep_copy_obj(const common::ObObj& src, common::ObObj& dest);
+  void *alloc(const int64_t size);
+  void free(void *ptr);
+  int deep_copy_str(const char *src, common::ObString &dest);
+  int deep_copy_str(const common::ObString &src, common::ObString &dest);
+  int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
   int deep_copy_string_array(
-      const common::ObIArray<common::ObString>& src, common::ObArrayHelper<common::ObString>& dst);
-  int add_string_to_array(const common::ObString& str, common::ObArrayHelper<common::ObString>& str_array);
+      const common::ObIArray<common::ObString> &src, common::ObArrayHelper<common::ObString> &dst);
+  int add_string_to_array(const common::ObString &str, common::ObArrayHelper<common::ObString> &str_array);
   int serialize_string_array(
-      char* buf, const int64_t buf_len, int64_t& pos, const common::ObArrayHelper<common::ObString>& str_array) const;
+      char *buf, const int64_t buf_len, int64_t &pos, const common::ObArrayHelper<common::ObString> &str_array) const;
   int deserialize_string_array(
-      const char* buf, const int64_t data_len, int64_t& pos, common::ObArrayHelper<common::ObString>& str_array);
-  int64_t get_string_array_serialize_size(const common::ObArrayHelper<common::ObString>& str_array) const;
-  void reset_string(common::ObString& str);
-  void reset_string_array(common::ObArrayHelper<common::ObString>& str_array);
-  const char* extract_str(const common::ObString& str) const;
+      const char *buf, const int64_t data_len, int64_t &pos, common::ObArrayHelper<common::ObString> &str_array);
+  int64_t get_string_array_serialize_size(const common::ObArrayHelper<common::ObString> &str_array) const;
+  void reset_string(common::ObString &str);
+  void reset_string_array(common::ObArrayHelper<common::ObString> &str_array);
+  const char *extract_str(const common::ObString &str) const;
   // buffer is the memory used to store schema item, if not same with this pointer,
   // it means that this schema item has already been rewrote to buffer when rewriting
   // other schema manager, and when we want to rewrite this schema item in current schema
   // manager, we just set pointer of schema item in schema manager to buffer
-  ObSchema* buffer_;
+  ObSchema *buffer_;
   int error_ret_;
   bool is_inner_allocator_;
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
 };
 
 template <typename DSTSCHEMA>
 int ObSchema::set_charset_and_collation_options(
-    common::ObCharsetType src_charset_type, common::ObCollationType src_collation_type, DSTSCHEMA& dst)
+    common::ObCharsetType src_charset_type, common::ObCollationType src_collation_type, DSTSCHEMA &dst)
 {
   int ret = common::OB_SUCCESS;
   if (dst.get_charset_type() == common::CHARSET_INVALID && dst.get_collation_type() == common::CS_TYPE_INVALID) {
@@ -1164,17 +1165,17 @@ class ObLocality {
   OB_UNIS_VERSION(1);
 
 public:
-  explicit ObLocality(ObSchema* schema) : schema_(schema)
+  explicit ObLocality(ObSchema *schema) : schema_(schema)
   {}
-  int assign(const ObLocality& other);
-  int set_locality_str(const common::ObString& locality);
-  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet>& src);
-  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet>& src);
+  int assign(const ObLocality &other);
+  int set_locality_str(const common::ObString &locality);
+  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet> &src);
+  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet> &src);
   int set_specific_replica_attr_array(
-      share::SchemaReplicaAttrArray& schema_replica_set, const common::ObIArray<ReplicaAttr>& src);
+      share::SchemaReplicaAttrArray &schema_replica_set, const common::ObIArray<ReplicaAttr> &src);
   void reset_zone_replica_attr_array();
   int64_t get_convert_size() const;
-  inline const common::ObString& get_locality_str() const
+  inline const common::ObString &get_locality_str() const
   {
     return locality_str_;
   }
@@ -1184,26 +1185,26 @@ public:
 public:
   common::ObString locality_str_;
   ZoneLocalityArray zone_replica_attr_array_;
-  ObSchema* schema_;
+  ObSchema *schema_;
 };
 
 class ObPrimaryZone {
   OB_UNIS_VERSION(1);
 
 public:
-  explicit ObPrimaryZone(ObSchema* schema) : schema_(schema)
+  explicit ObPrimaryZone(ObSchema *schema) : schema_(schema)
   {}
-  int assign(const ObPrimaryZone& other);
-  inline const common::ObString& get_primary_zone() const
+  int assign(const ObPrimaryZone &other);
+  inline const common::ObString &get_primary_zone() const
   {
     return primary_zone_str_;
   }
-  inline const common::ObIArray<ObZoneScore>& get_primary_zone_array() const
+  inline const common::ObIArray<ObZoneScore> &get_primary_zone_array() const
   {
     return primary_zone_array_;
   }
-  int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
-  int set_primary_zone(const common::ObString& zone);
+  int set_primary_zone_array(const common::ObIArray<ObZoneScore> &primary_zone_array);
+  int set_primary_zone(const common::ObString &zone);
   int64_t get_convert_size() const;
   void reset();
   TO_STRING_KV(K_(primary_zone_str), K_(primary_zone_array));
@@ -1211,7 +1212,7 @@ public:
 public:
   common::ObString primary_zone_str_;
   common::ObSEArray<ObZoneScore, common::MAX_ZONE_NUM, common::ObNullAllocator> primary_zone_array_;
-  ObSchema* schema_;
+  ObSchema *schema_;
 };
 
 class ObSysVarSchema : public ObSchema {
@@ -1224,10 +1225,10 @@ public:
   }
   ~ObSysVarSchema()
   {}
-  explicit ObSysVarSchema(common::ObIAllocator* allocator);
-  explicit ObSysVarSchema(const ObSysVarSchema& src_schema);
-  ObSysVarSchema& operator=(const ObSysVarSchema& src_schema);
-  int assign(const ObSysVarSchema& src_schema);
+  explicit ObSysVarSchema(common::ObIAllocator *allocator);
+  explicit ObSysVarSchema(const ObSysVarSchema &src_schema);
+  ObSysVarSchema &operator=(const ObSysVarSchema &src_schema);
+  int assign(const ObSysVarSchema &src_schema);
   virtual bool is_valid() const
   {
     return ObSchema::is_valid() && tenant_id_ != common::OB_INVALID_ID && !name_.empty();
@@ -1242,11 +1243,11 @@ public:
   {
     tenant_id_ = tenant_id;
   }
-  const common::ObString& get_name() const
+  const common::ObString &get_name() const
   {
     return name_;
   }
-  int set_name(const common::ObString& name)
+  int set_name(const common::ObString &name)
   {
     return deep_copy_str(name, name_);
   }
@@ -1258,35 +1259,35 @@ public:
   {
     data_type_ = data_type;
   }
-  const common::ObString& get_value() const
+  const common::ObString &get_value() const
   {
     return value_;
   }
   int get_value(
-      common::ObIAllocator* allocator, const common::ObDataTypeCastParams& dtc_params, common::ObObj& value) const;
+      common::ObIAllocator *allocator, const common::ObDataTypeCastParams &dtc_params, common::ObObj &value) const;
   inline int get_value(
-      common::ObIAllocator* allocator, const common::ObTimeZoneInfo* tz_info, common::ObObj& value) const
+      common::ObIAllocator *allocator, const common::ObTimeZoneInfo *tz_info, common::ObObj &value) const
   {
     const common::ObDataTypeCastParams dtc_params(tz_info);
     return get_value(allocator, dtc_params, value);
   }
-  int set_value(const common::ObString& value)
+  int set_value(const common::ObString &value)
   {
     return deep_copy_str(value, value_);
   }
-  const common::ObString& get_min_val() const
+  const common::ObString &get_min_val() const
   {
     return min_val_;
   }
-  int set_min_val(const common::ObString& min_val)
+  int set_min_val(const common::ObString &min_val)
   {
     return deep_copy_str(min_val, min_val_);
   }
-  const common::ObString& get_max_val() const
+  const common::ObString &get_max_val() const
   {
     return max_val_;
   }
-  int set_max_val(const common::ObString& max_val)
+  int set_max_val(const common::ObString &max_val)
   {
     return deep_copy_str(max_val, max_val_);
   }
@@ -1306,23 +1307,23 @@ public:
   {
     flags_ = flags;
   }
-  int set_info(const common::ObString& info)
+  int set_info(const common::ObString &info)
   {
     return deep_copy_str(info, info_);
   }
-  const common::ObString& get_info() const
+  const common::ObString &get_info() const
   {
     return info_;
   }
-  int set_zone(const common::ObZone& zone)
+  int set_zone(const common::ObZone &zone)
   {
     return zone_.assign(zone);
   }
-  int set_zone(const common::ObString& zone)
+  int set_zone(const common::ObString &zone)
   {
     return zone_.assign(zone);
   }
-  const common::ObZone& get_zone() const
+  const common::ObZone &get_zone() const
   {
     return zone_;
   }
@@ -1372,10 +1373,10 @@ class ObSysVariableSchema : public ObSchema {
 public:
   // base methods
   ObSysVariableSchema();
-  explicit ObSysVariableSchema(common::ObIAllocator* allocator);
+  explicit ObSysVariableSchema(common::ObIAllocator *allocator);
   virtual ~ObSysVariableSchema();
-  ObSysVariableSchema(const ObSysVariableSchema& src_schema);
-  ObSysVariableSchema& operator=(const ObSysVariableSchema& src_schema);
+  ObSysVariableSchema(const ObSysVariableSchema &src_schema);
+  ObSysVariableSchema &operator=(const ObSysVariableSchema &src_schema);
   // set methods
   inline void set_tenant_id(const uint64_t tenant_id)
   {
@@ -1402,17 +1403,17 @@ public:
     memset(sysvar_array_, 0, sizeof(sysvar_array_));
   }
   int64_t get_convert_size() const;
-  int add_sysvar_schema(const share::schema::ObSysVarSchema& sysvar_schema);
+  int add_sysvar_schema(const share::schema::ObSysVarSchema &sysvar_schema);
   int load_default_system_variable(bool is_sys_tenant);
   int64_t get_sysvar_count() const
   {
     return ObSysVarFactory::ALL_SYS_VARS_COUNT;
   }
   int64_t get_real_sysvar_count() const;
-  int get_sysvar_schema(const common::ObString& sysvar_name, const ObSysVarSchema*& sysvar_schema) const;
-  int get_sysvar_schema(ObSysVarClassType var_type, const ObSysVarSchema*& sysvar_schema) const;
-  const ObSysVarSchema* get_sysvar_schema(int64_t idx) const;
-  ObSysVarSchema* get_sysvar_schema(int64_t idx);
+  int get_sysvar_schema(const common::ObString &sysvar_name, const ObSysVarSchema *&sysvar_schema) const;
+  int get_sysvar_schema(ObSysVarClassType var_type, const ObSysVarSchema *&sysvar_schema) const;
+  const ObSysVarSchema *get_sysvar_schema(int64_t idx) const;
+  ObSysVarSchema *get_sysvar_schema(int64_t idx);
   bool is_read_only() const
   {
     return read_only_;
@@ -1425,15 +1426,15 @@ public:
   {
     name_case_mode_ = mode;
   }
-  int get_oracle_mode(bool& is_oracle_mode) const;
+  int get_oracle_mode(bool &is_oracle_mode) const;
   TO_STRING_KV(K_(tenant_id), K_(schema_version), "sysvars",
-      common::ObArrayWrap<ObSysVarSchema*>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT), K_(read_only),
+      common::ObArrayWrap<ObSysVarSchema *>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT), K_(read_only),
       K_(name_case_mode));
 
 private:
   uint64_t tenant_id_;
   int64_t schema_version_;
-  ObSysVarSchema* sysvar_array_[ObSysVarFactory::ALL_SYS_VARS_COUNT];
+  ObSysVarSchema *sysvar_array_[ObSysVarFactory::ALL_SYS_VARS_COUNT];
   bool read_only_;
   common::ObNameCaseMode name_case_mode_;
 };
@@ -1446,9 +1447,9 @@ enum ObTenantStatus {
   TENANT_STATUS_MAX
 };
 
-const char* ob_tenant_status_str(const ObTenantStatus);
+const char *ob_tenant_status_str(const ObTenantStatus);
 
-int get_tenant_status(const common::ObString& str, ObTenantStatus& status);
+int get_tenant_status(const common::ObString &str, ObTenantStatus &status);
 
 class ObTenantSchema : public ObSchema {
   OB_UNIS_VERSION(1);
@@ -1456,25 +1457,25 @@ class ObTenantSchema : public ObSchema {
 public:
   // base methods
   ObTenantSchema();
-  explicit ObTenantSchema(common::ObIAllocator* allocator);
+  explicit ObTenantSchema(common::ObIAllocator *allocator);
   virtual ~ObTenantSchema();
-  ObTenantSchema(const ObTenantSchema& src_schema);
-  ObTenantSchema& operator=(const ObTenantSchema& src_schema);
-  int assign(const ObTenantSchema& src_schema);
+  ObTenantSchema(const ObTenantSchema &src_schema);
+  ObTenantSchema &operator=(const ObTenantSchema &src_schema);
+  int assign(const ObTenantSchema &src_schema);
   // for sorted vector
-  static bool cmp(const ObTenantSchema* lhs, const ObTenantSchema* rhs)
+  static bool cmp(const ObTenantSchema *lhs, const ObTenantSchema *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_id() < rhs->get_tenant_id() : false;
   }
-  static bool equal(const ObTenantSchema* lhs, const ObTenantSchema* rhs)
+  static bool equal(const ObTenantSchema *lhs, const ObTenantSchema *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_id() == rhs->get_tenant_id() : false;
   }
-  static bool cmp_tenant_id(const ObTenantSchema* lhs, const uint64_t tenant_id)
+  static bool cmp_tenant_id(const ObTenantSchema *lhs, const uint64_t tenant_id)
   {
     return NULL != lhs ? lhs->get_tenant_id() < tenant_id : false;
   }
-  static bool equal_tenant_id(const ObTenantSchema* lhs, const uint64_t tenant_id)
+  static bool equal_tenant_id(const ObTenantSchema *lhs, const uint64_t tenant_id)
   {
     return NULL != lhs ? lhs->get_tenant_id() == tenant_id : false;
   }
@@ -1487,31 +1488,31 @@ public:
   {
     schema_version_ = schema_version;
   }
-  inline int set_tenant_name(const char* tenant_name)
+  inline int set_tenant_name(const char *tenant_name)
   {
     return deep_copy_str(tenant_name, tenant_name_);
   }
-  inline int set_comment(const char* comment)
+  inline int set_comment(const char *comment)
   {
     return deep_copy_str(comment, comment_);
   }
-  inline int set_locality(const char* locality)
+  inline int set_locality(const char *locality)
   {
     return deep_copy_str(locality, locality_str_);
   }
-  inline int set_previous_locality(const char* previous_locality)
+  inline int set_previous_locality(const char *previous_locality)
   {
     return deep_copy_str(previous_locality, previous_locality_str_);
   }
-  inline int set_tenant_name(const common::ObString& tenant_name)
+  inline int set_tenant_name(const common::ObString &tenant_name)
   {
     return deep_copy_str(tenant_name, tenant_name_);
   }
-  inline int set_zone_list(const common::ObIArray<common::ObString>& zone_list);
-  int set_zone_list(const common::ObIArray<common::ObZone>& zone_list);
-  inline int set_primary_zone(const common::ObString& zone);
-  int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
-  inline int add_zone(const common::ObString& zone);
+  inline int set_zone_list(const common::ObIArray<common::ObString> &zone_list);
+  int set_zone_list(const common::ObIArray<common::ObZone> &zone_list);
+  inline int set_primary_zone(const common::ObString &zone);
+  int set_primary_zone_array(const common::ObIArray<ObZoneScore> &primary_zone_array);
+  inline int add_zone(const common::ObString &zone);
   inline void set_locked(const bool locked)
   {
     locked_ = locked;
@@ -1524,15 +1525,15 @@ public:
   {
     rewrite_merge_version_ = version;
   }
-  inline int set_comment(const common::ObString& comment)
+  inline int set_comment(const common::ObString &comment)
   {
     return deep_copy_str(comment, comment_);
   }
-  inline int set_locality(const common::ObString& locality)
+  inline int set_locality(const common::ObString &locality)
   {
     return deep_copy_str(locality, locality_str_);
   }
-  inline int set_previous_locality(const common::ObString& previous_locality)
+  inline int set_previous_locality(const common::ObString &previous_locality)
   {
     return deep_copy_str(previous_locality, previous_locality_str_);
   }
@@ -1548,10 +1549,10 @@ public:
   {
     name_case_mode_ = mode;
   }
-  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet>& src);
-  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet>& src);
+  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet> &src);
+  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet> &src);
   int set_specific_replica_attr_array(
-      share::SchemaReplicaAttrArray& schema_replica_set, const common::ObIArray<ReplicaAttr>& src);
+      share::SchemaReplicaAttrArray &schema_replica_set, const common::ObIArray<ReplicaAttr> &src);
   void reset_zone_replica_attr_array();
   inline void set_storage_format_version(const int64_t storage_format_version);
   inline void set_storage_format_work_version(const int64_t storage_format_work_version);
@@ -1559,7 +1560,7 @@ public:
   {
     default_tablegroup_id_ = tablegroup_id;
   }
-  int set_default_tablegroup_name(const common::ObString& tablegroup_name)
+  int set_default_tablegroup_name(const common::ObString &tablegroup_name)
   {
     return deep_copy_str(tablegroup_name, default_tablegroup_name_);
   }
@@ -1577,23 +1578,23 @@ public:
   {
     return schema_version_;
   }
-  inline const char* get_tenant_name() const
+  inline const char *get_tenant_name() const
   {
     return extract_str(tenant_name_);
   }
-  inline const char* get_comment() const
+  inline const char *get_comment() const
   {
     return extract_str(comment_);
   }
-  inline const char* get_locality() const
+  inline const char *get_locality() const
   {
     return extract_str(locality_str_);
   }
-  inline const char* get_previous_locality() const
+  inline const char *get_previous_locality() const
   {
     return extract_str(previous_locality_str_);
   }
-  inline const common::ObString& get_tenant_name_str() const
+  inline const common::ObString &get_tenant_name_str() const
   {
     return tenant_name_;
   }
@@ -1601,7 +1602,7 @@ public:
   {
     return logonly_replica_num_;
   }
-  inline const common::ObString& get_primary_zone() const
+  inline const common::ObString &get_primary_zone() const
   {
     return primary_zone_;
   }
@@ -1617,15 +1618,15 @@ public:
   {
     return rewrite_merge_version_;
   }
-  inline const common::ObString& get_comment_str() const
+  inline const common::ObString &get_comment_str() const
   {
     return comment_;
   }
-  inline const common::ObString& get_locality_str() const
+  inline const common::ObString &get_locality_str() const
   {
     return locality_str_;
   }
-  inline const common::ObString& get_previous_locality_str() const
+  inline const common::ObString &get_previous_locality_str() const
   {
     return previous_locality_str_;
   }
@@ -1638,23 +1639,23 @@ public:
     return collation_type_;
   }
   int get_raw_first_primary_zone(
-      const rootserver::ObRandomZoneSelector& random_selector, common::ObZone& first_primary_zone) const;
-  int get_first_primary_zone(const rootserver::ObRandomZoneSelector& random_selector,
-      const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs, common::ObZone& first_primary_zone) const;
-  int get_primary_zone_score(const common::ObZone& zone, int64_t& zone_score) const;
-  inline const common::ObIArray<ObZoneScore>& get_primary_zone_array() const
+      const rootserver::ObRandomZoneSelector &random_selector, common::ObZone &first_primary_zone) const;
+  int get_first_primary_zone(const rootserver::ObRandomZoneSelector &random_selector,
+      const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs, common::ObZone &first_primary_zone) const;
+  int get_primary_zone_score(const common::ObZone &zone, int64_t &zone_score) const;
+  inline const common::ObIArray<ObZoneScore> &get_primary_zone_array() const
   {
     return primary_zone_array_;
   }
   int get_primary_zone_inherit(
-      share::schema::ObSchemaGetterGuard& schema_guard, share::schema::ObPrimaryZone& primary_zone) const;
-  int get_zone_replica_attr_array(ZoneLocalityIArray& locality) const;
-  int get_zone_replica_attr_array_inherit(ObSchemaGetterGuard& schema_guard, ZoneLocalityIArray& locality) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, share::schema::ObPrimaryZone &primary_zone) const;
+  int get_zone_replica_attr_array(ZoneLocalityIArray &locality) const;
+  int get_zone_replica_attr_array_inherit(ObSchemaGetterGuard &schema_guard, ZoneLocalityIArray &locality) const;
   int64_t get_full_replica_num() const;
-  int get_paxos_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const;
-  int get_zone_list(common::ObIArray<common::ObZone>& zone_list) const;
+  int get_paxos_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const;
+  int get_zone_list(common::ObIArray<common::ObZone> &zone_list) const;
   int get_zone_list(
-      share::schema::ObSchemaGetterGuard& schema_guard, common::ObIArray<common::ObZone>& zone_list) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, common::ObIArray<common::ObZone> &zone_list) const;
   inline int64_t get_storage_format_version() const
   {
     return storage_format_version_;
@@ -1667,7 +1668,7 @@ public:
   {
     return default_tablegroup_id_;
   }
-  inline const common::ObString& get_default_tablegroup_name() const
+  inline const common::ObString &get_default_tablegroup_name() const
   {
     return default_tablegroup_name_;
   }
@@ -1727,17 +1728,17 @@ public:
       K_(charset_type), K_(locked), K_(comment), K_(name_case_mode), K_(read_only), K_(rewrite_merge_version),
       K_(locality_str), K_(logonly_replica_num), K_(zone_replica_attr_array), K_(primary_zone_array),
       K_(storage_format_version), K_(storage_format_work_version), K_(previous_locality_str), "sysvars",
-      common::ObArrayWrap<ObSysVarSchema*>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT),
+      common::ObArrayWrap<ObSysVarSchema *>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT),
       K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time), K_(status),
       K_(in_recyclebin));
 
 private:
-  int add_sysvar_schema(const share::schema::ObSysVarSchema& sysvar_schema);
+  int add_sysvar_schema(const share::schema::ObSysVarSchema &sysvar_schema);
   int64_t get_sysvar_count() const
   {
     return ObSysVarFactory::ALL_SYS_VARS_COUNT;
   }
-  const ObSysVarSchema* get_sysvar_schema(int64_t idx) const;
+  const ObSysVarSchema *get_sysvar_schema(int64_t idx) const;
 
 private:
   uint64_t tenant_id_;
@@ -1762,7 +1763,7 @@ private:
   common::ObString previous_locality_str_;
   int64_t storage_format_version_;
   int64_t storage_format_work_version_;
-  ObSysVarSchema* sysvar_array_[ObSysVarFactory::ALL_SYS_VARS_COUNT];  // deprecated
+  ObSysVarSchema *sysvar_array_[ObSysVarFactory::ALL_SYS_VARS_COUNT];  // deprecated
   uint64_t default_tablegroup_id_;
   common::ObString default_tablegroup_name_;
   common::ObCompatibilityMode compatibility_mode_;
@@ -1771,17 +1772,17 @@ private:
   bool in_recyclebin_;
 };
 
-inline int ObTenantSchema::set_zone_list(const common::ObIArray<common::ObString>& zone_list)
+inline int ObTenantSchema::set_zone_list(const common::ObIArray<common::ObString> &zone_list)
 {
   return deep_copy_string_array(zone_list, zone_list_);
 }
 
-inline int ObTenantSchema::set_primary_zone(const common::ObString& zone)
+inline int ObTenantSchema::set_primary_zone(const common::ObString &zone)
 {
   return deep_copy_str(zone, primary_zone_);
 }
 
-inline int ObTenantSchema::add_zone(const common::ObString& zone)
+inline int ObTenantSchema::add_zone(const common::ObString &zone)
 {
   return add_string_to_array(zone, zone_list_);
 }
@@ -1802,11 +1803,11 @@ class ObDatabaseSchema : public ObSchema {
 public:
   // base methods
   ObDatabaseSchema();
-  explicit ObDatabaseSchema(common::ObIAllocator* allocator);
+  explicit ObDatabaseSchema(common::ObIAllocator *allocator);
   virtual ~ObDatabaseSchema();
-  ObDatabaseSchema(const ObDatabaseSchema& src_schema);
-  ObDatabaseSchema& operator=(const ObDatabaseSchema& src_schema);
-  int assign(const ObDatabaseSchema& src_schema);
+  ObDatabaseSchema(const ObDatabaseSchema &src_schema);
+  ObDatabaseSchema &operator=(const ObDatabaseSchema &src_schema);
+  int assign(const ObDatabaseSchema &src_schema);
   // set methods
   inline void set_tenant_id(const uint64_t tenant_id)
   {
@@ -1820,24 +1821,24 @@ public:
   {
     schema_version_ = schema_version;
   }
-  int set_database_name(const char* database_name)
+  int set_database_name(const char *database_name)
   {
     return deep_copy_str(database_name, database_name_);
   }
-  int set_database_name(const common::ObString& database_name)
+  int set_database_name(const common::ObString &database_name)
   {
     return deep_copy_str(database_name, database_name_);
   }
-  inline int set_zone_list(const common::ObIArray<common::ObString>& zone_list);
-  int set_zone_list(const common::ObIArray<common::ObZone>& zone_list);
-  inline int set_primary_zone(const common::ObString& zone);
-  int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
-  inline int add_zone(const common::ObString& zone);
-  int set_comment(const char* comment)
+  inline int set_zone_list(const common::ObIArray<common::ObString> &zone_list);
+  int set_zone_list(const common::ObIArray<common::ObZone> &zone_list);
+  inline int set_primary_zone(const common::ObString &zone);
+  int set_primary_zone_array(const common::ObIArray<ObZoneScore> &primary_zone_array);
+  inline int add_zone(const common::ObString &zone);
+  int set_comment(const char *comment)
   {
     return deep_copy_str(comment, comment_);
   }
-  int set_comment(const common::ObString& comment)
+  int set_comment(const common::ObString &comment)
   {
     return deep_copy_str(comment, comment_);
   }
@@ -1861,7 +1862,7 @@ public:
   {
     default_tablegroup_id_ = tablegroup_id;
   }
-  int set_default_tablegroup_name(const common::ObString& tablegroup_name)
+  int set_default_tablegroup_name(const common::ObString &tablegroup_name)
   {
     return deep_copy_str(tablegroup_name, default_tablegroup_name_);
   }
@@ -1888,23 +1889,23 @@ public:
   {
     return schema_version_;
   }
-  inline const char* get_database_name() const
+  inline const char *get_database_name() const
   {
     return extract_str(database_name_);
   }
-  inline const common::ObString& get_database_name_str() const
+  inline const common::ObString &get_database_name_str() const
   {
     return database_name_;
   }
-  inline const common::ObString& get_primary_zone() const
+  inline const common::ObString &get_primary_zone() const
   {
     return primary_zone_;
   }
-  inline const char* get_comment() const
+  inline const char *get_comment() const
   {
     return extract_str(comment_);
   }
-  inline const common::ObString& get_comment_str() const
+  inline const common::ObString &get_comment_str() const
   {
     return comment_;
   }
@@ -1928,7 +1929,7 @@ public:
   {
     return default_tablegroup_id_;
   }
-  inline const common::ObString& get_default_tablegroup_name() const
+  inline const common::ObString &get_default_tablegroup_name() const
   {
     return default_tablegroup_name_;
   }
@@ -1940,29 +1941,29 @@ public:
   {
     return in_recyclebin_ || database_id_ == common::combine_id(tenant_id_, common::OB_RECYCLEBIN_SCHEMA_ID);
   }
-  inline const common::ObString& get_locality_str() const
+  inline const common::ObString &get_locality_str() const
   {
     static const common::ObString dummy;
     return dummy;
   }
   int get_raw_first_primary_zone(
-      const rootserver::ObRandomZoneSelector& random_selector, common::ObZone& first_primary_zone) const;
-  int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard& schema_guard,
-      const rootserver::ObRandomZoneSelector& random_selector,
-      const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs, common::ObZone& first_primary_zone) const;
-  int get_primary_zone_score(const common::ObZone& zone, int64_t& zone_score) const;
-  inline const common::ObIArray<ObZoneScore>& get_primary_zone_array() const
+      const rootserver::ObRandomZoneSelector &random_selector, common::ObZone &first_primary_zone) const;
+  int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard &schema_guard,
+      const rootserver::ObRandomZoneSelector &random_selector,
+      const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs, common::ObZone &first_primary_zone) const;
+  int get_primary_zone_score(const common::ObZone &zone, int64_t &zone_score) const;
+  inline const common::ObIArray<ObZoneScore> &get_primary_zone_array() const
   {
     return primary_zone_array_;
   }
   int get_primary_zone_inherit(
-      share::schema::ObSchemaGetterGuard& schema_guard, share::schema::ObPrimaryZone& primary_zone) const;
-  int get_paxos_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, share::schema::ObPrimaryZone &primary_zone) const;
+  int get_paxos_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const;
   int get_zone_replica_attr_array_inherit(
-      share::schema::ObSchemaGetterGuard& schema_guard, ZoneLocalityIArray& locality) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, ZoneLocalityIArray &locality) const;
   // In the current implementation, the zone_list of the Database is directly read from the corresponding tenant.
   int get_zone_list(
-      share::schema::ObSchemaGetterGuard& schema_guard, common::ObIArray<common::ObZone>& zone_list) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, common::ObIArray<common::ObZone> &zone_list) const;
   // other methods
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
@@ -2006,17 +2007,17 @@ private:
   int64_t drop_schema_version_;
 };
 
-inline int ObDatabaseSchema::set_zone_list(const common::ObIArray<common::ObString>& zone_list)
+inline int ObDatabaseSchema::set_zone_list(const common::ObIArray<common::ObString> &zone_list)
 {
   return deep_copy_string_array(zone_list, zone_list_);
 }
 
-inline int ObDatabaseSchema::set_primary_zone(const common::ObString& zone)
+inline int ObDatabaseSchema::set_primary_zone(const common::ObString &zone)
 {
   return deep_copy_str(zone, primary_zone_);
 }
 
-inline int ObDatabaseSchema::add_zone(const common::ObString& zone)
+inline int ObDatabaseSchema::add_zone(const common::ObString &zone)
 {
   return add_string_to_array(zone, zone_list_);
 }
@@ -2026,12 +2027,12 @@ class ObPartitionOption : public ObSchema {
 
 public:
   ObPartitionOption();
-  explicit ObPartitionOption(common::ObIAllocator* allocator);
+  explicit ObPartitionOption(common::ObIAllocator *allocator);
   virtual ~ObPartitionOption();
-  ObPartitionOption(const ObPartitionOption& expr);
-  ObPartitionOption& operator=(const ObPartitionOption& expr);
-  bool operator==(const ObPartitionOption& expr) const;
-  bool operator!=(const ObPartitionOption& expr) const;
+  ObPartitionOption(const ObPartitionOption &expr);
+  ObPartitionOption &operator=(const ObPartitionOption &expr);
+  bool operator==(const ObPartitionOption &expr) const;
+  bool operator!=(const ObPartitionOption &expr) const;
 
   inline bool is_range_part() const
   {
@@ -2059,7 +2060,7 @@ public:
   }
 
   // set methods
-  int set_part_expr(const common::ObString& expr)
+  int set_part_expr(const common::ObString &expr)
   {
     return deep_copy_str(expr, part_func_expr_);
   }
@@ -2093,11 +2094,11 @@ public:
   }
 
   // get methods
-  inline const common::ObString& get_part_func_expr_str() const
+  inline const common::ObString &get_part_func_expr_str() const
   {
     return part_func_expr_;
   }
-  inline const char* get_part_func_expr() const
+  inline const char *get_part_func_expr() const
   {
     return extract_str(part_func_expr_);
   }
@@ -2129,11 +2130,11 @@ public:
   {
     return is_columns_;
   }
-  const common::ObString& get_intervel_start_str() const
+  const common::ObString &get_intervel_start_str() const
   {
     return interval_start_;
   }
-  const common::ObString& get_part_intervel_str() const
+  const common::ObString &get_part_intervel_str() const
   {
     return part_interval_;
   }
@@ -2144,7 +2145,7 @@ public:
 
   // other methods
   virtual void reset();
-  int64_t assign(const ObPartitionOption& src_part);
+  int64_t assign(const ObPartitionOption &src_part);
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
   TO_STRING_KV(K_(part_func_type), K_(part_func_expr), K_(part_num), K_(partition_cnt_within_partition_table),
@@ -2170,27 +2171,31 @@ class ObSchemaAllocator : public common::ObIAllocator {
 public:
   ObSchemaAllocator() : allocator_(NULL)
   {}
-  ObSchemaAllocator(common::ObIAllocator& allocator) : allocator_(&allocator)
+  ObSchemaAllocator(common::ObIAllocator &allocator) : allocator_(&allocator)
   {}
 
-  virtual void* alloc(const int64_t sz)
+  virtual void* alloc(const int64_t sz) override
   {
     return alloc(sz, common::default_memattr);
   }
 
-  virtual void* alloc(const int64_t sz, const common::ObMemAttr& attr)
+  virtual void* alloc(const int64_t sz, const common::ObMemAttr& attr) override
   {
-    void* ret = NULL;
+    void *ret = NULL;
     if (allocator_) {
       ret = allocator_->alloc(sz, attr);
     }
     return ret;
   }
 
+  virtual void free(void *p) override
+  {
+    allocator_->free(p);
+  }
   virtual ~ObSchemaAllocator(){};
 
 private:
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
 };
 
 // May need to add a schema_version field, this mark when the table was created
@@ -2203,7 +2208,7 @@ public:
   {}
 
 public:
-  bool operator()(const common::ObNewRow& left, const common::ObNewRow& right)
+  bool operator()(const common::ObNewRow &left, const common::ObNewRow &right)
   {
     bool bool_ret = false;
     int cmp = 0;
@@ -2233,7 +2238,7 @@ public:
   friend class ObPartitionUtils;
   friend class sql::ObPartitionExecutorUtils;
   ObBasePartition();
-  explicit ObBasePartition(common::ObIAllocator* allocator);
+  explicit ObBasePartition(common::ObIAllocator *allocator);
   virtual void reset();
   void set_tenant_id(const uint64_t tenant_id)
   {
@@ -2280,11 +2285,11 @@ public:
     return schema_version_;
   }
 
-  int set_part_name(common::ObString& part_name)
+  int set_part_name(common::ObString &part_name)
   {
     return deep_copy_str(part_name, name_);
   }
-  const common::ObString& get_part_name() const
+  const common::ObString &get_part_name() const
   {
     return name_;
   }
@@ -2298,32 +2303,32 @@ public:
     return tablespace_id_;
   }
 
-  int assign(const ObBasePartition& src_part);
+  int assign(const ObBasePartition &src_part);
 
   // This interface is not strictly semantically less than, please note
-  static bool less_than(const ObBasePartition* lhs, const ObBasePartition* rhs);
-  static bool list_part_func_layout(const ObBasePartition* lhs, const ObBasePartition* rhs);
-  static bool range_like_func_less_than(const ObBasePartition* lhs, const ObBasePartition* rhs);
-  static bool hash_like_func_less_than(const ObBasePartition* lhs, const ObBasePartition* rhs);
-  int add_list_row(const common::ObNewRow& row)
+  static bool less_than(const ObBasePartition *lhs, const ObBasePartition *rhs);
+  static bool list_part_func_layout(const ObBasePartition *lhs, const ObBasePartition *rhs);
+  static bool range_like_func_less_than(const ObBasePartition *lhs, const ObBasePartition *rhs);
+  static bool hash_like_func_less_than(const ObBasePartition *lhs, const ObBasePartition *rhs);
+  int add_list_row(const common::ObNewRow &row)
   {
     return list_row_values_.push_back(row);
   }
-  int set_high_bound_val(const common::ObRowkey& high_bound_val);
-  int set_high_bound_val_with_hex_str(const common::ObString& high_bound_val_hex);
-  int set_list_vector_values_with_hex_str(const common::ObString& list_vector_vals_hex);
-  const common::ObRowkey& get_high_bound_val() const
+  int set_high_bound_val(const common::ObRowkey &high_bound_val);
+  int set_high_bound_val_with_hex_str(const common::ObString &high_bound_val_hex);
+  int set_list_vector_values_with_hex_str(const common::ObString &list_vector_vals_hex);
+  const common::ObRowkey &get_high_bound_val() const
   {
     return high_bound_val_;
   }
   virtual int64_t get_deep_copy_size() const;
 
-  const common::ObIArray<common::ObNewRow>& get_list_row_values() const
+  const common::ObIArray<common::ObNewRow> &get_list_row_values() const
   {
     return list_row_values_;
   }
 
-  bool same_base_partition(const ObBasePartition& other) const
+  bool same_base_partition(const ObBasePartition &other) const
   {
     return part_id_ == other.part_id_ && high_bound_val_ == other.high_bound_val_ && status_ == other.status_;
   }
@@ -2339,18 +2344,18 @@ public:
   {
     return status_;
   }
-  const common::ObIArray<int64_t>& get_source_part_ids() const
+  const common::ObIArray<int64_t> &get_source_part_ids() const
   {
     return source_part_ids_;
   }
-  common::ObIArray<int64_t>& get_source_part_ids()
+  common::ObIArray<int64_t> &get_source_part_ids()
   {
     return source_part_ids_;
   }
-  int set_source_part_id(common::ObString& partition_str);
+  int set_source_part_id(common::ObString &partition_str);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(high_bound_val), K_(list_row_values),
       K_(part_idx), K_(is_empty_partition_name));
-  int get_source_part_ids_str(char* str, const int64_t buf_len) const;
+  int get_source_part_ids_str(char *str, const int64_t buf_len) const;
   void set_is_empty_partition_name(bool is_empty)
   {
     is_empty_partition_name_ = is_empty;
@@ -2377,7 +2382,7 @@ protected:
    * @warning: The projector can only be used by the less than interface for partition comparison calculations,
    *  and it is not allowed to be used in other places
    */
-  int32_t* projector_;
+  int32_t *projector_;
   int64_t projector_size_;
   common::ObSEArray<int64_t, 2> source_part_ids_;
   int64_t part_idx_;  // Valid for hash partition
@@ -2395,12 +2400,12 @@ struct ObPartition : public ObBasePartition {
 
 public:
   ObPartition();
-  explicit ObPartition(common::ObIAllocator* allocator);
-  int assign(const ObPartition& src_part);
+  explicit ObPartition(common::ObIAllocator *allocator);
+  int assign(const ObPartition &src_part);
 
   void reset();
   virtual int64_t get_convert_size() const;
-  virtual int clone(common::ObIAllocator& allocator, ObPartition*& dst) const;
+  virtual int clone(common::ObIAllocator &allocator, ObPartition *&dst) const;
 
   void set_sub_part_num(const int64_t sub_part_num)
   {
@@ -2450,7 +2455,7 @@ public:
   {
     return max_used_sub_part_id_;
   }
-  ObSubPartition** get_subpart_array() const
+  ObSubPartition **get_subpart_array() const
   {
     return subpartition_array_;
   }
@@ -2458,19 +2463,19 @@ public:
   {
     return subpartition_num_;
   }
-  ObSubPartition** get_sorted_part_id_subpartition_array() const
+  ObSubPartition **get_sorted_part_id_subpartition_array() const
   {
     return sorted_part_id_subpartition_array_;
   }
-  bool same_partition(const ObPartition& other) const
+  bool same_partition(const ObPartition &other) const
   {
     return same_base_partition(other) && sub_part_num_ == other.sub_part_num_ &&
            sub_part_space_ == other.sub_part_space_ && sub_interval_start_ == other.sub_interval_start_ &&
            sub_part_interval_ == other.sub_part_interval_;
   }
-  int add_partition(const ObSubPartition& subpartition);
+  int add_partition(const ObSubPartition &subpartition);
   int generate_mapping_pg_subpartition_array();
-  ObSubPartition** get_dropped_subpart_array() const
+  ObSubPartition **get_dropped_subpart_array() const
   {
     return dropped_subpartition_array_;
   }
@@ -2485,14 +2490,14 @@ public:
   }
   INHERIT_TO_STRING_KV("BasePartition", ObBasePartition, K_(mapping_pg_part_id), K_(source_part_ids),
       K_(drop_schema_version), K_(max_used_sub_part_id), "subpartition_array",
-      common::ObArrayWrap<ObSubPartition*>(subpartition_array_, subpartition_num_), K_(subpartition_array_capacity),
+      common::ObArrayWrap<ObSubPartition *>(subpartition_array_, subpartition_num_), K_(subpartition_array_capacity),
       "dropped_subpartition_array",
-      common::ObArrayWrap<ObSubPartition*>(dropped_subpartition_array_, dropped_subpartition_num_),
+      common::ObArrayWrap<ObSubPartition *>(dropped_subpartition_array_, dropped_subpartition_num_),
       K_(dropped_subpartition_array_capacity));
 
 private:
   int inner_add_partition(
-      const ObSubPartition& part, ObSubPartition**& part_array, int64_t& part_array_capacity, int64_t& part_num);
+      const ObSubPartition &part, ObSubPartition **&part_array, int64_t &part_array_capacity, int64_t &part_num);
 
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
@@ -2515,13 +2520,13 @@ private:
   int64_t subpartition_num_;
   // The array size of subpartition_array is not necessarily equal to subpartition_num_
   int64_t subpartition_array_capacity_;
-  ObSubPartition** subpartition_array_;
+  ObSubPartition **subpartition_array_;
   // Generated when the schema is refreshed, only used by the table, used to quickly index pg_key, not serialized
-  ObSubPartition** sorted_part_id_subpartition_array_;
+  ObSubPartition **sorted_part_id_subpartition_array_;
   /* delay delete subpartition */
   int64_t dropped_subpartition_num_;
   int64_t dropped_subpartition_array_capacity_;
-  ObSubPartition** dropped_subpartition_array_;
+  ObSubPartition **dropped_subpartition_array_;
 };
 
 struct ObSubPartition : public ObBasePartition {
@@ -2533,10 +2538,10 @@ public:
 
 public:
   ObSubPartition();
-  explicit ObSubPartition(common::ObIAllocator* allocator);
-  int assign(const ObSubPartition& src_part);
+  explicit ObSubPartition(common::ObIAllocator *allocator);
+  int assign(const ObSubPartition &src_part);
   virtual void reset();
-  virtual int clone(common::ObIAllocator& allocator, ObSubPartition*& dst) const;
+  virtual int clone(common::ObIAllocator &allocator, ObSubPartition *&dst) const;
 
   void set_sub_part_id(const int64_t subpart_id)
   {
@@ -2576,14 +2581,14 @@ public:
   }
 
   // first compare part_idx,then compare high_bound_val
-  static bool less_than(const ObSubPartition* lhs, const ObSubPartition* rhs);
-  bool same_sub_partition(const ObSubPartition& other) const
+  static bool less_than(const ObSubPartition *lhs, const ObSubPartition *rhs);
+  bool same_sub_partition(const ObSubPartition &other) const
   {
     return same_base_partition(other) && subpart_id_ == other.subpart_id_;
   }
   virtual int64_t get_convert_size() const;
-  bool key_match(const ObSubPartition& other) const;
-  static bool hash_like_func_less_than(const ObSubPartition* lhs, const ObSubPartition* rhs);
+  bool key_match(const ObSubPartition &other) const;
+  static bool hash_like_func_less_than(const ObSubPartition *lhs, const ObSubPartition *rhs);
   INHERIT_TO_STRING_KV("BasePartition", ObBasePartition, K_(subpart_id), K_(subpart_idx), K_(mapping_pg_sub_part_id),
       K_(drop_schema_version));
 
@@ -2601,13 +2606,13 @@ class ObPartitionSchema : public ObSchema {
 public:
   // base methods
   ObPartitionSchema();
-  explicit ObPartitionSchema(common::ObIAllocator* allocator);
+  explicit ObPartitionSchema(common::ObIAllocator *allocator);
   virtual ~ObPartitionSchema();
-  ObPartitionSchema(const ObPartitionSchema& src_schema);
-  ObPartitionSchema& operator=(const ObPartitionSchema& src_schema);
+  ObPartitionSchema(const ObPartitionSchema &src_schema);
+  ObPartitionSchema &operator=(const ObPartitionSchema &src_schema);
   // partition related
 
-  virtual const char* get_entity_name() const = 0;
+  virtual const char *get_entity_name() const = 0;
   virtual uint64_t get_tenant_id() const = 0;
   virtual void set_tenant_id(const uint64_t tenant_id) = 0;
   virtual uint64_t get_table_id() const = 0;
@@ -2622,23 +2627,23 @@ public:
   }
   virtual int64_t get_partition_cnt() const = 0;
   virtual bool has_self_partition() const = 0;
-  virtual int get_primary_zone_inherit(ObSchemaGetterGuard& schema_guard, ObPrimaryZone& primary_zone) const = 0;
+  virtual int get_primary_zone_inherit(ObSchemaGetterGuard &schema_guard, ObPrimaryZone &primary_zone) const = 0;
   virtual int get_zone_replica_attr_array_inherit(
-      ObSchemaGetterGuard& schema_guard, ZoneLocalityIArray& locality) const = 0;
+      ObSchemaGetterGuard &schema_guard, ZoneLocalityIArray &locality) const = 0;
   virtual int get_zone_list(
-      share::schema::ObSchemaGetterGuard& schema_guard, common::ObIArray<common::ObZone>& zone_list) const = 0;
+      share::schema::ObSchemaGetterGuard &schema_guard, common::ObIArray<common::ObZone> &zone_list) const = 0;
   virtual int get_locality_str_inherit(
-      share::schema::ObSchemaGetterGuard& guard, const common::ObString*& locality_str) const = 0;
-  virtual int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard& schema_guard,
-      const rootserver::ObRandomZoneSelector& random_selector,
-      const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs, common::ObZone& first_primary_zone) const = 0;
-  virtual int check_is_duplicated(share::schema::ObSchemaGetterGuard& guard, bool& is_duplicated) const = 0;
+      share::schema::ObSchemaGetterGuard &guard, const common::ObString *&locality_str) const = 0;
+  virtual int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard &schema_guard,
+      const rootserver::ObRandomZoneSelector &random_selector,
+      const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs, common::ObZone &first_primary_zone) const = 0;
+  virtual int check_is_duplicated(share::schema::ObSchemaGetterGuard &guard, bool &is_duplicated) const = 0;
   virtual uint64_t get_tablegroup_id() const = 0;
   virtual void set_tablegroup_id(const uint64_t tg_id) = 0;
-  virtual const common::ObString& get_locality_str() const = 0;
-  virtual common::ObString& get_locality_str() = 0;
-  virtual const common::ObString& get_previous_locality_str() const = 0;
-  virtual int get_paxos_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const = 0;
+  virtual const common::ObString &get_locality_str() const = 0;
+  virtual common::ObString &get_locality_str() = 0;
+  virtual const common::ObString &get_previous_locality_str() const = 0;
+  virtual int get_paxos_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const = 0;
   virtual share::ObDuplicateScope get_duplicate_scope() const = 0;
   virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) = 0;
   virtual void set_duplicate_scope(const int64_t duplicate_scope) = 0;
@@ -2693,15 +2698,15 @@ public:
   }
   // Only the templated secondary partition is valid, pay attention!!
   int64_t get_def_sub_part_num() const;
-  int get_first_individual_sub_part_num(int64_t& sub_part_num) const;
+  int get_first_individual_sub_part_num(int64_t &sub_part_num) const;
   // SQL view, unable to see the delayed deleted partition
   int64_t get_all_part_num() const;
-  int get_all_partition_num(bool check_dropped_partition, int64_t& part_num) const;
+  int get_all_partition_num(bool check_dropped_partition, int64_t &part_num) const;
 
-  int check_part_name(const ObPartition& partition);
-  int check_part_id(const ObPartition& partition);
-  int add_partition(const ObPartition& partition);
-  int add_def_subpartition(const ObSubPartition& subpartition);
+  int check_part_name(const ObPartition &partition);
+  int check_part_id(const ObPartition &partition);
+  int add_partition(const ObPartition &partition);
+  int add_def_subpartition(const ObSubPartition &subpartition);
 
   inline bool is_hash_part() const
   {
@@ -2749,19 +2754,19 @@ public:
     return part_option_.is_auto_range_part();
   }
 
-  inline const ObPartitionOption& get_part_option() const
+  inline const ObPartitionOption &get_part_option() const
   {
     return part_option_;
   }
-  inline ObPartitionOption& get_part_option()
+  inline ObPartitionOption &get_part_option()
   {
     return part_option_;
   }
-  inline const ObPartitionOption& get_sub_part_option() const
+  inline const ObPartitionOption &get_sub_part_option() const
   {
     return sub_part_option_;
   }
-  inline ObPartitionOption& get_sub_part_option()
+  inline ObPartitionOption &get_sub_part_option()
   {
     return sub_part_option_;
   }
@@ -2770,16 +2775,16 @@ public:
     return part_option_.get_auto_part_size();
   }
 
-  int serialize_partitions(char* buf, const int64_t data_len, int64_t& pos) const;
-  int serialize_dropped_partitions(char* buf, const int64_t data_len, int64_t& pos) const;
-  int serialize_def_subpartitions(char* buf, const int64_t data_len, int64_t& pos) const;
-  int deserialize_partitions(const char* buf, const int64_t data_len, int64_t& pos);
-  int deserialize_def_subpartitions(const char* buf, const int64_t data_len, int64_t& pos);
+  int serialize_partitions(char *buf, const int64_t data_len, int64_t &pos) const;
+  int serialize_dropped_partitions(char *buf, const int64_t data_len, int64_t &pos) const;
+  int serialize_def_subpartitions(char *buf, const int64_t data_len, int64_t &pos) const;
+  int deserialize_partitions(const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize_def_subpartitions(const char *buf, const int64_t data_len, int64_t &pos);
 
   int get_partition_by_part_id(
-      const int64_t part_id, const bool check_dropped_partition, const ObPartition*& partition) const;
+      const int64_t part_id, const bool check_dropped_partition, const ObPartition *&partition) const;
   // both part_id and subpart_id is not OB_TWO_PART_MASK
-  int get_subpartition(const int64_t part_id, const int64_t subpart_id, const ObSubPartition*& subpartition) const;
+  int get_subpartition(const int64_t part_id, const int64_t subpart_id, const ObSubPartition *&subpartition) const;
 
   /** generate part name of hash partition, for resolver only
    * @name_type: Type of generated hash partition name:
@@ -2790,17 +2795,17 @@ public:
    * @partition: nantemplate table, the partition name needs to be spelled with the partition name,
    *    and partition indicates the partition where the current subpartition is located
    */
-  int gen_hash_part_name(const int64_t part_id, const ObHashNameType name_type, const bool need_upper_case, char* buf,
-      const int64_t buf_size, int64_t* pos, const ObPartition* partition = NULL) const;
+  int gen_hash_part_name(const int64_t part_id, const ObHashNameType name_type, const bool need_upper_case, char *buf,
+      const int64_t buf_size, int64_t *pos, const ObPartition *partition = NULL) const;
   // Get the partition name corresponding to partition_id (non-partition/partition/subpartition)
-  int get_partition_name(const int64_t partition_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const;
+  int get_partition_name(const int64_t partition_id, char *buf, const int64_t buf_size, int64_t *pos /* = NULL*/) const;
   // get partition name
-  int get_part_name(const int64_t part_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const;
+  int get_part_name(const int64_t part_id, char *buf, const int64_t buf_size, int64_t *pos /* = NULL*/) const;
   // is_def_subpart refers to the generation of __all_def_sub_part or the part_name in the __all_sub_part table
-  int get_subpart_name(const int64_t part_id, const int64_t subpart_id, const bool is_def_subpart, char* buf,
-      const int64_t buf_size, int64_t* pos /* = NULL*/) const;
+  int get_subpart_name(const int64_t part_id, const int64_t subpart_id, const bool is_def_subpart, char *buf,
+      const int64_t buf_size, int64_t *pos /* = NULL*/) const;
 
-  inline ObPartition** get_part_array() const
+  inline ObPartition **get_part_array() const
   {
     return partition_array_;
   }
@@ -2813,7 +2818,7 @@ public:
     return partition_num_;
   }
   // The following interfaces can only be used for templated subpartition tables
-  inline ObSubPartition** get_def_subpart_array() const
+  inline ObSubPartition **get_def_subpart_array() const
   {
     return def_subpartition_array_;
   }
@@ -2867,37 +2872,37 @@ public:
   }
   // This interface is only for iterators, and the corresponding iterator should be used to access the deleted
   // partition, or the schema_guard/schema_service corresponding interface should be used
-  ObPartition** get_dropped_part_array() const
+  ObPartition **get_dropped_part_array() const
   {
     return dropped_partition_array_;
   }
   // -------------------------------------
-  int get_part_id_by_name(const common::ObString partition_name, int64_t& part_id) const;
+  int get_part_id_by_name(const common::ObString partition_name, int64_t &part_id) const;
   // FIXME:() Refresh the schema, do not assume that the partition_array is in order, and can be optimized later
   int find_partition_by_part_id(
-      const int64_t part_id, const bool check_dropped_partition, const ObPartition*& partition) const;
+      const int64_t part_id, const bool check_dropped_partition, const ObPartition *&partition) const;
   int get_subpart_info(
-      const int64_t part_id, ObSubPartition**& subpart_array, int64_t& subpart_num, int64_t& subpartition_num) const;
+      const int64_t part_id, ObSubPartition **&subpart_array, int64_t &subpart_num, int64_t &subpartition_num) const;
   //-------index partition-------
-  int get_part_id_by_idx(const int64_t part_idx, int64_t& part_id) const;
-  int get_hash_subpart_id_by_idx(const int64_t part_id, const int64_t subpart_idx, int64_t& subpart_id) const;
+  int get_part_id_by_idx(const int64_t part_idx, int64_t &part_id) const;
+  int get_hash_subpart_id_by_idx(const int64_t part_id, const int64_t subpart_idx, int64_t &subpart_id) const;
 
-  int get_hash_part_idx_by_id(const int64_t part_id, int64_t& part_idx) const;
-  int get_hash_subpart_idx_by_id(const int64_t part_id, const int64_t subpart_id, int64_t& subpart_idx) const;
+  int get_hash_part_idx_by_id(const int64_t part_id, int64_t &part_idx) const;
+  int get_hash_subpart_idx_by_id(const int64_t part_id, const int64_t subpart_id, int64_t &subpart_idx) const;
 
-  int convert_partition_idx_to_id(const int64_t partition_idx, int64_t& partition_id) const;
-  int convert_partition_id_to_idx(const int64_t partition_id, int64_t& partition_idx) const;
+  int convert_partition_idx_to_id(const int64_t partition_idx, int64_t &partition_id) const;
+  int convert_partition_id_to_idx(const int64_t partition_id, int64_t &partition_idx) const;
   //----------------------
   // Get the offset of the partition in partition_array, just take the offset of the partition,
   // not including the subpartition
   int get_partition_index_by_id(
-      const int64_t part_id, const bool check_dropped_partition, int64_t& partition_index) const;
+      const int64_t part_id, const bool check_dropped_partition, int64_t &partition_index) const;
   // Binary search range partition, only applicable to the partition that has not been split
   int get_partition_index_binary_search(
-      const int64_t part_id, const bool check_dropped_partition, int64_t& partition_index) const;
+      const int64_t part_id, const bool check_dropped_partition, int64_t &partition_index) const;
   // Iterate all the partitions to get the offset
   int get_partition_index_loop(
-      const int64_t part_id, const bool check_dropped_partition, int64_t& partition_index) const;
+      const int64_t part_id, const bool check_dropped_partition, int64_t &partition_index) const;
 
   inline void set_partition_status(const ObPartitionStatus partition_status)
   {
@@ -2932,19 +2937,19 @@ public:
     return 0;
   }
   virtual int get_split_source_partition_key(
-      const common::ObPartitionKey& dst_part_key, common::ObPartitionKey& source_part_key) const;
+      const common::ObPartitionKey &dst_part_key, common::ObPartitionKey &source_part_key) const;
   DECLARE_VIRTUAL_TO_STRING;
-  int try_assign_part_array(const share::schema::ObPartitionSchema& that);
-  int try_assign_def_subpart_array(const share::schema::ObPartitionSchema& that);
+  int try_assign_part_array(const share::schema::ObPartitionSchema &that);
+  int try_assign_def_subpart_array(const share::schema::ObPartitionSchema &that);
 
 protected:
-  int inner_add_partition(const ObPartition& part);
-  int inner_add_partition(const ObSubPartition& part);
+  int inner_add_partition(const ObPartition &part);
+  int inner_add_partition(const ObSubPartition &part);
   template <class T>
-  int inner_add_partition(const T& part, T**& part_array, int64_t& part_array_capacity, int64_t& part_num);
-  int get_subpart_name(const int64_t part_id, const int64_t subpart_id, char* buf, const int64_t buf_size,
-      int64_t* pos /* = NULL*/) const;
-  int get_def_subpart_name(const int64_t subpart_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const;
+  int inner_add_partition(const T &part, T **&part_array, int64_t &part_array_capacity, int64_t &part_num);
+  int get_subpart_name(const int64_t part_id, const int64_t subpart_id, char *buf, const int64_t buf_size,
+      int64_t *pos /* = NULL*/) const;
+  int get_def_subpart_name(const int64_t subpart_id, char *buf, const int64_t buf_size, int64_t *pos /* = NULL*/) const;
 
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
@@ -2957,13 +2962,13 @@ protected:
   ObPartitionOption part_option_;
   // The part_num_ is only valid when is_sub_part_template = true
   ObPartitionOption sub_part_option_;
-  ObPartition** partition_array_;
+  ObPartition **partition_array_;
   int64_t partition_array_capacity_;  // The array size of partition_array is not necessarily equal to partition_num;
   // Equal to part_num; historical reasons cause the two values to have the same meaning;
   // need to be modified together with part_num_
   int64_t partition_num_;
   /* template table, when is_sub_part_template = true, valid */
-  ObSubPartition** def_subpartition_array_;
+  ObSubPartition **def_subpartition_array_;
   // The array size of subpartition_array, not necessarily equal to subpartition_num
   int64_t def_subpartition_array_capacity_;
   int64_t def_subpartition_num_;  // equal subpart_num
@@ -2974,7 +2979,7 @@ protected:
   /* delay delete table/tablegroup/partition start*/
   int64_t drop_schema_version_;
   // delay delete partition, Not visible to SQL
-  ObPartition** dropped_partition_array_;
+  ObPartition **dropped_partition_array_;
   int64_t dropped_partition_array_capacity_;
   int64_t dropped_partition_num_;
   /* delay delete table/tablegroup/partition end*/
@@ -2989,11 +2994,11 @@ class ObTablegroupSchema : public ObPartitionSchema {
 public:
   // base methods
   ObTablegroupSchema();
-  explicit ObTablegroupSchema(common::ObIAllocator* allocator);
+  explicit ObTablegroupSchema(common::ObIAllocator *allocator);
   virtual ~ObTablegroupSchema();
-  ObTablegroupSchema(const ObTablegroupSchema& src_schema);
-  ObTablegroupSchema& operator=(const ObTablegroupSchema& src_schema);
-  int assign(const ObTablegroupSchema& src_schema);
+  ObTablegroupSchema(const ObTablegroupSchema &src_schema);
+  ObTablegroupSchema &operator=(const ObTablegroupSchema &src_schema);
+  int assign(const ObTablegroupSchema &src_schema);
   // set methods
   inline void set_binding(const bool binding)
   {
@@ -3011,51 +3016,51 @@ public:
   {
     tablegroup_id_ = tablegroup_id;
   }
-  inline int set_tablegroup_name(const char* name)
+  inline int set_tablegroup_name(const char *name)
   {
     return deep_copy_str(name, tablegroup_name_);
   }
-  inline int set_comment(const char* comment)
+  inline int set_comment(const char *comment)
   {
     return deep_copy_str(comment, comment_);
   }
-  inline int set_tablegroup_name(const common::ObString& name)
+  inline int set_tablegroup_name(const common::ObString &name)
   {
     return deep_copy_str(name, tablegroup_name_);
   }
-  inline int set_table_name(const common::ObString& name)
+  inline int set_table_name(const common::ObString &name)
   {
     return deep_copy_str(name, tablegroup_name_);
   }
-  inline int set_comment(const common::ObString& comment)
+  inline int set_comment(const common::ObString &comment)
   {
     return deep_copy_str(comment, comment_);
   }
-  inline int set_locality(const common::ObString& locality)
+  inline int set_locality(const common::ObString &locality)
   {
     return deep_copy_str(locality, locality_info_.locality_str_);
   }
-  inline int set_primary_zone(const common::ObString& primary_zone)
+  inline int set_primary_zone(const common::ObString &primary_zone)
   {
     return deep_copy_str(primary_zone, primary_zone_info_.primary_zone_str_);
   }
-  inline int set_previous_locality(const common::ObString& previous_locality)
+  inline int set_previous_locality(const common::ObString &previous_locality)
   {
     return deep_copy_str(previous_locality, previous_locality_);
   }
-  int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
+  int set_primary_zone_array(const common::ObIArray<ObZoneScore> &primary_zone_array);
 
-  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet>& src);
-  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet>& src);
-  inline int set_split_partition(const common::ObString& split_partition)
+  int set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet> &src);
+  int set_zone_replica_attr_array(const common::ObIArray<share::SchemaZoneReplicaAttrSet> &src);
+  inline int set_split_partition(const common::ObString &split_partition)
   {
     return deep_copy_str(split_partition, split_partition_name_);
   }
-  inline int set_split_rowkey(const common::ObRowkey& rowkey)
+  inline int set_split_rowkey(const common::ObRowkey &rowkey)
   {
     return rowkey.deep_copy(split_high_bound_val_, *get_allocator());
   }
-  inline int set_split_list_value(common::ObRowkey& list_values)
+  inline int set_split_list_value(common::ObRowkey &list_values)
   {
     return list_values.deep_copy(split_list_row_values_, *get_allocator());
   }
@@ -3076,76 +3081,76 @@ public:
   {
     return tablegroup_id_;
   }
-  inline const char* get_tablegroup_name_str() const
+  inline const char *get_tablegroup_name_str() const
   {
     return extract_str(tablegroup_name_);
   }
-  inline const char* get_comment() const
+  inline const char *get_comment() const
   {
     return extract_str(comment_);
   }
-  inline const common::ObString& get_tablegroup_name() const
+  inline const common::ObString &get_tablegroup_name() const
   {
     return tablegroup_name_;
   }
-  inline const common::ObString& get_table_name() const
+  inline const common::ObString &get_table_name() const
   {
     return tablegroup_name_;
   }
-  virtual const char* get_entity_name() const override
+  virtual const char *get_entity_name() const override
   {
     return extract_str(tablegroup_name_);
   }
-  inline const common::ObString& get_comment_str() const
+  inline const common::ObString &get_comment_str() const
   {
     return comment_;
   }
-  inline const ObLocality& get_locality_info() const
+  inline const ObLocality &get_locality_info() const
   {
     return locality_info_;
   }
-  virtual common::ObString& get_locality_str() override
+  virtual common::ObString &get_locality_str() override
   {
     return locality_info_.locality_str_;
   }
-  virtual const common::ObString& get_locality_str() const override
+  virtual const common::ObString &get_locality_str() const override
   {
     return locality_info_.locality_str_;
   }
-  inline const char* get_locality() const
+  inline const char *get_locality() const
   {
     return extract_str(locality_info_.locality_str_);
   }
-  inline const char* get_previous_locality() const
+  inline const char *get_previous_locality() const
   {
     return extract_str(previous_locality_);
   }
-  virtual const common::ObString& get_previous_locality_str() const override
+  virtual const common::ObString &get_previous_locality_str() const override
   {
     return previous_locality_;
   }
-  inline const ObPrimaryZone& get_primary_zone_info() const
+  inline const ObPrimaryZone &get_primary_zone_info() const
   {
     return primary_zone_info_;
   }
-  inline const common::ObString& get_primary_zone() const
+  inline const common::ObString &get_primary_zone() const
   {
     return primary_zone_info_.primary_zone_str_;
   }
-  int set_zone_list(const common::ObIArray<common::ObZone>& zone_list)
+  int set_zone_list(const common::ObIArray<common::ObZone> &zone_list)
   {
     UNUSED(zone_list);
     return common::OB_SUCCESS;
   }
-  inline const common::ObString& get_split_partition_name() const
+  inline const common::ObString &get_split_partition_name() const
   {
     return split_partition_name_;
   }
-  inline const common::ObRowkey& get_split_rowkey() const
+  inline const common::ObRowkey &get_split_rowkey() const
   {
     return split_high_bound_val_;
   }
-  inline const common::ObRowkey& get_split_list_row_values() const
+  inline const common::ObRowkey &get_split_list_row_values() const
   {
     return split_list_row_values_;
   }
@@ -3153,32 +3158,32 @@ public:
   // In the current implementation, if the locality of the zone_list of the tablegroup is empty,
   // it will be read from the tenant, otherwise it will be parsed from the locality
   virtual int get_zone_list(
-      share::schema::ObSchemaGetterGuard& schema_guard, common::ObIArray<common::ObZone>& zone_list) const override;
-  virtual int get_zone_replica_attr_array(ZoneLocalityIArray& locality) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, common::ObIArray<common::ObZone> &zone_list) const override;
+  virtual int get_zone_replica_attr_array(ZoneLocalityIArray &locality) const;
   virtual int get_zone_replica_attr_array_inherit(
-      ObSchemaGetterGuard& schema_guard, ZoneLocalityIArray& locality) const override;
+      ObSchemaGetterGuard &schema_guard, ZoneLocalityIArray &locality) const override;
   virtual int get_locality_str_inherit(
-      ObSchemaGetterGuard& schema_guard, const common::ObString*& locality_str) const override;
-  virtual int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard& schema_guard,
-      const rootserver::ObRandomZoneSelector& random_selector,
-      const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs,
-      common::ObZone& first_primary_zone) const override;
-  virtual int check_is_duplicated(share::schema::ObSchemaGetterGuard& guard, bool& is_duplicated) const override;
-  int get_primary_zone_score(const common::ObZone& zone, int64_t& zone_score) const;
-  inline const common::ObIArray<ObZoneScore>& get_primary_zone_array() const
+      ObSchemaGetterGuard &schema_guard, const common::ObString *&locality_str) const override;
+  virtual int get_first_primary_zone_inherit(share::schema::ObSchemaGetterGuard &schema_guard,
+      const rootserver::ObRandomZoneSelector &random_selector,
+      const common::ObIArray<rootserver::ObReplicaAddr> &replica_addrs,
+      common::ObZone &first_primary_zone) const override;
+  virtual int check_is_duplicated(share::schema::ObSchemaGetterGuard &guard, bool &is_duplicated) const override;
+  int get_primary_zone_score(const common::ObZone &zone, int64_t &zone_score) const;
+  inline const common::ObIArray<ObZoneScore> &get_primary_zone_array() const
   {
     return primary_zone_info_.primary_zone_array_;
   }
   virtual int get_primary_zone_inherit(
-      share::schema::ObSchemaGetterGuard& schema_guard, share::schema::ObPrimaryZone& primary_zone) const override;
+      share::schema::ObSchemaGetterGuard &schema_guard, share::schema::ObPrimaryZone &primary_zone) const override;
   int fill_additional_options();
   int check_in_locality_modification(
-      share::schema::ObSchemaGetterGuard& schema_guard, bool& in_locality_modification) const;
-  int check_is_readonly_at_all(share::schema::ObSchemaGetterGuard& guard, const common::ObZone& zone,
-      const common::ObRegion& region, bool& readonly_at_all) const;
-  int get_full_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const;
-  virtual int get_paxos_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const override;
-  int get_all_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, int64_t& num) const;
+      share::schema::ObSchemaGetterGuard &schema_guard, bool &in_locality_modification) const;
+  int check_is_readonly_at_all(share::schema::ObSchemaGetterGuard &guard, const common::ObZone &zone,
+      const common::ObRegion &region, bool &readonly_at_all) const;
+  int get_full_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const;
+  virtual int get_paxos_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const override;
+  int get_all_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const;
   // partition related
   virtual share::ObDuplicateScope get_duplicate_scope() const override
   {
@@ -3236,8 +3241,8 @@ public:
   {
     return 0;
   }
-  virtual int calc_part_func_expr_num(int64_t& part_func_expr_num) const;
-  virtual int calc_subpart_func_expr_num(int64_t& subpart_func_expr_num) const;
+  virtual int calc_part_func_expr_num(int64_t &part_func_expr_num) const;
+  virtual int calc_subpart_func_expr_num(int64_t &subpart_func_expr_num) const;
   // other methods
   virtual void reset() override;
   int64_t get_convert_size() const override;
@@ -3292,120 +3297,120 @@ public:
   /// Get part ids through range of partition_column
 
   // Get hash(FUNC_HASH/FUNC_KEY) part type ids
-  static int get_hash_part_ids(const ObTableSchema& table_schema, const common::ObNewRange& range,
-      const int64_t part_num, common::ObIArray<int64_t>& part_ids);
+  static int get_hash_part_ids(const ObTableSchema &table_schema, const common::ObNewRange &range,
+      const int64_t part_num, common::ObIArray<int64_t> &part_ids);
   // @param: get_part_index Indicates whether this function is called to get whether it is part_index or part_id
   // - true  Indicates that part_index is to be obtained, and part_index indicates the position of partition
   //  in the partition array.
   // - false Indicates that the part to be obtained is part_id, and part_id indicates the logical id of the primary
   // partition
-  static int get_hash_part_ids(const ObTableSchema& table_schema, const common::ObNewRow& row, int64_t part_num,
-      common::ObIArray<int64_t>& part_ids, bool get_part_index = false);
-  static int get_hash_subpart_ids(const ObTableSchema& table_schema, const int64_t part_id,
-      const common::ObNewRange& range, const int64_t subpart_num, common::ObIArray<int64_t>& subpart_ids);
+  static int get_hash_part_ids(const ObTableSchema &table_schema, const common::ObNewRow &row, int64_t part_num,
+      common::ObIArray<int64_t> &part_ids, bool get_part_index = false);
+  static int get_hash_subpart_ids(const ObTableSchema &table_schema, const int64_t part_id,
+      const common::ObNewRange &range, const int64_t subpart_num, common::ObIArray<int64_t> &subpart_ids);
   // @param: get_subpart_index  Indicates whether this function is called to get whether it is subpart_index or
   // subpart_id
   // - true  Indicates that subpart_index is to be obtained, and subpart_index indicates the position of subpartition
   //  in the subpartition array.
   // - false Indicates that the subpart to be obtained is subpart_id, and subpart_id indicates the logical id of
   //  the primary subpartition
-  static int get_hash_subpart_ids(const ObTableSchema& table_schema, const int64_t part_id, const common::ObNewRow& row,
-      int64_t subpart_num, common::ObIArray<int64_t>& subpart_ids, bool get_subpart_index = false);
+  static int get_hash_subpart_ids(const ObTableSchema &table_schema, const int64_t part_id, const common::ObNewRow &row,
+      int64_t subpart_num, common::ObIArray<int64_t> &subpart_ids, bool get_subpart_index = false);
 
   // Get level-one range part_ids
-  static int get_range_part_ids(const common::ObNewRange& range, const bool reverse,
-      ObPartition* const* partition_array, const int64_t partition_num, common::ObIArray<int64_t>& part_ids);
+  static int get_range_part_ids(const common::ObNewRange &range, const bool reverse,
+      ObPartition *const *partition_array, const int64_t partition_num, common::ObIArray<int64_t> &part_ids);
   // The meaning of get_part_index can refer to get_hash_part_ids()
-  static int get_range_part_ids(const common::ObNewRow& row, ObPartition* const* partition_array,
-      const int64_t partition_num, common::ObIArray<int64_t>& part_ids, bool get_part_index = false);
+  static int get_range_part_ids(const common::ObNewRow &row, ObPartition *const *partition_array,
+      const int64_t partition_num, common::ObIArray<int64_t> &part_ids, bool get_part_index = false);
 
   // Get level-one range part_ids
-  static int get_list_part_ids(const common::ObNewRange& range, const bool reverse, ObPartition* const* partition_array,
-      const int64_t partition_num, common::ObIArray<int64_t>& part_ids);
+  static int get_list_part_ids(const common::ObNewRange &range, const bool reverse, ObPartition *const *partition_array,
+      const int64_t partition_num, common::ObIArray<int64_t> &part_ids);
 
   // The meaning of get_part_index can refer to get_hash_part_ids()
-  static int get_list_part_ids(const common::ObNewRow& row, ObPartition* const* partition_array,
-      const int64_t partition_num, common::ObIArray<int64_t>& part_ids, bool get_part_index = false);
+  static int get_list_part_ids(const common::ObNewRow &row, ObPartition *const *partition_array,
+      const int64_t partition_num, common::ObIArray<int64_t> &part_ids, bool get_part_index = false);
 
   // Get level-two range part_ids
-  static int get_range_part_ids(const int64_t part_id, const common::ObNewRange& range, const bool reverse,
-      ObSubPartition* const* partition_array, const int64_t partition_num, common::ObIArray<int64_t>& part_ids);
+  static int get_range_part_ids(const int64_t part_id, const common::ObNewRange &range, const bool reverse,
+      ObSubPartition *const *partition_array, const int64_t partition_num, common::ObIArray<int64_t> &part_ids);
   // The meaning of get_subpart_index can refer to get_hash_subpart_ids()
-  static int get_range_part_ids(const int64_t part_id, const common::ObNewRow& row,
-      ObSubPartition* const* partition_array, const int64_t partition_num, common::ObIArray<int64_t>& part_ids,
+  static int get_range_part_ids(const int64_t part_id, const common::ObNewRow &row,
+      ObSubPartition *const *partition_array, const int64_t partition_num, common::ObIArray<int64_t> &part_ids,
       bool get_subpart_index = false);
 
   // Get level-two range part_ids
-  static int get_list_part_ids(const int64_t part_id, const common::ObNewRange& range, const bool reverse,
-      ObSubPartition* const* partition_array, const int64_t partition_num, common::ObIArray<int64_t>& part_ids);
+  static int get_list_part_ids(const int64_t part_id, const common::ObNewRange &range, const bool reverse,
+      ObSubPartition *const *partition_array, const int64_t partition_num, common::ObIArray<int64_t> &part_ids);
 
   // The meaning of get_subpart_index can refer to get_hash_subpart_ids()
-  static int get_list_part_ids(const int64_t part_id, const common::ObNewRow& row,
-      ObSubPartition* const* partition_array, const int64_t partition_num, common::ObIArray<int64_t>& part_ids,
+  static int get_list_part_ids(const int64_t part_id, const common::ObNewRow &row,
+      ObSubPartition *const *partition_array, const int64_t partition_num, common::ObIArray<int64_t> &part_ids,
       bool get_subpart_index = false);
 
   // According to the given hash value val and partition number part_num,
   // distinguish between oracle and mysql modes to calculate which partition this fold falls on
   // This interface is called at get_hash_part_idxs, get_hash_subpart_ids, etc.
-  static int calc_hash_part_idx(const uint64_t val, const int64_t part_num, int64_t& partition_idx);
+  static int calc_hash_part_idx(const uint64_t val, const int64_t part_num, int64_t &partition_idx);
   template <typename T>
   static int get_range_part_idx(
-      const common::ObObj& obj, T* const* part_array, const int64_t part_num, int64_t& part_idx);
+      const common::ObObj &obj, T *const *part_array, const int64_t part_num, int64_t &part_idx);
 
   template <typename T>
-  static int get_range_part_bounds(T* const* part_array, const int64_t part_num, const int64_t part_idx,
-      common::ObObj& lower_bound, common::ObObj& upper_bound);
+  static int get_range_part_bounds(T *const *part_array, const int64_t part_num, const int64_t part_idx,
+      common::ObObj &lower_bound, common::ObObj &upper_bound);
 
   // Get all part idxs of part num
-  static int get_all_part(const ObTableSchema& table_schema, int64_t part_num, common::ObIArray<int64_t>& part_ids);
+  static int get_all_part(const ObTableSchema &table_schema, int64_t part_num, common::ObIArray<int64_t> &part_ids);
 
   // Convert rowkey to sql literal for show
-  static int convert_rowkey_to_sql_literal(const common::ObRowkey& rowkey, char* buf, const int64_t buf_len,
-      int64_t& pos, bool print_collation, const common::ObTimeZoneInfo* tz_info);
+  static int convert_rowkey_to_sql_literal(const common::ObRowkey &rowkey, char *buf, const int64_t buf_len,
+      int64_t &pos, bool print_collation, const common::ObTimeZoneInfo *tz_info);
   // Used to display the defined value of the LIST partition
-  static int convert_rows_to_sql_literal(const common::ObIArray<common::ObNewRow>& rows, char* buf,
-      const int64_t buf_len, int64_t& pos, bool print_collation, const common::ObTimeZoneInfo* tz_info);
-  static int print_oracle_datetime_literal(const common::ObObj& tmp_obj, char* buf, const int64_t buf_len, int64_t& pos,
-      const common::ObTimeZoneInfo* tz_info);
+  static int convert_rows_to_sql_literal(const common::ObIArray<common::ObNewRow> &rows, char *buf,
+      const int64_t buf_len, int64_t &pos, bool print_collation, const common::ObTimeZoneInfo *tz_info);
+  static int print_oracle_datetime_literal(const common::ObObj &tmp_obj, char *buf, const int64_t buf_len, int64_t &pos,
+      const common::ObTimeZoneInfo *tz_info);
 
   // Convert rowkey's serialize buff to hex.For record all rowkey info.
-  static int convert_rowkey_to_hex(const common::ObRowkey& rowkey, char* buf, const int64_t buf_len, int64_t& pos);
+  static int convert_rowkey_to_hex(const common::ObRowkey &rowkey, char *buf, const int64_t buf_len, int64_t &pos);
   static int convert_rows_to_hex(
-      const common::ObIArray<common::ObNewRow>& rows, char* buf, const int64_t buf_len, int64_t& pos);
+      const common::ObIArray<common::ObNewRow> &rows, char *buf, const int64_t buf_len, int64_t &pos);
 
   // Get partition start with start_part rowkey, return start_pos
   template <typename T>
   static int get_start(
-      const T* const* partition_array, const int64_t partition_num, const T& start_part, int64_t& start_pos);
+      const T *const *partition_array, const int64_t partition_num, const T &start_part, int64_t &start_pos);
 
   // Get partition end with end_part rowkey, return end_pos
   template <typename T>
-  static int get_end(const T* const* partition_array, const int64_t partition_num,
-      const common::ObBorderFlag& border_flag, const T& end_part, int64_t& end_pos);
+  static int get_end(const T *const *partition_array, const int64_t partition_num,
+      const common::ObBorderFlag &border_flag, const T &end_part, int64_t &end_pos);
 
   // check if partition value equal
   template <typename PARTITION>
   static int check_partition_value(
-      const PARTITION& l_part, const PARTITION& r_part, const ObPartitionFuncType part_type, bool& is_equal);
+      const PARTITION &l_part, const PARTITION &r_part, const ObPartitionFuncType part_type, bool &is_equal);
 
-  static bool is_types_equal_for_partition_check(const common::ObObjType& typ1, const common::ObObjType& type2);
+  static bool is_types_equal_for_partition_check(const common::ObObjType &typ1, const common::ObObjType &type2);
 
 private:
   // Get level-one range part_ids
   // The meaning of get_part_index can refer to get_hash_part_ids()
-  static int get_range_part_ids(ObPartition& start, ObPartition& end, const common::ObBorderFlag& border_flag,
-      const bool reverse, ObPartition* const* partition_array, const int64_t partition_num,
-      common::ObIArray<int64_t>& part_ids, bool get_part_index = false);
+  static int get_range_part_ids(ObPartition &start, ObPartition &end, const common::ObBorderFlag &border_flag,
+      const bool reverse, ObPartition *const *partition_array, const int64_t partition_num,
+      common::ObIArray<int64_t> &part_ids, bool get_part_index = false);
   // Get level-two range part_ids
   // The meaning of get_subpart_index can refer to get_hash_subpart_ids()
-  static int get_range_part_ids(ObSubPartition& start_bound, ObSubPartition& end_bound,
-      const common::ObBorderFlag& border_flag, const bool reverse, ObSubPartition* const* partition_array,
-      const int64_t partition_num, common::ObIArray<int64_t>& part_ids, bool get_subpart_index = false);
+  static int get_range_part_ids(ObSubPartition &start_bound, ObSubPartition &end_bound,
+      const common::ObBorderFlag &border_flag, const bool reverse, ObSubPartition *const *partition_array,
+      const int64_t partition_num, common::ObIArray<int64_t> &part_ids, bool get_subpart_index = false);
 };
 
 template <typename T>
 int ObPartitionUtils::get_range_part_idx(
-    const common::ObObj& obj, T* const* part_array, const int64_t part_num, int64_t& part_idx)
+    const common::ObObj &obj, T *const *part_array, const int64_t part_num, int64_t &part_idx)
 {
   int ret = common::OB_SUCCESS;
   if (obj.is_null()) {
@@ -3429,8 +3434,8 @@ int ObPartitionUtils::get_range_part_idx(
 }
 
 template <typename T>
-int ObPartitionUtils::get_range_part_bounds(T* const* part_array, const int64_t part_num, const int64_t part_idx,
-    common::ObObj& lower_bound, common::ObObj& upper_bound)
+int ObPartitionUtils::get_range_part_bounds(T *const *part_array, const int64_t part_num, const int64_t part_idx,
+    common::ObObj &lower_bound, common::ObObj &upper_bound)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!(0 <= part_idx && part_idx < part_num))) {
@@ -3464,14 +3469,14 @@ int ObPartitionUtils::get_range_part_bounds(T* const* part_array, const int64_t 
 
 template <typename T>
 int ObPartitionUtils::get_start(
-    const T* const* partition_array, const int64_t partition_num, const T& start_part, int64_t& start_pos)
+    const T *const *partition_array, const int64_t partition_num, const T &start_part, int64_t &start_pos)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(partition_array)) {
     ret = common::OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "Partition array should not be NULL", K(ret));
   } else {
-    const T* const* result =
+    const T *const *result =
         std::upper_bound(partition_array, partition_array + partition_num, &start_part, T::less_than);
     start_pos = result - partition_array;
     if (start_pos < 0) {
@@ -3483,15 +3488,15 @@ int ObPartitionUtils::get_start(
 }
 
 template <typename T>
-int ObPartitionUtils::get_end(const T* const* partition_array, const int64_t partition_num,
-    const common::ObBorderFlag& border_flag, const T& end_part, int64_t& end_pos)
+int ObPartitionUtils::get_end(const T *const *partition_array, const int64_t partition_num,
+    const common::ObBorderFlag &border_flag, const T &end_part, int64_t &end_pos)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(partition_array)) {
     ret = common::OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "Input partition array should not be NULL", K(ret));
   } else {
-    const T* const* result =
+    const T *const *result =
         std::lower_bound(partition_array, partition_array + partition_num, &end_part, T::less_than);
     int64_t pos = result - partition_array;
     if (pos >= partition_num) {
@@ -3501,12 +3506,12 @@ int ObPartitionUtils::get_end(const T* const* partition_array, const int64_t par
       SHARE_SCHEMA_LOG(WARN, "result should not be NULL", K(ret), K(result));
     } else {
       common::ObNewRow lrow;
-      lrow.cells_ = const_cast<common::ObObj*>((*result)->high_bound_val_.get_obj_ptr());
+      lrow.cells_ = const_cast<common::ObObj *>((*result)->high_bound_val_.get_obj_ptr());
       lrow.count_ = (*result)->high_bound_val_.get_obj_cnt();
       lrow.projector_ = (*result)->projector_;
       lrow.projector_size_ = (*result)->projector_size_;
       common::ObNewRow rrow;
-      rrow.cells_ = const_cast<common::ObObj*>(end_part.high_bound_val_.get_obj_ptr());
+      rrow.cells_ = const_cast<common::ObObj *>(end_part.high_bound_val_.get_obj_ptr());
       rrow.count_ = end_part.high_bound_val_.get_obj_cnt();
       rrow.projector_ = end_part.projector_;
       rrow.projector_size_ = end_part.projector_size_;
@@ -3560,18 +3565,18 @@ class ObViewSchema : public ObSchema {
 
 public:
   ObViewSchema();
-  explicit ObViewSchema(common::ObIAllocator* allocator);
+  explicit ObViewSchema(common::ObIAllocator *allocator);
   virtual ~ObViewSchema();
-  ObViewSchema(const ObViewSchema& src_schema);
-  ObViewSchema& operator=(const ObViewSchema& src_schema);
-  bool operator==(const ObViewSchema& other) const;
-  bool operator!=(const ObViewSchema& other) const;
+  ObViewSchema(const ObViewSchema &src_schema);
+  ObViewSchema &operator=(const ObViewSchema &src_schema);
+  bool operator==(const ObViewSchema &other) const;
+  bool operator!=(const ObViewSchema &other) const;
 
-  inline int set_view_definition(const char* view_definition)
+  inline int set_view_definition(const char *view_definition)
   {
     return deep_copy_str(view_definition, view_definition_);
   }
-  inline int set_view_definition(const common::ObString& view_definition)
+  inline int set_view_definition(const common::ObString &view_definition)
   {
     return deep_copy_str(view_definition, view_definition_);
   }
@@ -3598,11 +3603,11 @@ public:
 
   // view_definition_ is defined using utf8, for sql resolve please use
   // ObSQLUtils::generate_view_definition_for_resolve
-  inline const common::ObString& get_view_definition_str() const
+  inline const common::ObString &get_view_definition_str() const
   {
     return view_definition_;
   }
-  inline const char* get_view_definition() const
+  inline const char *get_view_definition() const
   {
     return extract_str(view_definition_);
   }
@@ -3648,15 +3653,15 @@ class ObColumnSchemaHashWrapper {
 public:
   ObColumnSchemaHashWrapper()
   {}
-  explicit ObColumnSchemaHashWrapper(const common::ObString& str) : column_name_(str)
+  explicit ObColumnSchemaHashWrapper(const common::ObString &str) : column_name_(str)
   {}
   ~ObColumnSchemaHashWrapper()
   {}
-  void set_name(const common::ObString& str)
+  void set_name(const common::ObString &str)
   {
     column_name_ = str;
   }
-  inline bool operator==(const ObColumnSchemaHashWrapper& other) const
+  inline bool operator==(const ObColumnSchemaHashWrapper &other) const
   {
     ObCompareNameWithTenantID name_cmp;
     return (0 == name_cmp.compare(column_name_, other.column_name_));
@@ -3668,21 +3673,21 @@ class ObColumnSchemaWrapper {
 public:
   ObColumnSchemaWrapper() : column_name_(), prefix_len_(0)
   {}
-  explicit ObColumnSchemaWrapper(const common::ObString& str, int32_t prefix_len)
+  explicit ObColumnSchemaWrapper(const common::ObString &str, int32_t prefix_len)
       : column_name_(str), prefix_len_(prefix_len)
   {}
   ~ObColumnSchemaWrapper()
   {}
-  void set_name(const common::ObString& str)
+  void set_name(const common::ObString &str)
   {
     column_name_ = str;
   }
-  inline bool name_equal(const ObColumnSchemaWrapper& other) const
+  inline bool name_equal(const ObColumnSchemaWrapper &other) const
   {
     ObCompareNameWithTenantID name_cmp;
     return (0 == name_cmp.compare(column_name_, other.column_name_));
   }
-  inline bool all_equal(const ObColumnSchemaWrapper& other) const
+  inline bool all_equal(const ObColumnSchemaWrapper &other) const
   {
     ObCompareNameWithTenantID name_cmp;
     return (0 == name_cmp.compare(column_name_, other.column_name_)) && prefix_len_ == other.prefix_len_;
@@ -3711,13 +3716,13 @@ public:
       : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), data_table_id_(common::OB_INVALID_ID)
   {}
   ObIndexSchemaHashWrapper(
-      uint64_t tenant_id, const uint64_t database_id, const uint64_t data_table_id, const common::ObString& index_name)
+      uint64_t tenant_id, const uint64_t database_id, const uint64_t data_table_id, const common::ObString &index_name)
       : tenant_id_(tenant_id), database_id_(database_id), data_table_id_(data_table_id), index_name_(index_name)
   {}
   ~ObIndexSchemaHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObIndexSchemaHashWrapper& rv) const;
+  inline bool operator==(const ObIndexSchemaHashWrapper &rv) const;
 
   inline uint64_t get_tenant_id() const
   {
@@ -3731,7 +3736,7 @@ public:
   {
     return data_table_id_;
   }
-  inline const common::ObString& get_index_name() const
+  inline const common::ObString &get_index_name() const
   {
     return index_name_;
   }
@@ -3754,7 +3759,7 @@ inline uint64_t ObIndexSchemaHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObIndexSchemaHashWrapper::operator==(const ObIndexSchemaHashWrapper& rv) const
+inline bool ObIndexSchemaHashWrapper::operator==(const ObIndexSchemaHashWrapper &rv) const
 {
   // mysql case insensitive
   // oracle case sensitive
@@ -3772,7 +3777,7 @@ public:
         name_case_mode_(common::OB_NAME_CASE_INVALID)
   {}
   ObTableSchemaHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const uint64_t session_id,
-      const common::ObNameCaseMode mode, const common::ObString& table_name)
+      const common::ObNameCaseMode mode, const common::ObString &table_name)
       : tenant_id_(tenant_id),
         database_id_(database_id),
         session_id_(session_id),
@@ -3782,7 +3787,7 @@ public:
   ~ObTableSchemaHashWrapper()
   {}
   inline uint64_t hash() const;
-  bool operator==(const ObTableSchemaHashWrapper& rv) const;
+  bool operator==(const ObTableSchemaHashWrapper &rv) const;
 
   inline uint64_t get_tenant_id() const
   {
@@ -3796,7 +3801,7 @@ public:
   {
     return session_id_;
   }
-  inline const common::ObString& get_table_name() const
+  inline const common::ObString &get_table_name() const
   {
     return table_name_;
   }
@@ -3820,7 +3825,7 @@ inline uint64_t ObTableSchemaHashWrapper::hash() const
 }
 
 // See ObSchemaMgr::get_table_schema comment for session visibility judgment
-inline bool ObTableSchemaHashWrapper::operator==(const ObTableSchemaHashWrapper& rv) const
+inline bool ObTableSchemaHashWrapper::operator==(const ObTableSchemaHashWrapper &rv) const
 {
   ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_, database_id_);
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) &&
@@ -3834,13 +3839,13 @@ public:
   ObDatabaseSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID), name_case_mode_(common::OB_NAME_CASE_INVALID)
   {}
   ObDatabaseSchemaHashWrapper(
-      const uint64_t tenant_id, const common::ObNameCaseMode mode, const common::ObString& database_name)
+      const uint64_t tenant_id, const common::ObNameCaseMode mode, const common::ObString &database_name)
       : tenant_id_(tenant_id), name_case_mode_(mode), database_name_(database_name)
   {}
   ~ObDatabaseSchemaHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObDatabaseSchemaHashWrapper& rv) const;
+  inline bool operator==(const ObDatabaseSchemaHashWrapper &rv) const;
 
   inline uint64_t get_tenant_id() const
   {
@@ -3850,7 +3855,7 @@ public:
   {
     return name_case_mode_;
   }
-  inline const common::ObString& get_database_name() const
+  inline const common::ObString &get_database_name() const
   {
     return database_name_;
   }
@@ -3870,7 +3875,7 @@ inline uint64_t ObDatabaseSchemaHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObDatabaseSchemaHashWrapper::operator==(const ObDatabaseSchemaHashWrapper& rv) const
+inline bool ObDatabaseSchemaHashWrapper::operator==(const ObDatabaseSchemaHashWrapper &rv) const
 {
   ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_);
   return (tenant_id_ == rv.tenant_id_) && (name_case_mode_ == rv.name_case_mode_) &&
@@ -3881,19 +3886,19 @@ class ObTablegroupSchemaHashWrapper {
 public:
   ObTablegroupSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID)
   {}
-  ObTablegroupSchemaHashWrapper(uint64_t tenant_id, const common::ObString& tablegroup_name)
+  ObTablegroupSchemaHashWrapper(uint64_t tenant_id, const common::ObString &tablegroup_name)
       : tenant_id_(tenant_id), tablegroup_name_(tablegroup_name)
   {}
   ~ObTablegroupSchemaHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObTablegroupSchemaHashWrapper& rv) const;
+  inline bool operator==(const ObTablegroupSchemaHashWrapper &rv) const;
 
   inline uint64_t get_tenant_id() const
   {
     return tenant_id_;
   }
-  inline const common::ObString& get_tablegroup_name() const
+  inline const common::ObString &get_tablegroup_name() const
   {
     return tablegroup_name_;
   }
@@ -3911,13 +3916,13 @@ public:
     database_id_ = common::OB_INVALID_ID;
     foreign_key_name_.assign_ptr("", 0);
   }
-  ObForeignKeyInfoHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString& foreign_key_name)
+  ObForeignKeyInfoHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString &foreign_key_name)
       : tenant_id_(tenant_id), database_id_(database_id), foreign_key_name_(foreign_key_name)
   {}
   ~ObForeignKeyInfoHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObForeignKeyInfoHashWrapper& rv) const;
+  inline bool operator==(const ObForeignKeyInfoHashWrapper &rv) const;
   inline uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -3926,7 +3931,7 @@ public:
   {
     return database_id_;
   }
-  inline const common::ObString& get_foreign_key_name() const
+  inline const common::ObString &get_foreign_key_name() const
   {
     return foreign_key_name_;
   }
@@ -3947,7 +3952,7 @@ inline uint64_t ObForeignKeyInfoHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObForeignKeyInfoHashWrapper::operator==(const ObForeignKeyInfoHashWrapper& rv) const
+inline bool ObForeignKeyInfoHashWrapper::operator==(const ObForeignKeyInfoHashWrapper &rv) const
 {
   // mysql case insensitive
   // oracle case sensitive
@@ -3964,13 +3969,13 @@ public:
     database_id_ = common::OB_INVALID_ID;
     constraint_name_.assign_ptr("", 0);
   }
-  ObConstraintInfoHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString& constraint_name)
+  ObConstraintInfoHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString &constraint_name)
       : tenant_id_(tenant_id), database_id_(database_id), constraint_name_(constraint_name)
   {}
   ~ObConstraintInfoHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObConstraintInfoHashWrapper& rv) const;
+  inline bool operator==(const ObConstraintInfoHashWrapper &rv) const;
   inline uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -3979,7 +3984,7 @@ public:
   {
     return database_id_;
   }
-  inline const common::ObString& get_constraint_name() const
+  inline const common::ObString &get_constraint_name() const
   {
     return constraint_name_;
   }
@@ -4000,7 +4005,7 @@ inline uint64_t ObConstraintInfoHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObConstraintInfoHashWrapper::operator==(const ObConstraintInfoHashWrapper& rv) const
+inline bool ObConstraintInfoHashWrapper::operator==(const ObConstraintInfoHashWrapper &rv) const
 {
   // mysql case insensitive
   // oracle case sensitive
@@ -4017,7 +4022,7 @@ inline uint64_t ObTablegroupSchemaHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObTablegroupSchemaHashWrapper::operator==(const ObTablegroupSchemaHashWrapper& rv) const
+inline bool ObTablegroupSchemaHashWrapper::operator==(const ObTablegroupSchemaHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (tablegroup_name_ == rv.tablegroup_name_);
 }
@@ -4031,15 +4036,15 @@ public:
   ObTenantPlanBaselineId(const uint64_t tenant_id, const uint64_t plan_baseline_id)
       : tenant_id_(tenant_id), plan_baseline_id_(plan_baseline_id)
   {}
-  bool operator==(const ObTenantPlanBaselineId& rhs) const
+  bool operator==(const ObTenantPlanBaselineId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (plan_baseline_id_ == rhs.plan_baseline_id_);
   }
-  bool operator!=(const ObTenantPlanBaselineId& rhs) const
+  bool operator!=(const ObTenantPlanBaselineId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantPlanBaselineId& rhs) const
+  bool operator<(const ObTenantPlanBaselineId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -4072,15 +4077,15 @@ public:
   ObTenantOutlineId(const uint64_t tenant_id, const uint64_t outline_id)
       : tenant_id_(tenant_id), outline_id_(outline_id)
   {}
-  bool operator==(const ObTenantOutlineId& rhs) const
+  bool operator==(const ObTenantOutlineId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (outline_id_ == rhs.outline_id_);
   }
-  bool operator!=(const ObTenantOutlineId& rhs) const
+  bool operator!=(const ObTenantOutlineId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantOutlineId& rhs) const
+  bool operator<(const ObTenantOutlineId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -4113,15 +4118,15 @@ public:
   {}
   ObTenantUserId(const uint64_t tenant_id, const uint64_t user_id) : tenant_id_(tenant_id), user_id_(user_id)
   {}
-  bool operator==(const ObTenantUserId& rhs) const
+  bool operator==(const ObTenantUserId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_);
   }
-  bool operator!=(const ObTenantUserId& rhs) const
+  bool operator!=(const ObTenantUserId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantUserId& rhs) const
+  bool operator<(const ObTenantUserId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -4161,16 +4166,16 @@ public:
       const uint64_t col_id)
       : tenant_id_(tenant_id), grantee_id_(grantee_id), obj_id_(obj_id), obj_type_(obj_type), col_id_(col_id)
   {}
-  bool operator==(const ObTenantUrObjId& rhs) const
+  bool operator==(const ObTenantUrObjId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (grantee_id_ == rhs.grantee_id_) && (obj_id_ == rhs.obj_id_) &&
            (obj_type_ == rhs.obj_type_) && (col_id_ == rhs.col_id_);
   }
-  bool operator!=(const ObTenantUrObjId& rhs) const
+  bool operator!=(const ObTenantUrObjId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantUrObjId& rhs) const
+  bool operator<(const ObTenantUrObjId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -4224,13 +4229,13 @@ private:
 
 class ObPrintPackedPrivArray {
 public:
-  explicit ObPrintPackedPrivArray(const ObPackedPrivArray& packed_priv_array) : packed_priv_array_(packed_priv_array)
+  explicit ObPrintPackedPrivArray(const ObPackedPrivArray &packed_priv_array) : packed_priv_array_(packed_priv_array)
   {}
 
   DECLARE_TO_STRING;
 
 private:
-  const ObPackedPrivArray& packed_priv_array_;
+  const ObPackedPrivArray &packed_priv_array_;
 };
 
 class ObPriv {
@@ -4244,7 +4249,7 @@ public:
         priv_set_(0),
         priv_array_()
   {}
-  ObPriv(common::ObIAllocator* allocator)
+  ObPriv(common::ObIAllocator *allocator)
       : tenant_id_(common::OB_INVALID_ID),
         user_id_(common::OB_INVALID_ID),
         schema_version_(1),
@@ -4257,16 +4262,16 @@ public:
 
   virtual ~ObPriv()
   {}
-  ObPriv& operator=(const ObPriv& other);
-  static bool cmp_tenant_user_id(const ObPriv* lhs, const ObTenantUserId& tenant_user_id)
+  ObPriv &operator=(const ObPriv &other);
+  static bool cmp_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
   {
     return (lhs->get_tenant_user_id() < tenant_user_id);
   }
-  static bool equal_tenant_user_id(const ObPriv* lhs, const ObTenantUserId& tenant_user_id)
+  static bool equal_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
   {
     return (lhs->get_tenant_user_id() == tenant_user_id);
   }
-  static bool cmp_tenant_id(const ObPriv* lhs, const uint64_t tenant_id)
+  static bool cmp_tenant_id(const ObPriv *lhs, const uint64_t tenant_id)
   {
     return (lhs->get_tenant_id() < tenant_id);
   }
@@ -4303,7 +4308,7 @@ public:
   {
     priv_set_ = obj_privs;
   }
-  int set_priv_array(const ObPackedPrivArray& other)
+  int set_priv_array(const ObPackedPrivArray &other)
   {
     return priv_array_.assign(other);
   }
@@ -4328,7 +4333,7 @@ public:
   {
     return priv_set_ & priv;
   }
-  inline const ObPackedPrivArray& get_priv_array() const
+  inline const ObPackedPrivArray &get_priv_array() const
   {
     return priv_array_;
   }
@@ -4359,19 +4364,19 @@ class ObUserInfoHashWrapper {
 public:
   ObUserInfoHashWrapper() : tenant_id_(common::OB_INVALID_ID)
   {}
-  ObUserInfoHashWrapper(uint64_t tenant_id, const common::ObString& user_name)
+  ObUserInfoHashWrapper(uint64_t tenant_id, const common::ObString &user_name)
       : tenant_id_(tenant_id), user_name_(user_name)
   {}
   ~ObUserInfoHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObUserInfoHashWrapper& rv) const;
+  inline bool operator==(const ObUserInfoHashWrapper &rv) const;
 
   inline uint64_t get_tenant_id() const
   {
     return tenant_id_;
   }
-  inline const common::ObString& get_user_name() const
+  inline const common::ObString &get_user_name() const
   {
     return user_name_;
   }
@@ -4389,7 +4394,7 @@ inline uint64_t ObUserInfoHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObUserInfoHashWrapper::operator==(const ObUserInfoHashWrapper& other) const
+inline bool ObUserInfoHashWrapper::operator==(const ObUserInfoHashWrapper &other) const
 {
   return (tenant_id_ == other.tenant_id_) && (user_name_ == other.user_name_);
 }
@@ -4404,7 +4409,7 @@ enum class ObSSLType : int {
 };
 
 common::ObString get_ssl_type_string(const ObSSLType ssl_type);
-ObSSLType get_ssl_type_from_string(const common::ObString& ssl_type_str);
+ObSSLType get_ssl_type_from_string(const common::ObString &ssl_type_str);
 
 enum class ObSSLSpecifiedType : int {
   SSL_SPEC_TYPE_CIPHER = 0,
@@ -4413,7 +4418,7 @@ enum class ObSSLSpecifiedType : int {
   SSL_SPEC_TYPE_MAX
 };
 
-const char* get_ssl_spec_type_str(const ObSSLSpecifiedType ssl_spec_type);
+const char *get_ssl_spec_type_str(const ObSSLSpecifiedType ssl_spec_type);
 
 enum ObUserType {
   OB_USER = 0,
@@ -4449,49 +4454,49 @@ public:
         max_connections_(0),
         max_user_connections_(0)
   {}
-  explicit ObUserInfo(common::ObIAllocator* allocator);
+  explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
-  ObUserInfo(const ObUserInfo& other);
-  ObUserInfo& operator=(const ObUserInfo& other);
-  static bool cmp(const ObUserInfo* lhs, const ObUserInfo* rhs)
+  ObUserInfo(const ObUserInfo &other);
+  ObUserInfo &operator=(const ObUserInfo &other);
+  static bool cmp(const ObUserInfo *lhs, const ObUserInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_user_id() < rhs->get_tenant_user_id() : false;
   }
-  static bool equal(const ObUserInfo* lhs, const ObUserInfo* rhs)
+  static bool equal(const ObUserInfo *lhs, const ObUserInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_tenant_user_id() == rhs->get_tenant_user_id() : false;
   }
 
   // set methods
-  inline int set_user_name(const char* user_name)
+  inline int set_user_name(const char *user_name)
   {
     return deep_copy_str(user_name, user_name_);
   }
-  inline int set_user_name(const common::ObString& user_name)
+  inline int set_user_name(const common::ObString &user_name)
   {
     return deep_copy_str(user_name, user_name_);
   }
-  inline int set_host(const char* host_name)
+  inline int set_host(const char *host_name)
   {
     return deep_copy_str(host_name, host_name_);
   }
-  inline int set_host(const common::ObString& host_name)
+  inline int set_host(const common::ObString &host_name)
   {
     return deep_copy_str(host_name, host_name_);
   }
-  inline int set_passwd(const char* passwd)
+  inline int set_passwd(const char *passwd)
   {
     return deep_copy_str(passwd, passwd_);
   }
-  inline int set_passwd(const common::ObString& passwd)
+  inline int set_passwd(const common::ObString &passwd)
   {
     return deep_copy_str(passwd, passwd_);
   }
-  inline int set_info(const char* info)
+  inline int set_info(const char *info)
   {
     return deep_copy_str(info, info_);
   }
-  inline int set_info(const common::ObString& info)
+  inline int set_info(const common::ObString &info)
   {
     return deep_copy_str(info, info_);
   }
@@ -4503,27 +4508,27 @@ public:
   {
     ssl_type_ = ssl_type;
   }
-  inline int set_ssl_cipher(const char* ssl_cipher)
+  inline int set_ssl_cipher(const char *ssl_cipher)
   {
     return deep_copy_str(ssl_cipher, ssl_cipher_);
   }
-  inline int set_ssl_cipher(const common::ObString& ssl_cipher)
+  inline int set_ssl_cipher(const common::ObString &ssl_cipher)
   {
     return deep_copy_str(ssl_cipher, ssl_cipher_);
   }
-  inline int set_x509_issuer(const char* x509_issuer)
+  inline int set_x509_issuer(const char *x509_issuer)
   {
     return deep_copy_str(x509_issuer, x509_issuer_);
   }
-  inline int set_x509_issuer(const common::ObString& x509_issuer)
+  inline int set_x509_issuer(const common::ObString &x509_issuer)
   {
     return deep_copy_str(x509_issuer, x509_issuer_);
   }
-  inline int set_x509_subject(const char* x509_subject)
+  inline int set_x509_subject(const char *x509_subject)
   {
     return deep_copy_str(x509_subject, x509_subject_);
   }
-  inline int set_x509_subject(const common::ObString& x509_subject)
+  inline int set_x509_subject(const common::ObString &x509_subject)
   {
     return deep_copy_str(x509_subject, x509_subject_);
   }
@@ -4548,35 +4553,35 @@ public:
     max_user_connections_ = max_user_connections;
   }
   // get methods
-  inline const char* get_user_name() const
+  inline const char *get_user_name() const
   {
     return extract_str(user_name_);
   }
-  inline const common::ObString& get_user_name_str() const
+  inline const common::ObString &get_user_name_str() const
   {
     return user_name_;
   }
-  inline const char* get_host_name() const
+  inline const char *get_host_name() const
   {
     return extract_str(host_name_);
   }
-  inline const common::ObString& get_host_name_str() const
+  inline const common::ObString &get_host_name_str() const
   {
     return host_name_;
   }
-  inline const char* get_passwd() const
+  inline const char *get_passwd() const
   {
     return extract_str(passwd_);
   }
-  inline const common::ObString& get_passwd_str() const
+  inline const common::ObString &get_passwd_str() const
   {
     return passwd_;
   }
-  inline const char* get_info() const
+  inline const char *get_info() const
   {
     return extract_str(info_);
   }
-  inline const common::ObString& get_info_str() const
+  inline const common::ObString &get_info_str() const
   {
     return info_;
   }
@@ -4592,27 +4597,27 @@ public:
   {
     return get_ssl_type_string(ssl_type_);
   }
-  inline const char* get_ssl_cipher() const
+  inline const char *get_ssl_cipher() const
   {
     return extract_str(ssl_cipher_);
   }
-  inline const common::ObString& get_ssl_cipher_str() const
+  inline const common::ObString &get_ssl_cipher_str() const
   {
     return ssl_cipher_;
   }
-  inline const char* get_x509_issuer() const
+  inline const char *get_x509_issuer() const
   {
     return extract_str(x509_issuer_);
   }
-  inline const common::ObString& get_x509_issuer_str() const
+  inline const common::ObString &get_x509_issuer_str() const
   {
     return x509_issuer_;
   }
-  inline const char* get_x509_subject() const
+  inline const char *get_x509_subject() const
   {
     return extract_str(x509_subject_);
   }
-  inline const common::ObString& get_x509_subject_str() const
+  inline const common::ObString &get_x509_subject_str() const
   {
     return x509_subject_;
   }
@@ -4645,15 +4650,15 @@ public:
   {
     return role_id_array_.count();
   }
-  const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const
+  const common::ObSEArray<uint64_t, 8> &get_grantee_id_array() const
   {
     return grantee_id_array_;
   }
-  const common::ObSEArray<uint64_t, 8>& get_role_id_array() const
+  const common::ObSEArray<uint64_t, 8> &get_role_id_array() const
   {
     return role_id_array_;
   }
-  const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const
+  const common::ObSEArray<uint64_t, 8> &get_role_id_option_array() const
   {
     return role_id_option_array_;
   }
@@ -4662,15 +4667,15 @@ public:
     return grantee_id_array_.push_back(id);
   }
   int add_role_id(const uint64_t id, const uint64_t admin_option = NO_OPTION, const uint64_t disable_flag = 0);
-  void set_admin_option(uint64_t& option, const uint64_t admin_option)
+  void set_admin_option(uint64_t &option, const uint64_t admin_option)
   {
     option |= (admin_option << ADMIN_OPTION_SHIFT);
   }
-  void set_disable_flag(uint64_t& option, const uint64_t disable_flag)
+  void set_disable_flag(uint64_t &option, const uint64_t disable_flag)
   {
     option |= (disable_flag << DISABLE_FLAG_SHIFT);
   }
-  int get_nth_role_option(uint64_t nth, uint64_t& option) const;
+  int get_nth_role_option(uint64_t nth, uint64_t &option) const;
   uint64_t get_admin_option(uint64_t option) const
   {
     return 1 & (option >> ADMIN_OPTION_SHIFT);
@@ -4688,7 +4693,7 @@ public:
       K_(info), K_(locked), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject), K_(type),
       K_(grantee_id_array), K_(role_id_array), K_(profile_id));
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
-  int get_seq_by_role_id(uint64_t role_id, uint64_t& seq) const;
+  int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
 
 private:
   common::ObString user_name_;
@@ -4717,15 +4722,15 @@ struct ObDBPrivSortKey {
   ObDBPrivSortKey(const uint64_t tenant_id, const uint64_t user_id, const uint64_t sort_value)
       : tenant_id_(tenant_id), user_id_(user_id), sort_(sort_value)
   {}
-  bool operator==(const ObDBPrivSortKey& rhs) const
+  bool operator==(const ObDBPrivSortKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_) && (sort_ == rhs.sort_);
   }
-  bool operator!=(const ObDBPrivSortKey& rhs) const
+  bool operator!=(const ObDBPrivSortKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObDBPrivSortKey& rhs) const
+  bool operator<(const ObDBPrivSortKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -4747,18 +4752,18 @@ struct ObDBPrivSortKey {
 struct ObOriginalDBKey {
   ObOriginalDBKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
   {}
-  ObOriginalDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& db)
+  ObOriginalDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString &db)
       : tenant_id_(tenant_id), user_id_(user_id), db_(db)
   {}
-  bool operator==(const ObOriginalDBKey& rhs) const
+  bool operator==(const ObOriginalDBKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_) && (db_ == rhs.db_);
   }
-  bool operator!=(const ObOriginalDBKey& rhs) const
+  bool operator!=(const ObOriginalDBKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObOriginalDBKey& rhs) const
+  bool operator<(const ObOriginalDBKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -4790,15 +4795,15 @@ struct ObSysPrivKey {
   {}
   ObSysPrivKey(const uint64_t tenant_id, const uint64_t user_id) : tenant_id_(tenant_id), grantee_id_(user_id)
   {}
-  bool operator==(const ObSysPrivKey& rhs) const
+  bool operator==(const ObSysPrivKey &rhs) const
   {
     return ((tenant_id_ == rhs.tenant_id_) && (grantee_id_ == rhs.grantee_id_));
   }
-  bool operator!=(const ObSysPrivKey& rhs) const
+  bool operator!=(const ObSysPrivKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObSysPrivKey& rhs) const
+  bool operator<(const ObSysPrivKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -4829,21 +4834,21 @@ class ObDBPriv : public ObSchema, public ObPriv {
 public:
   ObDBPriv() : ObPriv(), db_(), sort_(0)
   {}
-  explicit ObDBPriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv(allocator), db_(), sort_(0)
+  explicit ObDBPriv(common::ObIAllocator *allocator) : ObSchema(allocator), ObPriv(allocator), db_(), sort_(0)
   {}
   virtual ~ObDBPriv()
   {}
-  ObDBPriv(const ObDBPriv& other) : ObSchema(), ObPriv()
+  ObDBPriv(const ObDBPriv &other) : ObSchema(), ObPriv()
   {
     *this = other;
   }
-  ObDBPriv& operator=(const ObDBPriv& other);
+  ObDBPriv &operator=(const ObDBPriv &other);
 
-  static bool cmp(const ObDBPriv* lhs, const ObDBPriv* rhs)
+  static bool cmp(const ObDBPriv *lhs, const ObDBPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? (lhs->get_sort_key() < rhs->get_sort_key()) : false;
   }
-  static bool cmp_sort_key(const ObDBPriv* lhs, const ObDBPrivSortKey& sort_key)
+  static bool cmp_sort_key(const ObDBPriv *lhs, const ObDBPrivSortKey &sort_key)
   {
     return NULL != lhs ? lhs->get_sort_key() < sort_key : false;
   }
@@ -4851,7 +4856,7 @@ public:
   {
     return ObDBPrivSortKey(tenant_id_, user_id_, sort_);
   }
-  static bool equal(const ObDBPriv* lhs, const ObDBPriv* rhs)
+  static bool equal(const ObDBPriv *lhs, const ObDBPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false;
   }  // point check
@@ -4861,11 +4866,11 @@ public:
   }
 
   // set methods
-  inline int set_database_name(const char* db)
+  inline int set_database_name(const char *db)
   {
     return deep_copy_str(db, db_);
   }
-  inline int set_database_name(const common::ObString& db)
+  inline int set_database_name(const common::ObString &db)
   {
     return deep_copy_str(db, db_);
   }
@@ -4875,11 +4880,11 @@ public:
   }
 
   // get methods
-  inline const char* get_database_name() const
+  inline const char *get_database_name() const
   {
     return extract_str(db_);
   }
-  inline const common::ObString& get_database_name_str() const
+  inline const common::ObString &get_database_name_str() const
   {
     return db_;
   }
@@ -4902,18 +4907,18 @@ private:
 struct ObTablePrivDBKey {
   ObTablePrivDBKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
   {}
-  ObTablePrivDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& db)
+  ObTablePrivDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString &db)
       : tenant_id_(tenant_id), user_id_(user_id), db_(db)
   {}
-  bool operator==(const ObTablePrivDBKey& rhs) const
+  bool operator==(const ObTablePrivDBKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_) && (db_ == rhs.db_);
   }
-  bool operator!=(const ObTablePrivDBKey& rhs) const
+  bool operator!=(const ObTablePrivDBKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTablePrivDBKey& rhs) const
+  bool operator<(const ObTablePrivDBKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -4933,18 +4938,18 @@ struct ObTablePrivSortKey {
   ObTablePrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
   {}
   ObTablePrivSortKey(
-      const uint64_t tenant_id, const uint64_t user_id, const common::ObString& db, const common::ObString& table)
+      const uint64_t tenant_id, const uint64_t user_id, const common::ObString &db, const common::ObString &table)
       : tenant_id_(tenant_id), user_id_(user_id), db_(db), table_(table)
   {}
-  bool operator==(const ObTablePrivSortKey& rhs) const
+  bool operator==(const ObTablePrivSortKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_) && (db_ == rhs.db_) && (table_ == rhs.table_);
   }
-  bool operator!=(const ObTablePrivSortKey& rhs) const
+  bool operator!=(const ObTablePrivSortKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTablePrivSortKey& rhs) const
+  bool operator<(const ObTablePrivSortKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -4997,16 +5002,16 @@ struct ObObjPrivSortKey {
         grantor_id_(grantor_id),
         grantee_id_(grantee_id)
   {}
-  bool operator==(const ObObjPrivSortKey& rhs) const
+  bool operator==(const ObObjPrivSortKey &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (obj_id_ == rhs.obj_id_) && (obj_type_ == rhs.obj_type_) &&
            (col_id_ == rhs.col_id_) && (grantor_id_ == rhs.grantor_id_) && (grantee_id_ == rhs.grantee_id_);
   }
-  bool operator!=(const ObObjPrivSortKey& rhs) const
+  bool operator!=(const ObObjPrivSortKey &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObObjPrivSortKey& rhs) const
+  bool operator<(const ObObjPrivSortKey &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (false == bret && tenant_id_ == rhs.tenant_id_) {
@@ -5061,9 +5066,9 @@ public:
   // constructor and destructor
   ObTablePriv() : ObSchema(), ObPriv()
   {}
-  explicit ObTablePriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv(allocator)
+  explicit ObTablePriv(common::ObIAllocator *allocator) : ObSchema(allocator), ObPriv(allocator)
   {}
-  ObTablePriv(const ObTablePriv& other) : ObSchema(), ObPriv()
+  ObTablePriv(const ObTablePriv &other) : ObSchema(), ObPriv()
   {
     *this = other;
   }
@@ -5071,26 +5076,26 @@ public:
   {}
 
   // operator=
-  ObTablePriv& operator=(const ObTablePriv& other);
+  ObTablePriv &operator=(const ObTablePriv &other);
 
   // for sort
   ObTablePrivSortKey get_sort_key() const
   {
     return ObTablePrivSortKey(tenant_id_, user_id_, db_, table_);
   }
-  static bool cmp(const ObTablePriv* lhs, const ObTablePriv* rhs)
+  static bool cmp(const ObTablePriv *lhs, const ObTablePriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false;
   }
-  static bool cmp_sort_key(const ObTablePriv* lhs, const ObTablePrivSortKey& sort_key)
+  static bool cmp_sort_key(const ObTablePriv *lhs, const ObTablePrivSortKey &sort_key)
   {
     return NULL != lhs ? lhs->get_sort_key() < sort_key : false;
   }
-  static bool equal(const ObTablePriv* lhs, const ObTablePriv* rhs)
+  static bool equal(const ObTablePriv *lhs, const ObTablePriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false;
   }
-  static bool equal_sort_key(const ObTablePriv* lhs, const ObTablePrivSortKey& sort_key)
+  static bool equal_sort_key(const ObTablePriv *lhs, const ObTablePrivSortKey &sort_key)
   {
     return NULL != lhs ? lhs->get_sort_key() == sort_key : false;
   }
@@ -5099,43 +5104,43 @@ public:
   {
     return ObTablePrivDBKey(tenant_id_, user_id_, db_);
   }
-  static bool cmp_db_key(const ObTablePriv* lhs, const ObTablePrivDBKey& db_key)
+  static bool cmp_db_key(const ObTablePriv *lhs, const ObTablePrivDBKey &db_key)
   {
     return lhs->get_db_key() < db_key;
   }
 
   // set methods
-  inline int set_database_name(const char* db)
+  inline int set_database_name(const char *db)
   {
     return deep_copy_str(db, db_);
   }
-  inline int set_database_name(const common::ObString& db)
+  inline int set_database_name(const common::ObString &db)
   {
     return deep_copy_str(db, db_);
   }
-  inline int set_table_name(const char* table)
+  inline int set_table_name(const char *table)
   {
     return deep_copy_str(table, table_);
   }
-  inline int set_table_name(const common::ObString& table)
+  inline int set_table_name(const common::ObString &table)
   {
     return deep_copy_str(table, table_);
   }
 
   // get methods
-  inline const char* get_database_name() const
+  inline const char *get_database_name() const
   {
     return extract_str(db_);
   }
-  inline const common::ObString& get_database_name_str() const
+  inline const common::ObString &get_database_name_str() const
   {
     return db_;
   }
-  inline const char* get_table_name() const
+  inline const char *get_table_name() const
   {
     return extract_str(table_);
   }
-  inline const common::ObString& get_table_name_str() const
+  inline const common::ObString &get_table_name_str() const
   {
     return table_;
   }
@@ -5158,9 +5163,9 @@ public:
   // constructor and destructor
   ObObjPriv() : ObSchema(), ObPriv()
   {}
-  explicit ObObjPriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv()
+  explicit ObObjPriv(common::ObIAllocator *allocator) : ObSchema(allocator), ObPriv()
   {}
-  ObObjPriv(const ObObjPriv& other) : ObSchema(), ObPriv()
+  ObObjPriv(const ObObjPriv &other) : ObSchema(), ObPriv()
   {
     *this = other;
   }
@@ -5168,7 +5173,7 @@ public:
   {}
 
   // operator=
-  ObObjPriv& operator=(const ObObjPriv& other);
+  ObObjPriv &operator=(const ObObjPriv &other);
 
   // for sort
   ObObjPrivSortKey get_sort_key() const
@@ -5181,23 +5186,23 @@ public:
     return ObTenantUrObjId(tenant_id_, grantee_id_, obj_id_, obj_type_, col_id_);
   }
 
-  static bool cmp_tenant_ur_obj_id(const ObObjPriv* lhs, const ObTenantUrObjId& rhs)
+  static bool cmp_tenant_ur_obj_id(const ObObjPriv *lhs, const ObTenantUrObjId &rhs)
   {
     return (lhs->get_tenant_ur_obj_id() < rhs);
   }
-  static bool cmp(const ObObjPriv* lhs, const ObObjPriv* rhs)
+  static bool cmp(const ObObjPriv *lhs, const ObObjPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false;
   }
-  static bool cmp_sort_key(const ObObjPriv* lhs, const ObObjPrivSortKey& sort_key)
+  static bool cmp_sort_key(const ObObjPriv *lhs, const ObObjPrivSortKey &sort_key)
   {
     return NULL != lhs ? lhs->get_sort_key() < sort_key : false;
   }
-  static bool equal(const ObObjPriv* lhs, const ObObjPriv* rhs)
+  static bool equal(const ObObjPriv *lhs, const ObObjPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false;
   }
-  static bool equal_sort_key(const ObObjPriv* lhs, const ObObjPrivSortKey& sort_key)
+  static bool equal_sort_key(const ObObjPriv *lhs, const ObObjPrivSortKey &sort_key)
   {
     return NULL != lhs ? lhs->get_sort_key() == sort_key : false;
   }
@@ -5276,16 +5281,16 @@ enum ObPrivLevel {
   OB_PRIV_MAX_LEVEL,
 };
 
-const char* ob_priv_level_str(const ObPrivLevel grant_level);
+const char *ob_priv_level_str(const ObPrivLevel grant_level);
 
 struct ObNeedPriv {
-  ObNeedPriv(const common::ObString& db, const common::ObString& table, ObPrivLevel priv_level, ObPrivSet priv_set,
+  ObNeedPriv(const common::ObString &db, const common::ObString &table, ObPrivLevel priv_level, ObPrivSet priv_set,
       const bool is_sys_table)
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set), is_sys_table_(is_sys_table)
   {}
   ObNeedPriv() : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false)
   {}
-  int deep_copy(const ObNeedPriv& other, common::ObIAllocator& allocator);
+  int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
   common::ObString table_;
   ObPrivLevel priv_level_;
@@ -5296,7 +5301,7 @@ struct ObNeedPriv {
 
 struct ObStmtNeedPrivs {
   typedef common::ObFixedArray<ObNeedPriv, common::ObIAllocator> NeedPrivs;
-  explicit ObStmtNeedPrivs(common::ObIAllocator& alloc) : need_privs_(alloc)
+  explicit ObStmtNeedPrivs(common::ObIAllocator &alloc) : need_privs_(alloc)
   {}
   ObStmtNeedPrivs() : need_privs_()
   {}
@@ -5308,7 +5313,7 @@ struct ObStmtNeedPrivs {
   {
     need_privs_.reset();
   }
-  int deep_copy(const ObStmtNeedPrivs& other, common::ObIAllocator& allocator);
+  int deep_copy(const ObStmtNeedPrivs &other, common::ObIAllocator &allocator);
   NeedPrivs need_privs_;
   TO_STRING_KV(K_(need_privs));
 };
@@ -5331,7 +5336,7 @@ struct ObOraNeedPriv {
         obj_privs_(0),
         owner_id_(common::OB_INVALID_ID)
   {}
-  ObOraNeedPriv(const common::ObString& db_name, uint64_t grantee_id, uint64_t obj_id, uint64_t col_id,
+  ObOraNeedPriv(const common::ObString &db_name, uint64_t grantee_id, uint64_t obj_id, uint64_t col_id,
       uint64_t obj_type, uint32_t check_flag, ObPackedObjPriv obj_privs, uint64_t owner_id)
       : db_name_(db_name),
         grantee_id_(grantee_id),
@@ -5344,8 +5349,8 @@ struct ObOraNeedPriv {
   {}
   ~ObOraNeedPriv()
   {}
-  int deep_copy(const ObOraNeedPriv& other, common::ObIAllocator& allocator);
-  bool same_obj(const ObOraNeedPriv& other);
+  int deep_copy(const ObOraNeedPriv &other, common::ObIAllocator &allocator);
+  bool same_obj(const ObOraNeedPriv &other);
   // ObOraNeedPriv& operator=(const ObOraNeedPriv &other);
   common::ObString db_name_;
   uint64_t grantee_id_;
@@ -5363,7 +5368,7 @@ struct ObOraNeedPriv {
 // the system permissions and multiple object permissions are recorded in the array
 struct ObStmtOraNeedPrivs {
   typedef common::ObFixedArray<ObOraNeedPriv, common::ObIAllocator> OraNeedPrivs;
-  explicit ObStmtOraNeedPrivs(common::ObIAllocator& alloc) : need_privs_(alloc)
+  explicit ObStmtOraNeedPrivs(common::ObIAllocator &alloc) : need_privs_(alloc)
   {}
   ObStmtOraNeedPrivs() : need_privs_()
   {}
@@ -5375,7 +5380,7 @@ struct ObStmtOraNeedPrivs {
   {
     need_privs_.reset();
   }
-  int deep_copy(const ObStmtOraNeedPrivs& other, common::ObIAllocator& allocator);
+  int deep_copy(const ObStmtOraNeedPrivs &other, common::ObIAllocator &allocator);
   OraNeedPrivs need_privs_;
   TO_STRING_KV(K_(need_privs));
 };
@@ -5393,7 +5398,7 @@ struct ObSessionPrivInfo {
         enable_role_id_array_()
   {}
   ObSessionPrivInfo(const uint64_t tenant_id, const uint64_t effective_tenant_id, const uint64_t user_id,
-      const common::ObString& db, const ObPrivSet user_priv_set, const ObPrivSet db_priv_set)
+      const common::ObString &db, const ObPrivSet user_priv_set, const ObPrivSet db_priv_set)
       : tenant_id_(tenant_id),
         user_id_(user_id),
         user_name_(),
@@ -5455,8 +5460,8 @@ struct ObSessionPrivInfo {
 struct ObUserLoginInfo {
   ObUserLoginInfo()
   {}
-  ObUserLoginInfo(const common::ObString& tenant_name, const common::ObString& user_name,
-      const common::ObString& client_ip, const common::ObString& passwd, const common::ObString& db)
+  ObUserLoginInfo(const common::ObString &tenant_name, const common::ObString &user_name,
+      const common::ObString &client_ip, const common::ObString &passwd, const common::ObString &db)
       : tenant_name_(tenant_name),
         user_name_(user_name),
         client_ip_(client_ip),
@@ -5465,9 +5470,9 @@ struct ObUserLoginInfo {
         scramble_str_()
   {}
 
-  ObUserLoginInfo(const common::ObString& tenant_name, const common::ObString& user_name,
-      const common::ObString& client_ip, const common::ObString& passwd, const common::ObString& db,
-      const common::ObString& scramble_str)
+  ObUserLoginInfo(const common::ObString &tenant_name, const common::ObString &user_name,
+      const common::ObString &client_ip, const common::ObString &passwd, const common::ObString &db,
+      const common::ObString &scramble_str)
       : tenant_name_(tenant_name),
         user_name_(user_name),
         client_ip_(client_ip),
@@ -5492,25 +5497,25 @@ class ObSysPriv : public ObSchema, public ObPriv {
 public:
   ObSysPriv() : ObPriv(), grantee_id_(common::OB_INVALID_ID)
   {}
-  explicit ObSysPriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv(allocator)
+  explicit ObSysPriv(common::ObIAllocator *allocator) : ObSchema(allocator), ObPriv(allocator)
   {}
   virtual ~ObSysPriv()
   {}
-  ObSysPriv(const ObSysPriv& other) : ObSchema(), ObPriv(), grantee_id_(common::OB_INVALID_ID)
+  ObSysPriv(const ObSysPriv &other) : ObSchema(), ObPriv(), grantee_id_(common::OB_INVALID_ID)
   {
     *this = other;
   }
-  ObSysPriv& operator=(const ObSysPriv& other);
+  ObSysPriv &operator=(const ObSysPriv &other);
 
-  static bool cmp_tenant_grantee_id(const ObSysPriv* lhs, const ObTenantUserId& tenant_grantee_id)
+  static bool cmp_tenant_grantee_id(const ObSysPriv *lhs, const ObTenantUserId &tenant_grantee_id)
   {
     return (lhs->get_tenant_grantee_id() < tenant_grantee_id);
   }
-  static bool equal_tenant_grantee_id(const ObSysPriv* lhs, const ObTenantUserId& tenant_grantee_id)
+  static bool equal_tenant_grantee_id(const ObSysPriv *lhs, const ObTenantUserId &tenant_grantee_id)
   {
     return (lhs->get_tenant_grantee_id() == tenant_grantee_id);
   }
-  static bool cmp_tenant_id(const ObPriv* lhs, const uint64_t tenant_id)
+  static bool cmp_tenant_id(const ObPriv *lhs, const uint64_t tenant_id)
   {
     return (lhs->get_tenant_id() < tenant_id);
   }
@@ -5535,11 +5540,11 @@ public:
     return user_id_ == 234;
   }
 
-  static bool cmp(const ObSysPriv* lhs, const ObSysPriv* rhs)
+  static bool cmp(const ObSysPriv *lhs, const ObSysPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? (lhs->get_key() < rhs->get_key()) : false;
   }
-  static bool cmp_key(const ObSysPriv* lhs, const ObSysPrivKey& key)
+  static bool cmp_key(const ObSysPriv *lhs, const ObSysPrivKey &key)
   {
     return NULL != lhs ? lhs->get_key() < key : false;
   }
@@ -5547,7 +5552,7 @@ public:
   {
     return ObSysPrivKey(tenant_id_, grantee_id_);
   }
-  static bool equal(const ObSysPriv* lhs, const ObSysPriv* rhs)
+  static bool equal(const ObSysPriv *lhs, const ObSysPriv *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_key() == rhs->get_key() : false;
   }  // point check
@@ -5565,7 +5570,7 @@ private:
   uint64_t grantee_id_;
 };
 
-int get_int_value(const common::ObString& str, int64_t& value);
+int get_int_value(const common::ObString &str, int64_t &value);
 
 class ObHostnameStuct {
 public:
@@ -5575,12 +5580,12 @@ public:
   {}
   static const uint32_t FAKE_PORT = 0;
   static const int MAX_IP_BITS = 128;
-  static int get_int_value(const common::ObString& str, int64_t& value);
-  static bool calc_ip(const common::ObString& host_ip, common::ObAddr& addr);
-  static bool calc_ip_mask(const common::ObString& host_ip_mask, common::ObAddr& mask);
-  static bool is_ip_match(const common::ObString& client_ip, common::ObString host_name);
-  static bool is_wild_match(const common::ObString& client_ip, const common::ObString& host_name);
-  static bool is_in_white_list(const common::ObString& client_ip, common::ObString& ip_white_list);
+  static int get_int_value(const common::ObString &str, int64_t &value);
+  static bool calc_ip(const common::ObString &host_ip, common::ObAddr &addr);
+  static bool calc_ip_mask(const common::ObString &host_ip_mask, common::ObAddr &mask);
+  static bool is_ip_match(const common::ObString &client_ip, common::ObString host_name);
+  static bool is_wild_match(const common::ObString &client_ip, const common::ObString &host_name);
+  static bool is_in_white_list(const common::ObString &client_ip, common::ObString &ip_white_list);
 };
 
 enum ObHintFormat {
@@ -5594,8 +5599,8 @@ public:
   {}
   virtual ~ObFixedParam()
   {}
-  bool has_equal_value(const common::ObObj& other_value) const;
-  bool is_equal(const ObFixedParam& other_param) const;
+  bool has_equal_value(const common::ObObj &other_value) const;
+  bool is_equal(const ObFixedParam &other_param) const;
   VIRTUAL_TO_STRING_KV(K(offset_), K(value_));
   int64_t offset_;
   common::ObObj value_;
@@ -5607,16 +5612,16 @@ class ObMaxConcurrentParam {
 public:
   static const int64_t UNLIMITED = -1;
   typedef common::ObArray<ObFixedParam, common::ObWrapperAllocator> FixParamStore;
-  explicit ObMaxConcurrentParam(common::ObIAllocator* allocator, const common::ObMemAttr& attr = common::ObMemAttr());
+  explicit ObMaxConcurrentParam(common::ObIAllocator *allocator, const common::ObMemAttr &attr = common::ObMemAttr());
   virtual ~ObMaxConcurrentParam();
   int destroy();
   int64_t get_convert_size() const;
-  int assign(const ObMaxConcurrentParam& max_concurrent_param);
+  int assign(const ObMaxConcurrentParam &max_concurrent_param);
   int64_t get_concurrent_num() const
   {
     return concurrent_num_;
   }
-  int match_fixed_param(const ParamStore& const_param_store, bool& is_match) const;
+  int match_fixed_param(const ParamStore &const_param_store, bool &is_match) const;
   bool is_concurrent_limit_param() const
   {
     return concurrent_num_ != UNLIMITED;
@@ -5625,20 +5630,20 @@ public:
   {
     return !outline_content_.empty();
   }
-  int get_fixed_param_with_offset(int64_t offset, ObFixedParam& fixed_param, bool& is_found) const;
-  int same_param_as(const ObMaxConcurrentParam& other, bool& is_same) const;
-  void set_mem_attr(const common::ObMemAttr& attr)
+  int get_fixed_param_with_offset(int64_t offset, ObFixedParam &fixed_param, bool &is_found) const;
+  int same_param_as(const ObMaxConcurrentParam &other, bool &is_same) const;
+  void set_mem_attr(const common::ObMemAttr &attr)
   {
     mem_attr_ = attr;
   }
   VIRTUAL_TO_STRING_KV(K_(concurrent_num), K_(outline_content), K_(fixed_param_store));
 
 private:
-  int deep_copy_outline_content(const common::ObString& src);
-  int deep_copy_param_value(const common::ObObj& src, common::ObObj& dest);
+  int deep_copy_outline_content(const common::ObString &src);
+  int deep_copy_param_value(const common::ObObj &src, common::ObObj &dest);
 
 public:
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
   int64_t concurrent_num_;
   common::ObString outline_content_;
   common::ObMemAttr mem_attr_;
@@ -5655,28 +5660,28 @@ class ObOutlineParamsWrapper {
 
 public:
   ObOutlineParamsWrapper();
-  explicit ObOutlineParamsWrapper(common::ObIAllocator* allocator);
+  explicit ObOutlineParamsWrapper(common::ObIAllocator *allocator);
   ~ObOutlineParamsWrapper();
   int destroy();
-  int assign(const ObOutlineParamsWrapper& src);
-  int set_allocator(common::ObIAllocator* allocator, const common::ObMemAttr& attr = common::ObMemAttr());
-  OutlineParamsArray& get_outline_params()
+  int assign(const ObOutlineParamsWrapper &src);
+  int set_allocator(common::ObIAllocator *allocator, const common::ObMemAttr &attr = common::ObMemAttr());
+  OutlineParamsArray &get_outline_params()
   {
     return outline_params_;
   }
-  const OutlineParamsArray& get_outline_params() const
+  const OutlineParamsArray &get_outline_params() const
   {
     return outline_params_;
   }
-  ObMaxConcurrentParam* get_outline_param(int64_t index) const;
+  ObMaxConcurrentParam *get_outline_param(int64_t index) const;
   int64_t get_convert_size() const;
   bool is_empty() const
   {
     return 0 == outline_params_.count();
   }
-  int add_param(const ObMaxConcurrentParam& param);
-  int has_param(const ObMaxConcurrentParam& param, bool& has_param) const;
-  int has_concurrent_limit_param(bool& has) const;
+  int add_param(const ObMaxConcurrentParam &param);
+  int has_param(const ObMaxConcurrentParam &param, bool &has_param) const;
+  int has_concurrent_limit_param(bool &has) const;
   int64_t get_param_count() const
   {
     return outline_params_.count();
@@ -5686,14 +5691,14 @@ public:
     allocator_ = NULL;
     mem_attr_ = common::ObMemAttr();
   }
-  void set_mem_attr(const common::ObMemAttr& attr)
+  void set_mem_attr(const common::ObMemAttr &attr)
   {
     mem_attr_ = attr;
   };
   TO_STRING_KV(K_(outline_params));
 
 private:
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
   OutlineParamsArray outline_params_;
   common::ObMemAttr mem_attr_;
 
@@ -5720,7 +5725,7 @@ public:
     return hash_val;
   }
 
-  inline bool operator==(const BaselineKey& other_key) const
+  inline bool operator==(const BaselineKey &other_key) const
   {
     return tenant_id_ == other_key.tenant_id_ && db_id_ == other_key.db_id_ &&
            constructed_sql_ == other_key.constructed_sql_ && params_info_str_ == other_key.params_info_str_;
@@ -5745,18 +5750,18 @@ class ObPlanBaselineInfo : public ObSchema {
 
 public:
   ObPlanBaselineInfo();
-  explicit ObPlanBaselineInfo(common::ObIAllocator* allocator);
+  explicit ObPlanBaselineInfo(common::ObIAllocator *allocator);
   virtual ~ObPlanBaselineInfo();
 
-  ObPlanBaselineInfo(const ObPlanBaselineInfo& src_schema);
-  ObPlanBaselineInfo& operator=(const ObPlanBaselineInfo& src_schema);
+  ObPlanBaselineInfo(const ObPlanBaselineInfo &src_schema);
+  ObPlanBaselineInfo &operator=(const ObPlanBaselineInfo &src_schema);
   void reset();
   int64_t get_convert_size() const;
-  static bool cmp(const ObPlanBaselineInfo* lhs, const ObPlanBaselineInfo* rhs)
+  static bool cmp(const ObPlanBaselineInfo *lhs, const ObPlanBaselineInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_plan_baseline_id() < rhs->get_plan_baseline_id() : false;
   }
-  static bool equal(const ObPlanBaselineInfo* lhs, const ObPlanBaselineInfo* rhs)
+  static bool equal(const ObPlanBaselineInfo *lhs, const ObPlanBaselineInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_plan_baseline_id() == rhs->get_plan_baseline_id() : false;
   }
@@ -5845,92 +5850,92 @@ public:
 
   // int set_plan_hash_value(const common::number::ObNumber &num);
 
-  int set_sql_id(const char* sql_id)
+  int set_sql_id(const char *sql_id)
   {
     return deep_copy_str(sql_id, sql_id_);
   }
-  int set_sql_id(const common::ObString& sql_id)
+  int set_sql_id(const common::ObString &sql_id)
   {
     return deep_copy_str(sql_id, sql_id_);
   }
 
-  inline const char* get_sql_id() const
+  inline const char *get_sql_id() const
   {
     return extract_str(sql_id_);
   }
-  inline const common::ObString& get_sql_id_str() const
+  inline const common::ObString &get_sql_id_str() const
   {
     return sql_id_;
   }
 
-  int set_hints_info(const char* hints_info)
+  int set_hints_info(const char *hints_info)
   {
     return deep_copy_str(hints_info, hints_info_);
   }
-  int set_hints_info(const common::ObString& hints_info)
+  int set_hints_info(const common::ObString &hints_info)
   {
     return deep_copy_str(hints_info, hints_info_);
   }
 
-  inline const char* get_hints_info() const
+  inline const char *get_hints_info() const
   {
     return extract_str(hints_info_);
   }
-  inline const common::ObString& get_hints_info_str() const
+  inline const common::ObString &get_hints_info_str() const
   {
     return hints_info_;
   }
 
-  int set_outline_data(const char* outline_data)
+  int set_outline_data(const char *outline_data)
   {
     return deep_copy_str(outline_data, outline_data_);
   }
-  int set_outline_data(const common::ObString& outline_data)
+  int set_outline_data(const common::ObString &outline_data)
   {
     return deep_copy_str(outline_data, outline_data_);
   }
 
-  inline const char* get_outline_data() const
+  inline const char *get_outline_data() const
   {
     return extract_str(outline_data_);
   }
-  inline const common::ObString& get_outline_data_str() const
+  inline const common::ObString &get_outline_data_str() const
   {
     return outline_data_;
   }
 
-  int set_sql_text(const char* constructed_sql)
+  int set_sql_text(const char *constructed_sql)
   {
     return deep_copy_str(constructed_sql, key_.constructed_sql_);
   }
-  int set_sql_text(const common::ObString& constructed_sql)
+  int set_sql_text(const common::ObString &constructed_sql)
   {
     return deep_copy_str(constructed_sql, key_.constructed_sql_);
   }
 
-  inline const char* get_sql_text() const
+  inline const char *get_sql_text() const
   {
     return extract_str(key_.constructed_sql_);
   }
-  inline const common::ObString& get_sql_text_str() const
+  inline const common::ObString &get_sql_text_str() const
   {
     return key_.constructed_sql_;
   }
 
-  int set_params_info(const char* params_info)
+  int set_params_info(const char *params_info)
   {
     return deep_copy_str(params_info, key_.params_info_str_);
   }
-  int set_params_info(const common::ObString& params_info)
+  int set_params_info(const common::ObString &params_info)
   {
     return deep_copy_str(params_info, key_.params_info_str_);
   }
 
-  inline const char* get_params_info() const
+  inline const char *get_params_info() const
   {
     return extract_str(key_.params_info_str_);
   }
-  inline const common::ObString& get_params_info_str() const
+  inline const common::ObString &get_params_info_str() const
   {
     return key_.params_info_str_;
   }
@@ -5958,19 +5963,19 @@ class ObOutlineInfo : public ObSchema {
 
 public:
   ObOutlineInfo();
-  explicit ObOutlineInfo(common::ObIAllocator* allocator);
+  explicit ObOutlineInfo(common::ObIAllocator *allocator);
   virtual ~ObOutlineInfo();
-  ObOutlineInfo(const ObOutlineInfo& src_schema);
-  ObOutlineInfo& operator=(const ObOutlineInfo& src_schema);
+  ObOutlineInfo(const ObOutlineInfo &src_schema);
+  ObOutlineInfo &operator=(const ObOutlineInfo &src_schema);
   void reset();
   bool is_valid() const;
   bool is_valid_for_replace() const;
   int64_t get_convert_size() const;
-  static bool cmp(const ObOutlineInfo* lhs, const ObOutlineInfo* rhs)
+  static bool cmp(const ObOutlineInfo *lhs, const ObOutlineInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_outline_id() < rhs->get_outline_id() : false;
   }
-  static bool equal(const ObOutlineInfo* lhs, const ObOutlineInfo* rhs)
+  static bool equal(const ObOutlineInfo *lhs, const ObOutlineInfo *rhs)
   {
     return (NULL != lhs && NULL != rhs) ? lhs->get_outline_id() == rhs->get_outline_id() : false;
   }
@@ -5991,60 +5996,60 @@ public:
   {
     schema_version_ = version;
   }
-  int set_name(const char* name)
+  int set_name(const char *name)
   {
     return deep_copy_str(name, name_);
   }
-  int set_name(const common::ObString& name)
+  int set_name(const common::ObString &name)
   {
     return deep_copy_str(name, name_);
   }
-  int set_signature(const char* sig)
+  int set_signature(const char *sig)
   {
     return deep_copy_str(sig, signature_);
   }
-  int set_signature(const common::ObString& sig)
+  int set_signature(const common::ObString &sig)
   {
     return deep_copy_str(sig, signature_);
   }
-  int set_sql_id(const char* sql_id)
+  int set_sql_id(const char *sql_id)
   {
     return deep_copy_str(sql_id, sql_id_);
   }
-  int set_sql_id(const common::ObString& sql_id)
+  int set_sql_id(const common::ObString &sql_id)
   {
     return deep_copy_str(sql_id, sql_id_);
   }
-  int set_outline_params(const common::ObString& outline_params_str);
-  int set_outline_content(const char* content)
+  int set_outline_params(const common::ObString &outline_params_str);
+  int set_outline_content(const char *content)
   {
     return deep_copy_str(content, outline_content_);
   }
-  int set_outline_content(const common::ObString& content)
+  int set_outline_content(const common::ObString &content)
   {
     return deep_copy_str(content, outline_content_);
   }
-  int set_sql_text(const char* sql)
+  int set_sql_text(const char *sql)
   {
     return deep_copy_str(sql, sql_text_);
   }
-  int set_sql_text(const common::ObString& sql)
+  int set_sql_text(const common::ObString &sql)
   {
     return deep_copy_str(sql, sql_text_);
   }
-  int set_outline_target(const char* target)
+  int set_outline_target(const char *target)
   {
     return deep_copy_str(target, outline_target_);
   }
-  int set_outline_target(const common::ObString& target)
+  int set_outline_target(const common::ObString &target)
   {
     return deep_copy_str(target, outline_target_);
   }
-  int set_owner(const char* owner)
+  int set_owner(const char *owner)
   {
     return deep_copy_str(owner, owner_);
   }
-  int set_owner(const common::ObString& owner)
+  int set_owner(const common::ObString &owner)
   {
     return deep_copy_str(owner, owner_);
   }
@@ -6056,11 +6061,11 @@ public:
   {
     used_ = used;
   }
-  int set_version(const char* version)
+  int set_version(const char *version)
   {
     return deep_copy_str(version, version_);
   }
-  int set_version(const common::ObString& version)
+  int set_version(const common::ObString &version)
   {
     return deep_copy_str(version, version_);
   }
@@ -6113,87 +6118,87 @@ public:
   {
     return format_;
   }
-  inline const char* get_name() const
+  inline const char *get_name() const
   {
     return extract_str(name_);
   }
-  inline const common::ObString& get_name_str() const
+  inline const common::ObString &get_name_str() const
   {
     return name_;
   }
-  inline const char* get_signature() const
+  inline const char *get_signature() const
   {
     return extract_str(signature_);
   }
-  inline const char* get_sql_id() const
+  inline const char *get_sql_id() const
   {
     return extract_str(sql_id_);
   }
-  inline const common::ObString& get_sql_id_str() const
+  inline const common::ObString &get_sql_id_str() const
   {
     return sql_id_;
   }
-  inline const common::ObString& get_signature_str() const
+  inline const common::ObString &get_signature_str() const
   {
     return signature_;
   }
-  inline const char* get_outline_content() const
+  inline const char *get_outline_content() const
   {
     return extract_str(outline_content_);
   }
-  inline const common::ObString& get_outline_content_str() const
+  inline const common::ObString &get_outline_content_str() const
   {
     return outline_content_;
   }
-  inline const char* get_sql_text() const
+  inline const char *get_sql_text() const
   {
     return extract_str(sql_text_);
   }
-  inline const common::ObString& get_sql_text_str() const
+  inline const common::ObString &get_sql_text_str() const
   {
     return sql_text_;
   }
-  inline common::ObString& get_sql_text_str()
+  inline common::ObString &get_sql_text_str()
   {
     return sql_text_;
   }
-  inline const char* get_outline_target() const
+  inline const char *get_outline_target() const
   {
     return extract_str(outline_target_);
   }
-  inline const common::ObString& get_outline_target_str() const
+  inline const common::ObString &get_outline_target_str() const
   {
     return outline_target_;
   }
-  inline common::ObString& get_outline_target_str()
+  inline common::ObString &get_outline_target_str()
   {
     return outline_target_;
   }
-  inline const char* get_owner() const
+  inline const char *get_owner() const
   {
     return extract_str(owner_);
   }
-  inline const common::ObString& get_owner_str() const
+  inline const common::ObString &get_owner_str() const
   {
     return owner_;
   }
-  inline const char* get_version() const
+  inline const char *get_version() const
   {
     return extract_str(version_);
   }
-  inline const common::ObString& get_version_str() const
+  inline const common::ObString &get_version_str() const
   {
     return version_;
   }
-  int get_visible_signature(common::ObString& visiable_signature) const;
+  int get_visible_signature(common::ObString &visiable_signature) const;
   int get_outline_sql(
-      common::ObIAllocator& allocator, const sql::ObSQLSessionInfo& session, common::ObString& outline_sql) const;
-  int get_hex_str_from_outline_params(common::ObString& hex_str, common::ObIAllocator& allocator) const;
-  const ObOutlineParamsWrapper& get_outline_params_wrapper() const
+      common::ObIAllocator &allocator, const sql::ObSQLSessionInfo &session, common::ObString &outline_sql) const;
+  int get_hex_str_from_outline_params(common::ObString &hex_str, common::ObIAllocator &allocator) const;
+  const ObOutlineParamsWrapper &get_outline_params_wrapper() const
   {
     return outline_params_wrapper_;
   }
-  ObOutlineParamsWrapper& get_outline_params_wrapper()
+  ObOutlineParamsWrapper &get_outline_params_wrapper()
   {
     return outline_params_wrapper_;
   }
@@ -6201,21 +6206,21 @@ public:
   {
     return outline_params_wrapper_.get_outline_params().count() > 0;
   }
-  int has_concurrent_limit_param(bool& has) const;
+  int has_concurrent_limit_param(bool &has) const;
   int gen_valid_allocator();
-  int add_param(const ObMaxConcurrentParam& src_param);
-  static int gen_limit_sql(const common::ObString& visible_signature, const ObMaxConcurrentParam* param,
-      const sql::ObSQLSessionInfo& session, common::ObIAllocator& allocator, common::ObString& limit_sql);
+  int add_param(const ObMaxConcurrentParam &src_param);
+  static int gen_limit_sql(const common::ObString &visible_signature, const ObMaxConcurrentParam *param,
+      const sql::ObSQLSessionInfo &session, common::ObIAllocator &allocator, common::ObString &limit_sql);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(outline_id), K_(schema_version), K_(name), K_(signature),
       K_(sql_id), K_(outline_content), K_(sql_text), K_(owner_id), K_(owner), K_(used), K_(compatible), K_(enabled),
       K_(format), K_(outline_params_wrapper), K_(outline_target));
-  static bool is_sql_id_valid(const common::ObString& sql_id);
+  static bool is_sql_id_valid(const common::ObString &sql_id);
 
 private:
-  static int replace_question_mark(const common::ObString& not_param_sql, const ObMaxConcurrentParam& concurrent_param,
-      int64_t start_pos, int64_t cur_pos, int64_t& question_mark_offset, common::ObSqlString& string_helper);
-  static int replace_not_param(const common::ObString& not_param_sql, const ParseNode& node, int64_t start_pos,
-      int64_t cur_pos, common::ObSqlString& string_helper);
+  static int replace_question_mark(const common::ObString &not_param_sql, const ObMaxConcurrentParam &concurrent_param,
+      int64_t start_pos, int64_t cur_pos, int64_t &question_mark_offset, common::ObSqlString &string_helper);
+  static int replace_not_param(const common::ObString &not_param_sql, const ParseNode &node, int64_t start_pos,
+      int64_t cur_pos, common::ObSqlString &string_helper);
 
 protected:
   uint64_t tenant_id_;
@@ -6244,7 +6249,7 @@ public:
   {
     reset();
   }
-  explicit ObDbLinkBaseInfo(common::ObIAllocator* allocator) : ObSchema(allocator)
+  explicit ObDbLinkBaseInfo(common::ObIAllocator *allocator) : ObSchema(allocator)
   {
     reset();
   }
@@ -6267,31 +6272,31 @@ public:
   {
     schema_version_ = version;
   }
-  inline int set_dblink_name(const common::ObString& name)
+  inline int set_dblink_name(const common::ObString &name)
   {
     return deep_copy_str(name, dblink_name_);
   }
-  inline int set_cluster_name(const common::ObString& name)
+  inline int set_cluster_name(const common::ObString &name)
   {
     return deep_copy_str(name, cluster_name_);
   }
-  inline int set_tenant_name(const common::ObString& name)
+  inline int set_tenant_name(const common::ObString &name)
   {
     return deep_copy_str(name, tenant_name_);
   }
-  inline int set_user_name(const common::ObString& name)
+  inline int set_user_name(const common::ObString &name)
   {
     return deep_copy_str(name, user_name_);
   }
-  inline int set_password(const common::ObString& password)
+  inline int set_password(const common::ObString &password)
   {
     return deep_copy_str(password, password_);
   }
-  inline void set_host_addr(const common::ObAddr& addr)
+  inline void set_host_addr(const common::ObAddr &addr)
   {
     host_addr_ = addr;
   }
-  inline int set_host_ip(const common::ObString& host_ip)
+  inline int set_host_ip(const common::ObString &host_ip)
   {
     host_addr_.set_ip_addr(host_ip, 0);
     return common::OB_SUCCESS;
@@ -6317,27 +6322,27 @@ public:
   {
     return schema_version_;
   }
-  inline const common::ObString& get_dblink_name() const
+  inline const common::ObString &get_dblink_name() const
   {
     return dblink_name_;
   }
-  inline const common::ObString& get_cluster_name() const
+  inline const common::ObString &get_cluster_name() const
   {
     return cluster_name_;
   }
-  inline const common::ObString& get_tenant_name() const
+  inline const common::ObString &get_tenant_name() const
   {
     return tenant_name_;
   }
-  inline const common::ObString& get_user_name() const
+  inline const common::ObString &get_user_name() const
   {
     return user_name_;
   }
-  inline const common::ObString& get_password() const
+  inline const common::ObString &get_password() const
   {
     return password_;
   }
-  inline const common::ObAddr& get_host_addr() const
+  inline const common::ObAddr &get_host_addr() const
   {
     return host_addr_;
   }
@@ -6374,23 +6379,23 @@ public:
   {}
   ObTenantDbLinkId(uint64_t tenant_id, uint64_t dblink_id) : tenant_id_(tenant_id), dblink_id_(dblink_id)
   {}
-  ObTenantDbLinkId(const ObTenantDbLinkId& other) : tenant_id_(other.tenant_id_), dblink_id_(other.dblink_id_)
+  ObTenantDbLinkId(const ObTenantDbLinkId &other) : tenant_id_(other.tenant_id_), dblink_id_(other.dblink_id_)
   {}
-  ObTenantDbLinkId& operator=(const ObTenantDbLinkId& other)
+  ObTenantDbLinkId &operator=(const ObTenantDbLinkId &other)
   {
     tenant_id_ = other.tenant_id_;
     dblink_id_ = other.dblink_id_;
     return *this;
   }
-  bool operator==(const ObTenantDbLinkId& rhs) const
+  bool operator==(const ObTenantDbLinkId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (dblink_id_ == rhs.dblink_id_);
   }
-  bool operator!=(const ObTenantDbLinkId& rhs) const
+  bool operator!=(const ObTenantDbLinkId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantDbLinkId& rhs) const
+  bool operator<(const ObTenantDbLinkId &rhs) const
   {
     return (tenant_id_ < rhs.tenant_id_) || (tenant_id_ == rhs.tenant_id_ && dblink_id_ < rhs.dblink_id_);
   }
@@ -6426,7 +6431,7 @@ class ObDbLinkInfo : public ObDbLinkBaseInfo {
 public:
   ObDbLinkInfo() : ObDbLinkBaseInfo()
   {}
-  explicit ObDbLinkInfo(common::ObIAllocator* allocator) : ObDbLinkBaseInfo(allocator)
+  explicit ObDbLinkInfo(common::ObIAllocator *allocator) : ObDbLinkBaseInfo(allocator)
   {}
   virtual ~ObDbLinkInfo()
   {}
@@ -6436,13 +6441,13 @@ class ObDbLinkSchema : public ObDbLinkBaseInfo {
 public:
   ObDbLinkSchema() : ObDbLinkBaseInfo()
   {}
-  explicit ObDbLinkSchema(common::ObIAllocator* allocator) : ObDbLinkBaseInfo(allocator)
+  explicit ObDbLinkSchema(common::ObIAllocator *allocator) : ObDbLinkBaseInfo(allocator)
   {}
-  ObDbLinkSchema(const ObDbLinkSchema& src_schema);
+  ObDbLinkSchema(const ObDbLinkSchema &src_schema);
   virtual ~ObDbLinkSchema()
   {}
-  ObDbLinkSchema& operator=(const ObDbLinkSchema& other);
-  bool operator==(const ObDbLinkSchema& other) const;
+  ObDbLinkSchema &operator=(const ObDbLinkSchema &other);
+  bool operator==(const ObDbLinkSchema &other) const;
 
   inline ObTenantDbLinkId get_tenant_dblink_id() const
   {
@@ -6460,11 +6465,11 @@ class ObSynonymInfo : public ObSchema {
 
 public:
   ObSynonymInfo();
-  explicit ObSynonymInfo(common::ObIAllocator* allocator);
+  explicit ObSynonymInfo(common::ObIAllocator *allocator);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version));
   virtual ~ObSynonymInfo();
-  ObSynonymInfo& operator=(const ObSynonymInfo& src_schema);
-  ObSynonymInfo(const ObSynonymInfo& src_schema);
+  ObSynonymInfo &operator=(const ObSynonymInfo &src_schema);
+  ObSynonymInfo(const ObSynonymInfo &src_schema);
   inline void set_tenant_id(const uint64_t id)
   {
     tenant_id_ = id;
@@ -6486,27 +6491,27 @@ public:
     schema_version_ = version;
   }
   int64_t get_convert_size() const;
-  int set_synonym_name(const char* name)
+  int set_synonym_name(const char *name)
   {
     return deep_copy_str(name, name_);
   }
-  int set_synonym_name(const common::ObString& name)
+  int set_synonym_name(const common::ObString &name)
   {
     return deep_copy_str(name, name_);
   }
-  int set_object_name(const char* name)
+  int set_object_name(const char *name)
   {
     return deep_copy_str(name, object_name_);
   }
-  int set_object_name(const common::ObString& name)
+  int set_object_name(const common::ObString &name)
   {
     return deep_copy_str(name, object_name_);
   }
-  int set_version(const char* version)
+  int set_version(const char *version)
   {
     return deep_copy_str(version, version_);
   }
-  int set_version(const common::ObString& version)
+  int set_version(const common::ObString &version)
   {
     return deep_copy_str(version, version_);
   }
@@ -6526,27 +6531,27 @@ public:
   {
     return schema_version_;
   }
-  inline const char* get_synonym_name() const
+  inline const char *get_synonym_name() const
   {
     return extract_str(name_);
   }
-  inline const common::ObString& get_synonym_name_str() const
+  inline const common::ObString &get_synonym_name_str() const
   {
     return name_;
   }
-  inline const char* get_object_name() const
+  inline const char *get_object_name() const
   {
     return extract_str(object_name_);
   }
-  inline const common::ObString& get_object_name_str() const
+  inline const common::ObString &get_object_name_str() const
   {
     return object_name_;
   }
-  inline const char* get_version() const
+  inline const char *get_version() const
   {
     return extract_str(version_);
   }
-  inline const common::ObString& get_version_str() const
+  inline const common::ObString &get_version_str() const
   {
     return version_;
   }
@@ -6576,17 +6581,17 @@ struct ObTenantUDFId {
 public:
   ObTenantUDFId() : tenant_id_(common::OB_INVALID_ID), udf_name_()
   {}
-  ObTenantUDFId(const uint64_t tenant_id, const common::ObString& name) : tenant_id_(tenant_id), udf_name_(name)
+  ObTenantUDFId(const uint64_t tenant_id, const common::ObString &name) : tenant_id_(tenant_id), udf_name_(name)
   {}
-  bool operator==(const ObTenantUDFId& rhs) const
+  bool operator==(const ObTenantUDFId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (udf_name_ == rhs.udf_name_);
   }
-  bool operator!=(const ObTenantUDFId& rhs) const
+  bool operator!=(const ObTenantUDFId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantUDFId& rhs) const
+  bool operator<(const ObTenantUDFId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -6619,15 +6624,15 @@ public:
   ObTenantSynonymId(const uint64_t tenant_id, const uint64_t synonym_id)
       : tenant_id_(tenant_id), synonym_id_(synonym_id)
   {}
-  bool operator==(const ObTenantSynonymId& rhs) const
+  bool operator==(const ObTenantSynonymId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (synonym_id_ == rhs.synonym_id_);
   }
-  bool operator!=(const ObTenantSynonymId& rhs) const
+  bool operator!=(const ObTenantSynonymId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantSynonymId& rhs) const
+  bool operator<(const ObTenantSynonymId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -6660,15 +6665,15 @@ public:
   ObTenantSequenceId(const uint64_t tenant_id, const uint64_t sequence_id)
       : tenant_id_(tenant_id), sequence_id_(sequence_id)
   {}
-  bool operator==(const ObTenantSequenceId& rhs) const
+  bool operator==(const ObTenantSequenceId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (sequence_id_ == rhs.sequence_id_);
   }
-  bool operator!=(const ObTenantSequenceId& rhs) const
+  bool operator!=(const ObTenantSequenceId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantSequenceId& rhs) const
+  bool operator<(const ObTenantSequenceId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -6705,11 +6710,11 @@ public:
     ObOutlineInfo::reset();
     alter_option_bitset_.reset();
   }
-  const common::ObBitSet<>& get_alter_option_bitset() const
+  const common::ObBitSet<> &get_alter_option_bitset() const
   {
     return alter_option_bitset_;
   }
-  common::ObBitSet<>& get_alter_option_bitset()
+  common::ObBitSet<> &get_alter_option_bitset()
   {
     return alter_option_bitset_;
   }
@@ -6723,13 +6728,13 @@ class ObOutlineNameHashWrapper {
 public:
   ObOutlineNameHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), name_()
   {}
-  ObOutlineNameHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& name_)
+  ObOutlineNameHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString &name_)
       : tenant_id_(tenant_id), database_id_(database_id), name_(name_)
   {}
   ~ObOutlineNameHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObOutlineNameHashWrapper& rv) const;
+  inline bool operator==(const ObOutlineNameHashWrapper &rv) const;
   inline void set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -6738,7 +6743,7 @@ public:
   {
     database_id_ = database_id;
   }
-  inline void set_name(const common::ObString& name)
+  inline void set_name(const common::ObString &name)
   {
     name_ = name;
   }
@@ -6751,7 +6756,7 @@ public:
   {
     return database_id_;
   }
-  inline const common::ObString& get_name() const
+  inline const common::ObString &get_name() const
   {
     return name_;
   }
@@ -6771,7 +6776,7 @@ inline uint64_t ObOutlineNameHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObOutlineNameHashWrapper::operator==(const ObOutlineNameHashWrapper& rv) const
+inline bool ObOutlineNameHashWrapper::operator==(const ObOutlineNameHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (name_ == rv.name_);
 }
@@ -6780,13 +6785,13 @@ class ObOutlineSignatureHashWrapper {
 public:
   ObOutlineSignatureHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), signature_()
   {}
-  ObOutlineSignatureHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& signature)
+  ObOutlineSignatureHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString &signature)
       : tenant_id_(tenant_id), database_id_(database_id), signature_(signature)
   {}
   ~ObOutlineSignatureHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObOutlineSignatureHashWrapper& rv) const;
+  inline bool operator==(const ObOutlineSignatureHashWrapper &rv) const;
   inline void set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -6795,7 +6800,7 @@ public:
   {
     database_id_ = database_id;
   }
-  inline void set_signature(const common::ObString& signature)
+  inline void set_signature(const common::ObString &signature)
   {
     signature_ = signature;
   }
@@ -6808,7 +6813,7 @@ public:
   {
     return database_id_;
   }
-  inline const common::ObString& get_signature() const
+  inline const common::ObString &get_signature() const
   {
     return signature_;
   }
@@ -6823,13 +6828,13 @@ class ObOutlineSqlIdHashWrapper {
 public:
   ObOutlineSqlIdHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), sql_id_()
   {}
-  ObOutlineSqlIdHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& sql_id)
+  ObOutlineSqlIdHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString &sql_id)
       : tenant_id_(tenant_id), database_id_(database_id), sql_id_(sql_id)
   {}
   ~ObOutlineSqlIdHashWrapper()
   {}
   inline uint64_t hash() const;
-  inline bool operator==(const ObOutlineSqlIdHashWrapper& rv) const;
+  inline bool operator==(const ObOutlineSqlIdHashWrapper &rv) const;
   inline void set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -6838,7 +6843,7 @@ public:
   {
     database_id_ = database_id;
   }
-  inline void set_sql_id(const common::ObString& sql_id)
+  inline void set_sql_id(const common::ObString &sql_id)
   {
     sql_id_ = sql_id;
   }
@@ -6851,7 +6856,7 @@ public:
   {
     return database_id_;
   }
-  inline const common::ObString& get_sql_id() const
+  inline const common::ObString &get_sql_id() const
   {
     return sql_id_;
   }
@@ -6871,7 +6876,7 @@ inline uint64_t ObOutlineSqlIdHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObOutlineSqlIdHashWrapper::operator==(const ObOutlineSqlIdHashWrapper& rv) const
+inline bool ObOutlineSqlIdHashWrapper::operator==(const ObOutlineSqlIdHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (sql_id_ == rv.sql_id_);
 }
@@ -6885,7 +6890,7 @@ inline uint64_t ObOutlineSignatureHashWrapper::hash() const
   return hash_ret;
 }
 
-inline bool ObOutlineSignatureHashWrapper::operator==(const ObOutlineSignatureHashWrapper& rv) const
+inline bool ObOutlineSignatureHashWrapper::operator==(const ObOutlineSignatureHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (signature_ == rv.signature_);
 }
@@ -6897,12 +6902,12 @@ private:
 
   int init_tenant_space_table_id_map();
   int init_sys_table_name_map();
-  int check_tenant_space_table_id(const uint64_t table_id, bool& is_tenant_space_table);
-  int check_sys_table_name(const uint64_t database_id, const common::ObString& table_name, bool& is_tenant_space_table);
-  int ob_write_string(const common::ObString& src, common::ObString& dst);
+  int check_tenant_space_table_id(const uint64_t table_id, bool &is_tenant_space_table);
+  int check_sys_table_name(const uint64_t database_id, const common::ObString &table_name, bool &is_tenant_space_table);
+  int ob_write_string(const common::ObString &src, common::ObString &dst);
 
 public:
-  static ObSysTableChecker& instance();
+  static ObSysTableChecker &instance();
   int init();
   int destroy();
 
@@ -6911,13 +6916,13 @@ public:
     return tenant_space_sys_table_num_;
   }
 
-  static int is_tenant_space_table_id(const uint64_t table_id, bool& is_tenant_space_table);
+  static int is_tenant_space_table_id(const uint64_t table_id, bool &is_tenant_space_table);
   static int is_sys_table_name(
-      const uint64_t database_id, const common::ObString& table_name, bool& is_tenant_space_table);
+      const uint64_t database_id, const common::ObString &table_name, bool &is_tenant_space_table);
   static bool is_tenant_table_in_version_2200(const uint64_t table_id);
   static bool is_cluster_private_tenant_table(const uint64_t table_id);
   static bool is_backup_private_tenant_table(const uint64_t table_id);
-  static int is_tenant_table_need_weak_read(const uint64_t table_id, bool& need_weak_read);
+  static int is_tenant_table_need_weak_read(const uint64_t table_id, bool &need_weak_read);
   static bool is_rs_restart_related_table_id(const uint64_t table_id);
   static bool is_rs_restart_related_partition(const uint64_t table_id, const int64_t partition_id);
 
@@ -6927,13 +6932,13 @@ public:
     TableNameWrapper()
         : database_id_(common::OB_INVALID_ID), name_case_mode_(common::OB_NAME_CASE_INVALID), table_name_()
     {}
-    TableNameWrapper(const uint64_t database_id, const common::ObNameCaseMode mode, const common::ObString& table_name)
+    TableNameWrapper(const uint64_t database_id, const common::ObNameCaseMode mode, const common::ObString &table_name)
         : database_id_(database_id), name_case_mode_(mode), table_name_(table_name)
     {}
     ~TableNameWrapper()
     {}
     inline uint64_t hash() const;
-    bool operator==(const TableNameWrapper& rv) const;
+    bool operator==(const TableNameWrapper &rv) const;
     TO_STRING_KV(K_(database_id), K_(name_case_mode), K_(table_name));
 
   private:
@@ -6948,7 +6953,7 @@ private:
 
 private:
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> tenant_space_table_id_map_;
-  common::hash::ObHashMap<uint64_t, TableNameWrapperArray*, common::hash::NoPthreadDefendMode> sys_table_name_map_;
+  common::hash::ObHashMap<uint64_t, TableNameWrapperArray *, common::hash::NoPthreadDefendMode> sys_table_name_map_;
   int64_t tenant_space_sys_table_num_;  // Number of tenant-level system tables (including system table indexes)
   common::ObArenaAllocator allocator_;
   bool is_inited_;
@@ -6970,7 +6975,7 @@ public:
     TRIGGER,
     TENANT,
   };
-  ObRecycleObject(common::ObIAllocator* allocator);
+  ObRecycleObject(common::ObIAllocator *allocator);
   ObRecycleObject()
       : ObSchema(),
         tenant_id_(common::OB_INVALID_ID),
@@ -6983,8 +6988,8 @@ public:
         tablegroup_name_(),
         database_name_()
   {}
-  ObRecycleObject(const ObRecycleObject& recycle_obj);
-  ObRecycleObject& operator=(const ObRecycleObject& recycle_obj);
+  ObRecycleObject(const ObRecycleObject &recycle_obj);
+  ObRecycleObject &operator=(const ObRecycleObject &recycle_obj);
   virtual ~ObRecycleObject()
   {}
   inline bool is_valid() const;
@@ -7006,11 +7011,11 @@ public:
   {
     return tablegroup_id_;
   }
-  const common::ObString& get_object_name() const
+  const common::ObString &get_object_name() const
   {
     return object_name_;
   }
-  const common::ObString& get_original_name() const
+  const common::ObString &get_original_name() const
   {
     return original_name_;
   }
@@ -7034,11 +7039,11 @@ public:
   {
     tablegroup_id_ = tablegroup_id;
   }
-  int set_object_name(const common::ObString& object_name)
+  int set_object_name(const common::ObString &object_name)
   {
     return deep_copy_str(object_name, object_name_);
   }
-  int set_original_name(const common::ObString& original_name)
+  int set_original_name(const common::ObString &original_name)
   {
     return deep_copy_str(original_name, original_name_);
   }
@@ -7046,22 +7051,22 @@ public:
   {
     type_ = type;
   }
-  int set_type_by_table_schema(const ObSimpleTableSchemaV2& table_schema);
-  static RecycleObjType get_type_by_table_schema(const ObSimpleTableSchemaV2& table_schema);
+  int set_type_by_table_schema(const ObSimpleTableSchemaV2 &table_schema);
+  static RecycleObjType get_type_by_table_schema(const ObSimpleTableSchemaV2 &table_schema);
   // for backup
-  int set_tablegroup_name(const common::ObString& tablegroup_name)
+  int set_tablegroup_name(const common::ObString &tablegroup_name)
   {
     return deep_copy_str(tablegroup_name, tablegroup_name_);
   }
-  const common::ObString& get_tablegroup_name() const
+  const common::ObString &get_tablegroup_name() const
   {
     return tablegroup_name_;
   }
-  int set_database_name(const common::ObString& database_name)
+  int set_database_name(const common::ObString &database_name)
   {
     return deep_copy_str(database_name, database_name_);
   }
-  const common::ObString& get_database_name() const
+  const common::ObString &get_database_name() const
   {
     return database_name_;
   }
@@ -7101,7 +7106,7 @@ public:
   ObBasedSchemaObjectInfo(const uint64_t schema_id, const ObSchemaType schema_type, const int64_t schema_version)
       : schema_id_(schema_id), schema_type_(schema_type), schema_version_(schema_version)
   {}
-  bool operator==(const ObBasedSchemaObjectInfo& other) const
+  bool operator==(const ObBasedSchemaObjectInfo &other) const
   {
     return (schema_id_ == other.schema_id_ && schema_type_ == other.schema_type_ &&
             schema_version_ == other.schema_version_);
@@ -7127,7 +7132,7 @@ public:
   ObAuxTableMetaInfo(const uint64_t table_id, const ObTableType table_type, const int64_t drop_schema_version)
       : table_id_(table_id), table_type_(table_type), drop_schema_version_(drop_schema_version)
   {}
-  bool operator==(const ObAuxTableMetaInfo& other) const
+  bool operator==(const ObAuxTableMetaInfo &other) const
   {
     return (table_id_ == other.table_id_ && table_type_ == other.table_type_ &&
             drop_schema_version_ == other.drop_schema_version_);
@@ -7193,7 +7198,7 @@ public:
         ref_cst_type_(CONSTRAINT_TYPE_INVALID),
         ref_cst_id_(common::OB_INVALID_ID)
   {}
-  ObForeignKeyInfo(common::ObIAllocator* allocator);
+  ObForeignKeyInfo(common::ObIAllocator *allocator);
   virtual ~ObForeignKeyInfo()
   {}
 
@@ -7222,7 +7227,7 @@ public:
   {
     delete_action_ = static_cast<ObReferenceAction>(delete_action);
   }
-  inline int set_foreign_key_name(const common::ObString& foreign_key_name)
+  inline int set_foreign_key_name(const common::ObString &foreign_key_name)
   {
     foreign_key_name_ = foreign_key_name;
     return common::OB_SUCCESS;
@@ -7276,17 +7281,17 @@ public:
   {
     ref_cst_id_ = ref_cst_id;
   }
-  inline const char* get_update_action_str() const
+  inline const char *get_update_action_str() const
   {
     return get_action_str(update_action_);
   }
-  inline const char* get_delete_action_str() const
+  inline const char *get_delete_action_str() const
   {
     return get_action_str(delete_action_);
   }
-  inline const char* get_action_str(ObReferenceAction action) const
+  inline const char *get_action_str(ObReferenceAction action) const
   {
-    const char* ret = NULL;
+    const char *ret = NULL;
     if (ACTION_RESTRICT <= action && action <= ACTION_SET_DEFAULT) {
       ret = reference_action_str_[action];
     }
@@ -7316,7 +7321,7 @@ public:
     ref_cst_type_ = CONSTRAINT_TYPE_INVALID;
     ref_cst_id_ = common::OB_INVALID_ID;
   }
-  int assign(const ObForeignKeyInfo& other);
+  int assign(const ObForeignKeyInfo &other);
   inline int64_t get_convert_size() const
   {
     int64_t convert_size = sizeof(*this);
@@ -7354,7 +7359,7 @@ public:
   uint64_t ref_cst_id_;
 
 private:
-  static const char* reference_action_str_[ACTION_MAX + 1];
+  static const char *reference_action_str_[ACTION_MAX + 1];
 };
 
 struct ObSimpleForeignKeyInfo {
@@ -7370,14 +7375,14 @@ public:
     foreign_key_id_ = common::OB_INVALID_ID;
   }
   ObSimpleForeignKeyInfo(const uint64_t tenant_id, const uint64_t database_id, const uint64_t table_id,
-      const common::ObString& foreign_key_name, const uint64_t foreign_key_id)
+      const common::ObString &foreign_key_name, const uint64_t foreign_key_id)
       : tenant_id_(tenant_id),
         database_id_(database_id),
         table_id_(table_id),
         foreign_key_name_(foreign_key_name),
         foreign_key_id_(foreign_key_id)
   {}
-  bool operator==(const ObSimpleForeignKeyInfo& other) const
+  bool operator==(const ObSimpleForeignKeyInfo &other) const
   {
     return (tenant_id_ == other.tenant_id_ && database_id_ == other.database_id_ && table_id_ == other.table_id_ &&
             foreign_key_name_ == other.foreign_key_name_ && foreign_key_id_ == other.foreign_key_id_);
@@ -7418,14 +7423,14 @@ public:
     constraint_id_ = common::OB_INVALID_ID;
   }
   ObSimpleConstraintInfo(const uint64_t tenant_id, const uint64_t database_id, const uint64_t table_id,
-      const common::ObString& constraint_name, const uint64_t constraint_id)
+      const common::ObString &constraint_name, const uint64_t constraint_id)
       : tenant_id_(tenant_id),
         database_id_(database_id),
         table_id_(table_id),
         constraint_name_(constraint_name),
         constraint_id_(constraint_id)
   {}
-  bool operator==(const ObSimpleConstraintInfo& other) const
+  bool operator==(const ObSimpleConstraintInfo &other) const
   {
     return (tenant_id_ == other.tenant_id_ && database_id_ == other.database_id_ && table_id_ == other.table_id_ &&
             constraint_name_ == other.constraint_name_ && constraint_id_ == other.constraint_id_);
@@ -7455,7 +7460,7 @@ public:
 
 template <typename PARTITION>
 int ObPartitionUtils::check_partition_value(
-    const PARTITION& l_part, const PARTITION& r_part, const ObPartitionFuncType part_type, bool& is_equal)
+    const PARTITION &l_part, const PARTITION &r_part, const ObPartitionFuncType part_type, bool &is_equal)
 {
   int ret = common::OB_SUCCESS;
   is_equal = true;
@@ -7502,16 +7507,16 @@ int ObPartitionUtils::check_partition_value(
       }
     }
   } else if (is_list_part(part_type)) {
-    const common::ObIArray<common::ObNewRow>& l_list_values = l_part.get_list_row_values();
-    const common::ObIArray<common::ObNewRow>& r_list_values = r_part.get_list_row_values();
+    const common::ObIArray<common::ObNewRow> &l_list_values = l_part.get_list_row_values();
+    const common::ObIArray<common::ObNewRow> &r_list_values = r_part.get_list_row_values();
     if (l_list_values.count() != r_list_values.count()) {
       is_equal = false;
     } else {
       for (int64_t i = 0; i < l_list_values.count() && is_equal; i++) {
-        const common::ObNewRow& l_rowkey = l_list_values.at(i);
+        const common::ObNewRow &l_rowkey = l_list_values.at(i);
         bool find_equal_item = false;
         for (int64_t j = 0; j < r_list_values.count() && !find_equal_item && is_equal; j++) {
-          const common::ObNewRow& r_rowkey = r_list_values.at(j);
+          const common::ObNewRow &r_rowkey = r_list_values.at(j);
           // First check that the count and meta information are consistent;
           if (l_rowkey.get_count() != r_rowkey.get_count()) {
             is_equal = false;
@@ -7559,11 +7564,11 @@ class ObSequenceSchema : public ObSchema {
 
 public:
   ObSequenceSchema();
-  explicit ObSequenceSchema(common::ObIAllocator* allocator);
+  explicit ObSequenceSchema(common::ObIAllocator *allocator);
   virtual ~ObSequenceSchema();
-  ObSequenceSchema& operator=(const ObSequenceSchema& src_schema);
-  int assign(const ObSequenceSchema& src_schema);
-  ObSequenceSchema(const ObSequenceSchema& src_schema);
+  ObSequenceSchema &operator=(const ObSequenceSchema &src_schema);
+  int assign(const ObSequenceSchema &src_schema);
+  ObSequenceSchema(const ObSequenceSchema &src_schema);
   int64_t get_convert_size() const;
 
   inline void set_tenant_id(const uint64_t id)
@@ -7582,15 +7587,15 @@ public:
   {
     schema_version_ = version;
   }
-  inline int set_sequence_name(const char* name)
+  inline int set_sequence_name(const char *name)
   {
     return deep_copy_str(name, name_);
   }
-  inline int set_sequence_name(const common::ObString& name)
+  inline int set_sequence_name(const common::ObString &name)
   {
     return deep_copy_str(name, name_);
   }
-  inline int set_name(const common::ObString& name)
+  inline int set_name(const common::ObString &name)
   {
     return set_sequence_name(name);
   }
@@ -7615,44 +7620,44 @@ public:
   // int set_start_with(const common::ObString &str);
   // int set_cache_size(const common::ObString &str);
 
-  int set_max_value(const common::number::ObNumber& num)
+  int set_max_value(const common::number::ObNumber &num)
   {
     return option_.set_max_value(num);
   }
-  int set_min_value(const common::number::ObNumber& num)
+  int set_min_value(const common::number::ObNumber &num)
   {
     return option_.set_min_value(num);
   }
-  int set_increment_by(const common::number::ObNumber& num)
+  int set_increment_by(const common::number::ObNumber &num)
   {
     return option_.set_increment_by(num);
   }
-  int set_start_with(const common::number::ObNumber& num)
+  int set_start_with(const common::number::ObNumber &num)
   {
     return option_.set_start_with(num);
   }
-  int set_cache_size(const common::number::ObNumber& num)
+  int set_cache_size(const common::number::ObNumber &num)
   {
     return option_.set_cache_size(num);
   }
 
-  inline const common::number::ObNumber& get_min_value() const
+  inline const common::number::ObNumber &get_min_value() const
   {
     return option_.get_min_value();
   }
-  inline const common::number::ObNumber& get_max_value() const
+  inline const common::number::ObNumber &get_max_value() const
   {
     return option_.get_max_value();
   }
-  inline const common::number::ObNumber& get_increment_by() const
+  inline const common::number::ObNumber &get_increment_by() const
   {
     return option_.get_increment_by();
   }
-  inline const common::number::ObNumber& get_start_with() const
+  inline const common::number::ObNumber &get_start_with() const
   {
     return option_.get_start_with();
   }
-  inline const common::number::ObNumber& get_cache_size() const
+  inline const common::number::ObNumber &get_cache_size() const
   {
     return option_.get_cache_size();
   }
@@ -7686,19 +7691,19 @@ public:
   {
     return schema_version_;
   }
-  inline const common::ObString& get_sequence_name() const
+  inline const common::ObString &get_sequence_name() const
   {
     return name_;
   }
-  inline const char* get_sequence_name_str() const
+  inline const char *get_sequence_name_str() const
   {
     return extract_str(name_);
   }
-  inline share::ObSequenceOption& get_sequence_option()
+  inline share::ObSequenceOption &get_sequence_option()
   {
     return option_;
   }
-  inline const share::ObSequenceOption& get_sequence_option() const
+  inline const share::ObSequenceOption &get_sequence_option() const
   {
     return option_;
   }
@@ -7736,15 +7741,15 @@ public:
   ObTenantCommonSchemaId(const uint64_t tenant_id, const uint64_t schema_id)
       : tenant_id_(tenant_id), schema_id_(schema_id)
   {}
-  bool operator==(const ObTenantCommonSchemaId& rhs) const
+  bool operator==(const ObTenantCommonSchemaId &rhs) const
   {
     return (tenant_id_ == rhs.tenant_id_) && (schema_id_ == rhs.schema_id_);
   }
-  bool operator!=(const ObTenantCommonSchemaId& rhs) const
+  bool operator!=(const ObTenantCommonSchemaId &rhs) const
   {
     return !(*this == rhs);
   }
-  bool operator<(const ObTenantCommonSchemaId& rhs) const
+  bool operator<(const ObTenantCommonSchemaId &rhs) const
   {
     bool bret = tenant_id_ < rhs.tenant_id_;
     if (tenant_id_ == rhs.tenant_id_) {
@@ -7807,10 +7812,10 @@ public:
 
   static const int64_t DEFAULT_PARAM_VALUES[MAX_PARAMS];
   static const int64_t INVALID_PARAM_VALUES[MAX_PARAMS];
-  static const char* PARAM_VALUE_NAMES[MAX_PARAMS];
+  static const char *PARAM_VALUE_NAMES[MAX_PARAMS];
 
   ObProfileSchema();
-  explicit ObProfileSchema(common::ObIAllocator* allocator);
+  explicit ObProfileSchema(common::ObIAllocator *allocator);
   virtual ~ObProfileSchema();
 
   TO_STRING_KV(K_(tenant_id), K_(profile_id), K_(schema_version), K_(profile_name), K_(failed_login_attempts),
@@ -7820,8 +7825,8 @@ public:
   void reset();
   int64_t get_convert_size() const;
 
-  ObProfileSchema& operator=(const ObProfileSchema& src_schema);
-  ObProfileSchema(const ObProfileSchema& src_schema);
+  ObProfileSchema &operator=(const ObProfileSchema &src_schema);
+  ObProfileSchema(const ObProfileSchema &src_schema);
 
   inline void set_tenant_id(const uint64_t id)
   {
@@ -7835,11 +7840,11 @@ public:
   {
     schema_version_ = version;
   }
-  inline int set_profile_name(const char* name)
+  inline int set_profile_name(const char *name)
   {
     return deep_copy_str(name, profile_name_);
   }
-  inline int set_profile_name(const common::ObString& name)
+  inline int set_profile_name(const common::ObString &name)
   {
     return deep_copy_str(name, profile_name_);
   }
@@ -7872,11 +7877,11 @@ public:
   {
     return schema_version_;
   }
-  inline const char* get_profile_name() const
+  inline const char *get_profile_name() const
   {
     return extract_str(profile_name_);
   }
-  inline const common::ObString& get_profile_name_str() const
+  inline const common::ObString &get_profile_name_str() const
   {
     return profile_name_;
   }
@@ -7906,21 +7911,21 @@ public:
   int set_default_value(const int64_t type);
   int set_default_values();
   int set_invalid_values();
-  static int get_default_value(const int64_t type, int64_t& value);
+  static int get_default_value(const int64_t type, int64_t &value);
 
-  inline const char* get_password_verify_function() const
+  inline const char *get_password_verify_function() const
   {
     return extract_str(password_verify_function_);
   }
-  inline const common::ObString& get_password_verify_function_str() const
+  inline const common::ObString &get_password_verify_function_str() const
   {
     return password_verify_function_;
   }
-  inline int set_password_verify_function(const char* name)
+  inline int set_password_verify_function(const char *name)
   {
     return deep_copy_str(name, password_verify_function_);
   }
-  inline int set_password_verify_function(const common::ObString& name)
+  inline int set_password_verify_function(const common::ObString &name)
   {
     return deep_copy_str(name, password_verify_function_);
   }
@@ -7937,7 +7942,7 @@ private:
   int64_t password_grace_time_;
 };
 
-common::ObIAllocator*& schema_stack_allocator();
+common::ObIAllocator *&schema_stack_allocator();
 
 struct ObObjectStruct {
   ObObjectStruct() : type_(ObObjectType::INVALID), id_(common::OB_INVALID_ID){};
@@ -7963,7 +7968,7 @@ public:
   virtual ObObjectType get_object_type() const = 0;
   static constexpr uint64_t TYPE_MASK = (0x7) << (sizeof(uint64_t) - 3);
   static constexpr uint64_t VAL_MASK = (-1) >> 3;
-  void inline gen_mask(uint64_t type, uint64_t& id)
+  void inline gen_mask(uint64_t type, uint64_t &id)
   {
     id = (TYPE_MASK & type) | (VAL_MASK & id);
   }

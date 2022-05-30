@@ -258,6 +258,8 @@ int ObMemtableCtx::set_host_(ObMemtable* host, const bool for_replay)
     ret = OB_ERR_UNEXPECTED;
   } else if (false == for_replay && true == trans_mgr_.is_for_replay()) {
     ret = OB_NOT_MASTER;
+  } else if (!ctx_->is_can_elr() && OB_FAIL(check_trans_size_(for_replay))) {
+    // do nothing
   } else if (host == get_active_mt()) {
     // do nothing
   } else if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
@@ -795,8 +797,10 @@ int ObMemtableCtx::do_trans_end(const bool commit, const int64_t trans_version, 
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
     }
+    (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
     // flush partition audit statistics cached in ctx to partition
-    if (NULL != ATOMIC_LOAD(&ctx_) && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
+    if (GCONF.enable_record_trace_log && NULL != ATOMIC_LOAD(&ctx_) &&
+        OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
       TRANS_LOG(WARN, "flush audit partition cache error", K(tmp_ret), K(commit), K(*ctx_));
     }
   }
@@ -933,7 +937,7 @@ void ObMemtableCtx::trans_mgr_sub_trans_end_(bool commit)
   set_read_elr_data(false);
   trans_mgr_.sub_trans_end(commit);
   // update partition audit
-  if (GCONF.enable_sql_audit) {
+  if (GCONF.enable_record_trace_log) {
     (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
   }
 }
@@ -1234,9 +1238,7 @@ int ObMemtableCtx::audit_partition_cache_(const enum ObPartitionAuditOperator op
 {
   int ret = OB_SUCCESS;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_FAIL(partition_audit_info_cache_.update_audit_info(op, count))) {
+  if (OB_FAIL(partition_audit_info_cache_.update_audit_info(op, count))) {
     TRANS_LOG(WARN, "update audit info", K(ret), K(*ctx_));
   }
 
@@ -1249,12 +1251,7 @@ int ObMemtableCtx::flush_audit_partition_cache_(bool commit)
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* partition_mgr = NULL;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "memtable ctx is NULL", K(ret), KP(ctx_));
-  } else if (OB_ISNULL(partition_mgr = ctx_->get_partition_mgr())) {
+  if (OB_ISNULL(partition_mgr = ctx_->get_partition_mgr())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "partition mgr is NULL", K(ret), K(*ctx_));
   } else if (OB_FAIL(partition_mgr->audit_partition(partition_audit_info_cache_, commit))) {
@@ -1742,6 +1739,20 @@ void ObMemtableCtx::dec_pending_elr_count()
     memtable_for_elr_->dec_pending_elr_count();
     memtable_for_elr_ = NULL;
   }
+}
+
+int ObMemtableCtx::check_trans_size_(const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_trx_size = GCONF._max_trx_size;
+  if (!for_replay && !is_can_elr()) {
+    if (max_trx_size > 0 && trans_mem_total_size_ > max_trx_size) {
+      ret = OB_TRANS_OUT_OF_THRESHOLD;
+      TRANS_LOG(WARN, "current transaction partition data size great to threshold", K(*this),
+                K(ret), K_(trans_mem_total_size), "max_trx_size_threshold", max_trx_size);
+    }
+  }
+  return ret;
 }
 
 }  // namespace memtable

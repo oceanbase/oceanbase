@@ -82,7 +82,7 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator(
     bool is_need_create = false;
     do {
       // rdlock
-      obsys::CRLockGuard guard(locks_[slot]);
+      obsys::ObRLockGuard guard(locks_[slot]);
       TMA** cur = &tma_array_[slot];
       while ((NULL != cur) && (NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
         cur = &((*cur)->get_next());
@@ -177,7 +177,7 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
     }
     do {
       // Need lock when modify slog list
-      obsys::CWLockGuard guard(locks_[slot]);
+      obsys::ObWLockGuard guard(locks_[slot]);
       if (OB_SUCC(ret)) {
         bool is_need_create = false;
         TMA** cur = &tma_array_[slot];

@@ -997,13 +997,13 @@ int ObPartitionTransCtxMgr::get_min_uncommit_prepare_version(int64_t& min_prepar
 }
 
 // get min prepare version of uncommitted trans or committed trans
-// whose prepare log ts less than log_ts and commit log ts greater than log_ts in current partition
-int ObPartitionTransCtxMgr::get_min_prepare_version(const int64_t log_ts, int64_t& min_prepare_version)
+// whose prepare log ts less than freeze_ts and commit log ts greater than freeze_ts in current partition
+int ObPartitionTransCtxMgr::get_min_prepare_version(const int64_t freeze_ts, int64_t& min_prepare_version)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
 
-  IterateMinPrepareVersionBeforeLogtsFunctor fn(log_ts);
+  IterateMinPrepareVersionBeforeLogtsFunctor fn(freeze_ts);
   if (OB_FAIL(ctx_map_mgr_.foreach_ctx(fn))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
   } else {
@@ -1564,9 +1564,7 @@ int ObPartitionTransCtxMgr::audit_partition(ObPartitionAuditInfoCache& cache, bo
   int ret = OB_SUCCESS;
   ObPartitionAuditInfo* partition_audit_info = NULL;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
+  if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "audit partition type unexpected", KR(ret), K_(partition));
   } else if (OB_ISNULL(core_local_partition_audit_info_)) {
@@ -1622,9 +1620,7 @@ int ObPartitionTransCtxMgr::set_partition_audit_base_row_count(const int64_t cou
   int ret = OB_SUCCESS;
   ObPartitionAuditInfo* partition_audit_info = NULL;
 
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
+  if (OB_UNLIKELY(ObTransCtxType::PARTICIPANT != ctx_type_ && ObTransCtxType::SLAVE_PARTICIPANT != ctx_type_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "audit partition type unexpected", KR(ret), K_(partition));
   } else if (OB_ISNULL(core_local_partition_audit_info_)) {
@@ -1724,7 +1720,7 @@ int ObPartitionTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartitionTransCtxMgr::clear_unused_trans_status(const int64_t max_cleanout_log_ts)
+int ObPartitionTransCtxMgr::clear_unused_trans_status(const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -4499,10 +4495,10 @@ int ObPartTransCtxMgr::get_min_uncommit_prepare_version(const ObPartitionKey& pa
 }
 
 /*
- * get the min prepare version of commit log ts greater than log_ts
+ * get the min prepare version of commit log ts greater than freeze_ts
  * */
 int ObPartTransCtxMgr::get_min_prepare_version(
-    const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version)
+    const ObPartitionKey& partition, const int64_t freeze_ts, int64_t& min_prepare_version)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = NULL;
@@ -4518,11 +4514,11 @@ int ObPartTransCtxMgr::get_min_prepare_version(
   } else if (OB_ISNULL(ctx_mgr = get_partition_trans_ctx_mgr(partition))) {
     TRANS_LOG(WARN, "get partition transaction context manager error", K(partition));
     ret = OB_PARTITION_NOT_EXIST;
-  } else if (OB_FAIL(ctx_mgr->get_min_prepare_version(log_ts, min_prepare_version))) {
-    TRANS_LOG(WARN, "get min prepare version error", KR(ret), K(partition), K(log_ts));
+  } else if (OB_FAIL(ctx_mgr->get_min_prepare_version(freeze_ts, min_prepare_version))) {
+    TRANS_LOG(WARN, "get min prepare version error", KR(ret), K(partition), K(freeze_ts));
   } else {
     TRANS_LOG(
-        DEBUG, "ObPartTransCtxMgr get min prepare version success", K(partition), K(log_ts), K(min_prepare_version));
+        DEBUG, "ObPartTransCtxMgr get min prepare version success", K(partition), K(freeze_ts), K(min_prepare_version));
   }
 
   return ret;
@@ -5099,7 +5095,8 @@ int ObPartTransCtxMgr::get_max_trans_version_before_given_log_ts(
   return ret;
 }
 
-int ObPartTransCtxMgr::clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_ts)
+int ObPartTransCtxMgr::clear_unused_trans_status(
+    const ObPartitionKey &pkey, const ObIArray<int64_t> &max_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = nullptr;

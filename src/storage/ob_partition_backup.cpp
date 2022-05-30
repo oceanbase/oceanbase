@@ -269,6 +269,10 @@ int ObPartGroupBackupTask::do_backup_task(const ObBackupDataType &backup_data_ty
 
       if (OB_SUCCESS != (tmp_ret = check_disk_space())) {
         STORAGE_LOG(WARN, "failed to check disk space", K(tmp_ret));
+        common::SpinWLockGuard guard(lock_);
+        if (OB_SUCCESS == first_error_code_) {
+          first_error_code_ = ret;
+        }
       }
 
       if (OB_SUCCESS != (tmp_ret = try_schedule_new_partition_backup(backup_data_type))) {
@@ -723,7 +727,7 @@ int ObPartGroupBackupTask::check_pg_backup_point_created(
       if (ObPartGroupMigrator::get_instance().is_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         STORAGE_LOG(WARN, "server is stopping", K(ret));
-      } else if (OB_FAIL(check_disk_space())) {
+       } else if (OB_FAIL(check_disk_space())) {
         LOG_WARN("failed to check disk space", K(ret));
         break;
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_id_, is_cancel))) {
@@ -789,10 +793,6 @@ int ObPartGroupBackupTask::check_disk_space()
   } else if (OB_FAIL(OB_STORE_FILE.check_disk_full(required_size))) {
     ObTaskController::get().allow_next_syslog();
     STORAGE_LOG(WARN, "failed to check_is_disk_full, cannot backup", K(ret), K(required_size));
-    common::SpinWLockGuard guard(lock_);
-    if (OB_SUCCESS == first_error_code_) {
-      first_error_code_ = ret;
-    }
   }
 
 #ifdef ERRSIM
@@ -813,8 +813,12 @@ int ObPartGroupBackupTask::check_before_backup()
   ObExternBackupInfoMgr extern_backup_info_mgr;
   ObClusterBackupDest cluster_backup_dest;
   ObBackupDest backup_dest;
-  ObFakeBackupLeaseService fake_backup_lease_service;
-  ObExternBackupInfo last_backup_info;
+  ObBackupPath path;
+  ObStorageUtil util(false /*need retry*/);
+  bool is_exist = false;
+
+  // For nfs 4.2 may has bug, which makes open wrong file handle
+  // There just check file exist
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
@@ -828,17 +832,13 @@ int ObPartGroupBackupTask::check_before_backup()
       STORAGE_LOG(WARN, "failed to set backup dest", K(ret), K(backup_arg));
     } else if (OB_FAIL(cluster_backup_dest.set(backup_dest, backup_arg.incarnation_))) {
       STORAGE_LOG(WARN, "failed to set cluster backup dest", K(ret), K(backup_dest));
-    } else if (OB_FAIL(extern_backup_info_mgr.init(tenant_id, cluster_backup_dest, fake_backup_lease_service))) {
-      STORAGE_LOG(WARN, "failed to init extern backup info", K(ret), K(cluster_backup_dest));
-    } else if (OB_FAIL(extern_backup_info_mgr.get_last_info(last_backup_info))) {
-      STORAGE_LOG(WARN, "failed to get last info", K(ret), K(cluster_backup_dest));
-    } else if (!last_backup_info.is_valid() || ObExternBackupInfo::DOING != last_backup_info.status_ ||
-               last_backup_info.backup_data_version_ != backup_arg.backup_data_version_ ||
-               last_backup_info.backup_schema_version_ != backup_arg.backup_schema_version_ ||
-               last_backup_info.backup_type_ != backup_arg.backup_type_ ||
-               last_backup_info.inc_backup_set_id_ != backup_arg.backup_set_id_) {
+    } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_backup_info_path(cluster_backup_dest, tenant_id, path))) {
+      LOG_WARN("failed to get tenant data backup info path", K(ret), K(backup_dest));
+    } else if (OB_FAIL(util.is_exist(path.get_ptr(), backup_arg.storage_info_, is_exist))) {
+      LOG_WARN("failed to check extern backup file info exist", K(ret), K(path), K(backup_dest));
+    } else if (!is_exist) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("last backup info is unexpected", K(ret), K(last_backup_info), K(backup_arg));
+      LOG_WARN("extern backup info is not exist", K(ret), K(backup_arg), K(path));
     }
   }
   return ret;
@@ -1271,7 +1271,7 @@ int ObBackupPrepareTask::build_backup_major_sstable(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < local_tables.count(); ++i) {
       const ObITable::TableKey &local_table = local_tables.at(i);
-      if (local_table.is_major_sstable()) {
+      if (local_table.is_major_sstable() && !local_table.is_trans_sstable()) {
         ObMigrateTableInfo::SSTableInfo info;
         info.src_table_key_ = local_table;
         info.dest_base_version_ = local_table.get_base_version();
@@ -1301,7 +1301,7 @@ int ObBackupPrepareTask::build_backup_minor_sstable(
     ObMigrateTableInfo::SSTableInfo info;
     for (int64_t i = 0; OB_SUCC(ret) && i < local_tables.count(); ++i) {
       const ObITable::TableKey &local_table = local_tables.at(i);
-      if (local_table.is_minor_sstable()) {
+      if (local_table.is_minor_sstable() || local_table.is_trans_sstable()) {
         info.reset();
         info.src_table_key_ = local_table;
         info.dest_base_version_ = local_table.trans_version_range_.base_version_;
@@ -1534,7 +1534,8 @@ int ObBackupPrepareTask::fetch_backup_major_sstables(ObIArray<ObITable::TableKey
             if (OB_UNLIKELY(!major_table_key.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid major table key", K(ret), K(major_table_key));
-            } else if (OB_UNLIKELY(!ObITable::is_major_sstable(major_table_key.table_type_))) {
+            } else if (OB_UNLIKELY(!ObITable::is_major_sstable(major_table_key.table_type_) ||
+                                   ObITable::is_trans_sstable(major_table_key.table_type_))) {
               ret = OB_ERR_SYS;
               LOG_ERROR("table type is not major sstable", K(ret), K(major_table_key), K(table_info));
             } else if (OB_FAIL(table_keys.push_back(major_table_key))) {
@@ -1573,9 +1574,10 @@ int ObBackupPrepareTask::fetch_backup_minor_sstables(ObIArray<ObITable::TableKey
             if (OB_UNLIKELY(!minor_table_key.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid major table key", K(ret), K(minor_table_key));
-            } else if (OB_UNLIKELY(!ObITable::is_minor_sstable(minor_table_key.table_type_))) {
+            } else if (OB_UNLIKELY(!ObITable::is_minor_sstable(minor_table_key.table_type_) &&
+                                   !ObITable::is_trans_sstable(minor_table_key.table_type_))) {
               ret = OB_ERR_SYS;
-              LOG_ERROR("table type is not minor sstable", K(ret), K(minor_table_key), K(table_info));
+              LOG_ERROR("table type is not minor sstable or trans sstable", K(ret), K(minor_table_key), K(table_info));
             } else if (OB_FAIL(table_keys.push_back(minor_table_key))) {
               LOG_WARN("failed to push major table key into array", K(ret), K(minor_table_key));
             }

@@ -51,36 +51,36 @@
     printable;                                                                       \
   })
 
-#define NG_TRACE_EXT_TIMES(times, ...)       \
-  if (CHECK_TRACE_TIMES(times, 500, NULL)) { \
-    NG_TRACE_EXT(__VA_ARGS__);               \
+#define NG_TRACE_EXT_TIMES(times, ...)                                                 \
+  if (oceanbase::lib::is_trace_log_enabled() && CHECK_TRACE_TIMES(times, 500, NULL)) { \
+    NG_TRACE_EXT(__VA_ARGS__);                                                         \
   }
 
-#define NG_TRACE_TIMES(times, ...)           \
-  if (CHECK_TRACE_TIMES(times, 500, NULL)) { \
-    NG_TRACE(__VA_ARGS__);                   \
+#define NG_TRACE_TIMES(times, ...)                                                     \
+  if (oceanbase::lib::is_trace_log_enabled() && CHECK_TRACE_TIMES(times, 500, NULL)) { \
+    NG_TRACE(__VA_ARGS__);                                                             \
   }
 
-#define NG_TRACE_TIMES_WITH_TRACE_ID(times, tmp_cur_trace_id, ...) \
-  if (CHECK_TRACE_TIMES(times, 500, tmp_cur_trace_id)) {           \
-    NG_TRACE(__VA_ARGS__);                                         \
+#define NG_TRACE_TIMES_WITH_TRACE_ID(times, tmp_cur_trace_id, ...)                                 \
+  if (oceanbase::lib::is_trace_log_enabled() && CHECK_TRACE_TIMES(times, 500, tmp_cur_trace_id)) { \
+    NG_TRACE(__VA_ARGS__);                                                                         \
   }
 
 // Ordinary print log level, judged according to the current system configuration level
-#define PRINT_TRACE(log_buffer)                                                                              \
-  if (OB_TRACE_CONFIG::get_log_level() <= OB_LOGGER.get_log_level()) {                                       \
-    if (NULL != log_buffer) {                                                                                \
-      ::oceanbase::common::OB_PRINT("[TRACE]", OB_LOG_LEVEL_DIRECT(TRACE), "[normal]", "TRACE", log_buffer); \
-    }                                                                                                        \
+#define PRINT_TRACE(log_buffer)                                                                                  \
+  if (oceanbase::lib::is_trace_log_enabled() && OB_TRACE_CONFIG::get_log_level() <= OB_LOGGER.get_log_level()) { \
+    if (NULL != log_buffer) {                                                                                    \
+      ::oceanbase::common::OB_PRINT("[TRACE]", OB_LOG_LEVEL_DIRECT(TRACE), "[normal]", "TRACE", log_buffer);     \
+    }                                                                                                            \
   }
 
 // For logs that are forced to be printed, you can also judge according to the log level: if it is ERROR level, it will
 // not print, and other levels will be forced to print
-#define FORCE_PRINT_TRACE(log_buffer, HEAD)                                                             \
-  if (OB_LOGGER.get_log_level() != ObLogger::LogLevel::LOG_ERROR) {                                     \
-    if (NULL != log_buffer) {                                                                           \
-      ::oceanbase::common::OB_PRINT("[TRACE]", OB_LOG_LEVEL_DIRECT(TRACE), HEAD, "TRACE", *log_buffer); \
-    }                                                                                                   \
+#define FORCE_PRINT_TRACE(log_buffer, HEAD)                                                                   \
+  if (oceanbase::lib::is_trace_log_enabled() && OB_LOGGER.get_log_level() != ObLogger::LogLevel::LOG_ERROR) { \
+    if (NULL != log_buffer) {                                                                                 \
+      ::oceanbase::common::OB_PRINT("[TRACE]", OB_LOG_LEVEL_DIRECT(TRACE), HEAD, "TRACE", *log_buffer);       \
+    }                                                                                                         \
   }
 
 namespace oceanbase {

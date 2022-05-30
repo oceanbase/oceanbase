@@ -230,16 +230,16 @@ int ObAllServerStat::calc_server_usage(ServerStat& server_stat)
     if (std::fabs(server_stat.get_cpu_capacity()) < EPSLISON) {
       cpu_assigned_percent = INVALID_ASSIGNED_PERCENT;
     } else {
-      server_stat.server_load_.status_.resource_info_.cpu_ =
-          server_stat.server_load_.status_.resource_info_.cpu_;  // just for code layout
+      // server_stat.server_load_.status_.resource_info_.cpu_ =
+      //    server_stat.server_load_.status_.resource_info_.cpu_;  // just for code layout
       cpu_assigned_percent = 100.0 * static_cast<double>(server_stat.get_cpu_assigned()) /
                              static_cast<double>(server_stat.get_cpu_capacity());
     }
     if (INVALID_TOTAL_RESOURCE == server_stat.get_mem_capacity()) {
       mem_assigned_percent = INVALID_ASSIGNED_PERCENT;
     } else {
-      server_stat.server_load_.status_.resource_info_.mem_total_ =
-          server_stat.server_load_.status_.resource_info_.mem_total_;  // just for code layout
+      // server_stat.server_load_.status_.resource_info_.mem_total_ =
+      //    server_stat.server_load_.status_.resource_info_.mem_total_;  // just for code layout
       mem_assigned_percent = 100.0 * static_cast<double>(server_stat.get_mem_assigned()) /
                              static_cast<double>(server_stat.get_mem_capacity());
     }
@@ -251,7 +251,13 @@ int ObAllServerStat::calc_server_usage(ServerStat& server_stat)
       disk_assigned_percent = 100.0 * static_cast<double>(server_stat.get_disk_assigned()) /
                               static_cast<double>(server_stat.get_disk_total());
     }
-
+    if (INVALID_TOTAL_RESOURCE == server_stat.get_disk_actual()) {
+      // do nothing
+    } else {
+      server_stat.server_load_.status_.resource_info_.disk_actual_ = static_cast<int64_t>(
+          static_cast<double>(server_stat.server_load_.status_.resource_info_.disk_actual_) * hard_limit);
+    }
+    
     server_stat.set_cpu_assigned_percent(static_cast<int64_t>(cpu_assigned_percent));
     server_stat.set_mem_assigned_percent(static_cast<int64_t>(mem_assigned_percent));
     server_stat.set_disk_assigned_percent(static_cast<int64_t>(disk_assigned_percent));
@@ -355,6 +361,11 @@ int ObAllServerStat::get_full_row(const ObTableSchema* table, ServerStat& server
         ADD_NULL_COLUMN(table, "mem_assigned_percent", columns);
       } else {
         ADD_COLUMN(set_int, table, "mem_assigned_percent", server_stat.get_mem_assigned_percent(), columns);
+      }
+      if (INVALID_TOTAL_RESOURCE == server_stat.get_disk_actual()) {
+        ADD_NULL_COLUMN(table, "disk_actual", columns);
+      } else {
+        ADD_COLUMN(set_int, table, "disk_actual", server_stat.get_disk_actual(), columns);
       }
       if (INVALID_TOTAL_RESOURCE == server_stat.get_disk_total()) {
         ADD_NULL_COLUMN(table, "disk_total", columns);

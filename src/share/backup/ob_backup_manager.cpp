@@ -1103,8 +1103,8 @@ int ObBackupInfoManager::check_can_update_(
   } else {
     switch (src_status) {
       case ObBackupInfoStatus::PREPARE:
-        if (ObBackupInfoStatus::SCHEDULE != dest_status && ObBackupInfoStatus::CANCEL != dest_status &&
-            ObBackupInfoStatus::STOP != dest_status) {
+        if (ObBackupInfoStatus::PREPARE != dest_status && ObBackupInfoStatus::SCHEDULE != dest_status &&
+            ObBackupInfoStatus::CANCEL != dest_status && ObBackupInfoStatus::STOP != dest_status) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("can not update backup info", K(ret), K(src_status), K(dest_status));
         }

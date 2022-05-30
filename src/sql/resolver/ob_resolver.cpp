@@ -51,6 +51,7 @@
 #include "sql/resolver/ddl/ob_alter_outline_resolver.h"
 #include "sql/resolver/ddl/ob_drop_outline_resolver.h"
 #include "sql/resolver/ddl/ob_optimize_resolver.h"
+#include "sql/resolver/ddl/ob_flashback_resolver.h"
 #include "sql/resolver/ddl/ob_purge_resolver.h"
 #include "sql/resolver/ddl/ob_alter_baseline_resolver.h"
 #include "sql/resolver/ddl/ob_purge_resolver.h"
@@ -81,7 +82,6 @@
 #include "sql/resolver/cmd/ob_show_resolver.h"
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "sql/resolver/cmd/ob_kill_resolver.h"
-#include "sql/resolver/cmd/ob_set_names_resolver.h"
 #include "sql/resolver/cmd/ob_set_transaction_resolver.h"
 #include "sql/resolver/cmd/ob_bootstrap_resolver.h"
 #include "sql/resolver/cmd/ob_empty_query_resolver.h"
@@ -482,6 +482,22 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
         REGISTER_STMT_RESOLVER(TruncateTable);
         break;
       }
+      case T_FLASHBACK_TABLE_FROM_RECYCLEBIN: {		
+        REGISTER_STMT_RESOLVER(FlashBackTableFromRecyclebin);		
+        break;		
+      }
+      case T_FLASHBACK_INDEX: {		
+        REGISTER_STMT_RESOLVER(FlashBackIndex);		
+        break;		
+      }
+      case T_FLASHBACK_DATABASE: {		
+        REGISTER_STMT_RESOLVER(FlashBackDatabase);		
+        break;		
+      }
+      case T_FLASHBACK_TENANT: {		
+        REGISTER_STMT_RESOLVER(FlashBackTenant);		
+        break;		
+      }
       case T_PURGE_TABLE: {
         REGISTER_STMT_RESOLVER(PurgeTable);
         break;
@@ -641,12 +657,6 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       }
       case T_ALTER_SESSION_SET: {
         REGISTER_STMT_RESOLVER(AlterSessionSet);
-        break;
-      }
-      case T_SET_NAMES:
-        // fall through
-      case T_SET_CHARSET: {
-        REGISTER_STMT_RESOLVER(SetNames);
         break;
       }
       case T_KILL: {

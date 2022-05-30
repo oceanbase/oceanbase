@@ -179,7 +179,7 @@ public:
   }
 
   int alloc_dir_id(int64_t& dir_id);
-  int get_dir_id()
+  int64_t get_dir_id()
   {
     return dir_id_;
   }

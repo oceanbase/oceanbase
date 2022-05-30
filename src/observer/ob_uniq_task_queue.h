@@ -305,7 +305,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "not init", K(ret));
   } else {
-    while (!has_set_stop()) {
+    while (!lib::this_thread::has_set_stop()) {
       Task* t = NULL;
       tasks.reuse();
       if (OB_SUCC(tasks.reserve(batch_exec_cnt))) {
@@ -431,10 +431,11 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::process_barrier(Task& task)
 {
   int ret = common::OB_SUCCESS;
+  bool stopped = lib::this_thread::has_set_stop();
   if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
-  } else if (OB_FAIL(updater_->process_barrier(task, has_set_stop()))) {
+  } else if (OB_FAIL(updater_->process_barrier(task, stopped))) {
     SERVER_LOG(WARN, "fail to batch process task", K(ret));
   }
   return ret;
@@ -444,12 +445,13 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task>& tasks)
 {
   int ret = common::OB_SUCCESS;
+  bool stopped = lib::this_thread::has_set_stop();
   if (0 == tasks.count()) {
     // nothing todo
   } else if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
-  } else if (OB_FAIL(updater_->batch_process_tasks(tasks, has_set_stop()))) {
+  } else if (OB_FAIL(updater_->batch_process_tasks(tasks, stopped))) {
     SERVER_LOG(WARN, "fail to batch process task", K(ret));
   }
   return ret;

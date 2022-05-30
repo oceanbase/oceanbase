@@ -31,11 +31,11 @@ public:
   int acquire_snapshot(common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot);
   int release_snapshot(common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot);
   int acquire_snapshot_for_building_index(
-      common::ObMySQLTransaction& trans, const share::ObSnapshotInfo& snapshot, const int64_t index_table_id);
-  int get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
-      const char* extra_info, share::ObSnapshotInfo& snapshot_info);
-  int get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
-      const int64_t snapshot_ts, share::ObSnapshotInfo& snapshot_info);
+      common::ObMySQLTransaction &trans, const share::ObSnapshotInfo &snapshot, const int64_t index_table_id);
+  int get_snapshot(common::ObMySQLProxy &proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
+      const char *extra_info, share::ObSnapshotInfo &snapshot_info);
+  int get_snapshot(common::ObISQLClient &proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type,
+      const int64_t snapshot_ts, share::ObSnapshotInfo &snapshot_info);
 
   int check_restore_point(common::ObMySQLProxy& proxy, const int64_t tenant_id, const int64_t table_id, bool& is_exist);
   int get_snapshot_count(

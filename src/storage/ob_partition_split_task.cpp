@@ -574,6 +574,16 @@ int ObLobSplitHelper::read_lob_columns(ObStoreRow* store_row)
                 DEBUG, "[LOB] Succ to load lob obj", K(obj.get_scale()), K(obj.get_meta()), K(obj.val_len_), K(ret));
           }
         }
+      } else if (ob_is_json_tc(obj.get_type())) {
+        if (obj.is_json_outrow()) {
+          if (OB_FAIL(lob_reader_.read_lob_data(obj, obj))) {
+            STORAGE_LOG(
+              WARN, "Failed to read json lob obj", K(obj.get_scale()), K(obj.get_meta()), K(obj.val_len_), K(ret));
+          } else {
+            STORAGE_LOG(
+              DEBUG, "[LOB] Succ to load json lob obj", K(obj.get_scale()), K(obj.get_meta()),K(obj.val_len_), K(ret));
+          }
+        }
       }
     }
   }

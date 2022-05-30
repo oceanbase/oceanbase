@@ -76,7 +76,7 @@ int ObSignalHandle::change_signal_mask()
   return ret;
 }
 
-int ObSignalHandle::add_signums_to_set(sigset_t& sig_set)
+int ObSignalHandle::add_signums_to_set(sigset_t &sig_set)
 {
   int ret = OB_SUCCESS;
   if (0 != sigemptyset(&sig_set)) {
@@ -221,8 +221,10 @@ int ObSignalHandle::deal_signals(int signum)
       break;
     }
     case 60: {
+#ifndef OB_USE_ASAN
       send_request_and_wait(VERB_LEVEL_1, syscall(SYS_gettid) /*exclude_id*/);
       break;
+#endif
     }
     case 62: {
       // RESP_DUMP_TRACE_TO_FILE();

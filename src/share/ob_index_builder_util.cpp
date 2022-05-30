@@ -134,6 +134,10 @@ int ObIndexBuilderUtil::add_shadow_pks(
       } else if (ob_is_text_tc(const_data_column->get_data_type())) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_WARN("Unexpected lob column in shadow pk", "table_id", data_schema.get_table_id(), K(column_id), K(ret));
+      } else if (ob_is_json_tc(const_data_column->get_data_type())) {
+        ret = OB_ERR_JSON_USED_AS_KEY;
+        LOG_WARN("Unexpected json column in shadow pk", "table_id", data_schema.get_table_id(),
+            K(column_id), K(ret));
       } else {
         data_column = *const_data_column;
         data_column.set_nullable(true);
@@ -212,6 +216,14 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
             "column length",
             sort_item.prefix_len_,
             K(ret));
+      } else if (ob_is_json_tc(data_column->get_data_type())) {
+        ret = OB_ERR_JSON_USED_AS_KEY;
+        LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+        LOG_WARN("JSON column cannot be used in key specification", "tenant_id", data_schema.get_tenant_id(),
+                 "database_id", data_schema.get_database_id(),
+                 "table_name", data_schema.get_table_name(),
+                 "column name", sort_item.column_name_,
+                 "column length", sort_item.prefix_len_, K(ret)); 
       } else if (OB_FAIL(add_column(data_column,
                      is_index_column,
                      is_rowkey,
@@ -267,6 +279,17 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               K(is_index_column),
               K(is_rowkey),
               "order_in_rowkey",
+              data_column->get_order_in_rowkey(),
+              K(row_desc),
+              K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_WARN("JSON column cannot be used in key specification.", 
+              "data_column", 
+              *data_column, 
+              K(is_index_column),
+              K(is_rowkey), 
+              "order_in_rowkey", 
               data_column->get_order_in_rowkey(),
               K(row_desc),
               K(ret));
@@ -326,6 +349,19 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               "column name",
               arg.store_columns_.at(i),
               K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+          LOG_WARN("JSON column cannot be used in key specification.", 
+              "tenant_id", 
+              data_schema.get_tenant_id(),
+              "database_id", 
+              data_schema.get_database_id(), 
+              "table_name",
+              data_schema.get_table_name(), 
+              "column name", 
+              arg.store_columns_.at(i), 
+              K(ret));
         } else if (OB_FAIL(
                        add_column(data_column, is_index_column, is_rowkey, order_in_rowkey, row_desc, index_schema))) {
           LOG_WARN("add_column failed",
@@ -372,6 +408,20 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               data_schema.get_table_name(),
               "column name",
               arg.hidden_store_columns_.at(i),
+              K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(
+              OB_ERR_JSON_USED_AS_KEY, arg.hidden_store_columns_.at(i).length(), arg.hidden_store_columns_.at(i).ptr());
+          LOG_WARN("JSON column '%.*s' cannot be used in key specification.",
+              "tenant_id", 
+              data_schema.get_tenant_id(),
+              "database_id", 
+              data_schema.get_database_id(), 
+              "table_name",
+              data_schema.get_table_name(), 
+              "column name", 
+              arg.hidden_store_columns_.at(i), 
               K(ret));
         } else if (OB_FAIL(add_column(
                        data_column, is_index_column, is_rowkey, order_in_rowkey, row_desc, index_schema, true))) {
@@ -448,9 +498,13 @@ int ObIndexBuilderUtil::adjust_fulltext_args(
   int ret = OB_SUCCESS;
   ObIArray<ObString>& fulltext_columns = arg.fulltext_columns_;
   ObIArray<ObColumnSortItem>& sort_items = arg.index_columns_;
+  ObIAllocator *allocator = arg.index_schema_.get_allocator();
   ObArray<ObColumnSortItem> new_sort_items;
   uint64_t virtual_column_id = OB_INVALID_ID;
-  if (fulltext_columns.count() > 0) {
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (fulltext_columns.count() > 0) {
     OrderFTColumns order_ft_columns;
     int64_t ft_begin_index = 0;  // first column idx in ft index
     int64_t ft_end_index = 0;    // last column idx in ft index
@@ -484,7 +538,9 @@ int ObIndexBuilderUtil::adjust_fulltext_args(
         LOG_WARN("generate fulltext column failed", K(ret));
       } else if (OB_ISNULL(tmp_ft_col)) {
         LOG_WARN("fulltext column schema is null", K(ret));
-      } else if (FALSE_IT(ft_sort_item.column_name_ = tmp_ft_col->get_column_name_str())) {
+      } else if (OB_FAIL(ob_write_string(*allocator, tmp_ft_col->get_column_name_str(), ft_sort_item.column_name_))) {
+        // to keep the memory lifetime of column_name consistent with index_arg
+        LOG_WARN("deep copy column name failed", K(ret));
       } else if (OB_FAIL(new_sort_items.push_back(ft_sort_item))) {
         LOG_WARN("store new sort items failed", K(ret));
       } else if (data_schema.get_column_count() > old_cnt) {
@@ -507,19 +563,24 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
     ObCreateIndexArg& arg, ObTableSchema& data_schema, ObIArray<ObColumnSchemaV2*>& gen_columns)
 {
   int ret = OB_SUCCESS;
-  ObIArray<ObColumnSortItem>& sort_items = arg.index_columns_;
+  ObIAllocator *allocator = arg.index_schema_.get_allocator();
+  ObIArray<ObColumnSortItem> &sort_items = arg.index_columns_;
   ObArray<ObColumnSortItem> new_sort_items;
   ObWorker::CompatMode compat_mode = ObWorker::CompatMode::MYSQL;
   uint64_t tenant_id = extract_tenant_id(data_schema.get_table_id());
   ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode);
   CompatModeGuard compat_guard(compat_mode);
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < sort_items.count(); ++i) {
     int64_t old_cnt = data_schema.get_column_count();
     ObColumnSortItem new_sort_item = sort_items.at(i);
     ObColumnSchemaV2* gen_col = NULL;
     if (new_sort_item.prefix_len_ > 0) {
       // handle prefix column index
-      if (OB_FAIL(generate_prefix_column(new_sort_item, data_schema, gen_col))) {
+      if (OB_FAIL(generate_prefix_column(new_sort_item, arg.sql_mode_, data_schema, gen_col))) {
         LOG_WARN("generate prefix column failed", K(ret));
       } else {
         new_sort_item.column_name_ = gen_col->get_column_name_str();
@@ -565,7 +626,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
         LOG_WARN("only pure functions can be indexed", K(ret));
       } else if (!expr->is_column_ref_expr()) {
         // real index expr, so generate hidden generated column in data table schema
-        if (OB_FAIL(generate_ordinary_generated_column(*expr, data_schema, gen_col))) {
+        if (OB_FAIL(generate_ordinary_generated_column(*expr, arg.sql_mode_, data_schema, gen_col))) {
           LOG_WARN("generate ordinary generated column failed", K(ret));
         } else {
           new_sort_item.column_name_ = gen_col->get_column_name_str();
@@ -578,7 +639,11 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(new_sort_items.push_back(new_sort_item))) {
+      ObString tmp_name = new_sort_item.column_name_;
+      // Keep the memory lifetime of column_name consistent with index_arg
+      if (OB_FAIL(ob_write_string(*allocator, tmp_name, new_sort_item.column_name_))) {
+        LOG_WARN("deep copy column name failed", K(ret));
+      } else if (OB_FAIL(new_sort_items.push_back(new_sort_item))) {
         LOG_WARN("store new sort item failed", K(ret), K(new_sort_item));
       } else if (data_schema.get_column_count() > old_cnt) {
         LOG_INFO("column info", KPC(gen_col), K(old_cnt), K(data_schema.get_column_count()));
@@ -722,8 +787,8 @@ int ObIndexBuilderUtil::generate_fulltext_column(
   return ret;
 }
 
-int ObIndexBuilderUtil::generate_ordinary_generated_column(
-    ObRawExpr& expr, ObTableSchema& data_schema, ObColumnSchemaV2*& gen_col, const uint64_t index_id)
+int ObIndexBuilderUtil::generate_ordinary_generated_column(ObRawExpr& expr, const ObSQLMode sql_mode,
+    ObTableSchema& data_schema, ObColumnSchemaV2*& gen_col, const uint64_t index_id)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 tmp_gen_col;
@@ -756,6 +821,9 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
         tmp_gen_col.set_table_id(data_schema.get_table_id());
         tmp_gen_col.set_column_id(data_schema.get_max_used_column_id() + 1);
         tmp_gen_col.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        if (is_pad_char_to_full_length(sql_mode)) {
+          tmp_gen_col.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+        }
         tmp_gen_col.set_is_hidden(true);
         tmp_gen_col.set_data_type(expr.get_data_type());
         tmp_gen_col.set_collation_type(expr.get_collation_type());
@@ -819,8 +887,8 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
   return ret;
 }
 
-int ObIndexBuilderUtil::generate_prefix_column(
-    const ObColumnSortItem& sort_item, ObTableSchema& data_schema, ObColumnSchemaV2*& prefix_col)
+int ObIndexBuilderUtil::generate_prefix_column(const ObColumnSortItem& sort_item, const ObSQLMode sql_mode,
+    ObTableSchema& data_schema, ObColumnSchemaV2*& prefix_col)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2* old_column = NULL;
@@ -898,6 +966,9 @@ int ObIndexBuilderUtil::generate_prefix_column(
         int32_t data_len = static_cast<int32_t>(min(sort_item.prefix_len_, old_column->get_data_length()));
         prefix_column.set_data_length(data_len);
         prefix_column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        if (is_pad_char_to_full_length(sql_mode)) {
+          prefix_column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
+        }
         prefix_column.set_is_hidden(true);  // for debug
         old_column->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
         prefix_column.set_prev_column_id(UINT64_MAX);

@@ -195,6 +195,9 @@ public:
       const share::schema::ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr,
       const ObSchemaChecker* schema_checker = NULL,
       const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
+  static int build_pad_expr_recursively(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session,
+      const share::schema::ObTableSchema& table_schema, const share::schema::ObColumnSchemaV2& gen_col_schema,
+      ObRawExpr*& expr);
   static int build_raw_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info, const ParseNode& node,
       ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns, common::ObIArray<ObVarInfo>& sys_vars,
       common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, common::ObIArray<ObWinFunRawExpr*>& win_exprs,
@@ -273,10 +276,11 @@ public:
   static int create_param_expr(
       ObRawExprFactory& expr_factory, int64_t param_idx, ObRawExpr*& expr, bool is_exec_param = false);
   static int build_trim_expr(const share::schema::ObColumnSchemaV2* column_schema, ObRawExprFactory& expr_factory,
-      ObSQLSessionInfo* session_info, ObRawExpr*& expr);
+      const ObSQLSessionInfo* session_info, ObRawExpr*& expr);
   static bool need_column_conv(const ColumnItem& column, ObRawExpr& expr);
   static int build_pad_expr(ObRawExprFactory& expr_factory, bool is_char,
-      const share::schema::ObColumnSchemaV2* column_schema, ObRawExpr*& expr, sql::ObSQLSessionInfo* session_info);
+      const share::schema::ObColumnSchemaV2* column_schema, ObRawExpr*& expr,
+      const sql::ObSQLSessionInfo* session_info);
   static bool need_column_conv(const ObExprResType& expected_type, const ObRawExpr& expr);
   static int build_column_conv_expr(ObRawExprFactory& expr_factory,
       const share::schema::ObColumnSchemaV2* column_schema, ObRawExpr*& expr,

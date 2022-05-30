@@ -43,13 +43,14 @@ typedef common::ObFixedArray<PartParamIdxArray, common::ObIAllocator> BatchParam
 typedef common::ObFixedArray<ObImplicitCursorInfo, common::ObIAllocator> ImplicitCursorInfoArray;
 
 struct ObRemoteSqlInfo {
-  ObRemoteSqlInfo() : use_ps_(false), is_batched_stmt_(false), remote_sql_(), ps_params_(nullptr)
+  ObRemoteSqlInfo() : use_ps_(false), is_batched_stmt_(false), ps_param_cnt_(0), remote_sql_(), ps_params_(nullptr)
   {}
 
-  TO_STRING_KV(K_(use_ps), K_(is_batched_stmt), K_(remote_sql), KPC_(ps_params));
+  DECLARE_TO_STRING;
 
   bool use_ps_;
   bool is_batched_stmt_;
+  int32_t ps_param_cnt_;
   common::ObString remote_sql_;
   ParamStore* ps_params_;
 };
@@ -135,6 +136,7 @@ public:
   {
     return consistency_level_;
   }
+  void restore_param_store(const int64_t param_count);
   // param store
   int reserve_param_space(int64_t param_count);
   const ParamStore& get_param_store() const

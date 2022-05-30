@@ -1,12 +1,23 @@
-// Copyright 2020 Alibaba Inc. All Rights Reserved
-// Author:
-//     yanfeng <yangyi.yyy@alibaba-inc.com>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_archive_log_round_stat.h"
 #include "share/backup/ob_backup_path.h"
 #include "lib/lock/ob_lock_guard.h"
 #include <algorithm>
+#include "lib/container/ob_array.h"
+#include "lib/container/ob_array_iterator.h"
+
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

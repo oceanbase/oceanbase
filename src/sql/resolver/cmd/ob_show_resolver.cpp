@@ -750,7 +750,6 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
       }
       case T_SHOW_TRIGGERS: {
         // Trigger is not supported in mysql mode and this is only used for mysqldump tool now.
-        // https://work.aone.alibaba-inc.com/issue/21188380
         if (is_oracle_mode) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support show triggers in oracle mode", K(ret));
@@ -1588,7 +1587,8 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
       case T_NVARCHAR2:
       case T_NCHAR:
       case T_UROWID:
-      case T_LOB: {
+      case T_LOB: 
+      case T_JSON:{
         break;  // do nothing
       }
       case T_COLUMN_REF: {

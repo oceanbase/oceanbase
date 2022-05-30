@@ -198,7 +198,7 @@ int ObGrantResolver::resolve_grant_role_to_ur(const ParseNode* grant_role, ObGra
                    role_info),
                 tenant_id,
                 role_name);
-            if (OB_USER_NOT_EXIST == ret) {
+            if (OB_USER_NOT_EXIST == ret || OB_ISNULL(role_info) || !role_info->is_role()) {
               ret = OB_ROLE_NOT_EXIST;
               LOG_USER_ERROR(OB_ROLE_NOT_EXIST, role_name.length(), role_name.ptr());
             }

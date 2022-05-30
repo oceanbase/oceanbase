@@ -29,9 +29,10 @@ int ObOptimizer::optimize(ObDMLStmt& stmt, ObLogPlan*& logical_plan)
   const ObSQLSessionInfo* session = ctx_.get_session_info();
   int64_t last_mem_usage = ctx_.get_allocator().total();
   int64_t optimizer_mem_usage = 0;
-  if (OB_ISNULL(query_ctx) || OB_ISNULL(session)) {
+  ObTaskExecutorCtx* task_exec_ctx = ctx_.get_task_exec_ctx();
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(session) || OB_ISNULL(task_exec_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session));
+    LOG_WARN("invalid arguments", K(ret), K(query_ctx), K(session), K(task_exec_ctx));
   } else if (OB_FAIL(init_env_info(stmt))) {
     LOG_WARN("failed to init px info", K(ret));
   } else if (OB_FAIL(generate_plan_for_temp_table(stmt))) {
@@ -60,6 +61,22 @@ int ObOptimizer::optimize(ObDMLStmt& stmt, ObLogPlan*& logical_plan)
     if (is_forbidden) {
       ret = OB_OP_NOT_ALLOW;
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Access tables from multiple tenants");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (ctx_.get_exec_ctx()->get_sql_ctx()->is_remote_sql_ && plan->get_phy_plan_type() != OB_PHY_PLAN_LOCAL) {
+      // set table location to refresh location cache
+      ObSEArray<ObTablePartitionInfo*, 8> table_partitions;
+      if (OB_FAIL(plan->get_global_table_partition_info(table_partitions))) {
+        LOG_WARN("failed to get global table partition info", K(ret));
+      } else if (OB_FAIL(task_exec_ctx->set_table_locations(table_partitions))) {
+        LOG_WARN("failed to set table locations", K(ret));
+      }
+
+      if (OB_SUCC(ret)) {
+        ret = OB_LOCATION_NOT_EXIST;
+        LOG_WARN("best plan for remote sql is not local", K(ret), K(plan->get_phy_plan_type()));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -238,6 +255,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt& stmt, const ObSQLSessionInf
   if (!stmt.is_pdml_supported_stmt()) {
     is_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() && !static_cast<const ObInsertStmt&>(stmt).value_from_select()) {
+    is_use_pdml = false;
+  } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt()) &&
+             static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()) {
     is_use_pdml = false;
   } else if (OB_FAIL(session.get_force_parallel_dml_dop(force_pdml_dop))) {
     LOG_WARN("fail get force parallel dml session val", K(ret));

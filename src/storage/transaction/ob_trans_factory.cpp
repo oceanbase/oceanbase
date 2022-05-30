@@ -48,8 +48,6 @@ int64_t ObPartitionTransCtxMgrFactory::alloc_count_ = 0;
 int64_t ObPartitionTransCtxMgrFactory::release_count_ = 0;
 const char* ObPartitionTransCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
 
-static TransObjFactory<TransRpcTask> trans_rpc_task_factory("OB_TRANS_RPC_TASK");
-
 #define OB_FREE(object, ...) ob_free(object)
 #define RP_FREE(object, LABEL) rp_free(object, LABEL)
 #define OB_ALLOC(object, LABEL) object##alloc()
@@ -258,42 +256,12 @@ const char* ObPartitionTransCtxMgrFactory::get_mod_type()
   return mod_type_;
 }
 
-// TransRpcTaskFactory
-TransRpcTask* TransRpcTaskFactory::alloc()
-{
-  return trans_rpc_task_factory.alloc();
-}
-
-void TransRpcTaskFactory::release(TransRpcTask* task)
-{
-  if (OB_ISNULL(task)) {
-    TRANS_LOG(ERROR, "TransRpcTask pointer is null when released", KP(task));
-  } else {
-    trans_rpc_task_factory.release(task);
-    task = NULL;
-  }
-}
-
-int64_t TransRpcTaskFactory::get_alloc_count()
-{
-  return trans_rpc_task_factory.get_alloc_count();
-}
-
-int64_t TransRpcTaskFactory::get_release_count()
-{
-  return trans_rpc_task_factory.get_release_count();
-}
-
-const char* TransRpcTaskFactory::get_mod_type()
-{
-  return trans_rpc_task_factory.get_mod_type();
-}
-
 MAKE_OB_ALLOC(ObDupTablePartitionMgr, OB_DUP_TABLE_PARTITION_MGR)
 MAKE_OB_ALLOC(ObGtsRpcProxy, OB_GTS_RPC_PROXY)
 MAKE_OB_ALLOC(ObGtsRequestRpc, OB_GTS_REQUEST_RPC)
 
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ClogBuf, OB_TRANS_CLOG_BUF)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(TransRpcTask, OB_TRANS_RPC_TASK)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(MutatorBuf, OB_TRANS_MUTATOR_BUF)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(SubmitLogTask, OB_TRANS_SUBMIT_LOG_TASK)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(AllocLogIdTask, OB_TRANS_ALLOC_LOG_ID_TASK)

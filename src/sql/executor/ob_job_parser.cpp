@@ -114,11 +114,13 @@ int ObJobParser::split_jobs(ObExecContext& exec_ctx, ObPhysicalPlan* phy_plan, O
       job->set_outer_join_child_job(true);
     }
   }
-  for (int32_t i = 0; OB_SUCC(ret) && i < phy_op->get_child_num(); ++i) {
-    if (OB_FAIL(split_jobs(
-            exec_ctx, phy_plan, phy_op->get_child(i), exec_id, job_ctrl, spfactory, NULL != job ? *job : cur_job))) {
-      LOG_WARN("fail to split jobs for child op", K(ret), K(exec_id), K(i));
-    } else {
+  if (OB_NOT_NULL(phy_op)) {
+    for (int32_t i = 0; OB_SUCC(ret) && i < phy_op->get_child_num(); ++i) {
+      if (OB_FAIL(split_jobs(
+              exec_ctx, phy_plan, phy_op->get_child(i), exec_id, job_ctrl, spfactory, NULL != job ? *job : cur_job))) {
+        LOG_WARN("fail to split jobs for child op", K(ret), K(exec_id), K(i));
+      } else {
+      }
     }
   }
   return ret;

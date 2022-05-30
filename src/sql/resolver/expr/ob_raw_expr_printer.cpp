@@ -329,6 +329,8 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
         SET_SYMBOL_IF_EMPTY("not");
       case T_OP_NOT_EXISTS:
         SET_SYMBOL_IF_EMPTY("not exists");
+      case T_OP_BIT_NEG:
+        SET_SYMBOL_IF_EMPTY("~");
       case T_OP_EXISTS: {
         SET_SYMBOL_IF_EMPTY("exists");
         if (1 != expr->get_param_count()) {
@@ -731,6 +733,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr* expr)
         SET_SYMBOL_IF_EMPTY("stddev_pop");
       case T_FUN_STDDEV_SAMP:
         SET_SYMBOL_IF_EMPTY("stddev_samp");
+      case T_FUN_JSON_ARRAYAGG:
+        SET_SYMBOL_IF_EMPTY("json_arrayagg");
+      case T_FUN_JSON_OBJECTAGG:
+        SET_SYMBOL_IF_EMPTY("json_objectagg");
       case T_FUN_WM_CONCAT: {
         SET_SYMBOL_IF_EMPTY("wm_concat");
         DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
@@ -1349,6 +1355,78 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
         }
         break;
       }
+      case T_FUN_SYS_JSON_VALUE: {
+        if (OB_UNLIKELY(7 != expr->get_param_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+        } else {
+          // json_value(expr(0), expr(1) returning cast_type xxx on empty xxx on error)
+          DATA_PRINTF("json_value(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(",");
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(" returning ");
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(print_cast_type(expr->get_param_expr(2)))) {
+              LOG_WARN("fail to print cast_type", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().is_int()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("type value isn't int value");
+            } else {
+              int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().get_int();
+              switch (type) {
+                case 0:
+                  DATA_PRINTF(" error");
+                  break;
+                case 1:
+                case 3:
+                  DATA_PRINTF(" null");
+                  break;
+                case 2:
+                  DATA_PRINTF(" default ");
+                  PRINT_EXPR(expr->get_param_expr(4));
+                  break;
+                default:
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid type value.", K(type));
+                  break;
+              }
+            }
+          }
+          DATA_PRINTF(" on empty");
+          if (OB_SUCC(ret)) {
+            if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().is_int()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("type value isn't int value");
+            } else {
+              int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
+              switch (type) {
+                case 0:
+                  DATA_PRINTF(" error");
+                  break;
+                case 1:
+                case 3:
+                  DATA_PRINTF(" null");
+                  break;
+                case 2:
+                  DATA_PRINTF(" default ");
+                  PRINT_EXPR(expr->get_param_expr(6));
+                  break;
+                default:
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid type value.", K(type));
+                  break;
+              }
+            }
+          }
+          DATA_PRINTF(" on error");
+          DATA_PRINTF(")");
+        }
+        break;
+      }
       default: {
         // substr
         // date, month
@@ -1465,6 +1543,10 @@ int ObRawExprPrinter::print(ObWinFunRawExpr* expr)
         SET_SYMBOL_IF_EMPTY("stddev_pop");
       case T_FUN_STDDEV_SAMP:
         SET_SYMBOL_IF_EMPTY("stddev_samp");
+      case T_FUN_JSON_ARRAYAGG:
+        SET_SYMBOL_IF_EMPTY("json_arrayagg");
+      case T_FUN_JSON_OBJECTAGG:
+        SET_SYMBOL_IF_EMPTY("json_objectagg");
       case T_FUN_WM_CONCAT: {
         SET_SYMBOL_IF_EMPTY("wm_concat");
         DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));

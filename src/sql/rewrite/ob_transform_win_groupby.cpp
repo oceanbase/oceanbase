@@ -459,9 +459,11 @@ int ObTransformWinGroupBy::check_outer_stmt_validity(WinGroupByHelper& helper, b
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  if (OB_ISNULL(helper.outer_stmt_) || OB_ISNULL(helper.inner_stmt_)) {
+  if (OB_ISNULL(helper.outer_stmt_) || OB_ISNULL(helper.inner_stmt_)
+      || OB_ISNULL(helper.outer_table_item_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(helper.outer_stmt_), K(helper.inner_stmt_), K(ret));
+    LOG_WARN("get unexpected null", K(helper.outer_stmt_), K(helper.inner_stmt_), K(helper.outer_table_item_),
+        K(ret));
   } else if (helper.outer_stmt_->get_group_exprs().empty() || !helper.outer_stmt_->get_condition_exprs().empty() ||
              !helper.outer_stmt_->get_window_func_exprs().empty() ||
              !helper.outer_stmt_->get_subquery_exprs().empty() || helper.outer_stmt_->has_sequence() ||
@@ -484,14 +486,26 @@ int ObTransformWinGroupBy::check_outer_stmt_validity(WinGroupByHelper& helper, b
       }
     }
     if (OB_SUCC(ret) && is_valid) {
+      ObSEArray<ObRawExpr*, 16> all_column_exprs;
       ObSEArray<ObRawExpr*, 16> aggr_exprs;
+      ObSEArray<ObRawExpr*, 16> groupby_exprs;
       ObSEArray<ObRawExpr*, 16> column_exprs;
-      if (OB_FAIL(append(aggr_exprs, helper.outer_stmt_->get_aggr_items()))) {
+      if (OB_FAIL(helper.outer_stmt_->get_column_exprs(helper.outer_table_item_->table_id_,
+                                                       all_column_exprs))) {
+        LOG_WARN("failed to get column exprs", K(ret));
+      } else if (OB_FAIL(append(aggr_exprs, helper.outer_stmt_->get_aggr_items()))) {
         LOG_WARN("failed to append exprs", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(aggr_exprs, column_exprs))) {
         LOG_WARN("failed to extract column exprs", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(all_column_exprs, column_exprs,
+                                                          column_exprs))) {
+        LOG_WARN("failed to intersect exprs", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(all_column_exprs,
+                                                          helper.outer_stmt_->get_group_exprs(),
+                                                          groupby_exprs))) {
+        LOG_WARN("failed to intersect exprs", K(ret));
       } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
-                     helper.outer_stmt_->get_group_exprs(), *helper.inner_stmt_, helper.ref_groupby_exprs_))) {
+                     groupby_exprs, *helper.inner_stmt_, helper.ref_groupby_exprs_))) {
         LOG_WARN("failed to convert column expr to select expr", K(ret));
       } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
                      column_exprs, *helper.inner_stmt_, helper.ref_column_exprs_))) {

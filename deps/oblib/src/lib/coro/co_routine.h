@@ -202,6 +202,7 @@ private:
   CoRoutine();
 
   static void __start(boost::context::detail::transfer_t from);
+  void start_without_jump();
 
 private:
   CoIdx idx_;
@@ -235,8 +236,7 @@ public:
   void start();
   // Destroy resources.
   void destroy();
-  void at_exit() override
-  {}
+  void at_exit() override;
 
   void usleep(uint32_t usec) final;
   void sleep_until(int64_t abs_time) final;

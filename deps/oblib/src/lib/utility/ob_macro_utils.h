@@ -888,6 +888,8 @@
 #define CACHE_ALIGN_SIZE 64
 #elif __aarch64__
 #define CACHE_ALIGN_SIZE 128
+#else
+#define CACHE_ALIGN_SIZE 64
 #endif
 
 #define CACHE_ALIGNED __attribute__((aligned(CACHE_ALIGN_SIZE)))

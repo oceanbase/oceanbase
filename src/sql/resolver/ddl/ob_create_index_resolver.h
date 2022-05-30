@@ -33,12 +33,12 @@ protected:
   int resolve_index_table_name_node(ParseNode* index_table_name_node, ObCreateIndexStmt* crt_idx_stmt);
   int resolve_index_column_node(ParseNode* index_column_node, const bool is_fulltext_index,
       ParseNode* table_option_node, ObCreateIndexStmt* crt_idx_stmt, const share::schema::ObTableSchema* tbl_schema);
-  int resolve_index_option_node(
-      ParseNode* index_option_node, ObCreateIndexStmt* crt_idx_stmt, const share::schema::ObTableSchema* tbl_schema);
+  int resolve_index_option_node(ParseNode* index_option_node, ObCreateIndexStmt* crt_idx_stmt,
+      const share::schema::ObTableSchema* tbl_schema, bool is_partitioned);
   int resolve_index_method_node(ParseNode* index_method_node, ObCreateIndexStmt* crt_idx_stmt);
   int check_generated_partition_column(share::schema::ObTableSchema& index_schema);
   int add_sort_column(const obrpc::ObColumnSortItem& sort_column);
-  int set_table_option_to_stmt();
+  int set_table_option_to_stmt(bool is_partitioned);
   int add_new_indexkey_for_oracle_temp_table();
 
 private:

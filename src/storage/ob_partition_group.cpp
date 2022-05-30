@@ -107,6 +107,7 @@ ObPartitionGroup::ObPartitionGroup()
 
 ObPartitionGroup::~ObPartitionGroup()
 {
+  FLOG_INFO("deconstruct ObPartitionGroup", K(this), K_(pkey));
   destroy();
 }
 
@@ -1876,7 +1877,6 @@ int ObPartitionGroup::replay_split_source_log(
         "replay split source log failed",
         K(ret),
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         "used_time",
@@ -1885,7 +1885,6 @@ int ObPartitionGroup::replay_split_source_log(
     STORAGE_LOG(INFO,
         "replay split source log success",
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         K(write_slog),
@@ -2475,7 +2474,7 @@ int ObPartitionGroup::split_dest_partition(const ObPartitionSplitInfo& split_inf
                     split_info.get_spp()))) {
               STORAGE_LOG(WARN, "split dest log init failed", K(ret));
             } else if (OB_FAIL(submit_split_dest_log_(log))) {
-              STORAGE_LOG(WARN, "submit split dest log failed", K(ret), K(log));
+              STORAGE_LOG(WARN, "submit split dest log failed", K(ret));
             } else {
               // do nothing
             }
@@ -2552,10 +2551,10 @@ int ObPartitionGroup::push_reference_tables(const ObIArray<ObPartitionKey>& dest
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(check_if_dest_pg_ready_(dest_array, is_dest_partition_ready))) {
-    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret), K(log));
+    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret));
   } else if (!is_dest_partition_ready) {
     ret = OB_EAGAIN;
-    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret), K(log));
+    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret));
   } else if (OB_FAIL(push_reference_tables_(dest_array, split_version))) {
     STORAGE_LOG(WARN, "failed to push reference tables", K(ret), K(dest_array), K(split_version));
   }
@@ -3150,7 +3149,7 @@ int ObPartitionGroup::check_can_do_merge(bool& can_merge, bool& need_merge)
 ObReplicaType ObPartitionGroup::get_replica_type() const
 {
   int tmp_ret = OB_SUCCESS;
-  ObReplicaType replica_type;
+  ObReplicaType replica_type = ObReplicaType::REPLICA_TYPE_MAX;
 
   if (OB_SUCCESS != (tmp_ret = pg_storage_.get_replica_type(replica_type))) {
     STORAGE_LOG(WARN, "get replica_type error", K(tmp_ret), K_(pkey), K(replica_type));
@@ -3453,8 +3452,7 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
         // max_log_ts as overflow(the requirement from the storage layer). while
         // the data may already synced and we have no chance to mark the data
         // except traversing all data in the memtable. So we choose to mark the
-        // end_log_ts as the max_majority_log_ts as well. The detailed issue can
-        // be found in https://work.aone.alibaba-inc.com/issue/33865988
+        // end_log_ts as the max_majority_log_ts as well.
         //
         // NB: we never maintain the max_mjority_log_ts for follower, so we just
         // use the variable for the corner case of leader transfer.
@@ -3942,12 +3940,8 @@ int ObPartitionGroup::freeze(const bool emergency, const bool force, int64_t& fr
   ObPartitionGroupLockGuard guard(lock_, 0, PGLOCKSTORAGE);
 
   if (with_data_()) {
-    // F replica, need freeze;
     ret = freeze_log_and_data_v2_(emergency, force, freeze_snapshot);
-    // F/R replica are with data because they have sstable. The freeze operation will be skipped at
-    // lower layer because they do not have memtable.
   } else {
-    // L replica or empty PG
     ret = freeze_log_(force);
   }
 
@@ -6122,6 +6116,20 @@ int ObPartitionGroup::inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, con
     if (OB_FAIL(pg_storage_.inc_pending_elr_count(mt_ctx, log_ts))) {
       STORAGE_LOG(WARN, "failed to inc_pending_elr_count", K(ret), K_(pkey), K(log_ts));
     }
+  }
+
+  return ret;
+}
+
+int ObPartitionGroup::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "Partition object not initialized", K(ret), K(is_inited_));
+  } else {
+    pls_->try_update_max_majority_log(log_id, log_ts);
   }
 
   return ret;

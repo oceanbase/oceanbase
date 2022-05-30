@@ -265,7 +265,12 @@ void ObRawExpr::reset()
 int ObRawExpr::get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
+  } else if (is_stack_overflow) {
+    LOG_DEBUG("too deep recursive", K(ret), K(is_stack_overflow)); 
+  } else if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
     if (OB_FAIL(orig_expr_->get_name(buf, buf_len, pos, type))) {
       LOG_WARN("fail to get name for orig expr", K(ret));
     }
@@ -430,6 +435,11 @@ int ObRawExpr::postorder_accept(ObRawExprVisitor& visitor)
   return ret;
 }
 
+bool ObRawExpr::is_bool_expr() const
+{
+  return IS_BOOL_OP(type_) || (is_const_expr() && static_cast<const ObConstRawExpr*>(this)->is_literal_bool());
+}
+
 int ObRawExpr::postorder_replace(ObRawExprVisitor& visitor)
 {
   int ret = OB_SUCCESS;
@@ -488,7 +498,8 @@ bool ObRawExpr::is_non_pure_sys_func_expr() const
         T_FUN_SYS_UNIX_TIMESTAMP == type_ || T_FUN_SYS_UTC_TIMESTAMP == type_ || T_FUN_SYS_RAND == type_ ||
         T_FUN_SYS_UUID == type_ || T_FUN_SYS_SLEEP == type_ || T_FUN_SYS_LAST_INSERT_ID == type_ ||
         T_FUN_SYS_ROW_COUNT == type_ || T_FUN_SYS_FOUND_ROWS == type_ || T_FUN_SYS_REGEXP_INSTR == type_ ||
-        T_FUN_SYS_REGEXP_LIKE == type_ || T_FUN_SYS_REGEXP_REPLACE == type_ || T_FUN_SYS_REGEXP_SUBSTR == type_) {
+        T_FUN_SYS_REGEXP_LIKE == type_ || T_FUN_SYS_REGEXP_REPLACE == type_ || T_FUN_SYS_REGEXP_SUBSTR == type_  ||
+        T_FUN_SYS_UUID_SHORT == type_) {
       return true;
     }
   }
@@ -546,11 +557,13 @@ int ObConstRawExpr::deep_copy(
           }
         }
         obj_meta_ = other.get_expr_obj_meta();
+        is_literal_bool_ = other.is_literal_bool();
       }
     } else {
       value_ = other.get_value();
       literal_prefix_ = other.get_literal_prefix();
       obj_meta_ = other.get_expr_obj_meta();
+      is_literal_bool_ = other.is_literal_bool();
     }
   }
   return ret;
@@ -583,6 +596,7 @@ void ObConstRawExpr::reset()
   ObRawExpr::reset();
   value_.reset();
   literal_prefix_.reset();
+  is_literal_bool_ = false;
 }
 
 void ObConstRawExpr::set_is_date_unit()
@@ -1904,7 +1918,7 @@ int ObOpRawExpr::get_subquery_comparison_name(
 void ObOpRawExpr::set_expr_type(ObItemType type)
 {
   type_ = type;
-  if ((T_OP_IN == type_ || T_OP_NOT_IN == type_) && GCONF.enable_static_engine_for_query()) {
+  if ((T_OP_IN == type_ || T_OP_NOT_IN == type_)) {
     set_deduce_type_adding_implicit_cast(false);
   }
 }
@@ -2698,94 +2712,130 @@ ObExprOperator* ObSysFunRawExpr::get_op()
   return op;
 }
 
+int ObSysFunRawExpr::check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type)
+{
+  int ret = OB_SUCCESS;
+  switch (param_num) {
+    case ObExprOperator::MORE_THAN_ZERO: {
+      if (param_count <= 0) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function can not be 0", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::MORE_THAN_ONE: {
+      if (param_count <= 1) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be more than 1", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::MORE_THAN_TWO: {
+      if (param_count <= 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be more than 2", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::ZERO_OR_ONE: {
+      if (0 != param_count && 1 != param_count) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 0 or 1", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::ONE_OR_TWO: {
+      if (param_count != 1 && param_count != 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 1 or 2", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::TWO_OR_THREE: {
+      if (param_count != 2 && param_count != 3) {
+        if (share::is_oracle_mode() && (T_FUN_SYS_RPAD == type || T_FUN_SYS_LPAD == type)) {
+          if (param_count > 3) {
+            ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
+            LOG_WARN("param count larger than 3", K(ret), K(func_name_), K(param_count));
+          } else {
+            ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
+            LOG_WARN("param count less than 2", K(ret), K(func_name_), K(param_count));
+          }
+        } else {
+          ret = OB_ERR_PARAM_SIZE;
+          LOG_WARN("Param num of function should be 2 or 3", K(func_name_), K(ret), K(param_count));
+        }
+      } else if (!share::is_oracle_mode() && T_FUN_SYS_REPLACE == type && param_count != 3) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be 3", K(func_name_), K(ret), K(share::is_oracle_mode()));
+      }
+      break;
+    }
+    case ObExprOperator::OCCUR_AS_PAIR: {
+      if (param_count % 2 != 0) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("Param num of function should be even", K(func_name_), K(ret));
+      }
+      break;
+    }
+    case ObExprOperator::PARAM_NUM_UNKNOWN: {
+      // nothing
+      break;
+    }
+    default: {
+      if (param_count != param_num) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid Param num of function", K(func_name_), K(param_num), K(param_count), K(ret));
+      }
+      break;
+    }
+  }
+  if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
+      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
+  }
+  return ret;
+}
+
 int ObSysFunRawExpr::check_param_num()
 {
   int ret = OB_SUCCESS;
-  ObExprOperator* op = NULL;
+  ObExprOperator *op = NULL;
   ObExprOperatorType type;
   if (OB_UNLIKELY(T_INVALID == (type = ObExprOperatorFactory::get_type_by_name(func_name_)))) {
     ret = OB_ERR_FUNCTION_UNKNOWN;
+    // should response error to USER
     LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
+    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
   } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to make function", K(func_name_), K(ret));
   } else {
     int32_t param_num = op->get_param_num();
-    switch (param_num) {
-      case ObExprOperator::MORE_THAN_ZERO: {
-        if (get_param_count() <= 0) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function can not be 0", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::MORE_THAN_ONE: {
-        if (get_param_count() <= 1) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be more than 1", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::MORE_THAN_TWO: {
-        if (get_param_count() <= 2) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be more than 2", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::ZERO_OR_ONE: {
-        if (0 != get_param_count() && 1 != get_param_count()) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 0 or 1", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::ONE_OR_TWO: {
-        if (get_param_count() != 1 && get_param_count() != 2) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 1 or 2", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::TWO_OR_THREE: {
-        if (get_param_count() != 2 && get_param_count() != 3) {
-          if (share::is_oracle_mode() && (T_FUN_SYS_RPAD == type || T_FUN_SYS_LPAD == type)) {
-            if (get_param_count() > 3) {
-              ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
-              LOG_WARN("param count larger than 3", K(ret), K(func_name_), K(get_param_count()));
-            } else {
-              ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
-              LOG_WARN("param count less than 2", K(ret), K(func_name_), K(get_param_count()));
-            }
-          } else {
-            ret = OB_ERR_PARAM_SIZE;
-            LOG_WARN("Param num of function should be 2 or 3", K(func_name_), K(ret), K(get_param_count()));
-          }
-        } else if (!share::is_oracle_mode() && T_FUN_SYS_REPLACE == type && get_param_count() != 3) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be 3", K(func_name_), K(ret), K(share::is_oracle_mode()));
-        }
-        break;
-      }
-      case ObExprOperator::OCCUR_AS_PAIR: {
-        if (get_param_count() % 2 != 0) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("Param num of function should be even", K(func_name_), K(ret));
-        }
-        break;
-      }
-      case ObExprOperator::PARAM_NUM_UNKNOWN: {
-        // nothing
-        break;
-      }
-      default: {
-        if (get_param_count() != param_num) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("invalid Param num of function", K(func_name_), K(param_num), K(get_param_count()), K(ret));
-        }
-        break;
-      }
+    int32_t param_count = get_param_count();
+    ret = check_param_num_internal(param_num, param_count, type);
+    if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
+      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
     }
+  }
+  return ret;
+}
+
+int ObSysFunRawExpr::check_param_num(int32_t param_count)
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *op = NULL;
+  ObExprOperatorType type;
+  if (OB_UNLIKELY(T_INVALID == (type = ObExprOperatorFactory::get_type_by_name(func_name_)))) {
+    ret = OB_ERR_FUNCTION_UNKNOWN;
+    // should response error to USER
+    LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
+    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
+  } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to make function", K(func_name_), K(ret));
+  } else {
+    int32_t param_num = op->get_param_num();
+    ret = check_param_num_internal(param_num, param_count, type);
     if (OB_UNLIKELY(OB_ERR_PARAM_SIZE == ret)) {
       LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
     }
@@ -2910,7 +2960,7 @@ int ObSysFunRawExpr::get_cast_type_name(char* buf, int64_t buf_len, int64_t& pos
             LOG_WARN("fail to BUF_PRINTF", K(ret));
           }
         }
-      } else if (ob_is_text_tc(dest_type)) {
+      } else if (ob_is_text_tc(dest_type)|| ob_is_json_tc(dest_type)) {
         // TODO texttc should use default length
         length = ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length();
         if (OB_FAIL(BUF_PRINTF("%s(%d)", type_str, length))) {

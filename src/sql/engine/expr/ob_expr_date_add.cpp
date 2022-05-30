@@ -151,6 +151,7 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
     ObString interval_val;
     int64_t unit_value = 0;
     bool is_neg = false;
+    bool is_json = (ObJsonType == date.get_type());
     number::ObNumber interval_num;
     if (OB_SUCC(unit.get_int(unit_value))) {
       ObDateUnitType unit_val = static_cast<ObDateUnitType>(unit_value);
@@ -231,6 +232,12 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
           if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, date_obj, date_obj))) {
             LOG_WARN("failed to cast to string", K(ret), K(date_obj));
           } else {
+            if (is_json) { // json to string will add quote automatically, here should take off quote
+              ObString str = date_obj.get_string();
+              if (str.length() >= 3) { // 2 quote and content length >= 1
+                date_obj.set_string(date_obj.get_type(), str.ptr() + 1, str.length() - 1);
+              }
+            }
             bool dt_flag = false;
             int tmp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (tmp_ret = ObTimeConverter::str_is_date_format(date_obj.get_string(), dt_flag))) {
@@ -286,6 +293,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr& expr, ObEvalCtx& ctx, ObDat
   ObDatum* date = NULL;
   ObDatum* interval = NULL;
   ObDatum* unit = NULL;
+  bool is_json = (expr.args_[0]->args_ != NULL) && (expr.args_[0]->args_[0]->datum_meta_.type_ == ObJsonType);
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -305,6 +313,12 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr& expr, ObEvalCtx& ctx, ObDat
     } else {
       ObTime ob_time;
       ObTimeConvertCtx cvrt_ctx(get_timezone_info(session), false);
+      if (is_json) { // json to string will add quote automatically, here should take off quote
+        ObString str = date->get_string();
+        if (str.length() >= 3) { // 2 quote and content length >= 1
+          date->set_string(str.ptr() + 1, str.length() - 1);
+        }
+      }
       if (OB_FAIL(ob_datum_to_ob_time_with_date(*date,
               date_type,
               get_timezone_info(session),

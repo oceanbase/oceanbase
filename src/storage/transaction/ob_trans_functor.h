@@ -555,8 +555,8 @@ private:
 
 class IterateMinPrepareVersionBeforeLogtsFunctor {
 public:
-  explicit IterateMinPrepareVersionBeforeLogtsFunctor(const int64_t log_ts)
-      : min_prepare_version_(INT64_MAX), min_logts_(log_ts)
+  explicit IterateMinPrepareVersionBeforeLogtsFunctor(const int64_t freeze_ts)
+      : min_prepare_version_(INT64_MAX), freeze_ts_(freeze_ts)
   {}
   int64_t get_min_prepare_version() const
   {
@@ -573,7 +573,7 @@ public:
       bool has_prepared = false;
       int64_t prepare_version = 0;
       ObPartTransCtx* ctx = static_cast<ObPartTransCtx*>(ctx_base);
-      if (OB_SUCCESS != (tmp_ret = ctx->get_prepare_version_before_logts(min_logts_, has_prepared, prepare_version))) {
+      if (OB_SUCCESS != (tmp_ret = ctx->get_prepare_version_before_logts(freeze_ts_, has_prepared, prepare_version))) {
         TRANS_LOG(WARN, "get prepare version if prepared failed", K(tmp_ret), K(*ctx));
       } else if (!has_prepared || prepare_version >= min_prepare_version_) {
         // do nothing
@@ -587,7 +587,7 @@ public:
 
 private:
   int64_t min_prepare_version_;
-  int64_t min_logts_;
+  int64_t freeze_ts_;
 };
 
 class IterateMinLogIdFunctor {
@@ -1752,7 +1752,8 @@ private:
 
 class ObCleanTransTableFunctor {
 public:
-  explicit ObCleanTransTableFunctor(const int64_t max_cleanout_log_ts) : max_cleanout_log_ts_(max_cleanout_log_ts)
+  explicit ObCleanTransTableFunctor(const ObIArray<int64_t> &max_cleanout_log_ts)
+      : max_cleanout_log_ts_(max_cleanout_log_ts)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
   {
@@ -1767,9 +1768,10 @@ public:
         TRANS_LOG(WARN, "failed to get trans table status info", K(ret));
       } else if ((ObTransTableStatusType::COMMIT == trans_info.status_ ||
                      ObTransTableStatusType::ABORT == trans_info.status_) &&
-                 ctx->is_exiting()) {
-        if (trans_info.end_log_ts_ <= max_cleanout_log_ts_) {
-          if (ctx->is_dirty_trans()) {
+                 ctx->is_exiting() && ctx->is_dirty_trans()) {
+        for (int64_t i = 0; i < max_cleanout_log_ts_.count() - 1; i++) {
+          if (trans_info.start_log_ts_ > max_cleanout_log_ts_.at(i) &&
+              trans_info.end_log_ts_ <= max_cleanout_log_ts_.at(i + 1)) {
             ctx->remove_trans_table();
           }
         }
@@ -1779,7 +1781,7 @@ public:
   }
 
 private:
-  int64_t max_cleanout_log_ts_;
+  const ObIArray<int64_t> &max_cleanout_log_ts_;
 };
 
 class ObCheckHasTerminatedTrxBeforeLogFunction {

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#include <numeric>
 #include "ob_task_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_simple_rate_limiter.h"

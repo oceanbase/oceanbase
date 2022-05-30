@@ -77,9 +77,9 @@ public:
 protected:
   virtual int inner_add_partition(
       ObIPartitionGroup& partition, const bool need_check_tenant, const bool is_replay, const bool allow_multi_value);
-  virtual int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id);
-  virtual int inner_del_partition(const common::ObPartitionKey& pkey);
-  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id);
+  int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id);
+  int inner_del_partition(const common::ObPartitionKey& pkey);
+  virtual int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id);
   virtual int init_partition_group(ObIPartitionGroup& pg, const common::ObPartitionKey& pkey);
   virtual int post_replay_remove_pg_partition(const ObChangePartitionLogEntry& log_entry)
   {
@@ -181,6 +181,7 @@ public:
     }
     return ret;
   }
+  TO_STRING_KV(KP_(pg_mgr), K_(partitions));
 
 private:
   const ObPGMgr* pg_mgr_;

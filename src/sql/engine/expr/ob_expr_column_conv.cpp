@@ -162,6 +162,9 @@ int ObExprColumnConv::convert_skip_null_check(ObObj& result, const ObObj& obj, c
   const ObObj* res_obj = NULL;
   cast_ctx.expect_obj_collation_ = collation_type;
   cast_ctx.dest_collation_ = collation_type;
+
+  ObAccuracy tmp_accuracy = accuracy;
+  cast_ctx.res_accuracy_ = &tmp_accuracy;
   if (OB_UNLIKELY(ob_is_enum_or_set_type(type))) {
     ObExpectType expect_type;
     expect_type.set_type(type);
@@ -349,15 +352,14 @@ int ObExprColumnConv::column_convert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         const int64_t str_len_byte = static_cast<int64_t>(val->len_);
         if (OB_FAIL(datum_accuracy_check(expr, cast_mode, ctx, *val, datum, warning))) {
           LOG_WARN("fail to check accuracy", K(ret), K(datum), K(expr), K(warning));
-          // compatible with old code
-          if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode() && PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+            if (OB_ERR_DATA_TOO_LONG == ret && PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
             ObString column_info_str;
             ObDatum* column_info = NULL;
             if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
               LOG_WARN("evaluate parameter failed", K(ret));
             } else {
               column_info_str = column_info->get_string();
-              LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2,
+              LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2,
                   column_info_str.length(),
                   column_info_str.ptr(),
                   str_len_byte,

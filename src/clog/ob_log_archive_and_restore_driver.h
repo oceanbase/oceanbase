@@ -42,7 +42,7 @@ private:
   const int64_t CLOG_CHECK_RESTORE_PROGRESS_INTERVAL = 2L * 1000 * 1000LL;
   const int64_t CHECK_LOG_ARCHIVE_CHECKPOINT_INTERVAL = 1 * 1000 * 1000LL;  // 1s
   const int64_t CLEAR_TRANS_AFTER_RESTORE_INTERVAL = 5 * 1000 * 1000LL;     // 5s
-  const int64_t ARCHVIE_AND_RESTORE_STATE_DRIVER_INTERVAL = 500 * 1000LL;   // 500ms
+  const int64_t ARCHIVE_AND_RESTORE_STATE_DRIVER_INTERVAL = 500 * 1000LL;   // 500ms
 private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;

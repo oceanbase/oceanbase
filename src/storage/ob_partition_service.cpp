@@ -112,7 +112,7 @@ namespace storage {
 
 #define AUDIT_PARTITION_V2(mem_ctx, op, count)                                        \
   do {                                                                                \
-    if (OB_SUCC(ret)) {                                                               \
+    if (OB_SUCC(ret) && GCONF.enable_record_trace_log) {                              \
       int tmp_ret = OB_SUCCESS;                                                       \
       if (OB_ISNULL((mem_ctx))) {                                                     \
         tmp_ret = OB_ERR_UNEXPECTED;                                                  \
@@ -397,6 +397,8 @@ int ObPartitionService::init(const blocksstable::ObStorageEnv& env, const ObAddr
     LOG_WARN("failed to init ObTableMgr", K(ret));
   } else if (OB_FAIL(ObBuildIndexScheduler::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init ObBuildIndexScheduler", K(ret));
+  } else if (OB_FAIL(ObRetryGhostIndexScheduler::get_instance().init())) {
+    LOG_WARN("fail to init ObRetryGhostIndexScheduler", K(ret));
   } else if (OB_FAIL(ObFreezeInfoMgrWrapper::init(sql_proxy, remote_sql_proxy))) {
     STORAGE_LOG(WARN, "fail to init ObFreezeInfoSnapshotMgr", K(ret));
   } else if (OB_FAIL(garbage_collector_.init(this, txs_, schema_service, GCTX.srv_rpc_proxy_, &sql_proxy, self_addr))) {
@@ -1433,11 +1435,9 @@ int ObPartitionService::add_new_partition(ObIPartitionGroupGuard& partition_guar
   return ret;
 }
 
-int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup *> &partitions)
+int ObPartitionService::add_partitions_to_mgr_(ObIPartitionArrayGuard &partitions)
 {
   int ret = OB_SUCCESS;
-  int64_t added_pg_count = 0;
-  int64_t added_pg_to_file_count = 0;
 
   ObIPartitionGroup* partition = NULL;
   int tmp_ret = OB_SUCCESS;
@@ -1464,11 +1464,8 @@ int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup
         STORAGE_LOG(WARN, "fail to inner add partition, ", K(ret));
       } else {
         ObTenantFileKey file_key(file->get_tenant_id(), file->get_file_id());
-        ++added_pg_count;
         if (OB_FAIL(file_mgr_->add_pg(file_key, partitions.at(i)->get_partition_key()))) {
           LOG_WARN("fail to remove pg from file mgr", K(ret), K(file_key));
-        } else {
-          ++added_pg_to_file_count;
         }
       }
     }
@@ -1489,29 +1486,6 @@ int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup
 
   if (OB_SUCC(ret)) {
     STORAGE_LOG(INFO, "add partition groups to partition service success", K(partitions));
-  } else {
-    STORAGE_LOG(WARN, "add partition groups to partition service fail", K(ret), K(partitions));
-    for (int64_t i = 0; i < added_pg_to_file_count; ++i) {
-      ObStorageFile* file = partitions.at(i)->get_storage_file();
-      ObTenantFileKey file_key(file->get_tenant_id(), file->get_file_id());
-      if (OB_SUCCESS != (tmp_ret = file_mgr_->remove_pg(file_key, partitions.at(i)->get_partition_key()))) {
-        LOG_WARN("failed to inner del partition", K(ret), K(i), K(file_key));
-        ob_abort();
-      }
-    }
-    for (int64_t i = 0; i < added_pg_count; ++i) {
-      const ObPartitionKey& pkey = partitions.at(i)->get_partition_key();
-      if (OB_SUCCESS != (tmp_ret = inner_del_partition(pkey))) {
-        LOG_WARN("failed to inner del partition", K(ret), K(i), K(pkey));
-        ob_abort();
-      }
-    }
-
-    for (int64_t i = added_pg_count; i < partitions.count(); ++i) {
-      partition = partitions.at(i);
-      cp_fty_->free(partition);
-    }
-    partitions.reuse();
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -1521,7 +1495,7 @@ int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup
   return ret;
 }
 
-int ObPartitionService::add_partitions_to_replay_engine(const common::ObIArray<ObIPartitionGroup*>& partitions)
+int ObPartitionService::add_partitions_to_replay_engine_(ObIPartitionArrayGuard &partitions)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2030,7 +2004,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
         ret = E(EventTable::EN_REPLAY_ADD_PARTITION_TO_PG_CLOG_AFTER_CREATE_SSTABLE) OB_SUCCESS;
 #endif
         if (OB_FAIL(ret)) {
-          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret), K(log));
+          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret));
         } else if (sstables_handle.get_count() > 0) {
           if (OB_FAIL(pg->create_pg_partition(arg.partition_key_,
                   data_info.get_publish_version(),
@@ -2192,7 +2166,7 @@ int ObPartitionService::create_batch_partition_groups(
   ObTimeGuard tg(__func__, 100L * 1000L);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObArray<ObIPartitionGroup*> partition_list;
+  ObIPartitionArrayGuard partition_array_guard;
   bool txs_add_success = false;
   bool rp_eg_add_success = false;
   ObArray<ObStorageFileHandle> files_handle;
@@ -2222,8 +2196,9 @@ int ObPartitionService::create_batch_partition_groups(
     ret = OB_TOO_MANY_TENANT_PARTITIONS_ERROR;
     STORAGE_LOG(
         WARN, "reach tenant partition count limit, cannot create new partitions", K(ret), "count", batch_arg.count());
-  } else if (OB_FAIL(partition_list.reserve(batch_arg.count()))) {
-    STORAGE_LOG(WARN, "reserve array failed", K(ret), "count", batch_arg.count());
+  } else if (FALSE_IT(partition_array_guard.set_pg_mgr(pg_mgr_))) {
+  } else if (OB_FAIL(partition_array_guard.reserve(batch_arg.count()))) {
+    STORAGE_LOG(WARN, "reserve partition guard array failed", K(ret), "count", batch_arg.count());
   } else if (OB_FAIL(batch_res.reserve(batch_arg.count()))) {
     STORAGE_LOG(WARN, "reserver res array failed, ", K(ret));
   } else if (OB_FAIL(batch_prepare_splitting(batch_arg))) {
@@ -2276,26 +2251,21 @@ int ObPartitionService::create_batch_partition_groups(
     tg.click();
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(batch_register_election_mgr(is_pg, batch_arg, partition_list, files_handle))) {
+      if (OB_FAIL(batch_register_election_mgr_(is_pg, batch_arg, partition_array_guard, files_handle))) {
         STORAGE_LOG(WARN, "fail to batch register election mgr, ", K(ret));
       }
     }
     tg.click();
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(add_partitions_to_mgr(partition_list))) {
+      if (OB_FAIL(add_partitions_to_mgr_(partition_array_guard))) {
         STORAGE_LOG(WARN, "add partition to mgr failed.", K(ret));
-      }
-    } else {
-      free_partition_list(partition_list);
-      if (OB_SUCCESS != (tmp_ret = SLOGGER.abort())) {
-        STORAGE_LOG(WARN, "commit logger failed to abort", K(tmp_ret));
       }
     }
     tg.click();
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(add_partitions_to_replay_engine(partition_list))) {
+      if (OB_FAIL(add_partitions_to_replay_engine_(partition_array_guard))) {
         STORAGE_LOG(WARN, "add partition to replay engine failed.", K(ret));
       } else {
         rp_eg_add_success = true;
@@ -2304,7 +2274,7 @@ int ObPartitionService::create_batch_partition_groups(
     tg.click();
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(batch_start_partition_election(batch_arg, partition_list))) {
+      if (OB_FAIL(batch_start_partition_election_(batch_arg, partition_array_guard))) {
         STORAGE_LOG(WARN, "batch start partition election failed", K(ret));
       }
     }
@@ -2312,9 +2282,25 @@ int ObPartitionService::create_batch_partition_groups(
 
     if (OB_FAIL(ret)) {
       // do some rollback work
+      SLOGGER.abort();  // abort slogger transaction anyway
+      tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; i < batch_arg.count(); ++i) {
         rollback_partition_register(batch_arg.at(i).partition_key_, txs_add_success, rp_eg_add_success);
-        inner_del_partition(batch_arg.at(i).partition_key_);
+      }
+      for (int64_t i = 0; i < partition_array_guard.count(); ++i) {
+        ObIPartitionGroup *rb_pg = partition_array_guard.at(i);
+        if (OB_ISNULL(rb_pg)) {
+          STORAGE_LOG(ERROR, "rollback pg is null", K(i));
+          ob_abort();
+        }
+        const ObPGKey &rb_pkey = rb_pg->get_partition_key();
+        tmp_ret = remove_pg_from_mgr(rb_pg, true/*write_slog*/);
+        if (OB_SUCCESS == tmp_ret) {
+          // partition object was released by partition service, do nothing
+        } else {
+          STORAGE_LOG(ERROR, "fail to rollback pg", K(tmp_ret), K(rb_pkey), K(rb_pg));
+          ob_abort();
+        }
       }
     }
     tg.click();
@@ -2363,17 +2349,6 @@ int ObPartitionService::create_batch_partition_groups(
   return ret;
 }
 
-void ObPartitionService::free_partition_list(ObArray<ObIPartitionGroup*>& partitions)
-{
-  for (int64_t i = 0; i < partitions.count(); ++i) {
-    ObIPartitionGroup* partition = partitions.at(i);
-    if (NULL != cp_fty_ && NULL != partition) {
-      cp_fty_->free(partition);
-    }
-  }
-  partitions.reuse();
-}
-
 int ObPartitionService::remove_duplicate_partitions(const ObIArray<ObCreatePartitionArg>& batch_arg)
 {
   int ret = OB_SUCCESS;
@@ -2407,7 +2382,14 @@ int ObPartitionService::remove_duplicate_partitions(const ObIArray<ObCreateParti
           if (arg.ignore_member_list_ && (OB_ENTRY_EXIST == partition_map_.contains_key(pkey))) {
             need_retry = true;
             if (REACH_TIME_INTERVAL(100 * 1000)) {
-              STORAGE_LOG(WARN, "partition still exist, need retry. ", K(pkey));
+              int tmp_ret = OB_SUCCESS;
+              ObPGPartition *pg_partition = NULL;
+              if (OB_SUCCESS != (tmp_ret = partition_map_.get(pkey, pg_partition))) {
+                STORAGE_LOG(WARN, "partition still exist, need retry. but get partition failed", K(tmp_ret), K(pkey));
+              } else {
+                STORAGE_LOG(WARN, "partition still exist, need retry. the left partition is", K(pkey), K(pg_partition));
+                partition_map_.revert(pg_partition);
+              }
             }
             break;
           }
@@ -2779,9 +2761,9 @@ int ObPartitionService::standby_update_replica_protection_level()
   return ret;
 }
 
-int ObPartitionService::batch_register_election_mgr(const bool is_pg,
-    const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg, common::ObIArray<ObIPartitionGroup*>& partitions,
-    ObIArray<ObStorageFileHandle>& files_handle)
+int ObPartitionService::batch_register_election_mgr_(const bool is_pg,
+    const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg, ObIPartitionArrayGuard &partitions,
+    ObIArray<ObStorageFileHandle> &files_handle)
 {
   int ret = OB_SUCCESS;
   int64_t index = 0;
@@ -2977,18 +2959,6 @@ int ObPartitionService::batch_register_election_mgr(const bool is_pg,
       files_handle.at(index).reset();
     }
   }  // end for loop
-
-  if (OB_FAIL(ret)) {
-    // do some rollback work
-    for (int64_t i = 0; i < partitions.count(); ++i) {
-      partition = partitions.at(i);
-      if (NULL != partition) {
-        cp_fty_->free(partition);
-        partition = NULL;
-      }
-    }
-    partitions.reuse();
-  }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = E(EventTable::EN_CREATE_PG_AFTER_REGISTER_ELECTION_MGR) OB_SUCCESS;
@@ -2997,8 +2967,8 @@ int ObPartitionService::batch_register_election_mgr(const bool is_pg,
   return ret;
 }
 
-int ObPartitionService::batch_start_partition_election(
-    const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg, common::ObIArray<ObIPartitionGroup*>& partitions)
+int ObPartitionService::batch_start_partition_election_(
+    const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg, ObIPartitionArrayGuard &partitions)
 {
   int ret = OB_SUCCESS;
   int64_t index = 0;
@@ -3130,12 +3100,12 @@ int ObPartitionService::remove_pg_from_mgr(const ObIPartitionGroup* partition, c
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(inner_del_partition(pkey))) {
-          // should not happen
-          STORAGE_LOG(ERROR, "Fail to inner del partition, ", K(ret), K(pkey));
-          ob_abort();
-        } else if (OB_FAIL(file_mgr_->remove_pg(file_key, pkey))) {
+        if (OB_FAIL(file_mgr_->remove_pg(file_key, pkey))) {
           STORAGE_LOG(ERROR, "fail to remove pg from file mgr", K(ret));
+          ob_abort();
+        } else if (OB_FAIL(inner_del_partition(pkey))) {
+          //should not happen
+          STORAGE_LOG(ERROR, "Fail to inner del partition, ", K(ret), K(pkey));
           ob_abort();
         }
       }
@@ -3784,6 +3754,10 @@ int ObPartitionService::delete_rows(const transaction::ObTransDesc& trans_desc, 
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_rows(
         ctx_guard.get_store_ctx(), dml_param, column_ids, row_iter, affected_rows);
@@ -3805,6 +3779,10 @@ int ObPartitionService::delete_row(const ObTransDesc& trans_desc, const ObDMLBas
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_row(ctx_guard.get_store_ctx(), dml_param, column_ids, row);
     AUDIT_PARTITION_V2(ctx_guard.get_store_ctx().mem_ctx_, PART_AUDIT_DELETE_ROW, 1);
@@ -4242,32 +4220,6 @@ int ObPartitionService::inner_del_partition_impl(const ObPartitionKey& pkey, con
 
   STORAGE_LOG(INFO, "partition service delete partition", K(tenant_id), K(tenant_part_cnt), K(tenant_pg_cnt), K(pkey));
 
-  return ret;
-}
-
-int ObPartitionService::inner_del_partition(const ObPartitionKey& pkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_del_partition_impl(pkey, nullptr /*file_id*/))) {
-    STORAGE_LOG(WARN, "fail to inner del partition", K(ret), K(pkey));
-  }
-  return ret;
-}
-
-int ObPartitionService::inner_del_partition_for_replay(const ObPartitionKey& pkey, const int64_t file_id)
-{
-  int ret = OB_SUCCESS;
-  ObIPartitionGroupGuard guard;
-  if (OB_FAIL(get_partition(pkey, guard))) {
-    if (OB_PARTITION_NOT_EXIST == ret) {
-      LOG_INFO("pg not exist in partition image", K(pkey));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get partition", K(ret), K(pkey));
-    }
-  } else if (OB_FAIL(inner_del_partition_impl(pkey, OB_INVALID_DATA_FILE_ID == file_id ? nullptr : &file_id))) {
-    STORAGE_LOG(WARN, "fail to inner del partition impl", K(ret));
-  }
   return ret;
 }
 
@@ -9299,7 +9251,6 @@ int ObPartitionService::check_schema_version_elapsed(const ObPartitionKey& targe
           K(latest_schema_version),
           K(schema_version));
     } else {
-      refreshed_schema_ts = ObTimeUtility::current_time();
       const int64_t timeout = 10 * 1000 * 1000;
       if (OB_FAIL(guard.get_partition_group()->get_pg_storage().replay_partition_schema_version_change_log(
               schema_version))) {
@@ -9318,7 +9269,7 @@ int ObPartitionService::check_schema_version_elapsed(const ObPartitionKey& targe
         // override ret
         ret = OB_EAGAIN;
       } else if (OB_FAIL(pg_partition->update_build_index_schema_info(
-                     schema_version, refreshed_schema_ts, log_id, log_ts))) {
+                     schema_version, log_id, log_ts, refreshed_schema_ts))) {
         STORAGE_LOG(WARN, "update build index schema info error", K(ret), K(target_pkey), K(pg_key), K(schema_version));
       } else {
         STORAGE_LOG(INFO,
@@ -11578,6 +11529,9 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     common::ObMemberList member_list;
     const uint64_t fetch_tenant_id =
         is_inner_table(index_table_id) ? OB_SYS_TENANT_ID : extract_tenant_id(index_table_id);
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(fetch_tenant_id, schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(fetch_tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_table_id, index_schema))) {
@@ -11599,7 +11553,12 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     } else if (OB_ISNULL(GCTX.pt_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, pt operator must not be NULL", K(ret));
-    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), partition_info))) {
+    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(),
+                   pkey.get_partition_id(),
+                   partition_info,
+                   need_fail_list,
+                   cluster_id,
+                   filter_flag_replica))) {
       STORAGE_LOG(WARN, "fail to get partition info", K(ret), K(pkey));
     } else if (OB_FAIL(partition_info.filter(filter))) {
       STORAGE_LOG(WARN, "fail to filter partition", K(ret));
@@ -13386,7 +13345,7 @@ int ObPartitionService::get_primary_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (FALSE_IT(is_restore = partition->get_pg_storage().is_restore())) {
-    } else if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+    } else if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
       if (OB_NEED_RETRY == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -13463,7 +13422,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (ObRole::STANDBY_LEADER == role) {
-      if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+      if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
         if (OB_NEED_RETRY == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -13472,7 +13431,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       } else if (OB_FAIL(add_migrate_src(src_info, src_set, src_array))) {
         LOG_WARN("failed to add migrate src", K(ret), K(role), K(src_info), K(pkey));
       } else {
-        LOG_INFO("get_clog_parent", K(src_info));
+        LOG_INFO("get_clog_parent_for_migration", K(src_info));
         src_info.reset();
       }
     }

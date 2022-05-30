@@ -523,6 +523,7 @@ public:
   virtual int reset_for_replay() = 0;
   virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
   virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
+  virtual int update_max_majority_log(const uint64_t log_id, const int64_t log_ts) = 0;
   TO_STRING_KV(K_(ref_cnt));
 
 protected:

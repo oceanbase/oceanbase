@@ -425,7 +425,7 @@ int ObTableApiRowIterator::cons_column_type(const schema::ObColumnSchemaV2 &colu
   int ret = OB_SUCCESS;
   column_type.set_type(column_schema.get_data_type());
   column_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(column_schema));
-  if (ob_is_string_type(column_schema.get_data_type())) {
+  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_json(column_schema.get_data_type())) {
     column_type.set_collation_type(column_schema.get_collation_type());
     column_type.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
@@ -936,7 +936,7 @@ int ObTableApiUpdateRowIterator::cons_new_row(const ObTableOperation &table_oper
 int ObTableApiUpdateRowIterator::obj_increment(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType target_type,
+    const sql::ObExprResType &target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
@@ -988,7 +988,7 @@ int ObTableApiUpdateRowIterator::obj_increment(
 int ObTableApiUpdateRowIterator::obj_append(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType target_type,
+    const sql::ObExprResType &target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
@@ -1044,6 +1044,9 @@ int ObTableApiUpdateRowIterator::obj_append(
     if (OB_SUCC(ret) && result_len >= 0) {
       if (ob_is_text_tc(target_type.get_type())) {  // LOB
         target.set_lob_value(target_type.get_type(), result_ptr, result_len);
+        target.set_meta_type(target_type);
+      } else if (ob_is_json_tc(target_type.get_type())) {
+        target.set_json_value(target_type.get_type(), result_ptr, result_len);
         target.set_meta_type(target_type);
       } else {  // Varchar/Varbinary
         target.set_varchar_value(result_ptr, result_len);

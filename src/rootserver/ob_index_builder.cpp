@@ -34,6 +34,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_index_builder_util.h"
 #include "observer/ob_server_struct.h"
+#include "observer/ob_service.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "ob_server_manager.h"
 #include "ob_zone_manager.h"
@@ -540,6 +541,7 @@ int ObRSBuildIndexTask::process()
     if (OB_FAIL(report_index_status(index_status))) {
       LOG_WARN("fail to report index status", K(ret));
       need_retry_ = true;
+      need_release_snapshot = false;
     }
   }
   if (need_release_snapshot) {
@@ -617,7 +619,7 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     // index table has been dropped
     ret = OB_SUCCESS;
     is_end = true;
@@ -719,6 +721,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
   const ObTableSchema* index_schema = NULL;
   const ObTableSchema* table_schema = NULL;
   ObIndexBuildStatus all_status;
+  const bool filter_flag_replica = false;
   ObTablePartitionIterator iter;
   ObReplicaFilterHolder filter;
   int64_t table_id = OB_INVALID_ID;
@@ -730,7 +733,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     ret = OB_SUCCESS;
     is_end = true;
   } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {
@@ -757,7 +760,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
   }
 
   if (OB_FAIL(ret) || is_end) {
-  } else if (OB_FAIL(iter.init(table_id, schema_guard, ddl_service_->get_pt_operator()))) {
+  } else if (OB_FAIL(iter.init(table_id, schema_guard, ddl_service_->get_pt_operator(), filter_flag_replica))) {
     LOG_WARN("fail to init partition table iterator",
         K(ret),
         "table_id",
@@ -879,11 +882,15 @@ int ObRSBuildIndexTask::calc_snapshot_version(const int64_t max_commit_version, 
   }
   if (OB_FAIL(ret)) {
     // nothing todo
-  } else if (OB_FAIL(ddl_service_->get_freeze_info_mgr().get_freeze_info(0L /*latest version*/, frozen_status))) {
-    LOG_WARN("fail to get freeze info", K(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS !=
+        (tmp_ret = ddl_service_->get_freeze_info_mgr().get_freeze_info(0L /*latest version*/, frozen_status))) {
+      LOG_WARN("fail to get freeze info", K(tmp_ret));
+    } else {
+      freeze_snapshot_version = frozen_status.frozen_timestamp_;
+    }
     const int64_t current_time = ObTimeUtility::current_time();
-    freeze_snapshot_version = frozen_status.frozen_timestamp_;
     snapshot_version = std::max(max_commit_version, gc_snapshot_version);
     snapshot_version = std::max(snapshot_version, freeze_snapshot_version);
     // we expected that the snapshot value is not far from the current timestamp
@@ -1023,6 +1030,9 @@ int ObRSBuildIndexTask::generate_index_build_stat_record()
   } else if (OB_FAIL(ddl_service_->get_sql_proxy().write(sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", K(ret));
   }
+#ifdef ERRSIM
+  ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_AFTER_STAT_RECORD) OB_SUCCESS;
+#endif
   return ret;
 }
 
@@ -1075,7 +1085,12 @@ int ObRSBuildIndexScheduler::init(ObDDLService* ddl_service)
 int ObRSBuildIndexScheduler::push_task(ObRSBuildIndexTask& task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+#ifdef ERRSIM
+  ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_BEFORE_STAT_RECORD) OB_SUCCESS;
+#endif
+  if (OB_SUCCESS != ret) {
+    LOG_INFO("errsim mock push local index task fail", K(ret));
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRSBuildIndexScheduler has not been inited", K(ret));
   } else if (is_stop_) {
@@ -1321,8 +1336,19 @@ int ObIndexBuilder::submit_build_global_index_task(const ObTableSchema& index_sc
         ret = OB_EAGAIN;
       }
     }
-    if (OB_FAIL(ret)) {
-      FORWARD_USER_ERROR(ret, "create global index failed, please drop and create another one");
+    // submit retry task if retryable, otherwise report error
+    if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+      int record_ret = ret;
+      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(index_schema.get_table_id()))) {
+        LOG_WARN("fail to submit retry ghost index task", K(ret));
+        ret = OB_TIMEOUT;
+      } else {
+        LOG_INFO(
+            "submit build global index task fail but fast retryable", K(record_ret), K(index_schema.get_table_id()));
+      }
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("submit global index task fail, mark it as timeout", K(ret));
+      ret = OB_TIMEOUT;
     }
   }
   return ret;
@@ -1411,7 +1437,17 @@ int ObIndexBuilder::submit_build_local_index_task(const ObTableSchema& index_sch
       LOG_WARN("fail to add task into ObRSBuildIndexScheduler", K(ret));
     }
 
-    if (OB_FAIL(ret)) {
+    // submit retry task if retryable, otherwise report error
+    if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+      int record_ret = ret;
+      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(index_schema.get_table_id()))) {
+        LOG_WARN("fail to submit retry ghost index task", K(ret));
+        ret = OB_TIMEOUT;
+      } else {
+        LOG_INFO(
+            "submit build local index task fail but fast retryable", K(record_ret), K(index_schema.get_table_id()));
+      }
+    } else if (OB_FAIL(ret)) {
       obrpc::ObUpdateIndexStatusArg arg;
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema* new_index_schema = NULL;
@@ -1428,8 +1464,8 @@ int ObIndexBuilder::submit_build_local_index_task(const ObTableSchema& index_sch
       } else if (OB_FAIL(schema_guard.get_table_schema(arg.index_table_id_, new_index_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(arg.index_table_id_));
       } else if (OB_ISNULL(new_index_schema)) {
-        ret = OB_SUCCESS;
         LOG_WARN("can not find this index schema", K(ret), K(arg.index_table_id_));
+        ret = OB_SUCCESS;
       } else {
         LOG_INFO("update index status success", LITERAL_K(INDEX_STATUS_INDEX_ERROR), "index_schema", *new_index_schema);
       }
@@ -1637,6 +1673,10 @@ int ObIndexBuilder::generate_schema(const ObCreateIndexArg& arg, const int64_t f
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("fulltext index created on blob column is not supported", K(arg.index_type_), K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("JSON column cannot be used in key specification.", K(arg.index_type_), K(ret));
         } else if (data_column->is_string_type()) {
           int64_t length = 0;
           if (data_column->is_fulltext_column()) {

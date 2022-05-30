@@ -415,7 +415,7 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock& micro_block)
   } else if (!need_merge) {
     if (micro_writer_->get_row_count() > 0) {
       if (OB_FAIL(build_micro_block())) {
-        STORAGE_LOG(WARN, "build_micro_block failed", K(ret));
+        STORAGE_LOG(WARN, "build_micro_block failed", K(ret), KPC(this));
       }
     }
     if (OB_SUCC(ret)) {
@@ -423,14 +423,14 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock& micro_block)
       if (OB_FAIL(build_micro_block_desc(micro_block, micro_block_desc))) {
         STORAGE_LOG(WARN, "build_micro_block_desc failed", K(ret), K(micro_block));
       } else if (OB_FAIL(write_micro_block(micro_block_desc))) {
-        STORAGE_LOG(WARN, "Failed to write micro block, ", K(ret), K(micro_block_desc));
+        STORAGE_LOG(WARN, "Failed to write micro block, ", K(ret), K(micro_block_desc), KPC(this));
       } else if (NULL != data_store_desc_->merge_info_) {
         data_store_desc_->merge_info_->rewrite_macro_old_micro_block_count_++;
       }
     }
   } else {
     if (OB_FAIL(merge_micro_block(micro_block))) {
-      STORAGE_LOG(WARN, "merge_micro_block failed", K(micro_block), K(ret));
+      STORAGE_LOG(WARN, "merge_micro_block failed", K(micro_block), K(ret), KPC(this));
     } else {
       STORAGE_LOG(TRACE, "merge micro block", K(micro_block));
     }
@@ -659,7 +659,7 @@ int ObMacroBlockWriter::save_root_micro_block()
     }
     if (OB_SUCC(ret)) {
       ObStoreRow row;
-      IndexMicroBlockDesc* task_top_block_descs;
+      IndexMicroBlockDesc* task_top_block_descs = NULL;
       if (OB_FAIL(micro_reader.init(block_data, &index_column_map_))) {
         STORAGE_LOG(WARN, "failed to init micro block reader", K(ret));
       } else if (OB_FAIL(sstable_index_writer_->get_index_block_desc(task_top_block_descs))) {
@@ -851,7 +851,12 @@ int ObMacroBlockWriter::check_order(const ObStoreRow& row)
         } else {
           // baseline data
           ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-          STORAGE_LOG(ERROR, "input rowkey is equal with last rowkey", K(cur_key), K(last_key), K(ret));
+          if (data_store_desc_->is_unique_index_) {
+            STORAGE_LOG(
+                WARN, "input rowkey is equal with last rowkey in unique index", K(cur_key), K(last_key), K(ret));
+          } else {
+            STORAGE_LOG(ERROR, "input rowkey is equal with last rowkey", K(cur_key), K(last_key), K(ret));
+          }
         }
       } else {
         // normal case

@@ -63,7 +63,11 @@ private:
 
   int is_simple_from_item(ObDMLStmt& stmt, uint64_t table_id, int64_t& from_index);
 
-  int use_given_tables(const ObRawExpr* expr, const ObIArray<uint64_t>& table_ids, bool& is_valid);
+  int use_given_tables(const ObRawExpr *expr, const ObIArray<uint64_t> &table_ids, bool &is_valid);
+
+  int check_is_where_subquery(ObDMLStmt &stmt, ObQueryRefRawExpr *query_ref, bool &is_valid);
+
+  int check_contain_expr(ObRawExpr *base, ObRawExpr *target, bool &has);
 };
 
 }  // namespace sql

@@ -453,7 +453,9 @@ int ObLogGroupBy::should_push_down_group_by(
                  T_FUN_AGG_UDF == aggr_expr->get_expr_type() || T_FUN_KEEP_MAX == aggr_expr->get_expr_type() ||
                  T_FUN_KEEP_MIN == aggr_expr->get_expr_type() || T_FUN_KEEP_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_KEEP_COUNT == aggr_expr->get_expr_type() || T_FUN_KEEP_WM_CONCAT == aggr_expr->get_expr_type() ||
-                 T_FUN_WM_CONCAT == aggr_expr->get_expr_type()) {
+                 T_FUN_WM_CONCAT == aggr_expr->get_expr_type() ||
+                 T_FUN_JSON_ARRAYAGG == aggr_expr->get_expr_type() ||
+                 T_FUN_JSON_OBJECTAGG == aggr_expr->get_expr_type()) {
         should_push_groupby = false;
       } else if (!aggr_expr->is_param_distinct() && !distinct_exprs.empty()) {
         should_push_groupby = false;
@@ -1273,23 +1275,6 @@ int ObLogGroupBy::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs)
       }
       default:
         break;
-    }
-  }
-  return ret;
-}
-
-int ObLogGroupBy::child_has_exchange(const ObLogicalOperator* op, bool& find)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(op) || find) {
-    /*do nothing*/
-  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
-    find = true;
-  } else {
-    for (int i = 0; i < op->get_num_of_child() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(SMART_CALL(child_has_exchange(op->get_child(i), find)))) {
-        LOG_WARN("fail to find tsc recursive", K(ret));
-      }
     }
   }
   return ret;

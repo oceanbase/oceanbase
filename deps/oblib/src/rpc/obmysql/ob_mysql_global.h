@@ -88,6 +88,7 @@ namespace obmysql {
 #define OB_MYSQL_BINCMP_FLAG (1 << 17)
 #define OB_MYSQL_GET_FIXED_FIELDS_FLAG (1 << 18)
 #define OB_MYSQL_FIELD_IN_PART_FUNC_FLAG (1 << 19)
+#define IS_BOOL_FLAG (1 << 20)
 
 enum EMySQLFieldType {
   MYSQL_TYPE_DECIMAL,
@@ -123,6 +124,7 @@ enum EMySQLFieldType {
   MYSQL_TYPE_OB_UROWID = 209,
   MYSQL_TYPE_ORA_BLOB = 210,
   MYSQL_TYPE_ORA_CLOB = 211,
+  MYSQL_TYPE_JSON = 245,
   MYSQL_TYPE_NEWDECIMAL = 246,
   MYSQL_TYPE_ENUM = 247,
   MYSQL_TYPE_SET = 248,
@@ -268,6 +270,9 @@ inline const char* get_emysql_field_type_str(const obmysql::EMySQLFieldType& typ
       break;
     case obmysql::MYSQL_TYPE_ORA_CLOB:
       str = "MYSQL_TYPE_ORA_CLOB";
+      break;
+    case obmysql::MYSQL_TYPE_JSON:
+      str = "MYSQL_TYPE_JSON";
       break;
     default:
       break;

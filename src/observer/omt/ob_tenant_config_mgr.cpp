@@ -228,8 +228,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   } else if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
     LOG_WARN("get tenant config failed", K(tenant_id), K(ret));
   } else if (OB_SUCC(GCTX.omt_->get_tenant(tenant_id, tenant))) {
-    // https://work.aone.alibaba-inc.com/issue/31717023
-    // 判断租户是否在这台机器上，避免启动时没有刷到租户时删掉了租户配置项
+    // check tenant is exist in this server, to avoid tenant has been deleted before config has been refresh
     LOG_WARN("tenant still exist, try to delete tenant config later...", K(tenant_id));
   } else {
     static const int DEL_TRY_TIMES = 30;
@@ -507,7 +506,7 @@ int ObTenantConfigMgr::cancel(const ObTenantConfig::TenantConfigUpdateTask& task
     LOG_WARN("cancel tenant config update task failed", K(ret));
   } else {
     for (int i = 0; i < try_times; ++i) {
-      if (task.task_lock_.tryLock()) {
+      if (task.task_lock_.trylock()) {
         if (!task.is_running_) {
           task.task_lock_.unlock();
           break;

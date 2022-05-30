@@ -837,14 +837,10 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(int64_t& max_wa_memory_size
     int64_t pre_mem_target = mem_target_;
     double hold_ratio = 1. * tenant_work_area_memory_hold / tenant_work_area_max_size;
     int64_t tmp_max_wa_memory_size = (remain_memory_size > 0)
-                                         ? (1 - hold_ratio * hold_ratio) * remain_memory_size + total_alloc_size
+                                         ? (1 - hold_ratio * hold_ratio * hold_ratio) * remain_memory_size + total_alloc_size
                                          : total_alloc_size;
     double alloc_ratio = total_alloc_size * 1.0 / tmp_max_wa_memory_size;
-    if (total_alloc_size >= tmp_max_wa_memory_size) {
-      max_wa_memory_size = (tmp_max_wa_memory_size >> 1);
-    } else {
-      max_wa_memory_size = tmp_max_wa_memory_size * (1 - alloc_ratio * alloc_ratio);
-    }
+    max_wa_memory_size = tmp_max_wa_memory_size * (1 - alloc_ratio * alloc_ratio);
     max_workarea_size_ = tenant_work_area_max_size;
     workarea_hold_size_ = tenant_work_area_memory_hold;
     max_auto_workarea_size_ = max_wa_memory_size;

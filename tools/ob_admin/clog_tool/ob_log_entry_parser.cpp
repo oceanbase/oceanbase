@@ -220,7 +220,7 @@ int ObLogEntryParser::get_type_(ObCLogItemType& type)
   return ret;
 }
 
-int ObLogEntryParser::dump_all_entry(bool is_hex)
+int ObLogEntryParser::dump_all_entry(bool is_hex, bool without_data)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -228,6 +228,7 @@ int ObLogEntryParser::dump_all_entry(bool is_hex)
     CLOG_LOG(ERROR, "log entry parser is not inited", K(is_inited_), K(ret));
   } else {
     dump_hex_ = is_hex;
+    without_data_ = without_data;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(parse_next_entry())) {
         if (OB_ITER_END != ret) {
@@ -690,7 +691,9 @@ int ObLogEntryParserImpl::dump_memtable_mutator(const char* buf, int64_t len)
         ret = OB_SUCCESS;
         break;
       } else {
-        if (dump_hex_) {
+        if (without_data_) {
+          fprintf(stdout, "  MutatorRow={*} | OLD_ROW={");
+        } else if (dump_hex_) {
           int64_t pos = row.rowkey_.to_smart_string(print_buf_, PRINT_BUF_SIZE - 1);
           print_buf_[pos] = '\0';
           fprintf(stdout, "  MutatorRow={%s} HexedRowkey={%s} | OLD_ROW={", to_cstring(row), print_buf_);
@@ -812,7 +815,23 @@ int ObLogEntryParserImpl::dump_trans_redo_log(const char* data, int64_t len, con
   return ret;
 }
 
-int ObLogEntryParserImpl::dump_trans_prepare_log(const char* data, int64_t len)
+int ObLogEntryParserImpl::dump_trans_record_log(const char *data, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  ObTransRecordLogHelper helper;
+  ObTransRecordLog log(helper);
+  int64_t pos = 0;
+
+  if (OB_FAIL(log.deserialize(data, len, pos))) {
+    CLOG_LOG(WARN, "failed to deserialize log", K(ret));
+  } else {
+    fprintf(stdout, " %s|||", to_cstring(log));
+  }
+
+  return ret;
+}
+
+int ObLogEntryParserImpl::dump_trans_prepare_log(const char *data, int64_t len)
 {
   int ret = OB_SUCCESS;
   ObTransPrepareLogHelper helper;
@@ -1444,7 +1463,9 @@ int ObLogEntryParserImpl::dump_freeze_log(const char* buf, const int64_t buf_len
 int ObLogEntryParserImpl::dump_obj(const common::ObObj& obj, uint64_t column_id)
 {
   int ret = OB_SUCCESS;
-  if (dump_hex_) {
+  if (without_data_) {
+    fprintf(stdout, "*");
+  } else if (dump_hex_) {
     int64_t buf_len = PRINT_BUF_SIZE - 1;  // reserver one character for '\0'
     int64_t pos = 0;
     if (OB_UNLIKELY(!is_inited_)) {
@@ -2193,6 +2214,12 @@ int ObLogEntryParserImpl::dump_trans_log(const ObStorageLogType log_type, const 
     case OB_LOG_SP_TRANS_REDO: {
       if (OB_FAIL(dump_sp_trans_redo_log(buf + pos, buf_len - pos, real_tenant_id))) {
         CLOG_LOG(ERROR, "dump_sp_trans_redo_log fail", K(ret), K(buf), K(pos), K(buf_len));
+      }
+      break;
+    }
+    case OB_LOG_TRANS_RECORD : {
+      if (OB_FAIL(dump_trans_record_log(buf + pos, buf_len - pos))) {
+        CLOG_LOG(ERROR, "dump_trans_record_log fail", K(ret), K(buf), K(pos), K(buf_len));
       }
       break;
     }

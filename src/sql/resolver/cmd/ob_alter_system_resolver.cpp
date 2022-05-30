@@ -36,6 +36,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/ob_server.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 
 namespace oceanbase {
 using namespace common;
@@ -550,14 +551,29 @@ int ObFreezeResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObFlushCacheResolver::resolve(const ParseNode& parse_tree)
+  //
+  // This node has five children_ and they are following:
+  // cache_type_: parse_tree.children_[0]
+  // opt_sql_id: parse_tree.children_[1]
+  // opt_databases: parse_tree.children_[2]
+  // opt_tenant_list: parse_tree.children_[3]
+  // flush_scope: parse_tree.children_[4]
+  //
+int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObFlushCacheStmt* stmt = NULL;
-  if (OB_UNLIKELY(T_FLUSH_CACHE != parse_tree.type_ || parse_tree.num_child_ != 3)) {
+  ObFlushCacheStmt *stmt = NULL;
+  ObSQLSessionInfo* sess = params_.session_info_;
+  if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", "type", get_type_name(parse_tree.type_), "child_num", parse_tree.num_child_);
-  } else if (NULL == parse_tree.children_[0] || NULL == parse_tree.children_[2]) {
+    SERVER_LOG(WARN, "invalid session");
+  } else if (OB_UNLIKELY(T_FLUSH_CACHE != parse_tree.type_ || parse_tree.num_child_ != 5)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument",
+             "type", get_type_name(parse_tree.type_),
+             "child_num", parse_tree.num_child_);
+  } else if (NULL == parse_tree.children_[0]
+             || NULL == parse_tree.children_[4]) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret));
   } else if (NULL == (stmt = create_stmt<ObFlushCacheStmt>())) {
@@ -565,14 +581,53 @@ int ObFlushCacheResolver::resolve(const ParseNode& parse_tree)
     LOG_ERROR("create ObFlushCacheStmt failed");
   } else {
     ObSchemaGetterGuard schema_guard;
+
+    // first child: resolve cache type
     stmt->flush_cache_arg_.cache_type_ = (ObCacheType)parse_tree.children_[0]->value_;
-    stmt->is_global_ = parse_tree.children_[2]->value_;
-    ParseNode* t_node = parse_tree.children_[1];
-    if (NULL == t_node) {  // tenant list is empty
+    // second child: resolve sql_id
+    ParseNode *sql_id_node = parse_tree.children_[1];
+    // for adds database id
+    // third child: resolve db_list
+    ParseNode *db_node = parse_tree.children_[2];
+    // for adds tenant ids
+    // fourth child: resolve tenant list
+    ParseNode *t_node = parse_tree.children_[3];
+    // fivth child: resolve application fields
+    stmt->is_global_ = parse_tree.children_[4]->value_;
+    // whether is coarse granularity plan cache evict.
+    // tenant level(true) / pcv_set level(false)
+    bool is_coarse_granularity = true;
+    ObSEArray<common::ObString, 8> db_name_list;
+
+    // sql_id
+    if (OB_FAIL(ret)) {
       // do nothing
-    } else if (NULL == t_node->children_) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "invalid argument", K(ret));
+    } else if (OB_ISNULL(sql_id_node)) {
+      // do nothing
+    // currently, only support plan cache's fine-grained cache evict
+    } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only support plan cache's fine-grained cache evict", K(stmt->flush_cache_arg_.cache_type_), K(ret));
+    } else if (lib::is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported plan cache's fine-grained cache evict in oracle mode", K(ret));
+    } else if (OB_ISNULL(sql_id_node->children_)
+               || OB_ISNULL(sql_id_node->children_[0])
+               || T_SQL_ID != sql_id_node->type_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SQL_ID_LENGTH+1)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      stmt->flush_cache_arg_.sql_id_.assign_ptr(
+          sql_id_node->children_[0]->str_value_,
+          static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
+      stmt->flush_cache_arg_.is_fine_grained_ = true;
+    }
+
+    // retrive schema guard
+    if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(GCTX.schema_service_)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "invalid argument", K(GCTX.schema_service_));
@@ -583,8 +638,106 @@ int ObFlushCacheResolver::resolve(const ParseNode& parse_tree)
                    session_info_->get_effective_tenant_id(), schema_guard))) {
       SERVER_LOG(WARN, "get_schema_guard failed", K(ret));
     } else {
+      // do nothing
+    }
+
+    // db names
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!stmt->flush_cache_arg_.is_fine_grained_) {
+      if (OB_ISNULL(db_node)) {
+        // tenant level plan cache evict
+        // and not needs to specify db_name
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported flush cache in database level", K(ret));
+      }
+    } else if (NULL == db_node) { // db list is empty
+      // empty db list means clear all db's in fine-grained cache evict
+      // do nothing
+    } else if (OB_ISNULL(db_node->children_)
+               || OB_ISNULL(db_node->children_[0])
+               || T_DATABASE_LIST != db_node->type_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      uint64_t db_id = 0;
+      ObString db_names;
+      ObString db_name;
+      db_names.assign_ptr(db_node->children_[0]->str_value_,
+                          static_cast<ObString::obstr_size_t>(db_node->children_[0]->str_len_));
+      while (OB_SUCC(ret) && !db_names.empty()) {
+        db_name = db_names.split_on(',').trim();
+        if(db_name.empty() && NULL == db_names.find(',')) {
+          db_name = db_names;
+          db_names.reset();
+        }
+        if(!db_name.empty()) {
+          if (OB_FAIL(db_name_list.push_back(db_name))) {
+            SERVER_LOG(WARN, "failed to add database name", K(ret));
+          }
+        }
+      } // for database name end
+    }
+
+    /*
+     * different database belongs to different tenant,
+     * and we will use following logics to retrive db_id:
+     * for (tenant list) {
+     *    for (database_name_list) {
+     *      // find db_id from schema
+     *      args_.push_back(db_id);
+     *    }
+     * }
+     * */
+    // tenant list
+    if (OB_FAIL(ret)) {
+    } else if (NULL == t_node) { //tenant list is empty
+      if (!stmt->flush_cache_arg_.is_fine_grained_) { // coarse grained cache evict
+        // Notes:
+        // tenant level evict, and no tenant list specified means all tenant
+        // for system tenant: empty means flush all tenant's 
+        // for normal tenant: this node has been set as NULL in parse phase,
+        //                    and already adds its tenant id to tenant list in above
+        // Therefore, do nothing
+      } else { // fine-grained cache evcit
+        // for fine-grained plan evict, we must specify tenant list
+        uint64_t t_id = OB_INVALID_ID;
+        t_id = sess->get_effective_tenant_id();
+        if (t_id <= OB_MAX_RESERVED_TENANT_ID) {// system tenant will use this path.
+          // system tenant must specify tenant_list;
+          ret = OB_EMPTY_TENANT;
+          SERVER_LOG(WARN, "invalid argument, fine-grained plan evict must specify tenant_list", K(ret));
+        } else { // normal tenant
+          if (OB_FAIL(stmt->flush_cache_arg_.push_tenant(sess->get_effective_tenant_id()))) {
+            LOG_WARN("failed  to adds tenant for normal tenant", K(sess->get_effective_tenant_id()), K(ret));
+          } else {
+            // normal tenant will use it's tenant_id when t_node is empty
+            for (uint64_t j=0; OB_SUCC(ret) && j<db_name_list.count(); j++) {
+              uint64_t db_id = 0;
+              if (OB_FAIL(schema_guard.get_database_id(t_id, db_name_list.at(j).trim(), db_id))) {
+                SERVER_LOG(WARN, "database not exist", K(db_name_list.at(j).trim()), K(ret));
+              } else if (OB_FAIL(stmt->flush_cache_arg_.push_database(db_id))) {
+                SERVER_LOG(WARN, "fail to push database id ",K(db_name_list.at(j).trim()), K(db_id), K(ret));
+              }
+            } // for get db_id ends
+            LOG_INFO("normal tenant flush plan cache ends", K(t_id), K(db_name_list));
+          }
+        } // normal tenant ends
+      } // fine-grained plan evcit ends
+    } else if (sess->get_effective_tenant_id() != OB_SYS_TENANT_ID) {
+    // tenant node is not null and current tenant is not sys tenant
+    // due to normal tenant cannot specify tenant, and only can purge
+    // their own plan cache
+      ret = OB_ERR_NO_PRIVILEGE;
+      LOG_WARN("Only sys tenant can do this operation", K(ret), K(sess->get_effective_tenant_id()));
+    } else if (NULL == t_node->children_) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "invalid argument", K(ret));
+    } else {
       uint64_t tenant_id = 0;
       ObString tenant_name;
+      // adds tenant_ids and get db_ids
       for (int64_t i = 0; OB_SUCC(ret) && i < t_node->num_child_; ++i) {
         if (OB_ISNULL(t_node->children_[i])) {
           ret = OB_ERR_UNEXPECTED;
@@ -595,11 +748,49 @@ int ObFlushCacheResolver::resolve(const ParseNode& parse_tree)
           if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tenant_id))) {
             SERVER_LOG(WARN, "tenant not exist", K(tenant_name), K(ret));
           } else if (OB_FAIL(stmt->flush_cache_arg_.push_tenant(tenant_id))) {
-            SERVER_LOG(WARN, "fail to push tenant id ", K(tenant_name), K(tenant_id), K(ret));
+            SERVER_LOG(WARN, "fail to push tenant id ",K(tenant_name), K(tenant_id), K(ret));
+          } else {
+            ObSchemaGetterGuard schema_guard_db;
+            if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_db))) {
+              SERVER_LOG(WARN, "get_schema_guard failed", K(ret), K(tenant_id));
+            } else {
+              for (uint64_t j = 0; OB_SUCC(ret) && j < db_name_list.count(); j++) {
+                uint64_t db_id = 0;
+                if (OB_FAIL(schema_guard_db.get_database_id(tenant_id, db_name_list.at(j), db_id))) {
+                  SERVER_LOG(WARN, "database not exist", K(db_name_list.at(j)), K(ret));
+                } else if ((int64_t)db_id == OB_INVALID_ID) {
+                  ret = OB_ERR_BAD_DATABASE;
+                  SERVER_LOG(WARN, "database not exist", K(db_name_list.at(j)), K(ret));
+                } else if (OB_FAIL(stmt->flush_cache_arg_.push_database(db_id))) {
+                  SERVER_LOG(WARN, "fail to push database id ",K(db_name_list.at(j)), K(db_id), K(ret));
+                }
+              } // for get db_id ends
+            }
           }
-        }
+        } // for get tenant_id ends
         tenant_name.reset();
       }  // for tenant end
+    }
+    LOG_INFO("resolve flush command finished!", K(ret), K(stmt->is_global_), K(stmt->flush_cache_arg_.cache_type_),
+                K(stmt->flush_cache_arg_.sql_id_), K(stmt->flush_cache_arg_.is_fine_grained_),
+                K(stmt->flush_cache_arg_.tenant_ids_), K(stmt->flush_cache_arg_.db_ids_));
+  }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_ISNULL(schema_checker_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
+        session_info_->get_effective_tenant_id(),
+        session_info_->get_priv_user_id(),
+        ObString(""),
+        // why use T_ALTER_SYSTEM_SET_PARAMETER?
+        // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+        // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+        // and prohibit other user to do this operation
+        // so we reuse this.
+        stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+        session_info_->get_enable_role_array()))) {
+      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
     }
   }
   return ret;
@@ -1514,6 +1705,14 @@ int check_backup_dest(const ObString& backup_dest)
     LOG_WARN("failed to print backup dest buf", K(ret), K(backup_dest));
   } else if (OB_FAIL(dest.set(backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
+  } else if (dest.is_nfs_storage() && 0 != strlen(dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, storage_info should be empty", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, additional parameters are");
+  } else if (dest.is_nfs_storage() && strlen(dest.root_path_) != strlen(backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, backup dest should not set '?'", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, setting '?' is"); 
   } else if (OB_FAIL(cluster_dest.set(dest, OB_START_INCARNATION))) {
     LOG_WARN("Failed to set cluster dest", K(ret), K(dest));
   } else if (OB_FAIL(backup_info_mgr.get_last_extern_log_archive_backup_info(
@@ -1536,6 +1735,23 @@ int check_backup_dest(const ObString& backup_dest)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("cannot change backup dest when backup backup dest is not empty", K(ret), K(backup_backup_dest_buf));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest with backup backup dest not empty is");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    share::ObBackupDest old_dest;
+    if (OB_FAIL(GCONF.backup_dest.copy(backup_dest_buf, sizeof(backup_dest_buf)))) {
+      LOG_WARN("failed to set backup dest buf", K(ret));
+    } else if (0 == strlen(backup_dest_buf)) {
+      LOG_INFO("[BACKUP_DEST]set new backup dest", K(dest));
+      ROOTSERVICE_EVENT_ADD(
+          "backup_dest", "backup_dest", "old_backup_dest", "null", "new_backup_dest", dest.root_path_);
+    } else if (OB_FAIL(old_dest.set(backup_dest_buf))) {
+      LOG_WARN("failed to set conf backup dest", K(ret), K(backup_dest_buf));
+    } else {
+      LOG_INFO("[BACKUP_DEST]set new backup dest", K(old_dest), K(dest));
+      ROOTSERVICE_EVENT_ADD(
+          "backup_dest", "backup_dest", "old_backup_dest", old_dest.root_path_, "new_backup_dest", dest.root_path_);
     }
   }
 
@@ -1698,6 +1914,14 @@ int check_backup_backup_dest(const ObString& backup_backup_dest)
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
   } else if (OB_FAIL(dst_dest.set(backup_backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_backup_dest_buf));
+  } else if (dst_dest.is_nfs_storage() && 0 != strlen(dst_dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, storage_info should be empty", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, additional parameters are"); 
+  } else if (dst_dest.is_nfs_storage() && strlen(dst_dest.root_path_) != strlen(backup_backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, backup backup dest should not set '?'", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, setting '?' is"); 
   } else if (dst_dest.is_cos_storage()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("backup backup do not support cos storage", KR(ret));
@@ -1710,6 +1934,31 @@ int check_backup_backup_dest(const ObString& backup_backup_dest)
   } else if (!is_empty_dir) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_ERROR("cannot use backup backup dest with non empty directory", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    share::ObBackupDest old_dest;
+    if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_backup_dest_buf, sizeof(backup_backup_dest_buf)))) {
+      LOG_WARN("failed to set backup backup dest buf", K(ret));
+    } else if (0 == strlen(backup_backup_dest_buf)) {
+      LOG_INFO("[BACKUP_DEST]set new backup backup dest", K(dst_dest));
+      ROOTSERVICE_EVENT_ADD("backup_dest",
+          "backup_backup_dest",
+          "old_backup_backup_dest",
+          "null",
+          "new_backup_backup_dest",
+          dst_dest.root_path_);
+    } else if (OB_FAIL(old_dest.set(backup_backup_dest_buf))) {
+      LOG_WARN("failed to set conf backup backup dest", K(ret), K(backup_backup_dest_buf));
+    } else {
+      LOG_INFO("[BACKUP_DEST]set new backup backup dest", K(old_dest), K(dst_dest));
+      ROOTSERVICE_EVENT_ADD("backup_dest",
+          "backup_backup_dest",
+          "old_backup_backup_dest",
+          old_dest.root_path_,
+          "new_backup_backup_dest",
+          dst_dest.root_path_);
+    }
   }
   return ret;
 }
@@ -2132,7 +2381,8 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
                   LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_FALSE_VALUE)) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_STRING))) {
                   if (GCONF.enable_sql_audit) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
@@ -2143,7 +2393,9 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                     LOG_WARN("add config item failed", K(ret), K(item));
                   }
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_TRUE_VALUE) && !GCONF.enable_perf_event) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_STRING)) &&
+                           !GCONF.enable_perf_event) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
                   LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
@@ -2152,11 +2404,11 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   has_perf_audit = true;
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
@@ -2236,6 +2488,10 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id, const ObString& na
         LOG_WARN("ERRSIM, fail to set ssl invite node", K(ret));
       }
 #endif
+    }
+    else if (OB_FAIL(OB_STORE_FILE.validate_datafile_param(name, value.ptr()))) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("datafile_size is not valid", K(ret));
     }
   }
   return ret;
@@ -3570,7 +3826,8 @@ int ObAlterSystemSetResolver::resolve(const ParseNode& parse_tree)
                   }
                 }
               }
-              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(
+                                  ObVariableSetStmt::make_variable_name_node(var_node)))) {
                 LOG_WARN("Add set entry failed", K(ret));
               }
             }

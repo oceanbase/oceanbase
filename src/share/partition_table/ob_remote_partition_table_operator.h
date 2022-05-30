@@ -37,7 +37,8 @@ public:
   {}
   int init(share::schema::ObMultiVersionSchemaService* schema_service, ObRemoteSqlProxy* remote_sql_proxy);
   virtual int get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID) override;
+      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID,
+      const bool filter_flag_replica = true) override;
   virtual int batch_fetch_partition_infos(const common::ObIArray<common::ObPartitionKey>& keys,
       common::ObIAllocator& allocator, common::ObArray<ObPartitionInfo*>& partitions,
       const int64_t cluster_id = common::OB_INVALID_ID) override;
@@ -45,7 +46,8 @@ public:
   // not supported interface
   virtual int batch_execute(const common::ObIArray<ObPartitionReplica>& replicas) override;
   virtual int prefetch_by_table_id(const uint64_t tenant_id, const uint64_t table_id, const int64_t partition_id,
-      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false) override;
+      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false,
+      const bool filter_flag_replica = true) override;
 
   virtual int prefetch(const uint64_t tenant_id, const uint64_t table_id, const int64_t partition_id,
       common::ObIArray<ObPartitionInfo>& partition_infos, bool ignore_row_checksum,

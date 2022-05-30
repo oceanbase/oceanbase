@@ -22,7 +22,6 @@
 #include "storage/ob_partition_split.h"
 #include "storage/ob_table_store.h"
 #include "share/ob_unit_getter.h"
-#include "storage/ob_old_sstable.h"
 #include "storage/ob_reserved_data_mgr.h"
 
 namespace oceanbase {
@@ -80,6 +79,7 @@ enum ObPartitionRedoLogSubcmd {
   // DATE: 2020-09-21 (since 2.2.70)
   REDO_LOG_ADD_RECOVERY_POINT_DATA = 38,
   REDO_LOG_REMOVE_RECOVERY_POINT_DATA = 39,
+  REDO_LOG_MAX = 40
 };
 
 struct ObBeginTransLogEntry : public blocksstable::ObIBaseStorageLogEntry {
@@ -148,14 +148,6 @@ struct ObCreateSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   OB_UNIS_VERSION_V(CREATE_SSTABLE_LOG_VERSION);
 };
 
-struct ObCompleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  ObOldSSTable& sstable_;
-  static const int64_t COMPLETE_SSTABLE_LOG_VERSION = 1;
-  ObCompleteSSTableLogEntry(ObOldSSTable& sstable);
-  bool is_valid() const;
-  TO_STRING_KV(K_(sstable));
-  OB_UNIS_VERSION_V(COMPLETE_SSTABLE_LOG_VERSION);
-};
 struct ObDeleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   ObITable::TableKey table_key_;
   static const int64_t DELETE_SSTABLE_LOG_VERSION = 1;

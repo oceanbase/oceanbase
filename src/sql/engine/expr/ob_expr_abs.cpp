@@ -272,14 +272,23 @@ int ObExprAbs::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObEx
     // null flag
     ObExprOperator::calc_result_flag1(type, type1);
 
-    if (OB_SUCC(ret) && session->use_static_typing_engine()) {
-      // set calc type for param
-      ObObjType param_calc_type = calc_param_type(type1.get_type(), lib::is_oracle_mode());
-      if (OB_UNLIKELY(ObMaxType == param_calc_type)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid param calc type", K(ret), K(type1.get_type()), K(param_calc_type));
-      } else {
-        type1.set_calc_type(param_calc_type);
+    if (OB_SUCC(ret)) {
+      if (session->use_static_typing_engine()) {
+        // set calc type for param
+        ObObjType param_calc_type = calc_param_type(type1.get_type(),
+                                                    lib::is_oracle_mode());
+        if (OB_UNLIKELY(ObMaxType == param_calc_type)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid param calc type", K(ret), K(type1.get_type()), K(param_calc_type));
+        } else {
+          type1.set_calc_type(param_calc_type);
+        }
+       } else {
+       // set calc type
+        if (type1.get_type() == ObJsonType) {
+          type1.set_calc_type(ObDoubleType);
+          type.set_type(ObDoubleType);
+        }
       }
     }
   } else {
@@ -447,6 +456,9 @@ int ObExprAbs::set_func_mysql(ObObjType param_type)
     case ObEnumType:
     case ObSetType:
       func_ = abs_enum_set;
+      break;
+    case ObJsonType:
+      func_ = abs_double;
       break;
     default: {
       LOG_ERROR("unexpected param type", K(param_type));
@@ -767,7 +779,8 @@ ObObjType ObExprAbs::calc_param_type(const ObObjType orig_param_type, const bool
         break;
       }
       case ObEnumType:
-      case ObSetType: {
+      case ObSetType: 
+      case ObJsonType: {
         calc_type = ObDoubleType;
         break;
       }

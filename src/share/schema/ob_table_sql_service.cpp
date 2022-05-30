@@ -1514,7 +1514,7 @@ int ObTableSqlService::supplement_for_core_table(
   } else {
     MEMSET(orig_default_value_buf, 0, value_buf_len);
     ObWorker::CompatMode compat_mode = ObWorker::CompatMode::INVALID;
-    if (!ob_is_string_type(column.get_data_type())) {
+    if (!ob_is_string_type(column.get_data_type()) && !ob_is_json(column.get_data_type())) {
       if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(column.get_tenant_id(), compat_mode))) {
         LOG_WARN("fail to get tenant mode", K(ret));
       } else {
@@ -1529,7 +1529,7 @@ int ObTableSqlService::supplement_for_core_table(
   }
   ObString orig_default_value;
   if (OB_SUCC(ret)) {
-    if (ob_is_string_type(column.get_data_type())) {
+    if (ob_is_string_type(column.get_data_type()) || ob_is_json(column.get_data_type())) {
       ObString orig_default_value_str = column.get_orig_default_value().get_string();
       orig_default_value.assign_ptr(orig_default_value_str.ptr(), orig_default_value_str.length());
     } else {
@@ -3335,7 +3335,13 @@ int ObTableSqlService::gen_column_dml(
   ObString cur_default_value;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   char* extended_type_info_buf = NULL;
-  if (column.is_generated_column() || ob_is_string_type(column.get_data_type())) {
+  
+  if (ob_is_json(column.get_data_type()) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_313) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("column is json type not support until cluster version not less than 3.1.3.");
+  } else if (column.is_generated_column() ||
+      ob_is_string_type(column.get_data_type()) ||
+      ob_is_json(column.get_data_type())) {
     // The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
     ObString cur_default_value_str = column.get_cur_default_value().get_string();

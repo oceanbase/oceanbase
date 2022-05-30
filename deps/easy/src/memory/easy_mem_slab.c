@@ -278,8 +278,9 @@ static void* easy_mem_cache_grow(easy_mem_cache_t* cache)
   for (i = 0; i < cache->num; i++) {
     slab->next_pos[i] = i + 1;
   }
-
-  slab->next_pos[i - 1] = EASY_MEM_POS_END;
+  // for static safty hole check, i is uint32_t
+  // when i-1,i=0->0-1=unsigned(-1),convert -1 to unsigned as result may overflow
+  if(i>0) slab->next_pos[i - 1] = EASY_MEM_POS_END;
   cache->free_objects += cache->num;
 
   obj = easy_mem_slab_get_obj(cache, slab);

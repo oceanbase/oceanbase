@@ -351,7 +351,7 @@ int easy_ssl_client_do_handshake(easy_connection_t* c)
   rc = easy_ssl_handshake(c);
 
   if (rc == EASY_ERROR) {
-    easy_error_log("easy_ssl_handshake() failed");
+    easy_warn_log("easy_ssl_handshake() failed");
     return EASY_ERROR;
   } else if (rc == EASY_AGAIN) {
     c->sc->handler = easy_ssl_client_handshake_handler;
@@ -368,7 +368,7 @@ void easy_ssl_client_handshake(struct ev_loop* loop, ev_io* w, int revents)
   c = (easy_connection_t*)w->data;
 
   if (easy_ssl_client_do_handshake(c) != EASY_OK) {
-    easy_error_log("easy_ssl_client_handshake failed");
+    easy_warn_log("easy_ssl_client_handshake failed");
     EASY_CONNECTION_DESTROY(c, "ssl_client_handshake");
   }
 }
@@ -460,7 +460,7 @@ static int easy_ssl_handshake(easy_connection_t* c)
   err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 
   if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
-    easy_error_log("peer closed connection in SSL handshake");
+    easy_warn_log("peer closed connection in SSL handshake");
     return EASY_ERROR;
   }
 

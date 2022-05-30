@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SERVER_OMT
 
 #include "common/ob_common_utility.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "lib/oblog/ob_log.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "observer/ob_server_struct.h"
@@ -82,7 +82,7 @@ int ObTenantTimezone::init(ObTenantTimezoneMgr* tz_mgr)
 void ObTenantTimezone::TenantTZUpdateTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (task_lock_.tryLock()) {
+  if (task_lock_.trylock()) {
     if (!tenant_tz_mgr_->get_start_refresh()) {
       const int64_t delay = 1 * 1000 * 1000;
       const bool repeat = false;

@@ -103,11 +103,16 @@ int alloc_key(BtreeKey*& ret_key, int64_t key)
 
 class FakeAllocator : public ObIAllocator {
 public:
-  void* alloc(int64_t size)
+  void *alloc(int64_t size) override
   {
     return ob_malloc(size, attr);
   }
-  void free(void* ptr)
+  void* alloc(const int64_t size, const ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
   {
     ob_free(ptr);
   }

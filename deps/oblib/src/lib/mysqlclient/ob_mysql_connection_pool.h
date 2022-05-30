@@ -193,7 +193,7 @@ protected:
   char db_name_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   char init_sql_[OB_MAX_SQL_LENGTH];
   ObConnPoolConfigParam config_;
-  mutable obsys::CRWLock get_lock_;
+  mutable obsys::ObRWLock get_lock_;
   common::ObArenaAllocator allocator_;
   ClusterList cluster_list_;
   common::ObCachedAllocator<ObServerConnectionPool> server_pool_;

@@ -719,13 +719,9 @@ int ObMPStmtExecute::do_process(
             && !THIS_WORKER.need_retry()
             && !retry_ctrl_.need_retry()) {
           LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
-          // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
-          // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
-          // 则需要在下面回复一个error_packet作为收尾。否则后面没人帮忙发错误包给客户端了，
-          // 可能会导致客户端挂起等回包。
           bool is_partition_hit = session.get_err_final_partition_hit(ret);
           int err = send_error_packet(ret, NULL, is_partition_hit, (void *)(&ctx_.reroute_info_));
-          if (OB_SUCCESS != err) {  // 发送error包
+          if (OB_SUCCESS != err) {  // send error package
             LOG_WARN("send error packet failed", K(ret), K(err));
           }
         }
@@ -1007,6 +1003,7 @@ int ObMPStmtExecute::process()
     int64_t sys_version = 0;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_use_static_typing_engine(false);
+    session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.set_thread_id(GETTID());
     const ObMySQLRawPacket& pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
@@ -1196,7 +1193,8 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
     case MYSQL_TYPE_NEWDECIMAL:
     case MYSQL_TYPE_OB_UROWID:
     case MYSQL_TYPE_ORA_BLOB:
-    case MYSQL_TYPE_ORA_CLOB: {
+    case MYSQL_TYPE_ORA_CLOB:
+    case MYSQL_TYPE_JSON: {
       ObString str;
       ObString dst;
       uint64_t length = 0;
@@ -1227,8 +1225,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
           param.set_urowid(urowid_data);
         }
       } else {
-        if (MYSQL_TYPE_STRING == type || MYSQL_TYPE_VARCHAR == type || MYSQL_TYPE_VAR_STRING == type ||
-            MYSQL_TYPE_ORA_CLOB == type) {
+        if (MYSQL_TYPE_STRING == type 
+            || MYSQL_TYPE_VARCHAR == type 
+            || MYSQL_TYPE_VAR_STRING == type 
+            || MYSQL_TYPE_ORA_CLOB == type 
+            || MYSQL_TYPE_JSON == type ) {
           const int64_t extra_len = MYSQL_TYPE_ORA_CLOB == type
                                         ? str.length() - reinterpret_cast<const ObLobLocator*>(str.ptr())->payload_size_
                                         : 0;
@@ -1286,8 +1287,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
               LOG_TRACE("get lob locator", K(lob), K(cs_type), K(type));
               param.set_lob_locator(lob);
             }
-          } else if (MYSQL_TYPE_TINY_BLOB == type || MYSQL_TYPE_MEDIUM_BLOB == type || MYSQL_TYPE_BLOB == type ||
-                     MYSQL_TYPE_LONG_BLOB == type) {
+          } else if (MYSQL_TYPE_TINY_BLOB == type 
+                || MYSQL_TYPE_MEDIUM_BLOB == type 
+                || MYSQL_TYPE_BLOB == type 
+                || MYSQL_TYPE_LONG_BLOB == type
+                || MYSQL_TYPE_JSON == type) {
             // in ps protocol:
             //    Oracle mode: client driver will call hextoraw()
             //    MySQL mode: no need to call hextoraw
@@ -1303,6 +1307,8 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
               param.set_lob_value(ObTextType, dst.ptr(), dst.length());
             } else if (MYSQL_TYPE_LONG_BLOB == type) {
               param.set_lob_value(ObLongTextType, dst.ptr(), dst.length());
+            } else if (MYSQL_TYPE_JSON == type) {
+              param.set_json_value(ObJsonType, dst.ptr(), dst.length());
             }
           } else {
             param.set_collation_type(cs_type);
@@ -1334,6 +1340,9 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
       ret = OB_ERR_ILLEGAL_TYPE;
       break;
     }
+  }
+  if (OB_SUCC(ret) && share::is_mysql_mode()) {
+    param.set_collation_level(CS_LEVEL_COERCIBLE);
   }
   return ret;
 }

@@ -10,6 +10,10 @@ target_include_directories(
   ${DEP_DIR}/include
 )
 
+set(ARCH_COMPILE_OPTIONS "")
+if(${ARCHITECTURE} STREQUAL "aarch64")
+  set(ARCH_COMPILE_OPTIONS -Wno-extern-c-compat -Wno-atomic-alignment)
+endif()
 if (OB_USE_CLANG)
   target_compile_options(oblib_base_base
     INTERFACE
@@ -24,16 +28,28 @@ if (OB_USE_CLANG)
     -Wno-format-security -Wno-reserved-user-defined-literal -Wno-sometimes-uninitialized
     -Wno-unused-value -Wno-self-assign -Wno-overloaded-virtual
     -Wno-unused-private-field -Wno-mismatched-tags -Wno-unused-variable
-    -Wno-invalid-offsetof -Wno-tautological-compare -Wno-psabi -Wno-c99-designator)
+    -Wno-invalid-offsetof -Wno-tautological-compare -Wno-psabi -Wno-c99-designator
+    ${ARCH_COMPILE_OPTIONS}
+)
 else()
   target_compile_options(oblib_base_base
     INTERFACE
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
     -D_NO_EXCEPTION -Wall -Wno-unused-parameter -Wextra -Wformat -Wno-deprecated
     -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-    -Wno-psabi -Wno-sign-compare -Wno-unused-variable
+    -Wno-psabi -Wno-sign-compare -Wno-unused-variable ${ARCH_COMPILE_OPTIONS}
     $<$<COMPILE_LANGUAGE:C>:-Wno-old-style-declaration>
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-literal-suffix -Wno-invalid-offsetof>)
+
+  if(${ARCHITECTURE} STREQUAL "sw_64")
+    target_compile_options(oblib_base_base
+      INTERFACE
+      -Wno-type-limits -Wno-implicit-fallthrough -Wno-deprecated-declarations
+      -Wno-nonnull-compare -Wno-tautological-compare -Wno-extra -Wno-parentheses
+      -Wno-memset-elt-size -Wno-comment -Wno-int-in-bool-context -Wno-unused-but-set-parameter
+      -Wno-ignored-qualifiers -Wno-unused-but-set-variable -Wno-unused-value -Wno-format-truncation
+      $<$<COMPILE_LANGUAGE:CXX>:-Wno-class-memaccess -Wno-aligned-new>)
+    endif()
 endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)

@@ -578,7 +578,7 @@ int ObCLogMgr::req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStart
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(log_ext_executor_v2_.req_start_log_id_by_ts_with_breakpoint(req_msg, result))) {
-    CLOG_LOG(WARN, "log executorv2 req_start_log_id_by_ts_with_breakpoint failed", K(ret));
+    CLOG_LOG(WARN, "log executor req_start_log_id_by_ts_with_breakpoint failed", K(ret));
   } else {
     // success
   }
@@ -3415,5 +3415,18 @@ bool ObCLogMgr::is_server_archive_stop(const int64_t incarnation, const int64_t 
   return archive_mgr_.is_server_archive_stop(incarnation, archive_round);
 }
 
+int ObCLogMgr::get_server_min_log_ts(int64_t &server_min_log_ts)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "clog_mgr is not inited", KR(ret));
+  } else if (OB_FAIL(log_engine_.get_server_min_log_ts(server_min_log_ts))) {
+    CLOG_LOG(WARN, "failed to get_server_min_log_ts", KR(ret));
+  } else {
+    CLOG_LOG(INFO, "get_server_min_log_ts success", K(server_min_log_ts));
+  }
+  return ret;
+}
 }  // namespace clog
 }  // end namespace oceanbase

@@ -560,8 +560,8 @@ int ObScheTransCtx::handle_timeout(const int64_t delay)
     REC_TRANS_TRACE_EXT(tlog_, handle_timeout, OB_ID(ret), ret, OB_ID(uref), get_uref());
   } else {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K_(trans_id));
-    unregister_timeout_task_();
-    register_timeout_task_(delay);
+    (void)unregister_timeout_task_();
+    (void)register_timeout_task_(delay);
   }
 
   return ret;
@@ -707,7 +707,7 @@ int ObScheTransCtx::end_trans(const ObTransDesc& trans_desc, const bool is_rollb
       }
     }
     if (OB_SUCC(ret)) {
-      set_app_trace_info_(trans_desc.get_trace_info().get_app_trace_info());
+      (void)set_app_trace_info_(trans_desc.get_trace_info().get_app_trace_info());
       set_stc_(commit_time);
       //(void)check_inner_table_commit_();
       if (OB_FAIL(end_trans_(is_rollback, trans_expired_time, stmt_expired_time, need_callback))) {
@@ -2479,7 +2479,7 @@ int ObScheTransCtx::handle_err_response(const int64_t msg_type, const ObPartitio
         trans_2pc_timeout_ = ObServerConfig::get_instance().trx_2pc_retry_interval;
         if (timeout_task_.is_registered()) {
           (void)unregister_timeout_task_();
-          register_timeout_task_(trans_2pc_timeout_);
+          (void)register_timeout_task_(trans_2pc_timeout_);
         }
       }
     } else if (OB_TRANS_CLEAR_REQUEST == msg_type) {
@@ -2616,7 +2616,7 @@ int ObScheTransCtx::handle_xa_trans_response_(const int64_t msg_type, int status
           TRANS_LOG(WARN, "[XA] xa prepare failed", K(ret), K(status), "context", *this);
           is_rollback_ = true;
           is_xa_end_trans_ = true;
-          register_timeout_task_(trans_2pc_timeout_);
+          (void)register_timeout_task_(trans_2pc_timeout_);
           status = OB_TRANS_NEED_ROLLBACK;
           end_trans_callback_(is_rollback_, status);
         } else if (ObXATransState::PREPARED == xa_trans_state_) {
@@ -3084,14 +3084,14 @@ int ObScheTransCtx::xa_rollback_session_terminate()
   */
   else if (has_decided_()) {
     if (!is_xa_one_phase_) {
-      // 已进入两阶段提交阶段的xa事务不再允许执行一阶段提交
+      // forbit one phase commit in two phase commit
       ret = OB_TRANS_XA_PROTO;
       TRANS_LOG(WARN, "xa trans has entered into two phase", "context", *this);
     } else if (!is_rollback_) {
       ret = OB_TRANS_XA_PROTO;
       TRANS_LOG(WARN, "invalid xa trans one phase request", "context", *this);
     } else {
-      // 断连接转发超时，不需要重试
+      // need not retry when rollback
       ret = OB_SUCCESS;
     }
     // ret = OB_ERR_UNEXPECTED;
@@ -3159,6 +3159,9 @@ int ObScheTransCtx::xa_one_phase_end_trans(const bool is_rollback)
         ret = OB_TRANS_XA_RETRY;
       }
     }
+  } else if (!is_rollback && trans_desc_->need_rollback()) {
+    ret = OB_TRANS_NEED_ROLLBACK;
+    TRANS_LOG(WARN, "transaction need rollback", K(ret), K(*this));
   } else {
     if (OB_FAIL(xa_one_phase_end_trans_(is_rollback))) {
       TRANS_LOG(WARN, "xa one phase end trans failed", K(ret), K(is_rollback), K(*this));
@@ -3377,6 +3380,9 @@ int ObScheTransCtx::xa_sync_status_response(const ObTransDesc& trans_desc, const
     tmp_trans_desc_->set_stmt_min_sql_no(trans_desc.get_stmt_min_sql_no());
     sql_no_ = trans_desc.get_sql_no();
     tmp_trans_desc_->get_trans_param() = trans_desc.get_trans_param();
+    if (trans_desc.need_rollback()) {
+      tmp_trans_desc_->set_need_rollback();
+    }
     if (OB_FAIL(tmp_trans_desc_->merge_participants(trans_desc.get_participants()))) {
       TRANS_LOG(WARN, "merge participants failed", K(ret));
     } else if (OB_FAIL(tmp_trans_desc_->merge_participants_pla(trans_desc.get_participants_pla()))) {
@@ -3500,6 +3506,7 @@ int ObScheTransCtx::save_trans_desc_(const ObTransDesc& trans_desc)
     void* ptr = NULL;
     if (OB_UNLIKELY(NULL == (ptr = ob_malloc(sizeof(ObTransDesc), "ObScheTransCtx")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "fail to alloc memory", K(ret), K(*this));
     } else {
       trans_desc_ = new (ptr) ObTransDesc;
     }

@@ -10,100 +10,67 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef TBSYS_MUTEX_H_
-#define TBSYS_MUTEX_H_
+#ifndef THREAD_MUTEX_H_
+#define THREAD_MUTEX_H_
 
 #include <assert.h>
 #include <pthread.h>
 namespace oceanbase {
 namespace obsys {
 
-/*
- * author cjxrobot
- *
- * Linux thread-lock
- */
-
-/**
- * @brief Simple encapsulation of linux thread-lock and mutex-lock
- */
-class CThreadMutex {
+class ThreadMutex {
 
 public:
-  /*
-   * Constructor
-   */
-  CThreadMutex()
-  {
-    // assert(pthread_mutex_init(&_mutex, NULL) == 0);
-    const int iRet = pthread_mutex_init(&_mutex, NULL);
-    (void)iRet;
-    assert(iRet == 0);
+  ThreadMutex() {
+    //assert(pthread_mutex_init(&mutex_, NULL) == 0);
+    const int iRet = pthread_mutex_init(&mutex_, NULL);
+    (void) iRet;
+    assert( iRet == 0 );
   }
 
-  /*
-   * Destructor
-   */
-  ~CThreadMutex()
-  {
-    pthread_mutex_destroy(&_mutex);
+  ~ThreadMutex() {
+    pthread_mutex_destroy(&mutex_);
   }
 
-  /**
-   * Lock
-   */
-
-  void lock()
-  {
-    pthread_mutex_lock(&_mutex);
+  void lock () {
+    pthread_mutex_lock(&mutex_);
   }
 
-  /**
-   * trylock
-   */
-
-  int trylock()
-  {
-    return pthread_mutex_trylock(&_mutex);
+  int trylock () {
+    return pthread_mutex_trylock(&mutex_);
   }
 
-  /**
-   * Unlock
-   */
-  void unlock()
-  {
-    pthread_mutex_unlock(&_mutex);
+  void unlock() {
+    pthread_mutex_unlock(&mutex_);
   }
 
 protected:
-  pthread_mutex_t _mutex;
+
+  pthread_mutex_t mutex_;
 };
 
-/**
- * @brief Thread guard
- */
-class CThreadGuard {
+class ThreadGuard
+{
 public:
-  CThreadGuard(CThreadMutex* mutex)
+  ThreadGuard(ThreadMutex *mutex)
   {
-    _mutex = NULL;
+    mutex_ = NULL;
     if (mutex) {
-      _mutex = mutex;
-      _mutex->lock();
+      mutex_ = mutex;
+      mutex_->lock();
     }
   }
-  ~CThreadGuard()
+  ~ThreadGuard()
   {
-    if (_mutex) {
-      _mutex->unlock();
+    if (mutex_) {
+      mutex_->unlock();
     }
   }
-
 private:
-  CThreadMutex* _mutex;
+  ThreadMutex *mutex_;
 };
 
 }  // namespace obsys
 }  // namespace oceanbase
 
-#endif /*MUTEX_H_*/
+#endif /*THREAD_MUTEX_H_*/

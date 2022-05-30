@@ -81,7 +81,7 @@ void CoBaseSched::run()
       if (OB_SUCC(create_routine(curr->func_))) {
         has_new_routine = true;
         the_tasks.remove(curr);
-        common::ob_free(curr);
+        OB_DELETE(Task, ObModIds::OB_CORO, curr);
       } else {
         break;
       }
@@ -263,10 +263,7 @@ void CoBaseSched::cancel_timer(CoTimer& timer)
 int CoBaseSched::submit(RunFuncT&& func)
 {
   int ret = OB_SUCCESS;
-  Task* t = (Task*)common::ob_malloc(sizeof(Task), ObModIds::OB_CORO);
-  if (t != nullptr) {
-    new (t) Task(func);
-  }
+  Task* t = OB_NEW(Task, ObModIds::OB_CORO, func);
   if (OB_ISNULL(t)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -281,10 +278,7 @@ int CoBaseSched::submit(RunFuncT&& func)
 int CoBaseSched::submit(const RunFuncT& func)
 {
   int ret = OB_SUCCESS;
-  Task* t = (Task*)common::ob_malloc(sizeof(Task), ObModIds::OB_CORO);
-  if (t != nullptr) {
-    new (t) Task(func);
-  }
+  Task* t = OB_NEW(Task, ObModIds::OB_CORO, func);
   if (OB_ISNULL(t)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {

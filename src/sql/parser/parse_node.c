@@ -120,16 +120,16 @@ int count_child(ParseNode* root, void* malloc_pool, int* count)
   } else if (NULL == root) {
     *count = 0;
   } else if (NULL == (stack_top = new_link_node(malloc_pool))) {
-    ret = 1;
+    ret = OB_PARSER_ERR_NO_MEMORY;
     (void)fprintf(stderr, "ERROR failed to malloc memory\n");
   } else {
     *count = 0;
     stack_top->val_ = root;
 
     do {
-      ParseNode* tree = NULL;
-      if (NULL == stack_top || NULL == (tree = (ParseNode*)stack_top->val_)) {
-        ret = 1;
+      ParseNode *tree = NULL;
+      if (NULL == stack_top || NULL == (tree = (ParseNode *)stack_top->val_)) {
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid null argument\n");
       } else {
         stack_top = stack_top->next_;
@@ -142,7 +142,7 @@ int count_child(ParseNode* root, void* malloc_pool, int* count)
         // do nothing
       } else {
         if (NULL == tree->children_) {
-          ret = 1;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(stderr, "ERROR invalid null children\n");
         }
         ParserLinkNode* tmp_node = NULL;
@@ -151,7 +151,7 @@ int count_child(ParseNode* root, void* malloc_pool, int* count)
           if (NULL == child) {
             // do nothing
           } else if (NULL == (tmp_node = new_link_node(malloc_pool))) {
-            ret = 1;
+            ret = OB_PARSER_ERR_NO_MEMORY;
             (void)fprintf(stderr, "ERROR failed to allocate memory\n");
           } else {
             tmp_node->val_ = child;
@@ -171,20 +171,20 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
   int ret = 0;
   ParserLinkNode* stack_top = NULL;
   if (OB_UNLIKELY(NULL == node || NULL == index)) {
-    ret = 1;
+    ret = OB_PARSER_ERR_UNEXPECTED;
     (void)fprintf(stderr, "ERROR node%p or index:%p is NULL\n", node, index);
   } else if (NULL == source_tree) {
     // do nothing
   } else if (NULL == (stack_top = new_link_node(malloc_pool))) {
-    ret = 1;
+    ret = OB_PARSER_ERR_NO_MEMORY;
     (void)fprintf(stderr, "ERROR failed to malloc memory\n");
   } else {
     stack_top->val_ = source_tree;
 
     do {
-      ParseNode* tree = NULL;
-      if (NULL == stack_top || NULL == (tree = (ParseNode*)stack_top->val_)) {
-        ret = 1;
+      ParseNode *tree = NULL;
+      if (NULL == stack_top || NULL == (tree = (ParseNode *)stack_top->val_)) {
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid null argument\n");
       } else {
         // pop stack
@@ -194,11 +194,11 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
         // do nothing
       } else if (T_LINK_NODE != tree->type_) {
         if (OB_UNLIKELY(*index < 0 || *index >= node->num_child_)) {
-          ret = 1;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(
               stderr, "ERROR invalid index: %d, num_child:%d\n tree: %d", *index, node->num_child_, tree->type_);
         } else if (NULL == node->children_) {
-          ret = 1;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(stderr, "ERROR invalid null children pointer\n");
         } else {
           node->children_[*index] = tree;
@@ -207,7 +207,7 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
       } else if (tree->num_child_ <= 0) {
         // do nothing
       } else if (NULL == tree->children_) {
-        ret = 1;
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid children pointer\n");
       } else {
         ParserLinkNode* tmp_node = NULL;
@@ -215,7 +215,7 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
           if (NULL == tree->children_[i]) {
             // do nothing
           } else if (NULL == (tmp_node = new_link_node(malloc_pool))) {
-            ret = 1;
+            ret = OB_PARSER_ERR_NO_MEMORY;
             (void)fprintf(stderr, "ERROR failed to malloc memory\n");
           } else {
             // push stack

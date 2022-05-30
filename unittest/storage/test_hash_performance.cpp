@@ -305,7 +305,6 @@ TEST_F(TestHashMapPerformance, test_performance)
   ObArray<blocksstable::MacroBlockId> block_ids;
   ObArray<int64_t> sstable_block_idx;
   ObArray<blocksstable::MacroBlockId> query_block_ids;
-  ASSERT_EQ(OB_SUCCESS, lib::ObMallocAllocator::get_instance()->init());
   ASSERT_EQ(OB_SUCCESS, generate_data(count, block_ids, sstable_block_idx));
   ASSERT_EQ(OB_SUCCESS, prepare_hash_map(count, 1.0));
   ASSERT_EQ(OB_SUCCESS, prepare_array_hash_map(count, 1.0));

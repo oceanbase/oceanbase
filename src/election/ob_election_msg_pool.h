@@ -49,7 +49,7 @@ public:
   void correct_recordT1_if_necessary(int64_t T1_timestamp);
   int store(const ObElectionVoteMsg& msg);
   int get_decentralized_candidate(common::ObAddr& server,
-      ObElectionPriority& priority,  // get the highest prioirity of server
+      ObElectionPriority& priority,  // get the highest priority of server
       const int64_t replica_num, const int64_t t1, int64_t& lease_time);
   int check_decentralized_majority(common::ObAddr& new_leader,
       int64_t& ticket,  // check if votes for self reach majority

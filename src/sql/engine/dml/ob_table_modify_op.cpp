@@ -403,7 +403,8 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpI
       iter_end_(false),
       saved_session_(NULL),
       fk_self_ref_row_res_infos_()
-{}
+{
+}
 
 int ObTableModifyOp::inner_open()
 {
@@ -658,7 +659,59 @@ int ObTableModifyOp::calc_part_id(const ObExpr* calc_part_id_expr, ObIArray<int6
   return ret;
 }
 
-int ObTableModifyOp::check_row_null(const ObExprPtrIArray& row, const ObIArray<ColumnContent>& column_infos) const
+int ObTableModifyOp::check_row_null(const ObExprPtrIArray &row,
+                                    const ObIArray<ColumnContent> &column_infos,
+                                    const ObIArray<ColumnContent> &update_col_infos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {
+    //兼容oracle, 如果有instead of trigger,不检查NOT NULL约束
+    OV (row.count() == column_infos.count(), OB_ERR_UNEXPECTED, row, column_infos);
+    for (int i = 0; OB_SUCC(ret) && i < update_col_infos.count(); i++) {
+      int64_t col_idx = update_col_infos.at(i).projector_index_;
+      ObDatum *datum = NULL;
+        const bool is_nullable = column_infos.at(col_idx).is_nullable_;
+      if (OB_FAIL(row.at(col_idx)->eval(eval_ctx_, datum))) {
+        const ObTableInsertOp *insert_op = dynamic_cast<const ObTableInsertOp*>(this);
+        const ObTableUpdateOp *update_op = dynamic_cast<const ObTableUpdateOp*>(this);
+        if (nullptr != insert_op) {
+          //compatible with old code
+          log_user_error_inner(ret, col_idx, insert_op->curr_row_num_ + 1, MY_SPEC.column_infos_);
+        } else if (nullptr != update_op) {
+          //compatible with old code
+          log_user_error_inner(ret, col_idx, update_op->get_found_rows() + 1, MY_SPEC.column_infos_);
+        }
+      } else if (!is_nullable && datum->is_null()) {
+        if (MY_SPEC.is_ignore_) {
+          ObObj zero_obj;
+          if (is_oracle_mode()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dml with ignore not supported in oracle mode");
+          } else if (OB_FAIL(ObObjCaster::get_zero_value(
+              column_infos.at(col_idx).column_type_,
+              column_infos.at(col_idx).coll_type_,
+              zero_obj))) {
+            LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(col_idx)));
+          } else if (OB_FAIL(datum->from_obj(zero_obj))) {
+            LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
+          } else {
+            //output warning msg
+            const ObString &column_name = column_infos.at(col_idx).column_name_;
+            LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
+          }
+        } else {
+          const ObString &column_name = column_infos.at(col_idx).column_name_;
+          ret = OB_BAD_NULL_ERROR;
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableModifyOp::check_row_null(const ObExprPtrIArray &row,
+                                    const ObIArray<ColumnContent> &column_infos) const
 {
   int ret = OB_SUCCESS;
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {

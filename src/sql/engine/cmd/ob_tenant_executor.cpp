@@ -26,6 +26,7 @@
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_lock_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_modify_tenant_stmt.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
@@ -39,7 +40,7 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace sql {
-int check_sys_var_options(ObExecContext& ctx, const common::ObIArray<ObVariableSetStmt::VariableSetNode>& sys_var_nodes,
+int check_sys_var_options(ObExecContext& ctx, const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& sys_var_nodes,
     share::schema::ObTenantSchema& tenant_schema, common::ObIArray<obrpc::ObSysVarIdValue>& sys_var_list);
 
 int ObCreateTenantExecutor::execute(ObExecContext& ctx, ObCreateTenantStmt& stmt)
@@ -111,7 +112,7 @@ int ObCreateTenantExecutor::execute(ObExecContext& ctx, ObCreateTenantStmt& stmt
   return ret;
 }
 
-int check_sys_var_options(ObExecContext& ctx, const common::ObIArray<ObVariableSetStmt::VariableSetNode>& sys_var_nodes,
+int check_sys_var_options(ObExecContext& ctx, const common::ObIArray<ObVariableSetStmt::VariableNamesSetNode>& sys_var_nodes,
     share::schema::ObTenantSchema& tenant_schema, common::ObIArray<obrpc::ObSysVarIdValue>& sys_var_list)
 {
   int ret = OB_SUCCESS;
@@ -141,104 +142,110 @@ int check_sys_var_options(ObExecContext& ctx, const common::ObIArray<ObVariableS
           plan_ctx->has_cur_time() ? plan_ctx->get_cur_time().get_timestamp() : ObTimeUtility::current_time();
       phy_plan_ctx.set_cur_time(cur_time, *session);
 
-      ObVariableSetStmt::VariableSetNode tmp_node;  // just for init node
+      ObVariableSetStmt::VariableNamesSetNode tmp_node;  // just for init node
       for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_nodes.count(); ++i) {
-        ObVariableSetStmt::VariableSetNode& cur_node = tmp_node;
+        ObVariableSetStmt::VariableNamesSetNode& var_names_node = tmp_node;
         ObBasicSysVar* sys_var = NULL;
-        if (OB_FAIL(sys_var_nodes.at(i, cur_node))) {
+        if (OB_FAIL(sys_var_nodes.at(i, var_names_node))) {
           LOG_WARN("failed to access node from array", K(ret));
-        } else if (!cur_node.is_system_variable_) {
+        } else if (OB_UNLIKELY(!var_names_node.is_set_variable_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("create tenant can only set system variables", K(cur_node), K(ret));
-        } else if (OB_FAIL(session->get_sys_variable_by_name(cur_node.variable_name_, sys_var))) {
-          LOG_WARN("fail to get_sys_variable_by_name", K(ret));
-        } else if (OB_ISNULL(sys_var)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("got sys var is NULL", K(ret));
-        } else if (cur_node.is_set_default_) {  // set default, then do nothing
+          LOG_WARN("only expect set variables here", K(ret), K(var_names_node));
         } else {
-          ObObj value_obj;
-          // first:calculate value of expression
-          ObNewRow tmp_row;
-          RowDesc row_desc;
-          ObExprGeneratorImpl expr_gen(0, 0, NULL, row_desc);
-          ObSqlExpression sql_expr(ctx.get_allocator(), 0);
-          if (OB_ISNULL(cur_node.value_expr_)) {
+          ObVariableSetStmt::VariableSetNode& cur_node = var_names_node.var_set_node_;
+          if (!cur_node.is_system_variable_) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("node.value_expr_ is NULL", K(ret));
+            LOG_WARN("create tenant can only set system variables", K(cur_node), K(ret));
+          } else if (OB_FAIL(session->get_sys_variable_by_name(cur_node.variable_name_, sys_var))) {
+            LOG_WARN("fail to get_sys_variable_by_name", K(ret));
+          } else if (OB_ISNULL(sys_var)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got sys var is NULL", K(ret));
+          } else if (cur_node.is_set_default_) {  // set default, then do nothing
           } else {
-            if (!is_strict_mode(session->get_sql_mode())) {
-              expr_ctx.cast_mode_ = CM_WARN_ON_FAIL;
-            }
-            if (OB_FAIL(expr_gen.generate(*cur_node.value_expr_, sql_expr))) {
-              LOG_WARN("fail to fill sql expression", K(ret));
-            } else if (FALSE_IT(phy_plan.set_regexp_op_count(expr_gen.get_cur_regexp_op_count()))) {
-            } else if (FALSE_IT(phy_plan.set_like_op_count(expr_gen.get_cur_like_op_count()))) {
-            } else if (OB_FAIL(sql_expr.calc(expr_ctx, tmp_row, value_obj))) {
-              LOG_WARN("fail to calc value", K(*cur_node.value_expr_), K(ret));
-            } else { /*do nothing*/
-            }
-          }
-          // second:convert value to dest type
-          uint64_t fake_tenant_id = OB_INVALID_ID;
-          ObSetVar set_var(cur_node.variable_name_,
-              cur_node.set_scope_,
-              cur_node.is_set_default_,
-              fake_tenant_id,
-              *expr_ctx.calc_buf_,
-              *sql_proxy);
-          if (OB_SUCC(ret)) {
-            ObObj out_obj;
-            const bool is_set_stmt = false;
-            if (OB_FAIL(ObVariableSetExecutor::check_and_convert_sys_var(
-                    ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
-              LOG_WARN("fail to check_and_convert_sys_var", K(cur_node), K(*sys_var), K(value_obj), K(ret));
-            } else if (FALSE_IT(value_obj = out_obj)) {
-            } else if (OB_FAIL(ObVariableSetExecutor::cast_value(
-                           ctx, cur_node, fake_tenant_id, *expr_ctx.calc_buf_, *sys_var, value_obj, out_obj))) {
-              LOG_WARN("fail to cast value", K(cur_node), K(*sys_var), K(value_obj), K(ret));
-            } else if (FALSE_IT(value_obj = out_obj)) {
-            } else { /*do nothing*/
-            }
-          }
-          // add variable value into ObCreateTenantArg
-          if (OB_SUCC(ret)) {
-            if (set_var.var_name_ == OB_SV_COLLATION_SERVER || set_var.var_name_ == OB_SV_COLLATION_DATABASE ||
-                set_var.var_name_ == OB_SV_COLLATION_CONNECTION || set_var.var_name_ == OB_SV_CHARACTER_SET_SERVER ||
-                set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
-                set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("collation or charset can not be modify temporarily", K(set_var), K(ret));
+            ObObj value_obj;
+            // first:calculate value of expression
+            ObNewRow tmp_row;
+            RowDesc row_desc;
+            ObExprGeneratorImpl expr_gen(0, 0, NULL, row_desc);
+            ObSqlExpression sql_expr(ctx.get_allocator(), 0);
+            if (OB_ISNULL(cur_node.value_expr_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node.value_expr_ is NULL", K(ret));
             } else {
-              // read only should also modify tenant_schema
-              if (set_var.var_name_ == OB_SV_READ_ONLY) {
-                if (session->get_in_transaction()) {
-                  ret = OB_ERR_LOCK_OR_ACTIVE_TRANSACTION;
-
-                  LOG_WARN("Can't execute the given command because "
-                           "you have active locked tables or an active transaction",
-                      K(ret));
-                } else {
-                  tenant_schema.set_read_only(value_obj.get_bool());
-                }
+              if (!is_strict_mode(session->get_sql_mode())) {
+                expr_ctx.cast_mode_ = CM_WARN_ON_FAIL;
               }
-              ObSysVarClassType sys_id = sys_var->get_type();
-              ObString val_str;
-              expr_ctx.calc_buf_ = &ctx.get_allocator();  // make sure use this allocator to keep ObString is valid
-              EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-              EXPR_GET_VARCHAR_V2(value_obj, val_str);
-              if (OB_SUCC(ret)) {
-                if (OB_UNLIKELY(val_str.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
-                  ret = OB_SIZE_OVERFLOW;
-                  LOG_WARN("set sysvar value is overflow",
-                      "max length",
-                      OB_MAX_SYS_VAR_VAL_LENGTH,
-                      "value length",
-                      val_str.length(),
-                      K(sys_id),
-                      K(val_str));
-                } else if (OB_FAIL(sys_var_list.push_back(obrpc::ObSysVarIdValue(sys_id, val_str)))) {
-                  LOG_WARN("failed to push back", K(sys_id), K(val_str), K(ret));
+              if (OB_FAIL(expr_gen.generate(*cur_node.value_expr_, sql_expr))) {
+                LOG_WARN("fail to fill sql expression", K(ret));
+              } else if (FALSE_IT(phy_plan.set_regexp_op_count(expr_gen.get_cur_regexp_op_count()))) {
+              } else if (FALSE_IT(phy_plan.set_like_op_count(expr_gen.get_cur_like_op_count()))) {
+              } else if (OB_FAIL(sql_expr.calc(expr_ctx, tmp_row, value_obj))) {
+                LOG_WARN("fail to calc value", K(*cur_node.value_expr_), K(ret));
+              } else { /*do nothing*/
+              }
+            }
+            // second:convert value to dest type
+            uint64_t fake_tenant_id = OB_INVALID_ID;
+            ObSetVar set_var(cur_node.variable_name_,
+                cur_node.set_scope_,
+                cur_node.is_set_default_,
+                fake_tenant_id,
+                *expr_ctx.calc_buf_,
+                *sql_proxy);
+            if (OB_SUCC(ret)) {
+              ObObj out_obj;
+              const bool is_set_stmt = false;
+              if (OB_FAIL(ObVariableSetExecutor::check_and_convert_sys_var(
+                      ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
+                LOG_WARN("fail to check_and_convert_sys_var", K(cur_node), K(*sys_var), K(value_obj), K(ret));
+              } else if (FALSE_IT(value_obj = out_obj)) {
+              } else if (OB_FAIL(ObVariableSetExecutor::cast_value(
+                            ctx, cur_node, fake_tenant_id, *expr_ctx.calc_buf_, *sys_var, value_obj, out_obj))) {
+                LOG_WARN("fail to cast value", K(cur_node), K(*sys_var), K(value_obj), K(ret));
+              } else if (FALSE_IT(value_obj = out_obj)) {
+              } else { /*do nothing*/
+              }
+            }
+            // add variable value into ObCreateTenantArg
+            if (OB_SUCC(ret)) {
+              if (set_var.var_name_ == OB_SV_COLLATION_SERVER || set_var.var_name_ == OB_SV_COLLATION_DATABASE ||
+                  set_var.var_name_ == OB_SV_COLLATION_CONNECTION || set_var.var_name_ == OB_SV_CHARACTER_SET_SERVER ||
+                  set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
+                  set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("collation or charset can not be modify temporarily", K(set_var), K(ret));
+              } else {
+                // read only should also modify tenant_schema
+                if (set_var.var_name_ == OB_SV_READ_ONLY) {
+                  if (session->get_in_transaction()) {
+                    ret = OB_ERR_LOCK_OR_ACTIVE_TRANSACTION;
+
+                    LOG_WARN("Can't execute the given command because "
+                            "you have active locked tables or an active transaction",
+                        K(ret));
+                  } else {
+                    tenant_schema.set_read_only(value_obj.get_bool());
+                  }
+                }
+                ObSysVarClassType sys_id = sys_var->get_type();
+                ObString val_str;
+                expr_ctx.calc_buf_ = &ctx.get_allocator();  // make sure use this allocator to keep ObString is valid
+                EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
+                EXPR_GET_VARCHAR_V2(value_obj, val_str);
+                if (OB_SUCC(ret)) {
+                  if (OB_UNLIKELY(val_str.length() > OB_MAX_SYS_VAR_VAL_LENGTH)) {
+                    ret = OB_SIZE_OVERFLOW;
+                    LOG_WARN("set sysvar value is overflow",
+                        "max length",
+                        OB_MAX_SYS_VAR_VAL_LENGTH,
+                        "value length",
+                        val_str.length(),
+                        K(sys_id),
+                        K(val_str));
+                  } else if (OB_FAIL(sys_var_list.push_back(obrpc::ObSysVarIdValue(sys_id, val_str)))) {
+                    LOG_WARN("failed to push back", K(sys_id), K(val_str), K(ret));
+                  }
                 }
               }
             }
@@ -494,6 +501,33 @@ int ObDropTenantExecutor::execute(ObExecContext& ctx, ObDropTenantStmt& stmt)
     LOG_WARN("rpc proxy drop tenant failed", K(ret));
   }
   return ret;
+}
+
+int ObFlashBackTenantExecutor::execute(ObExecContext &ctx, ObFlashBackTenantStmt &stmt)		
+{		
+  int ret = OB_SUCCESS;		
+  const obrpc::ObFlashBackTenantArg &flashback_tenant_arg = stmt.get_flashback_tenant_arg();		
+  ObTaskExecutorCtx *task_exec_ctx = NULL;		
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;		
+  ObString first_stmt;		
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {		
+     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));		
+  } else {		
+    const_cast<obrpc::ObFlashBackTenantArg&>(flashback_tenant_arg).ddl_stmt_str_ = first_stmt;		
+  }		
+  if (OB_FAIL(ret)) {		
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {		
+    ret = OB_NOT_INIT;		
+    SQL_ENG_LOG(WARN, "get task executor context failed");		
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {		
+    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));		
+  } else if (OB_ISNULL(common_rpc_proxy)){		
+    ret = OB_ERR_UNEXPECTED;		
+    SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));		
+  } else if (OB_FAIL(common_rpc_proxy->flashback_tenant(flashback_tenant_arg))) {		
+    SQL_ENG_LOG(WARN, "rpc proxy flashback tenant failed", K(ret));		
+  }		
+  return ret;		
 }
 
 int ObPurgeTenantExecutor::execute(ObExecContext& ctx, ObPurgeTenantStmt& stmt)

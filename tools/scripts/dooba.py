@@ -101,7 +101,7 @@ class Global:
 class Options(object):
     host = '127.0.0.1'
     port = 2881
-    user = root
+    user = "root"
     password = ""
     database = "oceanbase"
     supermode = False
@@ -1019,7 +1019,7 @@ class oceanbase(object):
     'block index cache hit',
     'block index cache miss',
     'bloom filter cache hit',
-    'bloom filter cache miss'
+    'bloom filter cache miss',
     'bloom filter filts',
     'bloom filter passes',
     'io read bytes',
@@ -1079,7 +1079,13 @@ class oceanbase(object):
             self.app_info = ObConfigHelper().get_app_info(dataid)
 
     def dosql(self, sql, host=None, port=None, database=None):
-        if host is None:
+	cmd = "mysql -V"        
+	p = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+        err = p.wait()
+        if err:
+            raise Exception('please install mysql', cmd)	
+
+	if host is None:
             host = self.__host
         if port is None:
             port = self.__port
@@ -1187,26 +1193,19 @@ class oceanbase(object):
         return True
 
     def __check_schema(self):
+        stat_ids = "stat_id in (10000,10004,10005,10006,30007,30008,30009,"\
+                "40000,40001,40002,40003,40004,40005,40006,40007,40008,40009,40010,40011,40012,40013,"\
+                "50000,50001,50002,50003,50004,50005,50006,50007,50008,50009,50010,50011,"\
+                "60000,60002,60003,60005,130000,130001,130002,130004,"\
+                "190001,190005,190405,190401,190205,190201,190105,190101,190305,190301,190505,190501,190903,190003,190403,190203,"\
+                "190103,190303,190503,190901,190004,190404,190204,190104,190304,190504,190902"\
+                ") "
 
-        sql = """ SELECT unit.svr_ip, unit.svr_port FROM __all_resource_pool pool JOIN __all_unit unit ON (pool.resource_pool_id = unit.resource_pool_id ) WHERE pool.tenant_id = %s ; """ % (str(self.get_current_tenant()))
-        res = self.dosql(sql)
+        sql = """ select current_time(), stat.con_id, stat.svr_ip, stat.svr_port, stat.name, stat.value from gv\$sysstat stat where stat.class IN (1,4,8,16,32,4096) and con_id = %s and (%s) """  % (  str(self.get_current_tenant()) , stat_ids)
 
-        s_join = ""
+        DEBUG(self.__check_schema, "oceanbase.check schema sql : ", sql)
 
-        for one in res.split("\n")[:-1]:
-            a = one.split("\t")
-            if s_join == "":
-                s_join = """ %s (svr_ip = '%s' and svr_port = %s ) """ % ( s_join, a[0], a[1])
-            else:
-                s_join = """ %s or (svr_ip = '%s' and svr_port = %s ) """ % ( s_join, a[0], a[1])
-
-        stat_ids = "stat_id in (10000,10004,10005,10006,30007,30008,30009,40000,40001,40002,40003,40004,40005,40006,40007,40008,40009,40010,40011,40012,40013,50000,50001,50002,50003,50004,50005,50006,50007,50008,50009,50010,50011,60000,60002,60003,60005,130000,130001,130002,130004) "
-
-        sql2 = """ select current_time(), stat.con_id, stat.svr_ip, stat.svr_port, stat.name, stat.value from gv\$sysstat stat where stat.class IN (1,4,8,16,32)   and con_id = %s and (%s) """  % (  str(self.get_current_tenant()) , stat_ids)
-
-        DEBUG(self.__check_schema, "oceanbase.check schema sql : ", sql2)
-
-        return sql2
+        return sql
 
     def __get_cpu_usage(self):
     	#sql = """SELECT t1.tenant_id,t2.zone, t1.svr_ip,t1.svr_port , round(cpu_quota_used/t4.max_cpu, 3) cpu_usage FROM __all_tenant_resource_usage t1 JOIN  __all_server t2 ON (t1.svr_ip=t2.svr_ip and t1.svr_port=t2.svr_port) JOIN __all_resource_pool t3 ON (t1.tenant_id=t3.tenant_id) JOIN __all_unit_config t4 ON (t3.unit_config_id=t4.unit_config_id) WHERE report_time > date_sub(now(), INTERVAL 30 SECOND) AND t1.tenant_id IN (%s)  ORDER BY t1.tenant_id, t2.zone, t1.svr_ip, t1.svr_port; """    % (str(self.get_current_tenant()))
@@ -1389,6 +1388,10 @@ class oceanbase(object):
             try:
                 cur = self.__get_all_stat()
             except Exception:
+                continue
+            if str(oceanbase.get_current_tenant()) not in cur:
+                # tid has changed before result returned, ignore it.
+                prev = self.__get_all_stat()
                 continue
             try:
                 stat_new = self.__sub_stat(cur, prev)
@@ -2668,7 +2671,7 @@ class SelectionBox(Widget):
             flag = 0
             if idx == self.__index:
                 flag = curses.A_BOLD | curses.color_pair(5)
-            self.win().addstr(idx - self.__start_idx + self.__padding_top + 1, 1, line, flag)
+            self.win().addstr(idx - self.__start_idx + self.__padding_top + 1, 1, item, flag)
 
     def run(self, first_movement=None):
         self.__fm = first_movement
@@ -2980,6 +2983,86 @@ def DEBUG(*args):
     global DEV
     if Options.debug :
         print >> DEV, "line %s :%s in [%s] %s %s" % (sys._getframe().f_lineno, time.asctime(), args[0].func_name, args[1], args[2])
+
+
+class TableApiPage(Page):
+    def __add_widgets(self):
+        tid = oceanbase.get_current_tenant()
+        DEBUG(self.__add_widgets, "cur_tenant_id", tid)
+        time_widget = ColumnWidget("TIME-TENANT", [
+            Column("timestamp", lambda stat:
+                stat["timestamp"].strftime("%H:%m:%S"),
+                    10, True),
+            Column("tenant", lambda stat:
+                tid,
+                10, True
+                ),
+            ], self.win())
+        
+        tableapi_widget = ColumnWidget("TABLE API ROWS", [
+            Column("get", lambda stat:(sum([ item["multi retrieve rows"] for item in stat[str(tid)].values() ])
+                    + sum([ item["single retrieve execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("put", lambda stat:(sum([ item["multi insert_or_update rows"] for item in stat[str(tid)].values()])
+                    + sum([ item["single insert_or_update execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("del", lambda stat:(sum([ item["multi delete rows"] for item in stat[str(tid)].values() ])
+                    + sum([ item["single delete execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("ins", lambda stat:(sum([ item["multi insert rows"] for item in stat[str(tid)].values() ])
+                    + sum([ item["single insert execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("upd", lambda stat:(sum([ item["multi update rows"] for item in stat[str(tid)].values() ])
+                    + sum([ item["single update execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("repl", lambda stat:(sum([ item["multi replace rows"] for item in stat[str(tid)].values() ])
+                    + sum([ item["single replace execute count"] for item in stat[str(tid)].values() ])), 6, True),
+            Column("query", lambda stat:(sum([ item["query row count"] for item in stat[str(tid)].values() ])), 6, True),
+            ], self.win())
+
+        tableapi_widget2 = ColumnWidget("TABLE API OPS", [
+            Column("get", lambda stat:(sum([ item["multi retrieve execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("put", lambda stat:(sum([ item["multi insert_or_update execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("del", lambda stat:(sum([ item["multi delete execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("ins", lambda stat:(sum([ item["multi insert execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("upd", lambda stat:(sum([ item["multi update execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("repl", lambda stat:(sum([ item["multi replace execute count"] for item in stat[str(tid)].values()])),6, True),
+            Column("query", lambda stat:(sum([ item["query count"] for item in stat[str(tid)].values()])),6, True),
+            ], self.win())
+
+        tableapi_widget3 = ColumnWidget("Table API RT", [
+            Column("get", lambda stat:(sum([ item["multi retrieve execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi retrieve execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("put", lambda stat:(sum([ item["multi insert_or_update execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi insert_or_update execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("del", lambda stat:(sum([ item["multi delete execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi delete execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("ins", lambda stat:(sum([ item["multi insert execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi insert execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("upd", lambda stat:(sum([ item["multi update execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi update execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("repl", lambda stat:(sum([ item["multi replace execute time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["multi replace execute count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+            Column("query", lambda stat:(sum([ item["query time"] for item in stat[str(tid)].values() ])
+                    / float(sum([ item["query count"] for item in stat[str(tid)].values() ]) or 1) / 1000), 6),
+        ], self.win())
+
+        self.add_widget(time_widget)
+        self.add_widget(tableapi_widget2)
+        self.add_widget(tableapi_widget)
+        self.add_widget(tableapi_widget3)
+
+    def __init__(self, y, x, h, w, parent):
+        Page.__init__(self, parent, Layout(), y, x, h, w)
+        try:
+            self.__add_widgets()
+        except curses.error:
+            pass
+
+    def title(self):
+        return "Table API"
+
+    def process_key(self, ch):
+        if ch == ord('j'):
+            pass
+        else:
+            Page.process_key(self, ch)
+
 
 class SQLPage(Page):
     def update_widgets(self):
@@ -3295,12 +3378,12 @@ class HelpPage(Page):
             system_keys = [('q', 'quit dooba')]
             addgroup("Global Keys  -  System", system_keys)
             support = [
-                ('Author', 'Yudi Shi (fufeng.syd)'),
-                ('Mail', 'fufeng.syd@alipay.com'),
+                ('Author', ''),
+                ('Mail', ''),
                 (),
-                ('project page', ''),
-                ('bug report', ''),
-                ('feature req', '')
+                ('github page', 'https://github.com/oceanbase/oceanbase'),
+                ('bug report', 'https://github.com/oceanbase/oceanbase/issues'),
+                ('feature req', 'https://github.com/oceanbase/oceanbase/issues')
                 ]
             addgroup("Support", support)
         except curses.error:
@@ -3552,14 +3635,14 @@ class Dooba(object):
         self.stat_w = StatusWidget(self.stdscr)
         self.help_w = HeaderWidget(self.stdscr)
 
-        self.__all_page.append(FalloutPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))        # 0
+        self.__all_page.append(FalloutPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 0
         self.__all_page.append(HelpPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))         # 1
         self.__all_page.append(GalleryPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 2
         self.__all_page.append(SQLPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))          # 3
-        self.__all_page.append(HistoryPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 4
-        self.__all_page.append(BianquePage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 5
-        self.__all_page.append(MachineStatPage(2, 0, self.maxy-4, self.maxx, self.stdscr))    # 6
-        self.__all_page.append(BlankPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))        # 7
+        self.__all_page.append(TableApiPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))     # 4
+        self.__all_page.append(HistoryPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 5
+        self.__all_page.append(BianquePage(2, 0, self.maxy - 4, self.maxx, self.stdscr))      # 6
+        self.__all_page.append(MachineStatPage(2, 0, self.maxy-4, self.maxx, self.stdscr))    # 7
         self.__all_page.append(BlankPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))        # 8
         self.__all_page.append(BlankPage(2, 0, self.maxy - 4, self.maxx, self.stdscr))        # 9
         self.__run()

@@ -394,10 +394,12 @@ int ObLocalFileSystem::open(bool& exist)
         ret = OB_CS_OUTOF_DISK_SPACE;
         STORAGE_LOG(ERROR, "data file size is too large, ", K(ret), K(free_space), K(data_file_size_));
       } else {
+        int sys_ret = 0;
         int64_t falloc_size = lower_align(data_file_size_, macro_block_size_);
-        if (OB_FAIL(fallocate(fd_.fd_, 0 /*MODE*/, 0 /*offset*/, falloc_size))) {
+        if (0 != (sys_ret = ::fallocate(fd_.fd_, 0 /*MODE*/, 0 /*offset*/, falloc_size))) {
           ret = OB_IO_ERROR;
-          STORAGE_LOG(ERROR, "allocate file error", K(store_path_), K(falloc_size), K(errno), KERRMSG, K(ret));
+          STORAGE_LOG(
+              ERROR, "allocate file error", K(ret), K(sys_ret), K(store_path_), K(falloc_size), K(errno), KERRMSG);
         }
       }
     }
@@ -803,6 +805,35 @@ int64_t ObLocalFileSystem::get_free_macro_block_count() const
   return store_file_.get_free_macro_block_count();
 }
 
+int64_t ObLocalFileSystem::get_total_macro_block_max_count() const
+{
+  int ret = OB_SUCCESS;
+  int64_t total_space = 0;
+  int64_t free_space = 0;
+  int64_t max_block_count = 0;
+  int64_t max_block_size;
+  int64_t datafile_size = GCONF.datafile_size;
+  int64_t datafile_maxsize = GCONF.datafile_maxsize;
+
+  if (OB_FAIL(FileDirectoryUtils::get_disk_space(sstable_dir_, total_space, free_space))) {
+    STORAGE_LOG(WARN, "Failed to get disk space ", K(ret));
+  } else if (datafile_size > 0 && data_file_size_ < datafile_maxsize ) {  
+    // get total block count of ssblock file. Further more, if auto extend mode is on, 
+    // and the disk is shared, the volume of disk will not fixed 
+    int64_t actual_disk_max_size = data_file_size_ + free_space;
+    actual_disk_max_size = actual_disk_max_size < datafile_maxsize ? 
+      actual_disk_max_size : datafile_maxsize;
+    max_block_size = lower_align(actual_disk_max_size, macro_block_size_);
+  } else {
+    max_block_size = lower_align(data_file_size_, macro_block_size_);   // cur total block cnt
+  }
+
+  if (OB_SUCC(ret)) {
+    max_block_count = max_block_size / macro_block_size_;
+  } 
+  return max_block_count;
+}
+
 int ObLocalFileSystem::get_marker_status(ObMacroBlockMarkerStatus& status)
 {
   return store_file_.get_store_status(status);
@@ -881,7 +912,8 @@ int ObLocalFileSystem::inner_get_super_block_version(const int64_t offset, int64
   return ret;
 }
 
-int ObLocalFileSystem::resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage)
+int ObLocalFileSystem::resize_file(
+    const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage, const int64_t extend_size)
 {
   int ret = OB_SUCCESS;
   int64_t new_cal_data_file_size = new_data_file_size;
@@ -889,9 +921,13 @@ int ObLocalFileSystem::resize_file(const int64_t new_data_file_size, const int64
   int64_t free_space = 0;
   if (OB_FAIL(FileDirectoryUtils::get_disk_space(sstable_dir_, total_space, free_space))) {
     STORAGE_LOG(WARN, "Failed to get disk space ", K(ret));
+  } else if (extend_size > 0) { // auto extend disk size, extend_size default 0
+    int64_t max_extend_size = free_space;
+    max_extend_size = extend_size < max_extend_size ? extend_size : max_extend_size;
+    new_cal_data_file_size = data_file_size_ + max_extend_size;
   } else if (new_cal_data_file_size <= 0) {
     new_cal_data_file_size = total_space * new_data_file_disk_percentage / 100;
-  }
+  } 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = E(EventTable::EN_RESIZE_PHYSICAL_FILE_FAILED) OB_SUCCESS;
@@ -904,21 +940,30 @@ int ObLocalFileSystem::resize_file(const int64_t new_data_file_size, const int64
     const int64_t curr_aligned_file_size = lower_align(data_file_size_, macro_block_size_);
     const int64_t new_aligned_file_size = lower_align(new_cal_data_file_size, macro_block_size_);
     if (curr_aligned_file_size > new_aligned_file_size) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("can not resize file to smaller", K(ret), K(curr_aligned_file_size), K(new_aligned_file_size));
+      ret = OB_ERR_RESIZE_FILE_TO_SMALLER;
+      LOG_WARN("can not resize file to smaller", 
+        K(ret), 
+        K(curr_aligned_file_size), 
+        K(new_aligned_file_size));
     } else if (curr_aligned_file_size == new_aligned_file_size) {
       LOG_INFO("new file size is equal to current file size, do not need to resize file",
           K(curr_aligned_file_size),
           K(new_aligned_file_size));
     } else {
+      int sys_ret = 0;
       const int64_t offset = curr_aligned_file_size;
       const int64_t delta_size = new_aligned_file_size - curr_aligned_file_size;
-      if (OB_FAIL(fallocate(fd_.fd_, 0, offset, delta_size))) {
-        LOG_WARN("fail to expand file size", K(ret), K(offset), K(delta_size), K(errno), KERRMSG);
+      if (0 != (sys_ret = ::fallocate(fd_.fd_, 0, offset, delta_size))) {
+        LOG_WARN("fail to expand file size", 
+          K(ret), K(sys_ret), K(offset), K(delta_size), K(free_space), K(errno), KERRMSG);
       } else {
-        data_file_size_ = new_cal_data_file_size;
-        datafile_disk_percentage_ = new_data_file_disk_percentage;
-        LOG_INFO("succeed to resize file", K(data_file_size_), K(datafile_disk_percentage_));
+          data_file_size_ = new_cal_data_file_size;
+          datafile_disk_percentage_ = new_data_file_disk_percentage;
+          LOG_INFO("succeed to resize file", 
+            K(extend_size), 
+            K(delta_size),
+            K(data_file_size_), 
+            K(datafile_disk_percentage_));
       }
     }
   }

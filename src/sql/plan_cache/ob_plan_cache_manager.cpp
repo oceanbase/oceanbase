@@ -445,6 +445,41 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_free_cache_obj_task()
   }
 }
 
+int ObPlanCacheManager::flush_plan_cache_by_sql_id(uint64_t tenant_id,
+                                                   uint64_t db_id,
+                                                   common::ObString sql_id) {
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  ObPlanCache *plan_cache = get_plan_cache(tenant_id);
+  if (NULL != plan_cache) {
+    if (OB_FAIL(plan_cache->cache_evict_plan_by_sql_id(db_id, sql_id))) {
+      SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
+    }
+    ObArray<DeletedCacheObjInfo> deleted_objs;
+    int64_t safe_timestamp = INT64_MAX;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(observer::ObGlobalReqTimeService::get_instance()
+                          .get_global_safe_timestamp(safe_timestamp))) {
+      SQL_PC_LOG(ERROR, "failed to get global safe timestamp", K(ret));
+    } else if (OB_FAIL(plan_cache->dump_deleted_objs<DUMP_SQL>(deleted_objs, safe_timestamp))) {
+      SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
+    } else {
+      ObCacheObject *to_del_obj = NULL;
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            plan_cache))) {
+            LOG_WARN("failed to destroy cache obj", K(ret));
+        }
+      }
+    }
+    plan_cache->dec_ref_count();
+  }
+  return ret;
+}
+
 int ObPlanCacheManager::flush_all_plan_cache()
 {
   int ret = OB_SUCCESS;

@@ -118,6 +118,7 @@ int check_stack_overflow(bool& is_overflow, int64_t reserved_size /* default equ
 int get_stackattr(void*& stackaddr, size_t& stacksize)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_USE_ASAN
   if (OB_LIKELY(CO_IS_ENABLED())) {
     auto cls = reinterpret_cast<common::ObLocalStore*>(CO_CURRENT().get_context().get_local_store());
     stackaddr = cls->stack_addr_;
@@ -125,6 +126,11 @@ int get_stackattr(void*& stackaddr, size_t& stacksize)
   } else if (OB_LIKELY(g_stackaddr != nullptr)) {
     stackaddr = g_stackaddr;
     stacksize = g_stacksize;
+#else
+  if (OB_LIKELY(g_stackaddr != nullptr)) {
+    stackaddr = g_stackaddr;
+    stacksize = g_stacksize;
+#endif
   } else {
     pthread_attr_t attr;
     if (OB_UNLIKELY(0 != pthread_getattr_np(pthread_self(), &attr))) {
@@ -147,6 +153,7 @@ int get_stackattr(void*& stackaddr, size_t& stacksize)
 
 void set_stackattr(void* stackaddr, size_t stacksize)
 {
+#ifndef OB_USE_ASAN
   if (CO_IS_ENABLED()) {
     auto cls = reinterpret_cast<common::ObLocalStore*>(CO_CURRENT().get_context().get_local_store());
     cls->stack_addr_ = stackaddr;
@@ -155,6 +162,10 @@ void set_stackattr(void* stackaddr, size_t stacksize)
     g_stackaddr = (char*)stackaddr;
     g_stacksize = stacksize;
   }
+#else
+  g_stackaddr = (char *)stackaddr;
+  g_stacksize = stacksize;
+#endif
 }
 
 ObFatalErrExtraInfoGuard::ObFatalErrExtraInfoGuard()

@@ -79,7 +79,7 @@ public:
 
 public:
   explicit ObFIFOAllocator(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
-  ~ObFIFOAllocator();
+  virtual ~ObFIFOAllocator();
 
   int init(ObIAllocator* allocator, const int64_t page_size, const ObMemAttr& attr = default_memattr,
       const int64_t init_size = 0, const int64_t idle_size = 256L << 10, const int64_t max_size = INT64_MAX);

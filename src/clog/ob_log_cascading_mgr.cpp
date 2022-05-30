@@ -229,7 +229,10 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
   } else {
     state_mgr_->reset_need_rebuild();
     state_mgr_->reset_fetch_state();
-    prev_parent_ = parent_;
+    if (parent_.is_valid()) {
+      // update prev_parent by valid old parent
+      prev_parent_ = parent_;
+    }
     parent_ = new_parent;
     if (partition_reach_time_interval(60 * 1000 * 1000, update_parent_warn_time_)) {
       CLOG_LOG(INFO,
@@ -832,7 +835,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_req(const common::ObAddr& server
         assigned_parent_cluster_id = self_cluster_id;
       }
     } else {
-      // 1. self is follwer, if own children list is not full, it will become its parent directly.
+      // 1. self is follower, if own children list is not full, it will become its parent directly.
       if (is_request_leader) {
         // If the requester thinks I am the leader, I will not respond
         ret = OB_NOT_MASTER;

@@ -22,13 +22,34 @@ public:
   explicit ObExprBaseLeastGreatest(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
   virtual ~ObExprBaseLeastGreatest();
-  int calc_result_typeN_oracle(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result_typeN_mysql(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  void set_param_type(const ObExprResType& type, ObExprResType* types, int64_t param_num) const;
-  static int calc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, bool least);
-
+  int calc_result_typeN_oracle(ObExprResType &type,
+                        ObExprResType *types_stack,
+                        int64_t param_num,
+                        common::ObExprTypeCtx &type_ctx) const;
+  int calc_result_typeN_mysql(ObExprResType &type,
+                        ObExprResType *types_stack,
+                        int64_t param_num,
+                        common::ObExprTypeCtx &type_ctx) const;
+  void set_param_type(const ObExprResType &type,
+                      ObExprResType *types,
+                      int64_t param_num) const;
+  static int calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum, bool least);
+  // left < right: return true, else return false.
+  static inline bool cmp_integer(const ObDatum &l_datum, const bool l_is_int,
+                                 const ObDatum &r_datum, const bool r_is_int)
+  {
+    bool ret_bool = true;
+    if (l_is_int && r_is_int) {
+      ret_bool = l_datum.get_int() < r_datum.get_int();
+    } else if (!l_is_int && !r_is_int) {
+      ret_bool = l_datum.get_uint() < r_datum.get_uint();
+    } else if (l_is_int && !r_is_int) {
+      ret_bool = l_datum.get_int() < r_datum.get_uint();
+    } else {
+      ret_bool = l_datum.get_uint() < r_datum.get_int();
+    }
+    return ret_bool;
+  }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLeastGreatest);
@@ -43,8 +64,6 @@ public:
       ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_resultN(
       common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
-  static int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& expected_type, common::ObExprCtx& expr_ctx);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_least(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

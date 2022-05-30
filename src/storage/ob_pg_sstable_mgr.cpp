@@ -937,50 +937,6 @@ int ObPGSSTableMgr::alloc_sstable(const int64_t tenant_id, ObSSTable*& sstable)
   return ret;
 }
 
-int ObPGSSTableMgr::replay_add_old_sstable(ObOldSSTable& sstable)
-{
-  int ret = OB_SUCCESS;
-  ObSSTable* new_sstable = nullptr;
-  TableNode* table_node = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPGSSTableMgr has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!sstable.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(sstable));
-  } else if (OB_FAIL(alloc_sstable(sstable.get_key().get_tenant_id(), new_sstable))) {
-    LOG_WARN("fail to alloc sstable", K(ret));
-  } else if (OB_FAIL(new_sstable->set_storage_file_handle(file_handle_))) {
-    LOG_WARN("fail to set pg file", K(ret));
-  } else if (OB_FAIL(new_sstable->convert_from_old_sstable(sstable))) {
-    LOG_WARN("fail to set sstable", K(ret));
-  } else if (OB_UNLIKELY(!new_sstable->is_valid())) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, sstable must not be null", K(ret));
-  } else if (OB_ISNULL(table_node = table_map_.alloc_node(*new_sstable))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(table_map_.put(*table_node))) {
-    if (OB_HASH_EXIST != ret) {
-      LOG_WARN("fail to put node", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    if (nullptr != table_node) {
-      table_map_.free_node(table_node);
-      table_node = nullptr;
-    }
-    if (nullptr != new_sstable) {
-      free_sstable(new_sstable);
-      new_sstable = nullptr;
-    }
-  }
-  return ret;
-}
-
 int ObPGSSTableMgr::check_all_sstable_unused(bool& all_unused)
 {
   int ret = OB_SUCCESS;
@@ -1009,13 +965,19 @@ int ObPGSSTableMgr::GetCleanOutLogIdFunctor::operator()(ObITable& table, bool& i
 {
   int ret = OB_SUCCESS;
   is_full = false;
-  if (table.get_ref() > 0 && table.is_multi_version_minor_sstable() && table.get_end_log_ts() < clean_out_log_ts_) {
-    clean_out_log_ts_ = table.get_end_log_ts();
+  if (table.get_ref() > 0 && table.is_multi_version_minor_sstable()) {
+    if (table.is_complement_minor_sstable()) {
+      min_complement_log_ts_ = std::min(min_complement_log_ts_, table.get_end_log_ts());
+    } else if (OB_FAIL(clean_out_log_ts_.push_back(table.get_end_log_ts()))) {
+      LOG_WARN("push into the clean out log ts array failed", K(ret));
+    } else {
+      // do nothing
+    }
   }
   return ret;
 }
 
-int ObPGSSTableMgr::get_clean_out_log_ts(int64_t& clean_out_log_ts)
+int ObPGSSTableMgr::get_clean_out_log_ts(ObIArray<int64_t> &clean_out_log_ts)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1026,7 +988,21 @@ int ObPGSSTableMgr::get_clean_out_log_ts(int64_t& clean_out_log_ts)
     if (OB_FAIL(table_map_.foreach (functor))) {
       LOG_WARN("fail to foreach table map", K(ret));
     } else {
-      clean_out_log_ts = functor.get_clean_out_log_ts();
+      functor.sort();
+      const ObIArray<int64_t> &log_ts_array = functor.get_clean_out_log_ts();
+      int64_t last_log_ts = -1;
+      // duplicate log ts may exist, need to remove duplicate
+      for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
+        if (log_ts_array.at(i) < functor.get_min_complement_log_ts()) {
+          if (last_log_ts != log_ts_array.at(i)) {
+            if (OB_FAIL(clean_out_log_ts.push_back(log_ts_array.at(i)))) {
+              LOG_WARN("failed to push back log ts", K(ret));
+            } else {
+              last_log_ts = log_ts_array.at(i);
+            }
+          }
+        }
+      }
     }
   }
   return ret;

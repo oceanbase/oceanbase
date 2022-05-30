@@ -1227,6 +1227,36 @@ int ObLogTableScan::explain_index_selection_info(char* buf, int64_t& buf_len, in
           } else { /* Do nothing */
           }
         }
+        // print unstable index name
+        if (OB_SUCC(ret) && table_opt_info_->unstable_index_name_.count() > 0) {
+          if (OB_FAIL(BUF_PRINTF(", "))) {
+            LOG_WARN("BUF_PRINTF fails", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF("unstable_index_name["))) {
+            LOG_WARN("BUF_PRINTF fails", K(ret));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < table_opt_info_->unstable_index_name_.count(); ++i) {
+              if (OB_FAIL(BUF_PRINTF("%.*s",
+                      table_opt_info_->unstable_index_name_.at(i).length(),
+                      table_opt_info_->unstable_index_name_.at(i).ptr()))) {
+                LOG_WARN("BUF_PRINTF fails", K(ret));
+              } else if (i != table_opt_info_->unstable_index_name_.count() - 1) {
+                if (OB_FAIL(BUF_PRINTF(","))) {
+                  LOG_WARN("BUF_PRINTF fails", K(ret));
+                } else { /* do nothing*/
+                }
+              } else { /* do nothing*/
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(BUF_PRINTF("]"))) {
+              LOG_WARN("BUF_PRINTF fails", K(ret));
+            } else { /* Do nothing */
+            }
+          } else { /* Do nothing */
+          }
+        }
+
         // print est row count infos
         if (OB_SUCC(ret) && est_records_.count() > 0) {
           if (OB_FAIL(BUF_PRINTF(", estimation info[table_id:%ld,", est_records_.at(0).table_id_))) {

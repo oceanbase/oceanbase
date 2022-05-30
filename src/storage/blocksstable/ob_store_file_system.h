@@ -399,7 +399,9 @@ public:
   {
     return super_block_;
   }
-  virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage);
+  virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage, const int64_t extend_size = 0);
+
+  virtual int64_t get_total_macro_block_max_count() const;
 
   VIRTUAL_TO_STRING_KV("ObStoreFileSystem", "empty");
 

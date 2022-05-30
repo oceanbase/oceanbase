@@ -391,7 +391,7 @@ public:
       const common::ObPartitionKey& partition, const int64_t publish_version, const bool for_replay);
   int get_min_uncommit_prepare_version(const ObPartitionKey& partition, int64_t& min_prepare_version);
   int get_min_uncommit_log(const ObPartitionKey& pkey, uint64_t& min_uncommit_log_id, int64_t& min_uncommit_log_ts);
-  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version);
+  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t freeze_ts, int64_t& min_prepare_version);
   int gc_trans_result_info(const ObPartitionKey& pkey, const int64_t checkpoint_ts);
   // get partition iterator
   int iterate_partition(ObPartitionIterator& partition_iter);
@@ -554,8 +554,8 @@ public:
     return &trans_status_mgr_;
   }
   int get_max_trans_version_before_given_log_ts(
-      const ObPartitionKey& pkey, const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const ObPartitionKey& pg_key, const int64_t max_cleanout_log_ts);
+      const ObPartitionKey &pkey, const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObPartitionKey &pg_key, const ObIArray<int64_t> &max_cleanout_log_ts);
   virtual int has_terminated_trx_in_given_log_ts_range(
       const ObPartitionKey& pkey, const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   ObPartTransSameLeaderBatchRpcMgr* get_part_trans_same_leader_batch_rpc_mgr()
@@ -718,7 +718,7 @@ private:
   int convert_sp_trans_to_dist_trans_(ObTransDesc& trans_desc);
   int check_snapshot_for_start_stmt_(const ObTransDesc& trans_desc, const ObPartitionLeaderArray& pla);
   memtable::ObMemtableCtx* alloc_tc_memtable_ctx_();
-  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool is_fast_select, const uint64_t tenant_id,
+  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool tls_enable /*thread local storage*/, const uint64_t tenant_id,
       memtable::ObMemtableCtx*& mt_ctx);
   void release_memtable_ctx_(const common::ObPartitionKey& pg_key, memtable::ObMemtableCtx* mt_ctx);
   int handle_start_stmt_request_(const ObTransMsg& msg);

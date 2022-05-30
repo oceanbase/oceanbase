@@ -200,6 +200,11 @@ int ObSparseCellWriter::write_text_store(const ObObj& obj)
   return ret;
 }
 
+int ObSparseCellWriter::write_json_store(const ObObj &obj)
+{
+  return write_text_store(obj);
+}
+
 int ObSparseCellWriter::write_binary(const enum ObObjType meta_type, const ObString& str)
 {
   int ret = OB_SUCCESS;
@@ -442,6 +447,10 @@ int ObSparseCellWriter::append(const ObObj& obj)
       case ObMediumTextType:
       case ObLongTextType: {
         ret = write_text_store(obj);
+        break;
+      }
+      case ObJsonType: {
+        ret = write_json_store(obj);
         break;
       }
       case ObBitType:

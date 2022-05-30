@@ -147,6 +147,21 @@ private:
 
   int replace_columns_and_aggrs(ObRawExpr*& expr, ObTransformerCtx* ctx);
 
+  /**
+   * @brief
+   * revert subquery alias, only used for update vector assignments
+   *  update t1 set (id, name) = (select id, name from t1 where rownum <= 1) where grade < (select max(grade) from t2
+   * where id < t1.id); after one iteration transformed, the stmt looks like this: update (select id, name,
+   * alias_ref(id) as o1, alias_ref(name) as o2 from t1 where xxx) v set v.id = v.o1, v.name = v.o2; the alias_ref
+   * should not be occurred in the v since v can not be transformed, so we should revert it, the result looks like this:
+   *  update (select id, name from t1 where xxx) v set v.id = alias_ref(id), v.name = alias_ref(name);
+   *
+   * @param child_stmt
+   * @param upper_stmt
+   * @return int
+   */
+  int revert_vec_assign_exprs(ObSelectStmt *&child_stmt, ObDMLStmt *&upper_stmt);
+
   inline bool is_exists_op(const ObItemType type)
   {
     return type == T_OP_EXISTS || type == T_OP_NOT_EXISTS;

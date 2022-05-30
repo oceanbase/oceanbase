@@ -607,7 +607,8 @@ int ObSqlTransControl::decide_trans_read_interface_specs(const char* module, con
   const bool is_build_index_stmt = (stmt::T_BUILD_INDEX_SSTABLE == stmt_type);
   uint64_t tenant_id = session.get_effective_tenant_id();
   const bool stmt_spec_snapshot_version_is_valid = session.has_valid_read_snapshot_version();
-  int32_t isolation = session.get_tx_isolation();
+  int32_t isolation = session.is_in_transaction() ? session.get_trans_desc().get_trans_param().get_isolation()
+                                                  : session.get_tx_isolation();
   const bool is_serializable_trans =
       (ObTransIsolation::SERIALIZABLE == isolation || ObTransIsolation::REPEATABLE_READ == isolation);
 

@@ -1144,39 +1144,35 @@ int ObCodeGeneratorImpl::convert_limit(ObLogLimit& op, const PhyOpsDesc& child_o
     ObSqlExpression* limit_expr = NULL;
     ObSqlExpression* offset_expr = NULL;
     ObSqlExpression* percent_expr = NULL;
-    if (OB_FAIL(op.need_calc_found_rows(need_calc))) {
-      LOG_WARN("need_calc_found_rows() fails unexpectedly", K(ret));
-    } else {
-      phy_op->set_calc_found_rows(need_calc);
-      phy_op->set_is_top_limit(op.is_top_limit());
-      phy_op->set_is_fetch_with_ties(op.is_fetch_with_ties());
-      limit_raw_expr = op.get_limit_count();
-      offset_raw_expr = op.get_limit_offset();
-      percent_raw_expr = op.get_limit_percent();
-      if (NULL != limit_raw_expr) {
-        if (OB_FAIL(generate_sql_expr(
-                phy_op->get_sql_expression_factory(), limit_raw_expr, *child_ops.at(0).second, limit_expr))) {
-          LOG_WARN("Generation of sql expression fails", K(ret));
-        }
+    phy_op->set_calc_found_rows(op.get_is_calc_found_rows());
+    phy_op->set_is_top_limit(op.is_top_limit());
+    phy_op->set_is_fetch_with_ties(op.is_fetch_with_ties());
+    limit_raw_expr = op.get_limit_count();
+    offset_raw_expr = op.get_limit_offset();
+    percent_raw_expr = op.get_limit_percent();
+    if (NULL != limit_raw_expr) {
+      if (OB_FAIL(generate_sql_expr(
+              phy_op->get_sql_expression_factory(), limit_raw_expr, *child_ops.at(0).second, limit_expr))) {
+        LOG_WARN("Generation of sql expression fails", K(ret));
       }
+    }
 
-      if (OB_SUCC(ret) && NULL != offset_raw_expr) {
-        if (OB_FAIL(generate_sql_expr(
-                phy_op->get_sql_expression_factory(), offset_raw_expr, *child_ops.at(0).second, offset_expr))) {
-          LOG_WARN("Generation of sql expression fails", K(ret));
-        }
+    if (OB_SUCC(ret) && NULL != offset_raw_expr) {
+      if (OB_FAIL(generate_sql_expr(
+              phy_op->get_sql_expression_factory(), offset_raw_expr, *child_ops.at(0).second, offset_expr))) {
+        LOG_WARN("Generation of sql expression fails", K(ret));
       }
+    }
 
-      if (OB_SUCC(ret) && NULL != percent_raw_expr) {
-        if (OB_FAIL(generate_sql_expr(
-                phy_op->get_sql_expression_factory(), percent_raw_expr, *child_ops.at(0).second, percent_expr))) {
-          LOG_WARN("Generation of sql expression fails", K(ret));
-        }
+    if (OB_SUCC(ret) && NULL != percent_raw_expr) {
+      if (OB_FAIL(generate_sql_expr(
+              phy_op->get_sql_expression_factory(), percent_raw_expr, *child_ops.at(0).second, percent_expr))) {
+        LOG_WARN("Generation of sql expression fails", K(ret));
       }
-      if (OB_SUCC(ret) && op.is_fetch_with_ties()) {
-        if (OB_FAIL(set_sort_columns_for_fetch(phy_op, input_row_desc, op.get_expected_ordering()))) {
-          LOG_WARN("failed to set limit sort columns for fetch", K(ret));
-        }
+    }
+    if (OB_SUCC(ret) && op.is_fetch_with_ties()) {
+      if (OB_FAIL(set_sort_columns_for_fetch(phy_op, input_row_desc, op.get_expected_ordering()))) {
+        LOG_WARN("failed to set limit sort columns for fetch", K(ret));
       }
     }
 
@@ -7008,7 +7004,7 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   }
 #endif
   // in any case, destroy row desc
-  if (NULL != table_scan_out_ops.at(0).second) {
+  if (table_scan_out_ops.count() > 0 && NULL != table_scan_out_ops.at(0).second) {
     ob_delete(table_scan_out_ops.at(0).second);
   }
   return ret;
@@ -7526,6 +7522,9 @@ int ObCodeGeneratorImpl::set_optimization_info(ObLogTableScan& log_ts, ObTableSc
       if (OB_FAIL(phy_ts->set_available_index_name(
               log_ts.get_table_opt_info()->available_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failed to set available index name", K(ret));
+      } else if (OB_FAIL(phy_ts->set_unstable_index_name(
+                     log_ts.get_table_opt_info()->unstable_index_name_, phy_plan_->get_allocator()))) {
+        LOG_WARN("failedd to set unstable index name", K(ret));
       } else if (OB_FAIL(phy_ts->set_pruned_index_name(
                      log_ts.get_table_opt_info()->pruned_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failedd to set prunned index name", K(ret));

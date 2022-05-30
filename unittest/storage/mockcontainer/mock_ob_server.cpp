@@ -18,7 +18,7 @@
 
 #include "lib/string/ob_sql_string.h"
 #include "lib/io/ob_io_manager.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/partition_table/ob_partition_info.h"
@@ -90,7 +90,7 @@ int MockObServer::init(
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     }
 
-    int32_t local_ip = ntohl(obsys::CNetUtil::getLocalAddr(config_.devname));
+    int32_t local_ip = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
     int32_t local_port = static_cast<int32_t>(config_.rpc_port);
 
     config_.print();

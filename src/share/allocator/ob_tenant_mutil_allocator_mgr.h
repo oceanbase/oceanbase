@@ -68,7 +68,7 @@ private:
 
 private:
   bool is_inited_;
-  obsys::CRWLock locks_[PRESERVED_TENANT_COUNT];
+  obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantMutilAllocator* tma_array_[PRESERVED_TENANT_COUNT];
   ObBlockAllocMgr clog_body_blk_alloc_;
   ObVSliceAlloc clog_entry_alloc_;

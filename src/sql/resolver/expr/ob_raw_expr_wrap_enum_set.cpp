@@ -230,6 +230,8 @@ int ObRawExprWrapEnumSet::visit(ObVarRawExpr& expr)
 int ObRawExprWrapEnumSet::visit(ObQueryRefRawExpr& expr)
 {
   UNUSED(expr);
+  // QueryRef expr for the children of `ObOpRawExpr` will be visited at `visit_query_ref_expr`.
+  // because it depends on the input_type of the parent node.
   return OB_SUCCESS;
 }
 
@@ -293,8 +295,14 @@ int ObRawExprWrapEnumSet::visit(ObOpRawExpr& expr)
           ObRawExpr* param_expr = expr.get_param_expr(i);
           ObObjType calc_type = expr.get_input_types().at(i).get_calc_type();
           ObSysFunRawExpr* new_expr = NULL;
-          if (OB_FAIL(
-                  wrap_type_to_str_if_necessary(param_expr, calc_type, get_current_level(), is_same_need, new_expr))) {
+          if (param_expr->is_query_ref_expr() && !ob_is_enumset_tc(param_expr->get_data_type())) {
+            ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr *>(param_expr);
+            OZ(visit_query_ref_expr(*query_ref_expr, calc_type, is_same_need));
+          } else if (OB_FAIL(wrap_type_to_str_if_necessary(param_expr,
+                                                           calc_type,
+                                                           get_current_level(),
+                                                           is_same_need,
+                                                           new_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
           } else if ((NULL != new_expr) && OB_FAIL(expr.replace_param_expr(i, new_expr))) {
             LOG_WARN("replace param expr failed", K(ret));
@@ -377,6 +385,7 @@ int ObRawExprWrapEnumSet::visit_left_expr(
             LOG_WARN("failed to check_and_wrap_left", K(ret));
           } else if (NULL != wrapped_expr) {
             ref_stmt->get_select_item(i).expr_ = wrapped_expr;
+            left_ref->get_column_types().at(i) = wrapped_expr->get_result_type();
           } else { /*do nothing*/
           }
         }
@@ -528,6 +537,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if (NULL != wrapped_expr) {
           ref_stmt->get_select_item(i).expr_ = wrapped_expr;
+          right_ref.get_column_types().at(i) = wrapped_expr->get_result_type();
         } else { /*do nothing*/
         }
       }
@@ -667,7 +677,9 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr& expr)
 int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  if (expr.has_enum_set_column() && T_FUN_GROUP_CONCAT == expr.get_expr_type()) {
+  if (expr.has_enum_set_column() && (T_FUN_GROUP_CONCAT == expr.get_expr_type() ||
+                                     T_FUN_MAX == expr.get_expr_type() ||
+                                     T_FUN_MIN == expr.get_expr_type())) {
     const ObIArray<ObRawExpr*>& real_parm_exprs = expr.get_real_param_exprs();
     const bool is_same_need = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
@@ -763,14 +775,16 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr& expr)
   int ret = OB_SUCCESS;
   int64_t param_count = expr.get_param_count();
   int64_t input_types_count = expr.get_input_types().count();
+  bool param_copied = false;
   if (OB_UNLIKELY(OB_ISNULL(my_session_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("session is null", K(ret));
   } else if (OB_UNLIKELY(T_FUN_SYS_NULLIF != expr.get_expr_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(expr), K(ret));
-  } else if (OB_UNLIKELY((my_session_->use_static_typing_engine() && 6 != param_count) ||
-                         (!my_session_->use_static_typing_engine() && 2 != param_count))) {
+	} else if (FALSE_IT(param_copied = my_session_->use_static_typing_engine() && !is_oracle_mode())) {
+  } else if (OB_UNLIKELY((param_copied && 6 != param_count)
+             || (!param_copied && 2 != param_count))) {
     // For the new engine, due to the copy of the nullif parameter,
     // there are actually 3 sets of parameters: the original input parameter,
     // the calc type parameter and the result parameter, so there are 6 in total
@@ -780,7 +794,7 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr& expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param_count is not equal to input_types_count", K(param_count), K(input_types_count), K(ret));
   } else {
-    for (int i = 0; i < param_count / 2; ++i) {
+    for (int i = 0; i < param_count && OB_SUCC(ret); i += 2) {
       ObRawExpr* left_param = expr.get_param_expr(i);
       ObRawExpr* right_param = expr.get_param_expr(i + 1);
       if (OB_ISNULL(left_param) || OB_ISNULL(right_param)) {
@@ -824,5 +838,38 @@ int ObRawExprWrapEnumSet::wrap_nullif_expr(ObSysFunRawExpr& expr)
   return ret;
 }
 
+int ObRawExprWrapEnumSet::visit_query_ref_expr(
+    ObQueryRefRawExpr &expr, const ObObjType dest_type, const bool is_same_need)
+{
+  int ret = OB_SUCCESS;
+  if (!expr.has_enum_set_column()) {
+    // no-op if expr doesn't have enumset column
+  } else if (1 == expr.get_output_column() && expr.is_set() &&
+             ob_is_enumset_tc(expr.get_column_types().at(0).get_type())) {
+    ObSelectStmt *ref_stmt = expr.get_ref_stmt();
+    if (OB_ISNULL(ref_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref_stmt should not be NULL", K(expr), K(ret));
+    } else if (OB_UNLIKELY(1 != ref_stmt->get_select_item_size())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item size should be 1", "size", ref_stmt->get_select_item_size(), K(expr), K(ret));
+    } else if (OB_ISNULL(ref_stmt->get_select_item(0).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr of select item is NULL", K(expr), K(ret));
+    } else {
+      ObRawExpr *enumset_expr = ref_stmt->get_select_item(0).expr_;
+      ObSysFunRawExpr *new_expr = NULL;
+      if (OB_FAIL(
+              wrap_type_to_str_if_necessary(enumset_expr, dest_type, get_current_level(), is_same_need, new_expr))) {
+        LOG_WARN("failed to wrap_type_to_str_if_necessary", K(ret));
+      } else if (NULL != new_expr) {
+        // replace with new wrapped expr
+        ref_stmt->get_select_item(0).expr_ = new_expr;
+      } else { /*do nothing*/
+      }
+    }
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

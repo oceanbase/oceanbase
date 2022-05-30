@@ -270,9 +270,16 @@ int ObMultipleMerge::deal_with_tables(ObTableAccessContext& context, ObTablesHan
         read_memtable_only_ = true;
       }
       if (result_tables.count() != tables_handle_.get_count()) {
-        tables_handle_.reset_tables();
-        if (OB_FAIL(tables_handle_.add_tables(result_tables))) {
+        ObTablesHandle tmp_table_handles;
+        if (OB_FAIL(tmp_table_handles.add_tables(result_tables))) {
           STORAGE_LOG(WARN, "failed to push result tables into tables handle", K(ret), K(result_tables));
+        } else {
+          tables_handle_.reset_tables();
+          if (OB_FAIL(tables_handle_.assign(tmp_table_handles))) {
+            STORAGE_LOG(WARN, "failed assgin tables handle", K(ret));
+          } else if (memtable_cnt > 0) {
+            tables_handle_.set_retire_check();
+          }
         }
       }
     }

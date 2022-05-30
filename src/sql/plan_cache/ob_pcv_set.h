@@ -75,10 +75,12 @@ public:
   int init(const ObPlanCacheCtx& pc_ctx, const ObCacheObject* cache_obj);
   void destroy();
 
-  // get plan from pcv_set
-  int get_plan(ObPlanCacheCtx& pc_ctx, ObCacheObject*& plan);
-  // add plan to pcv_set
-  int add_cache_obj(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx);
+  //get plan from pcv_set
+  int get_plan(ObPlanCacheCtx &pc_ctx, ObCacheObject *&plan);
+  //add plan to pcv_set
+  int add_cache_obj(ObCacheObject *cache_obj, ObPlanCacheCtx &pc_ctx);
+  common::ObIArray<common::ObString> &get_sql_id() { return sql_ids_; }
+  int push_sql_id(common::ObString sql_id) { return sql_ids_.push_back(sql_id); }
 
   int64_t inc_ref_count(const CacheRefHandleID ref_handle);
   int64_t dec_ref_count(const CacheRefHandleID ref_handle);
@@ -176,6 +178,7 @@ private:
   int64_t min_merged_version_;
   int64_t min_cluster_version_;
   int64_t plan_num_;
+  common::ObSEArray<common::ObString, 4> sql_ids_;
 
   bool need_check_gen_tbl_col_;
   common::ObFixedArray<PCColStruct, common::ObIAllocator> col_field_arr_;

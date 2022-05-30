@@ -94,7 +94,6 @@ public:
         blocks_(),
         chans_(),
         drain_ch_cnt_(0),
-        receive_ch_sets_(),
         dfo_key_(),
         op_metric_(nullptr),
         first_buf_cache_(nullptr),
@@ -219,6 +218,7 @@ public:
   {
     chans_.reset();
     blocks_.reset();
+    ch_info_ = nullptr;
     is_init_ = false;
   }
 
@@ -288,10 +288,6 @@ public:
   {
     dfo_key_ = key;
   }
-  ObPxTaskChSets& get_all_ch_set_for_update()
-  {
-    return receive_ch_sets_;
-  }
 
   ObDtlLocalFirstBufferCache* get_first_buffer_cache()
   {
@@ -342,7 +338,6 @@ private:
   common::ObSEArray<ObDtlChannel*, 16> chans_;
 
   uint64_t drain_ch_cnt_;
-  ObPxTaskChSets receive_ch_sets_;
   ObDtlDfoKey dfo_key_;
   sql::ObOpMetric* op_metric_;
 

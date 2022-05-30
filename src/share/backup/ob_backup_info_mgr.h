@@ -45,7 +45,6 @@ struct ObLogArchiveSimpleInfo final {
       K_(cur_piece_create_date), K_(is_piece_freezing), K_(prev_piece_id), K_(prev_piece_create_date));
 };
 
-// 用于切主后确认pg的checkpoint ts，可能会触发内部表的访问。
 class ObLogArchiveInfoMgr final {
 public:
   static ObLogArchiveInfoMgr &get_instance();
@@ -166,11 +165,19 @@ public:
   static int get_restore_sys_table_ids(
       const ObPhysicalRestoreInfo &info, common::ObIArray<common::ObPartitionKey> &pkey_list);
 
+  static int check_is_snapshot_restore(const int64_t backup_snapshot, const int64_t restore_timestamp,
+      const uint64_t cluster_version, bool &is_snapshot_restore);
+
 private:
   // get info from cluster backup dest level
   static int get_restore_backup_info_v1_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
   // get info from simple path level
   static int get_restore_backup_info_v2_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
+  static int inner_get_restore_backup_set_info_(const GetRestoreBackupInfoParam &param,
+      ObBackupSetFileInfo &backup_set_info, ObExternTenantLocalityInfo &tenant_locality_info,
+      common::ObIArray<common::ObPGKey> &sys_pg_keys);
+  static int inner_get_restore_backup_piece_info_(
+      const GetRestoreBackupInfoParam &param, ObBackupPieceInfo &piece_info);
 };
 
 class ObRestoreFatalErrorReporter : public share::ObThreadPool {

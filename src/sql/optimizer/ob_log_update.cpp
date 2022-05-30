@@ -333,3 +333,22 @@ int ObLogUpdate::est_cost()
   }
   return ret;
 }
+
+int ObLogUpdate::inner_replace_generated_agg_expr(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(all_table_columns_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null all_table_columns", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns_->count(); i++) {
+      IndexDMLInfo &index_dml_info =
+          const_cast<common::ObIArray<TableColumns> *>(all_table_columns_)->at(i).index_dml_infos_.at(0);
+      if (OB_FAIL(replace_exprs_action(to_replace_exprs, index_dml_info.column_convert_exprs_))) {
+        LOG_WARN("failed to replace aggr exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}

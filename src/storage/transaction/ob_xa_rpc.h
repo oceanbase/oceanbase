@@ -35,6 +35,7 @@ class ObXAPrepareRPCRequest {
 
 public:
   ObXAPrepareRPCRequest()
+      : trans_id_(), xid_(), stmt_timeout_(-1)
   {}
   ~ObXAPrepareRPCRequest()
   {}
@@ -68,6 +69,7 @@ class ObXAEndTransRPCRequest {
 
 public:
   ObXAEndTransRPCRequest()
+      : trans_id_(), xid_(), is_rollback_(false), is_terminated_(false)
   {}
   ~ObXAEndTransRPCRequest()
   {}
@@ -112,6 +114,8 @@ class ObXASyncStatusRPCRequest {
 
 public:
   ObXASyncStatusRPCRequest()
+      : trans_id_(), xid_(), sender_(), is_new_branch_(false), is_stmt_pull_(false), is_tightly_coupled_(false),
+        pull_trans_desc_(false), timeout_seconds_(-1)
   {}
   ~ObXASyncStatusRPCRequest()
   {}
@@ -177,6 +181,7 @@ class ObXASyncStatusRPCResponse {
 
 public:
   ObXASyncStatusRPCResponse()
+      : trans_desc_(), is_stmt_pull_(false)
   {}
   ~ObXASyncStatusRPCResponse()
   {}
@@ -205,6 +210,7 @@ class ObXAMergeStatusRPCRequest {
 
 public:
   ObXAMergeStatusRPCRequest()
+      : trans_desc_(), is_stmt_push_(false), is_tightly_coupled_(false), xid_(), seq_no_(-1)
   {}
   ~ObXAMergeStatusRPCRequest()
   {}
@@ -249,6 +255,7 @@ class ObXAHbRequest {
 
 public:
   ObXAHbRequest()
+      : trans_id_(), xid_(), sender_()
   {}
   ~ObXAHbRequest()
   {}

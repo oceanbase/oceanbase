@@ -15,6 +15,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
+#include "math.h"
 
 namespace oceanbase {
 namespace common {
@@ -574,6 +575,36 @@ void* ObCharset::charset_arr[CS_TYPE_MAX] = {
     // NULL,  // 96
 };
 
+double ObCharset::strntodv2(const char *str, size_t str_len, char **endptr, int *err)
+{
+  double result = 0.0;
+  if (lib::is_oracle_mode()) {
+    ObString str_orig(str_len, str);
+    ObString str_trim = str_orig.trim();
+    if ((str_trim.case_compare("NAN") == 0)
+            || (str_trim.case_compare("-NAN") == 0)
+            || (str_trim.case_compare("+NAN") == 0)) {
+      result = NAN;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else if ((str_trim.case_compare("+INFINITY") == 0)
+           || (str_trim.case_compare("INFINITY") == 0)
+           || (str_trim.case_compare("INF") == 0)) {
+      result = INFINITY;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else if ((str_trim.case_compare("-INFINITY") == 0)
+            || (str_trim.case_compare("-INF") == 0)) {
+      result = -INFINITY;
+      *endptr = str_trim.ptr() + str_trim.length();
+    } else {
+      result = strntod(str, str_len, endptr, err);
+    }
+  } else {
+    result = strntod(str, str_len, endptr, err);
+  }
+
+  return result;
+}
+
 double ObCharset::strntod(const char* str, size_t str_len, char** endptr, int* err)
 {
   ObCharsetInfo* cs = &ob_charset_bin;
@@ -852,6 +883,7 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
         OB_MAX_WEIGHT,
         reinterpret_cast<const unsigned char*>(str),
         str_len,
+        0,
         &is_valid_unicode_tmp);
     is_valid_unicode = is_valid_unicode_tmp;
   }
@@ -2076,14 +2108,6 @@ int ObCharset::get_mbminlen_by_coll(const ObCollationType collation_type, int64_
 
 /*in order to prevent a char from be splitted into 2 blocks
 We have to get the right bound of a string in terms a block
-Take "我爱你" as an example
-if len_limit_in_byte = 8 which means that the max size of a block is 8 Bytes
-since '我' and '爱' takes 6 Bytes in total already.
-and '你' takes 3 Bytes.
-if we assign the '你' to the block
-then the total length will be 9 which is greater than 8
-so , byte_num = 6  and char_num = 2 will be returned.
-and '你' has to be assigned to another block.
 
 Please note that:
 

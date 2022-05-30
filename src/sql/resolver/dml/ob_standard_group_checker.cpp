@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_standard_group_checker.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/resolver/dml/ob_any_value_checker.h"
 namespace oceanbase {
 using namespace common;
 namespace sql {
@@ -96,7 +97,8 @@ int ObStandardGroupChecker::check_only_full_group_by()
     // not check aggregate function or column in aggregate function, such as select count(c1) from t1 group by c2;
     // but if expr has column outside of aggregate function, we only check the column not in aggregate function
     // such as: select c1+count(c2) from t1 group by c1;
-    const ObUnsettledExprItem& unsettled_expr = unsettled_exprs_.at(i);
+    const ObUnsettledExprItem &unsettled_expr = unsettled_exprs_.at(i);
+    common::ObArray<const ObColumnRefRawExpr *> undefined_columns;
     for (int64_t j = unsettled_expr.start_idx_;
          OB_SUCC(ret) && j < unsettled_expr.start_idx_ + unsettled_expr.dependent_column_cnt_;
          ++j) {
@@ -110,13 +112,22 @@ int ObStandardGroupChecker::check_only_full_group_by()
       } else if (OB_FAIL(check_unsettled_column(unsettled_column, undefined_column))) {
         LOG_WARN("check unsettled column failed", K(ret));
       } else if (undefined_column != NULL) {
-        break;
+        //当前stmt中存在undefined的列，根据only full group
+        //by语义，如果一个表达式中所有列都是defined，那么该表达式是defined
+        //如果所有列不能保证defined，需要看看表达式本身是否是defined
+        //例如：select c1+c2 from t1 group by c1, c1+c2
+        // c1是defined列，c2不是，c1+c2整体是defined，所以这条语句满足only full group by
+        undefined_columns.push_back(undefined_column);
+        undefined_column = NULL;
       }
     }
-    if (OB_SUCC(ret) && undefined_column != NULL) {
-      // has undefined column, must check expr whether defined in group by
-      if (OB_FAIL(check_unsettled_expr(unsettled_expr.expr_, *undefined_column))) {
-        LOG_WARN("check unsettled expr failed", K(ret));
+    if (OB_SUCC(ret) && 0 != undefined_columns.size()) {
+      // has undefined column, must check expr whether defined in group by or in any_value
+      for (int64_t i = 0; OB_SUCC(ret) && i < undefined_columns.size(); ++i) {
+        if (OB_FAIL(check_unsettled_expr(unsettled_expr.expr_, *(undefined_columns.at(i))))) {
+          LOG_WARN("check unsettled expr failed", K(ret));
+          break;
+        }
       }
     }
     if (OB_SUCC(ret) && !unsettled_expr.expr_->has_flag(CNT_AGG)) {
@@ -180,9 +191,6 @@ int ObStandardGroupChecker::check_unsettled_expr(
     // but if expr has column outside of aggregate function, we only check the column not in aggregate function
     // such as: select c1+count(c2) from t1 group by c1;
     ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-    ObString column_name = concat_qualified_name(
-        undefined_column.get_database_name(), undefined_column.get_table_name(), undefined_column.get_column_name());
-    LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
     LOG_DEBUG("column not in group by", K(*unsettled_expr), K(undefined_column));
   } else if (OB_HASH_EXIST == (ret = settled_columns_.exist_refactored(reinterpret_cast<int64_t>(unsettled_expr)))) {
     // this expr satisfy the only full group by semantic constraints
@@ -201,12 +209,29 @@ int ObStandardGroupChecker::check_unsettled_expr(
     }
     if (OB_SUCC(ret) && !is_defined) {
       ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-      ObString column_name = concat_qualified_name(
-          undefined_column.get_database_name(), undefined_column.get_table_name(), undefined_column.get_column_name());
-      LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
     }
   } else {
     LOG_WARN("check unsettled expr failed", K(ret));
+  }
+
+  if (OB_ERR_WRONG_FIELD_WITH_GROUP == ret || OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS == ret) {
+    int tmp_ret = ret;
+    ObAnyValueChecker any_value_checker;
+    if (OB_FAIL(any_value_checker.check_any_value(unsettled_expr, &undefined_column))) {
+      LOG_WARN("check any value expr fail", K(ret));
+    } else {
+      if (any_value_checker.is_pass_after_check()) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = tmp_ret;
+        if (OB_ERR_WRONG_FIELD_WITH_GROUP == ret) {
+          ObString column_name = concat_qualified_name(undefined_column.get_database_name(),
+              undefined_column.get_table_name(),
+              undefined_column.get_column_name());
+          LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
+        }
+      }
+    }
   }
   return ret;
 }

@@ -40,18 +40,23 @@ int ObPrimaryZoneUtil::init(const common::ObIArray<common::ObString>& zone_list)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
-    MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
-    primary_zone_str_[len] = '\0';
-    common::ObZone zone;
-    for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count(); ++i) {
-      zone.reset();
-      if (OB_FAIL(zone.assign(zone_list.at(i).ptr()))) {
-        LOG_WARN("fail to assign zone", K(ret));
-      } else if (OB_FAIL(zone_list_.push_back(zone))) {
-        LOG_WARN("fail to push back", K(ret));
-      } else {
-      }  // no more to do
+    int64_t len = primary_zone_.length();
+    if (common::MAX_ZONE_LENGTH < len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+    } else {
+      MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
+      primary_zone_str_[len] = '\0';
+      common::ObZone zone;
+      for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count(); ++i) {
+        zone.reset();
+        if (OB_FAIL(zone.assign(zone_list.at(i).ptr()))) {
+          LOG_WARN("fail to assign zone", K(ret));
+        } else if (OB_FAIL(zone_list_.push_back(zone))) {
+          LOG_WARN("fail to push back", K(ret));
+        } else {
+        }  // no more to do
+      }
     }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -72,14 +77,19 @@ int ObPrimaryZoneUtil::init(const common::ObIArray<common::ObZone>& zone_list)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
-    MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
-    primary_zone_str_[len] = '\0';
-    for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count(); ++i) {
-      if (OB_FAIL(zone_list_.push_back(zone_list.at(i)))) {
-        LOG_WARN("fail to push back", K(ret));
-      } else {
-      }  // no more to do
+    int64_t len = primary_zone_.length();
+    if (common::MAX_ZONE_LENGTH < len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+    } else {
+      MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
+      primary_zone_str_[len] = '\0';
+      for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count(); ++i) {
+        if (OB_FAIL(zone_list_.push_back(zone_list.at(i)))) {
+          LOG_WARN("fail to push back", K(ret));
+        } else {
+        }  // no more to do
+      }
     }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
@@ -99,10 +109,15 @@ int ObPrimaryZoneUtil::init()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), KP(zone_region_list_));
   } else {
-    int64_t len = strlen(primary_zone_.ptr());
-    MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
-    primary_zone_str_[len] = '\0';
-    is_inited_ = true;
+    int64_t len = primary_zone_.length();
+    if (common::MAX_ZONE_LENGTH < len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+    } else {
+      MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
+      primary_zone_str_[len] = '\0';
+      is_inited_ = true;
+    }
   }
   return ret;
 }

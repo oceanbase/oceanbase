@@ -165,6 +165,7 @@ ObExpr::ObExpr()
       obj_meta_(),
       max_length_(UINT32_MAX),
       obj_datum_map_(OBJ_DATUM_NULL),
+      is_boolean_(0),
       eval_func_(NULL),
       inner_functions_(NULL),
       inner_func_cnt_(0),

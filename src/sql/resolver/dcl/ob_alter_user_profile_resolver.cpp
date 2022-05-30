@@ -101,7 +101,7 @@ int ObAlterUserProfileResolver::resolve_role_list(const ParseNode* role_list, ob
         role_name.assign_ptr(const_cast<char*>(role->str_value_), static_cast<int32_t>(role->str_len_));
         ObString host_name(OB_DEFAULT_HOST_NAME);
         if (OB_FAIL(params_.schema_checker_->get_user_info(arg.tenant_id_, role_name, host_name, role_info))) {
-          if (OB_USER_NOT_EXIST == ret) {
+          if (OB_USER_NOT_EXIST == ret || OB_ISNULL(role_info) || !role_info->is_role()) {
             if (for_default_role_stmt) {
               ret = OB_ROLE_NOT_EXIST;
               LOG_USER_ERROR(OB_ROLE_NOT_EXIST, role_name.length(), role_name.ptr());

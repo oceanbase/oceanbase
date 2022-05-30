@@ -63,7 +63,9 @@ private:
   pid_t pid_;
   pid_t tid_;
   Runnable runnable_;
-  void* stack_addr_;
+#ifndef OB_USE_ASAN
+  void *stack_addr_;
+#endif
   int64_t stack_size_;
   bool stop_;
 };

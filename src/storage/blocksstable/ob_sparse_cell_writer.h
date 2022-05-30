@@ -49,6 +49,7 @@ private:
   inline int write_ext(const int64_t ext_value);
   inline int get_int_byte(int64_t int_value);
   int write_text_store(const common::ObObj& obj);
+  int write_json_store(const common::ObObj &obj);
 
 private:
   char* buf_;

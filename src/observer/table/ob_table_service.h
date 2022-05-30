@@ -20,6 +20,11 @@
 #include "share/schema/ob_table_param.h"
 namespace oceanbase
 {
+namespace table
+{
+class ObHTableFilterOperator;
+class ObHColumnDescriptor;
+} // end namespace table
 namespace storage
 {
 class ObPartitionService;
@@ -34,6 +39,7 @@ using table::ObTableBatchOperationResult;
 using table::ObITableBatchOperationResult;
 using table::ObTableQuery;
 using table::ObTableQueryResult;
+using table::ObTableQuerySyncResult;
 class ObTableApiProcessorBase;
 class ObTableService;
 class ObTableApiRowIterator;
@@ -121,7 +127,7 @@ class ObNormalTableQueryResultIterator: public table::ObTableQueryResultIterator
 {
 public:
   ObNormalTableQueryResultIterator(const ObTableQuery &query, table::ObTableQueryResult &one_result)
-      :one_result_(one_result),
+      :one_result_(&one_result),
        query_(&query),
        last_row_(NULL),
        batch_size_(query.get_batch()),
@@ -129,15 +135,19 @@ public:
                                  static_cast<int64_t>(common::OB_MAX_PACKET_BUFFER_LENGTH-1024))),
        scan_result_(NULL),
        is_first_result_(true),
-       has_more_rows_(true)
+       has_more_rows_(true),
+       is_query_sync_(false)
   {
   }
   virtual ~ObNormalTableQueryResultIterator() {}
   virtual int get_next_result(table::ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override;
   void set_scan_result(common::ObNewRowIterator *scan_result) { scan_result_ = scan_result; }
+  virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
+  void set_query(const ObTableQuery *query) {query_ = query;}
+  void set_query_sync() { is_query_sync_ = true ; }
 private:
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   const ObTableQuery *query_;
   common::ObNewRow *last_row_;
   int32_t batch_size_;
@@ -145,16 +155,19 @@ private:
   common::ObNewRowIterator *scan_result_;
   bool is_first_result_;
   bool has_more_rows_;
+  bool is_query_sync_;
 };
 
 struct ObTableServiceQueryCtx: public ObTableServiceGetCtx
 {
 public:
   ObNormalTableQueryResultIterator *normal_result_iterator_;
+  table::ObHTableFilterOperator *htable_result_iterator_;
 public:
   ObTableServiceQueryCtx(common::ObArenaAllocator &alloc)
       :ObTableServiceGetCtx(alloc),
-       normal_result_iterator_(NULL)
+       normal_result_iterator_(NULL),
+       htable_result_iterator_(NULL)
   {}
   void reset_query_ctx(storage::ObPartitionService *part_service)
   {
@@ -163,6 +176,8 @@ public:
   }
   ObNormalTableQueryResultIterator *get_normal_result_iterator(const ObTableQuery &query,
                                                                table::ObTableQueryResult &one_result);
+  table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
+                                                            table::ObTableQueryResult &one_result);
   void destroy_result_iterator(storage::ObPartitionService *part_service);
 };
 
@@ -215,7 +230,7 @@ private:
                                           common::ObIArray<uint64_t> &column_ids,
                                           common::ObIArray<sql::ObExprResType> *columns_type);
 
-  int insert_or_update_can_use_put(uint64_t table_id, const table::ObITableEntity &entity, bool &use_put);
+  int insert_or_update_can_use_put(table::ObTableEntityType entity_type, uint64_t table_id, const table::ObITableEntity &entity, bool &use_put);
   int add_one_result(ObTableBatchOperationResult &result,
                      table::ObTableOperationType::Type op_type,
                      int32_t error_code,
@@ -242,7 +257,7 @@ private:
       const ObTableBatchOperation &batch_operation,
       ObTableApiRowIterator *scan_result,
       ObTableBatchOperationResult &result);
-  int delete_can_use_put(uint64_t table_id, bool &use_put);
+  int delete_can_use_put(table::ObTableEntityType entity_type, uint64_t table_id, bool &use_put);
   static int cons_all_index_properties(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema &table_schema,
                                        common::ObIArray<uint64_t> &column_ids,
@@ -282,7 +297,8 @@ private:
                              common::ObIArray<sql::ObExprResType> &rowkey_columns_type,
                              int64_t &schema_version,
                              uint64_t &index_id,
-                             int64_t &padding_num);
+                             int64_t &padding_num,
+                             table::ObHColumnDescriptor *hcolumn_desc);
   int fill_query_scan_ranges(ObTableServiceCtx &ctx,
                              const ObTableQuery &query,
                              int64_t padding_num,
@@ -295,6 +311,7 @@ private:
                             int32_t limit,
                             int32_t offset,
                             storage::ObTableScanParam &scan_param);
+  int check_htable_query_args(const ObTableQuery &query);
 private:
   int fill_new_entity(
       bool returning_rowkey,

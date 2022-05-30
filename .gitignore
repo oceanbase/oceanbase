@@ -59,6 +59,13 @@ src/election/election_admin
 src/sql/parser/*.output
 src/sql/parser/expr_parser.output
 src/sql/parser/sql_parser.output
+src/sql/parser/sql_parser_mysql_mode_lex.c
+src/sql/parser/sql_parser_mysql_mode_lex.h
+src/sql/parser/sql_parser_mysql_mode_tab.c
+src/sql/parser/sql_parser_mysql_mode_tab.h
+src/sql/parser/type_name.c
+src/sql/parser/_gen_parser.output
+src/sql/parser/_gen_parser.error
 tags
 unittest/clog/deploy/log_tool
 unittest/clog/deploy/ob_server_main
@@ -86,9 +93,7 @@ test/tmp
 test/var
 *.ccls-cache/
 .cproject
-
-###### Docs website files
-docs/site
+.cache
 
 ##### Git Sub Module
 deps/logmessage
@@ -101,3 +106,18 @@ cmake-build-release
 
 ###### OSX dir files
 .DS_Store
+
+###### Debug bin and configuration
+tools/deploy/bin
+tools/deploy/config2.py
+tools/deploy/.obd
+tools/deploy/distributed-with-proxy.yaml
+tools/deploy/distributed.yaml
+tools/deploy/obd_profile.sh
+tools/deploy/single-with-proxy.yaml
+tools/deploy/single.yaml
+
+###### binary and test logs
+tools/ob-configserver/bin/*
+tools/ob-configserver/tests/*.log
+tools/ob-configserver/tests/*.out

@@ -329,6 +329,9 @@ int ObURowIDData::decode_base64_str(
     ret = OB_INVALID_ROWID;
     COMMON_LOG(WARN, "invalid urowid format", K(ret));
   } else if (OB_FAIL(ObBase64Encoder::decode(input + 1, input_len - 1, output, output_len, pos))) {
+    if (ret == OB_INVALID_ARGUMENT) {
+      ret = OB_INVALID_ROWID;
+    }
     COMMON_LOG(WARN, "failed to decode base64 str", K(ret));
   }
   return ret;

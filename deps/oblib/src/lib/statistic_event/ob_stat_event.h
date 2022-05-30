@@ -86,10 +86,12 @@ STAT_EVENT_ADD_DEF(TRANS_SINGLE_PARTITION_COUNT, "trans single partition count",
     "trans single partition count", 30012, true, true)
 STAT_EVENT_ADD_DEF(TRANS_MULTI_PARTITION_COUNT, "trans multi partition count", ObStatClassIds::TRANS,
     "trans multi partition count", 30013, true, true)
-// STAT_EVENT_ADD_DEF(TRANS_DISTRIBUTED_STMT_COUNT, "trans distributed stmt count", TRANS, "trans distributed stmt
-// count", 30014) STAT_EVENT_ADD_DEF(TRANS_LOCAL_STMT_COUNT, "trans local stmt count", TRANS, "trans local stmt count",
-// 30015) STAT_EVENT_ADD_DEF(TRANS_REMOTE_STMT_COUNT, "trans remote stmt count", TRANS, "trans remote stmt count",
-// 30016)
+STAT_EVENT_ADD_DEF(TRANS_DISTRIBUTED_STMT_COUNT, "trans distributed stmt count", ObStatClassIds::TRANS,
+    "trans distributed stmt count", 30014, true, true)
+STAT_EVENT_ADD_DEF(TRANS_LOCAL_STMT_COUNT, "trans local stmt count", ObStatClassIds::TRANS,
+    "trans local stmt count", 30015, true, true)
+STAT_EVENT_ADD_DEF(TRANS_REMOTE_STMT_COUNT, "trans remote stmt count", ObStatClassIds::TRANS,
+    "trans remote stmt count", 30016, true, true)
 STAT_EVENT_ADD_DEF(TRANS_ZERO_PARTITION_COUNT, "trans zero partition count", ObStatClassIds::TRANS,
     "trans zero partition count", 30017, true, true)
 STAT_EVENT_ADD_DEF(

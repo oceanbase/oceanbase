@@ -437,10 +437,12 @@ int ObStorageLogReader::load_buf()
 int ObStorageLogReader::check_switch_file(const int get_ret, const LogCommand cmd)
 {
   int ret = get_ret;
-  // Check switch file when meet below situation:
-  // 1) Meet switch log command
+  const bool fetch_log_again = (OB_READ_NOTHING == get_ret);
+  // Check switch file when meet below 2 situation:
+  // 1) Meet switch log command, or
+  // 2) read the last log (which may be incomplete and ignored)
   // Otherwise directly ret
-  if (common::OB_SUCCESS == get_ret && OB_LOG_SWITCH_LOG == cmd) {
+  if ((common::OB_SUCCESS == get_ret && OB_LOG_SWITCH_LOG == cmd) || fetch_log_again) {
     STORAGE_REDO_LOG(INFO, "reach the end of log", K_(file_id));
     if (OB_FAIL(close())) {
       STORAGE_REDO_LOG(ERROR, "close error", K(ret));
@@ -451,6 +453,9 @@ int ObStorageLogReader::check_switch_file(const int get_ret, const LogCommand cm
         if (OB_READ_NOTHING != ret) {
           STORAGE_REDO_LOG(WARN, "open next log failed", K_(file_id), K(ret));
         }
+      } else if (fetch_log_again) {
+        ret = OB_EAGAIN;
+        STORAGE_REDO_LOG(INFO, "fetch log again", K(file_id_), K(log_buffer_));
       }
     }
   }

@@ -73,6 +73,7 @@ inline int call_with_new_stack(SContext& sctx)
   return ret;
 }
 
+#ifndef OB_USE_ASAN
 #define SMART_CALL(func)                                                   \
   ({                                                                       \
     int ret = OB_SUCCESS;                                                  \
@@ -84,9 +85,12 @@ inline int call_with_new_stack(SContext& sctx)
       std::function<int()> f = [&]() {                                     \
         int ret = OB_SUCCESS;                                              \
         try {                                                              \
+          in_try_stmt = true;                                              \
           ret = func;                                                      \
+          in_try_stmt = false;                                             \
         } catch (OB_BASE_EXCEPTION & except) {                             \
           ret = except.get_errno();                                        \
+          in_try_stmt = false;                                             \
         }                                                                  \
         return ret;                                                        \
       };                                                                   \
@@ -97,7 +101,20 @@ inline int call_with_new_stack(SContext& sctx)
     }                                                                      \
     ret;                                                                   \
   })
-
+#else
+#define SMART_CALL(func)                                                   \
+  ({                                                                       \
+    int ret = OB_SUCCESS;                                                  \
+    bool is_overflow = false;                                              \
+    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) { \
+    } else if (!is_overflow) {                                             \
+      ret = func;                                                          \
+    } else {                                                               \
+      ret = OB_STACK_OVERFLOW;                                             \
+    }                                                                      \
+    ret;                                                                   \
+  })
+#endif
 }  // end of namespace common
 }  // end of namespace oceanbase
 

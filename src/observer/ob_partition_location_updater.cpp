@@ -97,6 +97,26 @@ void ObPartitionLocationUpdater::destroy()
   wait();
 }
 
+int ObPartitionLocationUpdater::set_thread_cnt(const int64_t thread_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("updater is not inited yet", KR(ret), K(thread_cnt));
+  } else if (!lib::is_mini_mode() && thread_cnt > 0 && thread_cnt != thread_cnt_) {
+    if (OB_FAIL(sender_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set sender's thread cnt", KR(ret), K(thread_cnt), K(thread_cnt_));
+    } else if (OB_FAIL(receiver_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set receiver's thread cnt", KR(ret), K(thread_cnt), K(thread_cnt_));
+    } else {
+      LOG_INFO(
+          "[LOCATION] location updater change thread cnt", "pre_thread_cnt", thread_cnt_, "cur_thread_cnt", thread_cnt);
+      thread_cnt_ = thread_cnt;
+    }
+  }
+  return ret;
+}
+
 int ObPartitionLocationUpdater::submit_broadcast_task(const ObPartitionBroadcastTask& task)
 {
   int ret = OB_SUCCESS;

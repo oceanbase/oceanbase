@@ -67,7 +67,7 @@ public:
   HashMap* hashmap;
 
 private:
-  obsys::CThreadMutex mutex;
+  obsys::ThreadMutex mutex;
 };
 
 TEST(TestObConcurrentHashMap, concurrent)

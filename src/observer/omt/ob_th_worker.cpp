@@ -392,6 +392,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
               ret = pm->set_tenant_ctx(tenant_->id(), ObCtxIds::DEFAULT_CTX_ID);
             }
           }
+          CLEAR_INTERRUPTABLE();
           set_th_worker_thread_name(tenant_->id());
           lib::ContextTLOptGuard guard(true);
           lib::ContextParam param;
@@ -491,7 +492,7 @@ int ObThWorker::check_large_query_quota()
   // process is done.
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_)) {
-    // Back ground thread may also check large query quota, whereas we
+    // Background thread may also check large query quota, whereas we
     // always return success
   } else if (tenant_->id() >= OB_SERVER_TENANT_ID && tenant_->id() <= OB_MAX_RESERVED_TENANT_ID) {
     // do nothing, these tenants don't support large query schedule.

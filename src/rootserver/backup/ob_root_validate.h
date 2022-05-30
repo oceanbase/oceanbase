@@ -19,6 +19,7 @@
 #include "rootserver/ob_thread_idling.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/backup/ob_partition_validate.h"
+#include "rootserver/ob_i_backup_scheduler.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_validate_task_updater.h"
 #include "share/backup/ob_tenant_validate_task_updater.h"
@@ -49,7 +50,7 @@ public:
   virtual int64_t get_idle_interval_us() override;
 };
 
-class ObRootValidate : public ObRsReentrantThread {
+class ObRootValidate : public ObIBackupScheduler {
   friend class ObTenantValidate;
 
 public:
@@ -71,6 +72,7 @@ public:
   {
     return is_working_;
   }
+  virtual int force_cancel(const uint64_t tenant_id);
   void update_prepare_flag(const bool is_prepare);
   bool get_prepare_flag() const;
 

@@ -1775,9 +1775,14 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp& op, void* ct
               !static_cast<ObSelectStmt*>(get_stmt())->need_temp_table_trans() &&
               !static_cast<ObSelectStmt*>(get_stmt())->is_temp_table() && get_stmt()->has_order_by() &&
               !get_stmt()->is_order_siblings() && log_op_def::LOG_SORT != top->get_type() &&
-              AllocExchContext::DistrStat::DISTRIBUTED == alloc_exch_ctx->plan_type_ &&
-              OB_FAIL(allocate_stmt_order_by_above(top))) {
-            LOG_WARN("failed to allocate stmt order by", K(ret));
+              AllocExchContext::DistrStat::DISTRIBUTED == alloc_exch_ctx->plan_type_) {
+            if (OB_FAIL(allocate_stmt_order_by_above(top))) {
+              LOG_WARN("failed to allocate stmt order by", K(ret));
+            } else if (OB_FAIL(top->replace_generated_agg_expr(alloc_exch_ctx->group_push_down_replaced_exprs_))) {
+              LOG_WARN("failed to replace generated agg expr", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (NULL == top->get_parent()) {
             // this is the final root operator
             ObExchangeInfo exch_info;
@@ -2009,12 +2014,9 @@ int ObLogicalOperator::set_sort_topn()
       OB_ISNULL(session = optm_ctx->get_session_info())) {
     LOG_WARN("get unexpected null", K(get_plan()), K(optm_ctx), K(session), K(ret));
   } else if (LOG_LIMIT == get_type()) {
-    bool need_calc = false;
     ObLogLimit* op_limit = static_cast<ObLogLimit*>(this);
     is_fetch_with_ties = op_limit->is_fetch_with_ties();
-    if (OB_FAIL(op_limit->need_calc_found_rows(need_calc))) {
-      LOG_WARN("call need_calc_found_rows failed", K(ret));
-    } else if (need_calc) {
+    if (op_limit->get_is_calc_found_rows()) {
       /*do nothing*/
     } else {
       limit_count_expr = op_limit->get_limit_count();
@@ -3743,6 +3745,86 @@ int ObLogicalOperator::compute_repartition_func_info(const EqualSets& equal_sets
   return ret;
 }
 
+int ObLogicalOperator::compute_repartition_func_info_for_insert(const ObIArray<ObRawExpr *> &src_keys,
+    const ObIArray<ObRawExpr *> &target_keys, const ObShardingInfo &target_sharding, ObRawExprFactory &expr_factory,
+    ObExchangeInfo &exch_info)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObSEArray<ObRawExpr *, 4> repart_exprs;
+  ObSEArray<ObRawExpr *, 4> repart_sub_exprs;
+  ObSEArray<ObRawExpr *, 4> repart_func_exprs;
+  // get repart exprs
+  bool skip_part = target_sharding.is_partition_single();
+  bool skip_subpart = target_sharding.is_subpartition_single();
+  if (!skip_part && OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::copy_exprs(
+            expr_factory, target_sharding.get_partition_keys(), repart_exprs, COPY_REF_DEFAULT))) {
+      LOG_WARN("fail copy expr", K(ret));
+    }
+  }
+  if (!skip_subpart && OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::copy_exprs(
+            expr_factory, target_sharding.get_sub_partition_keys(), repart_sub_exprs, COPY_REF_DEFAULT))) {
+      LOG_WARN("fail copy expr", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // pass
+  } else if (OB_ISNULL(get_plan()) ||
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(session_info), K(ret));
+  } else if (!skip_part && OB_FAIL(ObTransformUtils::replace_equal_expr(target_keys, src_keys, repart_exprs))) {
+    LOG_WARN("failed to get repartition keys", K(ret), K(target_keys), K(src_keys));
+  } else if (!skip_subpart && OB_FAIL(ObTransformUtils::replace_equal_expr(target_keys, src_keys, repart_sub_exprs))) {
+    LOG_WARN("failed to get repartition keys", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_sharding.get_partition_func().count(); i++) {
+      ObRawExpr *repart_func_expr = NULL;
+      ObRawExpr *target_func_expr = target_sharding.get_partition_func().at(i);
+      if ((0 == i && skip_part) || (1 == i && skip_subpart)) {
+        ObConstRawExpr *const_expr = NULL;
+        ObRawExpr *dummy_expr = NULL;
+        int64_t const_value = 1;
+        if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+                get_plan()->get_optimizer_context().get_expr_factory(), ObIntType, const_value, const_expr))) {
+          LOG_WARN("Failed to build const expr", K(ret));
+        } else if (OB_ISNULL(dummy_expr = const_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(dummy_expr->formalize(session_info))) {
+          LOG_WARN("Failed to formalize a new expr", K(ret));
+        } else if (OB_FAIL(repart_func_exprs.push_back(dummy_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (OB_ISNULL(target_func_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(
+                     ObRawExprUtils::copy_expr(expr_factory, target_func_expr, repart_func_expr, COPY_REF_DEFAULT))) {
+        LOG_WARN("failed to deep copy the partition fuc raw expr");
+      } else if (OB_ISNULL(repart_func_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::replace_equal_expr(target_keys, src_keys, repart_func_expr))) {
+        LOG_WARN("failed to replace general expr", K(ret));
+      } else if (OB_FAIL(repart_func_exprs.push_back(repart_func_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(exch_info.set_repartition_info(repart_exprs, repart_sub_exprs, repart_func_exprs))) {
+        LOG_WARN("failed to set repartition keys", K(ret));
+      } else { /*do nothing*/
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::get_repartition_keys(const EqualSets& equal_sets, const ObIArray<ObRawExpr*>& src_keys,
     const ObIArray<ObRawExpr*>& target_keys, const ObIArray<ObRawExpr*>& target_part_keys,
     ObIArray<ObRawExpr*>& src_part_keys)
@@ -3781,7 +3863,7 @@ int ObLogicalOperator::get_repartition_keys(const EqualSets& equal_sets, const O
         }
         if (OB_SUCC(ret) && !is_find) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("can not find part expr", K(target_part_keys.at(i)), K(src_keys), K(target_keys), K(ret));
+          LOG_WARN("can not find part expr", K(*target_part_keys.at(i)), K(src_keys), K(target_keys), K(ret));
         }
       }
     }
@@ -5216,7 +5298,6 @@ int ObLogicalOperator::allocate_dummy_output_access()
           ObLogExchange *exchange_op = NULL;
           exchange_op = static_cast<ObLogExchange*>(this);
           if (exchange_op->get_is_remote() && exchange_op->is_producer()) {
-            // https://work.aone.alibaba-inc.com/issue/33487009
             // 0. EXCHANGE IN REMOTE
             // 1.  EXCHANGE OUT REMOTE
             // 2.   TABLE SCAN / OTHERS
@@ -6444,7 +6525,8 @@ int ObLogicalOperator::push_down_limit(AllocExchContext* ctx, ObRawExpr* limit_c
         LOG_WARN("get unexpected null", K(exchange_point), K(ret));
       } else if ((log_op_def::instance_of_log_table_scan(child->get_type())) &&
                  !is_virtual_table(static_cast<ObLogTableScan*>(child)->get_ref_table_id()) &&
-                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr()) {
+                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr() &&
+                 !is_fetch_with_ties) {
         // Do NOT allocate LIMIT operator, and push down limit onto table scan directly.
         ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(child);
         table_scan->set_limit_offset(new_limit_count_expr, NULL);
@@ -8615,3 +8697,21 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   }
   return ret;
 }
+
+int ObLogicalOperator::child_has_exchange(const ObLogicalOperator *op, bool &find)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || find) {
+    /*do nothing*/
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
+    find = true;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && !find && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(child_has_exchange(op->get_child(i), find)))) {
+        LOG_WARN("fail to find tsc recursive", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+

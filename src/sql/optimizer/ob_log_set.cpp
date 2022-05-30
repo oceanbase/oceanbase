@@ -499,6 +499,7 @@ int ObLogSet::check_if_match_partition_wise(bool& is_match)
 {
   int ret = OB_SUCCESS;
   is_match = false;
+  bool find_exchange = false;
   const int64_t num_of_child = get_num_of_child();
   if (num_of_child < 2) {
     ret = OB_ERR_UNEXPECTED;
@@ -506,13 +507,19 @@ int ObLogSet::check_if_match_partition_wise(bool& is_match)
   } else if (OB_ISNULL(get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_child(first_child)), K(ret));
+  } else if (OB_FAIL(child_has_exchange(get_child(first_child), find_exchange))) {
+    LOG_WARN("failed to check contain exchange below", K(ret));
   } else {
-    is_match = true;
+    is_match = !find_exchange;
     const ObShardingInfo& sharding_info = get_child(first_child)->get_sharding_info();
     for (int64_t i = 1; OB_SUCC(ret) && is_match && i < num_of_child; ++i) {
       if (OB_ISNULL(get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(get_child(i)), K(ret));
+      } else if (OB_FAIL(child_has_exchange(get_child(i), find_exchange))) {
+        LOG_WARN("fail to find exchange");
+      } else if (find_exchange) {
+        is_match = false;
       } else if (OB_FAIL(ObShardingInfo::is_physically_equal_partitioned(
                      sharding_info, get_child(i)->get_sharding_info(), is_match))) {
         LOG_WARN("failed to check is physically equal partitioned", K(ret));

@@ -89,6 +89,18 @@ struct ObSessionNLSParams  // oracle nls parameters
 
 #define CREATE_OBJ_PRINT_PARAM(session) (NULL != (session) ? (session)->create_obj_print_params() : ObObjPrintParams())
 
+// flag is a single bit, but marco(e.g., IS_NO_BACKSLASH_ESCAPES) compare two 64-bits int using '&';
+// if we directly assign the result to flag(single bit), only the last bit of the result is used,
+// which is equal to 'flag = result & 1;'.
+// So we first convert the result to bool(tmp_flag) and assign the bool to flag, which is equal to
+// 'flag = result!=0;'.
+#define GET_SQL_MODE_BIT(marco, sql_mode, flag) \
+  do {                                          \
+    bool tmp_flag = false;                      \
+    marco(sql_mode, tmp_flag);                  \
+    flag = tmp_flag;                            \
+  } while (0)
+
 #ifndef NDEBUG
 #define CHECK_COMPATIBILITY_MODE(session)    \
   do {                                       \
@@ -174,6 +186,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
   class TransFlags {
   public:
     TransFlags() : flags_(0)
@@ -1019,7 +1032,8 @@ public:
 
   // current executing physical plan
   ObPhysicalPlan* get_cur_phy_plan() const;
-  int set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan);
+  void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
+  int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   void reset_cur_phy_plan_to_null();
 
   common::ObObjType get_sys_variable_type(const common::ObString& var_name) const;
@@ -1261,7 +1275,8 @@ public:
   /// @}
   int64_t get_session_info_mem_size() const { return block_allocator_.get_total_mem_size(); }
   int64_t get_sys_var_mem_size() const { return base_sys_var_alloc_.total(); }
-  ObPartitionHitInfo &partition_hit() { return partition_hit_; } // 和上面的set_partition_hit没有任何关系
+  // no relationship with function set_partition_hit(const bool is_hit) above.
+  ObPartitionHitInfo &partition_hit() { return partition_hit_; }
   bool get_err_final_partition_hit(int err_ret)
   {
     bool is_partition_hit = partition_hit().get_bool();
@@ -1281,16 +1296,17 @@ public:
   uint32_t get_version() const {return version_;}
   uint32_t get_magic_num() {return magic_num_;}
   int64_t get_current_execution_id() const { return current_execution_id_; }
-  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
+  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
-    if (OB_ISNULL(trace_id)) {
-    } else {
-      last_trace_id_ = *trace_id;
-    }
+    if (OB_NOT_NULL(trace_id)) { last_trace_id_ = *trace_id; }
   }
-
+  const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
+  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
+  {
+    if (OB_NOT_NULL(trace_id)) { curr_trace_id_ = *trace_id; }
+  }
   const ObString& get_app_trace_id() const
   {
     return app_trace_id_;
@@ -2131,6 +2147,8 @@ private:
   // used for calculating which system variables need serialization,
   // set NULL after query is done.
   ObPhysicalPlan* cur_phy_plan_;
+  // sql_id of cur_phy_plan_ sql
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
 
   //=======================ObProxy && OCJ related============================
   obmysql::ObMySQLCapabilityFlags capability_;
@@ -2152,6 +2170,7 @@ private:
   uint32_t magic_num_;
   int64_t current_execution_id_;
   common::ObCurTraceId::TraceId last_trace_id_;
+  common::ObCurTraceId::TraceId curr_trace_id_;
   common::ObString app_trace_id_;
   uint64_t database_id_;
   ObQueryRetryInfo retry_info_;

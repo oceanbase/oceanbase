@@ -189,8 +189,13 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt* root_stmt, ObDMLStmt
     LOG_WARN("failed to check can add distinct", K(ret));
   } else if (!is_valid) {
     LOG_TRACE("semi right table output can not add distinct");
-  } else if (OB_FAIL(
-                 check_join_condition_match_index(root_stmt, stmt, semi_info, semi_info.semi_conditions_, is_valid))) {
+  } else if (stmt.get_stmt_hint().enable_unnest()) {
+    //do nothing
+    need_check_cost = false;
+    is_valid = true;
+  } else if (OB_FAIL(check_join_condition_match_index(root_stmt, stmt, semi_info,
+                                                      semi_info.semi_conditions_,
+                                                      is_valid))) {
     LOG_WARN("failed to check join condition match index", K(ret));
   } else {
     need_check_cost = is_valid | need_add_distinct;
@@ -272,11 +277,9 @@ int ObTransformSemiToInner::check_semi_join_condition(ObDMLStmt& stmt, SemiInfo&
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (left_table_set.is_superset(expr->get_relation_ids())) {
-      // do nothing for left filters
-    } else if (right_table_set.is_superset(expr->get_relation_ids())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected semi condition", K(ret), K(*expr));
+    } else if (left_table_set.is_superset(expr->get_relation_ids()) ||
+               right_table_set.is_superset(expr->get_relation_ids())) {
+      // do nothing for left/right filters
     } else if (T_OP_EQ != expr->get_expr_type()) {
       is_all_equal_cond = false;
     } else if (OB_ISNULL(left = expr->get_param_expr(0)) || OB_ISNULL(right = expr->get_param_expr(1))) {

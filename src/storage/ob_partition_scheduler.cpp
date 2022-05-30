@@ -25,7 +25,6 @@
 #include "share/ob_task_define.h"
 #include "share/ob_index_status_table_operator.h"
 #include "storage/blocksstable/ob_store_file.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/ob_sstable_row_whole_scanner.h"
 #include "storage/ob_partition_storage.h"
 #include "storage/transaction/ob_ts_mgr.h"
@@ -180,26 +179,6 @@ int ObBloomFilterBuildTask::build_bloom_filter()
           access_param_.iter_param_.table_id_ = table_id_;
           access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
           access_param_.iter_param_.rowkey_cnt_ = meta.schema_->rowkey_column_number_;
-          access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
-          scanner = new (buf) ObSSTableRowWholeScanner();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
-          col_desc.col_id_ = meta.schema_->column_id_array_[i];
-          col_desc.col_type_ = meta.schema_->column_type_array_[i];
-          if (OB_FAIL(access_param_.out_col_desc_param_.push_back(col_desc))) {
-            LOG_WARN("Fail to push the col to param columns, ", K(ret));
-          }
-        }
-      }
-      // prepare scan param
-      if (OB_SUCC(ret)) {
-        access_param_.reset();
-        if (OB_FAIL(access_param_.out_col_desc_param_.init())) {
-          LOG_WARN("init out cols fail", K(ret));
-        } else {
-          access_param_.iter_param_.table_id_ = table_id_;
-          access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
-          access_param_.iter_param_.rowkey_cnt_ = meta.meta_->rowkey_column_number_;
           access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
@@ -410,7 +389,7 @@ int ObMergeStatistic::notify_merge_start(const int64_t frozen_version)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, ", K(frozen_version), K(ret));
   } else {
-    obsys::CWLockGuard guard(lock_);
+    obsys::ObWLockGuard guard(lock_);
     if (OB_FAIL(search_entry(frozen_version, pentry))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         pentry = &(stats_[frozen_version % MAX_KEPT_HISTORY]);
@@ -440,7 +419,7 @@ int ObMergeStatistic::notify_merge_finish(const int64_t frozen_version)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, ", K(frozen_version), K(ret));
   } else {
-    obsys::CWLockGuard guard(lock_);
+    obsys::ObWLockGuard guard(lock_);
     if (OB_FAIL(search_entry(frozen_version, pentry))) {
       LOG_WARN("Fail to search entry, ", K(ret));
     } else if (OB_ISNULL(pentry)) {
@@ -471,7 +450,7 @@ int ObMergeStatistic::get_entry(const int64_t frozen_version, ObMergeStatEntry& 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, ", K(frozen_version), K(ret));
   } else {
-    obsys::CRLockGuard guard(lock_);
+    obsys::ObRLockGuard guard(lock_);
     if (OB_FAIL(search_entry(frozen_version, pentry))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         entry.reset();
@@ -792,7 +771,7 @@ int ObPartitionScheduler::schedule_merge(const int64_t frozen_version)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, ", K(frozen_version), K(ret));
   } else {
-    obsys::CWLockGuard frozen_version_guard(frozen_version_lock_);
+    obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
     lib::ObMutexGuard merge_guard(timer_lock_);
     if (frozen_version_ < frozen_version) {
       TG_CANCEL(lib::TGDefIDs::MinorScan, minor_task_for_major_);
@@ -834,7 +813,7 @@ int ObPartitionScheduler::schedule_merge(const ObPartitionKey& partition_key, bo
     LOG_WARN("Invalid argument, ", K(partition_key), K(ret));
   } else {
     {
-      obsys::CRLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version = frozen_version_;
     }
 
@@ -1031,7 +1010,7 @@ int ObPartitionScheduler::schedule_load_bloomfilter(
 
 int64_t ObPartitionScheduler::get_frozen_version() const
 {
-  obsys::CRLockGuard frozen_version_guard(frozen_version_lock_);
+  obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
   return frozen_version_;
 }
 
@@ -1747,7 +1726,7 @@ int ObPartitionScheduler::check_all_partitions(bool& check_finished, common::ObV
     ret = OB_EAGAIN;
   } else {
     {
-      obsys::CRLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version = frozen_version_;
     }
     // skip the partition which check failed
@@ -1949,7 +1928,7 @@ int ObPartitionScheduler::schedule_all_partitions(bool& merge_finished, common::
   } else {
     // get frozen_version
     {
-      obsys::CRLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version = frozen_version_;
     }
 
@@ -2334,7 +2313,7 @@ int ObPartitionScheduler::notify_minor_merge_start(const uint64_t tenant_id, con
   int ret = OB_SUCCESS;
   ObMinorMergeHistory* history = nullptr;
   {
-    obsys::CRLockGuard lock_guard(frozen_version_lock_);
+    obsys::ObRLockGuard lock_guard(frozen_version_lock_);
     if (OB_FAIL(minor_merge_his_map_.get_refactored(tenant_id, history))) {
       if (OB_HASH_NOT_EXIST != ret) {
         LOG_WARN("failed to get minor merge history", K(ret), K(tenant_id), K(snapshot_version));
@@ -2343,7 +2322,7 @@ int ObPartitionScheduler::notify_minor_merge_start(const uint64_t tenant_id, con
     }
   }
   if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
-    obsys::CWLockGuard lock_guard(frozen_version_lock_);
+    obsys::ObWLockGuard lock_guard(frozen_version_lock_);
     if (OB_FAIL(minor_merge_his_map_.get_refactored(tenant_id, history))) {
       if (OB_HASH_NOT_EXIST == ret) {
         void* buf = nullptr;
@@ -2378,7 +2357,7 @@ int ObPartitionScheduler::notify_minor_merge_finish(const uint64_t tenant_id, co
   int ret = OB_SUCCESS;
   ObMinorMergeHistory* history = nullptr;
   {
-    obsys::CRLockGuard lock_guard(frozen_version_lock_);
+    obsys::ObRLockGuard lock_guard(frozen_version_lock_);
     if (OB_FAIL(minor_merge_his_map_.get_refactored(tenant_id, history))) {
       if (OB_HASH_NOT_EXIST != ret) {
         LOG_WARN("failed to get minor merge history", K(ret), K(tenant_id), K(snapshot_version));

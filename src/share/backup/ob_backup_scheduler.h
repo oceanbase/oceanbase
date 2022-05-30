@@ -37,13 +37,11 @@ private:
   int get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
   int check_can_backup(const common::ObIArray<ObBaseBackupInfoStruct>& infos);
   int schedule_backup(const common::ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager);
-  int schedule_sys_tenant_backup(
-      const int64_t backup_snapshot_version, const uint64_t tenant_id, ObBackupInfoManager& info_manager);
-  int schedule_tenant_backup(const int64_t backup_snapshot_version, const uint64_t tenant_id,
-      const ObBaseBackupInfoStruct::BackupDest& backup_dest, common::ObISQLClient& sys_tenant_trans,
-      ObBackupInfoManager& info_manager);
-  int schedule_tenants_backup(const int64_t backup_snapshot_version, const common::ObIArray<uint64_t>& tenant_ids,
-      ObBackupInfoManager& info_manager);
+  int schedule_sys_tenant_backup(const uint64_t tenant_id, ObBackupInfoManager& info_manager);
+  int schedule_tenant_backup(const int64_t backup_snapshot_version, 
+      const uint64_t tenant_id, const ObBaseBackupInfoStruct::BackupDest& backup_dest, 
+      common::ObISQLClient& sys_tenant_trans, ObBackupInfoManager& info_manager);
+  int schedule_tenants_backup(const common::ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager);
 
   int get_tenant_schema_version(const uint64_t tenant_id, int64_t& schema_version);
   int fetch_schema_version(const uint64_t tenant_id, int64_t& schema_version);
@@ -56,9 +54,11 @@ private:
   int check_gts_(const common::ObIArray<uint64_t>& tenant_ids);
   int init_frozen_schema_versions_(rootserver::ObFreezeInfoManager& freeze_info_manager, const int64_t frozen_version);
   int check_backup_schema_version_(const uint64_t tenant_id, const int64_t backup_schema_version);
-  int create_backup_point(const uint64_t tenant_id);
+  int create_backup_point(const uint64_t tenant_id, common::ObMySQLTransaction &trans);
   int check_log_archive_status();
   int check_tenant_backup_data_version(const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& can_backup);
+  int prepare_backup_point_(const common::ObIArray<uint64_t> &tenant_ids, ObBackupInfoManager &info_manager);
+  int prepare_tenant_schema_version_(const uint64_t tenant_id);
 
 private:
   static const int64_t MAX_TENANT_BUCKET = 1024;
@@ -71,7 +71,6 @@ private:
   hash::ObHashMap<uint64_t, int64_t> frozen_schema_version_map_;
   int64_t backup_snapshot_version_;
   int64_t backup_data_version_;
-  int64_t frozen_timestamp_;
   int64_t max_backup_set_id_;
   rootserver::ObRootBackup* root_backup_;
   rootserver::ObFreezeInfoManager* freeze_info_manager_;

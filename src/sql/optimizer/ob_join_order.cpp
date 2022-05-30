@@ -542,9 +542,11 @@ int ObJoinOrder::get_query_range_info(
     range_info.set_equal_prefix_null_count(equal_prefix_null_count);
     range_info.set_index_column_count(
         index_schema->is_index_table() ? index_schema->get_index_column_num() : index_schema->get_rowkey_column_num());
-    if (OB_SUCCESS != ret && NULL != query_range) {
-      query_range->~ObQueryRange();
-      query_range = NULL;
+    if (OB_FAIL(ret)) {
+      if (NULL != query_range) {
+        query_range->~ObQueryRange();
+        query_range = NULL;
+      }
     } else {
       LOG_TRACE("succeed to get query range", K(ranges), K(*query_range), K(table_id), K(index_id));
     }
@@ -1418,9 +1420,9 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id,  // alias table id
   return ret;
 }
 
-int ObJoinOrder::prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
+int ObJoinOrder::skyline_prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
     const bool do_prunning, const ObIndexInfoCache& index_info_cache, const ObIArray<uint64_t>& valid_index_ids,
-    ObIArray<uint64_t>& skyline_index_ids, ObIArray<ObRawExpr*>& restrict_infos)
+    ObIArray<uint64_t>& skyline_index_ids, ObIArray<ObRawExpr *>& restrict_infos)
 {
   int ret = OB_SUCCESS;
   if (!do_prunning) {
@@ -1610,7 +1612,7 @@ int ObJoinOrder::add_table(
     LOG_WARN("failed to add table by heuristics", K(ret));
   } else if (heuristics_used) {
     LOG_TRACE("table added using heuristics", K(table_id));
-  } else if (OB_FAIL(prunning_index(table_id,
+  } else if (OB_FAIL(skyline_prunning_index(table_id,
                  ref_table_id,
                  stmt,
                  true,
@@ -1619,8 +1621,6 @@ int ObJoinOrder::add_table(
                  skyline_index_ids,
                  helper.filters_))) {
     LOG_WARN("failed to pruning_index", K(table_id), K(ref_table_id), K(ret));
-  } else if (OB_FAIL(compute_pruned_index(table_id, ref_table_id, skyline_index_ids, helper))) {
-    LOG_WARN("failed to compute pruned index", K(table_id), K(ref_table_id), K(skyline_index_ids), K(ret));
   } else {
     LOG_TRACE("table added not using heuristics", K(table_id), K(skyline_index_ids));
     helper.table_opt_info_->optimization_method_ = OptimizationMethod::COST_BASED;
@@ -2290,21 +2290,15 @@ int ObJoinOrder::add_cte_table(const uint64_t table_id, const uint64_t ref_id)
 int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper& helper, ObIArray<AccessPath*>& access_paths)
 {
   int ret = OB_SUCCESS;
-  ObSqlCtx* sql_ctx = NULL;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_exec_ctx()) ||
-      OB_ISNULL(task_exec_ctx = get_plan()->get_optimizer_context().get_task_exec_ctx()) ||
-      OB_ISNULL(sql_ctx = get_plan()->get_optimizer_context().get_exec_ctx()->get_sql_ctx())) {
+  if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(sql_ctx), K(ret));
+    LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
       AccessPath* ap = access_paths.at(i);
       if (OB_ISNULL(ap) || OB_ISNULL(ap->get_sharding_info())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ap), K(ret));
-      } else if (sql_ctx->is_remote_sql_ && ap->get_sharding_info()->is_remote_or_distribute()) {
-        /*do nothing*/
       } else if (OB_FAIL(ap->estimate_cost())) {
         LOG_WARN("failed to get index access info", K(*ap), K(ret));
       } else if (!ap->is_inner_path()) {
@@ -2324,35 +2318,6 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper& helper, ObIArray
         }
       }
     }  // add path end
-    if (OB_SUCC(ret) && sql_ctx->is_remote_sql_ && interesting_paths_.empty() && !helper.is_inner_path_) {
-      // for the purpose to refresh location cache
-      ObSEArray<ObTablePartitionInfo*, 8> table_partitions;
-      for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
-        AccessPath* path = NULL;
-        if (OB_ISNULL(path = access_paths.at(i)) || OB_ISNULL(path->table_partition_info_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(path));
-        } else if (1 != path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
-          // do nothing
-        } else if (is_contain(table_partitions, path->table_partition_info_)) {
-          /*do nothing*/
-        } else if (OB_FAIL(path->table_partition_info_->set_log_op_infos(path->index_id_, path->order_direction_))) {
-          LOG_WARN("failed to set log op infos", K(ret));
-        } else if (OB_FAIL(table_partitions.push_back(path->table_partition_info_))) {
-          LOG_WARN("failed to push back table partition", K(ret));
-        } else { /*do nothing*/
-        }
-      }
-      if (OB_FAIL(ret)) {
-        /*do nothing*/
-      } else if (OB_FAIL(task_exec_ctx->append_table_locations_no_dup(table_partitions))) {
-        LOG_WARN("failed to append table locations no dup", K(ret));
-      } else {
-        ret = (get_plan()->get_optimizer_context().is_cost_evaluation() ? OB_SQL_OPT_GEN_PLAN_FALIED
-                                                                        : OB_LOCATION_NOT_EXIST);
-        LOG_WARN("no available local path for remote sql", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -2478,72 +2443,67 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper& helper, ObIA
   return ret;
 }
 
-int ObJoinOrder::compute_pruned_index(
-    const uint64_t table_id, const uint64_t base_table_id, ObIArray<uint64_t>& available_index_id, PathHelper& helper)
+int ObJoinOrder::fill_opt_info_index_name(const uint64_t base_table_id, ObIArray<uint64_t> &available_index_id,
+    ObIArray<uint64_t> &unstable_index_id, BaseTableOptInfo *table_opt_info)
 {
   int ret = OB_SUCCESS;
-  const ObTableSchema* table_schema = NULL;
-  uint64_t index_ids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
-  ObSqlSchemaGuard* schema_guard = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
-      OB_ISNULL(helper.table_opt_info_)) {
+  const ObTableSchema *table_schema = NULL;
+  uint64_t index_ids[OB_MAX_INDEX_PER_TABLE + 3];
+  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 3;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  if (OB_ISNULL(table_opt_info) || OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(helper.table_opt_info_), K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id) || OB_UNLIKELY(OB_INVALID_ID == base_table_id)) {
+    LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(table_opt_info), K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == base_table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid table id", K(table_id), K(base_table_id), K(ret));
+    LOG_WARN("Invalid table id", K(base_table_id), K(ret));
   } else if (OB_FAIL(schema_guard->get_can_read_index_array(
                  base_table_id, index_ids, index_count, false, true /*global index*/, false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(base_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid index count", K(base_table_id), K(index_count), K(ret));
-  } else if (OB_FAIL(helper.table_opt_info_->available_index_id_.assign(available_index_id))) {
+  } else if (OB_FAIL(table_opt_info->available_index_id_.assign(available_index_id))) {
     LOG_WARN("failed to assign available index id", K(ret));
   } else {
+    const uint64_t rowid_index_id = ObSQLMockSchemaUtils::get_rowid_index_table_id(base_table_id);
+    index_ids[index_count++] = base_table_id;
+    index_ids[index_count++] = rowid_index_id;
     // i == -1 represents primary key, other value of i represent index
-    for (int64_t i = -1; OB_SUCC(ret) && i < index_count; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
       ObString name;
-      bool is_find = false;
-      uint64_t index_id = (i == -1) ? base_table_id : index_ids[i];
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
+      uint64_t index_id = index_ids[i];
+      if (rowid_index_id == index_id) {
+        name = ObString::make_string(ObSQLMockSchemaUtils::get_rowid_index_name());
+      } else if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema should not be null", K(ret), K(index_id));
-      } else if (i == -1) {
+      } else if (base_table_id == index_id) {
         name = table_schema->get_table_name_str();
       } else if (OB_FAIL(table_schema->get_index_name(name))) {
         LOG_WARN("failed to get index name", K(ret));
       } else { /*do nothing*/
       }
-      for (int64_t j = 0; OB_SUCC(ret) && (!is_find) && j < available_index_id.count(); j++) {
-        if (index_id == available_index_id.at(j)) {
-          is_find = true;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (is_find) {
-          if (OB_FAIL(helper.table_opt_info_->available_index_name_.push_back(name))) {
-            LOG_WARN("failed to push back index name", K(name), K(ret));
-          } else { /* do nothing */
-          }
-        } else {
-          if (OB_FAIL(helper.table_opt_info_->pruned_index_name_.push_back(name))) {
-            LOG_WARN("failed to push back index name", K(name), K(ret));
-          } else { /* do nothing */
-          }
-        }
-      }
-    }
 
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (ObSQLMockSchemaUtils::contain_mock_index(base_table_id) &&
-               OB_FAIL(helper.table_opt_info_->available_index_name_.push_back(
-                   ObString::make_string(ObSQLMockSchemaUtils::get_rowid_index_name())))) {
-      LOG_WARN("failed to push back rowid index name", K(ret));
+      if (OB_FAIL(ret)) {
+      } else if (ObOptimizerUtil::find_item(available_index_id, index_id)) {
+        if (OB_FAIL(table_opt_info->available_index_name_.push_back(name))) {
+          LOG_WARN("failed to push back index name", K(name), K(ret));
+        } else { /* do nothing */
+        }
+      } else if (ObOptimizerUtil::find_item(unstable_index_id, index_id)) {
+        if (OB_FAIL(table_opt_info->unstable_index_name_.push_back(name))) {
+          LOG_WARN("failed to push back index name", K(name), K(ret));
+        } else { /* do nothing */
+        }
+      } else if (rowid_index_id == index_id) {
+        /* do nothing */
+      } else if (OB_FAIL(table_opt_info->pruned_index_name_.push_back(name))) {
+        LOG_WARN("failed to push back index name", K(name), K(ret));
+      } else { /* do nothing */
+      }
     }
   }
   return ret;
@@ -3000,6 +2960,83 @@ int ObJoinOrder::estimate_size_and_width_for_access(PathHelper& helper, ObIArray
       get_plan()->get_est_sel_info().set_use_origin_stat(false);
       LOG_TRACE(
           "estimate rows for base table", K(output_rows_), K(get_plan()->get_est_sel_info()), K(avg_output_row_size_));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info, ObIArray<AccessPath *> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  bool use_acs = false;
+  ObSEArray<uint64_t, 4> unstable_index_id;
+  if (OB_UNLIKELY(access_paths.empty()) || OB_ISNULL(get_plan()) ||
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(access_paths.count()), K(get_plan()), K(session_info));
+  } else if (OB_FAIL(session_info->get_adaptive_cursor_sharing(use_acs))) {
+    LOG_WARN("failed to check is acs enabled", K(ret));
+  } else if (use_acs || access_paths.count() <= 1 || OB_DEFAULT_STAT_EST == table_meta_info_.cost_est_type_) {
+    /* do not pruning access path */
+  } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {
+    LOG_WARN("failed to pruning base table access path", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSEArray<uint64_t, 4> available_index_id;
+    uint64_t base_table_id = OB_INVALID_ID;
+    AccessPath *ap = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+      if (OB_ISNULL(ap = access_paths.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(available_index_id.push_back(ap->index_id_))) {
+        LOG_WARN("failed to push back index id", K(ret));
+      } else if (0 == i) {
+        base_table_id = ap->ref_table_id_;
+      }
+    }
+    if (OB_SUCC(ret) &&
+        OB_FAIL(fill_opt_info_index_name(base_table_id, available_index_id, unstable_index_id, table_opt_info))) {
+      LOG_WARN(
+          "failed to fill opt info index name", K(ret), K(base_table_id), K(available_index_id), K(unstable_index_id));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::try_pruning_base_table_access_path(
+    ObIArray<AccessPath *> &access_paths, ObIArray<uint64_t> &unstable_index_id)
+{
+  int ret = OB_SUCCESS;
+  bool need_prune = false;
+  int64_t base_path_pos = OB_INVALID_INDEX;
+  AccessPath *ap = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    if (OB_ISNULL(ap = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (ap->ref_table_id_ == ap->index_id_) {
+      base_path_pos = i;
+    } else {
+      need_prune |= ap->range_prefix_count_ > 0 && ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
+    }
+  }
+
+  if (OB_SUCC(ret) && need_prune && OB_INVALID_INDEX != base_path_pos) {
+    if (OB_UNLIKELY(base_path_pos < 0 || base_path_pos > access_paths.count()) ||
+        OB_ISNULL(ap = access_paths.at(base_path_pos))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected pos or access path", K(ret), K(base_path_pos), K(access_paths.count()), K(ap));
+    } else if (ap->range_prefix_count_ > 0) {
+      /* do nothing */
+    } else if (OB_FAIL(access_paths.remove(base_path_pos))) {
+      LOG_WARN("failed to remove access path", K(ret), K(base_path_pos));
+    } else if (OB_FAIL(unstable_index_id.push_back(ap->index_id_))) {
+      LOG_WARN("failed to push back index id", K(ret));
+    } else {
+      LOG_TRACE("pruned base table access paths", K(*ap));
     }
   }
   return ret;
@@ -3490,6 +3527,25 @@ int ObJoinOrder::compute_path_relationship(const sql::Path* first_path, const sq
         } else {
           uncompareable_count++;
         }
+      }
+    }
+
+    // relation is EQUAL now, check index column count when both not index back
+    // remove this if adjusted estimate cost for table scan
+    if (OB_SUCC(ret) && PathType::ACCESS == first_path->path_type_ && PathType::ACCESS == second_path->path_type_ &&
+        left_dominated_count == 0 && right_dominated_count == 0 && uncompareable_count == 0) {
+      const ObIndexMetaInfo &first_index_info =
+          static_cast<const AccessPath *>(first_path)->get_cost_table_scan_info().index_meta_info_;
+      const ObIndexMetaInfo &second_index_info =
+          static_cast<const AccessPath *>(second_path)->get_cost_table_scan_info().index_meta_info_;
+      if (first_index_info.is_index_back_ || second_index_info.is_index_back_) {
+        // do nothing for this, will return EQUAL final
+      } else if (first_index_info.index_column_count_ < second_index_info.index_column_count_) {
+        ++left_dominated_count;
+      } else if (first_index_info.index_column_count_ > second_index_info.index_column_count_) {
+        ++right_dominated_count;
+      } else {
+        // do nothing
       }
     }
 
@@ -3996,6 +4052,9 @@ int ObJoinOrder::generate_access_paths(PathHelper& helper)
     LOG_WARN("failed to calc table location", K(ret));
   } else if (OB_FAIL(estimate_size_and_width_for_access(helper, access_paths))) {
     LOG_WARN("failed to estimate_size", K(ret));
+  } else if (!access_paths.empty() &&  // when generate inner path, access_paths may be empty
+             OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
+    LOG_WARN("failed to pruning unstable access path", K(ret));
   } else if (!helper.is_inner_path_) {
     if (OB_FAIL(compute_const_exprs(NULL, NULL, type_, UNKNOWN_JOIN))) {
       LOG_WARN("failed to compute const exprs", K(ret));
@@ -6030,17 +6089,19 @@ int ObJoinOrder::create_and_add_nl_path(const sql::Path* left_path, const sql::P
     LOG_WARN("failed to alloc a join path", K(ret));
   } else {
     join_path = new (join_path) JoinPath(this, left_path, right_path, NESTED_LOOP_JOIN, join_type, need_mat);
-    join_path->set_interesting_order_info(left_path->get_interesting_order_info());
-    if (OB_FAIL(append(join_path->ordering_, left_path->ordering_))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(check_join_interesting_order(join_path))) {
-      LOG_WARN("failed to update join interesting order info", K(ret));
+    if (CONNECT_BY_JOIN != join_type) {
+      join_path->set_interesting_order_info(left_path->get_interesting_order_info());
+      if (OB_FAIL(append(join_path->ordering_, left_path->ordering_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(check_join_interesting_order(join_path))) {
+        LOG_WARN("failed to update join interesting order info", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_nl_filters(join_path, right_path, join_type, on_condition, where_condition))) {
       LOG_WARN("failed to remove filters", K(ret));
     } else if (CONNECT_BY_JOIN == join_type && OB_FAIL(push_down_order_siblings(join_path, right_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
-    }
-    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(join_path->estimate_cost())) {
       LOG_WARN("failed to calculate cost in create_nl_path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
@@ -6708,15 +6769,15 @@ int ObJoinOrder::compute_one_row_info_for_table_scan(ObIArray<AccessPath*>& acce
   AccessPath* access_path = NULL;
   is_at_most_one_row_ = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_at_most_one_row_ && i < access_paths.count(); i++) {
-    bool is_get = false;
+    bool is_one_row = false;
     if (OB_ISNULL(access_path = access_paths.at(i)) || OB_ISNULL(access_path->pre_query_range_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (access_path->is_inner_path_) {
       /*do nothing*/
-    } else if (OB_FAIL(access_path->pre_query_range_->is_get(is_get))) {
-      LOG_WARN("failed to check if query range is get", K(ret));
-    } else if (is_get && (1 == access_path->est_cost_info_.ranges_.count())) {
+    } else if (OB_FAIL(access_path->pre_query_range_->is_at_most_one_row(is_one_row))) {
+      LOG_WARN("failed to check if is at most one row", K(ret));
+    } else if (is_one_row && (1 == access_path->est_cost_info_.ranges_.count())) {
       is_at_most_one_row_ = true;
     } else { /*do nothing*/
     }

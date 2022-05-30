@@ -923,23 +923,23 @@ private:
   int replace_restore_info_(const uint64_t cur_tenant_id, const share::ObReplicaRestoreStatus is_restore,
       const int64_t create_frozen_version, ObCreatePartitionParam& create_param);
   int prepare_all_partitions();
-  int remove_duplicate_partitions(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg);
-  int add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup*>& partitions);
-  int add_partitions_to_replay_engine(const common::ObIArray<ObIPartitionGroup*>& partitions);
-  int batch_register_trans_service(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg);
-  int batch_register_election_mgr(const bool is_pg, const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg,
-      common::ObIArray<ObIPartitionGroup*>& partitions,
+  int remove_duplicate_partitions(const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg);
+  int add_partitions_to_mgr_(ObIPartitionArrayGuard &partitions);
+  int add_partitions_to_replay_engine_(ObIPartitionArrayGuard &partitions);
+  int batch_register_trans_service(const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg);
+  int batch_register_election_mgr_(const bool is_pg, const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg,
+      ObIPartitionArrayGuard &partitions,
       common::ObIArray<blocksstable::ObStorageFileHandle>& files_handle);
-  int batch_start_partition_election(
-      const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg, common::ObIArray<ObIPartitionGroup*>& partitions);
-  int try_remove_from_member_list(ObIPartitionGroup& partition);
-  int batch_prepare_splitting(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg);
-  int try_add_to_member_list(const obrpc::ObMemberChangeArg& arg);
-  int check_active_member(common::ObAddr& leader, const common::ObMember& member, const common::ObPartitionKey& key);
-  int handle_add_replica_callback(const ObReplicaOpArg& arg, const int result);
-  int handle_migrate_replica_callback(const ObReplicaOpArg& arg, const int result, bool& could_retry);
-  int handle_rebuild_replica_callback(const ObReplicaOpArg& arg, const int result);
-  int handle_change_replica_callback(const ObReplicaOpArg& arg, const int result);
+  int batch_start_partition_election_(
+      const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg, ObIPartitionArrayGuard &partitions);
+  int try_remove_from_member_list(ObIPartitionGroup &partition);
+  int batch_prepare_splitting(const common::ObIArray<obrpc::ObCreatePartitionArg> &batch_arg);
+  int try_add_to_member_list(const obrpc::ObMemberChangeArg &arg);
+  int check_active_member(common::ObAddr &leader, const common::ObMember &member, const common::ObPartitionKey &key);
+  int handle_add_replica_callback(const ObReplicaOpArg &arg, const int result);
+  int handle_migrate_replica_callback(const ObReplicaOpArg &arg, const int result, bool &could_retry);
+  int handle_rebuild_replica_callback(const ObReplicaOpArg &arg, const int result);
+  int handle_change_replica_callback(const ObReplicaOpArg &arg, const int result);
   template <typename ResultT>
   int get_operate_replica_res(const ObReplicaOpArg& arg, const int result, ResultT& res);
   int retry_get_is_member_change_done(common::ObAddr& leader, obrpc::ObMCLogRpcInfo& mc_log_info);
@@ -991,9 +991,7 @@ private:
   int remove_pg_from_mgr(const ObIPartitionGroup* partition, const bool write_slog);
   int inner_add_partition(ObIPartitionGroup& partition, const bool need_check_tenant, const bool is_replay,
       const bool allow_multi_value) override;
-  int inner_del_partition(const common::ObPartitionKey& pkey) override;
-  int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id) override;
-  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id);
+  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id) override;
   int create_sstables(const obrpc::ObCreatePartitionArg& arg, const bool in_slog_trans,
       ObIPartitionGroup& partition_group, ObTablesHandle& handle);
   int create_sstables(const ObCreatePartitionParam& arg, const bool in_slog_trans, ObIPartitionGroup& partition_group,
@@ -1015,7 +1013,6 @@ private:
       const int64_t schema_version, const uint64_t index_id, const int64_t timeout, uint64_t& log_id, int64_t& log_ts);
   int check_partition_state_(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg,
       common::ObIArray<obrpc::ObCreatePartitionArg>& target_batch_arg, common::ObIArray<int>& batch_res);
-  void free_partition_list(ObArray<ObIPartitionGroup*>& partition_list);
   void submit_pt_update_task_(const ObPartitionKey& pkey, const bool need_report_checksum = true);
   int submit_pg_pt_update_task_(const ObPartitionKey& pkey);
   int try_inc_total_partition_cnt(const int64_t new_partition_cnt, const bool need_check);

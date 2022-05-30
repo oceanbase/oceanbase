@@ -772,6 +772,23 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
     }
   }
 
+  if (OB_SUCC(ret) && get_insert_up() && is_needed) {
+    // multi insert on duplicate key At present, the static engine has a correctness problem,
+    // and the old engine is no problem. Currently, it will fall back to the old engine for execution.
+    // create table t1(c1 int primary key, c2 int auto_increment) partition by key(c1) partitions 2;
+    // create table t2(c1 int, c2 int) partition by key(c1) partitions 3;
+    // insert into t2 values('1',1000),('1',-100), (1, -300),('1',-200);
+    // insert into t1 select t2.c1, t2.c2 from t2 on duplicate key update t1.c2 = t1.c2 + t2.c2;
+    ObSQLSessionInfo *session = NULL;
+    if (OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("session is null", K(ret));
+    } else if (session->use_static_typing_engine()) {
+      ret = STATIC_ENG_NOT_IMPLEMENT;
+      LOG_WARN("multi part insert up have some bug, must use old sql engine", K(ret), K(is_needed));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check whether need multi-table dml for insert operator",
         K(is_match),
@@ -904,10 +921,8 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   ObSEArray<ObRawExpr*, 8> left_keys;
   ObSEArray<ObRawExpr*, 8> right_keys;
   ObShardingInfo output_sharding;
-  ObSEArray<ObShardingInfo*, 2> input_sharding;
-  EqualSets sharding_input_esets;
-  ObInsertStmt* stmt = static_cast<ObInsertStmt*>(get_stmt());
-
+  ObSEArray<ObShardingInfo *, 2> input_sharding;
+  ObInsertStmt *stmt = static_cast<ObInsertStmt *>(get_stmt());
   if (OB_ISNULL(ctx) || OB_ISNULL(get_plan()) || OB_ISNULL(stmt) || OB_ISNULL(table_columns_) ||
       OB_ISNULL(column_convert_exprs_) || OB_ISNULL(all_table_columns_) || OB_ISNULL(child = get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
@@ -918,7 +933,7 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   } else if (FALSE_IT(get_sharding_info().set_location_type(OB_TBL_LOCATION_DISTRIBUTED))) {
   } else if (FALSE_IT(calc_phy_location_type())) {
     LOG_WARN("fail calc phy location type for insert", K(ret));
-  } else if (OB_FAIL(sharding_info_.get_all_partition_keys(left_keys))) {
+  } else if (OB_FAIL(sharding_info_.get_all_partition_ref_columns(left_keys))) {
     LOG_WARN("failed to get all partition keys", K(ret));
   } else if (OB_FAIL(get_right_key(left_keys,
                  *column_convert_exprs_,
@@ -928,12 +943,13 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
   } else {
     // allocate pkey below insert operator
     ObExchangeInfo exch_info;
-    ObRawExprFactory& expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-    if (!left_keys.empty() &&
-        OB_FAIL(compute_repartition_func_info(
-            sharding_input_esets, right_keys, left_keys, sharding_info_, expr_factory, exch_info))) {
+    ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
+    if (!left_keys.empty() && OB_FAIL(compute_repartition_func_info_for_insert(right_keys,  // select from columns
+                                  left_keys,                                                // insert into columns
+                                  sharding_info_,
+                                  expr_factory,
+                                  exch_info))) {
       LOG_WARN("failed to compute repartition func info", K(ret));
-
     } else if (OB_FAIL(set_hash_dist_column_exprs(exch_info, get_index_tid()))) {
       LOG_WARN("fail set hash dist column exprs", K(ret));
     } else {
@@ -1023,17 +1039,28 @@ int ObLogInsert::set_hash_dist_column_exprs(ObExchangeInfo& exch_info, uint64_t 
               K(info),
               K(ret));
         }
+        ObSEArray<ObRawExpr *, 4> except_exprs;
         for (int64_t k = 0; OB_SUCC(ret) && k < info.rowkey_cnt_; ++k) {
-          ObRawExpr* target_expr = info.column_exprs_.at(k);
-          for (int64_t i = 0; OB_SUCC(ret) && i < column_convert_exprs_->count(); i++) {
+          ObRawExpr *target_expr = info.column_exprs_.at(k);
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_convert_exprs_->count(); j++) {
             if (OB_FAIL(ObRawExprUtils::replace_ref_column(
-                    target_expr, table_columns_->at(i), column_convert_exprs_->at(i)))) {
+                    target_expr, table_columns_->at(j), column_convert_exprs_->at(j), NULL, &except_exprs))) {
               LOG_WARN("fail to replace ref column", K(ret));
+            } else if (OB_FAIL(except_exprs.push_back(column_convert_exprs_->at(j)))) {
+              LOG_WARN("push expr into array failed", K(ret));
             }
           }
-          OZ(rowkey_exprs.push_back(target_expr));
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
+            LOG_WARN("push target expr into rowkey array failed", K(ret));
+          }
         }
-        OZ(exch_info.append_hash_dist_expr(rowkey_exprs));
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(exch_info.append_hash_dist_expr(rowkey_exprs))) {
+          LOG_WARN("append rowkey array after exch info array failed", K(ret));
+        }
         found = true;
         break;
       }

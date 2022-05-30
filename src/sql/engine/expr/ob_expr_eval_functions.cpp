@@ -184,6 +184,43 @@
 #include "ob_expr_to_single_byte.h"
 #include "ob_expr_to_multi_byte.h"
 #include "ob_expr_convert_tz.h"
+#include "ob_expr_degrees.h"
+#include "ob_expr_weight_string.h"
+#include "ob_expr_any_value.h"
+#include "ob_expr_validate_password_strength.h"
+#include "ob_expr_benchmark.h"
+#include "ob_expr_uuid_short.h"
+#include "ob_expr_to_base64.h"
+#include "ob_expr_from_base64.h"
+#include "ob_expr_json_object.h"
+#include "ob_expr_json_extract.h"
+#include "ob_expr_json_contains.h"
+#include "ob_expr_json_contains_path.h"
+#include "ob_expr_json_depth.h"
+#include "ob_expr_json_keys.h"
+#include "ob_expr_json_search.h"
+#include "ob_expr_json_array.h"
+#include "ob_expr_json_quote.h"
+#include "ob_expr_json_unquote.h"
+#include "ob_expr_json_overlaps.h"
+#include "ob_expr_json_valid.h"
+#include "ob_expr_json_remove.h"
+#include "ob_expr_json_array_append.h"
+#include "ob_expr_json_array_insert.h"
+#include "ob_expr_json_value.h"
+#include "ob_expr_json_replace.h"
+#include "ob_expr_json_type.h"
+#include "ob_expr_json_length.h"
+#include "ob_expr_json_insert.h"
+#include "ob_expr_json_storage_size.h"
+#include "ob_expr_json_storage_free.h"
+#include "ob_expr_json_set.h"
+#include "ob_expr_json_merge_preserve.h"
+#include "ob_expr_json_merge.h"
+#include "ob_expr_json_merge_patch.h"
+#include "ob_expr_json_pretty.h"
+#include "ob_expr_json_member_of.h"
+
 
 namespace oceanbase {
 using namespace common;
@@ -669,9 +706,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprPeriodAdd::calc_periodadd,          /* 409 */
     NULL,                                     /* 410 */
     NULL,                                     /* 411 */
-    NULL,                                     /* 412 */
+    ObExprAnyValue::eval_any_value,           /* 412 */
     NULL,                                     /* 413 */
-    NULL,                                     /* 414 */
+    ObExprDegrees::calc_degrees_expr,         /* 414 */
     NULL,                                     /* 415 */
     NULL,                                     /* 416 */
     NULL,                                     /* 417 */
@@ -700,13 +737,13 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 440 */
     ObExprTimestamp::calc_timestamp1,         /* 441 */
     ObExprTimestamp::calc_timestamp2,         /* 442 */
-    NULL,                                     /* 443 */
+    ObExprValidatePasswordStrength::eval_password_strength, /* 443 */
     NULL,                                     /* 444 */
     NULL,                                     /* 445 */
     NULL,                                     /* 446 */
     NULL,                                     /* 447 */
-    NULL,                                     /* 448 */
-    NULL,                                     /* 449 */
+    ObExprUuidShort::eval_uuid_short,         /* 448 */
+    ObExprBenchmark::eval_benchmark,          /* 449 */
     ObExprExportSet::eval_export_set,         /* 450 */
     ObExprInet6Aton::calc_inet6_aton,         /* 451 */
     ObExprIsIpv4::calc_is_ipv4,               /* 452 */
@@ -715,9 +752,40 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 455 */
     ObExprInetAton::calc_inet_aton,           /* 456 */
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
-    NULL,                                     // ObExprWeightString::eval_weight_string,  /* 458 */
+    ObExprWeightString::eval_weight_string,   /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
     ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprToBase64::eval_to_base64,           /* 461 */
+    ObExprFromBase64::eval_from_base64,       /* 462 */
+    ObExprJsonObject::eval_json_object,                                 /* 463 */
+    ObExprJsonExtract::eval_json_extract,                               /* 464 */
+    ObExprJsonContains::eval_json_contains,                             /* 465 */
+    ObExprJsonContainsPath::eval_json_contains_path,                    /* 466 */
+    ObExprJsonDepth::eval_json_depth,                                   /* 467 */
+    ObExprJsonKeys::eval_json_keys,                                     /* 468 */
+    ObExprJsonArray::eval_json_array,                                   /* 469 */
+    ObExprJsonQuote::eval_json_quote,                                   /* 470 */
+    ObExprJsonUnquote::eval_json_unquote,                               /* 471 */
+    ObExprJsonOverlaps::eval_json_overlaps,                             /* 472 */
+    ObExprJsonRemove::eval_json_remove,                                 /* 473 */
+    ObExprJsonSearch::eval_json_search,                                 /* 474 */
+    ObExprJsonValid::eval_json_valid,                                   /* 475 */
+    ObExprJsonArrayAppend::eval_json_array_append,                      /* 476 */
+    ObExprJsonArrayInsert::eval_json_array_insert,                      /* 477 */
+    ObExprJsonReplace::eval_json_replace,                               /* 478 */
+    ObExprJsonType::eval_json_type,                                     /* 479 */
+    ObExprJsonLength::eval_json_length,                                 /* 480 */
+    ObExprJsonInsert::eval_json_insert,                                 /* 481 */
+    ObExprJsonStorageSize::eval_json_storage_size,                      /* 482 */
+    ObExprJsonStorageFree::eval_json_storage_free,                      /* 483 */
+    ObExprJsonMergePreserve::eval_json_merge_preserve,                  /* 484 */
+    ObExprJsonMerge::eval_json_merge_preserve,                          /* 485 */
+    ObExprJsonMergePatch::eval_json_merge_patch,                        /* 486 */
+    ObExprJsonPretty::eval_json_pretty,                                 /* 487 */
+    ObExprJsonSet::eval_json_set,                                       /* 488 */
+    ObExprJsonValue::eval_json_value,                                   /* 489 */
+    ObExprJsonMemberOf::eval_json_member_of,                            /* 490 */
+    ObExprJsonExtract::eval_json_extract_null                           /* 491 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

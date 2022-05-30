@@ -168,8 +168,10 @@ public:
 
   static int replace_equal_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
-  static int replace_equal_expr(const common::ObIArray<ObRawExpr*>& other_exprs,
-      const common::ObIArray<ObRawExpr*>& current_exprs, ObRawExpr*& expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, ObRawExpr *&expr);
+  static int replace_equal_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+      const common::ObIArray<ObRawExpr *> &current_exprs, common::ObIArray<ObRawExpr *> &exprs);
 
   static int replace_expr(ObRawExpr* old_expr, ObRawExpr* new_expr, ObRawExpr*& expr);
 
@@ -240,7 +242,7 @@ public:
 
   static int find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_expr, bool& is_valid);
 
-  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable);
+  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE);
 
   static int check_is_not_null_column(const ObDMLStmt* stmt, const ObRawExpr* expr, bool& col_not_null);
 
@@ -312,6 +314,10 @@ public:
   static int is_match_index(const ObDMLStmt* stmt, const ObIArray<uint64_t>& index_cols,
       const ObColumnRefRawExpr* col_expr, bool& is_match, EqualSets* equal_sets = NULL,
       ObIArray<ObColumnRefRawExpr*>* col_exprs = NULL);
+
+  static int extract_inseparable_query_ref_expr(ObIArray<ObRawExpr*> &exprs, ObIArray<ObRawExpr*> &target_exprs);
+
+  static int extract_inseparable_query_ref_expr(ObRawExpr *expr, ObIArray<ObRawExpr*> &target_exprs);
 
   static int extract_query_ref_expr(ObIArray<ObRawExpr*>& exprs, ObIArray<ObQueryRefRawExpr*>& subqueries);
 
@@ -753,9 +759,6 @@ public:
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
 private:
-  static int create_select_item_for_subquery(
-      ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
-
   static int add_non_duplicated_select_expr(
       ObIArray<ObRawExpr*>& add_select_exprs, ObIArray<ObRawExpr*>& org_select_exprs);
 };

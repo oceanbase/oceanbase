@@ -404,6 +404,8 @@ public:
   // parameter evaluation.
   // NOTICE: %param must in %params array which passed by eval().
   int param_eval(common::ObExprCtx& expr_ctx, const common::ObObj& param, const int64_t param_index) const;
+  int get_param_type(common::ObExprCtx &expr_ctx, const common::ObObj &param, ObItemType &param_type) const;
+  int get_param_is_boolean(common::ObExprCtx &expr_ctx, const common::ObObj &param, bool &is_boolean) const;
 
   static bool is_valid_nls_param(const common::ObString& nls_param_str);
   inline bool is_param_lazy_eval() const
@@ -1000,33 +1002,8 @@ public:
     return ret;
   }
   static int get_equal_meta(common::ObObjMeta& meta, const common::ObObjMeta& meta1, const common::ObObjMeta& meta2);
-
-  OB_INLINE static bool can_cmp_without_cast(
-      const ObExprResType& type1, const ObExprResType& type2, common::ObCmpOp cmp_op, common::obj_cmp_func& cmp_func)
-  {
-    bool need_no_cast = false;
-    // Special processing shows that compare is called (for example: c1> c2),
-    // at this time enum/set should be converted to string processing.
-    // Internal comparison (order by), enum/set does not need to be converted.
-    if (GCONF.enable_static_engine_for_query()) {
-      if (common::ObDatumFuncs::is_string_type(type1.get_type()) &&
-          common::ObDatumFuncs::is_string_type(type2.get_type())) {
-        need_no_cast = common::ObCharset::charset_type_by_coll(type1.get_collation_type()) ==
-                       common::ObCharset::charset_type_by_coll(type2.get_collation_type());
-      } else {
-        auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-            type1.get_type(), type2.get_type(), cmp_op, lib::is_oracle_mode(), common::CS_TYPE_MAX);
-        need_no_cast = (func_ptr != nullptr);
-      }
-    } else if (common::ob_is_enum_or_set_type(type1.get_type())
-
-               && common::ob_is_enum_or_set_type(type2.get_type())) {
-      need_no_cast = false;
-    } else {
-      need_no_cast = common::ObObjCmpFuncs::can_cmp_without_cast(type1, type2, cmp_op, cmp_func);
-    }
-    return need_no_cast;
-  }
+  static bool can_cmp_without_cast(
+      const ObExprResType& type1, const ObExprResType& type2, common::ObCmpOp cmp_op, const ObSQLSessionInfo& session);
 
 protected:
   static bool is_int_cmp_const_str(const ObExprResType* type1, const ObExprResType* type2, common::ObObjType& cmp_type);
@@ -1115,9 +1092,6 @@ protected:
   {
     return common::ObObjCmpFuncs::compare(result, obj1, obj2, cmp_ctx, cmp_op, cmp_func);
   }
-
-  static bool can_cmp_without_cast(
-      const ObExprResType& type1, const ObExprResType& type2, common::ObCmpOp cmp_op, const ObSQLSessionInfo& session);
 
 protected:
   // only use for comparison with 2 operands(calc_result2)
@@ -1580,7 +1554,8 @@ protected:
   // least should set cmp_op to CO_LT.
   // greatest should set cmp_op to CO_GT.
   static int calc_(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
-      const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op, bool need_cast);
+      const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op, bool need_cast,
+      ObExprOperatorType expr_type);
   OB_INLINE static int calc_without_cast(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
       const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op);
   OB_INLINE static int calc_with_cast(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,

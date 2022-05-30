@@ -226,7 +226,9 @@ int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo* p_session_info)
     if (current_map.size() > 0) {
       // Init user var map on demand when setting to avoid wasting CPU and memory when there is no user var
       // synchronization
-      OZ(user_var_map_.init(1024 * 1024 * 2, 256, NULL));
+      if (!user_var_map_.get_val_map().created()) {
+        OZ(user_var_map_.init(1024 * 1024 * 2, 256, NULL));
+      }
       for (sql::ObSessionValMap::VarNameValMap::const_iterator iter = current_map.get_val_map().begin();
            OB_SUCC(ret) && iter != current_map.get_val_map().end();
            ++iter) {

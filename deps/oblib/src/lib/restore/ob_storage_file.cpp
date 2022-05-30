@@ -128,6 +128,20 @@ int ObStorageFileUtil::is_exist(const common::ObString& uri, const common::ObStr
   return ret;
 }
 
+int ObStorageFileUtil::is_tagging(const common::ObString &uri, const common::ObString &storage_info, bool &is_tagging)
+{
+  int ret = OB_SUCCESS;
+  is_tagging = false;
+  UNUSED(storage_info);
+  if (uri.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", K(ret), K(uri));
+  } else {
+    is_tagging = false;
+  }
+  return ret;
+}
+
 int ObStorageFileUtil::get_file_length(
     const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length)
 {

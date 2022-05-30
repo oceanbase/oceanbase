@@ -109,10 +109,13 @@ int ObDesExecContext::create_my_session(uint64_t tenant_id)
         LOG_ERROR("no more memory to create sql session info");
       } else {
         local_session = new (local_session) ObSQLSessionInfo();
-        uint32_t tmp_sid = 123456789;
+        uint32_t tmp_sid = 0;
+        uint64_t tmp_proxy_sessid = proxy_sid;
         uint32_t tmp_version = 0;
-        uint64_t tmp_proxy_sessid = 1234567890;
-        if (OB_FAIL(local_session->init(tmp_version, tmp_sid, tmp_proxy_sessid, NULL))) {
+        bool session_in_mgr = false;
+        if (OB_FAIL(GCTX.session_mgr_->create_sessid(tmp_sid, session_in_mgr))) {
+          LOG_WARN("failed to mock session id", K(ret));
+        } else if (OB_FAIL(local_session->init(tmp_version, tmp_sid, tmp_proxy_sessid, NULL))) {
           LOG_WARN("my session init failed", K(ret));
           local_session->~ObSQLSessionInfo();
         } else {

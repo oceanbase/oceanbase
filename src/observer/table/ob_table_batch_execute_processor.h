@@ -50,6 +50,9 @@ private:
   int multi_replace();
   int multi_update();
   int batch_execute(bool is_readonly);
+  int htable_delete();
+  int htable_put();
+  int htable_mutate_row();
 private:
   static const int64_t COMMON_COLUMN_NUM = 16;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;

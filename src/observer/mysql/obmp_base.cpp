@@ -900,7 +900,7 @@ int ObMPBase::before_response()
 int ObMPBase::after_process()
 {
   int ret = OB_SUCCESS;
-  if (!lib::is_diagnose_info_enabled()) {
+  if (!lib::is_trace_log_enabled()) {
   } else {
     NG_TRACE_EXT(process_end, OB_ID(run_ts), get_run_timestamp());
     const int64_t elapsed_time = common::ObTimeUtility::current_time() - get_receive_timestamp();
@@ -1232,8 +1232,11 @@ int ObMPBase::send_error_packet(
 
     OMPKError epacket;
     // TODO Negotiate a err for rerouting sql
-    epacket.set_errcode(static_cast<uint16_t>(ob_errpkt_errno(err, lib::is_oracle_mode())));
-    ret = epacket.set_sqlstate(ob_sqlstate(err));
+    const int user_error_code = ob_errpkt_errno(err, lib::is_oracle_mode());
+    const char *sql_state = ob_sqlstate(err);
+    LOG_INFO("send error package.", K(user_error_code), K(err), K(sql_state), K(message));
+    epacket.set_errcode(static_cast<uint16_t>(user_error_code));
+    ret = epacket.set_sqlstate(sql_state);
     if (OB_SUCC(ret) && OB_SUCC(epacket.set_message(message))) {
       comp_context_.update_last_pkt_pos(ez_buf_->last);
       if (OB_FAIL(response_packet(epacket))) {
@@ -1671,7 +1674,7 @@ int ObMPBase::do_after_process(
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
   // trace end
-  if (lib::is_diagnose_info_enabled()) {
+  if (lib::is_trace_log_enabled()) {
     NG_TRACE(query_end);
 
     if (use_session_trace) {

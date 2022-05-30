@@ -242,8 +242,8 @@ void ObColumnSchemaV2::reset()
   prev_column_id_ = UINT64_MAX;
   next_column_id_ = UINT64_MAX;
   encoding_type_ = INT64_MAX;
-  ObSchema::reset();
   reset_string_array(extended_type_info_);
+  ObSchema::reset();
 }
 
 OB_DEF_SERIALIZE(ObColumnSchemaV2)
@@ -482,9 +482,10 @@ int ObColumnSchemaV2::get_byte_length(int64_t& length, const bool for_check_leng
   if (CS_TYPE_INVALID == get_collation_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type is invalid", K(ret));
-  } else if (ob_is_text_tc(meta_type_.get_type())) {
+  } else if (ob_is_text_tc(meta_type_.get_type()) || ob_is_json(meta_type_.get_type())) {
     if (for_check_length &&
         ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_1470) || ObSchemaService::g_liboblog_mode_)) {
+      // when check row length, a lob will occupy at most 2KB
       length = min(get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
     } else {
       length = get_data_length();

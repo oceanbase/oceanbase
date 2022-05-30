@@ -53,7 +53,7 @@ private:
   int resolve_cascade_updated_global_index(
       const ObTableAssignment& ta, common::ObIArray<uint64_t>& cascade_global_index);
   int resolve_multi_table_dml_info(const ObTableAssignment& ta, common::ObIArray<uint64_t>& global_index);
-  int check_multi_update_key_conflict();
+  int check_multi_update_table_conflict();
 
   int check_view_updatable();
 

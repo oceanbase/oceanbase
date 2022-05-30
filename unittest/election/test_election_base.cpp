@@ -15,7 +15,7 @@
 #include "common/ob_clock_generator.h"
 #include "election/ob_election_async_log.h"
 #include "lib/net/ob_addr.h"
-#include "lib/net/tbnetutil.h"
+#include "lib/net/ob_net_util.h"
 #include "election/ob_election_base.h"
 
 namespace oceanbase {
@@ -41,15 +41,25 @@ TEST_F(TestObElectionBase, get_self_addr)
 
   EXPECT_EQ(OB_INVALID_ARGUMENT, get_self_addr(addr, NULL, 0));
   {
-    const char* dev = "null";
+    const char *dev = "null";
     EXPECT_EQ(OB_INVALID_ARGUMENT, get_self_addr(addr, dev, port));
   }
   {
-    const char* dev = "bond0";
-    EXPECT_EQ(OB_SUCCESS, get_self_addr(addr, dev, port));
-    uint32_t ip = obsys::CNetUtil::getLocalAddr(dev);
-    EXPECT_EQ(ip, addr.get_ipv4());
-    EXPECT_EQ(port, addr.get_port());
+    struct ifaddrs *ifaddr, *ifa;
+    char host[NI_MAXHOST];
+    EXPECT_EQ(getifaddrs(&ifaddr), 0);
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+      if (ifa->ifa_addr == NULL)
+        continue;
+      getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+      if (ifa->ifa_addr->sa_family == AF_INET) {
+        const char *dev = ifa->ifa_name;
+        EXPECT_EQ(OB_SUCCESS, get_self_addr(addr, dev, port));
+        uint32_t ip = obsys::ObNetUtil::get_local_addr_ipv4(dev);
+        EXPECT_EQ(ip, addr.get_ipv4());
+        EXPECT_EQ(port, addr.get_port());
+      }
+    }
   }
 }
 
@@ -78,7 +88,7 @@ TEST_F(TestObElectionBase, election_stage_name)
 }  // namespace unittest
 }  // namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int ret = -1;
 

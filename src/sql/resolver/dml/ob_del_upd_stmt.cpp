@@ -211,7 +211,9 @@ int ObDelUpdStmt::recursively_check_filter_null(const JoinedTable* cur_table)
         table_dml_info->need_filter_null_ = true;
       }
     }
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     if (cur_table->left_table_ != NULL && cur_table->left_table_->is_joined_table()) {
       const JoinedTable* left_table = static_cast<const JoinedTable*>(cur_table->left_table_);
       if (OB_FAIL(SMART_CALL(recursively_check_filter_null(left_table)))) {

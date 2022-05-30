@@ -504,6 +504,7 @@ public:
   void release_ref()
   {
     qclock_.leave_critical(qc_slot_);
+    qc_slot_ = UINT64_MAX;
   }
   OB_INLINE CompHelper& get_comp()
   {

@@ -1057,6 +1057,8 @@ int ObTmpTenantMemBlockManager::write_io(const ObTmpBlockIOInfo& io_info, ObMacr
     full_meta.schema_ = &macro_schema;
     if (OB_FAIL(build_macro_meta(io_info.tenant_id_, full_meta))) {
       STORAGE_LOG(WARN, "fail to build macro meta", K(ret));
+    } else if (OB_FAIL(OB_STORE_FILE.check_disk_full(OB_FILE_SYSTEM.get_macro_block_size()))) {
+      STORAGE_LOG(WARN, "fail to check space full", K(ret));
     } else {
       write_info.io_desc_ = io_info.io_desc_;
       write_info.meta_ = full_meta;

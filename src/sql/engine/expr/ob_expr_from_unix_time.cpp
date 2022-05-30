@@ -212,8 +212,6 @@ int ObExprFromUnixTime::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_exp
     if (OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1]) || OB_ISNULL(rt_expr.args_[2])) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null args", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]), K(rt_expr.args_[2]));
-    } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(rt_expr.args_[1], rt_expr.args_[2], &rt_expr, 2))) {
-      LOG_WARN("replace var rt expr failed", K(ret), K(rt_expr));
     } else if (ob_is_string_tc(rt_expr.args_[2]->datum_meta_.type_)) {
       rt_expr.eval_func_ = &eval_fromtime_normal;
     } else {

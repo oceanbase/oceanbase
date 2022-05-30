@@ -69,6 +69,9 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
+// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
+static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+
 class ObTransErrsim {
 public:
   static inline bool is_memory_errsim()
@@ -773,7 +776,11 @@ public:
   {
     return stmt_type_;
   }
-  const char* get_sql_id() const
+  inline bool is_delete_stmt() const
+  {
+    return sql::stmt::T_DELETE == stmt_type_;
+  }
+  const char *get_sql_id() const
   {
     return sql_id_.ptr();
   }
@@ -2847,6 +2854,7 @@ public:
     cur_insert_row_count_ = 0;
     cur_delete_row_count_ = 0;
     cur_update_row_count_ = 0;
+    /*
     query_row_count_ = 0;
     insert_sql_count_ = 0;
     delete_sql_count_ = 0;
@@ -2860,6 +2868,7 @@ public:
     rollback_delete_sql_count_ = 0;
     rollback_update_sql_count_ = 0;
     rollback_sql_count_ = 0;
+    */
   }
   int update_audit_info(const enum ObPartitionAuditOperator op, const int32_t count);
   int stmt_end_update_audit_info(bool commit);
@@ -2871,6 +2880,7 @@ public:
   int32_t cur_insert_row_count_;
   int32_t cur_delete_row_count_;
   int32_t cur_update_row_count_;
+  /*
   int32_t query_row_count_;
   int32_t insert_sql_count_;
   int32_t delete_sql_count_;
@@ -2884,6 +2894,7 @@ public:
   int32_t rollback_delete_sql_count_;
   int32_t rollback_update_sql_count_;
   int32_t rollback_sql_count_;
+  */
 };
 
 struct ObPartitionAuditInfo {
@@ -2900,6 +2911,7 @@ public:
     insert_row_count_ = 0;
     delete_row_count_ = 0;
     update_row_count_ = 0;
+    /*
     query_row_count_ = 0;
     insert_sql_count_ = 0;
     delete_sql_count_ = 0;
@@ -2915,6 +2927,7 @@ public:
     rollback_update_sql_count_ = 0;
     rollback_trans_count_ = 0;
     rollback_sql_count_ = 0;
+    */
   }
   void destroy()
   {
@@ -2934,6 +2947,8 @@ public:
   int64_t insert_row_count_;
   int64_t delete_row_count_;
   int64_t update_row_count_;
+  // dead statistic event, need to be removed
+  /*
   int64_t query_row_count_;
   int64_t insert_sql_count_;
   int64_t delete_sql_count_;
@@ -2949,6 +2964,7 @@ public:
   int64_t rollback_update_sql_count_;
   int64_t rollback_trans_count_;
   int64_t rollback_sql_count_;
+  */
 };
 
 class ObCoreLocalPartitionAuditInfo : public common::ObCoreLocalStorage<ObPartitionAuditInfo*> {
@@ -3116,13 +3132,15 @@ public:
       : status_(ObTransTableStatusType::RUNNING),
         trans_version_(common::OB_INVALID_VERSION),
         undo_status_(),
+        start_log_ts_(0),
         end_log_ts_(INT64_MAX)
   {}
   ObTransTableStatusType status_;
   int64_t trans_version_;
   ObTransUndoStatus undo_status_;
+  int64_t start_log_ts_;
   int64_t end_log_ts_;
-  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(end_log_ts));
+  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(start_log_ts), K_(end_log_ts));
 };
 
 class ObTransTableStatusInfo {
@@ -3518,6 +3536,7 @@ public:
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
     clear_log_base_ts_ = 0;
+    prev_checkpoint_id_ = 0;
   }
   void destroy()
   {
@@ -3529,7 +3548,7 @@ public:
       K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),
       K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),
       K_(stmt_info), K_(min_log_ts), K_(min_log_id), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
-      K_(prepare_log_timestamp));
+      K_(prepare_log_timestamp), K_(prev_checkpoint_id));
   ObTransTableStatusInfo trans_table_info_;
   common::ObPartitionKey partition_;
   ObStartTransParam trans_param_;
@@ -3564,6 +3583,7 @@ public:
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
   int64_t clear_log_base_ts_;
+  uint64_t prev_checkpoint_id_;
 };
 
 struct CtxInfo final {

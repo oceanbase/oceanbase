@@ -52,7 +52,8 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext& gctx, co
   ObSQLSessionInfo* session = result.get_exec_context().get_my_session();
   bool expected_stmt = (ObStmt::is_dml_stmt(result.get_stmt_type()) ||
                         ObStmt::is_ddl_stmt(result.get_stmt_type(), result.has_global_variable()) ||
-                        ObStmt::is_dcl_stmt(result.get_stmt_type()));
+                        ObStmt::is_dcl_stmt(result.get_stmt_type()) ||
+                        ObStmt::is_execute_stmt(result.get_stmt_type()));
   const ObMultiStmtItem& multi_stmt_item = ctx.multi_stmt_item_;
   if (OB_ISNULL(session)) {
     client_ret = err;  // OOM
@@ -77,7 +78,8 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext& gctx, co
     } else {
       client_ret = OB_TIMEOUT;
     }
-    if (is_try_lock_row_err(session->get_retry_info().get_last_query_retry_err())) {
+    if (result.get_exec_context().need_change_timeout_ret() &&
+        is_try_lock_row_err(session->get_retry_info().get_last_query_retry_err())) {
       client_ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     }
     retry_type_ = RETRY_TYPE_NONE;
@@ -410,10 +412,6 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext& gctx, co
   } else if (OB_AUTOINC_SERVICE_BUSY == err) {
     force_local_retry ? (void)(retry_type_ = RETRY_TYPE_LOCAL) : try_packet_retry(multi_stmt_item);
     if (RETRY_TYPE_LOCAL == retry_type_) {
-      // 对于 OB_AUTOINC_SERVICE_BUSY 错误，理想情况是将 query 放回队列。
-      // 不过即使由于各种原因无法放回队列，也值得做重试。因为让整个 query
-      // 从阻塞中退出，还是可以释放不少属于这个 query 的 dist execution rpc 线程
-      // 尽可能避免 rpc 死锁。
       sleep_before_local_retry(ObQueryRetryCtrl::RETRY_SLEEP_TYPE_LINEAR,
           WAIT_RETRY_WRITE_DML_US,
           retry_times_,

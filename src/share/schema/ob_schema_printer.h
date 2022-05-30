@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "share/schema/ob_schema_struct.h"
+#include "common/sql_mode/ob_sql_mode.h"
 
 namespace oceanbase {
 namespace common {

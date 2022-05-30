@@ -14,9 +14,12 @@
 #include "ob_root_backup.h"
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_extern_backup_info_mgr.h"
+#include "share/schema/ob_schema_mgr.h"
+#include "share/schema/ob_schema_struct.h"
 #include "ob_root_balancer.h"
 #include "ob_rs_event_history_table_operator.h"
 #include "share/backup/ob_tenant_backup_clean_info_updater.h"
+#include "rootserver/ob_backup_cancel_scheduler.h"
 
 namespace oceanbase {
 
@@ -51,7 +54,6 @@ ObRootBackup::ObRootBackup()
       need_switch_tenant_(false),
       is_working_(false),
       inner_error_(OB_SUCCESS),
-      extern_device_error_(OB_SUCCESS),
       backup_meta_info_(),
       backup_lease_service_(nullptr),
       restore_point_service_(nullptr),
@@ -157,7 +159,6 @@ void ObRootBackup::run3()
     ret = OB_SUCCESS;
     tenant_ids.reset();
     inner_error_ = OB_SUCCESS;
-    extern_device_error_ = OB_SUCCESS;
 
     DEBUG_SYNC(BEFROE_DO_ROOT_BACKUP);
     if (OB_FAIL(check_can_backup())) {
@@ -199,7 +200,7 @@ int ObRootBackup::check_inner_table_version_()
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("root validate do not init", K(ret));
+    LOG_WARN("root backup do not init", K(ret));
   } else if (is_valid_backup_inner_table_version(inner_table_version_) &&
              inner_table_version_ >= OB_BACKUP_INNER_TABLE_V2) {
     // inner table version is new enough
@@ -211,6 +212,25 @@ int ObRootBackup::check_inner_table_version_()
   } else if (inner_table_version_ < OB_BACKUP_INNER_TABLE_V3) {
     // TODO(muwei): need to upgrade deleted tenant backup info
   }
+
+  return ret;
+}
+
+int ObRootBackup::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObBackupCancelScheduler backup_cancel_scheduler;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root backup do not init", K(ret));
+  } else if (OB_FAIL(backup_cancel_scheduler.init(tenant_id, *sql_proxy_, this))) {
+    LOG_WARN("failed to init backup cancel scheduler", K(ret), K(tenant_id));
+  } else if (OB_FAIL(backup_cancel_scheduler.start_schedule_backup_cancel())) {
+    LOG_WARN("failed to start schedule backup cancel", K(ret));
+  }
+
+  FLOG_WARN("force_cancel backup", K(ret), K(tenant_id));
 
   return ret;
 }
@@ -307,8 +327,10 @@ int ObRootBackup::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
     if (OB_FAIL(info_manager.get_backup_info(OB_SYS_TENANT_ID, updater, sys_backup_info))) {
       LOG_WARN("failed to get backup info", K(ret));
     } else if (0 == sys_backup_info.backup_schema_version_) {
-      // do nothing
       // The schema_version of the backup is 0, indicating that the backup has not yet started, so skip
+      if (sys_backup_info.backup_status_.is_prepare_status() && OB_FAIL(tenant_ids.push_back(OB_SYS_TENANT_ID))) {
+        LOG_WARN("failed to push tenant id into array", K(ret));
+      }
     } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                    OB_SYS_TENANT_ID, *schema_service_, sys_backup_info.backup_schema_version_, guard))) {
       LOG_WARN("failed to get tenant schema guard", K(ret), K(sys_backup_info));
@@ -410,11 +432,6 @@ int ObRootBackup::do_root_scheduler(const ObIArray<uint64_t> &tenant_ids)
           } else {
             inner_error_ = OB_SUCCESS == inner_error_ ? tmp_ret : inner_error_;
             FLOG_INFO("set inner error", K(inner_error_));
-          }
-
-          if (ObBackupUtils::is_extern_device_error(tmp_ret)) {
-            extern_device_error_ = OB_SUCCESS == extern_device_error_ ? tmp_ret : extern_device_error_;
-            FLOG_INFO("set extern device error", K(extern_device_error_));
           }
         }
       }
@@ -671,6 +688,8 @@ int ObRootBackup::do_sys_tenant_backup(
   } else {
     if (OB_FAIL(add_backup_info_lock(info, updater, info_manager))) {
       LOG_WARN("failed to add backup info lock", K(ret), K(info));
+    } else if (OB_FAIL(check_server_disk_stat(info, updater.get_trans()))) {
+      LOG_WARN("failed to check server disk stat", K(ret), K(info));
     } else if (OB_FAIL(check_tenants_backup_task_failed(info, info_manager, updater.get_trans()))) {
       LOG_WARN("failed to check tenants backup task failed", K(ret), K(info));
     } else if (OB_FAIL(do_with_all_finished_info(info, updater, info_manager))) {
@@ -760,7 +779,7 @@ int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct &info, sh
 
     if (OB_FAIL(ret)) {
       if (ObBackupUtils::is_need_retry_error(ret)) {
-        //do nothing
+        // do nothing
       } else {
         dest_task_info = task_info;
         dest_task_info.result_ = ret;
@@ -850,8 +869,7 @@ int ObRootBackup::do_cleanup(const share::ObBaseBackupInfoStruct &info, share::O
       LOG_WARN("failed to get tenant backup set file info", K(ret), K(backup_set_file_info));
     } else if (FALSE_IT(status = (OB_SUCCESS == tenant_task_info.result_ ? ObExternBackupInfo::SUCCESS
                                                                          : ObExternBackupInfo::FAILED))) {
-    } else if (FALSE_IT(
-                   is_force_stop = (OB_CANCELED == tenant_task_info.result_ && OB_SUCCESS != extern_device_error_))) {
+    } else if (FALSE_IT(is_force_stop = is_force_cancel_())) {
     } else if (OB_FAIL(update_extern_backup_infos(info, status, is_force_stop, extern_backup_info))) {
       LOG_WARN("failed to do extern backup infos", K(ret), K(info), K(status), K(tenant_task_info));
     } else if (OB_FAIL(update_extern_backup_set_file_info(backup_set_file_info, is_force_stop))) {
@@ -907,7 +925,7 @@ int ObRootBackup::do_cleanup(const share::ObBaseBackupInfoStruct &info, share::O
     }
   }
   if (OB_FAIL(ret)) {
-    if (OB_CANCELED == tenant_task_info.result_ && ObBackupUtils::is_extern_device_error(ret)) {
+    if (OB_CANCELED == tenant_task_info.result_ && is_force_cancel_()) {
       need_switch_tenant_ = false;
     }
   }
@@ -1128,8 +1146,7 @@ int ObRootBackup::update_extern_backup_infos(const share::ObBaseBackupInfoStruct
     ret = OB_NOT_INIT;
     LOG_WARN("root backup do not init", K(ret));
   } else if (is_force_stop) {
-    FLOG_INFO(
-        "backup need force stop, skip update extern backup infos", K(is_force_stop), K(extern_device_error_), K(info));
+    FLOG_INFO("backup need force stop, skip update extern backup infos", K(is_force_stop), K(info));
   } else if (OB_FAIL(backup_dest.set(info.backup_dest_.ptr(), info.incarnation_))) {
     LOG_WARN("failed to set backup dest", K(ret), K(info));
   } else if (OB_FAIL(extern_backup_info_mgr.init(tenant_id, backup_dest, *backup_lease_service_))) {
@@ -1165,7 +1182,7 @@ int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct &info,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do extern backup set infos get invalid argument", K(ret), K(info), K(tenant_task_info));
   } else if (is_force_stop) {
-    FLOG_INFO("backup is force stop, skip backup set infos", K(is_force_stop), K(extern_device_error_), K(info));
+    FLOG_INFO("backup is force stop, skip backup set infos", K(is_force_stop), K(info));
   } else if (!extern_backup_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do extern backup set infos get invalid argument", K(ret), K(extern_backup_info));
@@ -1176,7 +1193,7 @@ int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct &info,
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else {
@@ -1214,8 +1231,7 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
     ret = OB_NOT_INIT;
     LOG_WARN("root backup do not init", K(ret));
   } else if (is_force_stop) {
-    FLOG_INFO(
-        "backup is force stop, skip backup tenant locality infos", K(is_force_stop), K(extern_device_error_), K(info));
+    FLOG_INFO("backup is force stop, skip backup tenant locality infos", K(is_force_stop), K(info));
   } else if (!extern_backup_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do extern backup tenant locality infos get invalid argument", K(ret), K(info));
@@ -1231,7 +1247,7 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else if (OB_FAIL(extern_tenant_locality_info.tenant_name_.assign(tenant_info->get_tenant_name()))) {
@@ -1694,8 +1710,8 @@ void ObRootBackup::cleanup_prepared_infos()
       // normal tenants, skip sys tenant
       for (int64_t i = 1; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
         const uint64_t tenant_id = tenant_ids.at(i);
-        if (OB_FAIL(cleanup_tenant_prepared_infos(tenant_id, updater.get_trans(), info_manager))) {
-          LOG_WARN("failed to cleanup stoppped tenant infos", K(ret), K(tenant_id));
+        if (OB_FAIL(cleanup_tenant_prepared_infos(tenant_id, sys_backup_info, updater.get_trans(), info_manager))) {
+          LOG_WARN("failed to cleanup stopped tenant infos", K(ret), K(tenant_id));
         }
       }
 
@@ -1736,8 +1752,8 @@ int ObRootBackup::check_need_cleanup_prepared_infos(
   return ret;
 }
 
-int ObRootBackup::cleanup_tenant_prepared_infos(
-    const uint64_t tenant_id, ObISQLClient &sys_tenant_trans, ObBackupInfoManager &info_manager)
+int ObRootBackup::cleanup_tenant_prepared_infos(const uint64_t tenant_id, const ObBaseBackupInfoStruct &sys_backup_info,
+    ObISQLClient &sys_tenant_trans, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo task_info;
@@ -1754,9 +1770,11 @@ int ObRootBackup::cleanup_tenant_prepared_infos(
   } else if (stop_) {
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("observer is stopping", K(ret));
-  } else if (OB_INVALID_ID == tenant_id) {
+  } else if (OB_INVALID_ID == tenant_id || !sys_backup_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant is is invalid", K(ret), K(tenant_id));
+    LOG_WARN("tenant is is invalid", K(ret), K(tenant_id), K(sys_backup_info));
+  } else if (OB_FAIL(drop_backup_point(tenant_id, sys_backup_info.backup_snapshot_version_))) {
+    LOG_WARN("failed to drop backup point", K(ret), K(info));
   } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
     LOG_WARN("failed to set trx timeout", K(ret), K(stmt_timeout));
   } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
@@ -1773,8 +1791,6 @@ int ObRootBackup::cleanup_tenant_prepared_infos(
       // do nothing
     } else if (OB_FAIL(ObBackupUtil::check_sys_tenant_trans_alive(info_manager, sys_tenant_trans))) {
       LOG_WARN("failed to check sys tenant trans alive", K(ret), K(info));
-    } else if (OB_FAIL(drop_backup_point(tenant_id, info.backup_snapshot_version_))) {
-      LOG_WARN("failed to drop backup point", K(ret), K(info));
     } else {
       dest_info = info;
       dest_info.backup_status_.set_backup_status_stop();
@@ -2334,7 +2350,7 @@ int ObRootBackup::do_with_all_finished_info(const share::ObBaseBackupInfoStruct 
           LOG_WARN("failed to get stopped backup tenant result", K(ret), K(infos));
         } else if (FALSE_IT(
                        status = (OB_SUCCESS == result ? ObExternBackupInfo::SUCCESS : ObExternBackupInfo::FAILED))) {
-        } else if (FALSE_IT(is_force_stop = (OB_CANCELED == result && OB_SUCCESS != extern_device_error_))) {
+        } else if (FALSE_IT(is_force_stop = is_force_cancel_())) {
         } else if (OB_FAIL(update_extern_backup_infos(info, status, is_force_stop, extern_backup_info))) {
           LOG_WARN("failed to do extern backup infos", K(ret), K(info), K(status));
         } else if (OB_FAIL(update_sys_tenant_backup_task(sys_updater.get_trans(),
@@ -2621,10 +2637,8 @@ int ObRootBackup::add_extern_backup_set_file_info(
     ret = OB_NOT_INIT;
     LOG_WARN("root backup do not init", K(ret));
   } else if (is_force_stop) {
-    FLOG_INFO("backup need force stop, skip update extern backup set file infos",
-        K(is_force_stop),
-        K(extern_device_error_),
-        K(backup_set_file_info));
+    FLOG_INFO(
+        "backup need force stop, skip update extern backup set file infos", K(is_force_stop), K(backup_set_file_info));
   } else if (!backup_set_file_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add extern backup set file info get invalid argument", K(ret), K(backup_set_file_info));
@@ -2654,10 +2668,8 @@ int ObRootBackup::update_extern_backup_set_file_info(
     ret = OB_NOT_INIT;
     LOG_WARN("root backup do not init", K(ret));
   } else if (is_force_stop) {
-    FLOG_INFO("backup need force stop, skip update extern backup set file infos",
-        K(is_force_stop),
-        K(extern_device_error_),
-        K(backup_set_file_info));
+    FLOG_INFO(
+        "backup need force stop, skip update extern backup set file infos", K(is_force_stop), K(backup_set_file_info));
   } else if (!backup_set_file_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update extern backup set file info get invalid argument", K(ret), K(backup_set_file_info));
@@ -2895,7 +2907,7 @@ int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBack
   const bool need_check_all_meta_files = true;
   const bool need_check_compeleted = true;
   ObArray<ObBackupMetaIndex> backup_meta_indexs;
-  ObBackupCompatibleVersion compatible = OB_BACKUP_COMPATIBLE_VERSION_V3;
+  ObBackupCompatibleVersion compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
   start_replay_log_ts = 0;
 
   if (!tenant_task_info.is_valid() || ObTenantBackupTaskInfo::FINISH != tenant_task_info.status_) {
@@ -3050,7 +3062,7 @@ int ObRootBackup::update_dropped_tenants_extern_backup_set_file_info(
     LOG_WARN("root backup do not init", K(ret));
   } else if (backup_set_file_infos.empty()) {
     // do nothing
-  } else if (FALSE_IT(is_force_stop = OB_SUCCESS != extern_device_error_)) {
+  } else if (FALSE_IT(is_force_stop = is_force_cancel_())) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_infos.count(); ++i) {
       const ObBackupSetFileInfo &backup_set_file_info = backup_set_file_infos.at(i);
@@ -3121,6 +3133,80 @@ int ObRootBackup::do_tenant_update_task_his_and_backup_set_file(
     }
   }
   return ret;
+}
+
+int ObRootBackup::check_server_disk_stat(const ObBaseBackupInfoStruct &info, common::ObISQLClient &sys_tenant_trans)
+{
+  int ret = OB_SUCCESS;
+  ObTenantBackupTaskInfo sys_task_info;
+  ObTenantBackupTaskInfo sys_dest_task_info;
+  const ObZone zone;
+  ObArray<share::ObServerStatus> server_status_array;
+  const int64_t NO_LIMIT_PERCENT = 100;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root backup do not init", K(ret));
+  } else if (!info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check server disk stat get invalid argument", K(ret), K(info));
+  } else if (OB_FAIL(get_tenant_backup_task(
+                 info.tenant_id_, info.backup_set_id_, info.incarnation_, sys_tenant_trans, sys_task_info))) {
+    LOG_WARN("failed to get tenant backup task", K(ret), K(info));
+  } else if (!sys_task_info.is_result_succeed()) {
+    // do nothing
+  } else if (OB_FAIL(server_mgr_->get_server_statuses(zone, server_status_array))) {
+    LOG_WARN("failed to get server statuses", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_status_array.count(); ++i) {
+      const ObServerStatus &status = server_status_array.at(i);
+      if (!status.is_active() || !status.in_service()) {
+        // do nothing
+      } else if (0 == status.resource_info_.disk_total_) {
+      } else {
+        const int64_t data_disk_usage_limit_percentage = GCONF.data_disk_usage_limit_percentage;
+        int64_t used_percent = (100 * status.resource_info_.disk_in_use_) / status.resource_info_.disk_total_;
+
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          ret = E(EventTable::EN_BACKUP_SERVER_DISK_IS_FULL) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            STORAGE_LOG(ERROR, "fake EN_BACKUP_SERVER_DISK_IS_FULL", K(ret));
+            used_percent = 100;
+            ret = OB_SUCCESS;
+          }
+        }
+#endif
+
+        if (data_disk_usage_limit_percentage != NO_LIMIT_PERCENT && used_percent >= data_disk_usage_limit_percentage) {
+          FLOG_INFO("server disk is almost full", K(ret), K(used_percent), K(status));
+          sys_dest_task_info = sys_task_info;
+          sys_dest_task_info.result_ = OB_CS_OUTOF_DISK_SPACE;
+          if (OB_FAIL(update_tenant_backup_task(sys_tenant_trans, sys_task_info, sys_dest_task_info))) {
+            LOG_WARN("failed to update tenant backup task", K(ret), K(sys_task_info), K(sys_dest_task_info));
+          } else {
+            ROOTSERVICE_EVENT_ADD("backup",
+                "backup server disk is almost full",
+                "server",
+                status.server_,
+                "disk_in_use",
+                status.resource_info_.disk_in_use_,
+                "disk_total",
+                status.resource_info_.disk_total_,
+                "result",
+                OB_CS_OUTOF_DISK_SPACE);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObRootBackup::is_force_cancel_() const
+{
+  return GCONF.backup_dest.get_value_string().empty();
 }
 
 ObTenantBackup::ObTenantBackup()

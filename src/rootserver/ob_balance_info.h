@@ -1214,7 +1214,7 @@ int TenantBalanceStat::fill_partition_entity(const uint64_t schema_id, const SCH
   int64_t schema_full_replica_cnt = 0;
   int64_t paxos_replica_num = 0;
   share::ObTablePartitionIterator iter;
-  const bool need_fetch_faillist = true;
+  const bool need_fetch_faillist = false;
   iter.set_need_fetch_faillist(need_fetch_faillist);
   if (OB_FAIL(check_stop())) {
     RS_LOG(WARN, "balancer stop", K(ret));

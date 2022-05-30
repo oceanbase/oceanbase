@@ -1,6 +1,15 @@
-// Copyright 2021 Alibaba Inc. All Rights Reserved.
-// Author:
-//     shanting <dachuan.sdc@antgroup.com>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #ifndef OCEANBASE_SQL_USER_RESOURCE_MGR_H_
 #define OCEANBASE_SQL_USER_RESOURCE_MGR_H_
 
@@ -125,7 +134,7 @@ private:
     void runTimerTask(void) override;
 
     ObConnectResourceMgr& conn_res_mgr_;
-    const uint64_t SLEEP_USECONDS = 3600000000;  // one hour
+    static const uint64_t SLEEP_USECONDS = 3600000000;  // one hour
   };
   friend class ConnResourceCleanUpTask;
   friend class CleanUpUserResourceFunc;

@@ -171,12 +171,37 @@ int ObServerCheckpointWriter::update_tenant_file_super_block(
     common::hash::ObHashMap<ObTenantFileKey, ObTenantFileCheckpointEntry>& file_checkpoint_map)
 {
   int ret = OB_SUCCESS;
+  // defensive code for  trouble shooting
+  ObArenaAllocator allocator;
+  ObArray<ObTenantFileInfo *> tenant_file_infos;
+  if (OB_FAIL(OB_SERVER_FILE_MGR.get_all_tenant_file_infos(allocator, tenant_file_infos))) {
+    LOG_WARN("fail to get all tenant file infos", K(ret));
+  } else {
+    for (int64_t i = 0; i < tenant_file_infos.count(); ++i) {
+      const ObTenantFileInfo &file_info = *tenant_file_infos.at(i);
+      if (ObTenantFileStatus::TENANT_FILE_DELETING != file_info.tenant_file_super_block_.status_) {
+        ObTenantFileCheckpointEntry entry;
+        // ignore ret on purpose
+        if (OB_SUCCESS != file_checkpoint_map.get_refactored(file_info.tenant_key_, entry)) {
+          LOG_WARN("tenant file ckpt not updated, may be leak!", K(file_info));
+        }
+      }
+    }
+  }
+
   for (common::hash::ObHashMap<ObTenantFileKey, ObTenantFileCheckpointEntry>::iterator iter =
            file_checkpoint_map.begin();
        OB_SUCC(ret) && iter != file_checkpoint_map.end();
        ++iter) {
     if (OB_FAIL(OB_SERVER_FILE_MGR.update_tenant_file_meta_info(iter->second, false /*do not write slog*/))) {
       LOG_WARN("fail to update tenant file super block", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; i < tenant_file_infos.count(); ++i) {
+    if (nullptr != tenant_file_infos.at(i)) {
+      tenant_file_infos.at(i)->~ObTenantFileInfo();
+      tenant_file_infos.at(i) = nullptr;
     }
   }
   return ret;

@@ -108,9 +108,6 @@ int ObSQLUtils::md5(const ObString& stmt, char* sql_id, int32_t len)
         reinterpret_cast<unsigned char*>(md5_sum_buf));
     if (OB_ISNULL(res)) {
       // MD5() in openssl always return an pointer not NULL, so we need not check return value.
-      // see:
-      // http://www.openssl.org/docs/crypto/md5.html#DESCRIPTION
-      // http://www.openssl.org/docs/crypto/md5.html#RETURN_VALUES
       // Even so, we HAVE TO check it here. You know it.
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("md5 res null pointer", K(ret), K(res));
@@ -900,7 +897,9 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(expr->formalize(&session))) {
+      if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(expr_factory, session, schema, gen_col, expr))) {
+        LOG_WARN("add pad expr failed", K(ret));
+      } else if (OB_FAIL(expr->formalize(&session))) {
         LOG_WARN("formalize expression failed", K(ret));
       }
     }
@@ -1003,6 +1002,7 @@ int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allo
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       exec_ctx = new (exec_ctx) ObExecContext();
+      exec_ctx->set_my_session(default_session);
       expr_ctx.exec_ctx_ = exec_ctx;
     }
   }
@@ -1482,9 +1482,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult& result)
                T_SHOW_PARAMETERS == type || T_SHOW_INDEXES == type || T_SHOW_PROCESSLIST == type ||
                T_SHOW_TABLEGROUPS == type || T_USE_DATABASE == type || T_TRANSACTION == type || T_BEGIN == type ||
                T_COMMIT == type || T_ROLLBACK == type || T_VARIABLE_SET == type ||
-               T_SET_NAMES == type       // read only not restrict it
-               || T_SET_CHARSET == type  // read only not restrict it
-               || T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type || T_SHOW_RESTORE_PREVIEW == type) {
+               T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type || T_SHOW_RESTORE_PREVIEW == type) {
       ret = true;
     }
   }
@@ -3239,10 +3237,7 @@ int ObVirtualTableResultConverter::convert_key_ranges(ObIArray<ObNewRange>& key_
   if (!key_ranges.empty()) {
     common::ObArray<common::ObNewRange> tmp_range;
     OZ(tmp_range.reserve(key_ranges.count()));
-    if (OB_ISNULL(key_types_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("key mapping is null", K(ret));
-    }
+    CK(OB_NOT_NULL(key_types_));
     for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
       ObNewRange new_range;
       new_range.table_id_ = key_ranges.at(i).table_id_;
@@ -3848,7 +3843,9 @@ int ObSQLUtils::handle_audit_record(
         } else {
           ObAuditRecordData audit_record = session.get_final_audit_record(exec_mode);
           audit_record.sched_info_ = exec_ctx.get_sched_info();
-          if (OB_FAIL(req_manager->record_request(audit_record))) {
+          bool is_sensitive = (NULL != exec_ctx.get_sql_ctx()) ?
+                              exec_ctx.get_sql_ctx()->is_sensitive_ : true;
+          if (OB_FAIL(req_manager->record_request(audit_record, is_sensitive))) {
             if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               LOG_DEBUG("cannot allocate mem for record", K(ret));
               ret = OB_SUCCESS;

@@ -41,8 +41,9 @@ class ObIndexBuilderUtil {
 public:
   static int adjust_expr_index_args(obrpc::ObCreateIndexArg& arg, share::schema::ObTableSchema& data_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*>& gen_columns);
-  static int generate_ordinary_generated_column(sql::ObRawExpr& expr, share::schema::ObTableSchema& data_schema,
-      share::schema::ObColumnSchemaV2*& gen_col, const uint64_t index_id = OB_INVALID_ID);
+  static int generate_ordinary_generated_column(sql::ObRawExpr& expr, const ObSQLMode sql_mode,
+      share::schema::ObTableSchema& data_schema, share::schema::ObColumnSchemaV2*& gen_col,
+      const uint64_t index_id = OB_INVALID_ID);
   static int set_index_table_columns(const obrpc::ObCreateIndexArg& arg,
       const share::schema::ObTableSchema& data_schema, share::schema::ObTableSchema& index_schema,
       bool check_data_schema = true);
@@ -67,8 +68,8 @@ private:
   };
   static int generate_fulltext_column(OrderFTColumns& ft_cols, share::schema::ObTableSchema& data_schema,
       uint64_t specified_virtual_cid, share::schema::ObColumnSchemaV2*& ft_col);
-  static int generate_prefix_column(const obrpc::ObColumnSortItem& sort_item, share::schema::ObTableSchema& data_schema,
-      share::schema::ObColumnSchemaV2*& prefix_col);
+  static int generate_prefix_column(const obrpc::ObColumnSortItem& sort_item, const ObSQLMode sql_mode,
+      share::schema::ObTableSchema& data_schema, share::schema::ObColumnSchemaV2*& prefix_col);
   static int adjust_fulltext_args(obrpc::ObCreateIndexArg& arg, share::schema::ObTableSchema& data_schema,
       share::schema::ObColumnSchemaV2*& ft_col);
   static int adjust_fulltext_columns(obrpc::ObCreateIndexArg& arg, OrderFTColumns& ft_columns);

@@ -71,9 +71,12 @@ int CoRoutine::resume(CoRoutine& current)
 
   running_tsc_ = co_rdtscp();
   assert(cc_.get_ctx());
+#ifndef OB_USE_ASAN
   transfer_t transfer = jump_fcontext(cc_.get_ctx(), this);
   cc_.get_ctx() = transfer.fctx;
-
+#else
+  start_without_jump();
+#endif
   return ret;
 }
 
@@ -142,15 +145,33 @@ void CoRoutine::__start(transfer_t from)
   OB_ASSERT(0);
 }
 
+void CoRoutine::start_without_jump()
+{
+  int ret = OB_SUCCESS;
+  CoRoutine &routine = *this;
+  routine.idx_ = alloc_coidx();
+  routine.set_run_status(RunStatus::RUNNING);
+  routine.at_create();
+  MemoryContext *mem_context = GET_TSI0(MemoryContext);
+  assert(mem_context != nullptr && *mem_context != nullptr);
+  WITH_CONTEXT(*mem_context)
+  {
+    routine.run();
+  }
+  routine.at_exit();
+  free_coidx(routine.idx_);
+  routine.set_run_status(RunStatus::FINISHED);
+}
+
 int CoRoutine::at_create()
 {
-  CVC.at_routine_create();
+  CVC.at_routine_create(get_crls_buffer());
   return OB_SUCCESS;
 }
 
 void CoRoutine::at_exit()
 {
-  CVC.at_routine_exit();
+  CVC.at_routine_exit(get_crls_buffer());
   return;
 }
 
@@ -188,6 +209,11 @@ void CoMainRoutine::start()
   CoSched::active_routine_ = nullptr;
   at_exit();
   free_coidx(idx_);
+}
+
+void CoMainRoutine::at_exit()
+{
+  CoRoutine::at_exit();
 }
 
 void CoMainRoutine::destroy()

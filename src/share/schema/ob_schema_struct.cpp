@@ -752,8 +752,8 @@ OB_DEF_SERIALIZE(ObSysVariableSchema)
 int ObSysVariableSchema::add_sysvar_schema(const ObSysVarSchema& sysvar_schema)
 {
   int ret = OB_SUCCESS;
-  ObSysVarSchema* tmp_sysvar_schema = NULL;
   void* ptr = NULL;
+  ObSysVarSchema* tmp_sysvar_schema = NULL;
   ObSysVarClassType var_id = ObSysVarFactory::find_sys_var_id_by_name(sysvar_schema.get_name(), true);
   int64_t var_idx = OB_INVALID_INDEX;
   if (OB_UNLIKELY(SYS_VAR_INVALID == var_id)) {
@@ -7037,7 +7037,7 @@ int ObPartitionUtils::get_all_part(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid part array", K(part));
     } else {
-      for (int64_t i = 0; i < table_schema.get_part_option().get_part_num(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_part_option().get_part_num(); i++) {
         if (OB_ISNULL(part[i])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid partition info", K(ret), K(i));

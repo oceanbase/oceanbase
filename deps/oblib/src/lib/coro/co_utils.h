@@ -73,7 +73,7 @@ OB_INLINE int64_t co_current_time()
   return now;
 }
 
-#if defined(__x86_64__)
+#if defined(__loongarch64) || defined(__sw_64__) || defined(__x86_64__)
 OB_INLINE uint64_t co_rdtscp(void)
 {
   return co_current_time() * 1000;

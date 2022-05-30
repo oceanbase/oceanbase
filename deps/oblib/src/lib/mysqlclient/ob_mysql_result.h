@@ -490,8 +490,8 @@
       if (skip_column_error) {                                                         \
         SQL_LOG(INFO, "column not found, ignore", "column_name", #column_name);        \
         /*overwrite ret*/                                                              \
-        if (OB_FAIL((class_obj).set_##column_name(str_value))) {                       \
-          SQL_LOG(WARN, "fail to set value", KR(ret), K(str_value));                   \
+        if (OB_FAIL((class_obj).set_##column_name(default_value))) {                   \
+          SQL_LOG(WARN, "fail to set value", KR(ret), K(default_value));               \
         }                                                                              \
       } else {                                                                         \
         SQL_LOG(WARN, "column not found", "column_name", #column_name, K(ret));        \
@@ -537,7 +537,6 @@
     } else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {                                     \
       ret = OB_SUCCESS;                                                                                          \
       real_length = 0;                                                                                           \
-      field[0] = '\0';                                                                                           \
     } else {                                                                                                     \
       SQL_LOG(WARN, "fail to extract strbuf field mysql. ", K(ret));                                             \
     }                                                                                                            \
@@ -700,7 +699,14 @@
         } else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj))) {               \
           SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type);     \
         } else {                                                                                          \
-          dest_obj.set_scale(column.get_data_scale());                                                    \
+          if (ob_is_json(data_type)) {                                                                    \
+            dest_obj.set_lob_inrow();                                                                     \
+            dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                        \
+          }                                                                                               \
+          else                                                                                            \
+          {                                                                                               \
+            dest_obj.set_scale(column.get_data_scale());                                                  \
+          }                                                                                               \
           ret = (class_obj).set_##column_name(dest_obj);                                                  \
         }                                                                                                 \
       }                                                                                                   \
@@ -913,7 +919,6 @@ namespace sqlclient {
 class ObMySQLResult {
 public:
   // see this for template virtual function
-  // http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER
   ObMySQLResult();
   virtual ~ObMySQLResult();

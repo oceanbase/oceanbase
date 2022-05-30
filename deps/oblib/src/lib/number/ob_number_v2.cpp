@@ -1371,6 +1371,27 @@ int ObNumber::extract_valid_uint64_with_trunc(uint64_t& value) const
   }
   return ret;
 }
+
+int ObNumber::extract_valid_int64_with_round(int64_t &value) const
+{
+  int ret = common::OB_SUCCESS;
+  if (!is_valid_int64(value)) {
+    number::ObNumber tmp_number;
+    char buf_alloc[ObNumber::MAX_BYTE_LEN];
+    ObDataBuffer allocator(buf_alloc, ObNumber::MAX_BYTE_LEN);
+    //need deep copy before round
+    if (OB_FAIL(tmp_number.from(*this, allocator))) {
+      LOG_WARN("fail to deep_copy", K(ret), K(tmp_number));
+    } else if (OB_FAIL(tmp_number.round(0))) {
+      LOG_WARN("fail to trunc", K(ret), K(tmp_number));
+    } else if (!tmp_number.is_valid_int64(value)) {
+      ret = OB_DATA_OUT_OF_RANGE;
+      LOG_WARN("invalid const type for array index", K(tmp_number), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObNumber::width_bucket(
     const ObNumber& start, const ObNumber& end, const ObNumber& bucket, ObNumber& value, ObIAllocator& allocator) const
 {
@@ -4411,7 +4432,7 @@ int ObNumber::add_v3(const ObNumber& other, ObNumber& value, ObIAllocator& alloc
 
       if (OB_SUCC(ret)) {
         MEMSET(sum_digits, 0, sizeof(uint32_t) * OB_CALC_BUFFER_SIZE);
-        MEMCPY(sum_digits + 1, augend_digits, augend_desc.len_ * sizeof(uint32_t));
+        MEMCPY(sum_digits + 1, augend_digits, min(augend_desc.len_, OB_MAX_DECIMAL_DIGIT) * sizeof(uint32_t));
 
         // inverse traversal
         const int64_t cur_augend_exp = augend_exp - (augend_desc.len_ - 1);
@@ -5046,7 +5067,7 @@ int ObNumber::mul_v3(const ObNumber& other, ObNumber& value, ObIAllocator& alloc
     int offset = 0;
     bool check_sum_len = true;
 
-    uint32_t tmp_res_digits[OB_CALC_BUFFER_SIZE];
+    uint32_t tmp_res_digits[OB_CALC_BUFFER_SIZE] = {0};
     uint32_t* res_digits = NULL;
     if (strict_mode) {
       res_digits = tmp_res_digits;

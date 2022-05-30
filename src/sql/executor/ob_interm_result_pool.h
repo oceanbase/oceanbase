@@ -31,7 +31,8 @@ public:
   // before interm result add to manager.
   static const int64_t SCANNER_CAPACITY = 256L << 10;  // 256K
 
-  static const int64_t SCANNER_MEM_LIMIT = 8 << 20;  // 8MB
+  // adapt to block size in tmp file.
+  static const int64_t SCANNER_MEM_LIMIT = (8 << 20) - (32 << 10);  // 8MB - 32K
 
   ObIntermResultPool();
   virtual ~ObIntermResultPool();

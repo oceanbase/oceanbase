@@ -81,9 +81,14 @@ target_compile_definitions(ob_sql_proxy_parser_objects PUBLIC SQL_PARSER_COMPILA
 disable_pch(ob_sql_server_parser_objects)
 disable_pch(ob_sql_proxy_parser_objects)
 
-add_library(ob_sql_proxy_parser_static
-  STATIC
-  EXCLUDE_FROM_ALL)
+message(STATUS "OB_BUILD_LIBOB_SQL_PROXY_PARSER ${OB_BUILD_LIBOB_SQL_PROXY_PARSER}")
+if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
+  add_library(ob_sql_proxy_parser_static STATIC)
+else()
+  add_library(ob_sql_proxy_parser_static
+    STATIC
+    EXCLUDE_FROM_ALL)
+endif()
 
 add_library(ob_sql_server_parser_static
   STATIC

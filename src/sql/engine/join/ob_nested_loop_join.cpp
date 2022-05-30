@@ -582,7 +582,10 @@ int ObNestedLoopJoin::bij_fill_left_rows(ObExecContext& exec_ctx) const
   int ret = OB_SUCCESS;
   ObNestedLoopJoinCtx* join_ctx = GET_PHY_OPERATOR_CTX(ObNestedLoopJoinCtx, exec_ctx, get_id());
   int64_t BATCH_SIZE = 1000;
-  if (OB_ISNULL(right_op_)) {
+  if (OB_ISNULL(join_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get nested loop join ctx", K(ret));
+  } else if (OB_ISNULL(right_op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("right_op is null", K(ret), K(right_op_));
   } else if (PHY_TABLE_SCAN != right_op_->get_type()) {

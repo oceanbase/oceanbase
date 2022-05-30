@@ -56,11 +56,15 @@ namespace this_routine {
 /// their execution.
 OB_INLINE void usleep(uint32_t usec)
 {
+#ifndef OB_USE_ASAN
   if (!this_thread::is_monopoly() && coro::is_enabled()) {
     coro::current().usleep(usec);
   } else {
     ::usleep(usec);
   }
+#else
+  ::usleep(usec);
+#endif
 }
 
 /// \brief Yield to other routines.

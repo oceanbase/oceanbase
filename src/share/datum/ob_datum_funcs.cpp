@@ -130,6 +130,12 @@ bool ObDatumFuncs::is_string_type(const ObObjType type)
   return (tc == ObStringTC || tc == ObRawTC || tc == ObTextTC || tc == ObEnumSetInnerTC);
 }
 
+bool ObDatumFuncs::is_json(const ObObjType type)
+{
+  const ObObjTypeClass tc = OBJ_TYPE_TO_CLASS[type];
+  return (tc == ObJsonTC);
+}
+
 OB_SERIALIZE_MEMBER(ObCmpFunc, ser_cmp_func_);
 OB_SERIALIZE_MEMBER(ObHashFunc, ser_hash_func_);
 

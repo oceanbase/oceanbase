@@ -451,13 +451,22 @@ int ObPartitionMetaRedoModule::parse(const int64_t subcmd, const char* buf, cons
         ObPGKey pgkey;
         ObITable::TableKey table_key;
         blocksstable::ObMacroBlockMetaV2 meta;
+        common::ObObj *endkey = static_cast<common::ObObj *>(ob_malloc(sizeof(ObObj) * common::OB_MAX_COLUMN_NUMBER));
         MacroBlockId macro_block_id;
         ObPGMacroBlockMetaLogEntry entry(pgkey, table_key, 0, 0, macro_block_id, meta);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
+        if (OB_UNLIKELY(nullptr == endkey)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory fail", K(ret));
+        } else if (FALSE_IT(meta.endkey_ = endkey)) {
+        } else if (OB_FAIL(entry.deserialize(buf, len, pos))) {
           LOG_WARN("Fail to deserialize ObPGMacroBlockMetaLogEntry", K(ret));
         } else if (0 > fprintf(stream, "ObPGMacroBlockMetaLogEntry\n%s\n", to_cstring(entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("failed to print ObPGMacroBlockMetaLogEntry", K(ret), K(entry));
+        }
+
+        if (nullptr != endkey) {
+          ob_free(endkey);
         }
         break;
       }
@@ -772,7 +781,9 @@ int ObPartitionMetaRedoModule::inner_del_partition_for_replay(const ObPartitionK
   } else if (OB_FAIL(inner_del_partition_impl(pkey, OB_INVALID_DATA_FILE_ID == file_id ? nullptr : &file_id))) {
     LOG_WARN("fail to inner del partition", K(ret));
   } else if (OB_INVALID_DATA_FILE_ID == file_id) {
-    // replay slog before 3.1, need to remove pg from file mgr explicitly
+    // OB_INVALID_DATA_FILE_ID means the slog is written before 3.1,
+    // need to remove pg from file mgr explicitly
+    // Otherwise, pg would be removed from file mgr in tenant file slog replay
     const ObIPartitionGroup& pg = *guard.get_partition_group();
     const ObStorageFile* file = pg.get_storage_file();
     if (OB_ISNULL(file)) {
@@ -920,6 +931,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
   LOG_INFO("replay base storage log::add_partition", K(param), K(log_entry), K(sub_type), K(ret));
 
   if (OB_FAIL(ret) && NULL != ptt && REDO_LOG_ADD_PARTITION_TO_PG != sub_type) {
+    int origin_ret = ret;
     // remove from pg_mgr
     if (is_ptt_in_mgr) {
       ObIPartitionGroupGuard partition_guard;
@@ -936,6 +948,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
       cp_fty_->free(ptt);
     }
     ptt = NULL;
+    ret = origin_ret;
   }
   return ret;
 }

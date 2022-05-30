@@ -84,6 +84,11 @@ int ObInitSqcP::process()
     ObPxSqcHandler::release_handler(sqc_handler);
     arg_.sqc_handler_ = nullptr;
   }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
   // 非rpc框架的错误内容设置到response消息中
   // rpc框架的错误码在process中返回OB_SUCCESS
   result_.rc_ = ret;
@@ -248,6 +253,12 @@ int ObInitFastSqcP::process()
       LOG_WARN("fail to startup normal sqc", K(ret));
     }
   }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
+
   if (OB_NOT_NULL(sqc_handler)) {
     sqc_handler->set_end_ret(ret);
     if (sqc_handler->has_flag(OB_SQC_HANDLER_QC_SQC_LINKED)) {
@@ -345,7 +356,9 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
 {
   if (OB_TIMEOUT == ret_) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
-    if (timeout_ts_ - cur_timestamp > 0) {
+    // 由于存在时间精度不一致导致的时间差, 这里需要满足大于100ms才认为不是超时.
+    // 一个容错的处理.
+    if (timeout_ts_ - cur_timestamp > 100 * 1000) {
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
                 "change error code to OB_CONNECT_ERROR",
           K(ret_),

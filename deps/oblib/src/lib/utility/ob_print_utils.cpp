@@ -259,6 +259,18 @@ int databuff_printf(char* buf, const int64_t buf_len, const char* fmt, ...)
   return ret;
 }
 
+int databuff_memcpy(char *buf, const int64_t buf_len, int64_t &pos, const int64_t src_len, const char *src)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != buf && 0 <= pos && 0 <= src_len && pos < buf_len - src_len) {
+    MEMCPY(buf + pos, src, src_len);
+    pos += src_len;
+  } else {
+    ret = OB_SIZE_OVERFLOW;
+  }
+  return ret;
+}
+
 int databuff_printf(char* buf, const int64_t buf_len, int64_t& pos, const char* fmt, ...)
 {
   int ret = OB_SUCCESS;

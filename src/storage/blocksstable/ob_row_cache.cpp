@@ -203,7 +203,8 @@ int ObRowCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue
       for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i++) {
         if (pvalue->obj_array_[i].need_deep_copy()) {
           data_length = pvalue->obj_array_[i].get_data_length();
-          if (pvalue->obj_array_[i].is_string_type() || pvalue->obj_array_[i].is_raw()) {
+          if (pvalue->obj_array_[i].is_string_type() || pvalue->obj_array_[i].is_raw()
+              || pvalue->obj_array_[i].is_json()) {
             MEMCPY(tmp_buf, pvalue->obj_array_[i].v_.string_, data_length);
             pvalue->obj_array_[i].v_.string_ = tmp_buf;
             tmp_buf += data_length;

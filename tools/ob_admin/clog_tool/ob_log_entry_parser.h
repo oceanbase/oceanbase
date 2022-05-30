@@ -107,6 +107,7 @@ public:
   ObLogEntryParserImpl()
       : is_inited_(false),
         dump_hex_(false),
+        without_data_(false),
         file_id_(-1),
         cur_offset_(OB_INVALID_OFFSET),
         print_buf_(NULL),
@@ -130,6 +131,7 @@ protected:
   int dump_sp_trans_commit_log(const char* data, int64_t len, const uint64_t real_tenant_id);
   int dump_sp_trans_abort_log(const char* data, int64_t len);
   int dump_trans_redo_log(const char* data, int64_t len, const uint64_t real_tenant_id);
+  int dump_trans_record_log(const char *data, int64_t len);
   int dump_trans_prepare_log(const char* data, int64_t len);
   int dump_trans_commit_log(const char* data, int64_t len);
   int dump_trans_abort_log(const char* data, int64_t len);
@@ -178,6 +180,7 @@ protected:
   static const int64_t PRINT_BUF_SIZE = 5 * 1024 * 1024;
   bool is_inited_;
   bool dump_hex_;
+  bool without_data_;
   uint64_t file_id_;
   int64_t cur_offset_;
   ObTransID cur_trans_id_;
@@ -199,7 +202,7 @@ public:
 
   int init(uint64_t file_id, char* buf, int64_t buf_len, const ObLogEntryFilter& filter, const common::ObString& host,
       const int32_t port, const char* config_file, const bool is_ofs);
-  int dump_all_entry(bool is_hex);
+  int dump_all_entry(bool is_hex, bool without_data);
   int format_dump_entry();
   int stat_log();
   const ObLogStat& get_log_stat() const

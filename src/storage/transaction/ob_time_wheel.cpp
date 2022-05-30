@@ -19,7 +19,7 @@ namespace oceanbase {
 
 namespace common {
 
-using namespace tbutil;
+using namespace obutil;
 
 void ObTimeWheelTask::reset()
 {

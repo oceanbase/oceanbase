@@ -501,7 +501,7 @@ private:
   int get_total_disk_space_(int64_t& total_space) const;
 
   static const int OPEN_FLAG_READ = O_RDONLY | O_DIRECT;
-  static const int OPEN_FLAG_WRITE = O_WRONLY | O_DIRECT | O_SYNC | O_CREAT;
+  static const int OPEN_FLAG_WRITE = O_RDWR | O_DIRECT | O_SYNC | O_CREAT;
   static const int OPEN_FLAG_WRITE_WITHOUT_CREATE = O_WRONLY | O_DIRECT | O_SYNC;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int64_t MONITOR_TASK_INTERVAL_US = 1000 * 1000;    // 1 seconds

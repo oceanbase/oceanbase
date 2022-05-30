@@ -99,6 +99,11 @@ int ObMergeStmt::assign(const ObMergeStmt& other)
 int64_t ObMergeStmt::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  ObArray<ObSelectStmt*> child_stmts;
+  if (OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
+    databuff_printf(buf, buf_len, pos, "ERROR get child stmts failed");
+  } else {
   J_OBJ_START();
   J_KV(N_STMT_TYPE,
       ((int)stmt_type_),
@@ -125,9 +130,11 @@ int64_t ObMergeStmt::to_string(char* buf, const int64_t buf_len) const
       N_PARTITION_EXPR,
       part_expr_items_,
       K_(all_table_columns),
+      K(child_stmts),
       N_QUERY_CTX,
       stmt_hint_);
   J_OBJ_END();
+  }
   return pos;
 }
 

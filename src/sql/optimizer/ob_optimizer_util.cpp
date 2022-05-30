@@ -4816,15 +4816,16 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr* expr, bool& is_los
 }
 
 int ObOptimizerUtil::gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
-    ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt, ObSelectStmt* select_stmt)
+    ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt,
+    ObSelectStmt* select_stmt, const bool to_left_type /* false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 1> left_stmts;
   ObSEArray<ObSelectStmt*, 1> right_stmts;
   if (OB_FAIL(left_stmts.push_back(&left_stmt)) || OB_FAIL(right_stmts.push_back(&right_stmt))) {
     LOG_WARN("failed to pushback stmt", K(ret));
-  } else if (OB_FAIL(
-                 gen_set_target_list(allocator, session_info, expr_factory, left_stmts, right_stmts, select_stmt))) {
+  } else if (OB_FAIL(gen_set_target_list(
+                 allocator, session_info, expr_factory, left_stmts, right_stmts, select_stmt, to_left_type))) {
     LOG_WARN("failed to get set target list", K(ret));
   }
   return ret;
@@ -4832,7 +4833,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator* allocator, ObSQLSessionIn
 
 int ObOptimizerUtil::gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
     ObRawExprFactory* expr_factory, ObIArray<ObSelectStmt*>& left_stmts, ObIArray<ObSelectStmt*>& right_stmts,
-    ObSelectStmt* select_stmt)
+    ObSelectStmt* select_stmt, const bool to_left_type /* false */)
 {
   int ret = OB_SUCCESS;
   UNUSED(allocator);
@@ -4847,7 +4848,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator* allocator, ObSQLSessionIn
                  select_stmt->is_set_distinct(),
                  left_stmts,
                  right_stmts,
-                 &res_types))) {
+                 &res_types,
+                 to_left_type))) {
     LOG_WARN("failed to try add cast to set child list", K(ret));
   } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0)) ||
              OB_UNLIKELY(res_types.count() != child_stmt->get_select_item_size())) {
@@ -5031,7 +5033,7 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator* allocator, ObSQLSessionInfo
 
 int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
     ObRawExprFactory* expr_factory, const bool is_distinct, ObIArray<ObSelectStmt*>& left_stmts,
-    ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types)
+    ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types, const bool to_left_type /* false */)
 {
   int ret = OB_SUCCESS;
   ObExprResType res_type;
@@ -5107,6 +5109,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         }
         const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
         if (OB_FAIL(ret)) {
+        } else if (to_left_type) {
+          res_type = left_type;
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
@@ -5114,6 +5118,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(
                        res_type, &types.at(0), 2, coll_type, is_oracle_mode(), length_semantics, session_info))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
+        }
+        if (OB_FAIL(ret)) {
         } else if (ObMaxType == res_type.get_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("column type incompatible", K(left_type), K(right_type));
@@ -5373,8 +5379,6 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
         K(child_select_list.count()),
         K(parent_select_list.count()),
         K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(parent_select_list, child_select_list, pushdown_filters))) {
-    LOG_WARN("failed to replace expr", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
     ObSEArray<ObRawExpr*, 4> view_column_exprs;
@@ -5382,6 +5386,10 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(parent_select_list, child_select_list, expr))) {
+      SQL_LOG(WARN, "failed to replace expr", K(ret));
+    } else if (OB_FAIL(expr->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret), K(*expr));
     } else if (expr->has_flag(CNT_WINDOW_FUNC) || expr->has_flag(CNT_AGG) || expr->has_flag(CNT_SUB_QUERY)) {
       ret = remain_filters.push_back(expr);
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
@@ -5391,12 +5399,16 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
     } else if (OB_FAIL(candi_filters.push_back(expr))) {
       LOG_WARN("failed to push back predicate", K(ret));
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(child_select_list, parent_select_list, expr))) {
+      SQL_LOG(WARN, "failed to replace expr", K(ret));
+    } else if (OB_FAIL(expr->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret), K(*expr));
+    } else {
+      pushdown_filters.at(i) = expr;
+    }
   }
-  if (OB_FAIL(ret)) {
-    // reset exprs for set
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(child_select_list, parent_select_list, pushdown_filters))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else {
+  if (OB_SUCC(ret)) {
     LOG_TRACE("success to check_pushdown_filter_for_set", K(pushdown_filters), K(candi_filters), K(remain_filters));
   }
   return ret;

@@ -38,7 +38,9 @@ int ObDtlLocalFirstBufferCache::ObDtlBufferClean::operator()(sql::dtl::ObDtlCach
   int ret = OB_SUCCESS;
   ObDtlLinkedBuffer* linked_buffer = buffer_info->buffer();
   buffer_info->set_buffer(nullptr);
-  tenant_mem_mgr_->free(linked_buffer);
+  if (nullptr != linked_buffer) {
+    tenant_mem_mgr_->free(linked_buffer);
+  }
   buffer_info->reset();
   buffer_info_mgr_->free_buffer_info(buffer_info);
   return ret;
@@ -113,23 +115,27 @@ int ObDtlLocalFirstBufferCache::cache_buffer(ObDtlCacheBufferInfo*& buffer)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(buffer)) {
     uint64_t chan_id = buffer->chid();
-    if (OB_FAIL(buffer_map_.set_refactored(chan_id, buffer))) {
+#ifdef ERRSIM
+    // -17 enable failed set refactored
+    ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+#endif
+    int64_t tmp_ret = ret;
+    if (TP_ENABLE_FAILED_SET_HT == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to set refactor", K(ret), K(tmp_ret));
+    } else if (OB_FAIL(buffer_map_.set_refactored(chan_id, buffer))) {
       LOG_WARN("failed to insert buffer map", K(ret));
-    } else if (OB_FAIL(set_first_buffer(chan_id))) {
-      int tmp_ret = OB_SUCCESS;
-      ObDtlCacheBufferInfo* tmp_buffer = nullptr;
-      if (tmp_ret != buffer_map_.erase_refactored(chan_id, tmp_buffer)) {
-        LOG_WARN("failed to insert buffer map", K(ret), K(tmp_ret));
-      } else if (nullptr == tmp_buffer) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("buffer is null", K(ret), K(tmp_ret));
-      } else {
-        buffer = tmp_buffer;
-      }
-      LOG_WARN("failed to set first buffer", K(ret), K(chan_id), KP(chan_id));
     } else {
-      inc_first_buffer_cnt();
-      LOG_DEBUG("trace cache buffer", KP(chan_id), KP(this), K(dfo_key_));
+      buffer = nullptr;
+      if (TP_ENABLE_FAILED_SET_FIRST_BUFFER == tmp_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set first buffer", K(ret), K(tmp_ret));
+      } else if (OB_FAIL(set_first_buffer(chan_id))) {
+        LOG_WARN("failed to set first buffer", K(ret), K(chan_id), KP(chan_id));
+      } else {
+        inc_first_buffer_cnt();
+        LOG_DEBUG("trace cache buffer", KP(chan_id), KP(this), K(dfo_key_));
+      }
     }
   }
   return ret;
@@ -421,7 +427,18 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
         buf_info->set_buffer(data_buffer);
         data_buffer = nullptr;
       } else {
-        ObDtlLinkedBuffer* buffer = tenant_mem_mgr_->alloc(chid, data_buffer->size());
+        ObDtlLinkedBuffer *buffer = nullptr;
+#ifdef ERRSIM
+        // -16 enable failed to alloc memory
+        ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+#endif
+        if (OB_SUCC(ret) || TP_ENABLE_FAILED_ALLOC_MEM != ret) {
+          ret = OB_SUCCESS;
+          buffer = tenant_mem_mgr_->alloc(chid, data_buffer->size());
+        } else {
+          ret = OB_SUCCESS;
+          buffer = nullptr;
+        }
         if (nullptr != buffer) {
           ObDtlLinkedBuffer::assign(*data_buffer, buffer);
           buf_info->set_buffer(buffer);
@@ -442,13 +459,10 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       if (nullptr != buf_info) {
-        if (nullptr == data_buffer) {
-          // if cache buffer failed, should still send it. Can't just free it
-          data_buffer = buf_info->buffer();
-          buf_info->set_buffer(nullptr);
-        }
-        if (!attach && OB_NOT_NULL(data_buffer)) {
-          tenant_mem_mgr_->free(data_buffer);
+        ObDtlLinkedBuffer *buffer = buf_info->buffer();
+        buf_info->set_buffer(nullptr);
+        if (nullptr != buffer) {
+          tenant_mem_mgr_->free(buffer);
         }
         if (OB_SUCCESS != (tmp_ret = buffer_info_mgr_.free_buffer_info(buf_info))) {
           LOG_WARN("failed to free buffer info", K(ret), K(tmp_ret));

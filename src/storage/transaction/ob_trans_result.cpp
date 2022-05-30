@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace transaction {
 
 using namespace common;
-using namespace tbutil;
+using namespace obutil;
 
 void ObTransCond::reset()
 {
@@ -51,10 +51,10 @@ int ObTransCond::wait(const int64_t wait_time_us, int& result)
     int64_t start_time_us = ObClockGenerator::getClock();
     THIS_WORKER.sched_wait();
     {
-      Monitor<Mutex>::Lock guard(monitor_);
+      ObMonitor<Mutex>::Lock guard(monitor_);
       while (!finished_ && OB_SUCC(ret)) {
         left_time_us = wait_time_us - (ObClockGenerator::getClock() - start_time_us);
-        if (left_time_us <= 0 || !monitor_.timedWait(Time(left_time_us))) {  // timeout
+        if (left_time_us <= 0 || !monitor_.timed_wait(ObSysTime(left_time_us))) { // timeout
           ret = OB_TIMEOUT;
         }
       }
@@ -71,21 +71,21 @@ int ObTransCond::wait(const int64_t wait_time_us, int& result)
 // set transaction result by transaction context
 void ObTransCond::notify(const int result)
 {
-  Monitor<Mutex>::Lock guard(monitor_);
+  ObMonitor<Mutex>::Lock guard(monitor_);
   if (finished_) {
     TRANS_LOG(DEBUG, "transaction has already get result", "old_result", result_, "new_result", result);
   }
   finished_ = true;
   result_ = result;
-  monitor_.notifyAll();
+  monitor_.notify_all();
 }
 
 void ObTransCond::usleep(const int64_t us)
 {
   if (us > 0) {
-    Monitor<Mutex> monitor;
+    ObMonitor<Mutex> monitor;
     THIS_WORKER.sched_wait();
-    (void)monitor.timedWait(Time(us));
+    (void)monitor.timed_wait(ObSysTime(us));
     THIS_WORKER.sched_run();
   }
 }

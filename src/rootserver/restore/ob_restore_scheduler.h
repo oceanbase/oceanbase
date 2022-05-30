@@ -104,6 +104,7 @@ private:
       const common::ObIArray<common::ObPartitionKey>& pkey_list, share::ObPhysicalRestoreJob& job);
   int assign_pool_list(const char* str, common::ObIArray<common::ObString>& pool_list);
   int convert_restore_tenant_info(share::ObPhysicalRestoreJob& job_info);
+  int update_sys_table_schema_version_();
   /*------------------------*/
 
   /* modify schema related */
@@ -117,6 +118,7 @@ private:
   int update_index_status(const common::ObIArray<uint64_t>& index_ids, share::schema::ObIndexStatus index_status);
   int convert_parameters(const share::ObPhysicalRestoreJob& job_info);
   int log_nop_operation(const share::ObPhysicalRestoreJob& job_info);
+  int convert_column_statistic(const uint64_t tenant_id);
   /*------------------------*/
 
   /* filter schema */

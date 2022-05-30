@@ -189,6 +189,11 @@ public:
     UNUSED(idc);
     return OB_SUCCESS;
   }
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+  {
+    UNUSED(log_id);
+    UNUSED(log_ts);
+  }
   virtual int fetch_register_server_resp_v2(const common::ObAddr& sender, const bool is_assign_parent_succeed,
       const share::ObCascadMemberList& candidate_list, const int32_t msg_type)
   {
@@ -528,7 +533,7 @@ public:
     UNUSED(leader);
     return common::OB_SUCCESS;
   }
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
   {
     UNUSED(parent);
     UNUSED(cluster_id);

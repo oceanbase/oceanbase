@@ -16,7 +16,6 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_array.h"
 #include "ob_macro_block_reader.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "ob_macro_block.h"
 
 namespace oceanbase {

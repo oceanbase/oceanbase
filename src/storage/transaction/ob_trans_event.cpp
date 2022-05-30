@@ -135,7 +135,7 @@ void ObTransStatistic::add_local_stmt_count(const uint64_t tenant_id, const int6
 {
   UNUSED(value);
   common::ObTenantStatEstGuard guard(tenant_id);
-  // EVENT_ADD(TRANS_LOCAL_STMT_COUNT, value);
+  EVENT_ADD(TRANS_LOCAL_STMT_COUNT, value);
   // local_stmt_stat_.add(value);
 }
 
@@ -143,7 +143,7 @@ void ObTransStatistic::add_remote_stmt_count(const uint64_t tenant_id, const int
 {
   UNUSED(value);
   common::ObTenantStatEstGuard guard(tenant_id);
-  // EVENT_ADD(TRANS_REMOTE_STMT_COUNT, value);
+  EVENT_ADD(TRANS_REMOTE_STMT_COUNT, value);
   // remote_stmt_stat_.add(value);
 }
 
@@ -151,7 +151,7 @@ void ObTransStatistic::add_distributed_stmt_count(const uint64_t tenant_id, cons
 {
   UNUSED(value);
   common::ObTenantStatEstGuard guard(tenant_id);
-  // EVENT_ADD(TRANS_DISTRIBUTED_STMT_COUNT, value);
+  EVENT_ADD(TRANS_DISTRIBUTED_STMT_COUNT, value);
   // distributed_stmt_stat_.add(value);
 }
 

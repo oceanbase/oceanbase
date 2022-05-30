@@ -571,6 +571,13 @@ int ObMajorPartitionMergeFuser::fuse_generate_exprs()
             K(ret));
         result_row_->row_val_.cells_[idx].set_lob_inrow();
       }
+    } else if (ob_is_json_tc(col->get_data_type())) {
+      if (!result_row_->row_val_.cells_[idx].is_json_inrow()) {
+        const ObObj &lob_obj = result_row_->row_val_.cells_[idx];
+        STORAGE_LOG(WARN, "[LOB] Unexpected json obj scale from generated_exprs", K(lob_obj), "lob_scale",
+                    result_row_->row_val_.cells_[idx].get_scale(), K(ret));
+        result_row_->row_val_.cells_[idx].set_lob_inrow();
+      }
     } else {
       STORAGE_LOG(DEBUG, "Fuse generate epxr", K(idx), K(col->get_column_id()), K(*result_row_));
     }

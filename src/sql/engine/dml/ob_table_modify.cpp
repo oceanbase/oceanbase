@@ -1088,6 +1088,53 @@ int ObTableModify::validate_row(ObExprCtx& expr_ctx, ObCastCtx& column_conv_ctx,
   return ret;
 }
 
+int ObTableModify::check_row_null(ObExecContext &ctx, const ObNewRow &calc_row,
+    const ObIArray<ColumnContent> &column_infos, const ObIArray<ColumnContent> &update_col_infos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {
+    //兼容oracle, 如果有instead of trigger,不检查NOT NULL约束
+    OV(calc_row.get_count() == column_infos.count(), OB_ERR_UNEXPECTED, calc_row, column_infos);
+    for (int i = 0; OB_SUCC(ret) && i < update_col_infos.count(); i++) {
+      int64_t col_idx = update_col_infos.at(i).projector_index_;
+      bool is_nullable = column_infos.at(col_idx).is_nullable_;
+      bool is_cell_null = calc_row.get_cell(col_idx).is_null() ||
+                          (lib::is_oracle_mode() && calc_row.get_cell(col_idx).is_null_oracle());
+      if (!is_nullable && is_cell_null) {
+        if (is_ignore_) {
+          if (is_oracle_mode()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dml with ignore not supported in oracle mode");
+          } else if (OB_FAIL(ObObjCaster::get_zero_value(column_infos.at(col_idx).column_type_,
+                         column_infos.at(col_idx).coll_type_,
+                         const_cast<ObObj &>(calc_row.get_cell(col_idx))))) {
+            LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(col_idx)));
+          } else {
+            // output warning msg
+            ObString column_name = column_infos.at(col_idx).column_name_;
+            ObSQLUtils::copy_and_convert_string_charset(ctx.get_allocator(),
+                column_name,
+                column_name,
+                CS_TYPE_UTF8MB4_BIN,
+                ctx.get_my_session()->get_local_collation_connection());
+            LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
+          }
+        } else {
+          ObString column_name = column_infos.at(col_idx).column_name_;
+          ObSQLUtils::copy_and_convert_string_charset(ctx.get_allocator(),
+              column_name,
+              column_name,
+              CS_TYPE_UTF8MB4_BIN,
+              ctx.get_my_session()->get_local_collation_connection());
+          ret = OB_BAD_NULL_ERROR;
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableModify::check_row_null(
     ObExecContext& ctx, const ObNewRow& calc_row, const ObIArray<ColumnContent>& column_infos) const
 {

@@ -255,7 +255,7 @@ int ObPartitionLoopWorker::write_checkpoint_(const int64_t checkpoint)
     if (OB_FAIL(cb->init(ps_, checkpoint))) {
       STORAGE_LOG(WARN, "checkpoint log callback init failed", K(ret), K(checkpoint));
     } else if (OB_FAIL(write_checkpoint(checkpoint, cb, log_id))) {
-      STORAGE_LOG(WARN, "submit checkpoint log failed", K(ret), K(log));
+      STORAGE_LOG(WARN, "submit checkpoint log failed", K(ret));
     } else {
       // do nothing
     }

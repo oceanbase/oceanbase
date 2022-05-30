@@ -15,7 +15,6 @@
 #include "share/ob_force_print_log.h"
 #include "ob_i_table.h"
 #include "ob_sstable.h"
-#include "ob_old_sstable.h"
 #include "ob_table_mgr.h"
 #include "memtable/ob_memtable.h"
 #include "share/ob_force_print_log.h"
@@ -162,23 +161,6 @@ int ObTableHandle::get_sstable(ObSSTable*& sstable)
     STORAGE_LOG(WARN, "not sstable", K(ret), K(table_->get_key()));
   } else {
     sstable = static_cast<ObSSTable*>(table_);
-  }
-  return ret;
-}
-
-int ObTableHandle::get_old_sstable(ObOldSSTable*& sstable)
-{
-  int ret = OB_SUCCESS;
-  sstable = NULL;
-
-  if (OB_ISNULL(table_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (!table_->is_sstable()) {
-    ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(WARN, "not sstable", K(ret), K(table_->get_key()));
-  } else {
-    sstable = static_cast<ObOldSSTable*>(table_);
   }
   return ret;
 }

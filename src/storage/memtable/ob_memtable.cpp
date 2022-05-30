@@ -249,7 +249,6 @@ void ObMemtable::set_begin(const ObStoreCtx& ctx)
 
 void ObMemtable::set_end(const ObStoreCtx& ctx, int ret)
 {
-
   if (NULL != ctx.mem_ctx_) {
     if (OB_SUCC(ret)) {
       EVENT_INC(MEMSTORE_APPLY_SUCC_COUNT);
@@ -382,7 +381,7 @@ int ObMemtable::set_(const ObStoreCtx& ctx, const uint64_t table_id, const int64
   bool is_lob_row = false;
   bool is_new_locked = false;
   bool need_explict_record_rowkey = false;
-  set_begin(ctx);
+  // set_begin(ctx);
   if (OB_FAIL(col_ccw.init())) {
     TRANS_LOG(WARN, "compact writer init fail", KR(ret));
   } else if (OB_FAIL(mtk.encode(table_id, columns, &tmp_key))) {
@@ -430,7 +429,7 @@ int ObMemtable::set_(const ObStoreCtx& ctx, const uint64_t table_id, const int64
       old_row_data.reset();
     }
   }
-  set_end(ctx, ret);
+  // set_end(ctx, ret);
   if (OB_SUCC(ret)) {
     set_max_schema_version(ctx.mem_ctx_->get_max_table_version());
   }
@@ -725,7 +724,8 @@ int ObMemtable::check_row_locked_by_myself(const ObStoreCtx& ctx, const uint64_t
         } else if (lock_state.is_locked_ && lock_state.lock_trans_id_ == ctx.trans_id_) {
           is_locked = true;
         }
-        TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable), K(is_locked));
+        TRANS_LOG(DEBUG, "check_row_locked meet sstable",
+                  K(ret), K(rowkey), K(*sstable), K(is_locked), K(lock_state));
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unknown store type", K(ret));
@@ -750,7 +750,6 @@ void ObMemtable::get_begin(const ObStoreCtx& ctx)
 
 void ObMemtable::get_end(const ObStoreCtx& ctx, int ret)
 {
-
   if (NULL != ctx.mem_ctx_) {
     if (OB_SUCC(ret)) {
       EVENT_INC(MEMSTORE_GET_SUCC_COUNT);
@@ -772,7 +771,7 @@ int ObMemtable::exist(const ObStoreCtx& ctx, const uint64_t table_id, const comm
   ObQueryFlag query_flag;
   query_flag.read_latest_ = true;
   query_flag.prewarm_ = false;
-  get_begin(ctx);
+  // get_begin(ctx);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(*this), K(ret));
@@ -800,7 +799,7 @@ int ObMemtable::exist(const ObStoreCtx& ctx, const uint64_t table_id, const comm
   } else {
     TRANS_LOG(DEBUG, "Check memtable exist rowkey, ", K(table_id), K(rowkey), K(columns), K(is_exist), K(has_found));
   }
-  get_end(ctx, ret);
+  // get_end(ctx, ret);
   return ret;
 }
 
@@ -813,8 +812,8 @@ int ObMemtable::prefix_exist(ObRowsInfo& rows_info, bool& may_exist)
   } else {
     const ObStoreCtx& ctx = rows_info.exist_helper_.get_store_ctx();
     ObMemtableKey parameter_mtk;
-    const ObStoreRowkey& rowkey = rows_info.get_prefix_rowkey().get_store_rowkey();
-    get_begin(ctx);
+    const ObStoreRowkey &rowkey = rows_info.get_prefix_rowkey().get_store_rowkey();
+    // get_begin(ctx);
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "not init", K(*this), K(ret));
@@ -830,7 +829,7 @@ int ObMemtable::prefix_exist(ObRowsInfo& rows_info, bool& may_exist)
     } else {
       TRANS_LOG(DEBUG, "Check memtable prefix exist rowkey, ", K(rowkey), K(may_exist), K(rows_info));
     }
-    get_end(ctx, ret);
+    // get_end(ctx, ret);
   }
   return ret;
 }
@@ -874,6 +873,7 @@ void ObMemtable::scan_begin(const ObStoreCtx& ctx)
     (static_cast<ObMemtableCtx*>(ctx.mem_ctx_))->set_handle_start_time(ObTimeUtility::current_time());
     EVENT_INC(MEMSTORE_SCAN_COUNT);
   }
+  UNUSED(ctx);
 }
 
 void ObMemtable::scan_end(const ObStoreCtx& ctx, int ret)
@@ -887,6 +887,8 @@ void ObMemtable::scan_end(const ObStoreCtx& ctx, int ret)
     EVENT_ADD(MEMSTORE_SCAN_TIME,
         ObTimeUtility::current_time() - (static_cast<ObMemtableCtx*>(ctx.mem_ctx_))->get_handle_start_time());
   }
+  UNUSED(ctx);
+  UNUSED(ret);
 }
 
 int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
@@ -1470,8 +1472,8 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
     }
   }
   const int64_t end_us = ObTimeUtility::current_time();
-  EVENT_INC(MEMSTORE_MUTATOR_REPLAY_COUNT);
-  EVENT_ADD(MEMSTORE_MUTATOR_REPLAY_TIME, end_us - start_us);
+  // EVENT_INC(MEMSTORE_MUTATOR_REPLAY_COUNT);
+  // EVENT_ADD(MEMSTORE_MUTATOR_REPLAY_TIME, end_us - start_us);
   return ret;
 }
 
@@ -2274,7 +2276,8 @@ bool ObMemtable::can_be_minor_merged() const
     can_merge = true;
   }
 
-  if (!can_merge && REACH_TIME_INTERVAL(1000 * 1000)) {
+  if (is_frozen_memtable() &&  // active memtable should not print log
+      !can_merge && REACH_TIME_INTERVAL(1000 * 1000)) {
     TRANS_LOG(WARN, "memtable cannot be minor merged", K(*this));
   }
 

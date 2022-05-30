@@ -114,6 +114,7 @@ ObPGStorage::ObPGStorage()
 
 ObPGStorage::~ObPGStorage()
 {
+  FLOG_INFO("deconstruct ObPGStorage", K(this), K_(pkey));
   destroy();
 }
 
@@ -146,13 +147,13 @@ int ObPGStorage::init(const ObPartitionKey& key, ObIPartitionComponentFactory* c
     pg_memtable_mgr_.set_pkey(key);
     is_inited_ = true;
   }
-  STORAGE_LOG(INFO, "partition init", K(ret), K(key));
+  STORAGE_LOG(INFO, "pgstorage init", K(ret), K(key), K(this));
   return ret;
 }
 
 void ObPGStorage::destroy()
 {
-  FLOG_INFO("destroy pg storage", K(*this), K(lbt()));
+  FLOG_INFO("destroy pg storage", K(this), K(*this), K(lbt()));
   clear();
   if (NULL != file_handle_.get_storage_file()) {
     file_handle_.reset();
@@ -161,7 +162,7 @@ void ObPGStorage::destroy()
 
 void ObPGStorage::clear()
 {
-  FLOG_INFO("clear pg storage", K(*this), K(lbt()));
+  FLOG_INFO("clear pg storage", K(this), K(*this), K(lbt()));
 
   int tmp_ret = OB_SUCCESS;
 
@@ -194,6 +195,7 @@ void ObPGStorage::clear()
     free_meta_(meta_);
   }
   bucket_lock_.destroy();
+  recovery_point_data_mgr_.destroy();
 }
 
 #define PG_PARTITION_GUARD(g, k) \
@@ -1160,7 +1162,7 @@ int ObPGStorage::replay(const ObStoreCtx& ctx, const char* data, const int64_t d
           mem_store = static_cast<ObMemtable*>(memtable);
         }
       } else {
-        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta), K(log));
+        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta));
         ret = OB_ERR_UNEXPECTED;
       }
     }
@@ -2118,8 +2120,6 @@ int ObPGStorage::enable_write_log(const bool is_replay_old)
     } else if (!meta_->is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid meta", K(ret), K(*meta_), K_(pkey));
-    } else if (is_replay_old && OB_FAIL(transform_and_add_old_sstable())) {
-      LOG_WARN("fail to transform and add old sstable", K(ret));
     } else {
       ObPGReportStatus pg_report_status;
       ObPartitionArray pkeys;
@@ -2250,8 +2250,13 @@ ObReplicaType ObPGStorage::get_replica_type_() const
 int ObPGStorage::get_replica_type(common::ObReplicaType& replica_type) const
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard lock_guard(lock_);
-  replica_type = meta_->replica_type_;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "partition is not initialized", K_(pkey), K(ret));
+  } else {
+    TCRLockGuard lock_guard(lock_);
+    replica_type = meta_->replica_type_;
+  }
   return ret;
 }
 
@@ -2337,7 +2342,8 @@ int ObPGStorage::set_pg_replica_type(const ObReplicaType& replica_type, const bo
         }
       }
       switch_meta_(next_meta_ptr);
-      LOG_INFO("succeed to set replica type", K(*meta_));
+      ATOMIC_STORE(&cached_replica_type_, replica_type);
+      LOG_INFO("succeed to set replica type", K(*meta_), K(cached_replica_type_));
 
       if (need_clean_memtable) {
         pg_memtable_mgr_.clean_memtables();
@@ -6000,6 +6006,8 @@ int ObPGStorage::create_sstables(const common::ObIArray<ObPGCreateSSTableParam>&
           need_create_sstable = false;
           if (OB_FAIL(tables_handle.add_table(table_handle))) {
             LOG_WARN("fail to add table", K(ret));
+          } else {
+            FLOG_INFO("local has sstable, no need create it again", K(table_key));
           }
         }
       }
@@ -6524,76 +6532,12 @@ int ObPGStorage::alloc_file_for_old_replay()
   return ret;
 }
 
-int ObPGStorage::transform_and_add_old_sstable()
-{
-  int ret = OB_SUCCESS;
-  ObPartitionArray pkeys;
-  if (OB_FAIL(get_all_pg_partition_keys_(pkeys))) {
-    STORAGE_LOG(WARN, "get all pg partition keys error", K(ret), K(pkey_), K(pkeys));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartition* pg_partition = nullptr;
-      ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPartitionStorage* storage = nullptr;
-      if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
-      } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage*>(pg_partition->get_storage()))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "partition storage is null", K(ret), K(pkey));
-      } else if (OB_FAIL(transform_and_add_old_sstable_for_partition(storage->get_partition_store()))) {
-        LOG_WARN("fail to set replay sstables", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObPGStorage::check_can_free(bool& can_free)
 {
   int ret = OB_SUCCESS;
   can_free = false;
   if (OB_FAIL(sstable_mgr_.check_all_sstable_unused(can_free))) {
     LOG_WARN("fail to check can free", K(ret));
-  }
-  return ret;
-}
-
-int ObPGStorage::transform_and_add_old_sstable_for_partition(ObPartitionStore& store)
-{
-  int ret = OB_SUCCESS;
-  ObArray<uint64_t> index_ids;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPGStorage has not been inited", K(ret));
-  } else if (OB_FAIL(store.get_all_table_ids(index_ids))) {
-    LOG_WARN("fail to get all table ids", K(ret));
-  } else {
-    ObArray<ObITable::TableKey> replay_tables;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
-      const uint64_t table_id = index_ids.at(i);
-      replay_tables.reuse();
-      if (OB_FAIL(store.get_replay_tables(table_id, replay_tables))) {
-        LOG_WARN("fail to get replay tables", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < replay_tables.count(); ++i) {
-          ObOldSSTable* sstable = nullptr;
-          ObTableHandle table_handle;
-          ObITable::TableKey& table_key = replay_tables.at(i);
-          if (OB_UNLIKELY(table_key.is_new_table_from_3x())) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("Unexpected new table type from 22x upgrade cluster", K(ret), K(table_key), K(replay_tables));
-          } else if (OB_FAIL(ObTableMgr::get_instance().acquire_old_table(table_key, table_handle))) {
-            LOG_WARN("fail to acquire table", K(ret), K(table_key));
-          } else if (OB_FAIL(table_handle.get_old_sstable(sstable))) {
-            LOG_WARN("fail to get sstable", K(ret));
-          } else if (OB_FAIL(sstable_mgr_.replay_add_old_sstable(*sstable))) {
-            LOG_WARN("fail to replay add sstable log", K(ret), K(*sstable));
-          }
-        }
-      }
-    }
   }
   return ret;
 }
@@ -6980,22 +6924,28 @@ int ObPGStorage::remove_mem_ctx_for_trans_ctx_(memtable::ObMemtable* mt)
   return ret;
 }
 
-int ObPGStorage::get_max_cleanout_log_ts(int64_t& max_cleanout_log_ts)
+int ObPGStorage::get_max_cleanout_log_ts(ObIArray<int64_t> &sstable_cleanout_log_ts)
 {
   int ret = OB_SUCCESS;
-  int64_t sstable_clean_out_log_ts = 0;
-  max_cleanout_log_ts = 0;
-  ObTablesHandle handle;
+  sstable_cleanout_log_ts.reset();
+  ObSEArray<int64_t, 10> log_ts_array;
+  int64_t last_replay_log_ts = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
-  } else if (OB_FAIL(sstable_mgr_.get_clean_out_log_ts(sstable_clean_out_log_ts))) {
+  } else if (OB_FAIL(sstable_mgr_.get_clean_out_log_ts(log_ts_array))) {
     LOG_WARN("failed to get clean out log id", K(ret), K(pkey_));
   } else {
     {
       TCRLockGuard lock_guard(lock_);
-      max_cleanout_log_ts =
-          std::min(sstable_clean_out_log_ts, meta_->storage_info_.get_data_info().get_last_replay_log_ts());
+      last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
+      if (log_ts_array.at(i) < last_replay_log_ts) {
+        if (OB_FAIL(sstable_cleanout_log_ts.push_back(log_ts_array.at(i)))) {
+          LOG_WARN("failed to push back log ts", K(ret), K(pkey_));
+        }
+      }
     }
   }
   return ret;
@@ -7044,7 +6994,7 @@ int ObPGStorage::get_min_schema_version(int64_t& min_schema_version)
 int ObPGStorage::clear_unused_trans_status()
 {
   int ret = OB_SUCCESS;
-  int64_t max_cleanout_log_ts = 0;
+  ObSEArray<int64_t, 10> max_cleanout_log_ts;
   if (OB_FAIL(get_max_cleanout_log_ts(max_cleanout_log_ts))) {
     LOG_WARN("failed to get max cleanout log id", K(ret), K_(pkey));
   } else if (OB_FAIL(txs_->clear_unused_trans_status(pkey_, max_cleanout_log_ts))) {

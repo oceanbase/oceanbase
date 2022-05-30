@@ -823,7 +823,7 @@ int ObPartitionLogService::change_member_(
     CLOG_LOG(WARN, "invalid argument", K(member), K(quorum), K(ret));
   } else {
     // ========== step 1 ===========
-    // 1) check it can do chagne member
+    // 1) check it can do change member
     // 2) get current membership_ts and member_list
     // 3) get current proposal_id
     //
@@ -1319,7 +1319,7 @@ int ObPartitionLogService::get_leader(common::ObAddr& leader) const
   return ret;
 }
 
-int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+int ObPartitionLogService::get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1330,22 +1330,34 @@ int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& clus
     parent = restore_mgr_.get_restore_leader();
     cluster_id = state_mgr_.get_self_cluster_id();
   } else {
+    const bool is_paxos_replica = ObReplicaTypeCheck::is_paxos_replica(mm_.get_replica_type());
     const share::ObCascadMember parent_member = cascading_mgr_.get_parent();
+    const share::ObCascadMember prev_parent_member = cascading_mgr_.get_prev_parent();
+    share::ObCascadMember cascad_leader;
+    (void)state_mgr_.get_cascad_leader(cascad_leader);
     if (parent_member.is_valid()) {
       parent = parent_member.get_server();
       cluster_id = parent_member.get_cluster_id();
-    } else {
+    } else if (!is_paxos_replica && prev_parent_member.is_valid()) {
+      // prev_parent is preferred choice for non-paxos replica
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else if (cascad_leader.is_valid()) {
       // returns corresponding leader when parent is invalid
-      share::ObCascadMember cascad_leader;
-      (void)state_mgr_.get_cascad_leader(cascad_leader);
       parent = cascad_leader.get_server();
       cluster_id = cascad_leader.get_cluster_id();
+    } else if (prev_parent_member.is_valid()) {
+      // at last return prev_parent
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else {
+      // it does not have valid parent
     }
   }
   if (!parent.is_valid()) {
     ret = OB_NEED_RETRY;
   }
-  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent));
+  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent), K(cluster_id));
   return ret;
 }
 
@@ -1876,7 +1888,7 @@ int ObPartitionLogService::process_archive_checkpoint(const uint64_t next_log_id
         "process_archive_checkpoint in unexpected state",
         K_(partition_key),
         K(ret),
-        "is_archive_resotring",
+        "is_archive_resorting",
         restore_mgr_.is_archive_restoring(),
         "role",
         restore_mgr_.get_role(),
@@ -2097,7 +2109,7 @@ int ObPartitionLogService::fake_ack_log(const ObAddr& server, const uint64_t log
   } else if (!state_mgr_.can_receive_log_ack(proposal_id) || self_ == server) {
     ret = OB_STATE_NOT_MATCH;
   } else if (LEADER != state_mgr_.get_role() || !is_in_curr_member_list) {
-    // self is not leader or sender is not paxos memeber, ignore
+    // self is not leader or sender is not paxos member, ignore
   } else if (log_id != sw_.get_start_id()) {
     // log_id not match with current start_id, skip
   } else {
@@ -2147,7 +2159,7 @@ int ObPartitionLogService::ack_renew_ms_log(
     }
     ret = OB_STATE_NOT_MATCH;
   } else if (!is_in_curr_member_list) {
-    // if not paxos memeber, record ts and skip majority count
+    // if not paxos member, record ts and skip majority count
   } else {
     // only leader need to count majority, other parent skip
     bool majority = false;
@@ -6150,7 +6162,7 @@ int ObPartitionLogService::notify_log_missing(
     if (!restore_mgr_.is_standby_restore_state()) {
       CLOG_LOG(INFO, "self is not in restore state, ignore msg", K_(partition_key), K(src_server));
     } else if (FOLLOWER != state_mgr_.get_role()) {
-      CLOG_LOG(WARN, "self is not follower, igore msg", K_(partition_key), K(src_server));
+      CLOG_LOG(WARN, "self is not follower, ignore msg", K_(partition_key), K(src_server));
     } else if (ObReplicaTypeCheck::is_paxos_replica_V2(replica_type) && !is_in_member_list) {
       CLOG_LOG(INFO,
           "self is paxos replica, but not in standby_leader's member_list, cannot exec restore",
@@ -6772,7 +6784,7 @@ int ObPartitionLogService::pre_change_member(const int64_t quorum, const bool is
       if (!is_standby_op) {
         proposal_id = state_mgr_.get_proposal_id();
       } else {
-        // standby non-private talbe's member change, use ms_proposal_id
+        // standby non-private table's member change, use ms_proposal_id
         proposal_id = mm_.get_ms_proposal_id();
       }
       if (OB_SUCCESS != (ret = member_list.deep_copy(mm_.get_curr_member_list()))) {
@@ -6987,7 +6999,7 @@ int ObPartitionLogService::leader_keepalive(const int64_t keepalive_interval)
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id())) {
         if (GCTX.is_primary_cluster() || GCTX.is_in_flashback_state() || GCTX.is_in_cleanup_state()) {
           // non-private leader only in flashback/cleanup state can advance next_log_ts
-          // it cannot do this in swithing state, which may lead conflict with new primary cluster
+          // it cannot do this in swiching state, which may lead conflict with new primary cluster
           is_cluster_status_allow_update = true;
         } else {
           is_cluster_status_allow_update = false;
@@ -7151,6 +7163,8 @@ int ObPartitionLogService::broadcast_info()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "is not inited", K(ret), K(partition_key_));
+  } else if (restore_mgr_.is_archive_restoring()) {
+    // archive restoring replica no need exec
   } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 || GCTX.is_primary_cluster()) {
     // Before the 226 version, the standby cluster did not have its own member_list,
     // and the logonly replica of the standby cluster can directly reclaim the logs according to the dump location,
@@ -8145,6 +8159,11 @@ int ObPartitionLogService::process_check_rebuild_req(
     }
   }
   return ret;
+}
+
+void ObPartitionLogService::try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  sw_.try_update_max_majority_log(log_id, log_ts);
 }
 
 void ObPartitionLogService::get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const

@@ -146,10 +146,11 @@ int ObBuildIndexDag::fill_comment(char* buf, const int64_t buf_len) const
     STORAGE_LOG(WARN, "ObBuildIndexDag has not been inited", K(ret));
   } else if (OB_FAIL(databuff_printf(buf,
                  buf_len,
-                 "build index task: key=%s index_id=%ld snapshot_version=%ld",
+                 "build index task: pkey=%s index_id=%ld snapshot_version=%ld parallelism=%ld",
                  to_cstring(pkey_),
                  index_id,
-                 param_.snapshot_version_))) {
+                 param_.snapshot_version_,
+                 param_.concurrent_cnt_))) {
     STORAGE_LOG(WARN, "failed to fill comment", K(ret), K(pkey_));
   }
 
@@ -825,6 +826,7 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
                  pg->get_partition_key(),
                  pg->get_storage_file_handle()))) {
     STORAGE_LOG(WARN, "Fail to init data store desc, ", K(ret));
+  } else if (FALSE_IT(data_desc_.is_unique_index_ = param.index_schema_->is_unique_index())) {
   } else if (OB_FAIL(writer_.open(data_desc_, macro_start_seq))) {
     STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
   } else {

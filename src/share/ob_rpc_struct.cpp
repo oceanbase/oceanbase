@@ -481,6 +481,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg& other)
     if_not_exist_ = other.if_not_exist_;
     name_case_mode_ = other.name_case_mode_;
     is_restore_ = other.is_restore_;
+    restore_frozen_status_ = other.restore_frozen_status_;
   }
   return ret;
 }
@@ -495,12 +496,13 @@ DEF_TO_STRING(ObCreateTenantArg)
       K_(name_case_mode),
       K_(is_restore),
       K_(restore_pkeys),
-      K_(restore_log_pkeys));
+      K_(restore_log_pkeys),
+      K_(restore_frozen_status));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg), tenant_schema_, pool_list_, if_not_exist_, sys_var_list_,
-    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_);
+    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_, restore_frozen_status_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -1701,14 +1703,19 @@ DEF_TO_STRING(ObCreateIndexArg)
       K_(index_table_id),
       K_(if_not_exist),
       K_(index_schema),
-      K_(is_inner));
+      K_(is_inner),
+      K_(nls_date_format),
+      K_(nls_timestamp_format),
+      K_(nls_timestamp_tz_format),
+      K_(sql_mode));
   J_OBJ_END();
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg), index_type_, index_columns_, store_columns_, index_option_,
     index_using_type_, fulltext_columns_, create_mode_, data_table_id_, index_table_id_, if_not_exist_, with_rowid_,
-    index_schema_, is_inner_, hidden_store_columns_);
+    index_schema_, is_inner_, hidden_store_columns_, nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_,
+    sql_mode_);
 
 bool ObAlterIndexArg::is_valid() const
 {
@@ -1885,26 +1892,6 @@ bool ObFlashBackTableFromRecyclebinArg::is_valid() const
 
 OB_SERIALIZE_MEMBER((ObFlashBackTableFromRecyclebinArg, ObDDLArg), tenant_id_, origin_table_name_, new_db_name_,
     new_table_name_, origin_db_name_);
-
-bool ObFlashBackTableToScnArg::is_valid() const
-{
-  int bret = true;
-  if (OB_INVALID_ID == tenant_id_) {
-    bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
-  } else if (OB_INVALID_ID == time_point_) {
-    bret = false;
-    LOG_WARN("timepoint is invalid", K_(time_point));
-  } else if (0 == tables_.count()) {
-    bret = false;
-    LOG_WARN("table is empty", K_(tables));
-  } else if (-1 == query_end_time_) {
-    bret = false;
-  }
-  return bret;
-}
-
-OB_SERIALIZE_MEMBER(ObFlashBackTableToScnArg, tenant_id_, time_point_, tables_, query_end_time_);
 
 bool ObFlashBackIndexArg::is_valid() const
 {
@@ -2645,7 +2632,7 @@ bool ObCopySSTableBatchArg::is_valid() const
   return is_valid;
 }
 
-OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_);
+OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_, data_size_);
 
 bool ObServerCopyLocalIndexSSTableArg::is_valid() const
 {
@@ -3367,9 +3354,9 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg& other)
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
 
-OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_);
+OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
-OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_);
+OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
 OB_SERIALIZE_MEMBER(ObAdminLoadBaselineArg, tenant_ids_, sql_id_, plan_hash_value_, fixed_, enabled_);
 
@@ -4762,17 +4749,52 @@ void ObBatchCheckRes::reset()
   index_.reset();
 }
 OB_SERIALIZE_MEMBER(ObRebuildIndexInRestoreArg, tenant_id_);
-OB_SERIALIZE_MEMBER((ObUpdateTableSchemaVersionArg, ObDDLArg), tenant_id_, table_id_, schema_version_);
+OB_SERIALIZE_MEMBER((ObUpdateTableSchemaVersionArg, ObDDLArg), tenant_id_, table_id_, schema_version_, action_);
+
+bool ObUpdateTableSchemaVersionArg::is_allow_when_upgrade() const
+{
+  return UPDATE_SYS_TABLE_IN_TENANT_SPACE != action_;
+}
+
 bool ObUpdateTableSchemaVersionArg::is_valid() const
 {
-  return tenant_id_ > OB_INVALID_TENANT_ID && table_id_ >= 0 && schema_version_ >= OB_INVALID_SCHEMA_VERSION;
+  return (tenant_id_ > OB_INVALID_TENANT_ID && table_id_ >= 0 && schema_version_ >= OB_INVALID_SCHEMA_VERSION) ||
+         UPDATE_SYS_TABLE_IN_TENANT_SPACE == action_;
 }
+
 void ObUpdateTableSchemaVersionArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_SCHEMA_VERSION;
+  action_ = Action::INVALID;
 }
+
+void ObUpdateTableSchemaVersionArg::init(const int64_t tenant_id, const int64_t table_id, const int64_t schema_version,
+    const bool is_replay_schema, const Action action)
+{
+  exec_tenant_id_ = OB_SYS_TENANT_ID;
+  tenant_id_ = tenant_id;
+  table_id_ = table_id;
+  schema_version_ = schema_version;
+  is_replay_schema_ = is_replay_schema;
+  action_ = action;
+}
+
+int ObUpdateTableSchemaVersionArg::assign(const ObUpdateTableSchemaVersionArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ObDDLArg", KR(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    table_id_ = other.table_id_;
+    schema_version_ = other.schema_version_;
+    action_ = other.action_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObRestoreModifySchemaArg, ObDDLArg), type_, schema_id_);
 bool ObRestoreModifySchemaArg::is_valid() const
 {
@@ -4903,6 +4925,44 @@ int ObPartitionBroadcastResult::assign(const ObPartitionBroadcastResult& other)
   if (this == &other) {
   } else {
     ret_ = other.ret_;
+  }
+  return ret;
+}
+
+int ObSubmitBuildIndexTaskArg::assign(const ObSubmitBuildIndexTaskArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    index_tid_ = other.index_tid_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObSubmitBuildIndexTaskArg, ObDDLArg), index_tid_);
+
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeArg, pkey_, index_id_);
+
+int ObFetchSstableSizeArg::assign(const ObFetchSstableSizeArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    pkey_ = other.pkey_;
+    index_id_ = other.index_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeRes, size_);
+
+int ObFetchSstableSizeRes::assign(const ObFetchSstableSizeRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    size_ = other.size_;
   }
   return ret;
 }

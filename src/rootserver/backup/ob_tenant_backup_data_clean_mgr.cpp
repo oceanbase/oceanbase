@@ -158,33 +158,6 @@ bool ObBackupDataCleanElement::is_same_element(
   return cluster_id_ == cluster_id && incarnation_ == incarnation && backup_dest_ == backup_dest;
 }
 
-int ObBackupDataCleanElement::set_backup_set_id(const ObBackupSetId &backup_set_id)
-{
-  int ret = OB_SUCCESS;
-  if (!is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can not set backup id", K(ret), K(*this));
-  } else if (!backup_set_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("set backup set id get invalid argument", K(ret), K(backup_set_id));
-  } else if (OB_FAIL(backup_set_id_array_.push_back(backup_set_id))) {
-    LOG_WARN("failed to set backup set id", K(ret), K(backup_set_id));
-  }
-  return ret;
-}
-
-int ObBackupDataCleanElement::set_log_archive_round(const ObLogArchiveRound &log_archive_round)
-{
-  int ret = OB_SUCCESS;
-  if (!log_archive_round.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("set log archive round get invalid argument", K(ret), K(log_archive_round));
-  } else if (OB_FAIL(log_archive_round_array_.push_back(log_archive_round))) {
-    LOG_WARN("failed to set log archive round", K(ret), K(log_archive_round));
-  }
-  return ret;
-}
-
 bool ObSimpleBackupDataCleanTenant::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_;
@@ -608,7 +581,7 @@ int ObBackupDataCleanUtil::delete_clog_dir_files(const ObBackupPath &path, const
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get file id", K(ret), K(file_name), K(tmp_file_id));
       } else if (tmp_file_id > file_id) {
-        LOG_INFO("no need delete clog file, skip it", K(tmp_file_id), K(file_id));
+        LOG_INFO("[BACKUP_CLEAN]no need delete clog file, skip it", K(tmp_file_id), K(file_id));
       } else {
         ObBackupPath tmp_path = path;
         if (OB_FAIL(tmp_path.join(file_name))) {
@@ -776,7 +749,7 @@ int ObTenantBackupDataCleanMgr::do_clean()
   ObBackupDataCleanStatics base_data_clean_statics;
   ObBackupDataCleanStatics clog_clean_statics;
 
-  LOG_INFO("tenant backup data clean mgr do clean", K(clean_tenant_.simple_clean_tenant_));
+  LOG_INFO("[BACKUP_CLEAN]tenant backup data clean mgr do clean", K(clean_tenant_.simple_clean_tenant_));
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup data clean mgr do not init", K(ret));
@@ -799,7 +772,7 @@ int ObTenantBackupDataCleanMgr::do_clean()
     clean_statics += base_data_clean_statics;
   }
 
-  LOG_INFO("finish tenant backup data clean mgr do clean",
+  LOG_INFO("[BACKUP_CLEAN]finish tenant backup data clean mgr do clean",
       "cost_ts",
       ObTimeUtil::current_time() - start_ts,
       K(ret),
@@ -837,7 +810,7 @@ int ObTenantBackupBaseDataCleanTask::do_clean()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
-  LOG_INFO("start tenant backup base data clean task", K(clean_tenant_.simple_clean_tenant_));
+  LOG_INFO("[BACKUP_CLEAN]start tenant backup base data clean task", K(clean_tenant_.simple_clean_tenant_));
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -854,7 +827,7 @@ int ObTenantBackupBaseDataCleanTask::do_clean()
     }
   }
 
-  LOG_INFO("finish tenant backup base data clean task",
+  LOG_INFO("[BACKUP_CLEAN]finish tenant backup base data clean task",
       "cost",
       ObTimeUtil::current_time() - start_ts,
       K(clean_tenant_.simple_clean_tenant_));
@@ -892,23 +865,23 @@ int ObTenantBackupBaseDataCleanTask::clean_backup_data(const ObSimpleBackupDataC
   int ret = OB_SUCCESS;
   ObArray<ObExternBackupInfo> extern_backup_infos;
   storage::ObPhyRestoreMetaIndexStore meta_index;
-
+  uint64_t tenant_id = simple_clean_tenant.tenant_id_;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup base data clean task do not init", K(ret));
   } else if (OB_FAIL(get_tenant_backup_infos(simple_clean_tenant, clean_element, backup_set_id, extern_backup_infos))) {
     LOG_WARN("failed to get tenant backup infos", K(ret), K(backup_set_id), K(simple_clean_tenant), K(clean_element));
   } else {
-    LOG_INFO("get extern backup infos", K(extern_backup_infos), K(backup_set_id));
-
+    LOG_INFO("[BACKUP_CLEAN]get extern backup infos", K(extern_backup_infos), K(backup_set_id));
     for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_infos.count(); ++i) {
       const ObExternBackupInfo &backup_info = extern_backup_infos.at(i);
       if (OB_FAIL(data_clean_->check_can_do_task())) {
         LOG_WARN("failed to check can do task", K(ret));
+      } else if (OB_FAIL(try_clean_backup_set_info(tenant_id, clean_element, backup_set_id, backup_info))) {
+        LOG_WARN("failed to try clean backup set info", K(ret), K(tenant_id), K(backup_set_id));
       } else if (OB_FAIL(clean_backp_set(simple_clean_tenant, clean_element, backup_set_id, backup_info))) {
         LOG_WARN("failed to clean backup set", K(ret), K(simple_clean_tenant), K(clean_element), K(backup_info));
-      } else if (OB_FAIL(try_clean_backup_set_dir(
-                     simple_clean_tenant.tenant_id_, clean_element, backup_set_id, backup_info))) {
+      } else if (OB_FAIL(try_clean_backup_set_dir(tenant_id, clean_element, backup_set_id, backup_info))) {
         LOG_WARN("failed to try clean backup set dir", K(ret), K(backup_set_id), K(simple_clean_tenant));
       }
     }
@@ -963,11 +936,6 @@ int ObTenantBackupBaseDataCleanTask::clean_backp_set(const ObSimpleBackupDataCle
         LOG_WARN("failed to get clean statics", K(ret));
       } else {
         clean_statics_ += clean_statics;
-        LOG_INFO("clean table base data statics",
-            K(table_id),
-            K(cluster_backup_dest),
-            K(extern_backup_info),
-            K(clean_statics));
       }
     }
 
@@ -1089,31 +1057,6 @@ int ObTenantBackupBaseDataCleanTask::delete_backup_set_meta(
   return ret;
 }
 
-int ObTenantBackupBaseDataCleanTask::get_table_id_list(
-    const storage::ObPhyRestoreMetaIndexStore::MetaIndexMap &meta_index_map, hash::ObHashSet<int64_t> &table_id_set)
-{
-  int ret = OB_SUCCESS;
-  const int overwrite_key = 1;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup base data clean task do not init", K(ret));
-  } else {
-    storage::ObPhyRestoreMetaIndexStore::MetaIndexMap::const_iterator iter;
-    for (iter = meta_index_map.begin(); OB_SUCC(ret) && iter != meta_index_map.end(); ++iter) {
-      const ObMetaIndexKey &meta_index_key = iter->first;
-      const int64_t table_id = meta_index_key.table_id_;
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (ObBackupMetaType::PARTITION_GROUP_META != meta_index_key.meta_type_) {
-        // do nothing
-      } else if (OB_FAIL(table_id_set.set_refactored_1(table_id, overwrite_key))) {
-        LOG_WARN("failed to set table id into set", K(ret), K(table_id));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTenantBackupBaseDataCleanTask::try_clean_backup_set_dir(const uint64_t tenant_id,
     const ObBackupDataCleanElement &clean_element, const ObBackupSetId &backup_set_id,
     const ObExternBackupInfo &extern_backup_info)
@@ -1125,8 +1068,6 @@ int ObTenantBackupBaseDataCleanTask::try_clean_backup_set_dir(const uint64_t ten
   } else if (!backup_set_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("try clean backup set dir get invalid argument", K(ret), K(backup_set_id));
-  } else if (OB_FAIL(try_clean_backup_set_info(tenant_id, clean_element, backup_set_id, extern_backup_info))) {
-    LOG_WARN("failed to try clean backup set info", K(ret), K(tenant_id), K(backup_set_id));
   } else if (OB_FAIL(try_clean_backup_set_data_dir(tenant_id, clean_element, backup_set_id, extern_backup_info))) {
     LOG_WARN("failed to try clean backup set data dir", K(ret), K(tenant_id), K(backup_set_id));
   } else if (OB_FAIL(try_clean_full_backup_set_dir(tenant_id, clean_element, backup_set_id, extern_backup_info))) {
@@ -1193,15 +1134,11 @@ int ObTenantBackupBaseDataCleanTask::try_clean_backup_set_info(const uint64_t te
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup base data clean task do not init", K(ret));
+  } else if (!backup_set_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try clean backup set info get invalid argument", K(ret), K(backup_set_id));
   } else if (OB_FAIL(backup_dest.set(clean_element.backup_dest_, clean_element.incarnation_))) {
     LOG_WARN("failed to set backup dest", K(ret), K(clean_element));
-  } else if (OB_FAIL(path_info.set(
-                 backup_dest, tenant_id, full_backup_set_id, inc_backup_set_id, backup_date, compatible))) {
-    LOG_WARN("failed to set backup path info", K(ret), K(backup_dest), K(tenant_id), K(extern_backup_info));
-  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_full_backup_set_path(path_info, path))) {
-    LOG_WARN("failed to get tenant date full backup set path", K(ret), K(path_info));
-  } else if (OB_FAIL(ObBackupDataCleanUtil::delete_tmp_files(path, backup_dest.get_storage_info()))) {
-    LOG_WARN("failed to delete tmp files", K(ret), K(path), K(backup_dest));
   } else if (OB_FAIL(extern_backup_set_info_mgr.init(tenant_id,
                  full_backup_set_id,
                  inc_backup_set_id,
@@ -1221,25 +1158,36 @@ int ObTenantBackupBaseDataCleanTask::try_clean_backup_set_info(const uint64_t te
   } else if (ObBackupDataCleanMode::TOUCH == backup_set_id.clean_mode_) {
     if (clean_element.backup_dest_option_.auto_delete_obsolete_backup_) {
       // do nothing
-    } else if (OB_FAIL(extern_backup_set_info_mgr.touch_extern_backup_set_info())) {
-      LOG_WARN("failed to touch backup file", K(ret), K(backup_dest));
     } else if (compatible > ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V1 &&
                OB_FAIL(extern_single_backup_set_info_mgr.touch_extern_backup_set_file_info())) {
       LOG_WARN("failed to touch extern backup set file info", K(ret), K(backup_dest));
+    } else if (OB_FAIL(extern_backup_set_info_mgr.touch_extern_backup_set_info())) {
+      LOG_WARN("failed to touch backup file", K(ret), K(backup_dest));
     }
   } else if (ObBackupDataCleanMode::CLEAN == backup_set_id.clean_mode_) {
     if (clean_element.backup_dest_option_.auto_touch_reserved_backup_) {
       // do nothing
-    } else if (OB_FAIL(extern_backup_set_info_mgr.delete_extern_backup_set_info())) {
-      LOG_WARN("failed to delete backup file", K(ret), K(backup_dest));
     } else if (compatible > ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V1 &&
                OB_FAIL(extern_single_backup_set_info_mgr.delete_extern_backup_set_file_info())) {
       LOG_WARN("failed to delete extern backup set file info", K(ret), K(backup_dest));
+    } else if (OB_FAIL(extern_backup_set_info_mgr.delete_extern_backup_set_info())) {
+      LOG_WARN("failed to delete backup file", K(ret), K(backup_dest));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("try clean backup set info's clean mode is not supported", K(ret), K(backup_set_id));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(path_info.set(
+                 backup_dest, tenant_id, full_backup_set_id, inc_backup_set_id, backup_date, compatible))) {
+    LOG_WARN("failed to set backup path info", K(ret), K(backup_dest), K(tenant_id), K(extern_backup_info));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_full_backup_set_path(path_info, path))) {
+    LOG_WARN("failed to get tenant date full backup set path", K(ret), K(path_info));
+  } else if (OB_FAIL(ObBackupDataCleanUtil::delete_tmp_files(path, backup_dest.get_storage_info()))) {
+    LOG_WARN("failed to delete tmp files", K(ret), K(path), K(backup_dest));
+  }
+
   return ret;
 }
 
@@ -1332,7 +1280,7 @@ int ObTenantBackupClogDataCleanTask::do_clean()
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
   int64_t start_replay_log_ts = 0;
-  LOG_INFO("tenant backup clog data clean task do clean", K(clean_tenant_.simple_clean_tenant_));
+  LOG_INFO("[BACKUP_CLEAN]tenant backup clog data clean task do clean", K(clean_tenant_.simple_clean_tenant_));
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1362,11 +1310,12 @@ int ObTenantBackupClogDataCleanTask::do_clean()
     }
   }
 
-  LOG_INFO("finish tenant backup clog data clean task do clean",
+  LOG_INFO("[BACKUP_CLEAN]finish tenant backup clog data clean task do clean",
       "cost",
       ObTimeUtil::current_time() - start_ts,
       K(ret),
-      K(clean_tenant_.simple_clean_tenant_));
+      K(clean_tenant_.simple_clean_tenant_),
+      K(start_replay_log_ts));
 
   return ret;
 }
@@ -1403,350 +1352,6 @@ int ObTenantBackupClogDataCleanTask::do_inner_clean(const ObSimpleBackupDataClea
   return ret;
 }
 
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::do_inner_clean(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-    const ObBackupDataCleanElement &clean_element, const ObTenantBackupTaskInfo &clog_data_clean_point)
-{
-  int ret = OB_SUCCESS;
-  // const uint64_t tenant_id = simple_clean_tenant.tenant_id_;
-  // const int64_t full_backup_set_id = clog_data_clean_point.backup_set_id_;
-  // const int64_t inc_backup_set_id = clog_data_clean_point.backup_set_id_;
-  ObBackupDataMgr backup_data_mgr;
-  ObClusterBackupDest cluster_backup_dest;
-  ObArray<int64_t> table_id_array;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup clog data clean task do not init", K(ret));
-  } else if (!simple_clean_tenant.is_valid() || !clean_element.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("inner do clean get invalid argument", K(ret), K(simple_clean_tenant), K(clean_element));
-  } else if (!clog_data_clean_point.is_valid()) {
-    // do nothing
-  } else if (OB_FAIL(cluster_backup_dest.set(clog_data_clean_point.backup_dest_, clog_data_clean_point.incarnation_))) {
-    LOG_WARN("failed to set cluster backup destt", K(ret), K(clean_element));
-    //} else if (OB_FAIL(backup_data_mgr.init(cluster_backup_dest,
-    //    tenant_id, full_backup_set_id, inc_backup_set_id))) {
-    //  LOG_WARN("failed to init backup data mgr", K(ret), K(cluster_backup_dest),
-    //      K(full_backup_set_id), K(inc_backup_set_id));
-  } else if (OB_FAIL(backup_data_mgr.get_base_data_table_id_list(table_id_array))) {
-    LOG_WARN("failed ot get base data table id list", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < clean_element.log_archive_round_array_.count(); ++i) {
-      const ObLogArchiveRound &log_archive_round = clean_element.log_archive_round_array_.at(i);
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (ObLogArchiveStatus::STOP == log_archive_round.log_archive_status_) {
-        if (log_archive_round.start_ts_ > clog_data_clean_point.snapshot_version_ ||
-            log_archive_round.checkpoint_ts_ > clog_data_clean_point.snapshot_version_) {
-          // clean set
-          if (OB_FAIL(clean_clog_data(simple_clean_tenant,
-                  clean_element,
-                  clog_data_clean_point,
-                  log_archive_round,
-                  table_id_array,
-                  backup_data_mgr))) {
-            LOG_WARN("failed to clean clog data", K(ret), K(simple_clean_tenant), K(clog_data_clean_point));
-          }
-        } else {
-          // log_archive_status.start_ts <= snapshot_version &&
-          // log_archive_status.check_point_ts <= snapshot_version
-          // clean clog archive round directly
-          if (OB_FAIL(clean_interrputed_clog_data(simple_clean_tenant, clean_element, log_archive_round))) {
-            LOG_WARN("failed to clean interrputed clog data", K(ret), K(simple_clean_tenant));
-          }
-        }
-      } else {
-        // clean set
-        if (OB_FAIL(clean_clog_data(simple_clean_tenant,
-                clean_element,
-                clog_data_clean_point,
-                log_archive_round,
-                table_id_array,
-                backup_data_mgr))) {
-          LOG_WARN("failed to clean clog data", K(ret), K(simple_clean_tenant), K(clog_data_clean_point));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::clean_clog_data(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-    const ObBackupDataCleanElement &clean_element, const ObTenantBackupTaskInfo &clog_data_clean_point,
-    const ObLogArchiveRound &log_archive_round, const common::ObIArray<int64_t> &table_id_array,
-    ObBackupDataMgr &backup_data_mgr)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObBackupMetaIndex> meta_index_array;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup clog data clean task do not init", K(ret));
-  } else if (!simple_clean_tenant.is_valid() || !clean_element.is_valid() || !log_archive_round.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "clean clog data get invalid argument", K(ret), K(simple_clean_tenant), K(clean_element), K(log_archive_round));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_id_array.count(); ++i) {
-      meta_index_array.reset();
-      const int64_t table_id = table_id_array.at(i);
-      ObTableClogDataCleanMgr table_clog_data_clean_mgr;
-      ObBackupDataCleanStatics clean_statics;
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (OB_FAIL(backup_data_mgr.get_table_pg_meta_index(table_id, meta_index_array))) {
-        LOG_WARN("failed to get table meta index", K(ret), K(table_id));
-      } else if (OB_FAIL(table_clog_data_clean_mgr.init(table_id,
-                     clean_element,
-                     log_archive_round,
-                     clog_data_clean_point,
-                     meta_index_array,
-                     *data_clean_))) {
-        LOG_WARN("failed to init table data clean mgr", K(ret));
-      } else if (OB_FAIL(table_clog_data_clean_mgr.do_clean())) {
-        LOG_WARN("failed to do table data clean", K(ret));
-      } else if (OB_FAIL(set_partition_into_set(meta_index_array))) {
-        LOG_WARN("failed to set partition into set", K(ret));
-      } else if (OB_FAIL(table_clog_data_clean_mgr.get_clean_statics(clean_statics))) {
-        LOG_WARN("failed to get table clgo data clean statics", K(ret));
-      } else {
-        clean_statics_ += clean_statics;
-        LOG_INFO("table clog data clean statis", K(table_id), K(log_archive_round), K(clean_statics));
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::set_partition_into_set(const ObIArray<ObBackupMetaIndex> &meta_index_array)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    LOG_WARN("tenant backup clog data clean mgr do not init", K(ret));
-  } else {
-    const int flag = 1;
-    for (int64_t i = 0; OB_SUCC(ret) && i < meta_index_array.count(); ++i) {
-      const ObBackupMetaIndex &meta_index = meta_index_array.at(i);
-      const int64_t table_id = meta_index.table_id_;
-      const int64_t partition_id = meta_index.partition_id_;
-      ObPartitionKey pkey(table_id, partition_id, 0);
-      if (OB_FAIL(pkey_set_.set_refactored_1(pkey, flag))) {
-        LOG_WARN("failed to set pkey into set", K(ret), K(pkey));
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::check_and_delete_clog_data(
-    const ObSimpleBackupDataCleanTenant &simple_clean_tenant, const ObBackupDataCleanElement &backup_clean_element,
-    const int64_t clog_gc_snapshot)
-{
-  int ret = OB_SUCCESS;
-  const ObBackupDest &backup_dest = backup_clean_element.backup_dest_;
-  const int64_t incarnation = backup_clean_element.incarnation_;
-  ObClusterBackupDest cluster_backup_dest;
-  ObBackupListDataMgr backup_list_data_mgr;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup data clean mgr do not init", K(ret));
-  } else if (OB_FAIL(cluster_backup_dest.set(backup_dest, incarnation))) {
-    LOG_WARN("failed to set cluster backup dest", K(ret), K(backup_dest));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < backup_clean_element.log_archive_round_array_.count(); ++i) {
-      const ObLogArchiveRound &log_archive_round = backup_clean_element.log_archive_round_array_.at(i);
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (OB_FAIL(check_and_delete_clog_data_with_round(
-                     simple_clean_tenant, cluster_backup_dest, log_archive_round, clog_gc_snapshot))) {
-        LOG_WARN("failed to check and delete clog data with round", K(ret), K(log_archive_round));
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::check_and_delete_clog_data_with_round(
-    const ObSimpleBackupDataCleanTenant &simple_clean_tenant, const ObClusterBackupDest &cluster_backup_dest,
-    const ObLogArchiveRound &log_archive_round, const int64_t max_clean_clog_snapshot)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObPartitionKey> pkey_list;
-  const int64_t archive_round = log_archive_round.log_archive_round_;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("failed ot check and delete clog data with round", K(ret), K(simple_clean_tenant));
-  } else if (OB_FAIL(get_clog_pkey_list_not_in_base_data(cluster_backup_dest,
-                 log_archive_round.log_archive_round_,
-                 simple_clean_tenant.tenant_id_,
-                 pkey_list))) {
-    LOG_WARN("failed to get clog pkey list not in base data", K(ret), K(cluster_backup_dest), K(log_archive_round));
-  } else {
-    // TODO(muwei)
-    const int64_t fake_piece_id = 0;
-    const int64_t fake_piece_create_date = 0;
-    ObSimplePieceInfo fake_backup_piece_info;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pkey_list.count(); ++i) {
-      const ObPartitionKey &pkey = pkey_list.at(i);
-      ObPartitionClogDataCleanMgr clog_data_clean_mgr;
-      archive::ObArchiveClear archive_clear;
-      uint64_t data_file_id = 0;
-      uint64_t index_file_id = 0;
-      const int64_t unused_retention_timestamp = INT64_MAX;
-      const bool is_backup_backup = false;
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (OB_FAIL(archive_clear.get_clean_max_clog_file_id_by_log_ts(cluster_backup_dest,
-                     archive_round,
-                     fake_piece_id,
-                     fake_piece_create_date,
-                     pkey,
-                     max_clean_clog_snapshot,
-                     unused_retention_timestamp,
-                     index_file_id,
-                     data_file_id))) {
-        LOG_WARN("failed to get clean max clog file id by log ts",
-            K(ret),
-            K(pkey),
-            K(log_archive_round),
-            K(max_clean_clog_snapshot));
-      } else if (OB_FAIL(clog_data_clean_mgr.init(cluster_backup_dest,
-                     fake_backup_piece_info,
-                     pkey,
-                     data_file_id,
-                     index_file_id,
-                     is_backup_backup,
-                     *data_clean_))) {
-        LOG_WARN("failed to init clog data clean mgr", K(ret), K(cluster_backup_dest), K(log_archive_round), K(pkey));
-      } else if (OB_FAIL(clog_data_clean_mgr.touch_clog_backup_data())) {
-        LOG_WARN("failed to touch clog backup data", K(ret), K(pkey), K(cluster_backup_dest));
-      } else if (OB_FAIL(clog_data_clean_mgr.clean_clog_backup_data())) {
-        LOG_WARN("failed to clean clog backup data", K(ret), K(pkey), K(cluster_backup_dest));
-      } else {
-        LOG_INFO("check and delete clog data", K(pkey), K(log_archive_round));
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::get_clog_pkey_list_not_in_base_data(const ObClusterBackupDest &cluster_backup_dest,
-    const int64_t log_archive_round, const uint64_t tenant_id, common::ObIArray<ObPartitionKey> &pkey_list)
-{
-  int ret = OB_SUCCESS;
-  ObBackupListDataMgr backup_list_data_mgr;
-  ObArray<ObPartitionKey> clog_pkey_list;
-  UNUSED(cluster_backup_dest);
-  UNUSED(log_archive_round);
-  UNUSED(tenant_id);
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup data clean mgr do not init", K(ret));
-    //} else if (OB_FAIL(backup_list_data_mgr.init(
-    //    cluster_backup_dest, log_archive_round, tenant_id))) {
-    //  LOG_WARN("failed to init backup list data mgr", K(ret),
-    //      K(cluster_backup_dest), K(log_archive_round));
-  } else if (OB_FAIL(backup_list_data_mgr.get_clog_pkey_list(clog_pkey_list))) {
-    LOG_WARN("failed to get clog pkey list", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < clog_pkey_list.count(); ++i) {
-      const ObPartitionKey &pkey = clog_pkey_list.at(i);
-      int hash_ret = pkey_set_.exist_refactored(pkey);
-      if (OB_HASH_NOT_EXIST == hash_ret) {
-        if (OB_FAIL(pkey_list.push_back(pkey))) {
-          LOG_WARN("failed to push pkey into list", K(ret), K(pkey));
-        }
-      } else if (OB_HASH_EXIST == hash_ret) {
-        // do nothing
-      } else {
-        ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
-        LOG_WARN("failed to check exist from set", K(ret), K(pkey));
-      }
-    }
-  }
-  return ret;
-}
-
-/*delete it later*/
-int ObTenantBackupClogDataCleanTask::clean_interrputed_clog_data(
-    const ObSimpleBackupDataCleanTenant &simple_clean_tenant, const ObBackupDataCleanElement &clean_element,
-    const ObLogArchiveRound &log_archive_round)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = simple_clean_tenant.tenant_id_;
-  const int64_t round = log_archive_round.log_archive_round_;
-  const char *storage_info = clean_element.backup_dest_.storage_info_;
-  const ObStorageType &storage_type = clean_element.backup_dest_.device_type_;
-  ObClusterBackupDest cluster_backup_dest;
-  ObBackupListDataMgr backup_list_data_mgr;
-  ObArray<ObPartitionKey> clog_pkey_list;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant backup data clean mgr do not init", K(ret));
-  } else if (ObLogArchiveStatus::STOP != log_archive_round.log_archive_status_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("clean interrputed clog data get invalid argument", K(ret), K(log_archive_round));
-  } else if (data_clean_->is_update_reserved_backup_timestamp()) {
-    LOG_INFO("update reserved backup timestamp, skip clean interrputed clog data", K(log_archive_round));
-  } else if (OB_FAIL(cluster_backup_dest.set(clean_element.backup_dest_, clean_element.incarnation_))) {
-    LOG_WARN("failed to set cluster backup dest", K(ret), K(clean_element));
-    // } else if (OB_FAIL(backup_list_data_mgr.init(
-    //     cluster_backup_dest, round, tenant_id))) {
-    //   LOG_WARN("failed to init backup list data mgr", K(ret),
-    //       K(cluster_backup_dest), K(log_archive_round));
-  } else if (OB_FAIL(backup_list_data_mgr.get_clog_pkey_list(clog_pkey_list))) {
-    LOG_WARN("failed to get clog pkey list", K(ret), K(cluster_backup_dest));
-  } else {
-    LOG_INFO("start clean interruped clog data", K(clean_element), K(log_archive_round));
-    const uint64_t data_file_id = UINT64_MAX;
-    const uint64_t index_file_id = UINT64_MAX;
-    ObSimplePieceInfo fake_backup_piece_info;
-    const bool is_backup_backup = false;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < clog_pkey_list.count(); ++i) {
-      const ObPartitionKey &pkey = clog_pkey_list.at(i);
-      ObPartitionClogDataCleanMgr partition_clog_data_clean_mgr;
-      ObBackupDataCleanStatics clean_statics;
-      if (OB_FAIL(data_clean_->check_can_do_task())) {
-        LOG_WARN("failed to check can do task", K(ret));
-      } else if (OB_FAIL(partition_clog_data_clean_mgr.init(cluster_backup_dest,
-                     fake_backup_piece_info,
-                     pkey,
-                     data_file_id,
-                     index_file_id,
-                     is_backup_backup,
-                     *data_clean_))) {
-        LOG_WARN("failed to init partition clog data clean mgr", K(ret), K(pkey), K(cluster_backup_dest));
-      } else if (OB_FAIL(partition_clog_data_clean_mgr.clean_clog_backup_data())) {
-        LOG_WARN("failed to clean clog backup data", K(ret), K(pkey));
-      } else if (OB_FAIL(try_clean_table_clog_data_dir(
-                     cluster_backup_dest, tenant_id, round, pkey.get_table_id(), storage_info, storage_type))) {
-        LOG_WARN("failed to try clean clog data dir", K(ret), K(pkey));
-      } else if (OB_FAIL(partition_clog_data_clean_mgr.get_clean_statics(clean_statics))) {
-        LOG_WARN("failed to get partition clog data clean statics", K(ret));
-      } else {
-        clean_statics_ += clean_statics;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(try_clean_clog_data_dir(cluster_backup_dest, tenant_id, round, storage_info, storage_type))) {
-        LOG_WARN("failed to try clean clog data dir", K(ret), K(cluster_backup_dest));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTenantBackupClogDataCleanTask::try_clean_table_clog_data_dir(const ObClusterBackupDest &cluster_backup_dest,
     const uint64_t tenant_id, const int64_t log_archive_round, const int64_t table_id, const char *storage_info,
     const common::ObStorageType &device_type)
@@ -1772,40 +1377,6 @@ int ObTenantBackupClogDataCleanTask::try_clean_table_clog_data_dir(const ObClust
     LOG_WARN("fail to get meta file path", K(ret));
   } else if (OB_FAIL(path.join(table_id))) {
     LOG_WARN("failed to join path", K(ret), K(table_id));
-  } else if (OB_FAIL(ObBackupDataCleanUtil::delete_backup_dir(path, storage_info, device_type))) {
-    LOG_WARN("failed to delete backup dir", K(ret), K(storage_info), K(device_type));
-  }
-  return ret;
-}
-
-int ObTenantBackupClogDataCleanTask::try_clean_clog_data_dir(const ObClusterBackupDest &cluster_backup_dest,
-    const uint64_t tenant_id, const int64_t log_archive_round, const char *storage_info,
-    const common::ObStorageType &device_type)
-{
-  int ret = OB_SUCCESS;
-  ObBackupPath path;
-  // TODO(muwei)
-  const int64_t fake_piece_id = 0;
-  const int64_t fake_piece_create_date = 0;
-
-  if (!cluster_backup_dest.is_valid() || log_archive_round <= 0 || OB_ISNULL(storage_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("try clean clog data dir get invlaid argument", K(ret), K(cluster_backup_dest), KP(storage_info));
-  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_data_path(
-                 cluster_backup_dest, tenant_id, log_archive_round, fake_piece_id, fake_piece_create_date, path))) {
-    LOG_WARN("fail to get meta file path", K(ret));
-  } else if (OB_FAIL(ObBackupDataCleanUtil::delete_backup_dir(path, storage_info, device_type))) {
-    LOG_WARN("failed to delete backup dir", K(ret), K(storage_info), K(device_type));
-  } else if (FALSE_IT(path.reset())) {
-  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_index_path(
-                 cluster_backup_dest, tenant_id, log_archive_round, fake_piece_id, fake_piece_create_date, path))) {
-    LOG_WARN("fail to get meta file path", K(ret));
-  } else if (OB_FAIL(ObBackupDataCleanUtil::delete_backup_dir(path, storage_info, device_type))) {
-    LOG_WARN("failed to delete backup dir", K(ret), K(storage_info), K(device_type));
-  } else if (FALSE_IT(path.reset())) {
-  } else if (OB_FAIL(ObBackupPathUtil::get_cluster_clog_prefix_path(
-                 cluster_backup_dest, tenant_id, log_archive_round, fake_piece_id, fake_piece_create_date, path))) {
-    LOG_WARN("failed to get cluster clog prefix path", K(ret), K(cluster_backup_dest));
   } else if (OB_FAIL(ObBackupDataCleanUtil::delete_backup_dir(path, storage_info, device_type))) {
     LOG_WARN("failed to delete backup dir", K(ret), K(storage_info), K(device_type));
   }
@@ -1870,10 +1441,25 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
     if (ObLogArchiveStatus::STOP == log_archive_round.log_archive_status_) {
       if (log_archive_round.copies_num_ < backup_copies || 0 == start_replay_log_ts) {
         delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
-      } else if (start_replay_log_ts < log_archive_round.checkpoint_ts_) {
+      } else if (start_replay_log_ts < log_archive_round.checkpoint_ts_ ||
+                 start_replay_log_ts < backup_piece_info.max_ts_) {
         delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_ARCHIVE_LOG;
       } else {
-        delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+        const hash::ObHashSet<ObSimpleArchiveRound> &sys_tenant_deleted_backup_round =
+            data_clean_->get_sys_tenant_deleted_backup_round();
+        ObSimpleArchiveRound simple_archive_round;
+        simple_archive_round.copy_id_ = log_archive_round.copy_id_;
+        simple_archive_round.incarnation_ = clean_element.incarnation_;
+        simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
+        int hash_ret = sys_tenant_deleted_backup_round.exist_refactored(simple_archive_round);
+        if (OB_HASH_EXIST == hash_ret) {
+          delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+        } else if (OB_HASH_NOT_EXIST == hash_ret) {
+          delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_ARCHIVE_LOG;
+        } else {
+          ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+          LOG_WARN("failed to check archive round exist", K(ret), K(hash_ret), K(simple_archive_round));
+        }
       }
     } else if ((ObLogArchiveStatus::DOING == log_archive_round.log_archive_status_ ||
                    ObLogArchiveStatus::INTERRUPTED == log_archive_round.log_archive_status_) &&
@@ -1883,22 +1469,36 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
     } else {
       delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
     }
-  } else if (ObBackupPieceStatus::BACKUP_PIECE_FROZEN == backup_piece_info.status_) {
-    if (ObBackupFileStatus::BACKUP_FILE_DELETED == backup_piece_info.file_status_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup file status is unexpected", K(ret), K(backup_piece_info));
-    } else if (ObBackupFileStatus::BACKUP_FILE_COPYING == backup_piece_info.file_status_) {
-      delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
-    } else if (backup_piece_info.max_ts_ > start_replay_log_ts || backup_piece_info.copies_num_ < backup_copies) {
-      delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
-    } else {
-      delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
-    }
   } else {
-    delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
+    const hash::ObHashSet<ObSimplePieceKey> &sys_tenant_deleted_backup_piece =
+        data_clean_->get_sys_tenant_deleted_backup_piece();
+    ObSimplePieceKey simple_piece_key;
+    simple_piece_key.backup_piece_id_ = backup_piece_info.backup_piece_id_;
+    simple_piece_key.copy_id_ = log_archive_round.copy_id_;
+    simple_piece_key.incarnation_ = clean_element.incarnation_;
+    simple_piece_key.round_id_ = backup_piece_info.round_id_;
+    int hash_ret = sys_tenant_deleted_backup_piece.exist_refactored(simple_piece_key);
+    if (OB_HASH_EXIST == hash_ret) {
+      delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+      LOG_INFO("[BACKUP_CLEAN]backup piece will be deleted", K(simple_piece_key));
+    } else if (OB_HASH_NOT_EXIST == hash_ret) {
+      delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
+      LOG_INFO("[BACKUP_CLEAN]backup piece will not be deleted", K(simple_piece_key));
+    } else {
+      ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+      LOG_WARN("failed to check backup piece exist", K(ret), K(hash_ret), K(simple_piece_key));
+    }
   }
 
   if (OB_SUCC(ret)) {
+    FLOG_INFO("[BACKUP_CLEAN]start handle backup piece",
+        K(delete_clog_mode),
+        "backup dest option",
+        clean_element.backup_dest_option_,
+        K(start_replay_log_ts),
+        K(backup_piece_info),
+        K(log_archive_round));
+
     if ((ObBackupDeleteClogMode::DELETE_BACKUP_PIECE == delete_clog_mode.mode_ &&
             clean_element.backup_dest_option_.auto_touch_reserved_backup_) ||
         (ObBackupDeleteClogMode::NONE == delete_clog_mode.mode_ &&
@@ -1947,6 +1547,7 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_delete_task(
     const int64_t start_replay_log_ts, const ObPartitionKey &pg_key, const ObBackupDeleteClogMode &delete_clog_mode)
 {
   int ret = OB_SUCCESS;
+  UNUSED(simple_clean_tenant);
   ObPartitionClogDataCleanMgr partition_clog_data_clean_mgr;
   uint64_t data_file_id = 0;
   uint64_t index_file_id = 0;
@@ -1979,12 +1580,12 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_delete_task(
                  is_backup_backup,
                  *data_clean_))) {
     LOG_WARN("failed to init clog data clean mgr", K(ret), K(cluster_backup_dest), K(log_archive_round), K(pg_key));
-  } else if (clean_element.backup_dest_option_.auto_delete_obsolete_backup_) {
-    if (OB_FAIL(partition_clog_data_clean_mgr.clean_clog_backup_data())) {
-      LOG_WARN("failed to clean clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
+  } else if (clean_element.backup_dest_option_.auto_touch_reserved_backup_) {
+    if (OB_FAIL(partition_clog_data_clean_mgr.touch_clog_backup_data())) {
+      LOG_WARN("failed to touch clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
     }
   } else {
-    if (OB_FAIL(partition_clog_data_clean_mgr.touch_clog_backup_data())) {
+    if (OB_FAIL(partition_clog_data_clean_mgr.clean_clog_backup_data())) {
       LOG_WARN("failed to clean clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
     }
   }
@@ -1992,13 +1593,6 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_delete_task(
   if (OB_FAIL(ret)) {
   } else {
     clean_statics_ += clean_statics;
-    LOG_INFO("check and delete clog data",
-        K(pg_key),
-        K(log_archive_round),
-        K(backup_piece_info),
-        K(simple_clean_tenant),
-        K(start_replay_log_ts),
-        K(delete_clog_mode));
   }
   return ret;
 }
@@ -2051,14 +1645,6 @@ int ObTenantBackupClogDataCleanTask::get_clog_file_id(const ObClusterBackupDest 
     index_file_id = UINT64_MAX;
   }
 
-  if (OB_SUCC(ret)) {
-    LOG_INFO("succeed get clog file id",
-        K(pg_key),
-        K(data_file_id),
-        K(index_file_id),
-        K(start_replay_log_ts),
-        K(delete_clog_mode));
-  }
   return ret;
 }
 
@@ -2352,14 +1938,14 @@ int ObTenantBackupClogDataCleanTask::handle_backup_clog_piece_infos(const uint64
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN(
         "handle archive key get invalid argument", K(ret), K(tenant_id), K(backup_piece_info), K(delete_clog_mode));
+  } else if (OB_FAIL(handle_single_piece_info(tenant_id, cluster_backup_dest, backup_piece_info, delete_clog_mode))) {
+    LOG_WARN("failed to handle single piece info", K(ret), K(cluster_backup_dest));
   } else if (OB_FAIL(handle_data_and_index_dir(
                  tenant_id, cluster_backup_dest, backup_piece_info, delete_clog_mode, pg_keys))) {
     LOG_WARN("failed to handle data and index dir", K(ret), K(cluster_backup_dest), K(backup_piece_info));
   } else if (OB_FAIL(
                  handle_archive_key(tenant_id, cluster_backup_dest, backup_piece_info, delete_clog_mode, pg_keys))) {
     LOG_WARN("failed to handle archive key", K(ret), K(cluster_backup_dest), K(backup_piece_info));
-  } else if (OB_FAIL(handle_single_piece_info(tenant_id, cluster_backup_dest, backup_piece_info, delete_clog_mode))) {
-    LOG_WARN("failed to handle single piece info", K(ret), K(cluster_backup_dest));
   } else if (OB_FAIL(handle_backup_piece_dir(tenant_id, cluster_backup_dest, backup_piece_info, delete_clog_mode))) {
     LOG_WARN("failed to handle backup piece dir", K(ret), K(cluster_backup_dest));
   }
@@ -2431,7 +2017,11 @@ int ObTableBaseDataCleanMgr::do_clean()
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
   const int64_t inc_backup_set_id = extern_backup_info_.inc_backup_set_id_;
-  LOG_INFO("start table base data clean mgr", K(table_id_), K(clean_element_), K(backup_set_id_), K(inc_backup_set_id));
+  LOG_INFO("[BACKUP_CLEAN]start table base data clean mgr",
+      K(table_id_),
+      K(clean_element_),
+      K(backup_set_id_),
+      K(inc_backup_set_id));
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2452,7 +2042,7 @@ int ObTableBaseDataCleanMgr::do_clean()
       }
     }
   }
-  LOG_INFO("finish table base data clean mgr",
+  LOG_INFO("[BACKUP_CLEAN]finish table base data clean mgr",
       "cost_ts",
       ObTimeUtil::current_time() - start_ts,
       K(table_id_),
@@ -2490,13 +2080,6 @@ int ObTableBaseDataCleanMgr::clean_partition_backup_data(const ObBackupMetaIndex
     LOG_WARN("failed to get partition data clean mgr", K(ret));
   } else {
     clean_statics_ += clean_statics;
-    const int64_t cost_ts = ObTimeUtil::current_time() - start_ts;
-    LOG_INFO("table clean partition backup data statics",
-        K(clean_element_),
-        K(backup_set_id_),
-        K(meta_index),
-        K(clean_statics),
-        K(cost_ts));
   }
   return ret;
 }
@@ -2582,7 +2165,7 @@ int ObTableClogDataCleanMgr::do_clean()
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
-  LOG_INFO("start table clog data clean mgr do clean",
+  LOG_INFO("[BACKUP_CLEAN]start table clog data clean mgr do clean",
       K(table_id_),
       K(clean_element_),
       K(log_archive_round_),
@@ -2608,7 +2191,7 @@ int ObTableClogDataCleanMgr::do_clean()
     }
   }
 
-  LOG_INFO("finish table clog data clean mgr do clean",
+  LOG_INFO("[BACKUP_CLEAN]finish table clog data clean mgr do clean",
       "cost_ts",
       ObTimeUtil::current_time() - start_ts,
       K(ret),
@@ -2661,14 +2244,6 @@ int ObTableClogDataCleanMgr::clean_partition_clog_backup_data(const ObBackupMeta
                    index_file_id,
                    data_file_id))) {
       LOG_WARN("failed ot get clean max clog file id by log id", K(ret), K(last_replay_log_id));
-    } else {
-      LOG_INFO("get clean max clog file id by log id",
-          K(pg_meta.pg_key_),
-          K(last_replay_log_id),
-          K(index_file_id),
-          K(data_file_id),
-          K(log_archive_round_),
-          K(cluster_backup_dest));
     }
 
     if (OB_FAIL(ret)) {
@@ -2695,14 +2270,6 @@ int ObTableClogDataCleanMgr::clean_partition_clog_backup_data(const ObBackupMeta
       LOG_WARN("failed to get clean statics", K(ret));
     } else {
       clean_statics_ += clean_statics;
-      LOG_INFO("clean clog data statics",
-          K(log_archive_round_),
-          K(cluster_backup_dest),
-          K(pg_meta.pg_key_),
-          K(last_replay_log_id),
-          K(index_file_id),
-          K(data_file_id),
-          K(clean_statics));
     }
   }
   return ret;
@@ -2858,7 +2425,7 @@ int ObPartitionClogDataCleanMgr::touch_clog_backup_data()
         ++retry_count;
         usleep(10 * 1000);                            // 10ms
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 60s
-          LOG_INFO("backup io limit, need retry", "retry_count", retry_count, K(ret));
+          LOG_INFO("[BACKUP_CLEAN]backup io limit, need retry", "retry_count", retry_count, K(ret));
         }
       }
     }

@@ -84,7 +84,6 @@ bool ObSimpleOutlineSchema::operator==(const ObSimpleOutlineSchema& other) const
 
 void ObSimpleOutlineSchema::reset()
 {
-  ObSchema::reset();
   tenant_id_ = OB_INVALID_ID;
   outline_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
@@ -92,6 +91,7 @@ void ObSimpleOutlineSchema::reset()
   name_.reset();
   signature_.reset();
   sql_id_.reset();
+  ObSchema::reset();
 }
 
 bool ObSimpleOutlineSchema::is_valid() const

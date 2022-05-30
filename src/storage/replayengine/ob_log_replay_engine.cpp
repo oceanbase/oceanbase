@@ -949,7 +949,7 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
           }
         }
       } else {
-        //非事务日志的回放需考虑物理恢复的过滤机制
+        //replay of non-transaction log needs to consider the filtering mechanism of physical recovery
         bool need_replay = true;
         if (OB_FAIL(check_need_replay_with_physical_restore_(partition, replay_task, need_replay))) {
           REPLAY_LOG(WARN, "faild to check_need_replay_with_physical_restore_", KR(ret), "replay_task", *replay_task);
@@ -1095,7 +1095,7 @@ int ObLogReplayEngine::submit_single_replay_task_(ObReplayLogTask& replay_task, 
   const int64_t buf_len = replay_task.log_size_;
   const ObStorageLogType log_type = replay_task.log_type_;
   const uint64_t log_id = replay_task.log_id_;
-  const ObPartitionKey& pk = replay_task.pk_;
+  const ObPartitionKey pk = replay_task.pk_;
 
   int64_t pos = serialization::encoded_length_i64(int64_t(0));  // skip log type
   if (ObStorageLogTypeChecker::is_trans_log(log_type)) {
@@ -1293,7 +1293,7 @@ int ObLogReplayEngine::submit_aggre_trans_log_(
       if (OB_FAIL(push_task(replay_status, *task, task_sign))) {
         REPLAY_LOG(ERROR, "push_task failed", K(ret), "task", *task, K(i));
         if (i > 0) {
-          // only part of tasks has been pushed， which can not be retry anymore
+          // only part of tasks has been pushed, which can not be retry anymore
           is_first_task_pushed_in_aggr_log = true;
         }
       } else {

@@ -88,6 +88,8 @@ void ObLockWaitMgr::destroy()
 
 void ObLockWaitMgr::run1()
 {
+  const int interval_us = (lib::is_mini_mode() ? 10 : 1000) * 1000;
+
   (void)prctl(PR_SET_NAME, "ObLockWaitMgr", 0, 0, 0);
   while (!has_set_stop() || !is_hash_empty()) {
     ObLink* iter = check_timeout();
@@ -97,7 +99,7 @@ void ObLockWaitMgr::run1()
       (void)repost(cur);
     }
 
-    usleep(10000);
+    usleep(interval_us);
   }
 }
 
@@ -193,7 +195,7 @@ void ObLockWaitMgr::wakeup(uint64_t hash)
 
   if (NULL != node) {
     EVENT_INC(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT);
-    EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::CTimeUtil::getTime() - node->lock_ts_);
+    EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::ObSysTimeUtil::getTime() - node->lock_ts_);
     node->on_retry_lock(hash);
 
     (void)repost(node);
@@ -229,7 +231,7 @@ ObLockWaitMgr::Node* ObLockWaitMgr::fetch_waiter(uint64_t hash)
     // we do not need to wake up if the request is not running
     while (NULL != node && node->hash() <= hash) {
       if (node->hash() == hash) {
-        if (node->get_run_ts() > obsys::CTimeUtil::getTime()) {
+        if (node->get_run_ts() > obsys::ObSysTimeUtil::getTime()) {
           // wake up the first task whose execution time is not yet
           break;
         } else {
@@ -285,7 +287,7 @@ ObLink* ObLockWaitMgr::check_timeout()
         // it needs to be placed before the judgment of session_id to prevent the
         // abnormal case which session_id equals 0 from causing the problem of missing wakeup
       } else if (iter->is_standalone_task() ||
-                 (iter->get_run_ts() > 0 && obsys::CTimeUtil::getTime() > iter->get_run_ts())) {
+                 (iter->get_run_ts() > 0 && obsys::ObSysTimeUtil::getTime() > iter->get_run_ts())) {
         node2del = iter;
         need_check_session = true;
         // it is desgined to fix the case once the lock_for_write does not try
@@ -374,7 +376,7 @@ void ObLockWaitMgr::retire_node(ObLink*& tail, Node* node)
   int err = 0;
   Node* tmp_node = NULL;
   EVENT_INC(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT);
-  EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::CTimeUtil::getTime() - node->lock_ts_);
+  EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, obsys::ObSysTimeUtil::getTime() - node->lock_ts_);
   while (-EAGAIN == (err = hash_.del(node, tmp_node)))
     ;
   if (0 == err) {
@@ -392,7 +394,7 @@ void ObLockWaitMgr::delay_header_node_run_ts(const Key& key)
   if (NULL != node && !node->is_dummy()) {
     // delay the execution of the header node by 10ms to ensure that the remote
     // request can be executed successfully
-    node->update_run_ts(obsys::CTimeUtil::getTime() + 50 * 1000);
+    node->update_run_ts(obsys::ObSysTimeUtil::getTime() + 50 * 1000);
     TRANS_LOG(INFO, "LOCK_MGR: delay header node");
   }
 }
@@ -424,7 +426,7 @@ int ObLockWaitMgr::post_lock(int tmp_ret, ObRowLock& lock, const Key& key, int64
             timeout,
             key.get_table_id(),
             total_trans_node_cnt,
-            to_cstring(key),
+            GCONF.enable_record_trace_log ? to_cstring(key) : NULL,
             ctx_desc);
 
         if (lock.is_locked()) {

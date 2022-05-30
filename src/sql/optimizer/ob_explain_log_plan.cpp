@@ -70,7 +70,7 @@ int ObExplainLogPlan::generate_raw_plan()
         int64_t pos = 0;
         values->set_explain_plan(child_plan);
 
-        if (EXPLAIN_JSON == explain_stmt->get_explain_type()) {
+        if (EXPLAIN_FORMAT_JSON == explain_stmt->get_explain_type()) {
           char* pre_buf = NULL;
           if (NULL == (pre_buf = static_cast<char*>(get_allocator().alloc(ObLogValues::MAX_EXPLAIN_BUFFER_SIZE)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -108,18 +108,24 @@ int ObExplainLogPlan::generate_raw_plan()
             buf[ObLogValues::MAX_EXPLAIN_BUFFER_SIZE - 1] = '\0';
           }
         }
-        ObObj obj;
-        obj.set_varchar(ObString::make_string(buf));
-        ObNewRow row;
-        row.cells_ = &obj;
-        row.count_ = 1;
-        values->add_row(row);
-        set_phy_plan_type(OB_PHY_PLAN_LOCAL);
-        set_plan_root(values);
-        values->mark_is_plan_root();
-        // set values operator id && set max operator id for LogPlan
-        values->set_op_id(0);
-        set_max_op_id(1);
+        
+        if (OB_SUCC(ret)) {
+          ObObj obj;
+          obj.set_varchar(ObString::make_string(buf));
+          ObNewRow row;
+          row.cells_ = &obj;
+          row.count_ = 1;
+          if (OB_FAIL(values->add_row(row))) {
+            LOG_WARN("failed to add row", K(ret));
+          } else {
+            set_phy_plan_type(OB_PHY_PLAN_LOCAL);
+            set_plan_root(values);
+            values->mark_is_plan_root();
+            // set values operator id && set max operator id for LogPlan
+            values->set_op_id(0);
+            set_max_op_id(1);
+          }
+        }
         if (NULL != buf) {
           get_allocator().free(buf);
           buf = NULL;

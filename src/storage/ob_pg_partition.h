@@ -116,7 +116,7 @@ public:
   // During the indexing process, after the new version of the schema version is refreshed,
   //  a clog needs to be persisted
   int update_build_index_schema_info(
-      const int64_t schema_version, const int64_t schema_refreshed_ts, const uint64_t log_id, const int64_t log_ts);
+      const int64_t schema_version, const uint64_t log_id, const int64_t log_ts, int64_t &schema_refreshed_ts);
   int get_refreshed_schema_info(
       int64_t& schema_version, int64_t& refreshed_schema_ts, uint64_t& log_id, int64_t& log_ts);
   TO_STRING_KV(K_(pkey), KP_(cp_fty), KP_(storage));
@@ -143,6 +143,7 @@ private:
   int64_t gc_start_ts_;
 
   // build index schema version
+  common::ObSpinLock lock_;
   int64_t build_index_schema_version_;
   int64_t build_index_schema_version_refreshed_ts_;
   uint64_t schema_version_change_log_id_;

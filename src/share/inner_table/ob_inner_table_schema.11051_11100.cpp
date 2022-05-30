@@ -6454,6 +6454,21 @@ int ObInnerTableSchema::all_virtual_server_clog_stat_schema(ObTableSchema &table
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("svr_min_log_timestamp", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);
     if (OB_FAIL(table_schema.get_part_option().set_part_expr("hash (addr_to_partition_id(svr_ip, svr_port))"))) {
@@ -9270,9 +9285,9 @@ int ObInnerTableSchema::tenant_virtual_show_create_tablegroup_schema(ObTableSche
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      TABLEGROUP_DEFINE_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

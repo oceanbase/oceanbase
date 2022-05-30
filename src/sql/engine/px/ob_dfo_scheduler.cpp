@@ -980,6 +980,17 @@ int ObParallelDfoScheduler::dispatch_sqc(
     } else {
       LOG_WARN("fail to wait all async init sqc", K(ret), K(dfo), K(exec_ctx));
     }
+    // 对于正确process的sqc, 是需要sqc report的, 否则在后续的wait_running_dfo逻辑中不会等待此sqc结束
+    const ObSqcAsyncCB *cb = NULL;
+    const ObArray<ObSqcAsyncCB *> &callbacks = proxy.get_callbacks();
+    for (int i = 0; i < callbacks.count(); ++i) {
+      cb = callbacks.at(i);
+      if (OB_NOT_NULL(cb) && cb->is_processed() && OB_SUCCESS == cb->get_ret_code().rcode_ &&
+          OB_SUCCESS == cb->get_result().rc_) {
+        ObPxSqcMeta &sqc = *sqcs.at(i);
+        sqc.set_need_report(true);
+      }
+    }
   } else {
     const ObArray<ObSqcAsyncCB*>& callbacks = proxy.get_callbacks();
     ARRAY_FOREACH(callbacks, idx) {

@@ -1,7 +1,14 @@
-// Copyright (c) 2021 OceanBase Inc. All Rights Reserved.
-//
-// Author:
-//    yangyi.yyy <yangyi.yyy@antgroup.com>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX RS
 
@@ -38,13 +45,15 @@ int ObCancelBackupBackupScheduler::init(const uint64_t tenant_id, common::ObMySQ
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cancel backup backup scheduler init twice", K(ret), K(is_inited_));
-  } else if (OB_INVALID_ID == tenant_id || OB_ISNULL(backup_backupset) || OB_ISNULL(backup_backuppiece)) {
+  } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cancel backup backup scheduler get invalid argument",
-        K(ret),
-        K(tenant_id),
-        KP(backup_backupset),
-        KP(backup_backuppiece));
+    LOG_WARN("cancel backup backup scheduler get invalid tenant_id", K(ret));
+  } else if (cancel_type == CANCEL_BACKUP_BACKUPSET && OB_ISNULL(backup_backupset)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cancel backup backup scheduler get invalid argument, backup_backupset is empty", K(ret), K(tenant_id));
+  } else if (cancel_type == CANCEL_BACKUP_BACKUPPIECE && OB_ISNULL(backup_backuppiece)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cancel backup backup scheduler get invalid argument, backup_backuppiece is empty", K(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;

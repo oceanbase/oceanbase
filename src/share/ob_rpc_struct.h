@@ -526,7 +526,8 @@ public:
         if_not_exist_(false),
         sys_var_list_(),
         name_case_mode_(common::OB_NAME_CASE_INVALID),
-        is_restore_(false)
+        is_restore_(false),
+        restore_frozen_status_()
   {}
   virtual ~ObCreateTenantArg(){};
   bool is_valid() const;
@@ -544,6 +545,7 @@ public:
                                                         // is_restore = REPLICA_RESTORE_DATA
   common::ObSArray<ObPartitionKey> restore_log_pkeys_;  // For physical restore, partitions that should be created with
                                                         // is_restore = REPLICA_RESTORE_ARCHIVE_DATA
+  share::ObSimpleFrozenStatus restore_frozen_status_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg {
@@ -1800,7 +1802,11 @@ public:
         if_not_exist_(false),
         with_rowid_(false),
         index_schema_(),
-        is_inner_(false)
+        is_inner_(false),
+        nls_date_format_(),
+        nls_timestamp_format_(),
+        nls_timestamp_tz_format_(),
+        sql_mode_(0)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -1824,6 +1830,10 @@ public:
     with_rowid_ = false;
     index_schema_.reset();
     is_inner_ = false;
+    nls_date_format_.reset();
+    nls_timestamp_format_.reset();
+    nls_timestamp_tz_format_.reset();
+    sql_mode_ = 0;
   }
   bool is_valid() const;
   int assign(const ObCreateIndexArg& other)
@@ -1851,6 +1861,10 @@ public:
       if_not_exist_ = other.if_not_exist_;
       with_rowid_ = other.with_rowid_;
       is_inner_ = other.is_inner_;
+      nls_date_format_ = other.nls_date_format_;
+      nls_timestamp_format_ = other.nls_timestamp_format_;
+      nls_timestamp_tz_format_ = other.nls_timestamp_tz_format_;
+      sql_mode_ = other.sql_mode_;
     }
     return ret;
   }
@@ -1877,6 +1891,11 @@ public:
   bool with_rowid_;
   share::schema::ObTableSchema index_schema_;  // Index table schema
   bool is_inner_;
+  // Nls_xx_format is required when creating a functional index
+  common::ObString nls_date_format_;
+  common::ObString nls_timestamp_format_;
+  common::ObString nls_timestamp_tz_format_;
+  ObSQLMode sql_mode_;
 };
 
 struct ObCreateForeignKeyArg : public ObIndexArg {
@@ -2002,22 +2021,6 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(origin_db_name), K_(origin_table_name), K_(new_db_name), K_(new_table_name),
       K_(origin_table_id));
-};
-
-struct ObFlashBackTableToScnArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObFlashBackTableToScnArg() : tenant_id_(common::OB_INVALID_ID), time_point_(-1), tables_(), query_end_time_(-1)
-  {}
-  bool is_valid() const;
-
-  uint64_t tenant_id_;
-  int64_t time_point_;
-  common::ObSArray<ObTableItem> tables_;
-  int64_t query_end_time_;
-
-  TO_STRING_KV(K_(tenant_id), K_(time_point), K_(tables), K_(query_end_time));
 };
 
 struct ObFlashBackIndexArg : public ObDDLArg {
@@ -3494,12 +3497,12 @@ struct ObServerCopyLocalIndexSSTableArg {
 
 public:
   ObServerCopyLocalIndexSSTableArg()
-      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID)
+      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID), data_size_(0)
   {}
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
+  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id), K_(data_size));
 
 public:
   common::ObAddr data_src_;
@@ -3507,6 +3510,7 @@ public:
   common::ObPartitionKey pkey_;
   uint64_t index_table_id_;
   int64_t cluster_id_;
+  int64_t data_size_;
 };
 
 struct ObBackupBatchArg {
@@ -4104,8 +4108,8 @@ public:
   common::ObString db_;
   common::ObString table_;
   ObPrivSet priv_set_;
-  common::ObSArray<common::ObString> users_passwd_;  // user_name1, pwd1; user_name2, pwd2
-  common::ObSArray<common::ObString> hosts_;         // hostname1, hostname2, ..
+  common::ObSArray<common::ObString> users_passwd_;  
+  common::ObSArray<common::ObString> hosts_;        
   bool need_create_user_;
   bool has_create_user_priv_;
   common::ObSArray<common::ObString> roles_;
@@ -4519,7 +4523,7 @@ public:
   common::ObString backup_tenant_name_;
   common::ObString passwd_array_;  // Password verification
   common::ObSArray<ObTableItem> table_items_;
-  common::ObString multi_uri_;  // 备份拆分用
+  common::ObString multi_uri_;  
 };
 
 struct ObRestoreTenantArg : public ObCmdArg {
@@ -4727,22 +4731,25 @@ struct ObAdminFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObAdminFlushCacheArg() : cache_type_(CACHE_TYPE_INVALID)
-  {}
-  virtual ~ObAdminFlushCacheArg()
-  {}
+  ObAdminFlushCacheArg() :
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false)
+  {
+  }
+  virtual ~ObAdminFlushCacheArg() {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  int push_tenant(uint64_t tenant_id)
-  {
-    return tenant_ids_.push_back(tenant_id);
-  }
-  TO_STRING_KV(K_(tenant_ids), K_(cache_type));
+  int push_tenant(uint64_t tenant_id) { return tenant_ids_.push_back(tenant_id); }
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K_(tenant_ids), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   common::ObSEArray<uint64_t, 8> tenant_ids_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObAdminMigrateUnitArg {
@@ -5463,19 +5470,26 @@ struct ObFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObFlushCacheArg() : is_all_tenant_(false), tenant_id_(common::OB_INVALID_TENANT_ID), cache_type_(CACHE_TYPE_INVALID)
-  {}
+   ObFlushCacheArg() :
+    is_all_tenant_(false),
+    tenant_id_(common::OB_INVALID_TENANT_ID),
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false){};
   virtual ~ObFlushCacheArg()
   {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type));
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   bool is_all_tenant_;
   uint64_t tenant_id_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObGetAllSchemaArg {
@@ -7645,6 +7659,7 @@ public:
     DELETE_OBSOLETE_BACKUP_BACKUP = 12,
     CANCEL_BACKUP_BACKUPPIECE = 13,
     DELETE_BACKUPROUND = 14,
+    CANCEL_ALL_BACKUP_FORCE = 15,
     MAX_TYPE
   };
   ObBackupManageArg() : tenant_id_(OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0), copy_id_(0)
@@ -7944,27 +7959,35 @@ struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
+  enum Action {
+    INVALID = 0,
+    UPDATE_SYS_ALL_INNER_TABLE,
+    UPDATE_SYS_INNER_TABLE,
+    UPDATE_SYS_TABLE_IN_TENANT_SPACE,
+  };
   ObUpdateTableSchemaVersionArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
-        table_id_(common::OB_INVALID_ID),
-        schema_version_(share::OB_INVALID_SCHEMA_VERSION)
+        table_id_(OB_INVALID_ID),
+        schema_version_(share::OB_INVALID_SCHEMA_VERSION),
+        action_(Action::INVALID)
   {}
   ~ObUpdateTableSchemaVersionArg()
   {
     reset();
   }
   bool is_valid() const;
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
+  virtual bool is_allow_when_upgrade() const;
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(schema_version));
   void reset();
+  void init(const int64_t tenant_id, const int64_t table_id, const int64_t schema_version, const bool is_replay_schema,
+      const Action action);
+  int assign(const ObUpdateTableSchemaVersionArg &other);
 
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t schema_version_;
+  Action action_;
 };
 
 struct ObRestoreModifySchemaArg : public ObDDLArg {
@@ -8308,6 +8331,69 @@ private:
 
 public:
   int ret_;
+};
+
+struct ObSubmitBuildIndexTaskArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSubmitBuildIndexTaskArg() : ObDDLArg(), index_tid_(0)
+  {}
+  ~ObSubmitBuildIndexTaskArg()
+  {}
+  bool is_valid() const
+  {
+    return index_tid_ > 0;
+  }
+  virtual int assign(const ObSubmitBuildIndexTaskArg &other);
+  TO_STRING_KV(K_(index_tid));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSubmitBuildIndexTaskArg);
+
+public:
+  uint64_t index_tid_;
+};
+
+struct ObFetchSstableSizeArg final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeArg() : pkey_(), index_id_(-1)
+  {}
+  ~ObFetchSstableSizeArg()
+  {}
+  bool is_valid() const
+  {
+    return pkey_.is_valid() && index_id_ > 0;
+  }
+  int assign(const ObFetchSstableSizeArg &other);
+  TO_STRING_KV(K_(pkey), K_(index_id));
+
+public:
+  common::ObPartitionKey pkey_;
+  int64_t index_id_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeArg);
+};
+
+struct ObFetchSstableSizeRes final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeRes() : size_(0)
+  {}
+  ~ObFetchSstableSizeRes()
+  {}
+  int assign(const ObFetchSstableSizeRes &other);
+  TO_STRING_KV(K_(size));
+
+public:
+  int64_t size_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeRes);
 };
 
 }  // end namespace obrpc

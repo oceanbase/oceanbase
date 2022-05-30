@@ -67,7 +67,7 @@ public:
     volatile int64_t version_;
     volatile int64_t scheduled_time_;
     bool update_local_;
-    tbutil::Mutex task_lock_;
+    obutil::Mutex task_lock_;
     bool is_running_;
   };
   friend class TenantConfigUpdateTask;
@@ -127,7 +127,7 @@ private:
   int64_t current_version_;  // currently processed task version
   int64_t newest_version_;
   volatile int64_t running_task_count_;
-  tbutil::Mutex mutex_;
+  obutil::Mutex mutex_;
   TenantConfigUpdateTask update_task_;
   common::ObSystemConfig system_config_;
   ObTenantConfigMgr* config_mgr_;

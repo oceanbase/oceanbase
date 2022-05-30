@@ -354,7 +354,7 @@ int ObTenantTimezoneMgr::delete_tenant_timezone()
       bool locked = false;
       // waiting for running task with lock finished
       for (int64_t j = 0; j < try_times; ++j) {
-        if (task.task_lock_.tryLock()) {
+        if (task.task_lock_.trylock()) {
           locked = true;
           break;
         }

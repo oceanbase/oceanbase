@@ -63,7 +63,7 @@ public:
   int handle_message(const ObTransMsg& msg);
   bool is_inited() const;
   int handle_timeout(const int64_t delay);
-  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly, const MonotonicTs commit_time,
+  int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, const bool is_readonly, const MonotonicTs commit_time,
       const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
       const common::ObString& app_trace_info, bool& need_convert_to_dist_trans)
   {

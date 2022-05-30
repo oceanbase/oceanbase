@@ -904,6 +904,9 @@ int ObTransService::local_xa_prepare(const ObXATransID& xid, const int64_t stmt_
     if (!trans_desc->is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "invalid trans dessc", K(ret), K(xid), K(trans_desc));
+    } else if (trans_desc->need_rollback()) {
+      ret = OB_TRANS_NEED_ROLLBACK;
+      TRANS_LOG(WARN, "transaction need rollback", K(ret), K(xid), K(trans_desc));
     } else if (OB_FAIL(trans_desc->set_sche_ctx(sche_ctx))) {
       TRANS_LOG(WARN, "set trans_desc failed", K(ret), K(xid), K(trans_desc));
       // TODO, refer to the remote xa prepare to handle the case that ctx does not exist
@@ -1948,17 +1951,22 @@ int ObTransService::clear_branch_for_xa_terminate_(
   int ret = OB_SUCCESS;
   const int64_t tenant_id = trans_desc.get_tenant_id();
   const ObXATransID xid = trans_desc.get_xid();
-  trans_desc.set_sche_ctx(NULL);
-  trans_desc.set_trans_end();
-  if (need_delete_xa_record && OB_FAIL(delete_xa_all_tightly_branch(tenant_id, xid))) {
-    TRANS_LOG(WARN, "delete all tightly branch from inner table failed", K(ret), K(trans_desc));
+  if (OB_ISNULL(sche_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected, sche_ctx is null", K(ret), K(trans_desc));
+  } else {
+    trans_desc.set_sche_ctx(NULL);
+    trans_desc.set_trans_end();
+    if (need_delete_xa_record && OB_FAIL(delete_xa_all_tightly_branch(tenant_id, xid))) {
+      TRANS_LOG(WARN, "delete all tightly branch from inner table failed", K(ret), K(trans_desc));
+    }
+    if (0 == sche_ctx->dec_and_get_xa_ref_count()) {
+      // this may be repeated exit
+      TRANS_LOG(INFO, "sche ctx going to exit", K(xid));
+      sche_ctx->set_exiting();
+    }
+    (void)sche_trans_ctx_mgr_.revert_trans_ctx(sche_ctx);
   }
-  if (0 == sche_ctx->dec_and_get_xa_ref_count()) {
-    // this may be repeated exit
-    TRANS_LOG(INFO, "sche ctx going to exit", K(xid));
-    sche_ctx->set_exiting();
-  }
-  (void)sche_trans_ctx_mgr_.revert_trans_ctx(sche_ctx);
   TRANS_LOG(INFO, "clear branch for xa trans when terminate", K(xid), K(trans_desc));
   return ret;
 }
@@ -2439,7 +2447,6 @@ int ObTransService::insert_xa_lock(
   char trans_id_buf[512];
   trans_id.to_string(trans_id_buf, 512);
   char scheduler_ip_buf[128];
-  self_.ip_to_string(scheduler_ip_buf, 128);
   char gtrid_str[128];
   int64_t gtrid_len = 0;
   char bqual_str[128];
@@ -2450,6 +2457,9 @@ int ObTransService::insert_xa_lock(
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(xid), K(trans_id));
+  } else if (!self_.ip_to_string(scheduler_ip_buf, 128)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get string of self address", K(ret), K_(self));
   } else if (OB_FAIL(hex_print(xid.get_gtrid_str().ptr(), xid.get_gtrid_str().length(), gtrid_str, 128, gtrid_len))) {
     TRANS_LOG(WARN, "fail to convert gtrid to hex", K(ret), K(tenant_id), K(xid));
   } else if (OB_FAIL(sql.assign_fmt(INSERT_XA_LOCK_SQL,
@@ -2503,7 +2513,6 @@ int ObTransService::insert_xa_record(const uint64_t tenant_id, const ObXATransID
   char trans_id_buf[512];
   trans_id.to_string(trans_id_buf, 512);
   char scheduler_ip_buf[128];
-  sche_addr.ip_to_string(scheduler_ip_buf, 128);
   char gtrid_str[128];
   int64_t gtrid_len = 0;
   char bqual_str[128];
@@ -2514,6 +2523,9 @@ int ObTransService::insert_xa_record(const uint64_t tenant_id, const ObXATransID
   if (!is_valid_tenant_id(tenant_id) || xid.empty() || !trans_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(xid), K(trans_id));
+  } else if (!self_.ip_to_string(scheduler_ip_buf, 128)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get string of self address", K(ret), K_(self));
   } else if (OB_FAIL(hex_print(xid.get_gtrid_str().ptr(), xid.get_gtrid_str().length(), gtrid_str, 128, gtrid_len))) {
     TRANS_LOG(WARN, "fail to convert gtrid to hex", K(ret), K(tenant_id), K(xid));
   } else if (OB_FAIL(hex_print(xid.get_bqual_str().ptr(), xid.get_bqual_str().length(), bqual_str, 128, bqual_len))) {

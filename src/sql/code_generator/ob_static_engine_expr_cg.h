@@ -63,7 +63,8 @@ public:
 
   static int generate_rt_expr(const ObRawExpr& src, common::ObIArray<ObRawExpr*>& exprs, ObExpr*& dst);
 
-  static int replace_var_rt_expr(ObExpr* origin_expr, ObExpr* var_expr, ObExpr* parent_expr, int32_t var_idx);
+  static int replace_var_rt_expr(ObExpr* origin_expr, ObExpr* var_expr,
+      ObExpr* parent_expr, int32_t var_idx);
 
   // Attention : Please think over before you have to use this function.
   // This function is different from generate_rt_expr.

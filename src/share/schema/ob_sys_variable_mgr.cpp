@@ -56,11 +56,11 @@ ObSimpleSysVariableSchema::~ObSimpleSysVariableSchema()
 
 void ObSimpleSysVariableSchema::reset()
 {
-  ObSchema::reset();
   tenant_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   name_case_mode_ = OB_NAME_CASE_INVALID;
   read_only_ = false;
+  ObSchema::reset();
 }
 
 bool ObSimpleSysVariableSchema::is_valid() const

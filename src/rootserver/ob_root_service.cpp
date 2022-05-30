@@ -4223,7 +4223,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
     } else if (OB_INVALID_ID == table_schema.get_database_id()) {
       ObString database_name = arg.db_name_;
       if (OB_FAIL(schema_guard.get_database_schema(table_schema.get_tenant_id(), database_name, db_schema))) {
-        LOG_WARN("get databas schema failed", K(arg));
+        LOG_WARN("get database schema failed", K(arg));
       } else if (OB_ISNULL(db_schema)) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_USER_ERROR(OB_ERR_BAD_DATABASE, database_name.length(), database_name.ptr());
@@ -4936,7 +4936,59 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObA
   return ret;
 }
 
-int ObRootService::flashback_index(const ObFlashBackIndexArg& arg)
+int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
+  const int64_t alloc_size = sizeof(ObTableSchema);
+  char *buf = nullptr;
+  ObTableSchema *deep_copy_index_schema = nullptr;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to allocate memory for deep copy schema", K(ret), K(alloc_size));
+  } else {
+    const uint64_t index_tid = arg.index_tid_;
+    const ObTableSchema *index_schema = nullptr;
+    deep_copy_index_schema = new (buf) ObTableSchema(&allocator);
+    ObSchemaGetterGuard schema_guard;
+    int64_t latest_schema_version = 0;
+    // In DDL task, the schema version should be the latest, otherwise the schema can be already recycled
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_refreshed_schema_version(
+            extract_tenant_id(index_tid), latest_schema_version))) {
+      LOG_WARN("fail to get latest schema version", K(ret), K(arg));
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+                   extract_tenant_id(index_tid), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(index_tid));
+    } else if (OB_FAIL(schema_guard.get_table_schema(index_tid, index_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(index_tid));
+    } else if (OB_ISNULL(index_schema)) {
+      LOG_INFO("index schema is deleted, skip it");
+    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
+      LOG_INFO("index build is already completed, skip it", K(ret), K(index_tid));
+    } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
+      LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
+    } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
+    } else if (deep_copy_index_schema->is_global_index_table() &&
+               OB_FAIL(global_index_builder_.submit_build_global_index_task(deep_copy_index_schema))) {
+      LOG_WARN("fail to submit build global index task", K(ret), K(*deep_copy_index_schema));
+    } else if (deep_copy_index_schema->is_index_local_storage()) {
+      ObIndexBuilder index_builder(ddl_service_);
+      if (OB_FAIL(index_builder.submit_build_local_index_task(*deep_copy_index_schema))) {
+        LOG_WARN("fail to submit build local index task", K(ret), K(*deep_copy_index_schema));
+      }
+    }
+  }
+  if (deep_copy_index_schema != nullptr) {
+    deep_copy_index_schema->~ObTableSchema();
+    allocator.free(deep_copy_index_schema);
+  }
+  return ret;
+}
+
+int ObRootService::flashback_index(const ObFlashBackIndexArg &arg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -5061,14 +5113,6 @@ int ObRootService::flashback_table_from_recyclebin(const ObFlashBackTableFromRec
   } else if (OB_FAIL(ddl_service_.flashback_table_from_recyclebin(arg))) {
     LOG_WARN("failed to flash back table", K(ret));
   }
-  return ret;
-}
-
-int ObRootService::flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(arg);
-  LOG_INFO("receive flashback table arg", K(arg));
   return ret;
 }
 
@@ -6510,7 +6554,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg& arg)
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
       // if not specify database, set default database name and database id;
-      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
+      outline_info.set_database_id(combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -7731,7 +7775,7 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
           dest_replica.member_ =
               ObReplicaMember(r->server_, ObTimeUtility::current_time(), r->replica_type_, r->get_memstore_percent());
           dest_replica.unit_id_ = r->unit_id_;
-          data_size = r->data_size_;
+          data_size = arg.data_size_ != 0 ? arg.data_size_ : r->data_size_;
         } else if (r->server_ != data_src) {
           // by pass
         } else if (OB_FAIL(server_manager_.check_server_alive(r->server_, alive))) {
@@ -7779,7 +7823,10 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
       } else if (OB_FAIL(rebalance_task_mgr_.add_task(task))) {
         LOG_WARN("fail to add task", K(ret), K(task));
       } else {
-        LOG_INFO("add copy local index sstable task", K(ret));
+        ROOTSERVICE_EVENT_ADD("balancer", "add_copy_sstable_task",
+                              "partition", ReplicaInfo(pkey, data_size),
+                              "source", src_member,
+                              "destination", dest_replica);
       }
     }
   }
@@ -8488,7 +8535,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int ret = OB_SUCCESS;
   int64_t gc_snapshot_ts = OB_INVALID_TIMESTAMP;
   int64_t current_timestamp = ObTimeUtility::current_time();
-  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;  // 防止恢复到未来的某个时间
+  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;
   int64_t job_id = OB_INVALID_ID;
   ObSchemaGetterGuard schema_guard;
   if (!inited_) {
@@ -9763,6 +9810,49 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
   return ret;
 }
 
+	
+int ObRootService::wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestOpt new_opt;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (NULL == item) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("item is null", K(ret)); 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(false/* is_backup_backup */))) {
+      LOG_WARN("failed init backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(true/* is_backup_backup */))) {
+      LOG_WARN("failed init backup backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_AUTO_DELETE_EXPIRED_BACKUP)) {
+    ObString value(item->value_.ptr());
+    ObString false_str("FALSE");
+    if (0 != value.case_compare(false_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("auto_delete_expired_backup parameters updated, wakeup backup_auto_delete", KPC(item));
+    } 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_RECORVERTY_WINDOW)) {
+    ObString value(item->value_.ptr());
+    ObString zero_str("0");
+    if (0 != value.case_compare(zero_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_recovery_window parameters updated, wakeup backup_auto_delete", KPC(item));
+    }  
+  }
+  return ret;
+}
+
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -9809,9 +9899,11 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
         LOG_WARN("fail to submit update rs list task", KR(ret), K(tmp_ret));
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret), KPC(item));
-    } else if (0 == STRCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
+    } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
-      LOG_INFO("_schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+      LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+    } else if (OB_FAIL(wakeup_auto_delete(item))) {
+      LOG_WARN("failed to wakeup auto delete", K(ret), KPC(item));
     }
   }
   return ret;
@@ -11108,6 +11200,12 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
         }
         break;
       };
+      case ObBackupManageArg::CANCEL_ALL_BACKUP_FORCE: {
+        if (OB_FAIL(handle_cancel_all_backup_force(arg))) {
+          LOG_WARN("failed to handle cancel all backup force", K(ret), K(arg));
+        }
+        break;
+      };
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid backup manage arg", K(ret), K(arg));
@@ -11180,6 +11278,11 @@ int ObRootService::update_table_schema_version(const ObUpdateTableSchemaVersionA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (ObUpdateTableSchemaVersionArg::UPDATE_SYS_TABLE_IN_TENANT_SPACE == arg.action_) {
+    // update sys tables in tenant space for physical restore
+    if (OB_FAIL(ddl_service_.update_sys_table_schema_version_in_tenant_space())) {
+      LOG_WARN("fail to update sys table schema version in tenant space", KR(ret));
+    }
   } else if (OB_SYS_TENANT_ID == arg.tenant_id_ && 0 == arg.table_id_ &&
              OB_INVALID_SCHEMA_VERSION == arg.schema_version_) {
     if (OB_FAIL(update_all_sys_tenant_schema_version())) {
@@ -11430,6 +11533,50 @@ int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg& a
   } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
     LOG_WARN("failed to start schedule cancel backup backup", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg)
+{
+  int ret = OB_SUCCESS;
+
+  FLOG_WARN("start cancel all backup force");
+  // clear backup_dest and backup_backup_dest in GCONF
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  if (OB_FAIL(sql.assign_fmt("alter system set backup_dest=''"))) {
+    LOG_WARN("failed to clear backup dest", K(ret));
+  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to clear backup dest", K(ret), K(sql));
+  } else {
+    LOG_WARN("succeed to clear backup dest");
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_dest", "result", ret, K_(self_addr));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt("alter system set backup_backup_dest=''"))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret));
+    } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret), K(sql));
+    } else {
+      LOG_WARN("succeed to clear backup backup dest");
+    }
+
+    ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_backup_dest", "result", ret, K_(self_addr));
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "force_cancel_backup", "result", ret, K_(self_addr));
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait refresh schema", K(ret), K(arg));
+  } else if (OB_FAIL(backup_lease_service_.force_cancel(arg.tenant_id_))) {
+    LOG_WARN("failed to force stop", K(ret), K(arg));
+  }
+
+  FLOG_WARN("end cancel all backup force", K(ret));
+
   return ret;
 }
 
@@ -11699,10 +11846,13 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
   // always passed
   int64_t expire_timeval = GCONF.recyclebin_object_expire_time;
   ObSEArray<uint64_t, 16> tenant_ids;
+  ObSchemaGetterGuard guard;
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_serviece_ is null", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get sys schema guard", KR(ret));
+  } else if (OB_FAIL(guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("get all tenants failed", KR(ret));
   } else {
     const int64_t current_time = ObTimeUtility::current_time();
@@ -11712,19 +11862,36 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
     obrpc::Int64 affected_rows = 0;
     obrpc::ObPurgeRecycleBinArg arg;
     int64_t purge_sum = purge_each_time;
+    const bool is_standby = PRIMARY_CLUSTER != ObClusterInfoGetter::get_cluster_type_v2();
+    const ObSimpleTenantSchema *simple_tenant = NULL;
     // ignore ret
     for (int i = 0; i < tenant_ids.count() && in_service() && purge_sum > 0; ++i) {
       int64_t purge_time = GCONF._recyclebin_object_purge_frequency;
+      const uint64_t tenant_id = tenant_ids.at(i);
       if (purge_time <= 0) {
         break;
+      }
+      if (OB_SYS_TENANT_ID != tenant_id && is_standby) {
+        // standby cluster won't purge recyclebin automacially.
+        LOG_TRACE("user tenant won't purge recyclebin automacially in standby cluster", K(tenant_id));
+        continue;
+      } else if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
+        LOG_WARN("fail to get simple tenant schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(simple_tenant)) {
+        ret = OB_TENANT_NOT_EXIST;
+        LOG_WARN("simple tenant schema not exist", KR(ret), K(tenant_id));
+      } else if (!simple_tenant->is_normal()) {
+        // only deal with normal tenant.
+        LOG_TRACE("tenant which isn't normal won't purge recyclebin automacially", K(tenant_id));
+        continue;
       }
       // ignore error code of different tenant
       ret = OB_SUCCESS;
       affected_rows = 0;
-      arg.tenant_id_ = tenant_ids.at(i);
+      arg.tenant_id_ = tenant_id;
       arg.expire_time_ = expire_time;
       arg.auto_purge_ = true;
-      arg.exec_tenant_id_ = tenant_ids.at(i);
+      arg.exec_tenant_id_ = tenant_id;
       LOG_INFO("start purge recycle objects of tenant", K(arg), K(purge_sum));
       while (OB_SUCC(ret) && in_service() && purge_sum > 0) {
         int64_t start_time = ObTimeUtility::current_time();

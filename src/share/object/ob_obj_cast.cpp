@@ -20,6 +20,10 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "share/ob_worker.h"
 #include "share/object/ob_obj_cast_util.h"
+#include "lib/json_type/ob_json_tree.h"
+#include "lib/json_type/ob_json_bin.h"
+#include "lib/json_type/ob_json_base.h"
+#include "lib/json_type/ob_json_parse.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -534,8 +538,12 @@ int ObHexUtils::unhex(const ObString& text, ObCastCtx& cast_ctx, ObObj& result)
     while (OB_SUCC(ret) && i < text.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = text[++i];
-        c2 = text[++i];
+        if (i + 2 < text.length()) {
+          c1 = text[++i];
+          c2 = text[++i];
+        } else {
+          break;
+        }
       } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(text));
@@ -678,7 +686,8 @@ int ObHexUtils::rawtohex(const ObObj& text, ObCastCtx& cast_ctx, ObObj& result)
       case ObVarcharType:
       case ObCharType:
       case ObLongTextType:
-      case ObRawType: {
+      case ObRawType: 
+      case ObJsonType: {
         // https://www.techonthenet.com/oracle/functions/rawtohex.php
         // NOTE:: when convert string to raw, Oracle use utl_raw.cast_to_raw(), while PL/SQL use hextoraw()
         //       here we use utl_raw.cast_to_raw(), as we can not distinguish in which SQL
@@ -1192,6 +1201,41 @@ static int string_lob(
 
 CAST_TO_LOB_METHOD(int, ObIntTC);
 
+static int int_json(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObIntTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObJsonInt j_int(in.get_int());
+    bool bool_val = (in.get_int() == 1) ? true : false;
+    ObJsonBoolean j_bool(bool_val);
+    ObIJsonBase *j_base = &j_int;
+    if (CM_HAS_BOOLEAN_FLAG(cast_mode)) {
+      j_base = &j_bool;
+    }
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // UInt -> XXX
 
@@ -1462,6 +1506,36 @@ static int uint_set(const ObExpectType& expect_type, ObObjCastParams& params, co
 
 CAST_TO_LOB_METHOD(uint, ObUIntTC);
 
+static int uint_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObUIntTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObJsonUint j_uint(in.get_uint64());
+    ObIJsonBase *j_base = &j_uint;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get uint json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // Float -> XXX
 
@@ -1603,6 +1677,12 @@ static int float_number(
   if (OB_UNLIKELY(ObFloatTC != in.get_type_class() || ObNumberTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (std::isnan(value)) {
+    ret = OB_INVALID_NUMERIC;
+    LOG_WARN("float_number failed ", K(ret), K(value));
+  } else if (std::isinf(value)) {
+    ret = OB_NUMERIC_OVERFLOW;
+    LOG_WARN("float_number failed", K(ret), K(value));
   } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
@@ -1784,6 +1864,36 @@ static int float_set(const ObExpectType& expect_type, ObObjCastParams& params, c
 
 CAST_TO_LOB_METHOD(float, ObFloatTC);
 
+static int float_json(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObFloatTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObJsonDouble j_double(in.get_float());
+    ObIJsonBase *j_base = &j_double;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get float json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 // Double -> XXX
 
@@ -1902,6 +2012,12 @@ static int double_number(
   if (OB_UNLIKELY(ObDoubleTC != in.get_type_class() || ObNumberTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (std::isnan(value) && lib::is_oracle_mode()) {
+    ret = OB_INVALID_NUMERIC;
+    LOG_WARN("float_number failed ", K(ret), K(value));
+  } else if (std::isinf(value) && lib::is_oracle_mode()) {
+    ret = OB_NUMERIC_OVERFLOW;
+    LOG_WARN("float_number failed", K(ret), K(value));
   } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
@@ -2013,6 +2129,29 @@ static int double_time(
   return ret;
 }
 
+static int double_year(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDoubleTC != in.get_type_class()
+                  || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    uint8_t value = 0;
+    double in_val = in.get_double();
+    in_val = in_val < 0 ? INT_MIN : in_val + 0.5;
+    uint64_t intvalue = static_cast<uint64_t>(in_val);
+    if (CAST_FAIL(ObTimeConverter::int_to_year(intvalue, value))) {
+    } else {
+      SET_RES_YEAR(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
 static int double_string(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
@@ -2102,6 +2241,36 @@ static int double_set(const ObExpectType& expect_type, ObObjCastParams& params, 
 }
 
 CAST_TO_LOB_METHOD(double, ObDoubleTC);
+
+static int double_json(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObDoubleTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    ObJsonDouble j_double(in.get_double());
+    ObIJsonBase *j_base = &j_double;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get double json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////////
 // Number -> XXX
@@ -2382,6 +2551,10 @@ static int number_year(
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pointer", K(ret), K(value));
+    } else if (in.get_number().is_negative()) {
+      uint8_t value = 0;
+      if (CAST_FAIL(ObTimeConverter::int_to_year(INT_MIN, value))) {
+      }
     } else {
       ObObj from;
       from.set_varchar(value, static_cast<ObString::obstr_size_t>(strlen(value)));
@@ -2485,6 +2658,37 @@ static int number_set(const ObExpectType& expect_type, ObObjCastParams& params, 
 }
 
 CAST_TO_LOB_METHOD(number, ObNumberTC);
+
+static int number_json(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObNumberTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    const number::ObNumber nmb(in.get_number());
+    ObJsonDecimal j_dec(nmb, -1, in.get_scale());
+    ObIJsonBase *j_base = &j_dec;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get decimal json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////
 // Datetime -> XXX
@@ -2819,6 +3023,47 @@ static int datetime_otimestamp(
 
 CAST_TO_LOB_METHOD(datetime, ObDateTimeTC);
 
+static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObDateTimeTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    int64_t in_val = in.get_datetime();
+    ObTime ob_time(DT_TYPE_DATETIME);
+    const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ?
+                                    params.dtc_params_.tz_info_ : NULL;
+    if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(in_val, tz_info, ob_time))) {
+      LOG_WARN("fail to create datetime from int failed", K(ret), K(in));
+    } else {
+      ObJsonNodeType j_type = (ObTimestampType == in.get_type()) 
+                                  ? ObJsonNodeType::J_TIMESTAMP
+                                  : ObJsonNodeType::J_DATETIME;
+      ObJsonDatetime j_datetime(j_type, ob_time);
+      ObIJsonBase *j_base = &j_datetime;
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get datetime json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else {
+        out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+        res_length = static_cast<ObLength>(raw_bin.length());
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Date -> XXX
 
@@ -3038,6 +3283,43 @@ static int date_set(const ObExpectType& expect_type, ObObjCastParams& params, co
 }
 
 CAST_TO_LOB_METHOD(date, ObDateTC);
+
+static int date_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObDateTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    int32_t in_val = in.get_date();
+    ObTime ob_time(DT_TYPE_DATE);
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(in_val, ob_time))) {
+      LOG_WARN("fail to create datetime from int failed", K(ret), K(in));
+    } else {
+      ObJsonDatetime j_date(ObJsonNodeType::J_DATE, ob_time);
+      ObIJsonBase *j_base = &j_date;
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get date json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else {
+        out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+        res_length = static_cast<ObLength>(raw_bin.length());
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Time -> XXX
 
@@ -3165,14 +3447,21 @@ static int time_date(
   int ret = OB_SUCCESS;
   const ObTimeZoneInfo* tz_info = params.dtc_params_.tz_info_;
   int32_t value = 0;
+  int64_t datetime_value = 0;
   if (OB_UNLIKELY(ObTimeTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type",
         K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(ObTimeConverter::datetime_to_date(params.cur_time_, tz_info, value))) {
-    LOG_WARN("datetime_to_date failed", K(ret), K(params.cur_time_));
   } else {
-    out.set_date(value);
+    ObTimeConvertCtx cvrt_ctx(tz_info, false);
+    if (OB_FAIL(ObTimeConverter::time_to_datetime(in.get_time(), params.cur_time_, tz_info,
+                                                  datetime_value, ObDateTimeType))) {
+      LOG_WARN("time to datetime failed", K(ret), K(in), K(params.cur_time_));
+    } else if (ObTimeConverter::datetime_to_date(datetime_value, NULL, value)) {
+      LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
+    } else {
+      out.set_date(value);
+    }
   }
   SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   UNUSED(cast_mode);
@@ -3252,6 +3541,42 @@ static int time_set(const ObExpectType& expect_type, ObObjCastParams& params, co
 }
 
 CAST_TO_LOB_METHOD(time, ObTimeTC);
+
+static int time_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObTimeTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else {
+    int64_t in_val = in.get_int();
+    ObTime ob_time(DT_TYPE_TIME);
+    if (OB_FAIL(ObTimeConverter::time_to_ob_time(in_val, ob_time))) {
+      LOG_WARN("fail to create datetime from int failed", K(ret), K(in));
+    } else {
+      ObJsonDatetime j_time(ObJsonNodeType::J_TIME, ob_time);
+      ObIJsonBase *j_base = &j_time;
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get time json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else {
+        out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+        res_length = static_cast<ObLength>(raw_bin.length());
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////
 // Year -> XXX
@@ -3344,6 +3669,24 @@ static int year_number(
   } else if (OB_FAIL(int_number(expect_type, params, obj_int, out, cast_mode))) {
   }
   // has set accuracy in prev int_number
+  return ret;
+}
+
+static int year_datetime(
+    const ObObjType expect_type, ObObjCastParams &params, const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t int_value = 0;
+  ObObj int64;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class() || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), int_value))) {
+    LOG_WARN("year to int failed", K(ret));
+  } else if (FALSE_IT(int64.set_int(int_value))) {
+  } else if (OB_FAIL(int_datetime(expect_type, params, int64, out, cast_mode))) {
+    LOG_WARN("int_datetime failed", K(ret));
+  }
   return ret;
 }
 
@@ -3441,6 +3784,39 @@ static int year_set(const ObExpectType& expect_type, ObObjCastParams& params, co
 }
 
 CAST_TO_LOB_METHOD(year, ObYearTC);
+
+static int year_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObLength res_length = -1;
+  int64_t full_year = 0;
+  if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(ObYearTC != in.get_type_class() || (ObJsonType != expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), full_year))) {
+    LOG_WARN("convert year to int failed in year to json convert", K(ret), K(in.get_year()));
+  } else {
+    ObJsonInt j_year(full_year);
+    ObIJsonBase *j_base = &j_year;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+      LOG_WARN("fail to get year json binary", K(ret), K(in), K(expect_type), K(*j_base));
+    } else {
+      out.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length)
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////
 // String -> XXX
@@ -3742,7 +4118,13 @@ static int string_datetime(
     } else {
       CAST_RET(ObTimeConverter::str_to_datetime(utf8_string, cvrt_ctx, value, &res_scale));
     }
-
+    // check zero date for scale over mode
+    if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+        (value == ObTimeConverter::ZERO_DATE ||
+        value == ObTimeConverter::ZERO_DATETIME)) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_USER_ERROR(OB_INVALID_DATE_VALUE, utf8_string.length(), utf8_string.ptr(), "");
+    }
     if (OB_SUCC(ret)) {
       SET_RES_DATETIME(out);
     }
@@ -3765,6 +4147,10 @@ static int string_date(
     LOG_ERROR("invalid use of blob type", K(ret), K(in), K(expect_type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
   } else if (CAST_FAIL(ObTimeConverter::str_to_date(in.get_string(), value))) {
+  } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) && value == ObTimeConverter::ZERO_DATE) {
+    // check zero date for scale over mode
+    ret = OB_INVALID_DATE_VALUE;
+    LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in.get_string().length(), in.get_string().ptr(), "");
   } else {
     SET_RES_DATE(out);
   }
@@ -3810,9 +4196,12 @@ static int string_year(
   } else if (OB_FAIL(string_int(
                  ObIntType, params, in, int64, CM_UNSET_STRING_INTEGER_TRUNC(CM_SET_WARN_ON_FAIL(cast_mode))))) {
   } else if (0 == int64.get_int()) {
-    const uint8_t base_year = 100;
-    uint8_t value = 4 == in.get_string().length() ? ObTimeConverter::ZERO_YEAR : base_year;
+	  const uint8_t base_year = 100;
+    uint8_t value = OB_SUCCESS == params.warning_ ?
+                    (4 == in.get_string().length() ? ObTimeConverter::ZERO_YEAR : base_year) :
+                    ObTimeConverter::ZERO_YEAR;
     SET_RES_YEAR(out);
+    CAST_FAIL(params.warning_);
   } else if (CAST_FAIL(int_year(ObYearType, params, int64, out, cast_mode))) {
   } else if (CAST_FAIL(params.warning_)) {
   }
@@ -4124,7 +4513,7 @@ static int string_set(const ObExpectType& expect_type, ObObjCastParams& params, 
           LOG_WARN("unexpect val_cnt", K(in), K(out), K(expect_type), K(ret));
         } else if (val_cnt >= 64) {  // do nothing
         } else if (val_cnt < 64 && value > ((1ULL << val_cnt) - 1)) {
-          value = value & ((1ULL << val_cnt) - 1);
+          value = 0;
           ret = OB_ERR_DATA_TRUNCATED;
           LOG_WARN("input value out of range", K(in), K(val_cnt), K(ret));
         }
@@ -4316,6 +4705,79 @@ static int string_lob(const ObObjType expect_type, ObObjCastParams& params, cons
   return ret;
 }
 
+static int string_json(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_val;
+  int64_t res_length = -1;
+  bool need_charset_convert = ((CS_TYPE_BINARY != in.get_collation_type()) && 
+                               (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
+                                ObCharset::charset_type_by_coll(params.dest_collation_)));
+  if (lib::is_mysql_mode() && (params.dest_collation_ != CS_TYPE_UTF8MB4_BIN)) {
+    ret = OB_ERR_INVALID_JSON_CHARSET;
+    LOG_WARN("fail to cast string to json invalid outtype", K(ret), K(params.dest_collation_));
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode) && is_mysql_unsupported_json_column_conversion(in.get_type())) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT); 
+  } else if (OB_UNLIKELY(ObStringTC != in.get_type_class() && ObTextTC != in.get_type_class())
+      || OB_UNLIKELY(ObJsonType != expect_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (need_charset_convert && OB_FAIL(string_string(ObLongTextType, params, in, tmp_val, cast_mode))) {
+    LOG_WARN("fail to cast string to string", K(ret), K(expect_type), K(in), K(params.dest_collation_), K(tmp_val));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in string to json cast", K(ret), K(params.allocator_v2_));
+  } else {
+    ObIJsonBase *j_base = NULL;
+    ObString j_text = (need_charset_convert ? tmp_val.get_string() : in.get_string());
+    ObJsonOpaque j_opaque(j_text, in.get_type());
+    ObJsonString j_string(j_text.ptr(), j_text.length());
+    ObJsonNull j_null;
+    ObJsonNode *j_tree = NULL;
+    if (expect_type == ObJsonType && j_text.length() == 0 && cast_mode == 0) { // add column json null
+      j_base = &j_null;
+    } else if (CS_TYPE_BINARY == in.get_collation_type()) {
+      j_base = &j_opaque;
+    } else if (CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)
+        && !CM_IS_JSON_VALUE(cast_mode) && ob_is_string_type(in.get_type())) {
+      // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
+      ret = OB_SUCCESS;
+      j_base = &j_string;
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree))) {
+      if (CM_IS_IMPLICIT_CAST(cast_mode) && !CM_IS_COLUMN_CONVERT(cast_mode)) {
+        ret = OB_SUCCESS;
+        j_base = &j_string;
+      } else {
+        LOG_WARN("fail to parse string as json", K(ret), K(expect_type), K(in), K(tmp_val));
+        if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+          ret = OB_ERR_INVALID_JSON_TEXT;
+          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+        } else {
+          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);  
+        }
+      }
+    } else {
+      j_base = j_tree;
+    }
+
+    if (OB_SUCC(ret)) {
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get string json binary", K(ret), K(in), K(*j_base));
+      } else {
+        res_length = raw_bin.length();
+        out.set_json_value(expect_type, raw_bin.ptr(), res_length);
+      }
+    }
+  }
+
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // bit -> XXX
 static int bit_int(
@@ -4337,6 +4799,48 @@ static int bit_int(
       SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
     }
   }
+  return ret;
+}
+
+
+static int bit_json(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+
+  if (OB_UNLIKELY((ObBitTC != in.get_type_class()
+      || (ObJsonTC != ob_obj_type_class(expect_type))))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObIAllocator *allocator = params.allocator_v2_;
+    uint64_t value = in.get_bit();
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    char buf[BUF_LEN] = {0};
+    int64_t pos = 0;
+    if (OB_FAIL(bit_to_char_array(value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(value), K(pos));
+    } else if (OB_ISNULL(allocator)) {
+      ret= OB_ERR_UNEXPECTED;
+      LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
+    } else {
+      common::ObString j_value(pos, buf);
+      ObJsonOpaque j_opaque(j_value, ObBitType);
+      ObIJsonBase *j_base = &j_opaque;
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
+        LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
+      } else if (OB_FAIL(copy_string(params, expect_type, raw_bin.ptr(), raw_bin.length(), out))) {
+        LOG_WARN("fail to copy string", K(ret), K(expect_type), K(raw_bin));
+      } else {
+        ObLength res_length = static_cast<ObLength>(out.get_string_len());
+        SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -4422,25 +4926,36 @@ static int bit_datetime(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int64_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObDateTimeTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
-    if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale))) {
-    } else {
-      SET_RES_DATETIME(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+    if (CAST_FAIL(ObTimeConverter::int_to_datetime(bit_value, 0, cvrt_ctx, value))) {
+      LOG_WARN("int_to_datetime failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
+      if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale))) {
+        LOG_WARN("int_to_datetime failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_DATETIME(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4451,24 +4966,34 @@ static int bit_date(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int32_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_date(str, value))) {
-    } else {
-      SET_RES_DATE(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    if (CAST_FAIL(ObTimeConverter::int_to_date(bit_value, value))) {
+      LOG_WARN("int_to_date failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      if (CAST_FAIL(ObTimeConverter::str_to_date(str, value))) {
+        LOG_WARN("str_to_date failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_DATE(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4479,24 +5004,34 @@ static int bit_time(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int64_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObTimeTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_time(str, value, &res_scale))) {
-    } else {
-      SET_RES_TIME(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    if (CAST_FAIL(ObTimeConverter::int_to_time(bit_value, value))) {
+      LOG_WARN("int_to_time failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      if (CAST_FAIL(ObTimeConverter::str_to_time(str, value, &res_scale))) {
+        LOG_WARN("str_to_date failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_TIME(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4507,24 +5042,15 @@ static int bit_year(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   uint8_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObYearTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+  } else if (CAST_FAIL(ObTimeConverter::int_to_year(bit_value, value))) {
+    LOG_WARN("int_to_year faile", K(ret), K(bit_value));
   } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_year(str, value))) {
-    } else {
-      SET_RES_YEAR(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
-    }
+    SET_RES_YEAR(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4533,28 +5059,41 @@ static int bit_string(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-  UNUSED(cast_mode);
-  ObLength res_length = -1;
-  int32_t bytes_length = 0;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  ObScale scale = in.get_scale();
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   uint64_t value = in.get_bit();
+  ObLength res_length = -1;
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() ||
                    (ObStringTC != ob_obj_type_class(expect_type) && ObTextTC != ob_obj_type_class(expect_type))))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else {
-    if (OB_FAIL(bit_to_char_array(value, scale, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(value), K(pos));
-    } else if (OB_FAIL(copy_string(params, expect_type, buf, pos, out))) {
-      LOG_WARN("fail to copy string", KP(buf), K(bytes_length), K(value), K(out), K(expect_type));
-    } else {
-      res_length = static_cast<ObLength>(out.get_string_len());
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    ObFastFormatInt ffi(value);
+    ObString tmp_str;
+    if (OB_FAIL(convert_string_collation(ObString(ffi.length(), ffi.ptr()),
+            ObCharset::get_system_collation(),
+            tmp_str,
+            params.dest_collation_,
+            params))) {
+      LOG_WARN("fail to convert string collation", K(ret));
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
+      LOG_WARN("fail to copy string", KP(tmp_str.ptr()), K(tmp_str.length()), K(value), K(out), K(expect_type));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char tmp_buf[BUF_LEN];
+    MEMSET(tmp_buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(value, scale, tmp_buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_buf, pos, out))) {
+      LOG_WARN("fail to copy string", KP(tmp_buf), K(pos), K(value), K(out), K(expect_type));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    res_length = static_cast<ObLength>(out.get_string_len());
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
   }
   return ret;
 }
@@ -5617,6 +6156,463 @@ static int lob_lob(
   return ret;
 }
 
+static int lob_json(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_out;
+  ObString in_str;
+  if (OB_UNLIKELY(ObLobTC != in.get_type_class() || ObJsonType != expect_type)) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(in.get_string(in_str))) {
+    LOG_WARN("get string failed", K(ret));
+  } else {
+    ObObj tmp_in = in;
+    tmp_in.set_string(ObLongTextType, in_str);
+    if (OB_FAIL(string_json(expect_type, params, tmp_in, out, cast_mode))) {
+      LOG_WARN("cast string to string failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////
+// json -> XXX
+
+static int json_int(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    int64_t value = 0;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_int(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (expect_type < ObIntType && CAST_FAIL(int_range_check(expect_type, value, value))) {
+      LOG_WARN("range check failed", K(ret), K(expect_type), K(value));
+    } else {
+      SET_RES_INT(out);
+      res_precision = get_precision_for_integer(value);
+    }
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+static int json_uint(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObUIntTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    uint64_t value = 0;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_uint(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (CAST_FAIL(uint_upper_check(expect_type, value))) {
+      LOG_WARN("range check failed", K(ret), K(expect_type), K(value));
+    } else {
+      SET_RES_UINT(out);
+      res_precision = get_precision_for_integer(value);
+    }
+  }
+  SET_RES_ACCURACY(res_precision, DEFAULT_SCALE_FOR_INTEGER, DEFAULT_LENGTH_FOR_NUMERIC);
+  return ret;
+}
+
+static int json_double(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode);
+static int json_float(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObFloatTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObObj obj_double;
+    if (OB_FAIL(json_double(ObDoubleType, params, in, obj_double, cast_mode))) {
+      LOG_WARN("json to double convert failed in json to float convert",
+               K(ret), K(cast_mode));
+    } else if (OB_FAIL(double_float(expect_type, params, obj_double, out, cast_mode))) {
+      LOG_WARN("double to float convert failed in json to float convert",
+               K(ret), K(obj_double), K(cast_mode));
+    }
+  }
+
+  return ret;
+}
+
+static int json_double(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObPrecision res_precision = -1;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObDoubleTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    double value = 0.0;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_double(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (ObUDoubleType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+      LOG_WARN("numeric_negative_check failed", K(ret), K(expect_type), K(value));
+    } else {
+      SET_RES_DOUBLE(out);
+      res_precision = get_precision_for_integer(value);
+    }
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  return ret;
+}
+
+static int json_number(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObNumberTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    number::ObNumber value;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_number(params.allocator_v2_, value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+      LOG_WARN("numeric_negative_check failed", K(ret), K(expect_type), K(value));
+    } else {
+      SET_RES_NUMBER(out);
+    }
+  }
+  SET_RES_ACCURACY(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET, LENGTH_UNKNOWN_YET);
+  return ret;
+}
+
+static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    int64_t value;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_datetime(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      SET_RES_DATETIME(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int json_date(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    int32_t value;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_date(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      SET_RES_DATE(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int json_time(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    int64_t value;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_time(value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      SET_RES_TIME(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, MIN_SCALE_FOR_TEMPORAL, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int json_year(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    uint8_t value = 0;
+    int64_t int_value = 0;
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_int(int_value, false, true))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (CAST_FAIL(ObTimeConverter::int_to_year(int_value, value))){
+      LOG_WARN("fail to cast json int to year type", K(ret), K(int_value), K(expect_type));
+    } else {
+      if (lib::is_mysql_mode() && (params.warning_ == OB_DATA_OUT_OF_RANGE)) {
+        out.set_null(); // not change the behavior of int_year 
+      } else {
+        SET_RES_YEAR(out);
+      }
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
+static int json_string(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  // ToDo convert json to other none string type is also not allowed.
+  if (OB_UNLIKELY(ObJsonType != in.get_type() ||
+      OB_UNLIKELY(ObStringTC != ob_obj_type_class(expect_type) && ObTextTC != ob_obj_type_class(expect_type)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (in.is_json_outrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cast of out row json obj", K(ret), K(in), K(out.get_meta()), K(expect_type), K(cast_mode));
+  } else if(OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObJsonBuffer j_buf(params.allocator_v2_);
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->print(j_buf, true))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      // get in cs type
+      bool need_charset_convert = ((CS_TYPE_BINARY == params.dest_collation_) || 
+                                   (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
+                                    ObCharset::charset_type_by_coll(params.dest_collation_)));
+      ObString temp_str_val(j_buf.length(), j_buf.ptr());
+
+      /* this function maybe called in json generated column 
+      * and the generated column may has limitaion constrain the string length */
+      uint64_t accuracy_max_len = 0; 
+      if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
+        accuracy_max_len = params.res_accuracy_->get_length();
+      }
+      if (!need_charset_convert) {
+        if (accuracy_max_len > 0 && accuracy_max_len < j_buf.length()) {
+          temp_str_val.assign_ptr(j_buf.ptr(), accuracy_max_len);
+        }
+        ret = copy_string(params, expect_type, temp_str_val, out);
+      } else {
+        ObObj tmp_obj;
+        tmp_obj.set_collation_type(in.get_collation_type());
+        tmp_obj.set_collation_level(in.get_collation_level());
+        tmp_obj.set_string(ObLongTextType, temp_str_val);
+        ret = string_string(expect_type, params, tmp_obj, out, cast_mode);
+        if (accuracy_max_len && accuracy_max_len < out.get_string().length()) {
+          ObString tmp_str = out.get_string();
+          out.set_string(expect_type, tmp_str.ptr(), accuracy_max_len);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+static int json_bit(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  uint64_t value;
+  int32_t bit_len = 0;
+
+  if (OB_UNLIKELY(ObJsonType != in.get_type() 
+      || ObBitTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+    ObIJsonBase *j_base = &j_bin;
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_bit(value))) {
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else if (OB_FAIL(get_bit_len(value, bit_len))) {
+      LOG_WARN("fail to get bit len", K(ret), K(value), K(bit_len));
+    } else {
+      SET_RES_BIT(out);
+      SET_RES_ACCURACY(static_cast<ObPrecision>(bit_len), DEFAULT_SCALE_FOR_BIT, DEFAULT_LENGTH_FOR_NUMERIC);
+    }
+  }
+  UNUSED(params);
+  UNUSED(cast_mode);
+
+  return ret;
+}
+
+static int json_otimestamp(const ObObjType expect_type, ObObjCastParams &params,
+                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObObj datetime_obj;
+
+  if (OB_UNLIKELY(ObJsonType != in.get_type()) || OB_UNLIKELY(ObOTimestampTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(json_datetime(ObDateTimeType, params, in, datetime_obj, cast_mode))) {
+    LOG_WARN("json to datatime convert failed in json to otimestamp convert", 
+             K(ret), K(cast_mode));
+  } else if (OB_FAIL(datetime_otimestamp(expect_type, params, datetime_obj, out, cast_mode))) {
+    LOG_WARN("datatime to otimestamp convert failed in json to otimestamp convert",
+             K(ret), K(datetime_obj), K(cast_mode));
+  }
+
+  return ret;
+}
+
+static int json_lob(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (!share::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected tenant mode", K(ret));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only support mysql json type currently", K(ret));
+  }
+  UNUSED(expect_type);
+  UNUSED(params);
+  UNUSED(in);
+  UNUSED(out);
+  UNUSED(cast_mode);
+  return ret;
+}
+
+static int json_json(const ObObjType expect_type, ObObjCastParams &params,
+                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObJsonType != in.get_type()) || OB_UNLIKELY(ObJsonTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else {
+    ObString str = in.get_string();
+    out.set_json_value(expect_type, str.ptr(), str.length());
+    ObLength res_length = static_cast<ObLength>(out.get_string_len());
+    SET_RES_ACCURACY(DEFAULT_SCALE_FOR_TEXT, DEFAULT_PRECISION_FOR_STRING, res_length);
+  }
+  UNUSED(cast_mode);
+  return ret;
+}
+
 ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
     {
         /*null -> XXX*/
@@ -5642,6 +6638,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_identity,           /*lob*/
+        cast_identity,           /*json*/
     },
     {
         /*int -> XXX*/
@@ -5667,6 +6664,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         int_lob,                 /*lob*/
+        int_json,                /*json*/
     },
     {
         /*uint -> XXX*/
@@ -5692,6 +6690,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         uint_lob,                /*lob*/
+        uint_json,               /*json*/
     },
     {
         /*float -> XXX*/
@@ -5717,6 +6716,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         float_lob,               /*lob*/
+        float_json,              /*json*/
     },
     {
         /*double -> XXX*/
@@ -5729,7 +6729,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         double_datetime,         /*datetime*/
         double_date,             /*date*/
         double_time,             /*time*/
-        cast_not_support,        /*year*/
+        double_year,             /*year*/
         double_string,           /*string*/
         cast_not_support,        /*extend*/
         cast_not_support,        /*unknown*/
@@ -5742,6 +6742,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         double_lob,              /*lob*/
+        double_json,             /*json*/
     },
     {
         /*number -> XXX*/
@@ -5767,6 +6768,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         number_lob,              /*lob*/
+        number_json,             /*lob*/
     },
     {
         /*datetime -> XXX*/
@@ -5792,6 +6794,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         datetime_lob,            /*lob*/
+        datetime_json,           /*json*/
     },
     {
         /*date -> XXX*/
@@ -5817,6 +6820,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         date_lob,                /*lob*/
+        date_json,               /*json*/
     },
     {
         /*time -> XXX*/
@@ -5842,6 +6846,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         time_lob,                /*lob*/
+        time_json,               /*json*/
     },
     {
         /*year -> XXX*/
@@ -5851,7 +6856,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         year_float,              /*float*/
         year_double,             /*double*/
         year_number,             /*number*/
-        cast_not_support,        /*datetime*/
+        year_datetime,           /*datetime*/
         year_date,               /*date*/
         cast_not_support,        /*time*/
         cast_identity,           /*year*/
@@ -5867,6 +6872,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         year_lob,                /*lob*/
+        year_json,               /*json*/
     },
     {
         /*string -> XXX*/
@@ -5892,6 +6898,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         string_lob,              /*lob*/
+        string_json,             /*json*/
     },
     {
         /*extend -> XXX*/
@@ -5917,6 +6924,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_not_support,        /*lob*/
+        cast_not_support,        /*json*/
     },
     {
         /*unknown -> XXX*/
@@ -5942,6 +6950,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_not_support,        /*lob*/
+        cast_not_support,        /*json*/
     },
     {
         /*text -> XXX*/
@@ -5967,6 +6976,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         string_lob,              /*lob*/
+        string_json,             /*json*/
     },
     {
         /*bit -> XXX*/
@@ -5992,6 +7002,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         bit_lob,                 /*lob*/
+        bit_json,                /*lob*/
     },
     {
         /*enum -> XXX*/
@@ -6017,6 +7028,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_not_expected,       /*lob*/
+        cast_not_expected,       /*json*/
     },
     {
         /*enumset_inner -> XXX*/
@@ -6042,6 +7054,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_not_support,        /*lob*/
+        cast_not_support,        /*json*/
     },
     {
         /*otimestamp -> XXX*/
@@ -6067,6 +7080,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         cast_not_expected,       /*lob*/
+        cast_not_expected,       /*json*/
     },
     {
         /*raw -> XXX*/
@@ -6092,6 +7106,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*interval -> XXX*/
@@ -6117,6 +7132,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*rowid -> XXX*/
@@ -6142,6 +7158,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*lob -> XXX*/
@@ -6167,7 +7184,34 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         cast_not_expected,       /*interval*/
         cast_not_expected,       /*rowid*/
         lob_lob,                 /*lob*/
+        lob_json,                /*json*/
     },
+    {
+        /*json -> XXX*/
+        cast_not_support,        /*null*/
+        json_int,                /*int*/
+        json_uint,               /*uint*/
+        json_float,              /*float*/
+        json_double,             /*double*/
+        json_number,             /*number*/
+        json_datetime,           /*datetime*/
+        json_date,               /*date*/
+        json_time,               /*time*/
+        json_year,               /*year*/
+        json_string,             /*string*/
+        cast_not_support,        /*extend*/
+        cast_not_support,        /*unknown*/
+        json_string,             /*text*/
+        json_bit,                /*bit*/
+        cast_not_expected,       /*enumset*/
+        cast_not_expected,       /*enumset_inner*/
+        json_otimestamp,         /*otimestamp*/
+        cast_inconsistent_types, /*raw*/
+        cast_not_expected,       /*interval*/
+        cast_not_expected,       /*rowid*/
+        json_lob,                /*lob*/
+        json_json,               /*json*/
+   },
 };
 
 ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
@@ -6195,6 +7239,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_identity, /*interval*/
         cast_identity, /*rowid*/
         cast_identity, /*lob*/
+        cast_identity, /*json*/
     },
     {
         /*int -> XXX*/
@@ -6220,6 +7265,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*uint -> XXX*/
@@ -6245,6 +7291,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*float -> XXX*/
@@ -6270,6 +7317,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*double -> XXX*/
@@ -6295,6 +7343,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*number -> XXX*/
@@ -6320,6 +7369,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*datetime -> XXX*/
@@ -6345,6 +7395,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*date -> XXX*/
@@ -6370,6 +7421,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*time -> XXX*/
@@ -6395,6 +7447,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*year -> XXX*/
@@ -6420,6 +7473,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*string -> XXX*/
@@ -6445,6 +7499,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         string_interval,         /*interval*/
         string_rowid,            /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*extend -> XXX*/
@@ -6470,6 +7525,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support, /*interval*/
         cast_not_support, /*rowid*/
         cast_not_support, /*lob*/
+        cast_not_support, /*json not support oracle yet*/
     },
     {
         /*unknown -> XXX*/
@@ -6495,6 +7551,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         unknown_other,    /*interval*/
         unknown_other,    /*rowid*/
         cast_not_support, /*lob*/
+        cast_not_support, /*json not support oracle yet*/
     },
     {
         /*text -> XXX*/
@@ -6520,6 +7577,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         string_interval,         /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*bit -> XXX*/
@@ -6545,6 +7603,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*enum -> XXX*/
@@ -6570,6 +7629,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*enumset_inner -> XXX*/
@@ -6595,6 +7655,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_support,  /*json not support oracle yet*/
     },
     {
         /*otimestamp -> XXX*/
@@ -6620,6 +7681,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*raw -> XXX*/
@@ -6645,6 +7707,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*interval -> XXX*/
@@ -6670,6 +7733,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         interval_interval,       /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*rowid -> XXX*/
@@ -6695,6 +7759,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_support,        /*interval*/
         rowid_rowid,             /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
     {
         /*lob -> XXX*/
@@ -6720,7 +7785,34 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] = {
         lob_interval,            /*interval*/
         cast_not_support,        /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_not_support,        /*json not support oracle yet*/
     },
+    {
+        /*json -> XXX, not support oracle currently*/
+        cast_not_support,        /*null*/
+        cast_not_support,        /*int*/
+        cast_not_support,        /*uint*/
+        cast_not_support,        /*float*/
+        cast_not_support,        /*double*/
+        cast_not_support,        /*number*/
+        cast_not_support,        /*datetime*/
+        cast_not_support,        /*date*/
+        cast_not_support,        /*time*/
+        cast_not_support,        /*year*/
+        cast_not_support,        /*string*/
+        cast_not_support,        /*extend*/
+        cast_not_support,        /*unknown*/
+        cast_not_support,        /*text*/
+        cast_not_support,        /*bit*/
+        cast_not_support,        /*enumset*/
+        cast_not_support,        /*enumset_inner*/
+        cast_not_support,        /*otimestamp*/
+        cast_not_support,        /*raw*/
+        cast_not_support,        /*interval*/
+        cast_not_support,        /*rowid*/
+        cast_not_support,        /*lob*/
+        cast_not_support,        /*json*/
+   },
 };
 
 /*
@@ -6756,6 +7848,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_identity,     /*interval*/
         cast_identity,     /*rowid*/
         cast_identity,     /*lob*/
+        cast_identity,     /*json*/
     },
     {
         /*int -> XXX*/
@@ -6781,6 +7874,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*uint -> XXX*/
@@ -6806,6 +7900,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*float -> XXX*/
@@ -6831,6 +7926,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*double -> XXX*/
@@ -6856,6 +7952,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*number -> XXX*/
@@ -6881,6 +7978,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         number_lob,              /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*datetime -> XXX*/
@@ -6906,6 +8004,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*date -> XXX*/
@@ -6931,6 +8030,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*time -> XXX*/
@@ -6956,6 +8056,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*year -> XXX*/
@@ -6981,6 +8082,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*string -> XXX*/
@@ -7006,6 +8108,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         string_interval,   /*interval*/
         string_rowid,      /*rowid*/
         string_lob,        /*lob*/
+        cast_inconsistent_types,/*json*/
     },
     {
         /*extend -> XXX*/
@@ -7031,6 +8134,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*unknown -> XXX*/
@@ -7056,6 +8160,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*text -> XXX*/
@@ -7081,6 +8186,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         string_interval,         /*interval*/
         string_rowid,            /*rowid*/
         string_lob,              /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*bit -> XXX*/
@@ -7106,6 +8212,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*enum -> XXX*/
@@ -7131,6 +8238,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*enumset_inner -> XXX*/
@@ -7156,6 +8264,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_not_expected, /*interval*/
         cast_not_expected, /*rowid*/
         cast_not_expected, /*lob*/
+        cast_not_expected, /*json*/
     },
     {
         /*otimestamp -> XXX*/
@@ -7181,6 +8290,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*raw -> XXX*/
@@ -7206,6 +8316,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         cast_inconsistent_types, /*rowid*/
         raw_lob,                 /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*interval -> XXX*/
@@ -7231,6 +8342,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         interval_interval,       /*interval*/
         cast_inconsistent_types, /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /* rowid -> XXX */
@@ -7256,6 +8368,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*interval*/
         rowid_rowid,             /*rowid*/
         cast_inconsistent_types, /*lob*/
+        cast_inconsistent_types, /*json*/
     },
     {
         /*lob -> XXX*/
@@ -7281,7 +8394,34 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         lob_interval,            /*interval*/
         lob_rowid,               /*rowid*/
         lob_lob,                 /*lob*/
+        cast_inconsistent_types, /*json*/
     },
+    {
+        /*json -> XXX, not support oracle currently*/
+        cast_not_support,        /*null*/
+        cast_not_support,        /*int*/
+        cast_not_support,        /*uint*/
+        cast_not_support,        /*float*/
+        cast_not_support,        /*double*/
+        cast_not_support,        /*number*/
+        cast_not_support,        /*datetime*/
+        cast_not_support,        /*date*/
+        cast_not_support,        /*time*/
+        cast_not_support,        /*year*/
+        cast_not_support,        /*string*/
+        cast_not_support,        /*extend*/
+        cast_not_support,        /*unknown*/
+        cast_not_support,        /*text*/
+        cast_not_support,        /*bit*/
+        cast_not_support,        /*enumset*/
+        cast_not_support,        /*enumset_inner*/
+        cast_not_support,        /*otimestamp*/
+        cast_not_support,        /*raw*/
+        cast_not_support,        /*interval*/
+        cast_not_support,        /*rowid*/
+        cast_not_support,        /*lob*/
+        cast_not_support,        /*json*/
+   },
 };
 
 ////////////////////////////////////////////////////////////////
@@ -7548,6 +8688,10 @@ int number_range_check_v2(ObObjCastParams& params, const ObAccuracy& accuracy, c
         const int64_t number_precision = static_cast<int64_t>(floor(precision * OB_PRECISION_BINARY_TO_DECIMAL_FACTOR));
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round_precision(number_precision))) {
+        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+          in_val.compare(out_val) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(scale), K(in_val));
         } else {
           buf_obj.set_number(obj.get_type(), out_val);
           res_obj = &buf_obj;
@@ -7578,6 +8722,10 @@ int number_range_check_v2(ObObjCastParams& params, const ObAccuracy& accuracy, c
         number::ObNumber num;
         if (OB_FAIL(num.from(obj.get_number(), allocator))) {
         } else if (OB_FAIL(num.round(scale))) {
+        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+          obj.get_number().compare(num) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(scale), K(in_val));
         } else {
           buf_obj.set_number(obj.get_type(), num);
           res_obj = &buf_obj;
@@ -7625,6 +8773,10 @@ int number_range_check_v2(ObObjCastParams& params, const ObAccuracy& accuracy, c
       } else {
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round(scale))) {
+        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
+          in_val.compare(out_val) != 0) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(scale), K(in_val));
         } else {
           buf_obj.set_number(obj.get_type(), out_val);
         }
@@ -7667,6 +8819,29 @@ int number_range_check_only(const ObAccuracy& accuracy, const ObObj& obj)
   return ret;
 }
 
+// check usec scale for ObTimeType, ObDateTimeType
+int time_usec_scale_check(const ObCastMode &cast_mode,
+                          const ObAccuracy &accuracy,
+                          const int64_t value)
+{
+  INIT_SUCC(ret);
+  bool need_check_zero_scale = CM_IS_ERROR_ON_SCALE_OVER(cast_mode);
+  // check usec scale for time part
+  if (need_check_zero_scale) {
+    ObScale scale = accuracy.get_scale();
+    if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      // get usec part for value
+      int64_t temp_value = value;
+      ObTimeConverter::round_datetime(scale, temp_value);
+      if (temp_value != value) { // round success
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("Invalid input value.", K(value), K(scale));
+      }
+    }
+  }
+  return ret;
+}
+
 int datetime_scale_check(ObObjCastParams& params, const ObAccuracy& accuracy, const ObObj& obj, ObObj& buf_obj,
     const ObObj*& res_obj, const ObCastMode cast_mode)
 {
@@ -7676,20 +8851,23 @@ int datetime_scale_check(ObObjCastParams& params, const ObAccuracy& accuracy, co
   if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
-  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
-    int64_t value = obj.get_datetime();
-    ObTimeConverter::round_datetime(scale, value);
-    if (ObTimeConverter::is_valid_datetime(value)) {
-      buf_obj.set_datetime(obj.get_type(), value);
-    } else {
-      buf_obj.set_null();
-    }
-    res_obj = &buf_obj;
   } else {
-    res_obj = &obj;
+    int64_t value = obj.get_datetime();
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check zero scale fail.", K(ret), K(value), K(scale));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      ObTimeConverter::round_datetime(scale, value);
+      if (ObTimeConverter::is_valid_datetime(value)) {
+        buf_obj.set_datetime(obj.get_type(), value);
+      } else {
+        buf_obj.set_null();
+      }
+      res_obj = &buf_obj;
+    } else {
+      res_obj = &obj;
+    }
   }
   UNUSED(params);
-  UNUSED(cast_mode);
   return ret;
 }
 
@@ -7789,8 +8967,10 @@ int time_scale_check(ObObjCastParams& params, const ObAccuracy& accuracy, const 
   int ret = OB_SUCCESS;
   res_obj = NULL;
   ObScale scale = accuracy.get_scale();
-  if (OB_LIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
-    int64_t value = obj.get_time();
+  int64_t value = obj.get_time();
+  if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+    LOG_WARN("check usec scale fail.", K(ret), K(value));
+  } else if (OB_LIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
     ObTimeConverter::round_datetime(scale, value);
     buf_obj.set_time(value);
     res_obj = &buf_obj;
@@ -7798,7 +8978,6 @@ int time_scale_check(ObObjCastParams& params, const ObAccuracy& accuracy, const 
     res_obj = &obj;
   }
   UNUSED(params);
-  UNUSED(cast_mode);
   return ret;
 }
 
@@ -7929,7 +9108,7 @@ int string_length_check(ObObjCastParams& params, const ObAccuracy& accuracy, con
           // insert 'ab  ! ' to char(3), we get an 'ab' in column, not 'ab ':
           // first trunc: 'ab  ! ' to 'ab ',
           // second trunc: 'ab ' to 'ab'.
-          if (obj.is_text()) {
+          if (obj.is_text() || obj.is_json()) {
             int64_t char_len = 0;
             trunc_len_byte = static_cast<int32_t>(
                 ObCharset::max_bytes_charpos(cs_type, str, str_len_byte, max_accuracy_len, char_len));
@@ -8177,6 +9356,10 @@ int obj_accuracy_check(ObCastCtx& cast_ctx, const ObAccuracy& accuracy, const Ob
     }
     case ObRowIDTC: {
       ret = string_length_check(cast_ctx, accuracy, cs_type, obj, buf_obj, res_obj, cast_ctx.cast_mode_);
+      break;
+    }
+    case ObJsonTC: {
+      // ToDo: json length check
       break;
     }
     case ObLobTC: {
@@ -8477,6 +9660,86 @@ int ObObjCaster::to_datetime(
   return ret;
 }
 
+int ObObjCaster::bool_to_json(const ObObjType expect_type,
+                              ObCastCtx &cast_ctx,
+                              const ObObj &in_obj,
+                              ObObj &buf_obj,
+                              const ObObj *&res_obj)
+{
+  int ret = OB_SUCCESS;
+  res_obj = NULL;
+  cast_ctx.warning_ = OB_SUCCESS;
+  ObLength res_length = -1;
+
+  if (CM_IS_COLUMN_CONVERT(cast_ctx.cast_mode_)) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(cast_ctx.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in_obj), K(expect_type));
+  } else { 
+    int64_t in_val = in_obj.get_int();
+    bool bool_val = (in_obj.get_int() == 1) ? true : false;
+    ObJsonBoolean j_bool(bool_val);
+    ObIJsonBase *j_base = &j_bool;
+    ObString raw_bin;
+    if (OB_FAIL(j_base->get_raw_binary(raw_bin, cast_ctx.allocator_v2_))) {
+      LOG_WARN("fail to get bool json binary", K(ret), K(in_obj), K(expect_type));
+    } else {
+      buf_obj.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+      res_length = static_cast<ObLength>(raw_bin.length());
+      res_obj = &buf_obj;
+    }
+  }
+
+  ObObjCastParams &params = cast_ctx;
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  return ret;
+}
+
+int ObObjCaster::enumset_to_json(const ObObjType expect_type,
+                                 ObCastCtx &cast_ctx,
+                                 const ObObj &in_obj,
+                                 ObObj &buf_obj,
+                                 const ObObj *&res_obj)
+{
+  int ret = OB_SUCCESS;
+  res_obj = NULL;
+  cast_ctx.warning_ = OB_SUCCESS;
+  ObLength res_length = -1;
+
+  if (CM_IS_COLUMN_CONVERT(cast_ctx.cast_mode_)) {
+    ret = OB_ERR_INVALID_JSON_TEXT;
+    LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+  } else if (OB_UNLIKELY(cast_ctx.allocator_v2_ == NULL)) {
+    ret= OB_ERR_UNEXPECTED;
+    LOG_ERROR("NULL allocator in json cast function", K(ret), K(in_obj), K(expect_type));
+  } else { 
+    ObIJsonBase *j_base = NULL;
+    ObJsonNull j_null;
+    ObString j_text = in_obj.get_string();
+    ObJsonString j_string(j_text.ptr(), j_text.length());
+    if (j_text.length() == 0) {
+      j_base = &j_null;
+    } else {
+      j_base = &j_string;
+      ObString raw_bin;
+      if (OB_FAIL(j_base->get_raw_binary(raw_bin, cast_ctx.allocator_v2_))) {
+        LOG_WARN("fail to get string json binary", K(ret), K(in_obj));
+      } else {
+        res_length = raw_bin.length();
+        buf_obj.set_json_value(expect_type, raw_bin.ptr(), raw_bin.length());
+        buf_obj.set_collation_type(cast_ctx.dest_collation_);
+        res_obj = &buf_obj;
+      }
+    }
+  }
+
+  ObObjCastParams &params = cast_ctx;
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  return ret;
+}
+
 // ObInnerEnumType and ObInnerSetType are not supported.
 int ObObjCaster::to_type(
     const ObExpectType& expect_type, ObCastCtx& cast_ctx, const ObObj& in_obj, ObObj& buf_obj, const ObObj*& res_obj)
@@ -8606,6 +9869,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   params.warning_ = 1;
   if (ob_is_string_tc(expect_type)) {
     zero_obj.set_string(expect_type, "");
+  } else if (ob_is_text_tc(expect_type)) {
+    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);
@@ -8807,11 +10072,7 @@ int ObObjCaster::is_const_consistent(const ObObjMeta& const_mt, const ObObjMeta&
   return ret;
 }
 
-/* make sure that you have read the doc before you call these functions !
- *
- * doc:  http://www.atatech.org/articles/56575
- */
-
+/* make sure that you have read the doc before you call these functions !*/
 int ObObjCaster::is_order_consistent(const ObObjMeta& from, const ObObjMeta& to, bool& result)
 {
   int ret = OB_SUCCESS;
@@ -8851,11 +10112,7 @@ int ObObjCaster::is_order_consistent(const ObObjMeta& from, const ObObjMeta& to,
   return ret;
 }
 
-/* make sure that you have read the doc before you call these functions !
- *
- * doc:  http://www.atatech.org/articles/56575
- */
-
+/* make sure that you have read the doc before you call these functions !*/
 int ObObjCaster::is_injection(const ObObjMeta& from, const ObObjMeta& to, bool& result)
 {
   int ret = OB_SUCCESS;
@@ -9088,6 +10345,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // int
     {
@@ -9113,6 +10371,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // uint
     {
@@ -9138,6 +10397,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // float
     {
@@ -9163,6 +10423,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // double
     {
@@ -9188,6 +10449,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // number
     {
@@ -9213,6 +10475,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // datetime
     {
@@ -9238,6 +10501,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        true,   // json
     },
     // date
     {
@@ -9263,6 +10527,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        true,   // json
     },
     // time
     {
@@ -9288,6 +10553,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        true,   // json
     },
     // year
     {
@@ -9313,6 +10579,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        true,   // json
     },
     // string
     {
@@ -9338,6 +10605,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         true,   // interval
         true,   // rowid
         true,   // lob
+        false,  // json
     },
     // extend
     {
@@ -9363,6 +10631,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // unknown
     {
@@ -9388,6 +10657,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // text
     {
@@ -9413,6 +10683,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        false,  // json
     },
     // bit
     {
@@ -9438,6 +10709,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // enumset
     {
@@ -9463,6 +10735,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // enumsetinner
     {
@@ -9488,6 +10761,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         false,  // text
+        false,  // json
     },
     // OTimestamp
     {
@@ -9513,6 +10787,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        true,   // json
     },
     // raw
     {
@@ -9538,6 +10813,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval,
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // interval
     {
@@ -9563,6 +10839,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         true,   // interval,
         false,  // rowid
         false,  // lob
+        false,  // json
     },
     // rowid
     {
@@ -9588,6 +10865,7 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval,
         true,   // rowid
         false,  // lob
+        false,  // json
     },
     // lob
     {
@@ -9613,7 +10891,34 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] = {
         false,  // interval
         false,  // rowid
         true,   // lob
+        false,  // json
     },
+    // json
+    {
+        false,  // null
+        false,  // int
+        false,  // uint
+        false,  // float
+        false,  // double
+        false,  // number
+        false,  // datetime
+        false,  // date
+        false,  // time
+        false,  // year
+        false,  // string
+        false,  // extend
+        false,  // unknown
+        false,  // text
+        false,  // bit
+        false,  // enumset
+        false,  // enumsetInner
+        false,  // OTimestamp
+        false,  // raw
+        false,  // interval
+        false,  // rowid
+        false,  // lob
+        true,   // json
+   },
 };
 
 const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] = {

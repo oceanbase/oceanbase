@@ -19,11 +19,9 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_macro_block_checker.cpp
   blocksstable/ob_macro_block_common_header.cpp
   blocksstable/ob_macro_block_id.cpp
-  blocksstable/ob_macro_block_meta_mgr.cpp
   blocksstable/ob_macro_block_reader.cpp
   blocksstable/ob_macro_block_struct.cpp
   blocksstable/ob_macro_block_writer.cpp
-  blocksstable/ob_macro_meta_block_reader.cpp
   blocksstable/ob_meta_block_reader.cpp
   blocksstable/ob_micro_block_cache.cpp
   blocksstable/ob_micro_block_index_cache.cpp
@@ -203,7 +201,6 @@ ob_set_subtarget(ob_storage common
   ob_scan_merge_loser_tree.cpp
   ob_single_merge.cpp
   ob_sstable.cpp
-  ob_old_sstable.cpp
   ob_sstable_struct.cpp
   ob_sstable_estimator.cpp
   ob_sstable_merge_info_mgr.cpp
@@ -220,7 +217,6 @@ ob_set_subtarget(ob_storage common
   ob_storage_struct.cpp
   ob_store_row_filter.cpp
   ob_table_mgr.cpp
-  ob_table_mgr_meta_block_reader.cpp
   ob_table_scan_iterator.cpp
   ob_table_store.cpp
   ob_table_store_stat_mgr.cpp
@@ -247,7 +243,6 @@ ob_set_subtarget(ob_storage common
   ob_server_pg_meta_checkpoint_reader.cpp
   ob_server_checkpoint_writer.cpp
   ob_server_checkpoint_log_reader.cpp
-  ob_server_checkpoint_log_reader_v1.cpp
   ob_tenant_config_meta_checkpoint_writer.cpp
   ob_tenant_config_meta_checkpoint_reader.cpp
   ob_tenant_file_super_block_checkpoint_writer.cpp
@@ -364,7 +359,6 @@ ob_server_add_pchs(storage
   blocksstable/slog/ob_base_storage_logger.h
   blocksstable/ob_row_reader.h
   blocksstable/ob_column_map.h
-  blocksstable/ob_macro_block_meta_mgr.h
   blocksstable/ob_micro_block_index_mgr.h
   ob_file_system_router.h
   blocksstable/ob_micro_block_reader.h

@@ -373,7 +373,7 @@ private:
   static const int64_t OB_ELECTION_HASH_TIME_US = 10000;      // 10ms
   static const int64_t OB_ELECTION_HASH_TABLE_NUM_NEW = 580;  // mod 580
   /**************************************************************************************************/
-  static const int64_t OB_ELECTION_MAX_CENTRIALIZED_TIME = 100000;                       // 100ms
+  static const int64_t OB_ELECTION_MAX_CENTRALIZED_TIME = 100000;                       // 100ms
   static const int64_t OB_ELECTION_LEADER_EXPIRED_PRINT_INTERVAL_US = 10 * 1000 * 1000;  // 10S
   // RWLock performs better on ARM platform, but worse on x86 platform
 #if defined(__x86_64__)
@@ -384,6 +384,10 @@ private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;
+#elif defined(__sw_64__) || defined(__loongarch64)
+  typedef common::SpinRLockGuard RLockGuard;
+  typedef common::SpinWLockGuard WLockGuard;
+  mutable common::SpinRWLock lock_;
 #endif
 private:
   bool is_inited_;

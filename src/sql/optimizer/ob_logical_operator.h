@@ -261,9 +261,12 @@ static const char OPCOST[] = "OP_COST";
  * these operator never generate expr
  */
 
-#define IS_EXPR_PASSBY_OPER(type)                                                  \
-  (log_op_def::LOG_GRANULE_ITERATOR == (type) || log_op_def::LOG_LINK == (type) || \
-      log_op_def::LOG_EXCHANGE == (type) || log_op_def::LOG_MONITORING_DUMP == (type))
+#define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
+                                   || log_op_def::LOG_LINK == (type)             \
+                                   || log_op_def::LOG_EXCHANGE == (type)         \
+                                   || log_op_def::LOG_MONITORING_DUMP == (type)  \
+                                   || log_op_def::LOG_JOIN_FILTER == (type))
+
 
 struct FilterCompare {
   FilterCompare(common::ObIArray<ObExprSelPair>& predicate_selectivities)
@@ -1571,7 +1574,7 @@ public:
     return type_ != log_op_def::LOG_EXCHANGE && type_ != log_op_def::LOG_GRANULE_ITERATOR &&
            type_ != log_op_def::LOG_MONITORING_DUMP && type_ != log_op_def::LOG_SORT &&
            type_ != log_op_def::LOG_SUBPLAN_FILTER && type_ != log_op_def::LOG_MATERIAL &&
-           type_ != log_op_def::LOG_JOIN_FILTER;
+           type_ != log_op_def::LOG_JOIN_FILTER && type_ != log_op_def::LOG_LINK;
   }
 
   /*
@@ -1737,6 +1740,10 @@ public:
   int compute_repartition_func_info(const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& src_join_key,
       const common::ObIArray<ObRawExpr*>& target_join_key, const ObShardingInfo& target_sharding,
       ObRawExprFactory& expr_factory, ObExchangeInfo& exch_info);
+
+  int compute_repartition_func_info_for_insert(const ObIArray<ObRawExpr *> &src_keys,
+      const ObIArray<ObRawExpr *> &target_keys, const ObShardingInfo &target_sharding, ObRawExprFactory &expr_factory,
+      ObExchangeInfo &exch_info);
 
   int get_repartition_keys(const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& src_keys,
       const common::ObIArray<ObRawExpr*>& target_keys, const common::ObIArray<ObRawExpr*>& target_part_keys,
@@ -1987,7 +1994,8 @@ public:
       ObRawExpr*& part_expr, ObRawExpr*& subpart_expr);
 
   int check_fulfill_cut_ratio_condition(int64_t dop, double ndv, bool& is_fulfill);
-
+  // check child operator contain exchange
+  int child_has_exchange(const ObLogicalOperator *op, bool &find);
 public:
   /* child operators */
   ObSEArray<ObLogicalOperator*, 16, common::ModulePageAllocator, true> child_;

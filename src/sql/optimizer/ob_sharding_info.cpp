@@ -521,7 +521,23 @@ int ObShardingInfo::get_all_partition_keys(
   return ret;
 }
 
-int ObShardingInfo::get_total_part_cnt(int64_t& total_part_cnt) const
+// extract all base column exprs from partition expr
+int ObShardingInfo::get_all_partition_ref_columns(
+    common::ObIArray<ObRawExpr *> &out_part_keys, bool ignore_single_partition /* = false */) const
+{
+  int ret = OB_SUCCESS;
+  if (!(ignore_single_partition && is_partition_single()) &&
+      OB_FAIL(ObRawExprUtils::extract_column_exprs(partition_keys_, out_part_keys))) {
+    LOG_WARN("failed to assign array", K(ret));
+  } else if (!(ignore_single_partition && is_subpartition_single()) &&
+             OB_FAIL(ObRawExprUtils::extract_column_exprs(sub_partition_keys_, out_part_keys))) {
+    LOG_WARN("failed to append array", K(ret));
+  } else { /*do nothing*/
+  }
+  return ret;
+}
+
+int ObShardingInfo::get_total_part_cnt(int64_t &total_part_cnt) const
 {
   int ret = OB_SUCCESS;
   total_part_cnt = 1;

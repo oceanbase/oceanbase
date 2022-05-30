@@ -1428,6 +1428,7 @@ const int64_t OB_MAX_COLUMN_NUMBER = OB_ROW_MAX_COLUMNS_COUNT;  // used in ObSch
 const int64_t OB_MAX_PARTITION_KEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER;
 const int64_t OB_MAX_USER_DEFINED_COLUMNS_COUNT = OB_ROW_MAX_COLUMNS_COUNT - OB_APP_MIN_COLUMN_ID;
 const int64_t OB_CAST_TO_VARCHAR_MAX_LENGTH = 256;
+const int64_t OB_CAST_TO_JSON_SCALAR_LENGTH = 256;
 const int64_t OB_CAST_BUFFER_LENGTH = 256;
 const int64_t OB_PREALLOCATED_NUM = 21;  // half of 42
 const int64_t OB_PREALLOCATED_COL_ID_NUM = 4;
@@ -1493,6 +1494,8 @@ const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 const int64_t OB_MAX_CPU_NUM = 64;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;
+#else
+const int64_t OB_MAX_CPU_NUM = 64;
 #endif
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
@@ -1872,7 +1875,7 @@ enum ObJITEnableMode {
 
 #define DATABUFFER_SERIALIZE_INFO data_buffer_.get_data(), data_buffer_.get_capacity(), data_buffer_.get_position()
 
-#define DIO_ALIGN_SIZE 512
+#define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
 #define CORO_INIT_PRIORITY 120

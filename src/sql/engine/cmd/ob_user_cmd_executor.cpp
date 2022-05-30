@@ -35,14 +35,16 @@ int ObCreateUserExecutor::encrypt_passwd(
     const common::ObString& pwd, common::ObString& encrypted_pwd, char* enc_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
+  // buffer need at least SCRAMBLE_LENGTH * 2 + 2 bytes for encrypt password and '\0'
+  // ObString encrypted_pwd only need to hold SCRAMBLE_LENGTH * 2 + 1 bytes for encrypt password
   if (OB_ISNULL(enc_buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("enc_buf is NULL", K(ret));
-  } else if (buf_len < SCRAMBLE_LENGTH * 2 + 1) {
+  } else if (buf_len < ENC_BUF_LEN) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("Encrypt buf not enough");
   } else {
-    encrypted_pwd.assign_ptr(enc_buf, SCRAMBLE_LENGTH * 2 + 1);
+    encrypted_pwd.assign_ptr(enc_buf, ENC_STRING_BUF_LEN);
     if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
       SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
     }

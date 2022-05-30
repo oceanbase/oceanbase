@@ -49,7 +49,8 @@ int ObTableQueryP::check_arg()
   if (!arg_.query_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table query request", K(ret), "query", arg_.query_);
-  } else if (arg_.consistency_level_ != ObTableConsistencyLevel::STRONG) {
+  } else if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
+                arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_);
@@ -121,6 +122,7 @@ int ObTableQueryP::try_process()
                                 table::ObBinlogRowImageType::MINIMAL/*ignored*/);
   ObSEArray<int64_t, 1> part_ids;
   const bool is_readonly = true;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   ObTableQueryResultIterator *result_iterator = nullptr;
   int32_t result_count = 0;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
@@ -131,7 +133,7 @@ int ObTableQueryP::try_process()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, table_id, part_ids, timeout_ts))) {
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->execute_query(table_service_ctx_, arg_.query_,
                                                    result_, result_iterator))) {
@@ -139,6 +141,19 @@ int ObTableQueryP::try_process()
       LOG_WARN("failed to execute query", K(ret), K(table_id));
     }
   } else {
+    if (arg_.query_.get_htable_filter().is_valid()) {
+      // hbase model, compress the result packet
+      ObCompressorType compressor_type = INVALID_COMPRESSOR;
+      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
+                      GCONF.tableapi_transport_compress_func, compressor_type))) {
+        compressor_type = INVALID_COMPRESSOR;
+      } else if (NONE_COMPRESSOR == compressor_type) {
+        compressor_type = INVALID_COMPRESSOR;
+      }
+      this->set_result_compress_type(compressor_type);
+      ret = OB_SUCCESS; // reset ret
+      LOG_DEBUG("[yzfdebug] use compressor", K(compressor_type));
+    }
     // one_result references to result_
     ObTableQueryResult *one_result = nullptr;
     while (OB_SUCC(ret)) {
@@ -182,10 +197,12 @@ int ObTableQueryP::try_process()
     LOG_WARN("failed to end trans", K(ret), "rollback", need_rollback_trans);
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-
   // record events
-  stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
-  
+  if (arg_.query_.get_htable_filter().is_valid()) {
+    stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
+  } else {
+    stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
+  }
   audit_row_count_ = result_row_count_;
 
 #ifndef NDEBUG

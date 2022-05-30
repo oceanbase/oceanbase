@@ -175,6 +175,8 @@ int ObPartTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, co
     }
     is_listener_ = false;
     listener_handler_ = NULL;
+    ctx_serialize_size_ = undo_status_.get_serialize_size() + partition_log_info_arr_.get_serialize_size() +
+                          prev_redo_log_ids_.get_serialize_size();
   }
   if (OB_FAIL(ret)) {
     if (NULL != redo_sync_task_) {
@@ -388,6 +390,8 @@ void ObPartTransCtx::reset()
   last_redo_log_mutator_size_ = 0;
   has_write_or_replay_mutator_redo_log_ = false;
   is_in_redo_with_prepare_ = false;
+  ctx_serialize_size_ = 0;
+  prev_checkpoint_id_ = 0;
 }
 
 int ObPartTransCtx::construct_context(const ObTransMsg& msg)
@@ -569,8 +573,6 @@ int ObPartTransCtx::trans_end_(const bool commit, const int64_t commit_version)
   }
 
   const int64_t end_us = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_trans_mt_end_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_trans_mt_end_time(tenant_id_, end_us - start_us);
   // just for debug
   if (end_us - start_us > 5 * 1000 * 1000) {
     TRANS_LOG(WARN,
@@ -762,7 +764,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
       } else {
         can_rollback_stmt_ = true;
       }
-      (void)audit_partition(false, stmt_type);
+      //(void)audit_partition(false, stmt_type);
     } else {
       mt_ctx_.set_read_snapshot(snapshot_version_);
     }
@@ -968,7 +970,7 @@ int ObPartTransCtx::end_task_(
             ctx_dependency_wrap_.clear_cur_stmt_prev_trans_item();
           }
 
-          (void)audit_partition(true, stmt_type);
+          //(void)audit_partition(true, stmt_type);
           TRANS_LOG(
               DEBUG, "rollback stmt success", K(is_rollback), K(plan_type), K_(commit_task_count), "context", *this);
         }
@@ -980,9 +982,10 @@ int ObPartTransCtx::end_task_(
         if (OB_PHY_PLAN_UNCERTAIN == plan_type) {
           need_print_trace_log_ = true;
         }
+        /*
         if (stmt_info_.is_task_match(stmt_min_sql_no)) {
           (void)audit_partition(true, stmt_type);
-        }
+        }*/
       }
     } else {
       // do nothing
@@ -1209,7 +1212,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
       case OB_TRANS_CLEAR_REQUEST: {
         if (OB_FAIL(set_scheduler_(msg.get_scheduler()))) {
           TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
-        } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+        } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
           TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
         } else if (OB_FAIL(handle_trans_clear_request_(msg))) {
           TRANS_LOG(WARN, "handle trans clear request error", KR(ret), K(msg));
@@ -1248,7 +1251,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
           TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
         } else if (OB_FAIL(set_coordinator_(msg.get_coordinator()))) {
           TRANS_LOG(WARN, "set coordinator error", KR(ret), K(msg));
-        } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+        } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
           TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
         } else if (OB_FAIL(set_xid_(msg.get_xid()))) {
           TRANS_LOG(WARN, "set xid error", KR(ret), K(msg));
@@ -1296,7 +1299,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
             TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
           } else if (OB_FAIL(set_coordinator_(msg.get_coordinator()))) {
             TRANS_LOG(WARN, "set coordinator error", KR(ret), K(msg));
-          } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+          } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
             TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
           } else {
             // do nothing
@@ -1437,8 +1440,8 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
     REC_TRANS_TRACE_EXT(tlog_, handle_timeout, OB_ID(ret), ret, OB_ID(used), timeguard, OB_ID(uref), get_uref());
   } else {
     TRANS_LOG(WARN, "failed to acquire lock in specified time", K_(trans_id));
-    unregister_timeout_task_();
-    register_timeout_task_(delay);
+    (void)unregister_timeout_task_();
+    (void)register_timeout_task_(delay);
   }
 
   return ret;
@@ -1644,12 +1647,17 @@ bool ObPartTransCtx::not_need_write_next_log_(const int64_t log_type)
   return is_dup_table_trans_ && is_prepare_leader_revoke_ && ObStorageLogTypeChecker::is_trans_redo_log(log_type);
 }
 
+void ObPartTransCtx::reset_prev_redo_log_ids()
+{
+  prev_redo_log_ids_.reset();
+}
+
 // when submit log success
 int ObPartTransCtx::on_sync_log_success(
     const int64_t log_type, const int64_t log_id, const int64_t timestamp, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
-  int64_t start_us = 0;
+  int64_t start_us = ObTimeUtility::fast_current_time();
   int64_t end_us = 0;
   bool has_redo_log = false;
   bool has_pending_cb = true;
@@ -1672,18 +1680,38 @@ int ObPartTransCtx::on_sync_log_success(
     dec_submit_log_count_();
     update_durable_log_id_ts_(log_type, log_id, timestamp);
 
+    if ((log_type & OB_LOG_TRANS_RECORD) != 0) {
+      reset_prev_redo_log_ids();
+      prev_checkpoint_id_ = log_id;
+      TRANS_LOG(INFO, "succeed to update prev_checkpoint_id ||| ", K(hash()), K(get_partition()), K(prev_checkpoint_id_));
+      // decide and then submit the next log
+      if (need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else {
+        ObStorageLogType next_log_type = ObStorageLogType::OB_LOG_UNKNOWN;
+        if (OB_FAIL(decide_and_submit_next_log_(next_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
+        }
+      }
+    }
+
     if ((log_type & OB_LOG_SP_TRANS_REDO) != 0) {
-      start_us = ObTimeUtility::fast_current_time();
       has_write_or_replay_mutator_redo_log_ = true;
       ++redo_log_no_;
       if (redo_log_no_ == 1) {
         // The log is completed, we need verify the txn checksum
         need_checksum_ = true;
       }
-      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
         TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
-      } else if (!not_need_write_next_log_(log_type) &&
-                 OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else if (!not_need_write_next_log_(log_type)
+                 && OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
         TRANS_LOG(WARN, "submit sp trans commit log task error", KR(ret), "context", *this);
       } else {
         // do nothing
@@ -1693,14 +1721,9 @@ int ObPartTransCtx::on_sync_log_success(
         // coordinator to progress the txn.
         set_status_(OB_TRANS_ROLLBACKED);
       }
-      ObTransStatistic::get_instance().add_sp_redo_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_redo_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
     }
     if ((log_type & OB_LOG_SP_ELR_TRANS_COMMIT) != 0) {
       ++redo_log_no_;
-      start_us = ObTimeUtility::fast_current_time();
       update_last_checkpoint_(quick_checkpoint_);
       if (OB_SUCC(ret)) {
         set_state_(ObSpState::PREPARE);
@@ -1730,10 +1753,6 @@ int ObPartTransCtx::on_sync_log_success(
       }
 
       INC_ELR_STATISTIC(with_dependency_trx_count);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       if (OB_FAIL(ret)) {
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
@@ -1741,7 +1760,6 @@ int ObPartTransCtx::on_sync_log_success(
     }
     if ((log_type & OB_LOG_SP_TRANS_COMMIT) != 0 || (log_type & OB_LOG_SP_TRANS_ABORT) != 0) {
       ++redo_log_no_;
-      start_us = ObTimeUtility::fast_current_time();
       const bool commit = ((log_type & OB_LOG_SP_TRANS_COMMIT) != 0) ? true : false;
       if (commit) {
         // update checkpoint
@@ -1763,10 +1781,6 @@ int ObPartTransCtx::on_sync_log_success(
       }
 
       INC_ELR_STATISTIC(without_dependency_trx_count);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_sp_commit_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       if (OB_FAIL(ret)) {
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
@@ -1786,10 +1800,13 @@ int ObPartTransCtx::on_sync_log_success(
       }
       // need submit redo_prepare log when log_type equal OB_LOG_TRANS_REDO
       if (OB_LOG_TRANS_REDO == log_type) {
-        start_us = ObTimeUtility::fast_current_time();
         // record the redo log id
-        if (!is_xa_last_empty_redo_log_() && OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+        if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
+        } else if (cluster_version_after_3100_() && need_record_log()) {
+          if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+            TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+          }
         } else if (not_need_write_next_log_(log_type)) {
           // No need to write log for dup table in order to prevent the leader
           // revoke from getting stuck
@@ -1829,16 +1846,11 @@ int ObPartTransCtx::on_sync_log_success(
           // coordinator to progress the txn
           set_status_(OB_TRANS_ROLLBACKED);
         }
-        ObTransStatistic::get_instance().add_redo_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_redo_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       } else {
         ret = OB_SUCCESS;
       }
     }
     if ((log_type & OB_LOG_TRANS_PREPARE) != 0) {
-      start_us = ObTimeUtility::fast_current_time();
       // update checkpoint
       update_last_checkpoint_(quick_checkpoint_);
       prepare_log_id_ = log_id;
@@ -1859,10 +1871,6 @@ int ObPartTransCtx::on_sync_log_success(
         is_hazardous_ctx_ = true;
         TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
       }
-      ObTransStatistic::get_instance().add_prepare_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_prepare_log_cb_time(
-          tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
     }
     // ignore ret
     if ((log_type & OB_LOG_TRANS_COMMIT) != 0) {
@@ -1892,10 +1900,6 @@ int ObPartTransCtx::on_sync_log_success(
           is_hazardous_ctx_ = true;
           TRANS_LOG(ERROR, "current ctx status is hazardous", K(*this));
         }
-        ObTransStatistic::get_instance().add_commit_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_commit_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     // ignore ret
@@ -1918,10 +1922,6 @@ int ObPartTransCtx::on_sync_log_success(
             TRANS_LOG(WARN, "ObPartTransCtx on_abort error", KR(ret), "context", *this);
           }
         }
-        ObTransStatistic::get_instance().add_abort_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_abort_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     // ignore ret
@@ -1931,14 +1931,9 @@ int ObPartTransCtx::on_sync_log_success(
         listener_handler_->set_commit_log_synced(true);
       }
       if (OB_ISNULL(listener_handler_) || listener_handler_->is_listener_ready()) {
-        start_us = ObTimeUtility::fast_current_time();
         if (OB_FAIL(on_clear_(true))) {
           TRANS_LOG(WARN, "ObPartTransCtx on_clear error", KR(ret), "context", *this);
         }
-        ObTransStatistic::get_instance().add_clear_log_cb_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_clear_log_cb_time(
-            tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-        end_us = ObTimeUtility::fast_current_time();
       }
     }
     if ((OB_LOG_MUTATOR & log_type) != 0) {
@@ -1950,62 +1945,26 @@ int ObPartTransCtx::on_sync_log_success(
         need_checksum_ = true;
       }
       start_us = ObTimeUtility::fast_current_time();
-      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
         TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if ((OB_LOG_TRANS_STATE & log_type) != 0) {
         // do nothing
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
       } else if (batch_commit_trans_) {
         // do nothing
+      } else if (OB_FAIL(decide_and_submit_next_log_(submit_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
       } else {
-        if (OB_FAIL(decide_log_type_for_mutating_(submit_log_type))) {
-          TRANS_LOG(ERROR, "decide log type for mutating fail", KR(ret), "context", *this);
-        } else if (OB_LOG_MUTATOR == submit_log_type && 0 != GCONF._private_buffer_size &&
-                   !mt_ctx_.pending_log_size_too_large() && !has_pending_cb) {
-          // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
-          // logging if all follows are true
-          // 1. _private_redo_buffer is closed
-          // 2. _private_redo_buffer is opened while pending log size is too small for continuing logging
-          // 3. there exists pending callbacks for minor merge
-        } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == submit_log_type || OB_LOG_TRANS_REDO == submit_log_type) &&
-                   OB_FAIL(alloc_local_trans_version_(submit_log_type))) {
-          if (OB_EAGAIN != ret) {
-            TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this, K(submit_log_type));
-          } else {
-            ret = OB_SUCCESS;
-            if (submit_log_count_ > 0) {
-              TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this, K(submit_log_type));
-              need_print_trace_log_ = true;
-            }
-            inc_submit_log_pending_count_();
-            inc_submit_log_count_();
-          }
-        } else if (OB_FAIL(submit_log_task_(submit_log_type, has_redo_log))) {
-          TRANS_LOG(WARN,
-              "submit log task error",
-              KR(ret),
-              "context",
-              *this,
-              K(submit_log_type),
-              K(is_sp_trans_()),
-              K(is_mini_sp_trans_()));
-        } else {
-          TRANS_LOG(DEBUG,
-              "submit log task success",
-              "context",
-              *this,
-              K(submit_log_type),
-              K(submit_log_type),
-              K(has_redo_log));
-        }
+        // do nothing
       }
       if (OB_FAIL(ret)) {
         // Mark the txn need to rollback, and rely on the timer task of
         // coordinator to progress the txn
         set_status_(OB_TRANS_ROLLBACKED);
       }
-      ObTransStatistic::get_instance().add_redo_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_redo_log_cb_time(tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       TRANS_LOG(DEBUG, "sync transaction mutator log", KR(ret), "context", *this, K(submit_log_type));
     }
     if ((OB_LOG_TRANS_STATE & log_type) != 0) {
@@ -2014,7 +1973,6 @@ int ObPartTransCtx::on_sync_log_success(
       TRANS_LOG(INFO, "sync transaction state log success", "context", *this);
     }
     if (OB_LOG_MUTATOR_ABORT == log_type) {
-      start_us = ObTimeUtility::fast_current_time();
       (void)unregister_timeout_task_();
       set_exiting_();
       const bool commit = false;
@@ -2022,9 +1980,6 @@ int ObPartTransCtx::on_sync_log_success(
       (void)trans_end_(commit, get_global_trans_version_());
       (void)trans_clear_();
       end_trans_callback_(OB_TRANS_KILLED);
-      ObTransStatistic::get_instance().add_abort_log_cb_count(tenant_id_, 1);
-      ObTransStatistic::get_instance().add_abort_log_cb_time(tenant_id_, ObTimeUtility::fast_current_time() - start_us);
-      end_us = ObTimeUtility::fast_current_time();
       ObTransStatus trans_status(trans_id_, OB_TRANS_KILLED);
       (void)trans_status_mgr_->set_status(trans_id_, trans_status);
       TRANS_LOG(INFO, "sync transaction mutator abort log", KR(ret), "context", *this);
@@ -2033,6 +1988,7 @@ int ObPartTransCtx::on_sync_log_success(
 
   dup_table_syncing_log_id_ = UINT64_MAX;
   dup_table_syncing_log_ts_ = INT64_MAX;
+  end_us = ObTimeUtility::fast_current_time();
 
   if (end_us - start_us > 30 * 1000) {
     TRANS_LOG(WARN,
@@ -2190,8 +2146,8 @@ int ObPartTransCtx::compensate_prepare_no_log_()
     } else {
       log_type = OB_LOG_TRANS_PREPARE;
       if (!stc_.is_valid()) {
-        // maybe crashed and recovered from trans status table, stc is not set.
-        // under such condition, stc is set to current time
+        // maybe crashed and recovered from trans status table, stc is not set.		
+        // under such condition, stc is set to current time		
         stc_ = MonotonicTs::current_time();
       }
       if (OB_FAIL(alloc_local_trans_version_(log_type))) {
@@ -3413,8 +3369,7 @@ int ObPartTransCtx::replay_sp_redo_log(
         store_ctx.log_ts_ = timestamp;
         store_ctx.cur_pkey_ = self_;
         cluster_id_ = log.get_cluster_id();
-        const ObTransMutator& mutator = log.get_mutator();
-        const int64_t mutator_size = mutator.get_position();
+        const ObTransMutator &mutator = log.get_mutator();
         bool replayed = true;
         if (OB_FAIL(partition_service_->replay_redo_log(
                 self_, store_ctx, timestamp, log_id, mutator.get_data(), mutator.get_position(), replayed))) {
@@ -3433,7 +3388,6 @@ int ObPartTransCtx::replay_sp_redo_log(
         } else {
           TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
         }
-        ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
       }
     }
 
@@ -3472,8 +3426,6 @@ int ObPartTransCtx::replay_sp_redo_log(
   }
 
   const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_redo_log_replay_time(tenant_id_, end - start);
   if (OB_UNLIKELY(end - start > REPLAY_PRINT_TRACE_THRESHOLD) && REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
     need_print_trace_log_ = true;
   }
@@ -3484,8 +3436,8 @@ int ObPartTransCtx::replay_sp_redo_log(
 int ObPartTransCtx::replay_sp_commit_log(const ObSpTransCommitLog& log, const int64_t timestamp, const uint64_t log_id)
 {
   int ret = OB_SUCCESS;
-
   const int64_t start = ObTimeUtility::fast_current_time();
+
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
   if (IS_NOT_INIT) {
@@ -3607,9 +3559,6 @@ int ObPartTransCtx::replay_sp_commit_log(const ObSpTransCommitLog& log, const in
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_commit_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_commit_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -3687,9 +3636,6 @@ int ObPartTransCtx::replay_sp_abort_log(const ObSpTransAbortLog& log, const int6
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObClockGenerator::getClock();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -3699,8 +3645,8 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
   ObWorker::CompatMode mode = ObWorker::CompatMode::INVALID;
+  const int64_t start = ObTimeUtility::fast_current_time();
 
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
@@ -3779,8 +3725,7 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
         is_redo_prepared_ = true;
       }
       if (OB_SUCC(ret)) {
-        const ObTransMutator& mutator = log.get_mutator();
-        const int64_t mutator_size = mutator.get_position();
+        const ObTransMutator &mutator = log.get_mutator();
         bool replayed = true;
         if (0 == mutator.get_position() && is_xa_local_trans()) {
           replayed = false;
@@ -3802,7 +3747,6 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
             TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
           }
         }
-        ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
       }
     }
     REC_TRANS_TRACE_EXT(tlog_,
@@ -3842,24 +3786,61 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
       update_durable_log_id_ts_(OB_LOG_TRANS_REDO, log_id, timestamp);
     }
   }
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_redo_log_replay_time(tenant_id_, end - start);
-  if (OB_UNLIKELY(end - start > REPLAY_PRINT_TRACE_THRESHOLD) && REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
+  if (OB_UNLIKELY(ObTimeUtility::fast_current_time() - start > REPLAY_PRINT_TRACE_THRESHOLD) &&
+      REACH_TIME_INTERVAL(1L * 1000 * 1000)) {
     need_print_trace_log_ = true;
   }
 
   return ret;
 }
 
-int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64_t timestamp, const uint64_t log_id,
-    const bool batch_committed, const int64_t checkpoint)
+int ObPartTransCtx::replay_record_log(const ObTransRecordLog &log,
+    const int64_t timestamp, const uint64_t log_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::fast_current_time();
+  CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
+  TRANS_LOG(INFO, "before replaying record log: ", K(log_id), K(prev_redo_log_ids_), K(prev_checkpoint_id_));
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!for_replay_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(!log.is_valid()) || OB_UNLIKELY(timestamp < 0)) {
+    TRANS_LOG(WARN, "invalid argument", K(log), K(timestamp), K(log_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_TRANS_RECORD, timestamp))) {
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log));
+    ret = OB_TRANS_INVALID_STATE;
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(is_hazardous_ctx_)) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(ERROR, "current ctx status is hazardous", K(ret), K(*this));
+  } else {
+    submit_log_count_ = 0;
+    update_durable_log_id_ts_(OB_LOG_TRANS_RECORD, log_id, timestamp);
+    reset_prev_redo_log_ids();
+    prev_checkpoint_id_ = log_id;
+    TRANS_LOG(INFO, "replay record log success", K(prev_redo_log_ids_), K(prev_checkpoint_id_), "context", *this);
+    REC_TRANS_TRACE_EXT(tlog_, replay_record, OB_ID(ret), ret, OB_ID(used), ObTimeUtility::fast_current_time() - start,
+        OB_ID(id), log_id, OB_ID(t), timestamp, OB_ID(uref), get_uref());
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog &log,
+    const int64_t timestamp, const uint64_t log_id, const bool batch_committed,
+    const int64_t checkpoint)
 {
   UNUSED(checkpoint);
   int ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
   int64_t commit_version = 0;
   bool can_checkpoint = false;
+  const int64_t start = ObTimeUtility::fast_current_time();
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
   if (IS_NOT_INIT) {
@@ -4006,7 +3987,6 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
         end_log_ts_ = timestamp;
       }
     }
-    TRANS_LOG(DEBUG, "replay prepare log success", "context", *this, K(log));
   }
   REC_TRANS_TRACE_EXT(tlog_,
       replay_prepare,
@@ -4026,9 +4006,6 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
       can_checkpoint,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_prepare_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_prepare_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4120,9 +4097,6 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_commit_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_commit_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4337,9 +4311,6 @@ int ObPartTransCtx::replay_abort_log(const ObTransAbortLog& log, const int64_t t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4412,9 +4383,6 @@ int ObPartTransCtx::replay_clear_log(const ObTransClearLog& log, const int64_t t
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObTimeUtility::fast_current_time();
-  ObTransStatistic::get_instance().add_clear_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_clear_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4599,8 +4567,7 @@ int ObPartTransCtx::replay_trans_mutator_log(
     store_ctx.mem_ctx_ = &mt_ctx_;
     store_ctx.tenant_id_ = self_.get_tenant_id();
     store_ctx.log_ts_ = timestamp;
-    const ObTransMutator& mutator = log.get_mutator();
-    const int64_t mutator_size = mutator.get_position();
+    const ObTransMutator &mutator = log.get_mutator();
     bool replayed = true;
     if (OB_FAIL(partition_service_->replay_redo_log(
             self_, store_ctx, timestamp, log_id, mutator.get_data(), mutator.get_position(), replayed))) {
@@ -4622,7 +4589,6 @@ int ObPartTransCtx::replay_trans_mutator_log(
     } else {
       TRANS_LOG(INFO, "no need to replay, maybe partition already removed", K(log), K(*this));
     }
-    ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
   }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "replay trans mutator log error", KR(ret), "context", *this, K(log), K(log_id));
@@ -4712,9 +4678,6 @@ int ObPartTransCtx::replay_mutator_abort_log(
       timestamp,
       OB_ID(uref),
       get_uref());
-  const int64_t end = ObClockGenerator::getClock();
-  ObTransStatistic::get_instance().add_abort_log_replay_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_abort_log_replay_time(tenant_id_, end - start);
   return ret;
 }
 
@@ -4734,7 +4697,7 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
     need_print_trace_log_ = true;
   } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_START_MEMBERSHIP_STORAGE, timestamp))) {
-    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log), K(timestamp));
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(timestamp));
     ret = OB_TRANS_INVALID_STATE;
     need_print_trace_log_ = true;
   } else if (0 == submit_log_count_) {
@@ -4776,7 +4739,34 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_STAT_ABORT_TRANS_INC(tenant_id_);
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(update_max_majority_log(log_id, timestamp))) {
+      TRANS_LOG(ERROR, "update max majority log failed", K(ret), K(*this));
+    }
+  }
+
   REC_TRANS_TRACE_EXT(tlog_, replay_start_working_log, OB_ID(ret), ret, OB_ID(uref), get_uref());
+
+  return ret;
+}
+
+int ObPartTransCtx::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+  storage::ObIPartitionGroupGuard pg_guard;
+
+  if (OB_NOT_NULL(pg_)) {
+    if (OB_FAIL(pg_->update_max_majority_log(log_id, log_ts))) {
+      TRANS_LOG(WARN, "update max majority log error", K(*this));
+    }
+  } else if (OB_FAIL(partition_service_->get_partition(self_, pg_guard))) {
+    TRANS_LOG(WARN, "get partition error", KR(ret), "context", *this);
+  } else if (NULL == pg_guard.get_partition_group()) {
+    TRANS_LOG(ERROR, "partition is null, unexpected error", KP(pg_guard.get_partition_group()), "context", *this);
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(pg_guard.get_partition_group()->update_max_majority_log(log_id, log_ts))) {
+    TRANS_LOG(WARN, "update max majority log error", K(*this));
+  }
 
   return ret;
 }
@@ -4849,7 +4839,25 @@ bool ObPartTransCtx::has_logged_() const
   return (mutator_log_no_ > 0 || has_trans_state_log_ || redo_log_no_ > 0);
 }
 
-int ObPartTransCtx::reserve_log_header_(char* buf, const int64_t size, int64_t& pos)
+bool ObPartTransCtx::need_record_log() const
+{
+  // Record Log will be generated if the number of log ids
+  // is no less than the max size of prev_redo_log_ids_
+  uint64_t prev_log_ids_count = MAX_PREV_LOG_IDS_COUNT;
+
+   #ifdef ERRSIM
+  // Error injection test, used for changing prev_log_ids_count for test
+  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  if (tmp_ret != OB_SUCCESS) {
+    prev_log_ids_count = 2;
+    TRANS_LOG(INFO, "need_record_log: ", K(prev_log_ids_count));
+  }
+  #endif
+
+  return prev_redo_log_ids_.count() >= prev_log_ids_count;
+}
+
+int ObPartTransCtx::reserve_log_header_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -4876,7 +4884,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
   int64_t tmp_pos = pos;
   int64_t available_capacity = 0;
   ObTimeGuard timeguard("fill_redo_log", 10 * 1000);
-  const int64_t start = ObTimeUtility::fast_current_time();
   ObElrTransInfoArray trans_array;
 
   {
@@ -4942,9 +4949,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
             pos = tmp_pos;
             mutator_size = mutator.get_position();
           }
-          ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-          ObTransStatistic::get_instance().add_fill_redo_log_time(
-              tenant_id_, ObTimeUtility::fast_current_time() - start);
         } else if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = log.serialize(buf, size, tmp_pos))) {
@@ -4956,9 +4960,6 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
             mutator_size = mutator.get_position();
             last_redo_log_mutator_size_ = mutator.get_position();
           }
-          ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-          ObTransStatistic::get_instance().add_fill_redo_log_time(
-              tenant_id_, ObTimeUtility::fast_current_time() - start);
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           last_redo_log_mutator_size_ = 0;
         } else {
@@ -5008,7 +5009,8 @@ int ObPartTransCtx::fill_prepare_log_(char* buf, const int64_t size, int64_t& po
           guard.get_elr_trans_arr(),
           can_elr_,
           trace_info_.get_app_trace_info(),
-          xid_);
+          xid_,
+          prev_checkpoint_id_);
       if (OB_UNLIKELY(!log.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid prepare log", K(ret), K(log));
@@ -5062,7 +5064,38 @@ int ObPartTransCtx::fill_commit_log_(char* buf, const int64_t size, int64_t& pos
   return ret;
 }
 
-int ObPartTransCtx::fill_pre_commit_log_(char* buf, const int64_t size, int64_t& pos)
+int ObPartTransCtx::fill_record_log_(char *buf, const int64_t size, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = pos;
+  int64_t prev_log_ids_count = (int64_t)prev_redo_log_ids_.count();
+
+  // Create a ObTransRecordLog and pass the log_id of prev checkpoint to it
+  ObTransRecordLog log(OB_LOG_TRANS_RECORD, self_, trans_id_, cluster_id_, prev_checkpoint_id_);
+  TRANS_LOG(INFO, "succeed to create record log", K(trans_id_), K(prev_checkpoint_id_), K(log.get_prev_record_log_id()));
+  #ifdef ERRSIM
+  // Error injection test, used for changing prev_log_ids_count for test
+  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  if (tmp_ret != OB_SUCCESS) {
+    prev_log_ids_count = 2;
+    TRANS_LOG(INFO, "set_prev_log_ids_count: ", K(prev_log_ids_count));
+  }
+  #endif
+  // Add current all log_ids to the record log
+  for (int i = 0; i < prev_log_ids_count; ++i) {
+    log.add_log_id(prev_redo_log_ids_.at(i));
+  }
+
+  if (OB_FAIL(log.serialize(buf, size, tmp_pos))) {
+    TRANS_LOG(WARN, "serialize commit log error", K(ret), K(log));
+  } else {
+    pos = tmp_pos;
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::fill_pre_commit_log_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -5282,7 +5315,6 @@ int ObPartTransCtx::fill_redo_prepare_commit_clear_log_(
 int ObPartTransCtx::fill_sp_redo_log_(ObSpTransRedoLog& sp_redo_log, const int64_t capacity, int64_t& mutator_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t start = ObTimeUtility::fast_current_time();
 
   if (OB_UNLIKELY(!sp_redo_log.is_valid()) || OB_UNLIKELY(capacity < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -5301,9 +5333,6 @@ int ObPartTransCtx::fill_sp_redo_log_(ObSpTransRedoLog& sp_redo_log, const int64
       mutator_size = mutator.get_position();
     }
   }
-
-  ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-  ObTransStatistic::get_instance().add_fill_redo_log_time(tenant_id_, ObTimeUtility::fast_current_time() - start);
 
   return ret;
 }
@@ -5436,7 +5465,8 @@ int ObPartTransCtx::fill_sp_commit_log_(const int target_log_type, char* buf, co
                    checkpoint,
                    guard.get_elr_trans_arr(),
                    can_elr_,
-                   trace_info_.get_app_trace_info()))) {
+                   trace_info_.get_app_trace_info(),
+                   prev_checkpoint_id_))) {
       TRANS_LOG(WARN,
           "init commit log error",
           KR(ret),
@@ -5677,7 +5707,6 @@ int ObPartTransCtx::fill_mutator_log_(char* buf, const int64_t size, int64_t& po
   int64_t available_capacity = 0;
   ObTransMutatorLog log;
   ObTimeGuard timeguard("fill_mutator_log", 10 * 1000);
-  const int64_t start = ObTimeUtility::fast_current_time();
 
   {
     ObElrTransArrGuard guard;
@@ -5725,8 +5754,6 @@ int ObPartTransCtx::fill_mutator_log_(char* buf, const int64_t size, int64_t& po
           pos = tmp_pos;
           mutator_size = mutator.get_position();
         }
-        ObTransStatistic::get_instance().add_fill_redo_log_count(tenant_id_, 1);
-        ObTransStatistic::get_instance().add_fill_redo_log_time(tenant_id_, ObTimeUtility::fast_current_time() - start);
       } else if (OB_ENTRY_NOT_EXIST == ret) {
         // do nothing
       } else {
@@ -6425,6 +6452,10 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
           ret = fill_commit_log_(buf, size, pos);
           break;
         }
+        case OB_LOG_TRANS_RECORD: {
+          ret = fill_record_log_(buf, size, pos);
+          break;
+        }
         case OB_LOG_TRANS_PREPARE_WITH_COMMIT: {
           ret = OB_ERR_UNEXPECTED;
           break;
@@ -6584,11 +6615,6 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
           } else {
             inc_submit_log_pending_count_();
             inc_submit_log_count_();
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (mutator_size > 0) {
-            ObTransStatistic::get_instance().add_memstore_mutator_size(tenant_id_, mutator_size);
           }
         }
         timeguard.click();
@@ -7116,7 +7142,7 @@ int ObPartTransCtx::post_stmt_response_(
               status,
               request_id_))) {
         TRANS_LOG(WARN, "message init error", K(ret), K_(scheduler), K_(tmp_scheduler), K(msg_type));
-        // 将request的发送时间戳记录到response中，用于scheduler对消息超时的校验
+        // record request timestamp into response for checking timeout in scheduler
       } else if (OB_FAIL(msg.set_msg_timeout(request_timeout))) {
         TRANS_LOG(INFO,
             "set message start timestamp error",
@@ -7856,7 +7882,7 @@ int ObPartTransCtx::handle_2pc_local_prepare_request(const int64_t request_id, c
     TRANS_LOG(WARN, "set scheduler error", K(ret), K(scheduler), "context", *this);
   } else if (OB_FAIL(set_coordinator_(coordinator))) {
     TRANS_LOG(WARN, "set coordinator error", K(ret), K(coordinator), "context", *this);
-  } else if (OB_FAIL(set_participants_(participants))) {
+  } else if (OB_FAIL(calc_serialize_size_and_set_participants_(participants))) {
     TRANS_LOG(WARN, "set participants error", K(ret), K(participants), "context", *this);
   } else if (Ob2PCState::INIT != get_state_()) {
     ret = OB_EAGAIN;
@@ -8036,7 +8062,7 @@ int ObPartTransCtx::handle_2pc_pre_prepare_request(const int64_t prepare_version
     TRANS_LOG(WARN, "set scheduler error", KR(ret), K(scheduler), "context", *this);
   } else if (OB_FAIL(set_coordinator_(coordinator))) {
     TRANS_LOG(WARN, "set coordinator error", KR(ret), K(coordinator), "context", *this);
-  } else if (OB_FAIL(set_participants_(participants))) {
+  } else if (OB_FAIL(calc_serialize_size_and_set_participants_(participants))) {
     TRANS_LOG(WARN, "set participants error", KR(ret), K(participants), "context", *this);
   } else if (Ob2PCState::INIT != get_state_()) {
     ret = OB_EAGAIN;
@@ -8373,7 +8399,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
         TRANS_LOG(WARN, "set scheduler error", K(ret), K(*req));
       } else if (OB_FAIL(set_coordinator_(req->coordinator_))) {
         TRANS_LOG(WARN, "set coordinator error", K(ret), K(*req));
-      } else if (OB_FAIL(set_participants_(req->participants_))) {
+      } else if (OB_FAIL(calc_serialize_size_and_set_participants_(req->participants_))) {
         TRANS_LOG(WARN, "set participants error", K(ret), K(*req));
       } else {
         // do nothing
@@ -8427,7 +8453,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
     //  TRANS_LOG(WARN, "set scheduler error", K(ret), K(*req));
     if (OB_FAIL(set_coordinator_(req->coordinator_))) {
       TRANS_LOG(WARN, "set coordinator error", K(ret), K(*req));
-    } else if (OB_FAIL(set_participants_(req->participants_))) {
+    } else if (OB_FAIL(calc_serialize_size_and_set_participants_(req->participants_))) {
       TRANS_LOG(WARN, "set participants error", K(ret), K(*req));
     } else if (OB_FAIL(set_xid_(req->xid_))) {
       TRANS_LOG(WARN, "set xid error", K(ret), K(*this), K(*req));
@@ -9380,9 +9406,9 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool& is_prepared, int64_t& 
 }
 
 /*
- * return prepare logtimestamp if the prepare_logtimestamp smaller than log_ts, but end_log_ts bigger
+ * return prepare logtimestamp if the prepare_logtimestamp smaller than freeze_ts, but end_log_ts bigger
  * */
-int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool& has_prepared, int64_t& prepare_version)
+int ObPartTransCtx::get_prepare_version_before_logts(const int64_t freeze_ts, bool& has_prepared, int64_t& prepare_version)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_US = 100;
@@ -9391,15 +9417,14 @@ int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool&
   int64_t cur_prepare_version = ObTransVersion::INVALID_TRANS_VERSION;
 
   has_prepared = false;
-  while (max_durable_log_ts_ <= log_ts && OB_INVALID_TIMESTAMP == end_log_ts_) {
-    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      STORAGE_LOG(WARN, "wait log durable cost too long", "time", ObTimeUtility::current_time() - begin_time);
-    }
-    usleep(SLEEP_US);
+  if (!is_xa_local_trans() || (is_xa_local_trans() && is_xa_trans_prepared_)) {
+    // cur_prepare_version is the redo log timestamp before prepare.
+    state_.get_state_and_version(cur_state, cur_prepare_version);
   }
-  state_.get_state_and_version(cur_state, cur_prepare_version);
-  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version && !in_xa_prepare_state_ /* always true */ &&
-      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ && prepare_log_timestamp_ <= log_ts && end_log_ts_ > log_ts) {
+  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version &&  // xa really prepared, normal trans has redo log
+      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ &&                // trans really prepared
+      prepare_log_timestamp_ <= freeze_ts &&                           // prepare before freeze ts
+      end_log_ts_ > freeze_ts) {                                       // trans end after freeze ts
     has_prepared = true;
     prepare_version = prepare_log_timestamp_;
   }
@@ -10077,6 +10102,7 @@ void ObPartTransCtx::check_memtable_ctx_ref()
   }
 }
 
+/*
 void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type)
 {
   int tmp_ret = OB_SUCCESS;
@@ -10117,7 +10143,7 @@ void ObPartTransCtx::audit_partition(const bool is_rollback, const sql::stmt::St
       // do ntohing
     }
   }
-}
+}*/
 
 int ObPartTransCtx::post_redo_log_sync_to_not_mask_addr_(
     const uint64_t log_id, const int64_t log_ts, const int64_t log_type)
@@ -10535,6 +10561,8 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     prepare_log_id_ = ctx_info.prepare_log_id_;
     prepare_log_timestamp_ = ctx_info.prepare_log_timestamp_;
     clear_log_base_ts_ = ctx_info.clear_log_base_ts_;
+    // for record log
+    prev_checkpoint_id_ = ctx_info.prev_checkpoint_id_;
 
     (void)mark_dirty_trans();
 
@@ -10616,6 +10644,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.prepare_log_id_ = prepare_log_id_;
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
     info.clear_log_base_ts_ = clear_log_base_ts_;
+    info.prev_checkpoint_id_ = prev_checkpoint_id_;
     TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
   }
 
@@ -10660,6 +10689,8 @@ int ObPartTransCtx::get_trans_state_and_version_without_lock(ObTransStatusInfo& 
   if (trans_info.status_ == ObTransTableStatusType::COMMIT || trans_info.status_ == ObTransTableStatusType::ABORT) {
     trans_info.end_log_ts_ = ATOMIC_LOAD(&end_log_ts_);
   }
+
+  trans_info.start_log_ts_ = ATOMIC_LOAD(&min_log_ts_);
   return ret;
 }
 
@@ -10917,7 +10948,7 @@ int ObPartTransCtx::rollback_to_(const int32_t sql_no)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(undo_status_.undo(sql_no, curr_sql_no))) {
+      if (OB_FAIL(calc_serialize_size_and_set_undo_(sql_no, curr_sql_no))) {
         TRANS_LOG(WARN, "record rollback action failed", K(ret), K(sql_no), K(curr_sql_no));
       }
     }
@@ -11091,13 +11122,14 @@ int ObPartTransCtx::lock_for_read(
   ObTransStatusInfo trans_info;
   const int64_t MAX_SLEEP_US = 1000;
   const int64_t lock_wait_start_ts = ObTimeUtility::current_time();
+  memtable::ObMemtableCtx &read_ctx = lock_for_read_arg.read_ctx_;
 
   for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
     // leave this check here to make sure no lock is held
     int64_t abs_stmt_timeout =
-        mt_ctx_.get_trx_lock_timeout() < 0
-            ? mt_ctx_.get_abs_expired_time()
-            : MIN(lock_wait_start_ts + mt_ctx_.get_trx_lock_timeout(), mt_ctx_.get_abs_expired_time());
+        read_ctx.get_trx_lock_timeout() < 0
+            ? read_ctx.get_abs_expired_time()
+            : MIN(lock_wait_start_ts + read_ctx.get_trx_lock_timeout(), read_ctx.get_abs_expired_time());
 
     if (OB_FAIL(get_trans_state_and_version_without_lock(trans_info))) {
       TRANS_LOG(WARN, "failed to get trans table status", K(ret));
@@ -11197,11 +11229,12 @@ int ObPartTransCtx::check_sql_sequence_can_read(const int64_t sql_sequence, bool
   return ret;
 }
 
-int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info, const ObTransID& read_trans_id,
+int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info,
     const ObTransID& data_trans_id, const int64_t sql_sequence, ObStoreRowLockState& lock_state)
 {
   int ret = OB_SUCCESS;
 
+  // when lock_state.trans_version_ != 0 means cur trans is commit or abort
   switch (trans_info.status_) {
     case ObTransTableStatusType::COMMIT: {
       lock_state.is_locked_ = false;
@@ -11209,18 +11242,13 @@ int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info, const
       break;
     }
     case ObTransTableStatusType::RUNNING: {
-      if (read_trans_id == data_trans_id) {
-        lock_state.is_locked_ = true;
-        lock_state.trans_version_ = 0;
-      } else {
-        lock_state.is_locked_ = !trans_info.undo_status_.is_contain(sql_sequence);
-        lock_state.trans_version_ = 0;
-      }
+      lock_state.is_locked_ = !trans_info.undo_status_.is_contain(sql_sequence);
+      lock_state.trans_version_ = 0;
       break;
     }
     case ObTransTableStatusType::ABORT: {
       lock_state.is_locked_ = false;
-      lock_state.trans_version_ = 0;
+      lock_state.trans_version_ = OB_INVALID_VERSION;
       break;
     }
   }
@@ -11247,7 +11275,7 @@ int ObPartTransCtx::check_row_locked(const ObStoreRowkey& key, ObIMvccCtx& ctx, 
 
   if (OB_FAIL(get_trans_state_and_version_without_lock(trans_info))) {
     TRANS_LOG(WARN, "failed to get trans table status", K(ret));
-  } else if (OB_FAIL(check_row_locked_(trans_info, read_trans_id, data_trans_id, sql_sequence, lock_state))) {
+  } else if (OB_FAIL(check_row_locked_(trans_info, data_trans_id, sql_sequence, lock_state))) {
     TRANS_LOG(WARN, "failed to check transaction status", K(ret));
     // locked by other
   } else if (lock_state.is_locked_ && lock_state.lock_trans_id_ != read_trans_id) {
@@ -11336,6 +11364,10 @@ int ObPartTransCtx::cleanout_transnode(ObMvccTransNode& tnode, ObMvccRow& value,
 
 void ObPartTransCtx::set_exiting_()
 {
+  if (is_dirty_) {
+    partition_log_info_arr_.reset();
+    participants_.reset();
+  }
   return ObTransCtx::set_exiting_(is_dirty_);
 }
 
@@ -11416,7 +11448,7 @@ int ObPartTransCtx::check_if_terminated_in_given_log_range(
 
 // See comments in submit_log_impl to understand the log submission state
 // machine
-int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
+int ObPartTransCtx::decide_log_type_for_mutator_and_record_(ObStorageLogType& log_type)
 {
   int ret = OB_SUCCESS;
   if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::LOGGING_NOT_FINISH) {
@@ -11444,6 +11476,50 @@ int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
   } else {
     log_type = OB_LOG_MUTATOR;
   }
+  return ret;
+}
+
+int ObPartTransCtx::decide_and_submit_next_log_(storage::ObStorageLogType& log_type, 
+                                                bool &has_redo_log,
+                                                bool has_pending_cb)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(decide_log_type_for_mutator_and_record_(log_type))) {
+    TRANS_LOG(ERROR, "decide log type for mutator and record fail", KR(ret), "context", *this);
+  } else if (OB_LOG_MUTATOR == log_type &&
+             0 != GCONF._private_buffer_size &&
+             !mt_ctx_.pending_log_size_too_large() &&
+             !has_pending_cb) {
+  // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
+  // logging if all the followings are true
+  // 1. _private_redo_buffer is opened 
+  // 2. pending log size is too small for continuing logging
+  // 3. there are not pending callbacks for minor merge
+  } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == log_type
+              || OB_LOG_TRANS_REDO == log_type)
+              && OB_FAIL(alloc_local_trans_version_(log_type))) {
+    if (OB_EAGAIN != ret) {
+      TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this,
+                K(log_type));
+    } else {
+      ret = OB_SUCCESS;
+      if (submit_log_count_ > 0) {
+        TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this,
+                  K(log_type));
+        need_print_trace_log_ = true;
+      }
+      inc_submit_log_pending_count_();
+      inc_submit_log_count_();
+    }
+  } else if (OB_FAIL(submit_log_task_(log_type, has_redo_log))) {
+    TRANS_LOG(WARN, "submit log task error", KR(ret), "context", *this,
+              K(log_type), K(is_sp_trans_()), K(is_mini_sp_trans_()));
+  } else {
+    TRANS_LOG(DEBUG, "submit log task success", "context", *this,
+              K(log_type), K(log_type), K(has_redo_log));
+  }
+
   return ret;
 }
 
@@ -11588,6 +11664,10 @@ bool ObPartTransCtx::is_trans_valid_for_replay_(const ObStorageLogType log_type,
       }
     } else if (log_type == OB_LOG_START_MEMBERSHIP_STORAGE) {
       // needn't check
+    } else if (log_type == OB_LOG_TRANS_RECORD) {
+      if (Ob2PCState::INIT != state) {
+        ret = false;
+      }
     } else {
       ret = false;
       TRANS_LOG(ERROR, "unknown log type", K(log_type), K(*this));
@@ -12073,6 +12153,59 @@ void ObPartTransCtx::DEBUG_SYNC_slow_txn_during_2pc_prepare_phase_for_physical_b
   if (mock_key == self_ && (OB_TRX_2PC_PREPARE_REQUEST == msg_type || OB_TRANS_2PC_PREPARE_REQUEST == msg_type)) {
     DEBUG_SYNC(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055);
   }
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_redo_log_(const int64_t log_id)
+{
+  int ret = OB_SUCCESS;
+  if ((ctx_serialize_size_ += serialization::encoded_length_vi64(log_id)) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN, "size overflow when set redo log.", KR(ret), K(ctx_serialize_size_), K(log_id));
+  } else if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+    ctx_serialize_size_ -= serialization::encoded_length_vi64(log_id);
+    TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
+  } else {
+    // push back redo log success
+  }
+  return ret;
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionArray &participants)
+{
+  int ret = OB_SUCCESS;
+  if ((ctx_serialize_size_ += participants.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    set_status_(OB_TRANS_NEED_ROLLBACK);
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN,
+        "size overflow when set participants.",
+        KR(ret),
+        K(ctx_serialize_size_),
+        K(participants.get_serialize_size()));
+  } else if (OB_FAIL(set_participants_(participants))) {
+    ctx_serialize_size_ -= participants.get_serialize_size();
+    TRANS_LOG(WARN, "set participants error", KR(ret), K(participants));
+  }
+  return ret;
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from)
+{
+  int ret = OB_SUCCESS;
+  ObUndoAction undo_action(undo_to, undo_from);
+  if ((ctx_serialize_size_ += undo_action.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    set_status_(OB_TRANS_NEED_ROLLBACK);
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN,
+        "size overflow when set undo action",
+        KR(ret),
+        K(ctx_serialize_size_),
+        K(ctx_serialize_size_),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE));
+  } else if (OB_FAIL(undo_status_.undo(undo_to, undo_from))) {
+    ctx_serialize_size_ -= undo_action.get_serialize_size();
+    TRANS_LOG(WARN, "record rollback action failed", K(ret), K(undo_to), K(undo_from));
+  }
+  return ret;
 }
 
 }  // namespace transaction

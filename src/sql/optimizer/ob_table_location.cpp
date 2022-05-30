@@ -1994,8 +1994,10 @@ int ObTableLocation::calculate_partition_ids(ObExecContext& exec_ctx, common::Ob
           LOG_WARN("Get virtual table fake id error", K(ret));
         }
       }
-      if (OB_FAIL(partition_ids.push_back(fake_id))) {
-        LOG_WARN("Add fake partition id error", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(partition_ids.push_back(fake_id))) {
+          LOG_WARN("Add fake partition id error", K(ret));
+        }
       }
     }
   }
@@ -4594,12 +4596,6 @@ int ObTableLocation::record_insert_part_info(ObInsertStmt& insert_stmt, ObSQLSes
   const ObIArray<ObRawExpr*>* value_vector = NULL;
   const int64_t part_column_count = partition_columns.count();
 
-  if (NULL != table_columns && table_columns->count() > 1) {
-    if (0 == table_columns->at(0)->get_table_name().case_compare("sg1")) {
-      LOG_DEBUG("shaoge table");
-    }
-  }
-
   ObSEArray<ObColumnRefRawExpr*, 4> value_desc_heap_table;
   ObSEArray<ObRawExpr*, 4> value_vector_heap_table;
   if (insert_stmt.get_part_generated_col_dep_cols().count() == 0) {
@@ -4628,11 +4624,23 @@ int ObTableLocation::record_insert_part_info(ObInsertStmt& insert_stmt, ObSQLSes
       }
     } else {
       for (int64_t value_idx = 0; OB_SUCC(ret) && value_idx < value_desc_count; ++value_idx) {
-        if (OB_ISNULL(value_desc->at(value_idx))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("value desc expr is null");
-        } else {
-          if (OB_FAIL(value_need_idx.push_back(value_idx))) {
+        // Value with subquery can't be calculated, remove it from value_need_idx.
+        // Previous code already guarantee that part key not contain subquery.
+        bool has_subquery = false;
+        for (int64_t j = value_idx; OB_SUCC(ret) && !has_subquery && j < value_count; j += value_desc_count) {
+          ObRawExpr *expr = value_vector->at(j);
+          if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null expr", K(ret), K(j));
+          } else if (expr->has_flag(CNT_SUB_QUERY) || expr->has_flag(CNT_EXEC_PARAM)) {
+            has_subquery = true;
+          }
+        }
+        if (OB_SUCC(ret) && !has_subquery) {
+          if (OB_ISNULL(value_desc->at(value_idx))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("value desc expr is null");
+          } else if (OB_FAIL(value_need_idx.push_back(value_idx))) {
             LOG_WARN("Failed to add value idx", K(ret));
           }
         }

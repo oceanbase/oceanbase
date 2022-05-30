@@ -20,12 +20,13 @@
 #include <sys/syscall.h>
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/signal/ob_signal_utils.h"
+#include "lib/signal/ob_libunwind.h"
 
 namespace oceanbase {
 namespace common {
 ObSigBTOnlyProcessor::ObSigBTOnlyProcessor() : fd_(-1), pos_(-1)
 {
-  char* buf = filename_;
+  char *buf = filename_;
   int64_t len = sizeof(filename_);
   int64_t pos = safe_snprintf(buf, len, "stack.%d.", getpid());
   int64_t count = 0;
@@ -50,12 +51,10 @@ int ObSigBTOnlyProcessor::prepare()
   int64_t tid = syscall(SYS_gettid);
   char tname[16];
   prctl(PR_GET_NAME, tname);
-  unw_context_t uctx;
-  unw_getcontext(&uctx);
   int64_t count = 0;
   count = safe_snprintf(buf_ + pos_, len - pos_, "tid: %ld, tname: %s, lbt: ", tid, tname);
   pos_ += count;
-  safe_backtrace(uctx, buf_ + pos_, len - pos_, count);
+  safe_backtrace(buf_ + pos_, len - pos_, &count);
   pos_ += count;
   buf_[pos_++] = '\n';
   return ret;

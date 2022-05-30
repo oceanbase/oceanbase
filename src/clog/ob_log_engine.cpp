@@ -10,11 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/vfs.h>
 #include "ob_log_engine.h"
+#include <sys/vfs.h>
 #include "common/ob_member_list.h"
 #include "lib/file/file_directory_utils.h"
+#include "lib/ob_define.h"
 #include "lib/thread_local/thread_buffer.h"
+#include "lib/time/ob_time_utility.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_server_blacklist.h"
@@ -2593,6 +2595,63 @@ bool ObLogEngine::is_clog_disk_hang() const
     is_disk_hang = (env->get_writer()).is_disk_hang();
   }
   return is_disk_hang;
+}
+
+int ObLogEngine::get_server_min_log_ts(int64_t &server_min_log_ts)
+{
+  int ret = OB_SUCCESS;
+  ObLogBlockMetaV2 log_block;
+  ObReadBuf read_buf;
+  ObReadRes res;
+  ObReadCost cost;
+  ObReadParam read_param;
+  const int64_t in_read_size = 4 * 1024;
+  read_buf.buf_len_ = in_read_size + CLOG_DIO_ALIGN_SIZE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (NULL == (read_buf.buf_
+        = static_cast<char*>(ob_malloc_align(CLOG_DIO_ALIGN_SIZE, read_buf.buf_len_, "LogEngine")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    const int64_t TIMEOUT_TS = 1 * 1000 * 1000;
+    int64_t start_ts = ObTimeUtility::current_time();
+    do {
+      file_id_t min_file_id = get_clog_min_file_id();
+      read_param.file_id_ = min_file_id;
+      read_param.offset_ = 0;
+      read_param.read_len_ = in_read_size;
+      if (OB_INVALID_FILE_ID == min_file_id) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_FAIL(read_data_direct(read_param, read_buf, res, cost))) {
+        CLOG_LOG(WARN, "read_log_by_location failed", K(ret), K(read_param));
+      } else {
+      }
+      int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+      if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
+        if (cost_ts >= TIMEOUT_TS) {
+          ret = OB_TIMEOUT;
+          CLOG_LOG(WARN, "get_server_min_log_ts timeout", K(ret));
+        } else {
+          usleep(100 * 1000);
+        }
+      }
+    } while (OB_NO_SUCH_FILE_OR_DIRECTORY == ret);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t pos = 0;
+    if (OB_FAIL(log_block.deserialize(res.buf_, res.data_len_, pos))) {
+    } else if (false == log_block.check_meta_checksum()) {
+      ret = OB_INVALID_DATA;
+      CLOG_LOG(WARN, "LogBlock has been corrupt", K(ret), K(log_block));
+    } else {
+      server_min_log_ts = log_block.get_timestamp();
+      CLOG_LOG(INFO, "ObLogEngine get_server_min_log_ts success", K(server_min_log_ts), K(read_param));
+    }
+  }
+  if (true == read_buf.is_valid()) {
+    ob_free_align(read_buf.buf_);
+  }
+  return ret;
 }
 
 NetworkLimitManager::NetworkLimitManager() : is_inited_(false), addr_array_(), ethernet_speed_(0), hash_map_()

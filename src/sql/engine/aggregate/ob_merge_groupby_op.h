@@ -71,7 +71,8 @@ public:
         cur_output_group_id_(common::OB_INVALID_INDEX),
         first_output_group_id_(0),
         last_child_output_(aggr_processor_.get_aggr_alloc()),
-        curr_groupby_datums_(aggr_processor_.get_aggr_alloc())
+        curr_groupby_datums_(aggr_processor_.get_aggr_alloc()),
+        dir_id_(-1)
   {}
   void reset();
   virtual int inner_open() override;
@@ -98,6 +99,7 @@ private:
   int64_t first_output_group_id_;
   ObChunkDatumStore::LastStoredRow<> last_child_output_;
   DatumFixedArray curr_groupby_datums_;
+  int64_t dir_id_;
 };
 
 }  // end namespace sql

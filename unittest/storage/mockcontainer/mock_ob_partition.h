@@ -249,6 +249,7 @@ public:
   MOCK_METHOD1(get_checkpoint, int(int64_t& checkpoint));
   MOCK_METHOD1(update_last_checkpoint, int(const int64_t checkpoint));
   MOCK_METHOD1(set_replay_checkpoint, int(const int64_t checkpoint));
+  MOCK_METHOD2(update_max_majority_log, int(const uint64_t log_id, const int64_t log_ts));
   //  MOCK_METHOD1(get_replay_checkpoint, int(int64_t &checkpoint));
   int get_replay_checkpoint(int64_t& checkpoint)
   {

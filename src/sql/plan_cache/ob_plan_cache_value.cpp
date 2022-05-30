@@ -451,6 +451,13 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx& pc_ctx, const stmt::StmtTy
         const bool is_paramlize = false;
         CHECK_COMPATIBILITY_MODE(session);
         int64_t server_collation = CS_TYPE_INVALID;
+        if (OB_SUCC(ret) && T_QUESTIONMARK == raw_param->type_) {
+          ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+          int64_t idx = raw_param->value_;
+          CK (nullptr != phy_ctx);
+          CK (idx >= 0 && idx < phy_ctx->get_param_store_for_update().count());
+          OX (value.set_is_boolean(phy_ctx->get_param_store_for_update().at(idx).is_boolean()));
+        }
         if (OB_FAIL(ret)) {
         } else if (share::is_oracle_mode() &&
                    OB_FAIL(session->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {

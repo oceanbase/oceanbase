@@ -176,7 +176,6 @@ int ObGlobalTimestampService::handle_request(const ObGtsRequest& request, ObGtsR
     TRANS_LOG(WARN, "gts request fly too much time", K(request), K(result), K(cost_us));
   }
   ATOMIC_INC(&total_cnt);
-  ObTransStatistic::get_instance().add_gts_request_total_count(request.get_tenant_id(), 1);
   (void)ATOMIC_FAA(&total_rt, end.mts_ - start.mts_);
   if (REACH_TIME_INTERVAL(STATISTICS_INTERVAL_US)) {
     TRANS_LOG(INFO,

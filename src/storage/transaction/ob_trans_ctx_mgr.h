@@ -156,7 +156,7 @@ public:
   // get the min prepare version of trans module in specified partition of current observer
   int get_min_uncommit_prepare_version(int64_t& min_prepare_version);
   int get_min_uncommit_log(uint64_t& min_uncommit_log_id, int64_t& min_uncommit_log_ts);
-  int get_min_prepare_version(const int64_t log_ts, int64_t& min_prepare_version);
+  int get_min_prepare_version(const int64_t freeze_ts, int64_t& min_prepare_version);
   int gc_trans_result_info(const int64_t checkpoint_ts);
 
   // check the partition status
@@ -323,8 +323,8 @@ public:
       const transaction::ObTransID& data_trans_id, const int32_t sql_sequence,
       storage::ObStoreRowLockState& lock_state);
   int get_max_trans_version_before_given_log_ts(
-      const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const int64_t max_cleanout_log_ts);
+      const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObIArray<int64_t> &max_cleanout_log_ts);
   int has_terminated_trx_in_given_log_ts_range(
       const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   bool is_clog_aggregation_enabled();
@@ -928,7 +928,7 @@ public:
   int get_min_uncommit_prepare_version(const ObPartitionKey& partition, int64_t& min_prepare_version);
   // get the min log ID of transactions in the specified partition
   int get_min_uncommit_log(const ObPartitionKey& pkey, uint64_t& min_uncommit_log_id, int64_t& min_uncommit_log_ts);
-  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version);
+  int get_min_prepare_version(const ObPartitionKey& partition, const int64_t freeze_ts, int64_t& min_prepare_version);
   int gc_trans_result_info(const ObPartitionKey& pkey, const int64_t checkpoint_ts);
   int checkpoint(
       const ObPartitionKey& pkey, const int64_t checkpoint_base_ts, storage::ObPartitionLoopWorker* lp_worker);
@@ -975,8 +975,8 @@ public:
   int get_applied_log_ts(const common::ObPartitionKey& pkey, int64_t& applied_log_ts);
 
   int get_max_trans_version_before_given_log_ts(
-      const ObPartitionKey& pkey, const int64_t log_ts, int64_t& max_trans_version, bool& is_all_rollback_trans);
-  int clear_unused_trans_status(const ObPartitionKey& pkey, const int64_t max_cleanout_log_id);
+      const ObPartitionKey &pkey, const int64_t log_ts, int64_t &max_trans_version, bool &is_all_rollback_trans);
+  int clear_unused_trans_status(const ObPartitionKey &pkey, const ObIArray<int64_t> &max_cleanout_log_id);
   int has_terminated_trx_in_given_log_ts_range(
       const ObPartitionKey& pkey, const int64_t start_log_ts, const int64_t end_log_ts, bool& has_terminated_trx);
   int set_last_restore_log_info(

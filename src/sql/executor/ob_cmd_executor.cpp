@@ -41,6 +41,7 @@
 #include "sql/resolver/ddl/ob_rename_table_stmt.h"
 #include "sql/resolver/ddl/ob_truncate_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_like_stmt.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/resolver/ddl/ob_alter_baseline_stmt.h"
 #include "sql/resolver/dcl/ob_create_user_stmt.h"
@@ -88,7 +89,6 @@
 #include "sql/engine/cmd/ob_dcl_executor.h"
 #include "sql/engine/cmd/ob_tcl_executor.h"
 #include "sql/engine/cmd/ob_tenant_executor.h"
-#include "sql/engine/cmd/ob_set_names_executor.h"
 #include "sql/engine/cmd/ob_alter_system_executor.h"
 #include "sql/engine/cmd/ob_set_password_executor.h"
 #include "sql/engine/cmd/ob_tablegroup_executor.h"
@@ -309,6 +309,22 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     case stmt::T_CREATE_TABLE_LIKE: {
       DEFINE_EXECUTE_CMD(ObCreateTableLikeStmt, ObCreateTableLikeExecutor);
       break;
+    }
+    case stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN: {		
+      DEFINE_EXECUTE_CMD(ObFlashBackTableFromRecyclebinStmt, ObFlashBackTableFromRecyclebinExecutor);		
+      break;
+    }
+    case stmt::T_FLASHBACK_INDEX: {		
+      DEFINE_EXECUTE_CMD(ObFlashBackIndexStmt, ObFlashBackIndexExecutor);		
+      break;		
+    }		
+    case stmt::T_FLASHBACK_DATABASE: {		
+      DEFINE_EXECUTE_CMD(ObFlashBackDatabaseStmt, ObFlashBackDatabaseExecutor);		
+      break;		
+    }		
+    case stmt::T_FLASHBACK_TENANT: {		
+      DEFINE_EXECUTE_CMD(ObFlashBackTenantStmt, ObFlashBackTenantExecutor);		
+      break;		
     }
     case stmt::T_PURGE_TABLE: {
       DEFINE_EXECUTE_CMD(ObPurgeTableStmt, ObPurgeTableExecutor);
@@ -540,11 +556,6 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     }
     case stmt::T_CANCEL_TASK: {
       DEFINE_EXECUTE_CMD(ObCancelTaskStmt, ObCancelTaskExecutor);
-      break;
-    }
-    case stmt::T_SET_NAMES: {
-      DEFINE_EXECUTE_CMD(ObSetNamesStmt, ObSetNamesExecutor);
-      sql_text = ObString::make_empty_string();  // do not record
       break;
     }
     case stmt::T_LOAD_DATA: {

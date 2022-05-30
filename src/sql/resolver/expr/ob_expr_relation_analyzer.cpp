@@ -44,36 +44,43 @@ ObExprRelationAnalyzer::ObExprRelationAnalyzer() : query_exprs_()
 int ObExprRelationAnalyzer::pull_expr_relation_id_and_levels(ObRawExpr* expr, int32_t cur_stmt_level)
 {
   int ret = OB_SUCCESS;
+  UNUSED(cur_stmt_level);
+  int64_t expr_level = -1;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (OB_FAIL(visit_expr(*expr, cur_stmt_level))) {
+  } else if (OB_FAIL(visit_expr(*expr, expr_level))) {
     LOG_WARN("failed to pull expr relation id and levels", K(ret));
   }
   return ret;
 }
 
-int ObExprRelationAnalyzer::visit_expr(ObRawExpr& expr, int32_t stmt_level)
+int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr, int64_t &expr_level)
 {
   int ret = OB_SUCCESS;
   // corner case: select min(t1.c1) from t1 group by c2 order by (select avg(t1.c1) from t2);
   // avg(t1.1) exists in the subquery, but belongs to the main query
-  int64_t expr_level = expr.is_aggr_expr() ? expr.get_expr_level() : stmt_level;
+  expr_level = -1;
   int64_t param_count = expr.get_param_count();
-
-  if (OB_FAIL(init_expr_info(expr))) {
+  if (OB_FAIL(init_expr_info(expr, expr_level))) {
     LOG_WARN("failed into init expr level and relation ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-    ObRawExpr* param = NULL;
+    ObRawExpr *param = NULL;
+    int64_t param_level = -1;
     if (OB_ISNULL(param = expr.get_param_expr(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param expr is null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(visit_expr(*param, stmt_level)))) {
+    } else if (OB_FAIL(SMART_CALL(visit_expr(*param, param_level)))) {
       LOG_WARN("failed to visit param", K(ret));
+    } else if (param_level > expr_level) {
+      expr.get_relation_ids().reuse();
+      expr_level = param_level;
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(expr.get_expr_levels().add_members(param->get_expr_levels()))) {
       LOG_WARN("failed to add expr levels", K(ret));
-    } else if (!param->get_expr_levels().has_member(expr_level)) {
+    } else if (expr_level != param_level || expr_level < 0) {
       // skip
     } else if (OB_FAIL(expr.get_relation_ids().add_members(param->get_relation_ids()))) {
       LOG_WARN("failed to add relation ids", K(ret));
@@ -82,7 +89,7 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr& expr, int32_t stmt_level)
   return ret;
 }
 
-int ObExprRelationAnalyzer::init_expr_info(ObRawExpr& expr)
+int ObExprRelationAnalyzer::init_expr_info(ObRawExpr &expr, int64_t &expr_level)
 {
   int ret = OB_SUCCESS;
   expr.get_expr_levels().reuse();
@@ -92,7 +99,7 @@ int ObExprRelationAnalyzer::init_expr_info(ObRawExpr& expr)
 
   if (expr.is_column_ref_expr() || expr.is_aggr_expr() || expr.is_set_op_expr() || expr.is_win_func_expr() ||
       T_ORA_ROWSCN == expr.get_expr_type()) {
-    int32_t expr_level = expr.get_expr_level();
+    expr_level = expr.get_expr_level();
     if (OB_UNLIKELY(expr_level >= OB_MAX_SUBQUERY_LAYER_NUM || expr_level < 0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("the subquery nested layers is out of range", K(ret), K(expr_level));
@@ -114,6 +121,7 @@ int ObExprRelationAnalyzer::init_expr_info(ObRawExpr& expr)
     }
   } else if (expr.is_query_ref_expr()) {
     ObQueryRefRawExpr &query = static_cast<ObQueryRefRawExpr &>(expr);
+    expr_level = query.get_expr_level();
     if (OB_FAIL(query_exprs_.push_back(&query))) {
       LOG_WARN("failed to push back query ref", K(ret));
     } else if (OB_UNLIKELY(!query.is_ref_stmt())) {
@@ -142,11 +150,12 @@ int ObExprRelationAnalyzer::visit_stmt(ObDMLStmt* stmt)
     LOG_WARN("failed to get relation exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
-      ObRawExpr* expr = NULL;
+      ObRawExpr *expr = NULL;
+      int64_t expr_level = -1;
       if (OB_ISNULL(expr = relation_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("relation expr is null", K(ret), K(expr));
-      } else if (OB_FAIL(visit_expr(*expr, stmt->get_current_level()))) {
+      } else if (OB_FAIL(visit_expr(*expr, expr_level))) {
         LOG_WARN("failed to visit expr", K(ret));
       }
     }

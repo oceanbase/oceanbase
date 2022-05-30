@@ -113,7 +113,7 @@ public:
 
 private:
   const static int64_t DEFAULT_MEMSTORE_COUNT = 16;
-  const static int64_t TIMER_TASK_INTERVAL = 1000;
+  const static int64_t TIMER_TASK_INTERVAL = 100 * 1000; // 100ms
   // PINNED_MEMORY_SIZE should set as ObIlogMemstore::CURSOR_SIZE_TRIGGER(32MB)
   // however, in concurrent scenarios, it will causes that the size of
   // ObIlogMemstore will exceed than ObIlogMemstore::CURSOR_SIZE_TRIGGER.

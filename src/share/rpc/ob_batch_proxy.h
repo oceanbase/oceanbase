@@ -15,6 +15,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "lib/ob_running_mode.h"
 #include "common/ob_partition_key.h"
 #include "election/ob_election_group_id.h"
 #include "share/config/ob_server_config.h"
@@ -38,7 +39,11 @@ enum {
 inline int64_t get_batch_delay_us(const int batch_type)
 {
   int64_t delay[BATCH_REQ_TYPE_COUNT] = {2 * 1000, 2 * 1000, 1 * 1000, 0, 20, 0, 0, 0, 5 * 1000};
-  return (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? delay[batch_type] : 0;
+  int64_t delay_us = (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? delay[batch_type] : 0;
+  if (lib::is_mini_mode()) {
+    delay_us *= 100;
+  }
+  return delay_us;
 }
 
 inline int64_t get_batch_buffer_size(const int batch_type)

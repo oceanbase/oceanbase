@@ -98,6 +98,7 @@ public:
   static const int64_t CHARSET_WRAPPER_COUNT = 2;
   static const int64_t COLLATION_WRAPPER_COUNT = 3;
 
+  static double strntodv2(const char *str, size_t str_len, char **endptr, int *err);
   static double strntod(const char* str, size_t str_len, char** endptr, int* err);
   static int64_t strntoll(const char* str, size_t str_len, int base, char** end_ptr, int* err);
   static uint64_t strntoull(const char* str, size_t str_len, int base, char** end_ptr, int* err);
@@ -277,7 +278,7 @@ public:
     return result;
   }
   template <typename foreach_char_func>
-  static int foreach_char(common::ObString& str, common::ObCollationType collation_type, foreach_char_func& func)
+  static int foreach_char(const common::ObString &str, common::ObCollationType collation_type, foreach_char_func &func)
   {
     int ret = common::OB_SUCCESS;
     int32_t wchar = 0;

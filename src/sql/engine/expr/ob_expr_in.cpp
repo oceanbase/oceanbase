@@ -318,8 +318,10 @@ int ObExprInOrNotIn::ObExprInCtx::init_hashset_vecs(int64_t param_num, int64_t r
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
+    for (int64_t i = 0; i < (1 << row_dimension); ++i) {
+      new (&hashset_vecs_[i]) ObExprInHashMap<ObObj>();
+    }
     for (int i = 0; OB_SUCC(ret) && i < (1 << row_dimension); ++i) {
-      ObExprInHashMap<ObObj>* hashset_ptr = new (&hashset_vecs_[i]) ObExprInHashMap<ObObj>();
       hashset_vecs_[i].set_meta_idx(i);
       hashset_vecs_[i].set_meta_dimension(row_dimension);
       if (OB_FAIL(hashset_vecs_[i].create(param_num))) {
@@ -350,8 +352,10 @@ int ObExprInOrNotIn::ObExprInCtx::init_static_engine_hashset_vecs(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
+    for (int64_t i = 0; i < (1 << row_dimension); ++i) {
+      new (&static_engine_hashset_vecs_[i]) ObExprInHashMap<ObDatum>();
+    }
     for (int i = 0; OB_SUCC(ret) && i < (1 << row_dimension); ++i) {
-      ObExprInHashMap<ObDatum>* hashset_ptr = new (&static_engine_hashset_vecs_[i]) ObExprInHashMap<ObDatum>();
       static_engine_hashset_vecs_[i].set_meta_idx(i);
       static_engine_hashset_vecs_[i].set_meta_dimension(row_dimension);
       if (OB_FAIL(static_engine_hashset_vecs_[i].create(param_num))) {
@@ -614,7 +618,13 @@ int ObExprInOrNotIn::calc_resultN(ObObj& result, const ObObj* objs, int64_t para
     if (lib::is_oracle_mode() && is_param_is_ext_type_oracle()) {
       ret = OB_NOT_SUPPORTED;
     } else {
-      const bool hashset_lookup = need_hash(expr_ctx.exec_ctx_);
+      bool hash_json_type = false;
+      for (int i = 0; i < param_num && !hash_json_type; ++i) {
+        if (ob_is_json(objs[i].get_type())) {
+          hash_json_type = true;
+        }
+      }
+      const bool hashset_lookup = hash_json_type && need_hash(expr_ctx.exec_ctx_);
       bool fall_back = false;
       if (hashset_lookup) {
         if (row_dimension_ == 1) {
@@ -1182,7 +1192,7 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator& allocator, const ObRawExp
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void*)func_ptr;
       }
-      if (!is_param_all_const()) {
+      if (!is_param_all_const() || (ob_is_json(left_type) || ob_is_json(right_type))) {
         rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_without_row_fallback;
       } else {
         rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_without_row;

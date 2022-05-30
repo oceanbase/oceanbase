@@ -12,6 +12,7 @@
 
 #include "ob_log_sliding_window.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
+#include "share/backup/ob_backup_info_mgr.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/compress/ob_compressor_pool.h"
@@ -96,11 +97,11 @@ ObLogSlidingWindow::ObLogSlidingWindow()
       is_inited_(false)
 {}
 
-int ObLogSlidingWindow::init(ObLogReplayEngineWrapper* replay_engine, ObILogEngine* log_engine,
-    ObILogStateMgrForSW* state_mgr, ObILogMembershipMgr* mm, ObLogCascadingMgr* cascading_mgr,
-    storage::ObPartitionService* partition_service, common::ObILogAllocator* alloc_mgr, ObILogChecksum* checksum,
-    ObILogCallbackEngine* cb_engine, ObLogRestoreMgr* restore_mgr, const common::ObAddr& self,
-    const common::ObPartitionKey& key, const int64_t epoch_id, const uint64_t last_replay_log_id,
+int ObLogSlidingWindow::init(ObLogReplayEngineWrapper *replay_engine, ObILogEngine *log_engine,
+    ObILogStateMgrForSW *state_mgr, ObILogMembershipMgr *mm, ObLogCascadingMgr *cascading_mgr,
+    storage::ObPartitionService *partition_service, common::ObILogAllocator *alloc_mgr, ObILogChecksum *checksum,
+    ObILogCallbackEngine *cb_engine, ObLogRestoreMgr *restore_mgr, const common::ObAddr &self,
+    const common::ObPartitionKey &key, const int64_t epoch_id, const uint64_t last_replay_log_id,
     const int64_t last_submit_ts, const int64_t accum_checksum)
 {
   int ret = OB_SUCCESS;
@@ -175,7 +176,7 @@ int ObLogSlidingWindow::init_aggre_buffer_(const uint64_t start_id, const uint64
     aggre_buffer_cnt = 4;
   }
   if (0 < aggre_buffer_cnt) {
-    if (NULL == (aggre_buffer_ = (ObAggreBuffer*)ob_malloc(aggre_buffer_cnt * sizeof(ObAggreBuffer), mem_attr))) {
+    if (NULL == (aggre_buffer_ = (ObAggreBuffer *)ob_malloc(aggre_buffer_cnt * sizeof(ObAggreBuffer), mem_attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       CLOG_LOG(WARN, "alloc memory failed", K(ret), K(start_id));
     } else {
@@ -268,12 +269,12 @@ uint64_t ObLogSlidingWindow::get_max_timestamp() const
   return max_log_meta_info_.get_timestamp();
 }
 
-void ObLogSlidingWindow::get_max_log_id_info(uint64_t& max_log_id, int64_t& max_log_ts) const
+void ObLogSlidingWindow::get_max_log_id_info(uint64_t &max_log_id, int64_t &max_log_ts) const
 {
   (void)max_log_meta_info_.get_log_id_and_timestamp(max_log_id, max_log_ts);
 }
 
-void ObLogSlidingWindow::get_next_replay_log_id_info(uint64_t& next_log_id, int64_t& next_log_ts) const
+void ObLogSlidingWindow::get_next_replay_log_id_info(uint64_t &next_log_id, int64_t &next_log_ts) const
 {
   struct types::uint128_t next_log_id_info;
   LOAD128(next_log_id_info, &next_replay_log_id_info_);
@@ -297,7 +298,7 @@ int ObLogSlidingWindow::try_update_max_log_id(const uint64_t log_id)
   return ret;
 }
 
-int ObLogSlidingWindow::send_log_to_standby_cluster_(const uint64_t log_id, ObLogTask* log_task)
+int ObLogSlidingWindow::send_log_to_standby_cluster_(const uint64_t log_id, ObLogTask *log_task)
 {
   // send log to standby cluster, caller guarantees this log has reached majority in local cluster.
   // caller need hold lock for log_task
@@ -310,7 +311,7 @@ int ObLogSlidingWindow::send_log_to_standby_cluster_(const uint64_t log_id, ObLo
     ObReadBuf rbuf;
     ObLogEntry tmp_entry;
     if (log_task->is_submit_log_body_exist()) {
-      const char* log_buf = log_task->get_log_buf();
+      const char *log_buf = log_task->get_log_buf();
       int64_t log_buf_len = log_task->get_log_buf_len();
 
       ObLogEntryHeader header;
@@ -345,10 +346,10 @@ int ObLogSlidingWindow::send_log_to_standby_cluster_(const uint64_t log_id, ObLo
     }
 
     int64_t pos = 0;
-    char* serialize_buff = NULL;
+    char *serialize_buff = NULL;
     int64_t serialize_size = tmp_entry.get_serialize_size();
     if (OB_SUCC(ret)) {
-      if (NULL == (serialize_buff = static_cast<char*>(alloc_mgr_->ge_alloc(serialize_size)))) {
+      if (NULL == (serialize_buff = static_cast<char *>(alloc_mgr_->ge_alloc(serialize_size)))) {
         CLOG_LOG(ERROR, "alloc failed", K_(partition_key));
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_SUCCESS != (ret = tmp_entry.serialize(serialize_buff, serialize_size, pos))) {
@@ -370,7 +371,7 @@ int ObLogSlidingWindow::send_log_to_standby_cluster_(const uint64_t log_id, ObLo
   return ret;
 }
 
-int ObLogSlidingWindow::send_confirmed_info_to_standby_children_(const uint64_t log_id, ObLogTask* log_task)
+int ObLogSlidingWindow::send_confirmed_info_to_standby_children_(const uint64_t log_id, ObLogTask *log_task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -409,7 +410,7 @@ int ObLogSlidingWindow::send_confirmed_info_to_standby_children_(const uint64_t 
   return ret;
 }
 
-bool ObLogSlidingWindow::is_primary_need_send_log_to_standby_(ObLogTask* log_task) const
+bool ObLogSlidingWindow::is_primary_need_send_log_to_standby_(ObLogTask *log_task) const
 {
   // whether primary replica can transfer log to standby children
   bool bool_ret = false;
@@ -422,7 +423,7 @@ bool ObLogSlidingWindow::is_primary_need_send_log_to_standby_(ObLogTask* log_tas
   return bool_ret;
 }
 
-bool ObLogSlidingWindow::is_mp_leader_waiting_standby_ack_(ObLogTask* log_task) const
+bool ObLogSlidingWindow::is_mp_leader_waiting_standby_ack_(ObLogTask *log_task) const
 {
   // whether primary leader has not received standby ack in max protection mode
   bool bool_ret = false;
@@ -436,7 +437,7 @@ bool ObLogSlidingWindow::is_mp_leader_waiting_standby_ack_(ObLogTask* log_task) 
   return bool_ret;
 }
 
-bool ObLogSlidingWindow::is_follower_need_send_log_to_standby_(ObLogTask* log_task) const
+bool ObLogSlidingWindow::is_follower_need_send_log_to_standby_(ObLogTask *log_task) const
 {
   // whether follower can transfer log to standby children
   // it must guarantee this log has been confirmed
@@ -452,13 +453,13 @@ bool ObLogSlidingWindow::is_follower_need_send_log_to_standby_(ObLogTask* log_ta
   return bool_ret;
 }
 
-int ObLogSlidingWindow::ack_log(const uint64_t log_id, const ObAddr& server, bool& majority)
+int ObLogSlidingWindow::ack_log(const uint64_t log_id, const ObAddr &server, bool &majority)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   bool need_send_to_standby = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -468,7 +469,7 @@ int ObLogSlidingWindow::ack_log(const uint64_t log_id, const ObAddr& server, boo
     ret = OB_SUCCESS;
   } else if (OB_FAIL(ret)) {
     CLOG_LOG(WARN, "ack log: get log from sliding window failed", K_(partition_key), K(log_id), K(ret));
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
     ret = OB_ERR_NULL_VALUE;
     CLOG_LOG(WARN, "ack log: get null log", K_(partition_key), K(log_id));
   } else if (!log_task->is_submit_log_exist()) {
@@ -511,13 +512,13 @@ int ObLogSlidingWindow::ack_log(const uint64_t log_id, const ObAddr& server, boo
   return ret;
 }
 
-int ObLogSlidingWindow::standby_ack_log(const uint64_t log_id, const ObAddr& server, bool& majority)
+int ObLogSlidingWindow::standby_ack_log(const uint64_t log_id, const ObAddr &server, bool &majority)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!server.is_valid() || OB_ISNULL(mm_)) {
@@ -526,7 +527,7 @@ int ObLogSlidingWindow::standby_ack_log(const uint64_t log_id, const ObAddr& ser
     ret = OB_SUCCESS;
   } else if (OB_FAIL(ret)) {
     CLOG_LOG(WARN, "ack log: get log from sliding window failed", K_(partition_key), K(log_id), K(ret));
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
     ret = OB_ERR_NULL_VALUE;
     CLOG_LOG(WARN, "ack log: get null log", K_(partition_key), K(log_id));
   } else if (!log_task->is_submit_log_exist()) {
@@ -546,7 +547,7 @@ int ObLogSlidingWindow::standby_ack_log(const uint64_t log_id, const ObAddr& ser
   return ret;
 }
 
-int ObLogSlidingWindow::fake_ack_log(const uint64_t log_id, const common::ObAddr& server, const int64_t receive_ts)
+int ObLogSlidingWindow::fake_ack_log(const uint64_t log_id, const common::ObAddr &server, const int64_t receive_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -591,7 +592,7 @@ bool ObLogSlidingWindow::is_fake_info_need_revoke(const uint64_t log_id, const i
           fake_ack_info_mgr_.get_log_id());
     }
   } else {
-    const common::ObMemberList& member_list = mm_->get_curr_member_list();
+    const common::ObMemberList &member_list = mm_->get_curr_member_list();
     const int64_t replica_num = mm_->get_replica_num();
     bool_ret = fake_ack_info_mgr_.check_fake_info_need_revoke(log_id, current_time, self_, member_list, replica_num);
     if (bool_ret && REACH_TIME_INTERVAL(100 * 1000)) {
@@ -603,7 +604,7 @@ bool ObLogSlidingWindow::is_fake_info_need_revoke(const uint64_t log_id, const i
 }
 
 // when base_timestamp !=0, it indicates that this log is transaction log.
-int ObLogSlidingWindow::alloc_log_id_ts_(const int64_t base_timestamp, uint64_t& log_id, int64_t& submit_timestamp)
+int ObLogSlidingWindow::alloc_log_id_ts_(const int64_t base_timestamp, uint64_t &log_id, int64_t &submit_timestamp)
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
@@ -621,7 +622,7 @@ int ObLogSlidingWindow::alloc_log_id_ts_(const int64_t base_timestamp, uint64_t&
         if (AGGRE_BUFFER_FLAG != tmp_offset) {
           ret = fill_aggre_buffer_(log_id - 1, tmp_offset, NULL, 0, 0, NULL);
         }
-        ObAggreBuffer* buffer = aggre_buffer_ + ((log_id - aggre_buffer_start_id_) % aggre_buffer_cnt_);
+        ObAggreBuffer *buffer = aggre_buffer_ + ((log_id - aggre_buffer_start_id_) % aggre_buffer_cnt_);
         buffer->wait(log_id, wait_times);
         if (wait_times > 0 && EXECUTE_COUNT_PER_SEC(4)) {
           CLOG_LOG(WARN, "clog wait aggre buffer", K_(partition_key), K(wait_times), K(log_id));
@@ -634,7 +635,7 @@ int ObLogSlidingWindow::alloc_log_id_ts_(const int64_t base_timestamp, uint64_t&
 }
 
 int ObLogSlidingWindow::alloc_log_id_ts_(
-    const int64_t base_timestamp, const int64_t size, uint64_t& log_id, int64_t& submit_timestamp, int64_t& offset)
+    const int64_t base_timestamp, const int64_t size, uint64_t &log_id, int64_t &submit_timestamp, int64_t &offset)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -646,7 +647,7 @@ int ObLogSlidingWindow::alloc_log_id_ts_(
   return ret;
 }
 
-int ObLogSlidingWindow::submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t log_id, const int64_t submit_timestamp)
+int ObLogSlidingWindow::submit_aggre_log_(ObAggreBuffer *buffer, const uint64_t log_id, const int64_t submit_timestamp)
 {
   int ret = OB_SUCCESS;
 
@@ -695,8 +696,8 @@ int ObLogSlidingWindow::submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t 
   return ret;
 }
 
-int ObLogSlidingWindow::fill_aggre_buffer_(const uint64_t log_id, const int64_t offset, const char* data,
-    const int64_t data_size, const int64_t submit_timestamp, ObISubmitLogCb* cb)
+int ObLogSlidingWindow::fill_aggre_buffer_(const uint64_t log_id, const int64_t offset, const char *data,
+    const int64_t data_size, const int64_t submit_timestamp, ObISubmitLogCb *cb)
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
@@ -705,7 +706,7 @@ int ObLogSlidingWindow::fill_aggre_buffer_(const uint64_t log_id, const int64_t 
     CLOG_LOG(ERROR, "ObLogSlidingWindow is not inited", K(ret), K(partition_key_));
   } else {
     int64_t ref_cnt = 0;
-    ObAggreBuffer* buffer = aggre_buffer_ + ((log_id - aggre_buffer_start_id_) % aggre_buffer_cnt_);
+    ObAggreBuffer *buffer = aggre_buffer_ + ((log_id - aggre_buffer_start_id_) % aggre_buffer_cnt_);
     buffer->wait(log_id, wait_times);
     if (wait_times > 0 && EXECUTE_COUNT_PER_SEC(4)) {
       CLOG_LOG(WARN, "clog wait aggre buffer", K_(partition_key), K(wait_times), K(log_id));
@@ -797,7 +798,7 @@ int ObLogSlidingWindow::submit_freeze_aggre_buffer_task_(const uint64_t log_id)
   return ret;
 }
 
-int ObLogSlidingWindow::alloc_log_id(const int64_t base_timestamp, uint64_t& log_id, int64_t& submit_timestamp)
+int ObLogSlidingWindow::alloc_log_id(const int64_t base_timestamp, uint64_t &log_id, int64_t &submit_timestamp)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -837,7 +838,7 @@ int ObLogSlidingWindow::try_update_submit_timestamp(const int64_t base_ts)
 
 // only called by ObExtLeaderHeartbeatHandler to get next served log_id and ts based on keepalive ts
 int ObLogSlidingWindow::get_next_served_log_info_by_next_replay_log_info(
-    uint64_t& next_served_log_id, int64_t& next_served_log_ts)
+    uint64_t &next_served_log_id, int64_t &next_served_log_ts)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -859,7 +860,7 @@ int ObLogSlidingWindow::get_next_served_log_info_by_next_replay_log_info(
   return ret;
 }
 
-int ObLogSlidingWindow::submit_aggre_log(ObAggreBuffer* buffer, const int64_t base_timestamp)
+int ObLogSlidingWindow::submit_aggre_log(ObAggreBuffer *buffer, const int64_t base_timestamp)
 {
   int ret = OB_SUCCESS;
 
@@ -887,8 +888,8 @@ int ObLogSlidingWindow::submit_aggre_log(ObAggreBuffer* buffer, const int64_t ba
   return ret;
 }
 
-int ObLogSlidingWindow::submit_log(const ObLogType& log_type, const char* buff, const int64_t size,
-    const int64_t base_timestamp, const bool is_trans_log, ObISubmitLogCb* cb, uint64_t& log_id, int64_t& log_timestamp)
+int ObLogSlidingWindow::submit_log(const ObLogType &log_type, const char *buff, const int64_t size,
+    const int64_t base_timestamp, const bool is_trans_log, ObISubmitLogCb *cb, uint64_t &log_id, int64_t &log_timestamp)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1000,7 +1001,7 @@ int ObLogSlidingWindow::submit_log(const ObLogType& log_type, const char* buff, 
   return ret;
 }
 
-int ObLogSlidingWindow::submit_log(const ObLogEntryHeader& header, const char* buff, ObISubmitLogCb* cb)
+int ObLogSlidingWindow::submit_log(const ObLogEntryHeader &header, const char *buff, ObISubmitLogCb *cb)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1048,7 +1049,7 @@ int ObLogSlidingWindow::submit_log(const ObLogEntryHeader& header, const char* b
 }
 
 int ObLogSlidingWindow::need_update_log_task_(
-    const ObLogEntryHeader& header, const char* buff, ObLogTask& task, bool& log_need_update, bool& need_send_ack)
+    const ObLogEntryHeader &header, const char *buff, ObLogTask &task, bool &log_need_update, bool &need_send_ack)
 {
   int ret = OB_SUCCESS;
   const uint64_t log_id = header.get_log_id();
@@ -1099,8 +1100,8 @@ int ObLogSlidingWindow::need_update_log_task_(
   return ret;
 }
 
-int ObLogSlidingWindow::update_log_task_(const ObLogEntryHeader& header, const char* buff, const bool need_copy,
-    ObLogTask& task, bool& log_is_updated, bool& need_send_ack)
+int ObLogSlidingWindow::update_log_task_(const ObLogEntryHeader &header, const char *buff, const bool need_copy,
+    ObLogTask &task, bool &log_is_updated, bool &need_send_ack)
 {
   int ret = OB_SUCCESS;
   log_is_updated = false;
@@ -1116,7 +1117,7 @@ int ObLogSlidingWindow::update_log_task_(const ObLogEntryHeader& header, const c
   return ret;
 }
 
-int ObLogSlidingWindow::append_disk_log_to_sliding_window_(const ObLogEntry& log_entry, const ObLogCursor& log_cursor,
+int ObLogSlidingWindow::append_disk_log_to_sliding_window_(const ObLogEntry &log_entry, const ObLogCursor &log_cursor,
     const int64_t accum_checksum, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
@@ -1124,9 +1125,9 @@ int ObLogSlidingWindow::append_disk_log_to_sliding_window_(const ObLogEntry& log
   const bool is_logonly_replica = (mm_->get_replica_type() == REPLICA_TYPE_LOGONLY);
   const int64_t MAX_COPY_LOG_SIZE = 4 * 1024;  // 4k
   const uint64_t log_id = log_entry.get_header().get_log_id();
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   bool need_copy = (log_entry.get_header().get_total_len() <= MAX_COPY_LOG_SIZE) &&
                    (log_id < ATOMIC_LOAD(&next_index_log_id_)) && (!is_logonly_replica);
   bool first_appended = false;
@@ -1143,7 +1144,7 @@ int ObLogSlidingWindow::append_disk_log_to_sliding_window_(const ObLogEntry& log
     if (OB_FAIL(sw_.get(log_id, log_data, ref))) {
       CLOG_LOG(ERROR, "get log from sliding window failed", K(ret), K(partition_key_), K(log_id));
     } else if (NULL != log_data) {
-      log_task = static_cast<ObLogTask*>(log_data);
+      log_task = static_cast<ObLogTask *>(log_data);
       break;
     } else if (OB_FAIL(quick_generate_log_task_(log_entry, need_copy, log_task))) {
       CLOG_LOG(ERROR, "quick_generate_log_task_ failed", K(ret), K(partition_key_), K(log_id));
@@ -1229,24 +1230,24 @@ int ObLogSlidingWindow::append_disk_log_to_sliding_window_(const ObLogEntry& log
   return ret;
 }
 
-int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header, const char* buff, ObISubmitLogCb* cb,
-    const bool need_replay, const bool send_slave, const ObAddr& server, const int64_t cluster_id,
+int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader &header, const char *buff, ObISubmitLogCb *cb,
+    const bool need_replay, const bool send_slave, const ObAddr &server, const int64_t cluster_id,
     const bool is_confirmed, const int64_t accum_checksum, const bool is_batch_committed)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
-  ObLogFlushTask* flush_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
+  ObLogFlushTask *flush_task = NULL;
   bool log_task_need_update = false;
   bool locked = false;
   const uint64_t log_id = header.get_log_id();
   const bool need_copy = false;
 
-  char* out = NULL;
+  char *out = NULL;
   int64_t out_size = 0;
-  char* serialize_buff = NULL;
+  char *serialize_buff = NULL;
   ObLogEntry new_log;
   bool standby_need_handle_index_log = false;
   bool standby_need_send_follower = false;
@@ -1264,7 +1265,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
         CLOG_LOG(WARN, "get log from sliding window failed", K(ret), K_(partition_key), K(log_id));
       }
     } else if (NULL != log_data) {
-      log_task = static_cast<ObLogTask*>(log_data);
+      log_task = static_cast<ObLogTask *>(log_data);
       if (log_task->is_on_success_cb_called()) {
         if (!log_task->is_checksum_verified(header.get_data_checksum())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1322,7 +1323,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
   // if log exists, try to update it
   if (OB_SUCCESS == ret && !locked) {
     if (NULL != log_data) {
-      log_task = static_cast<ObLogTask*>(log_data);
+      log_task = static_cast<ObLogTask *>(log_data);
     }
     log_task->lock();
     locked = true;
@@ -1393,7 +1394,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
       CLOG_LOG(ERROR, "generate_entry failed", K_(partition_key), K(ret));
     } else if (OB_ISNULL(alloc_mgr_)) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (NULL == (serialize_buff = static_cast<char*>(alloc_mgr_->ge_alloc(new_log.get_serialize_size())))) {
+    } else if (NULL == (serialize_buff = static_cast<char *>(alloc_mgr_->ge_alloc(new_log.get_serialize_size())))) {
       CLOG_LOG(WARN, "alloc memory failed", K_(partition_key), K(new_log));
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else if (OB_FAIL(new_log.serialize(serialize_buff, new_log.get_serialize_size(), pos))) {
@@ -1421,33 +1422,37 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
     }
   }
 
-  if (OB_SUCCESS == ret && !log_task_need_update && standby_need_send_follower) {
-    // log_task no need be updated, but standby_leader need transfer it to followers
-    int64_t pos = 0;
-    if (OB_FAIL(new_log.generate_entry(header, buff))) {
-      CLOG_LOG(ERROR, "generate_entry failed", K_(partition_key), K(ret));
-    } else if (NULL != serialize_buff) {
-      // serialize_buff is expected to be empty
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "serialize_buff is not null, unexpected", K_(partition_key), K(ret));
-    } else {
-      int64_t serialize_size = new_log.get_serialize_size();
-      if (NULL == (serialize_buff = static_cast<char*>(alloc_mgr_->ge_alloc(serialize_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        CLOG_LOG(ERROR, "alloc failed", K(ret), K_(partition_key));
-      } else if (OB_FAIL(new_log.serialize(serialize_buff, serialize_size, pos))) {
-        CLOG_LOG(WARN, "serialize log failed", K_(partition_key), K(ret));
-      } else {
-        // do nothing
-      }
-    }
-  }
-
   bool is_log_majority = false;
   if (locked) {
     is_log_majority = (log_task->is_local_majority_flushed() || log_task->is_log_confirmed());
     log_task->unlock();
     locked = false;
+  }
+
+  char *standby_serialize_buff = NULL;
+  if (OB_SUCCESS == ret && !log_task_need_update && standby_need_send_follower) {
+    // log_task no need be updated, but standby_leader need transfer it to followers
+    int64_t pos = 0;
+    if (OB_FAIL(new_log.generate_entry(header, buff))) {
+      CLOG_LOG(ERROR, "generate_entry failed", K_(partition_key), K(ret));
+    } else {
+      const int64_t serialize_size = new_log.get_serialize_size();
+      if (NULL == (standby_serialize_buff = static_cast<char *>(alloc_mgr_->ge_alloc(serialize_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        CLOG_LOG(ERROR, "alloc failed", K(ret), K_(partition_key));
+      } else if (OB_FAIL(new_log.serialize(standby_serialize_buff, serialize_size, pos))) {
+        CLOG_LOG(WARN, "serialize log failed", K_(partition_key), K(ret));
+      } else if (send_slave || cascading_mgr_->has_valid_child() || cascading_mgr_->has_valid_async_standby_child() ||
+                 cascading_mgr_->has_valid_sync_standby_child()) {
+        if (OB_SUCCESS !=
+            (tmp_ret = submit_log_to_net_(
+                 new_log.get_header(), standby_serialize_buff, new_log.get_serialize_size(), is_log_majority))) {
+          CLOG_LOG(WARN, "submit_to_net failed", K(tmp_ret), K_(partition_key), K(header));
+        }
+      } else {
+        // do nothing
+      }
+    }
   }
 
   if (OB_SUCC(ret) && is_confirmed) {
@@ -1488,7 +1493,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
   }
 
   if (OB_SUCC(ret)) {
-    if ((log_task_need_update || standby_need_send_follower)  // ensure new_log is valid
+    if (log_task_need_update  // ensure new_log is valid
         && (send_slave || cascading_mgr_->has_valid_child() || cascading_mgr_->has_valid_async_standby_child() ||
                cascading_mgr_->has_valid_sync_standby_child())) {
       // send it to member_list/children
@@ -1524,21 +1529,21 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
     ref = NULL;
   }
 
-  if (NULL != serialize_buff) {
-    alloc_mgr_->ge_free(serialize_buff);
-    serialize_buff = NULL;
+  if (NULL != standby_serialize_buff) {
+    alloc_mgr_->ge_free(standby_serialize_buff);
+    standby_serialize_buff = NULL;
   }
   return ret;
 }
 
 int ObLogSlidingWindow::submit_confirmed_info_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool is_leader, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool is_leader, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   bool locked = false;
 
   if (IS_NOT_INIT) {
@@ -1602,7 +1607,7 @@ int ObLogSlidingWindow::submit_confirmed_info_(
     }
   }
   if (OB_SUCCESS == ret && !locked) {
-    log_task = static_cast<ObLogTask*>(log_data);
+    log_task = static_cast<ObLogTask *>(log_data);
     log_task->lock();
     locked = true;
     if (log_task->is_confirmed_info_exist()) {
@@ -1648,11 +1653,20 @@ int ObLogSlidingWindow::submit_confirmed_info_(
         // restore_leader check accum_checksum in physical restore log state
         if (log_task->get_accum_checksum() != confirmed_info.get_accum_checksum()) {
           ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "log_task and confirmed_info's accum_checksum not match", K(ret), K_(partition_key),
-                   K(log_id), K(*log_task), K(confirmed_info));
+          CLOG_LOG(ERROR,
+              "log_task and confirmed_info's accum_checksum not match",
+              K(ret),
+              K_(partition_key),
+              K(log_id),
+              K(*log_task),
+              K(confirmed_info));
           // record error event
-          SERVER_EVENT_ADD("clog_restore", "clog accum_checksum is not match witch archived log",
-              "partition", partition_key_, "log_id", log_id);
+          SERVER_EVENT_ADD("clog_restore",
+              "clog accum_checksum is not match witch archived log",
+              "partition",
+              partition_key_,
+              "log_id",
+              log_id);
           // report restore error
           const uint64_t tenant_id = partition_key_.get_tenant_id();
           int64_t job_id = 0;
@@ -1663,9 +1677,10 @@ int ObLogSlidingWindow::submit_confirmed_info_(
               CLOG_LOG(WARN, "physical restore info not exist", K(tenant_id), KR(tmp_ret), KR(ret));
             }
           } else if (OB_SUCCESS != (tmp_ret = ObRestoreFatalErrorReporter::get_instance().add_restore_error_task(
-                      tenant_id, PHYSICAL_RESTORE_MOD_CLOG, ret, job_id, self_))) {
+                                        tenant_id, PHYSICAL_RESTORE_MOD_CLOG, ret, job_id, self_))) {
             CLOG_LOG(WARN, "failed to report restore error", KR(tmp_ret), K(tenant_id), KR(ret));
-          } else {/*do nothing*/}
+          } else { /*do nothing*/
+          }
         }
       }
 
@@ -1707,17 +1722,17 @@ int ObLogSlidingWindow::submit_confirmed_info_(
   return ret;
 }
 
-void* ObLogSlidingWindow::alloc_log_task_buf_()
+void *ObLogSlidingWindow::alloc_log_task_buf_()
 {
-  void* log_task = NULL;
+  void *log_task = NULL;
   int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     CLOG_LOG(WARN, "sw is not inited", K_(partition_key));
-  } else if (NULL != (log_task = static_cast<ObLogTask*>(alloc_mgr_->alloc_log_task_buf()))) {
+  } else if (NULL != (log_task = static_cast<ObLogTask *>(alloc_mgr_->alloc_log_task_buf()))) {
     // alloc success
   } else if (REPLAY == state_mgr_->get_state()) {
     // try to alloc from tenant 500 when in REPLAY state
-    ObILogAllocator* server_tenant_allocator = NULL;
+    ObILogAllocator *server_tenant_allocator = NULL;
     if (OB_SUCCESS !=
         (tmp_ret = TMA_MGR_INSTANCE.get_tenant_log_allocator(OB_SERVER_TENANT_ID, server_tenant_allocator))) {
       CLOG_LOG(WARN, "get_tenant_log_allocator failed", K(tmp_ret), K_(partition_key));
@@ -1729,14 +1744,14 @@ void* ObLogSlidingWindow::alloc_log_task_buf_()
 }
 
 int ObLogSlidingWindow::generate_null_log_task_(
-    const ObLogEntryHeader& header, const bool need_replay, ObLogTask*& log_task)
+    const ObLogEntryHeader &header, const bool need_replay, ObLogTask *&log_task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(alloc_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(alloc_log_task_buf_()))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(alloc_log_task_buf_()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc memory failed", K(ret), K_(partition_key), K(header));
   } else {
@@ -1752,12 +1767,12 @@ int ObLogSlidingWindow::generate_null_log_task_(
 }
 
 int ObLogSlidingWindow::quick_generate_log_task_(
-    const ObLogEntry& log_entry, const bool need_copy, ObLogTask*& log_task)
+    const ObLogEntry &log_entry, const bool need_copy, ObLogTask *&log_task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(alloc_log_task_buf_()))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(alloc_log_task_buf_()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(ERROR, "alloc memory failed", K(ret), K(partition_key_));
   } else {
@@ -1772,8 +1787,8 @@ int ObLogSlidingWindow::quick_generate_log_task_(
   return ret;
 }
 
-int ObLogSlidingWindow::generate_log_task_(const ObLogEntryHeader& header, const char* buff, const bool need_replay,
-    const bool need_copy, ObLogTask*& log_task)
+int ObLogSlidingWindow::generate_log_task_(const ObLogEntryHeader &header, const char *buff, const bool need_replay,
+    const bool need_copy, ObLogTask *&log_task)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_null_log_task_(header, need_replay, log_task))) {
@@ -1788,14 +1803,14 @@ int ObLogSlidingWindow::generate_log_task_(const ObLogEntryHeader& header, const
 }
 
 int ObLogSlidingWindow::generate_log_task_(
-    const ObConfirmedInfo& confirmed_info, const bool need_replay, const bool batch_committed, ObLogTask*& log_task)
+    const ObConfirmedInfo &confirmed_info, const bool need_replay, const bool batch_committed, ObLogTask *&log_task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(alloc_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(alloc_log_task_buf_()))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(alloc_log_task_buf_()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc memory failed", K(ret), K_(partition_key), K(confirmed_info));
   } else {
@@ -1818,7 +1833,7 @@ int ObLogSlidingWindow::generate_log_task_(
 }
 
 int ObLogSlidingWindow::submit_confirmed_info_to_net_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1847,7 +1862,7 @@ int ObLogSlidingWindow::submit_confirmed_info_to_net_(
 
 // follower transfer confirmed_info to all children
 int ObLogSlidingWindow::follower_transfer_confirmed_info_to_net_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1876,7 +1891,7 @@ int ObLogSlidingWindow::follower_transfer_confirmed_info_to_net_(
 
 // send confirmed_info to curr_member_list
 int ObLogSlidingWindow::submit_confirmed_info_to_member_list_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   if (LEADER == state_mgr_->get_role() ||
@@ -1909,7 +1924,7 @@ int ObLogSlidingWindow::submit_confirmed_info_to_member_list_(
 
 // send confirmed info to children in same cluster
 int ObLogSlidingWindow::submit_confirmed_info_to_local_children_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   if (cascading_mgr_->has_valid_child() && can_transfer_confirmed_info_(log_id)) {
@@ -1945,7 +1960,7 @@ int ObLogSlidingWindow::submit_confirmed_info_to_local_children_(
 }
 
 int ObLogSlidingWindow::submit_confirmed_info_to_standby_children_(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
 
@@ -2013,7 +2028,7 @@ int ObLogSlidingWindow::submit_confirmed_info_to_standby_children_(
   return ret;
 }
 
-int ObLogSlidingWindow::submit_log_to_net_(const ObLogEntryHeader& header, const char* serialize_buff,
+int ObLogSlidingWindow::submit_log_to_net_(const ObLogEntryHeader &header, const char *serialize_buff,
     const int64_t serialize_size, const bool is_log_majority)
 {
   int ret = OB_SUCCESS;
@@ -2044,7 +2059,7 @@ int ObLogSlidingWindow::submit_log_to_net_(const ObLogEntryHeader& header, const
 }
 
 int ObLogSlidingWindow::submit_log_to_member_list_(
-    const ObLogEntryHeader& header, const char* serialize_buff, const int64_t serialize_size)
+    const ObLogEntryHeader &header, const char *serialize_buff, const int64_t serialize_size)
 {
   int ret = OB_SUCCESS;
   if (LEADER == state_mgr_->get_role() || STANDBY_LEADER == state_mgr_->get_role()) {
@@ -2069,7 +2084,7 @@ int ObLogSlidingWindow::submit_log_to_member_list_(
 }
 
 int ObLogSlidingWindow::submit_log_to_local_children_(
-    const ObLogEntryHeader& header, const char* serialize_buff, const int64_t serialize_size)
+    const ObLogEntryHeader &header, const char *serialize_buff, const int64_t serialize_size)
 {
   int ret = OB_SUCCESS;
   ObLogNetTask net_task(state_mgr_->get_proposal_id(), serialize_buff, serialize_size);
@@ -2093,7 +2108,7 @@ int ObLogSlidingWindow::submit_log_to_local_children_(
 }
 
 // send log to standby children(sync/async)
-int ObLogSlidingWindow::submit_log_to_standby_children_(const ObLogEntryHeader& header, const char* serialize_buff,
+int ObLogSlidingWindow::submit_log_to_standby_children_(const ObLogEntryHeader &header, const char *serialize_buff,
     const int64_t serialize_size, const bool is_log_majority)
 {
   int ret = OB_SUCCESS;
@@ -2156,8 +2171,8 @@ int ObLogSlidingWindow::submit_log_to_standby_children_(const ObLogEntryHeader& 
   return ret;
 }
 
-int ObLogSlidingWindow::prepare_flush_task_(const ObLogEntryHeader& header, char* serialize_buff,
-    const int64_t serialize_size, const ObAddr& server, const int64_t cluster_id, ObLogFlushTask*& flush_task)
+int ObLogSlidingWindow::prepare_flush_task_(const ObLogEntryHeader &header, char *serialize_buff,
+    const int64_t serialize_size, const ObAddr &server, const int64_t cluster_id, ObLogFlushTask *&flush_task)
 {
   int ret = OB_SUCCESS;
   int64_t pls_epoch = OB_INVALID_TIMESTAMP;
@@ -2290,9 +2305,9 @@ int ObLogSlidingWindow::process_sync_standby_max_confirmed_id(
     uint64_t end_log_id = std::min(standby_max_confirmed_id, reconfirm_next_id - 1);
     end_log_id = std::min(end_log_id, max_log_id);
     for (uint64_t i = sw_.get_start_id(); i <= end_log_id; ++i) {
-      ObILogExtRingBufferData* log_data = NULL;
-      ObLogTask* log_task = NULL;
-      const int64_t* ref = NULL;
+      ObILogExtRingBufferData *log_data = NULL;
+      ObLogTask *log_task = NULL;
+      const int64_t *ref = NULL;
       if (OB_SUCCESS != (tmp_ret = sw_.get(static_cast<int64_t>(i), log_data, ref))) {
         if (OB_ERROR_OUT_OF_RANGE != tmp_ret) {
           CLOG_LOG(WARN,
@@ -2306,7 +2321,7 @@ int ObLogSlidingWindow::process_sync_standby_max_confirmed_id(
               "max_log_id",
               max_log_meta_info_.get_log_id());
         }
-      } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+      } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
         // log_task is NULL, skip
       } else {
         log_task->lock();
@@ -2347,9 +2362,9 @@ int ObLogSlidingWindow::clean_log()
   } else {
     uint64_t need_reset_confirmed_info = false;
     for (uint64_t i = sw_.get_start_id(); i <= max_log_meta_info_.get_log_id(); ++i) {
-      ObILogExtRingBufferData* log_data = NULL;
-      ObLogTask* log_task = NULL;
-      const int64_t* ref = NULL;
+      ObILogExtRingBufferData *log_data = NULL;
+      ObLogTask *log_task = NULL;
+      const int64_t *ref = NULL;
       if (OB_SUCCESS != (tmp_ret = sw_.get(static_cast<int64_t>(i), log_data, ref))) {
         CLOG_LOG(WARN,
             "get log task from sliding window failed",
@@ -2361,7 +2376,7 @@ int ObLogSlidingWindow::clean_log()
             i,
             "max_log_id",
             max_log_meta_info_.get_log_id());
-      } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+      } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
         // begin clean confirm_info when it encounters empty log slot
         if (GCTX.is_standby_cluster() && !ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
             !need_reset_confirmed_info) {
@@ -2420,8 +2435,8 @@ int ObLogSlidingWindow::restore_leader_try_confirm_log()
   int64_t unused_version = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(partition_service_->get_restore_replay_info(partition_key_,
-          last_restore_log_id, unused_log_ts, unused_version))) {
+  } else if (OB_FAIL(partition_service_->get_restore_replay_info(
+                 partition_key_, last_restore_log_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "get_restore_replay_info failed", K_(partition_key), K(ret));
   } else if (OB_INVALID_ID == last_restore_log_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -2472,7 +2487,7 @@ int ObLogSlidingWindow::set_log_archive_accum_checksum(const uint64_t log_id, co
   return ret;
 }
 
-bool ObLogSlidingWindow::can_set_log_confirmed_(const ObLogTask* log_task) const
+bool ObLogSlidingWindow::can_set_log_confirmed_(const ObLogTask *log_task) const
 {
   bool bool_ret = false;
   if (NULL != log_task) {
@@ -2492,15 +2507,15 @@ int ObLogSlidingWindow::set_log_confirmed(const uint64_t log_id, const bool batc
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(sw_.get(static_cast<int64_t>(log_id), log_data, ref))) {
     CLOG_LOG(WARN, "get log task from sliding window failed", K_(partition_key), K(ret));
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
     CLOG_LOG(WARN, "get NULL log from sliding window", K_(partition_key), K(log_id));
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -2532,14 +2547,14 @@ int ObLogSlidingWindow::set_log_confirmed(const uint64_t log_id, const bool batc
   return ret;
 }
 
-int ObLogSlidingWindow::get_log(const uint64_t log_id, const uint32_t log_attr, bool& log_confirmed,
-    ObLogCursor& log_cursor, int64_t& accum_checksum, bool& batch_committed)
+int ObLogSlidingWindow::get_log(const uint64_t log_id, const uint32_t log_attr, bool &log_confirmed,
+    ObLogCursor &log_cursor, int64_t &accum_checksum, bool &batch_committed)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_ERROR_OUT_OF_RANGE == (ret = sw_.get(static_cast<int64_t>(log_id), log_data, ref))) {
@@ -2551,7 +2566,7 @@ int ObLogSlidingWindow::get_log(const uint64_t log_id, const uint32_t log_attr, 
         sw_.get_start_id());
   } else if (OB_FAIL(ret)) {
     CLOG_LOG(ERROR, "get log from sliding window failed,", K_(partition_key), K(ret));
-  } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
     ret = OB_ERR_NULL_VALUE;
     CLOG_LOG(DEBUG,
         "ObLogSlidingWindow::get_log(), log in sliding window is NULL",
@@ -2660,7 +2675,7 @@ bool ObLogSlidingWindow::can_transfer_confirmed_info_(const uint64_t log_id)
 
 // follower send confirmed log to standby children
 // same with set_log_flushed_succ()
-int ObLogSlidingWindow::follower_send_log_to_standby_children_(const uint64_t log_id, ObLogTask* log_task)
+int ObLogSlidingWindow::follower_send_log_to_standby_children_(const uint64_t log_id, ObLogTask *log_task)
 {
   int ret = OB_SUCCESS;
 
@@ -2690,7 +2705,7 @@ int ObLogSlidingWindow::follower_send_log_to_standby_children_(const uint64_t lo
 }
 
 int ObLogSlidingWindow::receive_confirmed_info(
-    const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
+    const uint64_t log_id, const ObConfirmedInfo &confirmed_info, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
   bool can_receive_log = true;
@@ -2737,7 +2752,7 @@ int ObLogSlidingWindow::receive_confirmed_info(
 }
 
 int ObLogSlidingWindow::leader_submit_confirmed_info_(
-    const uint64_t log_id, const ObLogTask* log_task, const int64_t accum_checksum)
+    const uint64_t log_id, const ObLogTask *log_task, const int64_t accum_checksum)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2775,7 +2790,7 @@ int ObLogSlidingWindow::leader_submit_confirmed_info_(
   return ret;
 }
 
-int ObLogSlidingWindow::standby_leader_transfer_confirmed_info_(const uint64_t log_id, const ObLogTask* log_task)
+int ObLogSlidingWindow::standby_leader_transfer_confirmed_info_(const uint64_t log_id, const ObLogTask *log_task)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2816,7 +2831,7 @@ int ObLogSlidingWindow::standby_leader_transfer_confirmed_info_(const uint64_t l
   return ret;
 }
 
-int ObLogSlidingWindow::append_disk_log(const ObLogEntry& log_entry, const ObLogCursor& log_cursor,
+int ObLogSlidingWindow::append_disk_log(const ObLogEntry &log_entry, const ObLogCursor &log_cursor,
     const int64_t accum_checksum, const bool batch_committed)
 {
   int ret = OB_SUCCESS;
@@ -2836,7 +2851,7 @@ int ObLogSlidingWindow::append_disk_log(const ObLogEntry& log_entry, const ObLog
   return ret;
 }
 
-int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t& next_replay_log_timestamp) const
+int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t &next_replay_log_timestamp) const
 {
   int ret = OB_SUCCESS;
 
@@ -2851,21 +2866,20 @@ int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t& next_replay_log_t
   return ret;
 }
 
-void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id,
-                                                       int64_t &last_replay_log_ts)
+void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id, int64_t &last_replay_log_ts)
 {
   last_replay_log_.get(last_replay_log_id, last_replay_log_ts);
 }
 
 int ObLogSlidingWindow::set_log_flushed_succ(const uint64_t log_id, const ObProposalID proposal_id,
-    const ObLogCursor& log_cursor, const int64_t after_consume_timestamp, bool& majority)
+    const ObLogCursor &log_cursor, const int64_t after_consume_timestamp, bool &majority)
 {
   UNUSED(after_consume_timestamp);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2883,7 +2897,7 @@ int ObLogSlidingWindow::set_log_flushed_succ(const uint64_t log_id, const ObProp
       } else {
         ret = OB_SUCCESS;
       }
-    } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+    } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
       ret = OB_ERR_NULL_VALUE;
       CLOG_LOG(ERROR, "log in sliding window is NULL", K_(partition_key), K(ret));
     } else {
@@ -2962,7 +2976,7 @@ int ObLogSlidingWindow::set_log_flushed_succ(const uint64_t log_id, const ObProp
 }
 
 int ObLogSlidingWindow::send_standby_log_ack_(
-    const ObAddr& server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID& proposal_id)
+    const ObAddr &server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID &proposal_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2993,7 +3007,7 @@ int ObLogSlidingWindow::send_standby_log_ack_(
   return ret;
 }
 
-int ObLogSlidingWindow::receive_log_(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id)
+int ObLogSlidingWindow::receive_log_(const ObLogEntry &log_entry, const ObAddr &server, const int64_t cluster_id)
 {
   int ret = OB_SUCCESS;
   const uint64_t log_id = log_entry.get_header().get_log_id();
@@ -3063,7 +3077,7 @@ int ObLogSlidingWindow::receive_log_(const ObLogEntry& log_entry, const ObAddr& 
 }
 
 int ObLogSlidingWindow::receive_recovery_log(
-    const ObLogEntry& log_entry, const bool is_confirmed, const int64_t accum_checksum, const bool is_batch_committed)
+    const ObLogEntry &log_entry, const bool is_confirmed, const int64_t accum_checksum, const bool is_batch_committed)
 {
   int ret = OB_SUCCESS;
   const uint64_t log_id = log_entry.get_header().get_log_id();
@@ -3105,7 +3119,7 @@ int ObLogSlidingWindow::receive_recovery_log(
 }
 
 int ObLogSlidingWindow::receive_log(
-    const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id, const ReceiveLogType type)
+    const ObLogEntry &log_entry, const ObAddr &server, const int64_t cluster_id, const ReceiveLogType type)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -3134,9 +3148,9 @@ int ObLogSlidingWindow::majority_cb(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   BG_MONITOR_GUARD_DEFAULT(1000 * 1000);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3144,8 +3158,10 @@ int ObLogSlidingWindow::majority_cb(
   } else if (log_data == NULL) {
     ret = OB_ERR_NULL_VALUE;
   } else {
-    log_task = static_cast<ObLogTask*>(log_data);
-    try_update_max_majority_log(log_id, log_task->get_submit_timestamp());
+    log_task = static_cast<ObLogTask *>(log_data);
+    if (ObLogType::OB_LOG_START_MEMBERSHIP != log_task->get_log_type()) {
+      try_update_max_majority_log(log_id, log_task->get_submit_timestamp());
+    }
     if (OB_FAIL(log_task->submit_log_succ_cb(partition_key_, log_id, batch_committed, batch_first_participant))) {
       CLOG_LOG(WARN, "submit log majority_cb failed", K(ret), K_(partition_key), K(log_id), K(batch_committed));
       ret = OB_SUCCESS;
@@ -3159,7 +3175,7 @@ int ObLogSlidingWindow::majority_cb(
   return ret;
 }
 
-bool ObLogSlidingWindow::is_freeze_log_(const char* log_buf, const int64_t log_buf_len, int64_t& log_type) const
+bool ObLogSlidingWindow::is_freeze_log_(const char *log_buf, const int64_t log_buf_len, int64_t &log_type) const
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
@@ -3173,7 +3189,7 @@ bool ObLogSlidingWindow::is_freeze_log_(const char* log_buf, const int64_t log_b
   return bool_ret;
 }
 
-bool ObLogSlidingWindow::is_change_pg_log_(const char* log_buf, const int64_t log_buf_len, int64_t& log_type) const
+bool ObLogSlidingWindow::is_change_pg_log_(const char *log_buf, const int64_t log_buf_len, int64_t &log_type) const
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
@@ -3189,7 +3205,7 @@ bool ObLogSlidingWindow::is_change_pg_log_(const char* log_buf, const int64_t lo
 }
 
 bool ObLogSlidingWindow::is_offline_partition_log_(
-    const char* log_buf, const int64_t log_buf_len, int64_t& log_type) const
+    const char *log_buf, const int64_t log_buf_len, int64_t &log_type) const
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
@@ -3203,7 +3219,7 @@ bool ObLogSlidingWindow::is_offline_partition_log_(
   return bool_ret;
 }
 
-int ObLogSlidingWindow::get_replica_replay_type(ObReplicaReplayType& replay_type) const
+int ObLogSlidingWindow::get_replica_replay_type(ObReplicaReplayType &replay_type) const
 {
   int ret = OB_SUCCESS;
   replay_type = INVALID_REPLICA_REPLAY_TYPE;
@@ -3234,7 +3250,7 @@ int ObLogSlidingWindow::get_replica_replay_type(ObReplicaReplayType& replay_type
   return ret;
 }
 
-int ObLogSlidingWindow::need_replay_for_data_or_log_replica_(const bool is_trans_log, bool& need_replay) const
+int ObLogSlidingWindow::need_replay_for_data_or_log_replica_(const bool is_trans_log, bool &need_replay) const
 {
   int ret = OB_SUCCESS;
   ObReplicaReplayType replay_type = INVALID_REPLICA_REPLAY_TYPE;
@@ -3251,12 +3267,12 @@ int ObLogSlidingWindow::need_replay_for_data_or_log_replica_(const bool is_trans
   return ret;
 }
 
-int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool& is_meta_log, int64_t& log_ts,
-    int64_t& next_replay_log_ts_for_rg, int64_t& accum_checksum, ObLogType& log_type) const
+int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool &is_meta_log, int64_t &log_ts,
+    int64_t &next_replay_log_ts_for_rg, int64_t &accum_checksum, ObLogType &log_type) const
 {
   int ret = OB_SUCCESS;
   is_meta_log = false;
-  ObICLogMgr* clog_mgr = NULL;
+  ObICLogMgr *clog_mgr = NULL;
   if (OB_ISNULL(partition_service_) || OB_ISNULL(clog_mgr = partition_service_->get_clog_mgr())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "invalid argument", K(partition_key_), K(log_id), KP(partition_service_), KP(clog_mgr), KR(ret));
@@ -3300,7 +3316,7 @@ int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool& is_meta_log, in
   return ret;
 }
 
-int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObLogTask& log_task)
+int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObLogTask &log_task)
 {
   int ret = OB_SUCCESS;
 
@@ -3343,7 +3359,7 @@ int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObL
       // skip logs those do not need replay
     } else if (OB_LOG_MEMBERSHIP == header_log_type || OB_LOG_START_MEMBERSHIP == header_log_type) {
       ObReadBuf rbuf;
-      const char* log_buf = NULL;
+      const char *log_buf = NULL;
       int64_t log_buf_len = 0;
       if (log_task.is_submit_log_body_exist()) {
         log_buf = log_task.get_log_buf();
@@ -3475,7 +3491,7 @@ int ObLogSlidingWindow::follower_update_leader_next_log_info(
 }
 
 int ObLogSlidingWindow::get_switchover_info(
-    int64_t& switchover_epoch, uint64_t& leader_max_log_id, int64_t& leader_next_log_ts) const
+    int64_t &switchover_epoch, uint64_t &leader_max_log_id, int64_t &leader_next_log_ts) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -3535,8 +3551,8 @@ bool ObLogSlidingWindow::is_standby_leader_need_fetch_log_(const uint64_t start_
   } else if (STANDBY_LEADER != state_mgr_->get_role()) {
     // not standby_leader, skip
   } else {
-    ObLogTask* log_task = NULL;
-    const int64_t* ref = NULL;
+    ObLogTask *log_task = NULL;
+    const int64_t *ref = NULL;
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = get_log_task(start_log_id, log_task, ref))) {
       // slide out or null
@@ -3555,7 +3571,7 @@ bool ObLogSlidingWindow::is_standby_leader_need_fetch_log_(const uint64_t start_
   return bool_ret;
 }
 
-bool ObLogSlidingWindow::check_need_fetch_log_(const uint64_t start_log_id, bool& need_check_rebuild)
+bool ObLogSlidingWindow::check_need_fetch_log_(const uint64_t start_log_id, bool &need_check_rebuild)
 {
   bool bool_ret = true;
   bool is_tenant_out_of_mem = false;
@@ -3677,7 +3693,7 @@ int ObLogSlidingWindow::follower_check_need_rebuild_(const uint64_t start_log_id
   return ret;
 }
 
-void ObLogSlidingWindow::start_fetch_log_from_leader(bool& is_fetched)
+void ObLogSlidingWindow::start_fetch_log_from_leader(bool &is_fetched)
 {
   int ret = OB_SUCCESS;
   const uint64_t start_id = sw_.get_start_id();
@@ -3693,7 +3709,7 @@ void ObLogSlidingWindow::start_fetch_log_from_leader(bool& is_fetched)
 }
 
 int ObLogSlidingWindow::do_fetch_log(const uint64_t start_id, const uint64_t end_id,
-    const enum ObFetchLogExecuteType& fetch_log_execute_type, bool& is_fetched)
+    const enum ObFetchLogExecuteType &fetch_log_execute_type, bool &is_fetched)
 {
   int ret = OB_SUCCESS;
   bool need_check_rebuild = false;
@@ -3819,7 +3835,7 @@ int ObLogSlidingWindow::do_fetch_log(const uint64_t start_id, const uint64_t end
   return ret;
 }
 
-int ObLogSlidingWindow::sliding_cb(const int64_t sn, const ObILogExtRingBufferData* data)
+int ObLogSlidingWindow::sliding_cb(const int64_t sn, const ObILogExtRingBufferData *data)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3830,7 +3846,7 @@ int ObLogSlidingWindow::sliding_cb(const int64_t sn, const ObILogExtRingBufferDa
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "invalid argument", K_(partition_key), K(sn), K(ret));
   } else if (state_mgr_->can_slide_sw()) {
-    const ObLogTask* log_task = dynamic_cast<const ObLogTask*>(data);
+    const ObLogTask *log_task = dynamic_cast<const ObLogTask *>(data);
     if (NULL == log_task) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "dynamic_cast return NULL", K_(partition_key), K(ret));
@@ -3918,7 +3934,7 @@ int ObLogSlidingWindow::sliding_cb(const int64_t sn, const ObILogExtRingBufferDa
   return ret;
 }
 
-int ObLogSlidingWindow::submit_replay_task(const bool need_async, bool& is_replayed, bool& is_replay_failed)
+int ObLogSlidingWindow::submit_replay_task(const bool need_async, bool &is_replayed, bool &is_replay_failed)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -3951,10 +3967,10 @@ int ObLogSlidingWindow::submit_replay_task(const bool need_async, bool& is_repla
   return ret;
 }
 
-int ObLogSlidingWindow::get_log_task(const uint64_t log_id, ObLogTask*& log_task, const int64_t*& ref) const
+int ObLogSlidingWindow::get_log_task(const uint64_t log_id, ObLogTask *&log_task, const int64_t *&ref) const
 {
   int ret = OB_SUCCESS;
-  ObILogExtRingBufferData* log_data = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_IS_INVALID_LOG_ID(log_id)) {
@@ -3962,17 +3978,17 @@ int ObLogSlidingWindow::get_log_task(const uint64_t log_id, ObLogTask*& log_task
   } else if (OB_SUCCESS == (ret = sw_.get(log_id, log_data, ref)) && log_data == NULL) {
     ret = OB_ERR_NULL_VALUE;
   } else if (OB_SUCC(ret)) {
-    log_task = static_cast<ObLogTask*>(log_data);
+    log_task = static_cast<ObLogTask *>(log_data);
   }
   return ret;
 }
 
-int ObLogSlidingWindow::check_left_bound_empty(bool& is_empty)
+int ObLogSlidingWindow::check_left_bound_empty(bool &is_empty)
 {
   int ret = OB_SUCCESS;
   is_empty = false;
-  ObLogTask* log_task = NULL;
-  const int64_t* ref = NULL;
+  ObLogTask *log_task = NULL;
+  const int64_t *ref = NULL;
   const uint64_t start_log_id = get_start_id();
   if (OB_FAIL(get_log_task(start_log_id, log_task, ref))) {
     if (OB_ERR_NULL_VALUE == ret) {
@@ -3994,7 +4010,7 @@ int ObLogSlidingWindow::check_left_bound_empty(bool& is_empty)
   return ret;
 }
 
-int ObLogSlidingWindow::revert_log_task(const int64_t* ref)
+int ObLogSlidingWindow::revert_log_task(const int64_t *ref)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -4010,7 +4026,7 @@ int ObLogSlidingWindow::revert_log_task(const int64_t* ref)
 }
 
 // This function may take a long time and does not lock during execution
-int ObLogSlidingWindow::truncate_first_stage(const common::ObBaseStorageInfo& base_storage_info)
+int ObLogSlidingWindow::truncate_first_stage(const common::ObBaseStorageInfo &base_storage_info)
 {
   int ret = OB_SUCCESS;
   const uint64_t new_start_id = base_storage_info.get_last_replay_log_id() + 1;
@@ -4024,7 +4040,7 @@ int ObLogSlidingWindow::truncate_first_stage(const common::ObBaseStorageInfo& ba
   return ret;
 }
 
-int ObLogSlidingWindow::truncate_second_stage(const common::ObBaseStorageInfo& base_storage_info)
+int ObLogSlidingWindow::truncate_second_stage(const common::ObBaseStorageInfo &base_storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -4055,14 +4071,14 @@ int ObLogSlidingWindow::truncate_second_stage(const common::ObBaseStorageInfo& b
     set_next_replay_log_id_info(
         base_storage_info.get_last_replay_log_id() + 1, base_storage_info.get_submit_timestamp() + 1);
 
-    const int64_t* ref = NULL;
-    ObILogExtRingBufferData* log_data = NULL;
-    ObLogTask* log_task = NULL;
+    const int64_t *ref = NULL;
+    ObILogExtRingBufferData *log_data = NULL;
+    ObLogTask *log_task = NULL;
     if (OB_SUCCESS != (tmp_ret = sw_.get(new_start_id, log_data, ref))) {
       if (OB_ERROR_OUT_OF_RANGE != tmp_ret) {
         CLOG_LOG(WARN, "get log from sliding window failed", K(tmp_ret), K(partition_key_), K(new_start_id));
       }
-    } else if (NULL == (log_task = static_cast<ObLogTask*>(log_data))) {
+    } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
       tmp_ret = OB_ERR_NULL_VALUE;
       CLOG_LOG(TRACE, "log in sliding window is NULL", K(tmp_ret), K(partition_key_));
     }
@@ -4120,7 +4136,7 @@ void ObLogSlidingWindow::destroy()
 }
 
 int ObLogSlidingWindow::handle_first_index_log_(
-    const uint64_t log_id, ObLogTask* log_task, const bool do_pop, bool& need_check_succeeding_log)
+    const uint64_t log_id, ObLogTask *log_task, const bool do_pop, bool &need_check_succeeding_log)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -4169,7 +4185,7 @@ int ObLogSlidingWindow::handle_succeeding_index_log_(
   int tmp_ret = OB_SUCCESS;
   uint64_t log_id = id;
   bool need_check_succeeding_log = check_succeeding_log;
-  ObLogTask* log_task = NULL;
+  ObLogTask *log_task = NULL;
   bool is_replay_failed = false;
 
   if (IS_NOT_INIT) {
@@ -4178,12 +4194,12 @@ int ObLogSlidingWindow::handle_succeeding_index_log_(
     ret = OB_INVALID_ARGUMENT;
   } else {
     while (need_check_succeeding_log && OB_SUCCESS == ret) {
-      const int64_t* ref = NULL;
-      ObILogExtRingBufferData* data = NULL;
+      const int64_t *ref = NULL;
+      ObILogExtRingBufferData *data = NULL;
       ++log_id;
       if (ATOMIC_LOAD(&next_index_log_id_) == log_id &&
           OB_SUCCESS == (ret = sw_.get(static_cast<int64_t>(log_id), data, ref)) &&
-          NULL != (log_task = static_cast<ObLogTask*>(data)) && log_task->is_flush_local_finished() &&
+          NULL != (log_task = static_cast<ObLogTask *>(data)) && log_task->is_flush_local_finished() &&
           log_task->is_log_confirmed() && test_and_submit_index_log_(log_id, log_task, ret)) {
         // do nothing
       } else {
@@ -4204,7 +4220,7 @@ int ObLogSlidingWindow::handle_succeeding_index_log_(
   return ret;
 }
 
-bool ObLogSlidingWindow::test_and_set_index_log_submitted_(const uint64_t log_id, ObLogTask* log_task)
+bool ObLogSlidingWindow::test_and_set_index_log_submitted_(const uint64_t log_id, ObLogTask *log_task)
 {
   // caller guarantees log_task is not NULL
   bool bool_ret = false;
@@ -4230,7 +4246,7 @@ bool ObLogSlidingWindow::test_and_set_index_log_submitted_(const uint64_t log_id
   return bool_ret;
 }
 
-bool ObLogSlidingWindow::test_and_submit_index_log_(const uint64_t log_id, ObLogTask* log_task, int& ret)
+bool ObLogSlidingWindow::test_and_submit_index_log_(const uint64_t log_id, ObLogTask *log_task, int &ret)
 {
   // caller guarantees log_task is not NULL
   bool bool_ret = false;
@@ -4305,7 +4321,7 @@ bool ObLogSlidingWindow::test_and_submit_index_log_(const uint64_t log_id, ObLog
   return bool_ret;
 }
 
-int ObLogSlidingWindow::submit_index_log_(const uint64_t log_id, const ObLogTask* log_task, int64_t& accum_checksum)
+int ObLogSlidingWindow::submit_index_log_(const uint64_t log_id, const ObLogTask *log_task, int64_t &accum_checksum)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -4411,8 +4427,8 @@ int ObLogSlidingWindow::set_next_index_log_id(const uint64_t log_id, const int64
   return ret;
 }
 
-int ObLogSlidingWindow::try_submit_mc_success_cb_(const ObLogType& log_type, const uint64_t log_id, const char* log_buf,
-    const int64_t log_buf_len, const common::ObProposalID& proposal_id)
+int ObLogSlidingWindow::try_submit_mc_success_cb_(const ObLogType &log_type, const uint64_t log_id, const char *log_buf,
+    const int64_t log_buf_len, const common::ObProposalID &proposal_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -4460,7 +4476,7 @@ bool ObLogSlidingWindow::check_can_receive_larger_log(const uint64_t log_id)
   return bool_ret;
 }
 
-int ObLogSlidingWindow::get_end_log_id_(const uint64_t start_id, uint64_t& end_id)
+int ObLogSlidingWindow::get_end_log_id_(const uint64_t start_id, uint64_t &end_id)
 {
   int ret = OB_SUCCESS;
   end_id = OB_INVALID_ID;
@@ -4474,8 +4490,8 @@ int ObLogSlidingWindow::get_end_log_id_(const uint64_t start_id, uint64_t& end_i
     const uint64_t max_log_id = std::min(get_max_log_id(), start_id + clog_fetch_log_count - 1);
     bool found = false;
     for (uint64_t i = start_id; !found && i <= max_log_id; ++i) {
-      ObLogTask* log_task = NULL;
-      const int64_t* ref = NULL;
+      ObLogTask *log_task = NULL;
+      const int64_t *ref = NULL;
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = get_log_task(i, log_task, ref))) {
         if (OB_ERROR_OUT_OF_RANGE == tmp_ret) {
@@ -4522,14 +4538,14 @@ int ObLogSlidingWindow::get_end_log_id_(const uint64_t start_id, uint64_t& end_i
   return ret;
 }
 
-int ObLogSlidingWindow::get_slide_log_range_(const uint64_t start_id, uint64_t& ret_start_id, uint64_t& ret_end_id)
+int ObLogSlidingWindow::get_slide_log_range_(const uint64_t start_id, uint64_t &ret_start_id, uint64_t &ret_end_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ret_start_id = OB_INVALID_ID;
   ret_end_id = OB_INVALID_ID;
-  ObLogTask* log_task = NULL;
-  const int64_t* ref = NULL;
+  ObLogTask *log_task = NULL;
+  const int64_t *ref = NULL;
   const uint64_t clog_fetch_log_count =
       std::min(state_mgr_->get_fetch_window_size(), get_follower_max_unconfirmed_log_count());
   if (IS_NOT_INIT) {
@@ -4608,9 +4624,9 @@ int ObLogSlidingWindow::get_slide_log_range_(const uint64_t start_id, uint64_t& 
   return ret;
 }
 
-int ObLogSlidingWindow::backfill_log(const uint64_t log_id, const common::ObProposalID& proposal_id,
-    const char* serialize_buff, const int64_t serialize_size, const ObLogCursor& log_cursor, const bool is_leader,
-    ObISubmitLogCb* submit_cb)
+int ObLogSlidingWindow::backfill_log(const uint64_t log_id, const common::ObProposalID &proposal_id,
+    const char *serialize_buff, const int64_t serialize_size, const ObLogCursor &log_cursor, const bool is_leader,
+    ObISubmitLogCb *submit_cb)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -4665,7 +4681,7 @@ int ObLogSlidingWindow::backfill_confirmed(const uint64_t log_id, const bool bat
   return ret;
 }
 
-int ObLogSlidingWindow::resubmit_log(const ObLogInfo& log_info, ObISubmitLogCb* cb)
+int ObLogSlidingWindow::resubmit_log(const ObLogInfo &log_info, ObISubmitLogCb *cb)
 {
   int ret = OB_SUCCESS;
 
@@ -4682,15 +4698,15 @@ int ObLogSlidingWindow::resubmit_log(const ObLogInfo& log_info, ObISubmitLogCb* 
   return ret;
 }
 
-int ObLogSlidingWindow::backfill_log_(const char* serialize_buff, const int64_t serialize_size,
-    const ObLogCursor& log_cursor, const bool is_leader, ObISubmitLogCb* submit_cb)
+int ObLogSlidingWindow::backfill_log_(const char *serialize_buff, const int64_t serialize_size,
+    const ObLogCursor &log_cursor, const bool is_leader, ObISubmitLogCb *submit_cb)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
   const bool need_replay = !is_leader;
   // need_copy == false, this can save a memory copy
   const bool need_copy = false;
@@ -4701,8 +4717,8 @@ int ObLogSlidingWindow::backfill_log_(const char* serialize_buff, const int64_t 
   if (OB_FAIL(log_entry.deserialize(serialize_buff, serialize_size, pos))) {
     CLOG_LOG(ERROR, "log_entry deserialize failed", K(ret), K(partition_key_));
   }
-  const ObLogEntryHeader& header = log_entry.get_header();
-  const char* buff = log_entry.get_buf();
+  const ObLogEntryHeader &header = log_entry.get_header();
+  const char *buff = log_entry.get_buf();
   const uint64_t log_id = header.get_log_id();
 
   while (OB_SUCC(ret)) {
@@ -4713,7 +4729,7 @@ int ObLogSlidingWindow::backfill_log_(const char* serialize_buff, const int64_t 
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "leader backfill_log_, log exist", K(ret), K(partition_key_), K(log_id));
       } else {
-        log_task = static_cast<ObLogTask*>(log_data);
+        log_task = static_cast<ObLogTask *>(log_data);
         log_task->lock();
         // leader already resubmit_log when callback
         if (log_task->is_submit_log_exist()) {
@@ -4803,10 +4819,10 @@ int ObLogSlidingWindow::backfill_confirmed_(const uint64_t log_id, const bool ba
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
-  const common::ObMemberList& member_list = mm_->get_curr_member_list();
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
+  const common::ObMemberList &member_list = mm_->get_curr_member_list();
   const bool batch_committed = true;
   bool majority = false;
   bool need_wait_standby_ack = false;
@@ -4817,7 +4833,7 @@ int ObLogSlidingWindow::backfill_confirmed_(const uint64_t log_id, const bool ba
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "the log not exist, unexpected", K(ret), K(partition_key_), K(log_id));
   } else {
-    log_task = static_cast<ObLogTask*>(log_data);
+    log_task = static_cast<ObLogTask *>(log_data);
     log_task->lock();
     // At this time, it has been confirmed that the log has formed a majority,
     // so don't care whether the ack_list is completely accurate
@@ -4888,15 +4904,15 @@ int ObLogSlidingWindow::backfill_confirmed_(const uint64_t log_id, const bool ba
   return ret;
 }
 
-int ObLogSlidingWindow::resubmit_log_(const ObLogInfo& log_info, ObISubmitLogCb* cb)
+int ObLogSlidingWindow::resubmit_log_(const ObLogInfo &log_info, ObISubmitLogCb *cb)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  const int64_t* ref = NULL;
-  ObILogExtRingBufferData* log_data = NULL;
-  ObLogTask* log_task = NULL;
-  const char* buff = log_info.get_buf();
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
+  const char *buff = log_info.get_buf();
   const int64_t size = log_info.get_size();
   const uint64_t log_id = log_info.get_log_id();
   const bool need_replay = false;
@@ -4914,7 +4930,7 @@ int ObLogSlidingWindow::resubmit_log_(const ObLogInfo& log_info, ObISubmitLogCb*
     CLOG_LOG(WARN, "get log from sliding_window failed", K(ret), K(partition_key_), K(log_id));
   } else if (NULL != log_data) {
     is_log_backfilled = true;
-    log_task = static_cast<ObLogTask*>(log_data);
+    log_task = static_cast<ObLogTask *>(log_data);
     log_task->reset_pinned();
     is_log_majority = (log_task->is_local_majority_flushed() || log_task->is_log_confirmed());
   }
@@ -4952,9 +4968,9 @@ int ObLogSlidingWindow::resubmit_log_(const ObLogInfo& log_info, ObISubmitLogCb*
   return ret;
 }
 
-int ObLogSlidingWindow::generate_backfill_log_task_(const ObLogEntryHeader& header, const char* buff,
-    const ObLogCursor& log_cursor, ObISubmitLogCb* submit_cb, const bool need_replay, const bool need_copy,
-    const bool need_pinned, ObLogTask*& log_task)
+int ObLogSlidingWindow::generate_backfill_log_task_(const ObLogEntryHeader &header, const char *buff,
+    const ObLogCursor &log_cursor, ObISubmitLogCb *submit_cb, const bool need_replay, const bool need_copy,
+    const bool need_pinned, ObLogTask *&log_task)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_null_log_task_(header, need_replay, log_task))) {
@@ -5021,7 +5037,7 @@ void ObLogSlidingWindow::try_update_max_majority_log(const uint64_t log_id, cons
   max_majority_log_.inc_update(log_id, log_ts);
 }
 
-int ObLogSlidingWindow::check_if_all_log_replayed(bool& has_replayed) const
+int ObLogSlidingWindow::check_if_all_log_replayed(bool &has_replayed) const
 {
   int ret = OB_SUCCESS;
   has_replayed = false;
@@ -5059,7 +5075,7 @@ int ObLogSlidingWindow::try_freeze_aggre_buffer()
 }
 
 int ObLogSlidingWindow::set_confirmed_info_without_lock_(
-    const ObLogEntryHeader& header, const int64_t accum_checksum, const bool is_batch_committed, ObLogTask& log_task)
+    const ObLogEntryHeader &header, const int64_t accum_checksum, const bool is_batch_committed, ObLogTask &log_task)
 {
   int ret = OB_SUCCESS;
   ObConfirmedInfo confirmed_info;

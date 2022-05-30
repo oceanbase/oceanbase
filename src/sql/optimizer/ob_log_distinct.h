@@ -90,6 +90,7 @@ public:
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int compute_op_ordering() override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
