@@ -3506,6 +3506,7 @@ int ObScheTransCtx::save_trans_desc_(const ObTransDesc& trans_desc)
     void* ptr = NULL;
     if (OB_UNLIKELY(NULL == (ptr = ob_malloc(sizeof(ObTransDesc), "ObScheTransCtx")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "fail to alloc memory", K(ret), K(*this));
     } else {
       trans_desc_ = new (ptr) ObTransDesc;
     }
