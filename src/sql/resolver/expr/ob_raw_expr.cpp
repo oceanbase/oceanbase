@@ -3579,6 +3579,42 @@ int ObWindow::assign(const ObWindow& other)
   return ret;
 }
 
+int ObWindow::remove_const_params()
+{
+  int ret = OB_SUCCESS;
+  int64_t cnt_part_expr = 0;
+  int64_t cnt_order_item = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_exprs_.count(); ++i) {
+    if (OB_ISNULL(partition_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (partition_exprs_.at(i)->has_const_or_const_expr_flag()) {
+      /*do nothing */
+    } else {
+      partition_exprs_.at(cnt_part_expr++) = partition_exprs_.at(i);
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (order_items_.at(i).expr_->has_const_or_const_expr_flag()) {
+      /*do nothing */
+    } else {
+      order_items_.at(cnt_order_item++) = order_items_.at(i);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    while (partition_exprs_.count() > cnt_part_expr) {
+      partition_exprs_.pop_back();
+    }
+    while (order_items_.count() > cnt_order_item) {
+      order_items_.pop_back();
+    }
+  }
+  return ret;
+}
+
 void ObWinFunRawExpr::clear_child()
 {
   func_type_ = T_MAX;

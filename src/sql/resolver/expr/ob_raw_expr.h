@@ -3759,8 +3759,8 @@ public:
   {
     return order_items_;
   }
-
   int assign(const ObWindow &other);
+  int remove_const_params();
 
   common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> partition_exprs_;
   common::ObArray<OrderItem, common::ModulePageAllocator, true> order_items_;

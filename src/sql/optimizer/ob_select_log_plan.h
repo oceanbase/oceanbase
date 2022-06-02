@@ -183,6 +183,7 @@ private:
       common::ObIArray<MergeKeyInfo*>& merge_keys);
 
   int candi_allocate_window_function();
+  int remove_const_in_window_functions(ObIArray<ObWinFunRawExpr *> &win_funcs);
 
   int candi_allocate_temp_table_insert();
 

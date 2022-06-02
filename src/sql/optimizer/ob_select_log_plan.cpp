@@ -1719,6 +1719,20 @@ int ObSelectLogPlan::decide_sort_keys_for_runion(
   return ret;
 }
 
+int ObSelectLogPlan::remove_const_in_window_functions(ObIArray<ObWinFunRawExpr *> &win_funcs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < win_funcs.count(); ++i) {
+    if (OB_ISNULL(win_funcs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(win_funcs.at(i)->remove_const_params())) {
+      LOG_WARN("failed to remove const params in window function", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSelectLogPlan::candi_allocate_window_function()
 {
   int ret = OB_SUCCESS;
@@ -1731,6 +1745,8 @@ int ObSelectLogPlan::candi_allocate_window_function()
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
     LOG_WARN("failed to do allocate subplan filter", K(ret));
+  } else if (OB_FAIL(remove_const_in_window_functions(stmt->get_window_func_exprs()))) {
+    LOG_WARN("failed to remove const in window functions", K(ret));
   } else if (stmt->get_window_func_count() > 0) {
     ObSEArray<CandidatePlan, 8> winfunc_plans;
     CandidatePlan winfunc_plan;
