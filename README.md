@@ -27,7 +27,8 @@ OceanBase Database supports the entire core business of Alipay and the core syst
 
 ## Quick start
 
-Refer to the [Get Started guide](https://open.oceanbase.com/quickStart) to try out OceanBase Database.
+Refer to the [Get Started guide](https://open.oceanbase.com/quickStart) to try out OceanBase Database with OBD.
+Refer to the [Try with Docker](https://hub.docker.com/repository/docker/oceanbase/oceanbase-ce) to try OceanBase Database with docker.
 
 ## Documentation
 
