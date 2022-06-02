@@ -596,6 +596,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
       }
       break;
     }
+    case ObDateTimeType:
     case ObIntType: {
       buf_ptr[0] = (char)(ptr[7] ^ 128);
       buf_ptr[1] = ptr[6];
@@ -718,7 +719,6 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     case ObEnumType:
     case ObSetType:
     case ObTimeType:
-    case ObDateTimeType:
     case ObTimestampType: {
       buf_ptr[0] = ptr[7];
       buf_ptr[1] = ptr[6];
