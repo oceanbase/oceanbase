@@ -129,12 +129,12 @@ int ObPxMSCoordOp::init_store_rows(int64_t n_ways)
     LOG_WARN("unexpected status: store rows is not empty", K(ret), K(n_ways));
   }
   for (int64_t i = 0; i < n_ways && OB_SUCC(ret); ++i) {
-    void* buf = alloc_.alloc(sizeof(ObChunkDatumStore::LastStoredRow<>));
+    void* buf = alloc_.alloc(sizeof(ObChunkDatumStore::LastStoredRow));
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloca memory", K(ret));
     } else {
-      ObChunkDatumStore::LastStoredRow<>* store_row = new (buf) ObChunkDatumStore::LastStoredRow<>(alloc_);
+      ObChunkDatumStore::LastStoredRow* store_row = new (buf) ObChunkDatumStore::LastStoredRow(alloc_);
       if (OB_FAIL(store_rows_.push_back(store_row))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -160,7 +160,7 @@ int ObPxMSCoordOp::free_allocator()
   last_pop_row_ = nullptr;
   // the heap shoud be empty before store_rows_.reset();
   while (OB_SUCC(ret) && row_heap_.count() > 0) {
-    const ObChunkDatumStore::LastStoredRow<>* pop_row = nullptr;
+    const ObChunkDatumStore::LastStoredRow* pop_row = nullptr;
     if (OB_SUCC(row_heap_.raw_pop(pop_row))) {
       row_heap_.shrink();
     } else {
@@ -324,7 +324,7 @@ int ObPxMSCoordOp::next_row(bool& wait_next_msg)
         LOG_WARN("fail push row to heap", K(ret));
       }
     } else {
-      ObChunkDatumStore::LastStoredRow<>* cur_row = nullptr;
+      ObChunkDatumStore::LastStoredRow* cur_row = nullptr;
       if (OB_FAIL(store_rows_.at(row_heap_.writable_channel_idx(), cur_row))) {
         LOG_WARN("failed to get store row", K(ret), K(row_heap_.writable_channel_idx()));
       } else if (OB_FAIL(cur_row->save_store_row(MY_SPEC.all_exprs_, eval_ctx_, 0))) {
@@ -346,14 +346,14 @@ int ObPxMSCoordOp::next_row(bool& wait_next_msg)
       all_rows_finish_ = true;
       metric_.mark_last_out();
     } else if (row_heap_.capacity() == row_heap_.count()) {
-      const ObChunkDatumStore::LastStoredRow<>* pop_row = nullptr;
+      const ObChunkDatumStore::LastStoredRow* pop_row = nullptr;
       if (OB_FAIL(row_heap_.pop(pop_row))) {
         LOG_WARN("failed to pop row", K(ret));
       } else if (OB_FAIL(pop_row->store_row_->to_expr(MY_SPEC.all_exprs_, eval_ctx_))) {
         LOG_WARN("failed to to exprs", K(ret));
       } else {
         wait_next_msg = false;
-        last_pop_row_ = const_cast<ObChunkDatumStore::LastStoredRow<>*>(pop_row);
+        last_pop_row_ = const_cast<ObChunkDatumStore::LastStoredRow*>(pop_row);
       }
       metric_.count();
       metric_.mark_first_out();

@@ -21,32 +21,9 @@ using namespace oceanbase::common;
 
 int ObConnectByOpPumpBase::deep_copy_row(const ObIArray<ObExpr*>& exprs, const ObChunkDatumStore::StoredRow*& dst_row)
 {
-  int ret = OB_SUCCESS;
-  char* buf = NULL;
-  int64_t row_size = 0;
-  int64_t buffer_len = 0;
-  int64_t extra_size = 0;
-  int64_t head_size = sizeof(ObChunkDatumStore::StoredRow);
-  int64_t pos = head_size;
-  ObChunkDatumStore::StoredRow* new_row = nullptr;
-  if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, *eval_ctx_, row_size))) {
-    SQL_ENG_LOG(WARN, "failed to calc copy size", K(ret));
-  } else {
-    row_size += head_size;
-    buffer_len = row_size + extra_size;
-    if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(buffer_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
-    } else if (OB_ISNULL(new_row = new (buf) ObChunkDatumStore::StoredRow())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
-    } else if (OB_FAIL(
-                   new_row->copy_datums(exprs, *eval_ctx_, buf + pos, buffer_len - head_size, row_size, extra_size))) {
-      SQL_ENG_LOG(WARN, "failed to deep copy row", K(ret), K(buffer_len), K(row_size));
-    } else {
-      dst_row = new_row;
-    }
-  }
+  ObChunkDatumStore::StoredRow* sr = NULL;
+  int ret = ObChunkDatumStore::StoredRow::build(sr, exprs, *eval_ctx_, allocator_);
+  dst_row = sr;
   return ret;
 }
 

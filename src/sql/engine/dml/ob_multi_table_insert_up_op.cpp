@@ -326,31 +326,7 @@ int ObMultiTableInsertUpOp::shuffle_update_row(const ObChunkDatumStore::StoredRo
 int ObMultiTableInsertUpOp::convert_exprs_to_stored_row(
     ObIAllocator& allocator, ObEvalCtx& eval_ctx, const ObExprPtrIArray& exprs, ObChunkDatumStore::StoredRow*& new_row)
 {
-  int ret = OB_SUCCESS;
-  new_row = NULL;
-  char* buf = NULL;
-  int64_t row_size = 0;
-  if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, eval_ctx, row_size))) {
-    LOG_WARN("failed to calc copy size", K(ret));
-  } else {
-    const int64_t STORE_ROW_HEADER_SIZE = sizeof(ObChunkDatumStore::StoredRow);
-    int64_t buffer_len = STORE_ROW_HEADER_SIZE + row_size;
-    if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buffer_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc buf failed", K(ret));
-    } else if (OB_ISNULL(new_row = new (buf) ObChunkDatumStore::StoredRow())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to new row", K(ret));
-    } else {
-      int64_t pos = STORE_ROW_HEADER_SIZE;
-      if (OB_FAIL(new_row->copy_datums(
-              exprs, eval_ctx, buf + pos, buffer_len - STORE_ROW_HEADER_SIZE, row_size, 0 /*extra_size*/))) {
-        LOG_WARN("failed to deep copy row", K(ret), K(buffer_len));
-      }
-    }
-  }
-
-  return ret;
+  return ObChunkDatumStore::StoredRow::build(new_row, exprs, eval_ctx, allocator);
 }
 
 }  // namespace sql

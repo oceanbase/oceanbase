@@ -72,7 +72,7 @@ public:
   };
   class ObMsgReceiveFilter : public dtl::ObIDltChannelLoopPred {
   public:
-    ObMsgReceiveFilter(ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow<>>& heap)
+    ObMsgReceiveFilter(ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow>& heap)
         : data_ch_idx_start_(-1), data_ch_idx_end_(-1), heap_(heap)
     {}
     ~ObMsgReceiveFilter() = default;
@@ -96,7 +96,7 @@ public:
   private:
     int64_t data_ch_idx_start_;
     int64_t data_ch_idx_end_;
-    ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow<>>& heap_;
+    ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow>& heap_;
   };
 
 public:
@@ -127,9 +127,9 @@ private:
   ObBarrierPieceMsgP barrier_piece_msg_proc_;
   ObWinbufPieceMsgP winbuf_piece_msg_proc_;
   ObPxQcInterruptedP interrupt_proc_;
-  ObArray<ObChunkDatumStore::LastStoredRow<>*> store_rows_;
-  ObChunkDatumStore::LastStoredRow<>* last_pop_row_;
-  ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow<>> row_heap_;
+  ObArray<ObChunkDatumStore::LastStoredRow*> store_rows_;
+  ObChunkDatumStore::LastStoredRow* last_pop_row_;
+  ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow> row_heap_;
   ObMsgReceiveFilter receive_order_;
   common::ObArenaAllocator alloc_;
 };

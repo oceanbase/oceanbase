@@ -192,7 +192,7 @@ private:
     bool has_backup_row_;
     bool reach_end_;  // child iterator end
     bool* left_row_joined_;
-    ObChunkDatumStore::ShadowStoredRow<> store_row_;
+    ObChunkDatumStore::ShadowStoredRow store_row_;
     ObOperator* child_;
   };
 

@@ -129,7 +129,7 @@ ObMaxDatumRowCompare::ObMaxDatumRowCompare()
 
 int ObMaxDatumRowCompare::init(const ObIArray<ObSortFieldCollation>* sort_collations,
     const ObIArray<ObSortCmpFunc>* sort_cmp_funs,
-    const common::ObIArray<const ObChunkDatumStore::LastStoredRow<>*>& rows)
+    const common::ObIArray<const ObChunkDatumStore::LastStoredRow*>& rows)
 {
   int ret = OB_SUCCESS;
   bool is_static_cmp = false;

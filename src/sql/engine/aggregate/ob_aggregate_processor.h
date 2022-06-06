@@ -62,7 +62,7 @@ public:
                ? 1
                : ((T_FUN_COUNT == get_expr_type() && param_exprs_.empty()) ? 0 : param_exprs_.count());
   }
-  int eval_aggr(ObChunkDatumStore::ShadowStoredRow<>& curr_row_results, ObEvalCtx& ctx) const;
+  int eval_aggr(ObChunkDatumStore::ShadowStoredRow& curr_row_results, ObEvalCtx& ctx) const;
   inline void set_implicit_first_aggr()
   {
     is_implicit_first_aggr_ = true;
@@ -326,7 +326,7 @@ public:
     }
 
   public:
-    ObChunkDatumStore::ShadowStoredRow<> curr_row_results_;
+    ObChunkDatumStore::ShadowStoredRow curr_row_results_;
 
   private:
     // for avg/count
@@ -466,7 +466,7 @@ private:
   int rollup_distinct(AggrCell& aggr_cell, AggrCell& rollup_cell);
   int compare_calc(const ObDatum& left_value, const ObDatum& right_value, const ObAggrInfo& aggr_info, int64_t index,
       int& compare_result, bool& is_asc);
-  int check_rows_equal(const ObChunkDatumStore::LastStoredRow<>& prev_row, const ObChunkDatumStore::StoredRow& cur_row,
+  int check_rows_equal(const ObChunkDatumStore::LastStoredRow& prev_row, const ObChunkDatumStore::StoredRow& cur_row,
       const ObAggrInfo& aggr_info, bool& is_equal);
   int get_wm_concat_result(
       const ObAggrInfo& aggr_info, GroupConcatExtraResult*& extra, bool is_keep_group_concat, ObDatum& concat_result);

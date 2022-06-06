@@ -689,7 +689,7 @@ private:
   bool postprocessed_left_;
   bool has_fill_right_row_;
   bool has_fill_left_row_;
-  ObChunkDatumStore::ShadowStoredRow<ObHashJoinStoredJoinRow> right_last_row_;
+  ObChunkDatumStore::ShadowStoredRow right_last_row_;
   bool need_return_;
   bool iter_end_;
   bool opt_cache_aware_;

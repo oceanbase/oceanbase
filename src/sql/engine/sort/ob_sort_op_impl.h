@@ -340,7 +340,7 @@ private:
 
   const ObChunkDatumStore::StoredRow* prev_row_;
   // when got new prefix, save the row to to %next_prefix_row_
-  ObChunkDatumStore::ShadowStoredRow<> next_prefix_row_store_;
+  ObChunkDatumStore::ShadowStoredRow next_prefix_row_store_;
   ObChunkDatumStore::StoredRow* next_prefix_row_;
 
   ObOperator* child_;

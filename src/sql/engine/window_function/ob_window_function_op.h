@@ -272,7 +272,7 @@ public:
 
     int64_t wf_idx_;
     int64_t part_first_row_idx_;
-    ObChunkDatumStore::LastStoredRow<> part_values_;
+    ObChunkDatumStore::LastStoredRow part_values_;
     RowsStore part_rows_store_;
 
     Frame last_valid_frame_;
@@ -494,7 +494,7 @@ private:
   RowsStore rows_store_;
   WinFuncCellList wf_list_;
   // shadow copy the next and restore it before get next row from child.
-  ObChunkDatumStore::ShadowStoredRow<> next_row_;
+  ObChunkDatumStore::ShadowStoredRow next_row_;
   bool next_row_valid_;  // TODO
   DatumFixedArray curr_row_collect_values_;
 

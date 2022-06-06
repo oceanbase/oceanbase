@@ -102,7 +102,7 @@ public:
   ObChunkDatumStore left_store_;
   ObChunkDatumStore::Iterator left_store_iter_;
   bool is_left_end_;
-  ObChunkDatumStore::ShadowStoredRow<> last_store_row_;
+  ObChunkDatumStore::ShadowStoredRow last_store_row_;
   bool save_last_row_;
 
 private:

@@ -70,7 +70,7 @@ protected:
 
 protected:
   common::ObArenaAllocator alloc_;
-  ObChunkDatumStore::LastStoredRow<> last_row_;
+  ObChunkDatumStore::LastStoredRow last_row_;
   Compare cmp_;
   bool need_skip_init_row_;
   bool iter_end_;

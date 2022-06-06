@@ -84,7 +84,7 @@ class ObMaxDatumRowCompare {
 public:
   ObMaxDatumRowCompare();
   int init(const ObIArray<ObSortFieldCollation>* sort_collations, const ObIArray<ObSortCmpFunc>* sort_cmp_funs,
-      const common::ObIArray<const ObChunkDatumStore::LastStoredRow<>*>& rows);
+      const common::ObIArray<const ObChunkDatumStore::LastStoredRow*>& rows);
 
   // compare function for quick sort.
   bool operator()(int64_t row_idx1, int64_t row_idx2);
@@ -113,7 +113,7 @@ public:
   int ret_;
   const ObIArray<ObSortFieldCollation>* sort_collations_;
   const ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
-  const common::ObIArray<const ObChunkDatumStore::LastStoredRow<>*>* rows_;
+  const common::ObIArray<const ObChunkDatumStore::LastStoredRow*>* rows_;
 };
 
 /*

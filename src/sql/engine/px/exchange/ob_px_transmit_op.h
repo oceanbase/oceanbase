@@ -135,7 +135,7 @@ protected:
   common::ObArenaAllocator px_row_allocator_;
   ObPxTaskChSet task_ch_set_;
   bool transmited_;
-  // const ObChunkDatum::LastStoredRow<> first_row_;
+  // const ObChunkDatum::LastStoredRow first_row_;
   bool iter_end_;
   bool consume_first_row_;
   dtl::ObDtlUnblockingMsgP dfc_unblock_msg_proc_;

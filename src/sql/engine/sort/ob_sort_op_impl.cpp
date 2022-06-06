@@ -1425,21 +1425,19 @@ int ObInMemoryTopnSortImpl::add_row(const common::ObIArray<ObExpr*>& exprs, bool
     // optimize for hit-rate: enlarge first Limit-Count row's space,
     // so following rows are more likely to fit in.
     int64_t row_size = 0;
-    if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, *eval_ctx_, row_size))) {
+    if (OB_FAIL(ObChunkDatumStore::Block::row_store_size(exprs, *eval_ctx_, row_size, STORE_ROW_EXTRA_SIZE))) {
       LOG_WARN("failed to calc copy size", K(ret));
     } else {
-      int64_t buffer_len = STORE_ROW_HEADER_SIZE + 2 * row_size + STORE_ROW_EXTRA_SIZE;
-      if (OB_ISNULL(buf = reinterpret_cast<char*>(cur_alloc_.alloc(buffer_len)))) {
+      int64_t buffer_len = 2 * row_size;
+      if (OB_ISNULL(buf = reinterpret_cast<char *>(cur_alloc_.alloc(buffer_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc buf failed", K(ret));
-      } else if (OB_ISNULL(new_row = new (buf) SortStoredRow())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to new row", K(ret));
       } else {
-        int64_t pos = STORE_ROW_HEADER_SIZE;
-        if (OB_FAIL(new_row->copy_datums(
-                exprs, *eval_ctx_, buf + pos, buffer_len - STORE_ROW_HEADER_SIZE, row_size, STORE_ROW_EXTRA_SIZE))) {
-          LOG_WARN("failed to deep copy row", K(ret), K(buffer_len));
+        ObChunkDatumStore::StoredRow *sr = NULL;
+        if (OB_FAIL(
+                ObChunkDatumStore::StoredRow::build(sr, exprs, *eval_ctx_, buf, buffer_len, STORE_ROW_EXTRA_SIZE))) {
+          LOG_WARN("build stored row failed", K(ret));
+        } else if (FALSE_IT(new_row = static_cast<SortStoredRow *>(sr))) {
         } else if (OB_FAIL(heap_.push(new_row))) {
           LOG_WARN("failed to push back row", K(ret), K(buffer_len));
         } else {
@@ -1469,37 +1467,33 @@ int ObInMemoryTopnSortImpl::adjust_topn_heap(const common::ObIArray<ObExpr*>& ex
       char* buf = NULL;
       int64_t row_size = 0;
       int64_t buffer_len = 0;
-      if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, *eval_ctx_, row_size))) {
+      if (OB_FAIL(ObChunkDatumStore::Block::row_store_size(exprs, *eval_ctx_, row_size, STORE_ROW_EXTRA_SIZE))) {
         LOG_WARN("failed to calc copy size", K(ret));
       } else {
         // check to see whether this old row's space is adequate for new one
-        if (dt_row->get_max_size() >= row_size + STORE_ROW_HEADER_SIZE + STORE_ROW_EXTRA_SIZE) {
+        if (dt_row->get_max_size() >= row_size) {
           buf = reinterpret_cast<char*>(dt_row);
           new_row = dt_row;
           buffer_len = dt_row->get_max_size();
         } else {
-          buffer_len = row_size * 2 + STORE_ROW_HEADER_SIZE + STORE_ROW_EXTRA_SIZE;
+          buffer_len = row_size * 2;
           if (OB_ISNULL(buf = reinterpret_cast<char*>(cur_alloc_.alloc(buffer_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_ERROR("alloc buf failed", K(ret));
-          } else if (OB_ISNULL(new_row = new (buf) SortStoredRow())) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("failed to new row", K(ret));
           }
         }
       }
       if (OB_SUCC(ret)) {
-        int64_t pos = STORE_ROW_HEADER_SIZE;
-        if (OB_FAIL(new_row->copy_datums(
-                exprs, *eval_ctx_, buf + pos, buffer_len - STORE_ROW_HEADER_SIZE, row_size, STORE_ROW_EXTRA_SIZE))) {
-          LOG_WARN("failed to deep copy row", K(ret), K(buffer_len), K(row_size));
+        ObChunkDatumStore::StoredRow *sr = NULL;
+        if (OB_FAIL(
+                ObChunkDatumStore::StoredRow::build(sr, exprs, *eval_ctx_, buf, buffer_len, STORE_ROW_EXTRA_SIZE))) {
+          LOG_WARN("build stored row failed", K(ret));
+        } else if (FALSE_IT(new_row = static_cast<SortStoredRow *>(sr))) {
         } else if (OB_FAIL(heap_.replace_top(new_row))) {
           LOG_WARN("failed to replace top", K(ret));
         } else {
           new_row->set_max_size(buffer_len);
           last_row_ = new_row;
-          // LOG_TRACE("in memory topn sort check replace row", KPC(new_row),
-          //   K(buffer_len), K(row_size), K(new_row->get_max_size()));
         }
       }
     } else {

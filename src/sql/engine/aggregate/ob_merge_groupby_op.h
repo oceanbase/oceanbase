@@ -97,7 +97,7 @@ private:
   // added to support groupby with rollup
   int64_t cur_output_group_id_;
   int64_t first_output_group_id_;
-  ObChunkDatumStore::LastStoredRow<> last_child_output_;
+  ObChunkDatumStore::LastStoredRow last_child_output_;
   DatumFixedArray curr_groupby_datums_;
   int64_t dir_id_;
 };
