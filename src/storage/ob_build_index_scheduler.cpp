@@ -1424,7 +1424,7 @@ int ObBuildIndexScheduleTask::get_data_size(int64_t &data_size)
   ObFetchSstableSizeRes res;
   arg.pkey_ = pkey_;
   arg.index_id_ = index_id_;
-  if (OB_UNLIKELY(candidate_replica_.is_valid())) {
+  if (OB_UNLIKELY(!candidate_replica_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "candidate replica is invalid", K(ret), K(candidate_replica_));
   } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(candidate_replica_).fetch_sstable_size(arg, res))) {
