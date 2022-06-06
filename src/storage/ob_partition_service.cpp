@@ -2297,6 +2297,8 @@ int ObPartitionService::create_batch_partition_groups(
         tmp_ret = remove_pg_from_mgr(rb_pg, true/*write_slog*/);
         if (OB_SUCCESS == tmp_ret) {
           // partition object was released by partition service, do nothing
+        } else if (OB_NOT_RUNNING == tmp_ret) {
+          // partition service was stopped, ignore
         } else {
           STORAGE_LOG(ERROR, "fail to rollback pg", K(tmp_ret), K(rb_pkey), K(rb_pg));
           ob_abort();
