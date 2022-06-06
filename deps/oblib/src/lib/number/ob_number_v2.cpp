@@ -363,7 +363,8 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
         nth += i_nth;
       }
       warning = OB_INVALID_NUMERIC;
-    } else if (0 == valid_len) {
+    } else if (0 == valid_len || 0 == i_nth) {
+      // `i_nth = 0` means all digits are zero.
       /* ignore e's value; only do the check*/
       cur = str[++i];
       if ('-' == cur || '+' == cur) {
@@ -524,8 +525,9 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
             K(e_neg),
             K(e_value),
             K(valid_len),
-            K(i));
-        if (as_zero || 0 == valid_len) {
+            K(i),
+            K(i_nth));
+        if (as_zero || 0 == valid_len || 0 == i_nth) {
           full_str[0] = '0';
           nth = 1;
           set_zero();
