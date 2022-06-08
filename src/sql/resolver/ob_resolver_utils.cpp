@@ -638,6 +638,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
                 if (OB_SUCC(ret)) {
                   val.set_string(val.get_type(), buf, static_cast<int32_t>(result_len));
                   val.set_collation_type(target_collation);
+                  val.set_collation_level(CS_LEVEL_COERCIBLE);
                 }
               }
             }
