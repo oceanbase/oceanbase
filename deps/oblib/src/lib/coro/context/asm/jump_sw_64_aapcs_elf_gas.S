@@ -1,9 +1,9 @@
 #if defined(__sw_64__)
 .text
 .align  2
-.global ontop_fcontext
-.type   ontop_fcontext, %function
-ontop_fcontext:
+.global jump_fcontext
+.type   jump_fcontext, %function
+jump_fcontext:
     # prepare stack for GP + FPU
     #ldih $29,0($27)
     #ldi $29,0($29)
@@ -28,7 +28,7 @@ ontop_fcontext:
     stl  $14, 0x68($sp)
     stl  $15, 0x70($sp)
     stl  $fp, 0x78($sp)
-    stl  $16, 0x80($sp)  #save ontop_fcontext return address
+    stl  $16, 0x80($sp)  #save jump_fcontext return address
     stl  $26, 0x88($sp)
 
     # save LR as PC
@@ -70,19 +70,19 @@ ontop_fcontext:
 
     # pass transfer_t as first arg in context function,such as f1,f2,f3
     # $16 == FCTX, $17 == DATA
-    mov $20,$16   #$16 $17 $18 as first and second arg
+    mov $20,$16   #$16 $17 as first and second arg
     mov $18,$17
 
 
-    # skip pc
-    mov $19, $27
+    # load pc
+    ldl $27, 0x90($sp)
 
 
     # restore stack from GP + FPU
     addl  $sp, 0x98, $sp
 
     ret  $31,($27),0x1 //jmp $31, ($27) //ret ($27)
-.size   ontop_fcontext,.-ontop_fcontext
+.size   jump_fcontext,.-jump_fcontext
 # Mark that we don't need executable stack.
 .section .note.GNU-stack,"",%progbits
 #endif
