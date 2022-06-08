@@ -3440,7 +3440,7 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode* node)
       }
     }
     CK(session_info_)
-    if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
+    if (OB_SUCC(ret)) {
       // make sure limit expr is int value in static typing engine.
       ObRawExpr** exprs[] = {&limit_count, &limit_offset};
       for (int64_t i = 0; i < ARRAYSIZEOF(exprs) && OB_SUCC(ret); i++) {
