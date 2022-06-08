@@ -315,6 +315,12 @@ int ObLocalFileSystem::init(const ObStorageEnv& storage_env, ObPartitionService&
           }
         }
       }
+      // auto extend ssblock file will not change conf file item, 
+      // in this case, if restart ob system, data_file_size_ and 
+      // total_file_size_ in super block will be difference, 
+      if(data_file_size_ != super_block_.content_.total_file_size_) {
+        data_file_size_ = super_block_.content_.total_file_size_;
+      }
     } else {
       // empty file system, init it
       if (OB_FAIL(super_block_.format_startup_super_block(storage_env.default_block_size_, data_file_size_))) {
