@@ -26,14 +26,20 @@ name
 all_cluster_list
 all_server_list
 autoinc_cache_refresh_interval
+auto_broadcast_location_cache_rate_limit
 auto_delete_expired_backup
 auto_leader_switch_interval
+auto_refresh_location_cache_rate_limit
+backup_backup_dest
+backup_backup_dest_option
 backup_concurrency
 backup_dest
+backup_dest_option
 backup_log_archive_option
 backup_net_limit
 backup_recovery_window
 backup_region
+backup_zone
 balancer_emergency_percentage
 balancer_idle_time
 balancer_log_interval
@@ -51,7 +57,6 @@ clog_disk_usage_limit_percentage
 clog_disk_utilization_threshold
 clog_max_unconfirmed_log_count
 clog_sync_time_warn_threshold
-clog_usage_limit_size
 cluster
 cluster_id
 config_additional_dir
@@ -63,6 +68,8 @@ datafile_size
 data_copy_concurrency
 data_dir
 data_disk_usage_limit_percentage
+data_storage_error_tolerance_time
+data_storage_warning_tolerance_time
 dead_socket_detection_timeout
 debug_sync_timeout
 default_compress
@@ -76,6 +83,7 @@ election_blacklist_interval
 election_cpu_quota
 enable_async_syslog
 enable_auto_leader_switch
+enable_auto_refresh_location_cache
 enable_ddl
 enable_early_lock_release
 enable_election_group
@@ -87,7 +95,6 @@ enable_merge_by_turn
 enable_monotonic_weak_read
 enable_one_phase_commit
 enable_perf_event
-enable_pg
 enable_rebalance
 enable_record_trace_id
 enable_record_trace_log
@@ -112,6 +119,7 @@ force_refresh_location_cache_interval
 force_refresh_location_cache_threshold
 freeze_trigger_percentage
 fuse_row_cache_priority
+gc_wait_archive
 get_leader_candidate_rpc_timeout
 global_index_build_single_replica_timeout
 global_major_freeze_residual_memory
@@ -133,6 +141,8 @@ location_cache_cpu_quota
 location_cache_expire_time
 location_cache_priority
 location_cache_refresh_min_interval
+location_cache_refresh_rpc_timeout
+location_cache_refresh_sql_timeout
 location_fetch_concurrency
 location_refresh_thread_count
 log_archive_batch_buffer_limit
@@ -175,6 +185,7 @@ net_thread_count
 obconfig_url
 ob_enable_batched_multi_statement
 ob_event_history_recycle_interval
+ob_proxy_readonly_transaction_routing_policy
 ob_ssl_invited_common_names
 open_cursors
 partition_table_check_interval
@@ -207,6 +218,7 @@ row_purge_thread_count
 rpc_port
 rpc_timeout
 schema_history_expire_time
+schema_history_recycle_interval
 server_balance_cpu_mem_tolerance_percent
 server_balance_critical_disk_waterlevel
 server_balance_disk_tolerance_percent
@@ -268,6 +280,8 @@ zone_merge_concurrency
 zone_merge_order
 zone_merge_timeout
 _alter_column_mode
+_auto_drop_tenant_if_restore_failed
+_auto_update_reserved_backup_timestamp
 _backup_idle_time
 _backup_retry_timeout
 _bloom_filter_enabled
@@ -277,6 +291,9 @@ _chunk_row_store_mem_limit
 _clog_aggregation_buffer_amount
 _create_table_partition_distribution_strategy
 _data_storage_io_timeout
+_enable_block_file_punch_hole
+_enable_compaction_diagnose
+_enable_defensive_check
 _enable_easy_keepalive
 _enable_fast_commit
 _enable_filter_push_down_storage
@@ -288,7 +305,6 @@ _enable_oracle_priv_check
 _enable_parallel_minor_merge
 _enable_plan_cache_mem_diagnosis
 _enable_sparse_row
-_enable_split_partition
 _enable_static_typing_engine
 _flush_clog_aggregation_buffer_timeout
 _follower_replica_merge_level
@@ -313,6 +329,7 @@ _ob_elr_fast_freeze_threshold
 _ob_enable_fast_freeze
 _ob_enable_log_replica_strict_recycle_mode
 _ob_enable_prepared_statement
+_ob_enable_px_for_inner_sql
 _ob_get_gts_ahead_interval
 _ob_minor_merge_schedule_interval
 _ob_plan_cache_gc_strategy
@@ -331,7 +348,6 @@ _px_message_compression
 _recyclebin_object_purge_frequency
 _restore_idle_time
 _rpc_checksum
-_schema_history_recycle_interval
 _single_zone_deployment_on
 _sort_area_size
 _temporary_file_io_area_size
@@ -342,7 +358,6 @@ _xa_gc_timeout
 __balance_controller
 __easy_memory_limit
 __easy_memory_reserved_percentage
-__enable_block_receiving_clog
 __enable_identical_partition_distribution
 __enable_small_tenant
 __min_full_resource_pool_memory

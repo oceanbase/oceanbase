@@ -1,7 +1,6 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# ....yzf....Fri, 21 Aug 2015....17:55....
 
 # set-up
 --disable_warnings
@@ -246,10 +245,6 @@ set collation_connection = utf8mb4_bin;
 select collation(cast(1 as char));
 SELECT collation(DATE_FORMAT('2009-10-04 22:23:00', '%W %M %Y'));
 select collation(cast('A' as char)), cast('A' as char) < 'a';
-
-#set utf8 binary collation set
-SELECT collation(CAST('A' AS char CHAR SET utf8mb4));
-SELECT collation(CAST('A' AS char CHAR SET binary));
 
 ################################################################
 # tear-down

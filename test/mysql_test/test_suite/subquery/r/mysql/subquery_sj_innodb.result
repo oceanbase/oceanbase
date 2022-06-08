@@ -214,7 +214,7 @@ Outputs & filters:
       equal_conds([cast(t2.c2, DECIMAL(-1, -1)) = VIEW1.1]), other_conds(nil)
   2 - output([VIEW1.1]), filter(nil), 
       access([VIEW1.1])
-  3 - output([cast(1, DECIMAL(1, 0))]), filter(nil), limit(1), offset(nil)
+  3 - output([?]), filter(nil), limit(1), offset(nil)
   4 - output([1]), filter(nil), 
       conds(nil), nl_params_(nil)
   5 - output([1]), filter(nil), 

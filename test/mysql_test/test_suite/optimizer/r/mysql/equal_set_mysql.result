@@ -7151,32 +7151,34 @@ Outputs & filters:
 
 explain select * from (select a from t1 intersect select a from t2 intersect select b from t3) as t4, t1 as t5 where t4.a = t5.a;
 Query Plan
-========================================================================
-|ID|OPERATOR                            |NAME    |EST. ROWS |COST      |
-------------------------------------------------------------------------
-|0 |PX COORDINATOR                      |        |2450250000|1921660442|
-|1 | EXCHANGE OUT DISTR                 |:EX10003|2450250000|1457778786|
-|2 |  MERGE JOIN                        |        |2450250000|1457778786|
-|3 |   EXCHANGE IN DISTR                |        |500000    |2864053   |
-|4 |    EXCHANGE OUT DISTR (PKEY)       |:EX10002|500000    |2840388   |
-|5 |     MATERIAL                       |        |500000    |2840388   |
-|6 |      SUBPLAN SCAN                  |t4      |500000    |2748511   |
-|7 |       MERGE INTERSECT DISTINCT     |        |500000    |2679500   |
-|8 |        EXCHANGE IN MERGE SORT DISTR|        |500000    |902213    |
-|9 |         EXCHANGE OUT DISTR         |:EX10000|500000    |878548    |
-|10|          PX PARTITION ITERATOR     |        |500000    |878548    |
-|11|           MERGE INTERSECT DISTINCT |        |500000    |878548    |
-|12|            TABLE SCAN              |t1      |500000    |309262    |
-|13|            TABLE SCAN              |t2      |500000    |309262    |
-|14|        EXCHANGE IN MERGE SORT DISTR|        |500000    |1517265   |
-|15|         EXCHANGE OUT DISTR         |:EX10001|500000    |1469935   |
-|16|          SORT                      |        |500000    |1469935   |
-|17|           PX PARTITION ITERATOR    |        |500000    |320292    |
-|18|            TABLE SCAN              |t3      |500000    |320292    |
-|19|   SORT                             |        |500000    |1578063   |
-|20|    PX PARTITION ITERATOR           |        |500000    |331321    |
-|21|     TABLE SCAN                     |t5      |500000    |331321    |
-========================================================================
+=========================================================================
+|ID|OPERATOR                             |NAME    |EST. ROWS |COST      |
+-------------------------------------------------------------------------
+|0 |PX COORDINATOR                       |        |2450250000|1922804863|
+|1 | EXCHANGE OUT DISTR                  |:EX10003|2450250000|1458923207|
+|2 |  MERGE JOIN                         |        |2450250000|1458923207|
+|3 |   EXCHANGE IN DISTR                 |        |500000    |4008474   |
+|4 |    EXCHANGE OUT DISTR (PKEY)        |:EX10002|500000    |3984809   |
+|5 |     MATERIAL                        |        |500000    |3984809   |
+|6 |      SUBPLAN SCAN                   |t4      |500000    |3892932   |
+|7 |       MERGE INTERSECT DISTINCT      |        |500000    |3823921   |
+|8 |        MATERIAL                     |        |500000    |2046634   |
+|9 |         EXCHANGE IN MERGE SORT DISTR|        |500000    |1954757   |
+|10|          EXCHANGE OUT DISTR         |:EX10000|500000    |1931092   |
+|11|           SORT                      |        |500000    |1931092   |
+|12|            PX PARTITION ITERATOR    |        |500000    |878548    |
+|13|             MERGE INTERSECT DISTINCT|        |500000    |878548    |
+|14|              TABLE SCAN             |t1      |500000    |309262    |
+|15|              TABLE SCAN             |t2      |500000    |309262    |
+|16|        EXCHANGE IN MERGE SORT DISTR |        |500000    |1517265   |
+|17|         EXCHANGE OUT DISTR          |:EX10001|500000    |1469935   |
+|18|          SORT                       |        |500000    |1469935   |
+|19|           PX PARTITION ITERATOR     |        |500000    |320292    |
+|20|            TABLE SCAN               |t3      |500000    |320292    |
+|21|   SORT                              |        |500000    |1578063   |
+|22|    PX PARTITION ITERATOR            |        |500000    |331321    |
+|23|     TABLE SCAN                      |t5      |500000    |331321    |
+=========================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -7190,23 +7192,25 @@ Outputs & filters:
   6 - output([t4.a]), filter(nil), 
       access([t4.a])
   7 - output([INTERSECT([1])]), filter(nil)
-  8 - output([INTERSECT([1])]), filter(nil), sort_keys([INTERSECT([1]), ASC]), Local Order
-  9 - output([INTERSECT([1])]), filter(nil), dop=1
-  10 - output([INTERSECT([1])]), filter(nil)
-  11 - output([INTERSECT([1])]), filter(nil)
-  12 - output([t1.a]), filter(nil), 
+  8 - output([INTERSECT([1])]), filter(nil)
+  9 - output([INTERSECT([1])]), filter(nil), sort_keys([INTERSECT([1]), ASC])
+  10 - output([INTERSECT([1])]), filter(nil), dop=1
+  11 - output([INTERSECT([1])]), filter(nil), sort_keys([INTERSECT([1]), ASC]), local merge sort
+  12 - output([INTERSECT([1])]), filter(nil)
+  13 - output([INTERSECT([1])]), filter(nil)
+  14 - output([t1.a]), filter(nil), 
       access([t1.a]), partitions(p[0-4])
-  13 - output([t2.a]), filter(nil), 
+  15 - output([t2.a]), filter(nil), 
       access([t2.a]), partitions(p[0-4])
-  14 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
-  15 - output([t3.b]), filter(nil), dop=1
   16 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
-  17 - output([t3.b]), filter(nil)
-  18 - output([t3.b]), filter(nil), 
+  17 - output([t3.b]), filter(nil), dop=1
+  18 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
+  19 - output([t3.b]), filter(nil)
+  20 - output([t3.b]), filter(nil), 
       access([t3.b]), partitions(p[0-4])
-  19 - output([t5.a], [t5.b], [t5.c]), filter(nil), sort_keys([t5.a, ASC]), local merge sort
-  20 - output([t5.a], [t5.b], [t5.c]), filter(nil)
-  21 - output([t5.a], [t5.b], [t5.c]), filter(nil), 
+  21 - output([t5.a], [t5.b], [t5.c]), filter(nil), sort_keys([t5.a, ASC]), local merge sort
+  22 - output([t5.a], [t5.b], [t5.c]), filter(nil)
+  23 - output([t5.a], [t5.b], [t5.c]), filter(nil), 
       access([t5.a], [t5.b], [t5.c]), partitions(p[0-4])
 
 explain select * from (select a from t1 intersect select 1 a intersect select b from t3) as t4, t1 as t5 where t4.a = t5.a;
@@ -7327,26 +7331,28 @@ Outputs & filters:
 
 explain select * from (select a from t1 intersect select a from t2 intersect select 1 a) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
-===================================================================
-|ID|OPERATOR                           |NAME    |EST. ROWS|COST   |
--------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |4950     |1005162|
-|1 | EXCHANGE OUT DISTR                |:EX10002|4950     |1004225|
-|2 |  NESTED-LOOP JOIN                 |        |4950     |1004225|
-|3 |   EXCHANGE IN DISTR               |        |1        |997719 |
-|4 |    EXCHANGE OUT DISTR (PKEY)      |:EX10001|1        |997719 |
-|5 |     SUBPLAN SCAN                  |t3      |1        |997719 |
-|6 |      MERGE INTERSECT DISTINCT     |        |1        |997719 |
-|7 |       EXCHANGE IN MERGE SORT DISTR|        |500000   |902213 |
-|8 |        EXCHANGE OUT DISTR         |:EX10000|500000   |878548 |
-|9 |         PX PARTITION ITERATOR     |        |500000   |878548 |
-|10|          MERGE INTERSECT DISTINCT |        |500000   |878548 |
-|11|           TABLE SCAN              |t1      |500000   |309262 |
-|12|           TABLE SCAN              |t2      |500000   |309262 |
-|13|       EXPRESSION                  |        |1        |1      |
-|14|   PX PARTITION ITERATOR           |        |4950     |3301   |
-|15|    TABLE SCAN                     |t4      |4950     |3301   |
-===================================================================
+====================================================================
+|ID|OPERATOR                            |NAME    |EST. ROWS|COST   |
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |4950     |2057706|
+|1 | EXCHANGE OUT DISTR                 |:EX10002|4950     |2056769|
+|2 |  NESTED-LOOP JOIN                  |        |4950     |2056769|
+|3 |   EXCHANGE IN DISTR                |        |1        |2050264|
+|4 |    EXCHANGE OUT DISTR (PKEY)       |:EX10001|1        |2050264|
+|5 |     MATERIAL                       |        |1        |2050264|
+|6 |      SUBPLAN SCAN                  |t3      |1        |2050264|
+|7 |       MERGE INTERSECT DISTINCT     |        |1        |2050263|
+|8 |        EXCHANGE IN MERGE SORT DISTR|        |500000   |1954757|
+|9 |         EXCHANGE OUT DISTR         |:EX10000|500000   |1931092|
+|10|          SORT                      |        |500000   |1931092|
+|11|           PX PARTITION ITERATOR    |        |500000   |878548 |
+|12|            MERGE INTERSECT DISTINCT|        |500000   |878548 |
+|13|             TABLE SCAN             |t1      |500000   |309262 |
+|14|             TABLE SCAN             |t2      |500000   |309262 |
+|15|        EXPRESSION                  |        |1        |1      |
+|16|   PX PARTITION ITERATOR            |        |4950     |3301   |
+|17|    TABLE SCAN                      |t4      |4950     |3301   |
+====================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -7356,21 +7362,23 @@ Outputs & filters:
       conds(nil), nl_params_([t3.a])
   3 - output([t3.a], [PARTITION_ID]), filter(nil)
   4 - (#keys=1, [t3.a]), output([t3.a], [PARTITION_ID]), filter(nil), is_single, dop=1
-  5 - output([t3.a]), filter(nil), 
+  5 - output([t3.a]), filter(nil)
+  6 - output([t3.a]), filter(nil), 
       access([t3.a])
-  6 - output([INTERSECT([1])]), filter(nil)
-  7 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(INTERSECT([1]), BIGINT(20, 0)), ASC]), Local Order
-  8 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), dop=1
-  9 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil)
-  10 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil)
-  11 - output([t1.a]), filter(nil), 
+  7 - output([INTERSECT([1])]), filter(nil)
+  8 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(INTERSECT([1]), BIGINT(20, 0)), ASC])
+  9 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), dop=1
+  10 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(INTERSECT([1]), BIGINT(20, 0)), ASC]), local merge sort
+  11 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil)
+  12 - output([cast(INTERSECT([1]), BIGINT(20, 0))]), filter(nil)
+  13 - output([t1.a]), filter(nil), 
       access([t1.a]), partitions(p[0-4])
-  12 - output([t2.a]), filter(nil), 
+  14 - output([t2.a]), filter(nil), 
       access([t2.a]), partitions(p[0-4])
-  13 - output([1]), filter(nil)
+  15 - output([1]), filter(nil)
       values({1})
-  14 - output([t4.a], [t4.b], [t4.c]), filter(nil)
-  15 - output([t4.a], [t4.b], [t4.c]), filter(nil), 
+  16 - output([t4.a], [t4.b], [t4.c]), filter(nil)
+  17 - output([t4.a], [t4.b], [t4.c]), filter(nil), 
       access([t4.a], [t4.b], [t4.c]), partitions(p[0-4])
 
 explain select * from (select t2.a from t1, t2 where t1.a = t2.a intersect select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
@@ -7810,32 +7818,34 @@ Outputs & filters:
 
 explain select * from (select a from t1 except select a from t2 except select b from t3) as t4, t1 as t5 where t4.a = t5.a;
 Query Plan
-========================================================================
-|ID|OPERATOR                            |NAME    |EST. ROWS |COST      |
-------------------------------------------------------------------------
-|0 |PX COORDINATOR                      |        |2450250000|1921660442|
-|1 | EXCHANGE OUT DISTR                 |:EX10003|2450250000|1457778786|
-|2 |  MERGE JOIN                        |        |2450250000|1457778786|
-|3 |   EXCHANGE IN DISTR                |        |500000    |2864053   |
-|4 |    EXCHANGE OUT DISTR (PKEY)       |:EX10002|500000    |2840388   |
-|5 |     MATERIAL                       |        |500000    |2840388   |
-|6 |      SUBPLAN SCAN                  |t4      |500000    |2748511   |
-|7 |       MERGE EXCEPT DISTINCT        |        |500000    |2679500   |
-|8 |        EXCHANGE IN MERGE SORT DISTR|        |500000    |902213    |
-|9 |         EXCHANGE OUT DISTR         |:EX10000|500000    |878548    |
-|10|          PX PARTITION ITERATOR     |        |500000    |878548    |
-|11|           MERGE EXCEPT DISTINCT    |        |500000    |878548    |
-|12|            TABLE SCAN              |t1      |500000    |309262    |
-|13|            TABLE SCAN              |t2      |500000    |309262    |
-|14|        EXCHANGE IN MERGE SORT DISTR|        |500000    |1517265   |
-|15|         EXCHANGE OUT DISTR         |:EX10001|500000    |1469935   |
-|16|          SORT                      |        |500000    |1469935   |
-|17|           PX PARTITION ITERATOR    |        |500000    |320292    |
-|18|            TABLE SCAN              |t3      |500000    |320292    |
-|19|   SORT                             |        |500000    |1578063   |
-|20|    PX PARTITION ITERATOR           |        |500000    |331321    |
-|21|     TABLE SCAN                     |t5      |500000    |331321    |
-========================================================================
+=========================================================================
+|ID|OPERATOR                             |NAME    |EST. ROWS |COST      |
+-------------------------------------------------------------------------
+|0 |PX COORDINATOR                       |        |2450250000|1922804863|
+|1 | EXCHANGE OUT DISTR                  |:EX10003|2450250000|1458923207|
+|2 |  MERGE JOIN                         |        |2450250000|1458923207|
+|3 |   EXCHANGE IN DISTR                 |        |500000    |4008474   |
+|4 |    EXCHANGE OUT DISTR (PKEY)        |:EX10002|500000    |3984809   |
+|5 |     MATERIAL                        |        |500000    |3984809   |
+|6 |      SUBPLAN SCAN                   |t4      |500000    |3892932   |
+|7 |       MERGE EXCEPT DISTINCT         |        |500000    |3823921   |
+|8 |        MATERIAL                     |        |500000    |2046634   |
+|9 |         EXCHANGE IN MERGE SORT DISTR|        |500000    |1954757   |
+|10|          EXCHANGE OUT DISTR         |:EX10000|500000    |1931092   |
+|11|           SORT                      |        |500000    |1931092   |
+|12|            PX PARTITION ITERATOR    |        |500000    |878548    |
+|13|             MERGE EXCEPT DISTINCT   |        |500000    |878548    |
+|14|              TABLE SCAN             |t1      |500000    |309262    |
+|15|              TABLE SCAN             |t2      |500000    |309262    |
+|16|        EXCHANGE IN MERGE SORT DISTR |        |500000    |1517265   |
+|17|         EXCHANGE OUT DISTR          |:EX10001|500000    |1469935   |
+|18|          SORT                       |        |500000    |1469935   |
+|19|           PX PARTITION ITERATOR     |        |500000    |320292    |
+|20|            TABLE SCAN               |t3      |500000    |320292    |
+|21|   SORT                              |        |500000    |1578063   |
+|22|    PX PARTITION ITERATOR            |        |500000    |331321    |
+|23|     TABLE SCAN                      |t5      |500000    |331321    |
+=========================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -7849,23 +7859,25 @@ Outputs & filters:
   6 - output([t4.a]), filter(nil), 
       access([t4.a])
   7 - output([EXCEPT([1])]), filter(nil)
-  8 - output([EXCEPT([1])]), filter(nil), sort_keys([EXCEPT([1]), ASC]), Local Order
-  9 - output([EXCEPT([1])]), filter(nil), dop=1
-  10 - output([EXCEPT([1])]), filter(nil)
-  11 - output([EXCEPT([1])]), filter(nil)
-  12 - output([t1.a]), filter(nil), 
+  8 - output([EXCEPT([1])]), filter(nil)
+  9 - output([EXCEPT([1])]), filter(nil), sort_keys([EXCEPT([1]), ASC])
+  10 - output([EXCEPT([1])]), filter(nil), dop=1
+  11 - output([EXCEPT([1])]), filter(nil), sort_keys([EXCEPT([1]), ASC]), local merge sort
+  12 - output([EXCEPT([1])]), filter(nil)
+  13 - output([EXCEPT([1])]), filter(nil)
+  14 - output([t1.a]), filter(nil), 
       access([t1.a]), partitions(p[0-4])
-  13 - output([t2.a]), filter(nil), 
+  15 - output([t2.a]), filter(nil), 
       access([t2.a]), partitions(p[0-4])
-  14 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
-  15 - output([t3.b]), filter(nil), dop=1
   16 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
-  17 - output([t3.b]), filter(nil)
-  18 - output([t3.b]), filter(nil), 
+  17 - output([t3.b]), filter(nil), dop=1
+  18 - output([t3.b]), filter(nil), sort_keys([t3.b, ASC])
+  19 - output([t3.b]), filter(nil)
+  20 - output([t3.b]), filter(nil), 
       access([t3.b]), partitions(p[0-4])
-  19 - output([t5.a], [t5.b], [t5.c]), filter(nil), sort_keys([t5.a, ASC]), local merge sort
-  20 - output([t5.a], [t5.b], [t5.c]), filter(nil)
-  21 - output([t5.a], [t5.b], [t5.c]), filter(nil), 
+  21 - output([t5.a], [t5.b], [t5.c]), filter(nil), sort_keys([t5.a, ASC]), local merge sort
+  22 - output([t5.a], [t5.b], [t5.c]), filter(nil)
+  23 - output([t5.a], [t5.b], [t5.c]), filter(nil), 
       access([t5.a], [t5.b], [t5.c]), partitions(p[0-4])
 
 explain select * from (select a from t1 except select 1 a except select b from t3) as t4, t1 as t5 where t4.a = t5.a;
@@ -7986,27 +7998,29 @@ Outputs & filters:
 
 explain select * from (select a from t1 except select a from t2 except select 1 a) as t3, t1 as t4 where t3.a = t4.a;
 Query Plan
-=======================================================================
-|ID|OPERATOR                           |NAME    |EST. ROWS |COST      |
------------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |2450250000|2125103997|
-|1 | EXCHANGE OUT DISTR                |:EX10002|2450250000|1661222341|
-|2 |  MERGE JOIN                       |        |2450250000|1661222341|
-|3 |   EXCHANGE IN DISTR               |        |500000    |1159406   |
-|4 |    EXCHANGE OUT DISTR (PKEY)      |:EX10001|500000    |1135741   |
-|5 |     SUBPLAN SCAN                  |t3      |500000    |1135741   |
-|6 |      MERGE EXCEPT DISTINCT        |        |500000    |1066730   |
-|7 |       EXCHANGE IN MERGE SORT DISTR|        |500000    |902213    |
-|8 |        EXCHANGE OUT DISTR         |:EX10000|500000    |878548    |
-|9 |         PX PARTITION ITERATOR     |        |500000    |878548    |
-|10|          MERGE EXCEPT DISTINCT    |        |500000    |878548    |
-|11|           TABLE SCAN              |t1      |500000    |309262    |
-|12|           TABLE SCAN              |t2      |500000    |309262    |
-|13|       EXPRESSION                  |        |1         |1         |
-|14|   SORT                            |        |500000    |1578063   |
-|15|    PX PARTITION ITERATOR          |        |500000    |331321    |
-|16|     TABLE SCAN                    |t4      |500000    |331321    |
-=======================================================================
+========================================================================
+|ID|OPERATOR                            |NAME    |EST. ROWS |COST      |
+------------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |2450250000|2126248418|
+|1 | EXCHANGE OUT DISTR                 |:EX10002|2450250000|1662366762|
+|2 |  MERGE JOIN                        |        |2450250000|1662366762|
+|3 |   EXCHANGE IN DISTR                |        |500000    |2303827   |
+|4 |    EXCHANGE OUT DISTR (PKEY)       |:EX10001|500000    |2280162   |
+|5 |     MATERIAL                       |        |500000    |2280162   |
+|6 |      SUBPLAN SCAN                  |t3      |500000    |2188285   |
+|7 |       MERGE EXCEPT DISTINCT        |        |500000    |2119274   |
+|8 |        EXCHANGE IN MERGE SORT DISTR|        |500000    |1954757   |
+|9 |         EXCHANGE OUT DISTR         |:EX10000|500000    |1931092   |
+|10|          SORT                      |        |500000    |1931092   |
+|11|           PX PARTITION ITERATOR    |        |500000    |878548    |
+|12|            MERGE EXCEPT DISTINCT   |        |500000    |878548    |
+|13|             TABLE SCAN             |t1      |500000    |309262    |
+|14|             TABLE SCAN             |t2      |500000    |309262    |
+|15|        EXPRESSION                  |        |1         |1         |
+|16|   SORT                             |        |500000    |1578063   |
+|17|    PX PARTITION ITERATOR           |        |500000    |331321    |
+|18|     TABLE SCAN                     |t4      |500000    |331321    |
+========================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -8016,22 +8030,24 @@ Outputs & filters:
       equal_conds([t3.a = t4.a]), other_conds(nil)
   3 - output([t3.a]), filter(nil)
   4 - (#keys=1, [t3.a]), output([t3.a]), filter(nil), is_single, dop=1
-  5 - output([t3.a]), filter(nil), 
+  5 - output([t3.a]), filter(nil)
+  6 - output([t3.a]), filter(nil), 
       access([t3.a])
-  6 - output([EXCEPT([1])]), filter(nil)
-  7 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(EXCEPT([1]), BIGINT(20, 0)), ASC]), Local Order
-  8 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil), dop=1
-  9 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil)
-  10 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil)
-  11 - output([t1.a]), filter(nil), 
+  7 - output([EXCEPT([1])]), filter(nil)
+  8 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(EXCEPT([1]), BIGINT(20, 0)), ASC])
+  9 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil), dop=1
+  10 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil), sort_keys([cast(EXCEPT([1]), BIGINT(20, 0)), ASC]), local merge sort
+  11 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil)
+  12 - output([cast(EXCEPT([1]), BIGINT(20, 0))]), filter(nil)
+  13 - output([t1.a]), filter(nil), 
       access([t1.a]), partitions(p[0-4])
-  12 - output([t2.a]), filter(nil), 
+  14 - output([t2.a]), filter(nil), 
       access([t2.a]), partitions(p[0-4])
-  13 - output([1]), filter(nil)
+  15 - output([1]), filter(nil)
       values({1})
-  14 - output([t4.a], [t4.b], [t4.c]), filter(nil), sort_keys([t4.a, ASC]), local merge sort
-  15 - output([t4.a], [t4.b], [t4.c]), filter(nil)
-  16 - output([t4.a], [t4.b], [t4.c]), filter(nil), 
+  16 - output([t4.a], [t4.b], [t4.c]), filter(nil), sort_keys([t4.a, ASC]), local merge sort
+  17 - output([t4.a], [t4.b], [t4.c]), filter(nil)
+  18 - output([t4.a], [t4.b], [t4.c]), filter(nil), 
       access([t4.a], [t4.b], [t4.c]), partitions(p[0-4])
 
 explain select * from (select t2.a from t1, t2 where t1.a = t2.a except select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;

@@ -177,7 +177,7 @@ collation(substr(X'41', 2))
 binary
 select collation(trim('a' from null)) from coll_test;
 collation(trim('a' from null))
-utf8mb4_general_ci
+binary
 select collation(trim('a' from uc)) from coll_test;
 collation(trim('a' from uc))
 utf8mb4_general_ci
@@ -501,10 +501,4 @@ utf8mb4_bin
 select collation(cast('A' as char)), cast('A' as char) < 'a';
 collation(cast('A' as char))	cast('A' as char) < 'a'
 utf8mb4_bin	1
-SELECT collation(CAST('A' AS char CHAR SET utf8mb4));
-collation(CAST('A' AS char CHAR SET utf8mb4))
-utf8mb4_general_ci
-SELECT collation(CAST('A' AS char CHAR SET binary));
-collation(CAST('A' AS char CHAR SET binary))
-binary
 drop table coll_test;

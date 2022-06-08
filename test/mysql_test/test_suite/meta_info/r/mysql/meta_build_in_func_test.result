@@ -1793,12 +1793,12 @@ a
 1
 select  !w, !!w, !(!w), ! !w, not w, not not w, w is true, w is not false, (not w) is false, not(w is false), if(w,'true','false'), !1+1, !'a', !false, !isnull('a'), !!isnull('a') from (select 0 w union select 1) w;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def				!w	!w	8	1	1	N	32897	0	63
-def				!!w	!!w	8	1	1	N	32897	0	63
-def				!(!w)	!(!w)	8	1	1	N	32897	0	63
-def				! !w	! !w	8	1	1	N	32897	0	63
-def				not w	not w	8	1	1	N	32897	0	63
-def				not not w	not not w	8	1	1	N	32897	0	63
+def				!w	!w	8	1	1	Y	32896	0	63
+def				!!w	!!w	8	1	1	Y	32896	0	63
+def				!(!w)	!(!w)	8	1	1	Y	32896	0	63
+def				! !w	! !w	8	1	1	Y	32896	0	63
+def				not w	not w	8	1	1	Y	32896	0	63
+def				not not w	not not w	8	1	1	Y	32896	0	63
 def				w is true	w is true	3	1	1	N	32897	0	63
 def				w is not false	w is not false	3	1	1	N	32897	0	63
 def				(not w) is false	(not w) is false	3	1	1	N	32897	0	63

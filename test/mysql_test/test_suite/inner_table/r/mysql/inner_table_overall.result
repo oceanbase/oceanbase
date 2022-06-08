@@ -182,7 +182,16 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 305	__all_res_mgr_plan	0	1099511627777	1
 306	__all_res_mgr_directive	0	1099511627777	1
 307	__all_res_mgr_mapping_rule	0	1099511627777	1
+310	__all_backup_backuppiece_job	0	1099511627777	1
+311	__all_backup_backuppiece_job_history	0	1099511627777	1
+312	__all_backup_backuppiece_task	0	1099511627777	1
+313	__all_backup_backuppiece_task_history	0	1099511627777	1
+314	__all_backup_piece_files	0	1099511627777	1
+315	__all_backup_set_files	0	1099511627777	1
 316	__all_res_mgr_consumer_group	0	1099511627777	1
+317	__all_backup_info	0	1099511627777	1
+318	__all_backup_log_archive_status_v2	0	1099511627777	1
+321	__all_backup_backup_log_archive_status_v2	0	1099511627777	1
 10001	__tenant_virtual_all_table	2	1099511627777	1
 10002	__tenant_virtual_table_column	2	1099511627777	1
 10003	__tenant_virtual_table_index	2	1099511627777	1
@@ -292,6 +301,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11095	__all_virtual_dump_tenant_info	2	1099511627777	65536
 11096	__all_virtual_tenant_parameter_info	2	1099511627777	65536
 11099	__all_virtual_dag_warning_history	2	1099511627777	65536
+11102	__virtual_show_restore_preview	2	1099511627777	1
+11104	__all_virtual_master_key_version_info	2	1099511627777	65536
 12001	SESSION_VARIABLES	2	1099511627778	1
 12002	TABLE_PRIVILEGES	2	1099511627778	1
 12003	USER_PRIVILEGES	2	1099511627778	1
@@ -426,7 +437,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12165	__all_virtual_objauth	2	1099511627777	1
 12166	__all_virtual_objauth_history	2	1099511627777	1
 12167	__all_virtual_backup_info	2	1099511627777	1
-12168	__all_virtual_backup_log_archive_status	2	1099511627777	1
 12170	__all_virtual_backup_task	2	1099511627777	1
 12171	__all_virtual_pg_backup_task	2	1099511627777	1
 12173	__all_virtual_pg_backup_log_archive_status	2	1099511627777	65536
@@ -459,7 +469,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12201	__all_virtual_backupset_history_mgr	2	1099511627777	1
 12202	__all_virtual_backup_backupset_task	2	1099511627777	1
 12203	__all_virtual_pg_backup_backupset_task	2	1099511627777	1
-12204	__all_virtual_backup_backup_log_archive_status	2	1099511627777	1
 12206	__all_virtual_global_transaction	2	1099511627777	1
 15001	ALL_VIRTUAL_TABLE_AGENT	2	1099511627782	1
 15002	ALL_VIRTUAL_COLUMN_AGENT	2	1099511627782	1
@@ -761,6 +770,16 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21130	CDB_OB_BACKUP_BACKUPSET_TASK	1	1099511627777	1
 21131	CDB_OB_BACKUP_BACKUPSET_TASK_HISTORY	1	1099511627777	1
 21132	CDB_OB_BACKUP_BACKUP_ARCHIVELOG_SUMMARY	1	1099511627777	1
+21136	CDB_OB_BACKUP_PIECE_FILES	1	1099511627777	1
+21137	CDB_OB_BACKUP_SET_FILES	1	1099511627777	1
+21138	CDB_OB_BACKUP_BACKUPPIECE_JOB	1	1099511627777	1
+21139	CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY	1	1099511627777	1
+21140	CDB_OB_BACKUP_BACKUPPIECE_TASK	1	1099511627777	1
+21141	CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY	1	1099511627777	1
+21142	v$ob_all_clusters	1	1099511627777	1
+21143	CDB_OB_BACKUP_ARCHIVELOG	1	1099511627777	1
+21144	CDB_OB_BACKUP_BACKUP_ARCHIVELOG	1	1099511627777	1
+21150	COLUMN_PRIVILEGES	1	1099511627778	1
 25001	DBA_SYNONYMS	1	1099511627782	1
 25002	DBA_OBJECTS	1	1099511627782	1
 25003	ALL_OBJECTS	1	1099511627782	1
@@ -1065,9 +1084,9 @@ TABLE_NAME	varchar(256)	NO
 COLUMN_NAME	varchar(128)	NO			
 ORDINAL_POSITION	bigint(20)	NO			
 POSITION_IN_UNIQUE_CONSTRAINT	null	NO			
-REFERENCED_TABLE_SCHEMA	null	NO			
-REFERENCED_TABLE_NAME	null	NO			
-REFERENCED_COLUMN_NAME	null	NO			
+REFERENCED_TABLE_SCHEMA	varchar(128)	NO			
+REFERENCED_TABLE_NAME	varchar(256)	NO			
+REFERENCED_COLUMN_NAME	varchar(128)	NO			
 desc information_schema.PARAMETERS;
 Field	Type	Null	Key	Default	Extra
 SPECIFIC_CATALOG	varchar(4096)	NO		def	
@@ -1163,6 +1182,7 @@ SCHEMA_NAME	varchar(128)	NO
 DEFAULT_CHARACTER_SET_NAME	varchar(7)	NO			
 DEFAULT_COLLATION_NAME	varchar(18)	NO			
 SQL_PATH	null	NO			
+DEFAULT_ENCRYPTION	varchar(2)	NO			
 desc information_schema.SCHEMA_PRIVILEGES;
 Field	Type	Null	Key	Default	Extra
 GRANTEE	varchar(81)	NO			
@@ -1203,7 +1223,7 @@ TABLE_CATALOG	varchar(3)	NO
 TABLE_SCHEMA	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 TABLE_TYPE	varchar(12)	NO			
-ENGINE	null	NO			
+ENGINE	varchar(9)	NO			
 VERSION	null	NO			
 ROW_FORMAT	null	NO			
 TABLE_ROWS	decimal(20,0)	NO		NULL	
@@ -2657,7 +2677,7 @@ extra_info	varchar(512)	YES
 desc oceanbase.__all_build_index_param;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 job_id	bigint(20)	NO	PRI	NULL	
 snapshot_version	bigint(20)	NO	PRI	NULL	
 execution_id	bigint(20)	NO	PRI	NULL	
@@ -2683,7 +2703,7 @@ end_log_timestamp	bigint(20)	NO		NULL
 desc oceanbase.__all_clog_history_info_v2;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 table_id	bigint(20) unsigned	NO	PRI	NULL	
 partition_idx	bigint(20)	NO	PRI	NULL	
 partition_cnt	bigint(20)	NO	PRI	NULL	
@@ -2704,7 +2724,7 @@ sortlen	bigint(20)	NO		0
 desc oceanbase.__all_column_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 column_id	bigint(20)	NO	PRI	NULL	
@@ -2736,7 +2756,7 @@ cur_default_value_v2	varbinary(262144)	YES		NULL
 desc oceanbase.__all_column_stat;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -2759,7 +2779,7 @@ histogram_type	bigint(20)	NO		NULL
 desc oceanbase.__all_column_statistic;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -2775,7 +2795,7 @@ last_rebuild_version	bigint(20)	NO		NULL
 desc oceanbase.__all_constraint;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 constraint_id	bigint(20)	NO	PRI	NULL	
@@ -2789,7 +2809,7 @@ validate_flag	tinyint(4)	NO		1
 desc oceanbase.__all_constraint_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 constraint_id	bigint(20)	NO	PRI	NULL	
@@ -2804,7 +2824,7 @@ validate_flag	tinyint(4)	YES		1
 desc oceanbase.__all_database;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO	PRI	NULL	
 database_name	varchar(128)	NO			
@@ -2820,7 +2840,7 @@ drop_schema_version	bigint(20)	NO		-1
 desc oceanbase.__all_database_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -2838,7 +2858,7 @@ drop_schema_version	bigint(20)	YES		-1
 desc oceanbase.__all_database_privilege;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 database_name	varchar(128)	NO	PRI	NULL	
@@ -2856,7 +2876,7 @@ priv_show_view	bigint(20)	NO		0
 desc oceanbase.__all_database_privilege_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 database_name	varchar(128)	NO	PRI	NULL	
@@ -2876,14 +2896,14 @@ priv_show_view	bigint(20)	YES		0
 desc oceanbase.__all_ddl_id;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 ddl_id_str	varchar(64)	NO	PRI	NULL	
 ddl_stmt_str	longtext	NO		NULL	
 desc oceanbase.__all_def_sub_part;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 sub_part_id	bigint(20)	NO	PRI	NULL	
@@ -2907,7 +2927,7 @@ tablespace_id	bigint(20)	NO		-1
 desc oceanbase.__all_def_sub_part_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 sub_part_id	bigint(20)	NO	PRI	NULL	
@@ -2946,7 +2966,7 @@ info	varchar(512)	NO
 desc oceanbase.__all_foreign_key;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 foreign_key_id	bigint(20)	NO	PRI	NULL	
 foreign_key_name	varchar(128)	NO			
@@ -2962,7 +2982,7 @@ rely_flag	tinyint(4)	NO		0
 desc oceanbase.__all_foreign_key_column;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 foreign_key_id	bigint(20)	NO	PRI	NULL	
 child_column_id	bigint(20)	NO	PRI	NULL	
@@ -2971,7 +2991,7 @@ position	bigint(20)	NO		0
 desc oceanbase.__all_foreign_key_column_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 foreign_key_id	bigint(20)	NO	PRI	NULL	
 child_column_id	bigint(20)	NO	PRI	NULL	
@@ -2982,7 +3002,7 @@ position	bigint(20)	YES		0
 desc oceanbase.__all_foreign_key_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 foreign_key_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3004,7 +3024,7 @@ frozen_timestamp	bigint(20)	NO	PRI	NULL
 desc oceanbase.__all_func;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 name	varchar(64)	NO	PRI	NULL	
 ret	bigint(20)	NO		NULL	
@@ -3014,7 +3034,7 @@ type	bigint(20)	NO		NULL
 desc oceanbase.__all_func_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 name	varchar(64)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3026,7 +3046,7 @@ type	bigint(20)	YES		NULL
 desc oceanbase.__all_global_index_data_src;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
 data_table_id	bigint(20)	NO	PRI	NULL	
@@ -3036,7 +3056,7 @@ svr_port	bigint(20)	NO		NULL
 desc oceanbase.__all_histogram_stat;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -3049,7 +3069,7 @@ endpoint_repeat_cnt	bigint(20)	NO		NULL
 desc oceanbase.__all_immediate_effect_index_sstable;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
 partition_id,	bigint(20)	NO	PRI	NULL	
@@ -3061,7 +3081,7 @@ data_size	bigint(20)	NO		NULL
 desc oceanbase.__all_index_build_stat;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 data_table_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
@@ -3071,7 +3091,7 @@ schema_version	bigint(20)	NO		NULL
 desc oceanbase.__all_index_checksum;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 execution_id	bigint(20)	NO	PRI	NULL	
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
@@ -3083,7 +3103,7 @@ checksum_method	bigint(20)	NO		0
 desc oceanbase.__all_index_schedule_task;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -3094,7 +3114,7 @@ snapshot_version	bigint(20)	NO		NULL
 desc oceanbase.__all_index_wait_transaction_status;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
 svr_type	bigint(20)	NO	PRI	NULL	
@@ -3108,7 +3128,7 @@ schema_version	bigint(20)	NO		NULL
 desc oceanbase.__all_local_index_status;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 index_table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -3120,7 +3140,7 @@ role	bigint(20)	NO		2
 desc oceanbase.__all_meta_table;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -3154,7 +3174,7 @@ memstore_percent	bigint(20)	NO		100
 desc oceanbase.__all_ori_schema_version;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 ori_schema_version	bigint(20)	NO		NULL	
@@ -3162,7 +3182,7 @@ building_snapshot	bigint(20)	NO		0
 desc oceanbase.__all_outline;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 outline_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO		NULL	
@@ -3184,7 +3204,7 @@ owner_id	bigint(20)	YES		NULL
 desc oceanbase.__all_outline_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 outline_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3207,7 +3227,7 @@ owner_id	bigint(20)	YES		NULL
 desc oceanbase.__all_package;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 package_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO		NULL	
@@ -3224,7 +3244,7 @@ route_sql	longtext	YES		NULL
 desc oceanbase.__all_package_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 package_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3242,7 +3262,7 @@ route_sql	longtext	YES		NULL
 desc oceanbase.__all_part;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 part_id	bigint(20)	NO	PRI	NULL	
@@ -3277,7 +3297,7 @@ max_used_sub_part_id	bigint(20)	NO		-1
 desc oceanbase.__all_part_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 part_id	bigint(20)	NO	PRI	NULL	
@@ -3313,7 +3333,7 @@ max_used_sub_part_id	bigint(20)	YES		-1
 desc oceanbase.__all_part_info;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 part_type	bigint(20)	NO		NULL	
@@ -3343,7 +3363,7 @@ spare3	varchar(65536)	YES		NULL
 desc oceanbase.__all_part_info_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3389,7 +3409,7 @@ original_name	varchar(256)	NO		NULL
 desc oceanbase.__all_resource_pool;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 resource_pool_id	bigint(20)	NO	PRI	NULL	
 name	varchar(128)	NO		NULL	
 unit_count	bigint(20)	NO		NULL	
@@ -3401,7 +3421,7 @@ is_tenant_sys_pool	tinyint(4)	NO		0
 desc oceanbase.__all_restore_job;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 job_id	bigint(20)	NO	PRI	NULL	
 tenant_name	varchar(64)	NO		NULL	
 start_time	bigint(20)	NO		NULL	
@@ -3413,7 +3433,7 @@ status	bigint(20)	NO		NULL
 desc oceanbase.__all_restore_job_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 job_id	bigint(20)	NO	PRI	NULL	
 tenant_name	varchar(64)	NO		NULL	
 start_time	bigint(20)	NO		NULL	
@@ -3425,7 +3445,7 @@ status	bigint(20)	NO		NULL
 desc oceanbase.__all_restore_task;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -3457,7 +3477,7 @@ rs_svr_port	bigint(20)	YES		0
 desc oceanbase.__all_rootservice_job;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 job_id	bigint(20)	NO	PRI	NULL	
 job_type	varchar(128)	NO		NULL	
 job_status	varchar(128)	NO		NULL	
@@ -3483,7 +3503,7 @@ tablegroup_name	varchar(128)	YES		NULL
 desc oceanbase.__all_routine;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 routine_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO		NULL	
@@ -3504,7 +3524,7 @@ route_sql	longtext	YES		NULL
 desc oceanbase.__all_routine_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 routine_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3526,7 +3546,7 @@ route_sql	longtext	YES		NULL
 desc oceanbase.__all_routine_param;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 routine_id	bigint(20)	NO	PRI	NULL	
 sequence	bigint(20)	NO	PRI	NULL	
@@ -3551,7 +3571,7 @@ extended_type_info	varbinary(65536)	YES
 desc oceanbase.__all_routine_param_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 routine_id	bigint(20)	NO	PRI	NULL	
 sequence	bigint(20)	NO	PRI	NULL	
@@ -3577,7 +3597,7 @@ extended_type_info	varbinary(65536)	YES
 desc oceanbase.__all_sequence;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 sequence_key	bigint(20)	NO	PRI	NULL	
 column_id	bigint(20)	NO	PRI	NULL	
@@ -3588,7 +3608,7 @@ migrated	bigint(20)	NO		0
 desc oceanbase.__all_sequence_object;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 sequence_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO		NULL	
@@ -3604,7 +3624,7 @@ cycle_flag	tinyint(4)	NO		NULL
 desc oceanbase.__all_sequence_object_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 sequence_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3621,7 +3641,7 @@ cycle_flag	tinyint(4)	YES		NULL
 desc oceanbase.__all_sequence_v2;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 sequence_key	bigint(20)	NO	PRI	NULL	
 column_id	bigint(20)	NO	PRI	NULL	
 tenant_id	bigint(20)	NO		NULL	
@@ -3631,13 +3651,13 @@ sync_value	bigint(20) unsigned	NO		NULL
 desc oceanbase.__all_sequence_value;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 sequence_id	bigint(20)	NO	PRI	NULL	
 next_value	decimal(38,0)	NO		NULL	
 desc oceanbase.__all_server;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 svr_ip	varchar(46)	NO	PRI	NULL	
 svr_port	bigint(20)	NO	PRI	NULL	
 id	bigint(20)	NO		NULL	
@@ -3675,7 +3695,7 @@ extra_info	varchar(512)	YES
 desc oceanbase.__all_sql_execute_task;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 job_id	bigint(20)	NO	PRI	NULL	
 execution_id	bigint(20)	NO	PRI	NULL	
 sql_job_id	bigint(20)	NO	PRI	NULL	
@@ -3689,7 +3709,7 @@ task_info	varchar(4096)	NO		NULL
 desc oceanbase.__all_sstable_checksum;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 data_table_id	bigint(20)	NO	PRI	NULL	
 sstable_id	bigint(20)	NO	PRI	NULL	
@@ -3705,7 +3725,7 @@ replica_type	bigint(20)	NO		NULL
 desc oceanbase.__all_sstable_column_checksum;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 data_table_id	bigint(20)	NO	PRI	NULL	
 index_id	bigint(20)	NO	PRI	NULL	
@@ -3722,7 +3742,7 @@ major_version	bigint(20)	NO		NULL
 desc oceanbase.__all_sub_part;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 part_id	bigint(20)	NO	PRI	NULL	
@@ -3749,7 +3769,7 @@ drop_schema_version	bigint(20)	NO		-1
 desc oceanbase.__all_sub_part_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 part_id	bigint(20)	NO	PRI	NULL	
@@ -3777,7 +3797,7 @@ drop_schema_version	bigint(20)	YES		-1
 desc oceanbase.__all_synonym;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 synonym_id	bigint(20)	NO	PRI	NULL	
 database_id	bigint(20)	NO		NULL	
@@ -3788,7 +3808,7 @@ object_database_id	bigint(20)	NO		NULL
 desc oceanbase.__all_synonym_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 synonym_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3800,7 +3820,7 @@ object_database_id	bigint(20)	YES		NULL
 desc oceanbase.__all_sys_parameter;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 zone	varchar(128)	NO	PRI	NULL	
 svr_type	varchar(16)	NO	PRI	NULL	
 svr_ip	varchar(46)	NO	PRI	NULL	
@@ -3820,7 +3840,7 @@ edit_level	varchar(128)	YES		NULL
 desc oceanbase.__all_sys_stat;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 zone	varchar(128)	NO	PRI	NULL	
 name	varchar(128)	NO	PRI	NULL	
@@ -3830,7 +3850,7 @@ info	varchar(4096)	NO		NULL
 desc oceanbase.__all_sys_variable;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 zone	varchar(128)	NO	PRI	NULL	
 name	varchar(128)	NO	PRI		
@@ -3843,7 +3863,7 @@ max_val	varchar(65536)	NO
 desc oceanbase.__all_sys_variable_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 zone	varchar(128)	NO	PRI	NULL	
 name	varchar(128)	NO	PRI		
@@ -3858,7 +3878,7 @@ max_val	varchar(65536)	NO
 desc oceanbase.__all_tablegroup;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 tablegroup_id	bigint(20)	NO	PRI	NULL	
 tablegroup_name	varchar(128)	NO		NULL	
@@ -3883,7 +3903,7 @@ is_sub_part_template	tinyint(4)	NO		1
 desc oceanbase.__all_tablegroup_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 tablegroup_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3909,7 +3929,7 @@ is_sub_part_template	tinyint(4)	YES		1
 desc oceanbase.__all_table_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -3985,7 +4005,7 @@ auto_part	tinyint(4)	YES		0
 desc oceanbase.__all_table_privilege;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 database_name	varchar(128)	NO	PRI	NULL	
@@ -4004,7 +4024,7 @@ priv_show_view	bigint(20)	NO		0
 desc oceanbase.__all_table_privilege_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 database_name	varchar(128)	NO	PRI	NULL	
@@ -4025,7 +4045,7 @@ priv_show_view	bigint(20)	YES		0
 desc oceanbase.__all_table_stat;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -4045,7 +4065,7 @@ create_host	varchar(128)	NO
 desc oceanbase.__all_tenant;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 tenant_name	varchar(128)	NO		NULL	
 replica_num	bigint(20)	NO		NULL	
@@ -4069,14 +4089,14 @@ in_recyclebin	bigint(20)	NO		0
 desc oceanbase.__all_tenant_gc_partition_info;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
 desc oceanbase.__all_tenant_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
 is_deleted	bigint(20)	NO		NULL	
@@ -4102,7 +4122,7 @@ in_recyclebin	bigint(20)	YES		0
 desc oceanbase.__all_tenant_meta_table;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 partition_id	bigint(20)	NO	PRI	NULL	
@@ -4175,7 +4195,7 @@ Version	bigint(20)	YES		NULL
 desc oceanbase.__all_unit;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 unit_id	bigint(20)	NO	PRI	NULL	
 resource_pool_id	bigint(20)	NO		NULL	
 group_id	bigint(20)	NO		NULL	
@@ -4190,7 +4210,7 @@ replica_type	bigint(20)	NO		0
 desc oceanbase.__all_unit_config;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 unit_config_id	bigint(20)	NO	PRI	NULL	
 name	varchar(128)	NO		NULL	
 max_cpu	double	NO		NULL	
@@ -4223,7 +4243,7 @@ rs_svr_port	bigint(20)	YES		NULL
 desc oceanbase.__all_user;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 user_name	varchar(128)	NO		NULL	
@@ -4259,10 +4279,12 @@ priv_alter_tenant	bigint(20)	NO		0
 priv_alter_system	bigint(20)	NO		0	
 priv_create_resource_pool	bigint(20)	NO		0	
 priv_create_resource_unit	bigint(20)	NO		0	
+max_connections	bigint(20)	NO		0	
+max_user_connections	bigint(20)	NO		0	
 desc oceanbase.__all_user_history;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 tenant_id	bigint(20)	NO	PRI	NULL	
 user_id	bigint(20)	NO	PRI	NULL	
 schema_version	bigint(20)	NO	PRI	NULL	
@@ -4300,6 +4322,8 @@ priv_alter_tenant	bigint(20)	YES		0
 priv_alter_system	bigint(20)	YES		0	
 priv_create_resource_pool	bigint(20)	YES		0	
 priv_create_resource_unit	bigint(20)	YES		0	
+max_connections	bigint(20)	YES		0	
+max_user_connections	bigint(20)	YES		0	
 desc oceanbase.__all_virtual_bad_block_table;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -4910,6 +4934,7 @@ weak_read_timestamp	bigint(20)	NO		-1
 replica_type	bigint(20)	NO		0	
 last_replay_log_id	bigint(20)	NO		0	
 schema_version	bigint(20)	NO		0	
+last_replay_log_ts	bigint(20)	NO		0	
 desc oceanbase.__all_virtual_partition_item;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
@@ -5309,6 +5334,7 @@ user_host	varchar(128)	YES		NULL
 trans_id	bigint(20) unsigned	NO		NULL	
 thread_id	bigint(20) unsigned	NO		NULL	
 ssl_cipher	varchar(4096)	YES		NULL	
+trace_id	varchar(64)	YES			
 desc oceanbase.__all_virtual_proxy_server_stat;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -5496,6 +5522,7 @@ idc	varchar(4096)	NO		NULL
 zone_type	varchar(4096)	NO		NULL	
 merge_status	varchar(4096)	NO		NULL	
 zone_status	varchar(4096)	NO		NULL	
+svr_min_log_timestamp	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_server_memory_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO	PRI	NULL	
@@ -6079,7 +6106,7 @@ spare6	varchar(65536)	NO		NULL
 desc oceanbase.__all_zone;
 Field	Type	Null	Key	Default	Extra
 gmt_create	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	
-gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
 zone	varchar(128)	NO	PRI	NULL	
 name	varchar(128)	NO	PRI	NULL	
 value	bigint(20)	NO		NULL	

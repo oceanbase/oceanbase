@@ -44,16 +44,22 @@ Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is
 def				str_to_date('1970-01-02','null') + 100	str_to_date('1970-01-02','null') + 100	8	11	0	Y	32896	0	63
 str_to_date('1970-01-02','null') + 100
 NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02',0)+ 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def				str_to_date('1970-01-02',0)+ 1	str_to_date('1970-01-02',0)+ 1	246	21	0	Y	32896	0	63
 str_to_date('1970-01-02',0)+ 1
 NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02', 23) +10;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def				str_to_date('1970-01-02', 23) +10	str_to_date('1970-01-02', 23) +10	246	21	0	Y	32896	0	63
 str_to_date('1970-01-02', 23) +10
 NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1970-01-02' for function str_to_date
 select str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def				str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	246	21	14	Y	32896	0	63
@@ -74,6 +80,8 @@ Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is
 def				str_to_date('12:23:32',10)+ 10000	str_to_date('12:23:32',10)+ 10000	246	21	0	Y	32896	0	63
 str_to_date('12:23:32',10)+ 10000
 NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '12:23:32' for function str_to_date
 drop table if exists t1, t2, t3, t3k;
 CREATE TABLE t1 (EMPNUM INT);
 INSERT INTO t1 VALUES (0), (2);

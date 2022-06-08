@@ -118,6 +118,6 @@ drop view v1;
 create view v1 as select version() from dual limit 10;
 desc v1;
 Field	Type	Null	Key	Default	Extra
-version()	varchar(5)	NO			
+version()	varchar(18)	NO			
 drop view v1;
 connection conn_admin;

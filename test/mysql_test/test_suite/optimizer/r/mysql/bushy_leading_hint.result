@@ -11,7 +11,6 @@ create table nn2(d1 int, d2 int, d3 varchar(10));
 create table t1(a int, b int, c int);
 create table t2(a int, b int, c int);
 create table t3(a int, b int, c int);
-### 1, 基本测试  ###
 select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
 count(*)	sum(a.c1+b.d2*a.c2)
 0	NULL
@@ -79,7 +78,6 @@ from nn1 t1, nn2 t2, nn1 t3
 where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 =t3.c1+t2.d2;
 count(*)	sum(t2.d1+t3.c2)
 0	NULL
-### 3, 复杂测试(集合、子查询中等)  ###
 SELECT count(*), sum(b.d1) from
 nn1 a,  nn2 b,  nn1 c
 WHERE
@@ -142,7 +140,6 @@ select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where
 and t3.c1 in (1,2);
 sum(t1.c1)
 NULL
-### 4, 错误、无效或冗余的指定测试  ###
 select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
 where a.c1 = b.d1 and c.c2 = d.d1;
 count(*)	sum(b.d1+d.d2)
@@ -171,7 +168,6 @@ nn1 t3 on t3.c2 IN(1,23,4,2,5,6) join nn1 t4 on t3.c1=t4.c1 join nn1 t5 on t4.c2
 join nn1 t6 on t5.c1 = t6.c2 left join nn1 t7 on t1.c1=t7.c1;
 count(*)	sum(t2.c2+t3.c1)
 0	NULL
-### 6, 嵌套hint和hint的print测试  ###
 select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
 and d.c2 = a.c1  ;
@@ -180,17 +176,17 @@ count(a.c1+b.d2)	sum(b.d2+b.d2*a.c1)
 create view v1 as  select /*+ leading(c,  b , a ) use_hash(b a) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2, c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS select /*+ LEADING(c b a) USE_HASH((b) (a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS select /*+ LEADING(c b a) USE_HASH((b) (a)) */`a`.`c1` AS `a_c1`,`a`.`c2` AS `a_c2`,`a`.`c3` AS `a_c3`,`b`.`d1` AS `d1`,`b`.`d2` AS `d2`,`b`.`d3` AS `d3`,`c`.`c1` AS `c_c1`,`c`.`c2` AS `c_c2`,`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`a`.`c1` = `b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`b`.`d1` = `c`.`c1`))) where (`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
 create view v2 as  select /*+ leading(c,  (b , a)) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
 show create view v2;
 View	Create View	character_set_client	collation_connection
-v2	CREATE VIEW `v2` AS select /*+ LEADING(c (b a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+v2	CREATE VIEW `v2` AS select /*+ LEADING(c (b a)) */`a`.`c1` AS `a_c1`,`a`.`c2` AS `a_c2`,`a`.`c3` AS `a_c3`,`b`.`d1` AS `d1`,`b`.`d2` AS `d2`,`b`.`d3` AS `d3`,`c`.`c1` AS `c_c1`,`c`.`c2` AS `c_c2`,`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`a`.`c1` = `b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`b`.`d1` = `c`.`c1`))) where (`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
 create view v3 as select /*+ leading(c, (d, (a,b))) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b 
 on a.c1 = b.d2  
 join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
 show create view v3;
 View	Create View	character_set_client	collation_connection
-v3	CREATE VIEW `v3` AS select /*+ LEADING(c (d (a b))) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from (((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) join `bushy_leading_hint_db`.`nn1` `d` on ((`bushy_leading_hint_db`.`d`.`c2` = `bushy_leading_hint_db`.`c`.`c2`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+v3	CREATE VIEW `v3` AS select /*+ LEADING(c (d (a b))) */`a`.`c1` AS `a_c1`,`a`.`c2` AS `a_c2`,`a`.`c3` AS `a_c3`,`b`.`d1` AS `d1`,`b`.`d2` AS `d2`,`b`.`d3` AS `d3`,`c`.`c1` AS `c_c1`,`c`.`c2` AS `c_c2`,`c`.`c3` AS `c_c3` from (((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`a`.`c1` = `b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`b`.`d1` = `c`.`c1`))) join `bushy_leading_hint_db`.`nn1` `d` on ((`d`.`c2` = `c`.`c2`))) where (`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
 create view v4 as 
 select /*+ leading(t2, (t1, t3), (t7, (t8, t9)), (t4, t5, t6)) */
 t1.c1 as x, t3.c2 as y, t5.c2 as z from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
@@ -198,7 +194,7 @@ where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c
 t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
 show create view v4;
 View	Create View	character_set_client	collation_connection
-v4	CREATE VIEW `v4` AS select /*+ LEADING(t2 (t1 t3) (t7 (t8 t9)) (t4 t5 t6)) */`bushy_leading_hint_db`.`t1`.`c1` AS `x`,`bushy_leading_hint_db`.`t3`.`c2` AS `y`,`bushy_leading_hint_db`.`t5`.`c2` AS `z` from `bushy_leading_hint_db`.`nn1` `t1`,`bushy_leading_hint_db`.`nn1` `t2`,`bushy_leading_hint_db`.`nn1` `t3`,`bushy_leading_hint_db`.`nn1` `t4`,`bushy_leading_hint_db`.`nn1` `t5`,`bushy_leading_hint_db`.`nn1` `t6`,`bushy_leading_hint_db`.`nn1` `t7`,`bushy_leading_hint_db`.`nn1` `t8`,`bushy_leading_hint_db`.`nn1` `t9` where (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t3`.`c2`) and (`bushy_leading_hint_db`.`t2`.`c1` = `bushy_leading_hint_db`.`t3`.`c1`) and (`bushy_leading_hint_db`.`t3`.`c1` = `bushy_leading_hint_db`.`t4`.`c1`) and (`bushy_leading_hint_db`.`t4`.`c1` = `bushy_leading_hint_db`.`t5`.`c1`) and (`bushy_leading_hint_db`.`t5`.`c1` = `bushy_leading_hint_db`.`t6`.`c1`) and (`bushy_leading_hint_db`.`t6`.`c1` = `bushy_leading_hint_db`.`t7`.`c1`) and (`bushy_leading_hint_db`.`t7`.`c1` = `bushy_leading_hint_db`.`t8`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`)	utf8mb4	utf8mb4_general_ci
+v4	CREATE VIEW `v4` AS select /*+ LEADING(t2 (t1 t3) (t7 (t8 t9)) (t4 t5 t6)) */`t1`.`c1` AS `x`,`t3`.`c2` AS `y`,`t5`.`c2` AS `z` from `bushy_leading_hint_db`.`nn1` `t1`,`bushy_leading_hint_db`.`nn1` `t2`,`bushy_leading_hint_db`.`nn1` `t3`,`bushy_leading_hint_db`.`nn1` `t4`,`bushy_leading_hint_db`.`nn1` `t5`,`bushy_leading_hint_db`.`nn1` `t6`,`bushy_leading_hint_db`.`nn1` `t7`,`bushy_leading_hint_db`.`nn1` `t8`,`bushy_leading_hint_db`.`nn1` `t9` where (`t1`.`c1` = `t2`.`c1`) and (`t1`.`c1` = `t3`.`c2`) and (`t2`.`c1` = `t3`.`c1`) and (`t3`.`c1` = `t4`.`c1`) and (`t4`.`c1` = `t5`.`c1`) and (`t5`.`c1` = `t6`.`c1`) and (`t6`.`c1` = `t7`.`c1`) and (`t7`.`c1` = `t8`.`c1`) and (`t8`.`c1` = `t9`.`c1`) and (`t8`.`c1` = `t2`.`c1`) and (`t1`.`c1` = `t9`.`c1`)	utf8mb4	utf8mb4_general_ci
 select count(*), sum(x+y-z*4) from v4;
 count(*)	sum(x+y-z*4)
 0	NULL
@@ -237,7 +233,6 @@ count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
 where t1.c1 = t2.c1 and  t3.c1 = t4.c1 and t1.c2 = t3.c2;
 count(*)	sum(t1.c1)-sum(t4.c2)
 0	NULL
-### 7, 带qb_name的测试  ###
 select /*+ LEADING(@x2x (c d), (a b)) */
 * from nn1 x
 where exists (select /*+ qb_name(x2x) */  1 
@@ -256,7 +251,6 @@ where exists (select /*+ qb_name(x3x) */  1
 from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
 and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
 c1	c2	c3
-### 8, 通过bushy 扩展能获取较好的计划  ###
 select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
 where t1.c1 = t2.c1 and 
 t4.d1 = t5.d1 AND

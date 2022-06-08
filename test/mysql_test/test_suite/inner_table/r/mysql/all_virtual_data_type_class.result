@@ -22,6 +22,7 @@ data_type_class	data_type_class_str
 19	INTERVAL
 20	ROWID
 21	LOB
+22	JSON
 select data_type_class, data_type_class_str from __all_virtual_data_type_class;
 data_type_class	data_type_class_str
 0	NULL
@@ -45,6 +46,7 @@ data_type_class	data_type_class_str
 19	INTERVAL
 20	ROWID
 21	LOB
+22	JSON
 select * from __all_virtual_data_type_class where data_type_class = 10;
 data_type_class	data_type_class_str
 10	STRING
@@ -95,6 +97,7 @@ NVARCHAR2	STRING
 NCHAR	STRING
 ROWID	ROWID
 LOB	LOB
+JSON	JSON
 show create table __all_virtual_data_type_class;
 Table	Create Table
 __all_virtual_data_type_class	CREATE TABLE `__all_virtual_data_type_class` (
