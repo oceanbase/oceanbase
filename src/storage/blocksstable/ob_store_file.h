@@ -445,6 +445,7 @@ private:
   bool is_fs_support_punch_hole_;
   int block_file_fd_;
   lib::ObMutex alloc_lock_;
+  lib::ObMutex resize_file_lock_;
 };
 
 OB_INLINE bool ObStoreFile::is_valid(const MacroBlockId macro_id)

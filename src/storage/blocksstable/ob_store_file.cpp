@@ -430,7 +430,8 @@ ObStoreFile::ObStoreFile()
       cond_(),
       is_fs_support_punch_hole_(true),
       block_file_fd_(OB_INVALID_FD),
-      alloc_lock_()
+      alloc_lock_(),
+      resize_file_lock_()
 {
   MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
 }
@@ -1180,7 +1181,7 @@ int ObStoreFile::mark_macro_blocks()
 // should lock before using to protect free_block_cnt_ opt
 int ObStoreFile::extend_file_size_task()
 {
-  lib::ObMutexGuard guard(block_lock_); // lock block info update opt 
+  lib::ObMutexGuard guard(resize_file_lock_); // lock resize file opt 
   int ret = OB_SUCCESS;
   if (OB_ISNULL(store_file_system_)) {
   } else {
@@ -1204,6 +1205,7 @@ int ObStoreFile::extend_file_size_task()
       if (OB_FAIL(wait_mark_sweep_finish())) {
         LOG_WARN("fail to wait mark and sweep finish", K(ret));
       } else {
+        lib::ObMutexGuard guard(block_lock_); // lock block info update opt
         bool is_extend_size = false;
         int64_t total_block_cnt = store_file_system_->get_total_macro_block_count();
         int64_t free_block_cnt_to_extend = 
@@ -1543,11 +1545,12 @@ int ObStoreFile::resize_file(
   if (OB_ISNULL(store_file_system_)) {
     LOG_DEBUG("Do resize file fail, store_file_system_ is null pointer");
   } else {
-    lib::ObMutexGuard guard(block_lock_);
+    lib::ObMutexGuard guard(resize_file_lock_);
     disable_mark_sweep();
     if (OB_FAIL(wait_mark_sweep_finish())) {
       LOG_WARN("fail to wait mark and sweep finish", K(ret));
     } else {
+      lib::ObMutexGuard guard(block_lock_);
       if (OB_FAIL(store_file_system_->resize_file(new_data_file_size, new_data_file_disk_percentage))) {
         LOG_WARN("fail to resize file", K(ret));
       } else if (OB_FAIL(refresh_block_meta())) {
