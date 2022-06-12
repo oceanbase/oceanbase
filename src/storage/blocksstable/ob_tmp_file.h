@@ -184,7 +184,7 @@ public:
   {
     block_id_ = block_id;
   }
-  OB_INLINE int32_t get_block_id() const
+  OB_INLINE int64_t get_block_id() const
   {
     return block_id_;
   }
