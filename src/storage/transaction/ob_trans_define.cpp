@@ -1419,6 +1419,38 @@ int ObTransDesc::merge_participants(const common::ObPartitionArray& participants
   return ret;
 }
 
+int ObTransDesc::check_participants_size()
+{
+  int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  // test if this function can handle participants size overflow successfully
+  if (OB_FAIL(E(EventTable::EN_PARTICIPANTS_SIZE_OVERFLOW) OB_SUCCESS)) {
+    OB_MAX_TRANS_SERIALIZE_SIZE = 1500;
+    OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;
+    TRANS_LOG(INFO, "ERRSIM modify trans ctx serialize size for case 1 ",
+              K(OB_MAX_TRANS_SERIALIZE_SIZE), K(OB_MIN_REDO_LOG_SERIALIZE_SIZE));
+  } else if (OB_FAIL(E(EventTable::EN_PART_PLUS_UNDO_OVERFLOW) OB_SUCCESS)) {
+    OB_MAX_TRANS_SERIALIZE_SIZE = 7500;
+    OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;
+    TRANS_LOG(INFO, "ERRSIM modify trans ctx serialize size for case 2 ",
+              K(OB_MAX_TRANS_SERIALIZE_SIZE), K(OB_MIN_REDO_LOG_SERIALIZE_SIZE));
+  }
+
+  OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
+
+  ret = OB_SUCCESS;
+#endif
+
+  int64_t participants_size = participants_.get_serialize_size();
+  if (participants_size > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN, "Participants are too large which may make dump trans state table failed.",
+              KR(ret), K(participants_size), K(participants_.count()),
+              K(OB_MAX_TRANS_SERIALIZE_SIZE), K(participants_));
+  }
+  return ret;
+}
+
 int ObTransDesc::set_cur_stmt_desc(const ObStmtDesc& stmt_desc)
 {
   int ret = OB_SUCCESS;

@@ -405,7 +405,8 @@ public:
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
       K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
       K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
-      K_(status), K_(is_xa_trans_prepared), K_(ctx_serialize_size));
+      K_(status), K_(is_xa_trans_prepared), K_(redo_log_id_serialize_size), K_(participants_serialize_size),
+      K_(undo_serialize_size));
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -752,7 +753,9 @@ ObTransSubmitLogCb submit_log_cb_;
   bool is_xa_trans_prepared_;
   bool has_write_or_replay_mutator_redo_log_;
   bool is_in_redo_with_prepare_;
-  int64_t ctx_serialize_size_;
+  int64_t redo_log_id_serialize_size_;
+  int64_t participants_serialize_size_;
+  int64_t undo_serialize_size_;
   // the log id of prev checkpoint log
   uint64_t prev_checkpoint_id_;
 };

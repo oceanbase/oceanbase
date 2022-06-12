@@ -1200,7 +1200,7 @@ int ObGarbageCollector::gc_check_log_archive_(
 
   int64_t delay_interval = LOG_ARCHIVE_DROP_DELAY;
 #ifdef ERRSIM
-  delay_interval = std::min(LOG_ARCHIVE_DROP_DELAY, (int64_t)ObServerConfig::get_instance().schema_drop_gc_delay_time);
+  // delay_interval = std::min(LOG_ARCHIVE_DROP_DELAY, (int64_t)ObServerConfig::get_instance().schema_drop_gc_delay_time);
 #endif
 
   if (enable_log_archive && !is_restore && !is_sys_tenant) {

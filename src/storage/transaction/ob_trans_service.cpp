@@ -2500,6 +2500,10 @@ int ObTransService::end_stmt(bool is_rollback, bool is_incomplete, const ObParti
     }
   }
 
+  if (OB_SUCC(ret) && OB_FAIL(trans_desc.check_participants_size())) {
+    trans_desc.set_need_rollback();
+    TRANS_LOG(WARN, "check participants size failed.", KR(ret));
+  }
   REC_TRACE_EXT(tlog, end_stmt, Y(ret));
   if (OB_FAIL(ret)) {
     trans_desc.set_need_print_trace_log();

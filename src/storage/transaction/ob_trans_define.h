@@ -69,8 +69,15 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
-// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
-static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+// The redo log id can use at least 128KB storage space
+static int64_t OB_MIN_REDO_LOG_SERIALIZE_SIZE = 131072;
+
+// redo_log + participants + undo_actions can use MAX_VARCHAR_LENGTH-10KB storage space
+static int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_VARCHAR_LENGTH - 10 * 1024;
+
+// The participants and undo actions share the last storage space
+static int64_t OB_MAX_UNDO_ACTION_SERIALIZE_SIZE
+  = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
 
 class ObTransErrsim {
 public:
@@ -1672,6 +1679,7 @@ public:
   int merge_participants_pla();
   int merge_participants(const common::ObPartitionArray& participants);
   int merge_participants_pla(const common::ObPartitionLeaderArray& participant_pla);
+  int check_participants_size();
   const common::ObPartitionArray& get_participants() const
   {
     return participants_;
