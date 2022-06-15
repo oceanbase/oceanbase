@@ -6396,7 +6396,7 @@
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #####========******####======== actions begin ========####******========####
-#  run_upgrade_job(conn, cur, "3.1.3")
+#  run_upgrade_job(conn, cur, "3.1.4")
 #  return
 #####========******####========= actions end =========####******========####
 #
@@ -8686,7 +8686,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_post_checker.log'
-#  new_version = '3.1.3'
+#  new_version = '3.1.4'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):

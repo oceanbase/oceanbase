@@ -4,7 +4,7 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.3
+  VERSION 3.1.4
   DESCRIPTION "OceanBase distributed database system"
   HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
