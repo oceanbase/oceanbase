@@ -2024,5 +2024,17 @@ int ObFetchSstableSizeP::process()
   return ret;
 }
 
+int ObRpcTTLRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->ttl_request(arg_, result_);
+  }
+  return ret;
+}
+
 }  // end of namespace observer
 }  // end of namespace oceanbase

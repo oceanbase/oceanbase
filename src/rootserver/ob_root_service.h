@@ -83,6 +83,7 @@
 #include "rootserver/ob_restore_point_service.h"
 #include "rootserver/backup/ob_backup_archive_log_scheduler.h"
 #include "rootserver/backup/ob_backup_backupset.h"
+#include "rootserver/ob_ttl_scheduler.h"
 
 namespace oceanbase {
 
@@ -1235,6 +1236,10 @@ public:
   int standby_grant(const obrpc::ObStandbyGrantArg& arg);
   int finish_replay_schema(const obrpc::ObFinishReplayArg& arg);
 
+  // table api
+  int handle_user_ttl(const obrpc::ObTableTTLArg& arg);
+  int ttl_response(const obrpc::ObTTLResponseArg& arg);
+
   ////////////////////////////////////////////////////
 private:
   int check_parallel_ddl_conflict(share::schema::ObSchemaGetterGuard& schema_guard, const obrpc::ObDDLArg& arg);
@@ -1474,6 +1479,9 @@ private:
   ObBackupArchiveLogScheduler backup_archive_log_;
   ObBackupBackupset backup_backupset_;
   ObBackupLeaseService backup_lease_service_;
+
+  // tableapi
+  ObTTLScheduler ttl_scheduler_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);

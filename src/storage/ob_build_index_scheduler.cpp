@@ -39,6 +39,7 @@
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_index_builder.h"
 #include "rootserver/ob_root_service.h"
+#include "observer/table/ob_table_ttl_manager.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::common;
@@ -1681,6 +1682,7 @@ void ObCheckTenantSchemaTask::runTimerTask()
             STORAGE_LOG(WARN, "fail to set tenant schema version into map", K(ret));
           } else {
             STORAGE_LOG(INFO, "add tenant ddl task", K(task));
+            observer::ObTTLManager::get_instance().on_schema_changed(tenant_id);
           }
         }
       }

@@ -3723,6 +3723,7 @@ int ObInnerTableSchema::all_virtual_server_stat_schema(ObTableSchema &table_sche
       false, //is_nullable
       false); //is_autoincrement
   }
+
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("disk_total", //column_name
       ++column_id, //column_id
@@ -4251,6 +4252,7 @@ int ObInnerTableSchema::all_virtual_server_stat_schema(ObTableSchema &table_sche
       false, //is_nullable
       false); //is_autoincrement
   }
+
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("disk_actual", //column_name
       ++column_id, //column_id

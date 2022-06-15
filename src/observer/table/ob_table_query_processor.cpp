@@ -116,7 +116,7 @@ int ObTableQueryP::try_process()
   }
   const int64_t timeout_ts = get_timeout_ts();
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(timeout_ts, this, &allocator_,
+  table_service_ctx_.init_param(timeout_ts, this->get_trans_desc(), &allocator_,
                                 false/*ignored*/,
                                 arg_.entity_type_,
                                 table::ObBinlogRowImageType::MINIMAL/*ignored*/);

@@ -459,7 +459,7 @@ int ObTableQuerySyncP::query_scan_with_init()
   table_service_ctx_->scan_param_.is_thread_scope_ = false;
   uint64_t &table_id = table_service_ctx_->param_table_id();
   table_service_ctx_->init_param(timeout_ts_,
-      this,
+      this->get_trans_desc(),
       query_session_->get_allocator(),
       false /*ignored*/,
       arg_.entity_type_,

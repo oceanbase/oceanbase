@@ -147,6 +147,7 @@ ob_set_subtarget(ob_rootserver task
   ob_backup_data_clean_scheduler.cpp
   ob_backup_data_clean.cpp
   ob_schema_history_recycler.cpp
+  ob_ttl_scheduler.cpp
 )
 
 ob_server_add_pchs(rootserver

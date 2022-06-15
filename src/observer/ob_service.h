@@ -306,6 +306,10 @@ public:
   int pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg& arg);
   int submit_retry_ghost_index_task(const uint64_t index_id);
 
+  ////////////////////////////////////////////////////////////////
+  // table api
+  int ttl_request(const obrpc::ObTTLRequestArg &arg, obrpc::ObTTLResult &result);
+
 private:
   int register_self();
   int check_server_empty(const obrpc::ObCheckServerEmptyArg& arg, const bool wait_log_scan, bool& server_empty);

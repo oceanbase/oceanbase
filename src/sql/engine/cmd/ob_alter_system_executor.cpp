@@ -1891,5 +1891,30 @@ int ObClearRestoreSourceExecutor::execute(ObExecContext& ctx, ObClearRestoreSour
   return ret;
 }
 
+int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx* task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common_rpc_proxy is null", K(ret));
+  } else {
+    FLOG_INFO("ObTableTTLExecutor::execute", K(stmt), K(ctx));
+    ObTableTTLArg arg;
+    arg.cmd_code_ = static_cast<int64_t>(stmt.get_type());
+    if (OB_FAIL(common_rpc_proxy->table_ttl(arg))) {
+      LOG_WARN("handle table ttl failed", K(arg), K(ret));
+    }
+  }
+  return ret;
+}
+
 }  // end namespace sql
 }  // end namespace oceanbase

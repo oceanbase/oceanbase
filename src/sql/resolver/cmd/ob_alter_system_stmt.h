@@ -1175,6 +1175,39 @@ private:
   int64_t copy_id_;
 };
 
+class ObTableTTLStmt : public ObSystemCmdStmt {
+public:
+  ObTableTTLStmt()
+    : ObSystemCmdStmt(stmt::T_TABLE_TTL),
+      type_(obrpc::ObTTLRequestArg::TTL_INVALID_TYPE)
+  {}
+  virtual ~ObTableTTLStmt()
+  {}
+
+  obrpc::ObTTLRequestArg::TTLRequestType get_type() const
+  {
+    return type_;
+  }
+  int set_param(const int64_t type)
+  {
+    int ret = common::OB_SUCCESS;
+
+    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_MOVE_TYPE) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid args", K(type));
+    } else {
+      type_ = static_cast<obrpc::ObTTLRequestArg::TTLRequestType>(type);
+    }
+
+    return ret;
+  }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type));
+
+private:
+  uint64_t tenant_id_;
+  obrpc::ObTTLRequestArg::TTLRequestType type_;
+};
+
 class ObBackupSetEncryptionStmt : public ObSystemCmdStmt {
 public:
   ObBackupSetEncryptionStmt();

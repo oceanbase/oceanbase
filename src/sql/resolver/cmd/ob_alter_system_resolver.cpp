@@ -3886,12 +3886,6 @@ int ObBackupDatabaseResolver::resolve(const ParseNode& parse_tree)
   if (OB_UNLIKELY(T_BACKUP_DATABASE != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_BACKUP_DATABASE", "type", get_type_name(parse_tree.type_));
-  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children should not be null", K(ret));
-  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
@@ -3904,6 +3898,36 @@ int ObBackupDatabaseResolver::resolve(const ParseNode& parse_tree)
       LOG_ERROR("create ObBackupDatabaseStmt failed");
     } else if (OB_FAIL(stmt->set_param(tenant_id, incremental))) {
       LOG_WARN("Failed to set param", K(ret), K(tenant_id), K(incremental));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_TABLE_TTL != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_TABLE_TTL", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObTableTTLStmt* stmt = create_stmt<ObTableTTLStmt>();
+    const int64_t type = parse_tree.children_[0]->value_;
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObArchiveLogStmt failed");
+    } else if (OB_FAIL(stmt->set_param(type))) {
+      LOG_WARN("Failed to set param", K(ret), K(type));
     } else {
       stmt_ = stmt;
     }

@@ -210,6 +210,7 @@ public:
   RPC_S(PR5 kill_part_trans_ctx, OB_KILL_PART_TRANS_CTX, (obrpc::ObKillPartTransCtxArg));
   RPC_S(PR5 fetch_sstable_size, obrpc::OB_FETCH_SSTABLE_SIZE, (obrpc::ObFetchSstableSizeArg),
       obrpc::ObFetchSstableSizeRes);
+  RPC_AP(PR5 ttl_request, OB_TTL_REQUEST, (obrpc::ObTTLRequestArg), obrpc::ObTTLResult);
 };  // end of class ObSrvRpcProxy
 
 }  // namespace obrpc

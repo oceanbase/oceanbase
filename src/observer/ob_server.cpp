@@ -75,6 +75,8 @@
 #include "share/ob_bg_thread_monitor.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "lib/oblog/ob_log_compressor.h"
+#include "observer/table/ob_table_ttl_task.h"
+#include "observer/table/ob_table_ttl_manager.h"
 //#include "share/ob_ofs.h"
 
 using namespace oceanbase::lib;
@@ -361,6 +363,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_WARN("failed to init backup file lock mgr", K(ret));
   } else if (OB_FAIL(G_RES_MGR.init())) {
     LOG_WARN("failed to init resource plan", K(ret));
+  } else if (OB_FAIL(ObTTLManager::get_instance().init())) {
+    LOG_WARN("failed to init ttl manager", K(ret));
   } else {
     GDS.set_rpc_proxy(&rs_rpc_proxy_);
     LOG_INFO("ob server instance init succeed");
@@ -495,6 +499,8 @@ int ObServer::start()
     LOG_ERROR("failed to start backup info", K(ret));
   } else if (OB_FAIL(ObRestoreFatalErrorReporter::get_instance().start())) {
     LOG_ERROR("failed to start ObRestoreFatalErrorReporter", K(ret));
+  } else if (OB_FAIL(ObTTLManager::get_instance().start())) {
+    LOG_ERROR("failed to start ObTTLManager", K(ret));
   } else {
     LOG_INFO("[NOTICE] server instance start succeed");
     stop_ = false;

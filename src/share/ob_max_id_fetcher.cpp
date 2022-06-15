@@ -33,7 +33,8 @@ using namespace common::sqlclient;
 namespace share {
 using namespace share::schema;
 
-const char* ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {{"ob_max_used_table_id", "max used table id"},
+const char* ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
+    {"ob_max_used_table_id", "max used table id"},
     {"ob_max_used_tenant_id", "max used tenant id"},
     {"ob_max_used_database_id", "max used database id"},
     {"ob_max_used_tablegroup_id", "max used tablegroup id"},
@@ -51,7 +52,8 @@ const char* ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {{"ob_max_use
     {"ob_max_used_udf_id", "max used udf id"},
     {"ob_max_used_profile_id", "max used profile id"},
     {"ob_max_used_ha_gts_id", "max used ha gts id"},
-    {"ob_max_used_dblink_id", "max used dblink id"}};
+    {"ob_max_used_dblink_id", "max used dblink id"},
+    {"ob_max_used_ttl_task_id", "max used ttl task id"}};
 
 ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy& proxy) : proxy_(proxy)
 {}

@@ -7630,6 +7630,15 @@ public:
   common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
 };
 
+struct ObTableTTLArg {
+  OB_UNIS_VERSION(1);
+public:
+  ObTableTTLArg();
+  int assign(const ObTableTTLArg& other);
+  TO_STRING_KV(K_(cmd_code));
+  int64_t cmd_code_;
+};
+
 struct ObBackupManageArg {
   OB_UNIS_VERSION(1);
 
@@ -8386,6 +8395,73 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeRes);
 };
+
+struct ObTTLRequestArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TTLRequestType {
+    TTL_TRIGGER_TYPE = 0,
+    TTL_SUSPEND_TYPE = 1,
+    TTL_RESUME_TYPE = 2,
+    TTL_CANCEL_TYPE = 3,
+    TTL_MOVE_TYPE = 4,
+    TTL_INVALID_TYPE = 5 
+  };
+  
+  enum TTLTriggerType {
+    SYS_TRIGGER_TYPE = 1,
+    USER_TRIGGER_TYPE,
+    INVALID_TRIGGER_TYPE,
+  };
+
+  ObTTLRequestArg()
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObTTLRequestArg() = default;
+  bool is_valid() const { 
+    return cmd_code_ != -1 && OB_INVALID_ID != task_id_ && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID; 
+  }
+  int assign(const ObTTLRequestArg &other);
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+public:
+  int32_t cmd_code_; // enum TTLCmdType
+  int32_t trigger_type_; // system or user 
+  int64_t task_id_;  // task id 
+  uint64_t tenant_id_; // tenand_id array
+};
+
+struct ObTTLResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTTLResult()
+    : ret_code_(-1)
+  {}
+  ~ObTTLResult() = default;
+  bool is_valid() const { return OB_INVALID_ID != ret_code_; }
+  int assign(const ObTTLResult &other) { 
+    ret_code_ = other.ret_code_;
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(ret_code));
+public:
+  int32_t ret_code_; // SUCCESS or error code
+};
+
+struct ObTTLResponseArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObTTLResponseArg();
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(server_addr), K_(task_status));
+public:
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObAddr server_addr_;
+  uint8_t task_status_;
+};
+
 
 }  // end namespace obrpc
 }  // end namespace oceanbase

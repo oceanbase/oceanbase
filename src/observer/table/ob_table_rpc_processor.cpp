@@ -1044,12 +1044,12 @@ ObHTableDeleteExecutor::ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
 {
   query_ctx_.param_table_id() = table_id;
   query_ctx_.param_partition_id() = partition_id;
-  query_ctx_.init_param(timeout_ts, processor, &alloc,
+  query_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                         false/*ignored*/, table::ObTableEntityType::ET_HKV,
                         table::ObBinlogRowImageType::MINIMAL/*ignored*/);
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
   mutations_result_.set_entity_factory(&entity_factory_);
@@ -1243,7 +1243,7 @@ ObHTablePutExecutor::ObHTablePutExecutor(common::ObArenaAllocator &alloc,
 {
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
 
@@ -1327,7 +1327,7 @@ ObHTableIncrementExecutor::ObHTableIncrementExecutor(table::ObTableOperationType
 {
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
   mutations_result_.set_entity_factory(&entity_factory_);

@@ -19,8 +19,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
 
+// format: {"HColumnDescriptor": {"TimeToLive": 3600, "MaxVersions": 3}}
 int ObHColumnDescriptor::from_string(const common::ObString &str)
 {
+  reset();
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   json::Parser json_parser;
@@ -44,7 +46,12 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
             if (elem->name_.case_compare("TimeToLive") == 0) {
               json::Value *ttl_val = elem->value_;
               if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
-                time_to_live_ = static_cast<int32_t>(ttl_val->get_number());
+                time_to_live_ = static_cast<int64_t>(ttl_val->get_number());
+              }
+            } else if (elem->name_.case_compare("MaxVersions") == 0) {
+              json::Value *max_version_val = elem->value_;
+              if (NULL != max_version_val && max_version_val->get_type() == json::JT_NUMBER) {
+                max_version_ = static_cast<int64_t>(max_version_val->get_number());
               }
             }
           }  // end foreach
@@ -53,6 +60,12 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
     }
   }
   return ret;
+}
+
+void ObHColumnDescriptor::reset()
+{
+  time_to_live_ = 0;   
+  max_version_ = 0;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -83,6 +96,20 @@ void ObHTableColumnTracker::set_ttl(int32_t ttl_value)
     LOG_DEBUG("[yzfdebug] set ttl", K(ttl_value), K(now), K_(oldest_stamp));
     NG_TRACE_EXT(t, OB_ID(arg1), ttl_value, OB_ID(arg2), oldest_stamp_);
   }
+}
+
+void ObHTableColumnTracker::set_max_version(int32_t max_version)
+{
+  if (max_version > 0) {
+    max_versions_ = max_version;
+    LOG_DEBUG("set max_version", K(max_version));
+    NG_TRACE_EXT(version, OB_ID(arg1), max_version);
+  }
+}
+
+int32_t ObHTableColumnTracker::get_max_version()
+{
+  return max_versions_;
 }
 
 bool ObHTableColumnTracker::is_done(int64_t timestamp) const
@@ -624,6 +651,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
      max_result_size_(query.get_max_result_size()),
      batch_size_(query.get_batch()),
      time_to_live_(0),
+     max_version_(0),
      curr_cell_(),
      allocator_(ObModIds::TABLE_PROC),
      column_tracker_(NULL),
@@ -749,8 +777,14 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
     }
     if (OB_FAIL(column_tracker_->init(htable_filter_, scan_order_))) {
       LOG_WARN("failed to init column tracker", K(ret));
-    } else if (time_to_live_ > 0) {
-      column_tracker_->set_ttl(time_to_live_);
+    } else {
+      if (time_to_live_ > 0) {
+        column_tracker_->set_ttl(time_to_live_);
+      }
+      if (max_version_ > 0) {
+        int32_t real_max_version = std::min(column_tracker_->get_max_version(), max_version_);
+        column_tracker_->set_max_version(real_max_version);
+      }
     }
   }
   if (OB_SUCC(ret) && NULL == matcher_) {
@@ -1023,6 +1057,11 @@ void ObHTableRowIterator::set_hfilter(table::hfilter::Filter *hfilter)
 void ObHTableRowIterator::set_ttl(int32_t ttl_value)
 {
   time_to_live_ = ttl_value;
+}
+
+void ObHTableRowIterator::set_max_version(int32_t max_version)
+{
+  max_version_ = max_version;
 }
 
 ////////////////////////////////////////////////////////////////

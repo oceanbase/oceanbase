@@ -562,7 +562,7 @@ int ObTableApiRowIterator::fill_flag(ObTableServiceCtx &ctx, storage::ObTableSca
     scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
-    scan_param.trans_desc_ = &(ctx.param_.processor_->get_trans_desc());
+    scan_param.trans_desc_ = ctx.param_.trans_desc_;
     scan_param.index_id_ = table_id_;
     scan_param.sql_mode_ = SMO_DEFAULT;
     scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());

@@ -142,7 +142,7 @@ int ObTableQueryAndMutateP::try_process()
     rpc_timeout = rpc_pkt_->get_timeout();
   }
   uint64_t &table_id = query_ctx_.param_table_id();
-  query_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  query_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                         false/*ignored*/,
                         arg_.entity_type_,
                         table::ObBinlogRowImageType::MINIMAL/*ignored*/);

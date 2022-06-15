@@ -4963,6 +4963,37 @@ int ObFetchSstableSizeRes::assign(const ObFetchSstableSizeRes &other)
   }
   return ret;
 }
+OB_SERIALIZE_MEMBER(ObTableTTLArg, cmd_code_);
+ObTableTTLArg::ObTableTTLArg()
+    : cmd_code_(4)
+{}
+int ObTableTTLArg::assign(const ObTableTTLArg& other) {
+  cmd_code_ = other.cmd_code_;
+  return OB_SUCCESS;
+}
+
+
+OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_);
+ObTTLResponseArg::ObTTLResponseArg()
+    : tenant_id_(0),
+      task_id_(OB_INVALID_ID),
+      server_addr_(),
+      task_status_(15)
+{}
+
+OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_);
+OB_SERIALIZE_MEMBER(ObTTLResult, ret_code_);
+
+int ObTTLRequestArg::assign(const ObTTLRequestArg &other) {
+  int ret = OB_SUCCESS;
+
+  cmd_code_ = other.cmd_code_;
+  task_id_ = other.task_id_;
+  tenant_id_ = other.tenant_id_;
+  trigger_type_ = other.trigger_type_;
+  
+  return ret;
+}
 
 }  // end namespace obrpc
 }  // namespace oceanbase

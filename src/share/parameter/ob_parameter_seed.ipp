@@ -1555,3 +1555,14 @@ DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
     "specifies whether inner sql uses px. "
     "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// ttl
+DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "[0:00:00, 24:00:00]", common::ObTTLDutyDurationChecker,
+    "ttl background task working time duration"
+    "begin_time or end_time in Range [0:00:00, 24:00:00]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]",
+    "the time to recycle ttl history. Range: [1d, 180d]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
+    "specifies whether ttl task is enbled",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

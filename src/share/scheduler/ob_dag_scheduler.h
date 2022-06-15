@@ -88,6 +88,7 @@ public:
     TASK_TYPE_RESTORE_TAILORED_FINISH = 42,
     TASK_TYPE_BACKUP_BACKUPSET = 43,
     TASK_TYPE_BACKUP_ARCHIVELOG = 44,
+    TASK_TYPE_TTL_DELETE = 45,
 
     TASK_TYPE_MAX,
   };
@@ -214,6 +215,7 @@ public:
     DAG_PRIO_CREATE_INDEX,
     DAG_PRIO_SSTABLE_SPLIT,
     DAG_PRIO_VALIDATE,
+    DAG_PRIO_TTL,
     /* add new item in ObIDagPriorityStr */
     DAG_PRIO_MAX,
   };
@@ -230,6 +232,7 @@ public:
     "DAG_PRIO_CREATE_INDEX",
     "DAG_PRIO_SSTABLE_SPLIT",
     "DAG_PRIO_VALIDATE",
+    "DAG_PRIO_TTL",
   };*/
 
   // We limit the max concurrency of tasks by UpLimitType (ult for short)
@@ -247,6 +250,7 @@ public:
     DAG_ULT_CREATE_INDEX = 5,
     DAG_ULT_SPLIT = 6,
     DAG_ULT_BACKUP = 7,
+    DAG_ULT_TTL = 8,
     /* add new item in ObIDagUpLimitTypeStr */
     DAG_ULT_MAX,
   };
@@ -258,7 +262,8 @@ public:
     "DAG_ULT_MAJOR_MERGE",
     "DAG_ULT_CREATE_INDEX",
     "DAG_ULT_SPLIT",
-    "DAG_ULT_BACKUP",};*/
+    "DAG_ULT_BACKUP",
+    "DAG_ULT_TTL"};*/
 
   enum ObIDagType {
     DAG_TYPE_UT = 0,
@@ -281,6 +286,7 @@ public:
     DAG_TYPE_VALIDATE = 17,
     DAG_TYPE_BACKUP_BACKUPSET = 18,
     DAG_TYPE_BACKUP_ARCHIVELOG = 19,
+    DAG_TYPE_TTL = 20,
     /* add new item in ObIDagTypeStr and ObIDagModuleStr*/
     DAG_TYPE_MAX,
   };
@@ -306,6 +312,7 @@ public:
     "DAG_TYPE_VALIDATE",
     "DAG_TYPE_BACKUP_BACKUPSET",
     "DAG_TYPE_BACKUP_ARCHIVELOG",
+    "DAG_TYPE_TTL",
    };*/
 
   const static char *ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX]; /* = {
@@ -326,7 +333,10 @@ public:
    "BACKUP",
    "OTHER",
    "OTHER",
-   "OTHER",};*/
+   "OTHER",
+   "BACKUP",
+   "BACKUP",
+   "TABLE_API"};*/
 
   enum ObDagStatus {
     DAG_STATUS_INITING = 0,
@@ -778,8 +788,9 @@ private:
       1,                                                                 /*Migrate Replica Low Prio*/
       2,                                                                 /*Create index*/
       1,                                                                 /*Split task*/
-      5,
-      /*Validate task*/};
+      5,                                                                 /*Validate task*/
+      1,
+      /*TTL task*/};
   static constexpr int32_t DEFAULT_UP_LIMIT[ObIDag::DAG_ULT_MAX] = {6, /*Mini merge and trans table*/
       10,                                                              /*Minor merge*/
       2,                                                               /*Group migrate*/
@@ -787,8 +798,9 @@ private:
       10,                                                              /*Major merge*/
       10,                                                              /*Create index*/
       10,                                                              /*Split*/
-      10,
-      /*Backup*/};
+      10,                                                              /*Backup*/
+      5,
+      /*TTL*/};
   // map from priority to UpLimitType
   static constexpr ObIDag::ObIDagUpLimitType UP_LIMIT_MAP[ObIDag::DAG_PRIO_MAX] = {
       ObIDag::DAG_ULT_MINI_MERGE, /*trans table*/
@@ -802,7 +814,8 @@ private:
       ObIDag::DAG_ULT_MIGRATE,
       ObIDag::DAG_ULT_CREATE_INDEX,
       ObIDag::DAG_ULT_SPLIT,
-      ObIDag::DAG_ULT_BACKUP};
+      ObIDag::DAG_ULT_BACKUP,
+      ObIDag::DAG_ULT_TTL};
 
 private:
   ObDagScheduler();

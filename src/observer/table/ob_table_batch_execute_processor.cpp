@@ -293,7 +293,7 @@ int ObTableBatchExecuteP::multi_insert_or_update()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
@@ -376,7 +376,7 @@ int ObTableBatchExecuteP::multi_get()
   int ret = OB_SUCCESS;
   need_rollback_trans_ = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
@@ -414,7 +414,7 @@ int ObTableBatchExecuteP::multi_delete()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
@@ -497,7 +497,7 @@ int ObTableBatchExecuteP::multi_insert()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
@@ -532,7 +532,7 @@ int ObTableBatchExecuteP::multi_replace()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
@@ -567,7 +567,7 @@ int ObTableBatchExecuteP::multi_update()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_/*important*/);
@@ -601,7 +601,7 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
-  table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  table_service_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_,

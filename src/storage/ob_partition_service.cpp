@@ -92,6 +92,7 @@
 #include "storage/ob_file_system_util.h"
 #include "storage/ob_pg_storage.h"
 #include "share/backup/ob_backup_backupset_operator.h"
+#include "observer/table/ob_table_ttl_manager.h"
 
 namespace oceanbase {
 using namespace oceanbase::common;
@@ -10369,6 +10370,10 @@ int ObPartitionService::internal_leader_active(const ObCbTask& active_task)
       if ((OB_SYS_TENANT_ID != pkey.get_tenant_id()) && is_normal_pg) {
         (void)clog_mgr_->add_pg_archive_task(partition);
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      observer::ObTTLManager::get_instance().on_leader_active(partition);
     }
   }
 

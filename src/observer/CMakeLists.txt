@@ -263,6 +263,8 @@ ob_set_subtarget(ob_server table
   table/htable_filter_tab.cxx
   table/htable_filter_lex.cxx
   table/ob_table_query_sync_processor.cpp
+  table/ob_table_ttl_manager.cpp
+  table/ob_table_ttl_task.cpp
 )
 
 set_source_files_properties(table/htable_filter_lex.cxx PROPERTIES COMPILE_FLAGS -Wno-null-conversion)

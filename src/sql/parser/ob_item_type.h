@@ -1762,6 +1762,7 @@ typedef enum ObItemType
   T_CLEAR_RESTORE_SOURCE,
 
   T_PREVIEW,
+  T_TABLE_TTL,
   T_MAX  // Attention: add a new type before T_MAX
 } ObItemType;
 

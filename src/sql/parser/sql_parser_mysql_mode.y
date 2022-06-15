@@ -285,7 +285,7 @@ END_P SET_VAR DELIMITER
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
-        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TIMES
+        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TIMES  TTL
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP
@@ -11870,6 +11870,38 @@ ALTER SYSTEM RESUME BACKUP
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
+ALTER SYSTEM TRIGGER TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM SUSPEND TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM RESUME TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM CANCEL TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
 ALTER SYSTEM DELETE EXPIRED BACKUP opt_copy_id
 {
   ParseNode *type = NULL;
@@ -14245,6 +14277,7 @@ ACCOUNT
 |       TRIGGERS
 |       TRIM
 |       TRUNCATE
+|       TTL
 |       TYPE
 |       TYPES
 |       TABLEGROUP_ID

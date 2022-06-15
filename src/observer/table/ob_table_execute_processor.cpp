@@ -261,7 +261,7 @@ int ObTableApiExecuteP::process_get()
   int ret = OB_SUCCESS;
   need_rollback_trans_ = false;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -311,7 +311,7 @@ int ObTableApiExecuteP::process_insert_or_update()
 {
   int ret = OB_SUCCESS;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -345,7 +345,7 @@ int ObTableApiExecuteP::process_del()
 {
   int ret = OB_SUCCESS;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -378,7 +378,7 @@ int ObTableApiExecuteP::process_replace()
 {
   int ret = OB_SUCCESS;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -412,7 +412,7 @@ int ObTableApiExecuteP::process_insert()
   int ret = OB_SUCCESS;
   ObNewRowIterator *duplicate_row_iter = nullptr;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -448,7 +448,7 @@ int ObTableApiExecuteP::process_update()
 {
   int ret = OB_SUCCESS;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
@@ -481,7 +481,7 @@ int ObTableApiExecuteP::process_increment()
 {
   int ret = OB_SUCCESS;
   uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  get_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                       arg_.returning_affected_rows_,
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_,

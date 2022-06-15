@@ -406,6 +406,17 @@ private:
   DISABLE_COPY_ASSIGN(ObDataStorageErrorToleranceTimeChecker);
 };
 
+class ObTTLDutyDurationChecker : public ObConfigChecker {
+public:
+  ObTTLDutyDurationChecker()
+  {}
+  virtual ~ObTTLDutyDurationChecker(){};
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
+};
+
 // config item container
 class ObConfigStringKey {
 public:

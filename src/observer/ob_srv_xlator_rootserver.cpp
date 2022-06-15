@@ -224,6 +224,9 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(rootserver::ObCheckGtsReplicaStopServerP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObCheckGtsReplicaStopZoneP, *gctx_.root_service_);
 
+  RPC_PROCESSOR(rootserver::ObTableTTLP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObTTLResponseP, *gctx_.root_service_);
+
   // backup and restore
   RPC_PROCESSOR(rootserver::ObRpcRestoreTenantP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObRpcRestoreReplicaResP, *gctx_.root_service_);

@@ -289,6 +289,9 @@ public:
   RPC_S(PRD create_restore_point, obrpc::OB_CREATE_RESTORE_POINT, (ObCreateRestorePointArg));
   RPC_S(PRD drop_restore_point, obrpc::OB_DROP_RESTORE_POINT, (ObDropRestorePointArg));
 
+  // table api
+  RPC_S(PRD table_ttl, obrpc::OB_TABLE_TTL, (ObTableTTLArg));
+  RPC_S(PRD ttl_response, obrpc::OB_TTL_RESPONSE, (ObTTLResponseArg));
 public:
   void set_rs_mgr(share::ObRsMgr& rs_mgr)
   {

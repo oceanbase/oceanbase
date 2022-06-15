@@ -545,6 +545,8 @@ DEFINE_RS_RPC_PROCESSOR(
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_ARCHIVE_LOG, ObBackupArchiveLogP, handle_backup_archive_log(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPSET, ObBackupBackupsetP, handle_backup_backupset(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPPIECE, ObBackupBackupPieceP, handle_backup_backuppiece(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_TABLE_TTL, ObTableTTLP, handle_user_ttl(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_TTL_RESPONSE, ObTTLResponseP, ttl_response(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

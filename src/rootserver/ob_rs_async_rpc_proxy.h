@@ -467,6 +467,8 @@ RPC_F(obrpc::OB_CHECK_NEED_OFFLINE_REPLICA, obrpc::ObTenantSchemaVersions, obrpc
     ObCheckNeedOfflineReplicaProxy);
 RPC_F(obrpc::OB_CHECK_FLASHBACK_INFO_DUMP, obrpc::ObCheckFlashbackInfoArg, obrpc::ObCheckFlashbackInfoResult,
     ObCheckFlashbackInfoProxy);
+RPC_F(obrpc::OB_TTL_REQUEST, obrpc::ObTTLRequestArg,
+    obrpc::ObTTLResult, ObTTLProxy);
 
 }  // end namespace rootserver
 }  // end namespace oceanbase
