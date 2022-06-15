@@ -3501,7 +3501,7 @@ class Dooba(object):
             MessageBox(self.stdscr, "[ INFO ] save screen to %s done!" % filename).run(anykey=True)
         #what is this ?
         elif ch == ord('p'):
-            MessageBox(self.stdscr, "[TEST]What's up? Nigger! (- -)#").run()
+            MessageBox(self.stdscr, "[TEST] illegal").run()
         elif ch == ord('z'):
             items = [('check1  12344', False), ('check2 1', True), ('check3 124328432431', False)]
             CheckBox('Test check box', items, self.stdscr).run()
