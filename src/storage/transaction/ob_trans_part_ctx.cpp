@@ -12146,7 +12146,13 @@ int64_t ObPartTransCtx::get_part_trans_action() const
 
   if (ObPartTransAction::UNKNOWN == action) {
     if (stmt_info_.get_sql_no() > 0) {
-      action = stmt_info_.is_task_match() ? ObPartTransAction::END_TASK : ObPartTransAction::START_TASK;
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(lock_.try_lock())) {
+        TRANS_LOG(INFO, "lock fail to get part_trans_action", K(ret), K_(trans_id), K_(self), KP(this));
+      } else {
+        action = stmt_info_.is_task_match() ? ObPartTransAction::END_TASK : ObPartTransAction::START_TASK;
+        lock_.unlock();
+      }
     }
   }
 

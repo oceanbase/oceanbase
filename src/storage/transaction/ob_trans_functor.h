@@ -741,6 +741,7 @@ public:
         // If the transaction has not completed in 600 seconds, print its trace log
         part_ctx->print_trace_log();
       }
+      /* _NOTICE_: must acquire part_ctx's lock when accessing member of imprimitive type */
       if (OB_SUCCESS == tmp_ret) {
         ObPartitionArray participants_arr(
             common::ObModIds::OB_TRANS_PARTITION_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE);
