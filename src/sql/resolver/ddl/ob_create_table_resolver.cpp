@@ -946,9 +946,6 @@ int ObCreateTableResolver::check_column_name_duplicate(const ParseNode* node)
           if (OB_ISNULL(name_node)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("name node can not be null", K(ret));
-          } else if (name_node->str_len_ > OB_MAX_COLUMN_NAME_LENGTH) {
-            ret = OB_ERR_TOO_LONG_IDENT;
-            LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)name_node->str_len_, name_node->str_value_);
           } else if (0 == name_node->str_len_) {
             ret = OB_WRONG_COLUMN_NAME;
             LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, (int)name_node->str_len_, name_node->str_value_);
@@ -2461,11 +2458,14 @@ int ObCreateTableResolver::resolve_index_name(
   }
 
   if (OB_SUCC(ret)) {
-    const int64_t max_user_table_name_length =
-        share::is_oracle_mode() ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
-    if (index_name_.length() > max_user_table_name_length) {
-      ret = OB_ERR_TOO_LONG_IDENT;
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, index_name_.length(), index_name_.ptr());
+    ObCollationType cs_type = CS_TYPE_INVALID;
+    if (OB_UNLIKELY(NULL == session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session if NULL", K(ret));
+    } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+      LOG_WARN("fail to get collation connection", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_index_name(cs_type, index_name_))) {
+      LOG_WARN("fail to check index name", K(ret), K(index_name_));
     }
   }
 

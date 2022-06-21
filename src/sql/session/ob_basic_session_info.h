@@ -1689,12 +1689,12 @@ protected:
     }
     ~MultiThreadData()
     {}
-    common::ObString user_name_;                                   // current user name
-    common::ObString host_name_;                                   // current user host name
-    common::ObString client_ip_;                                   // current user real client host name
-    common::ObString user_at_host_name_;                           // current user@host, for current_user()
-    common::ObString user_at_client_ip_;                           // current user@clientip, for user()
-    char database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH];  // default database
+    common::ObString user_name_;          // current user name
+    common::ObString host_name_;          // current user host name
+    common::ObString client_ip_;          // current user real client host name
+    common::ObString user_at_host_name_;  // current user@host, for current_user()
+    common::ObString user_at_client_ip_;  // current user@clientip, for user()
+    char database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  // default database
     common::ObAddr peer_addr_;
     common::ObAddr user_client_addr_;
     int64_t cur_query_buf_len_;

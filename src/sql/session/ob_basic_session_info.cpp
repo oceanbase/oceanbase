@@ -641,7 +641,7 @@ int ObBasicSessionInfo::set_default_database(
     const ObString& database_name, const ObCollationType coll_type /*= CS_TYPE_INVALID */)
 {
   int ret = OB_SUCCESS;
-  if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH) {
+  if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN) {
     ret = OB_INVALID_ARGUMENT_FOR_LENGTH;
     LOG_WARN("invalid length for database_name", K(database_name), K(ret));
   } else {

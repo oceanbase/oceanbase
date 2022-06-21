@@ -1204,7 +1204,10 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type, cons
   const char* name_str = name.ptr();
   const int64_t max_user_table_name_length =
       share::is_oracle_mode() ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
-  if (0 == name_len || name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN) || OB_ISNULL(name_str)) {
+  const int64_t max_index_name_prefix_len = 30;
+  if (0 == name_len || (!is_index_table && (name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN))) ||
+      (is_index_table && (name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN + max_index_name_prefix_len))) ||
+      OB_ISNULL(name_str)) {
     ret = OB_WRONG_TABLE_NAME;
     LOG_USER_ERROR(OB_WRONG_TABLE_NAME, static_cast<int32_t>(name_len), name_str);
     LOG_WARN("incorrect table name", K(name), K(ret));
@@ -1279,14 +1282,21 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
   bool last_char_is_space = false;
   const char* end = name.ptr() + name.length();
   const char* name_str = name.ptr();
-  size_t name_char_len = 0;
+  size_t name_len = 0;  // char semantics for MySQL mode, and byte semantics for Oracle mode
+  size_t byte_length = 0;
+  int is_mb_char = 0;
   while (OB_SUCCESS == ret && name_str != end) {
     last_char_is_space = ObCharset::is_space(CS_TYPE_UTF8MB4_GENERAL_CI, *name_str);
     if (ObCharset::usemb(CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      int char_len = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
-      if (char_len) {
-        name_str += char_len;
-        name_char_len++;
+      is_mb_char = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
+      if (is_mb_char) {
+        byte_length = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end - name_str, 1);
+        name_str += byte_length;
+        if (share::is_mysql_mode()) {
+          name_len++;
+        } else {
+          name_len += byte_length;
+        }
         continue;
       }
     }
@@ -1295,7 +1305,7 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
       ret = OB_WRONG_COLUMN_NAME;
     } else {
       name_str++;
-      name_char_len++;
+      name_len++;
     }
   }
 
@@ -1304,10 +1314,10 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
       ret = OB_WRONG_COLUMN_NAME;
       LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, name.length(), name.ptr());
       LOG_WARN("incorrect column name", K(name), K(ret));
-    } else if (name_char_len > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
+    } else if (name_len > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, name.length(), name.ptr());
-      LOG_WARN("column name is too long", K(name), K(ret));
+      LOG_WARN("column name is too long", K(ret), K(name), K(name_len));
     }
   }
   return ret;
@@ -1345,33 +1355,39 @@ int ObSQLUtils::check_ident_name(
   bool last_char_is_space = false;
   const char* end = name.ptr() + name.length();
   const char* name_str = name.ptr();
-  size_t name_char_len = 0;
+  size_t name_len = 0;  // char semantics for MySQL mode, and byte semantics for Oracle mode
+  size_t byte_length = 0;
+  int is_mb_char = 0;
   while (OB_SUCCESS == ret && NULL != name_str && name_str != end) {
     last_char_is_space = ObCharset::is_space(CS_TYPE_UTF8MB4_GENERAL_CI, *name_str);
     if (ObCharset::usemb(CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      int char_len = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
-      if (char_len) {
-        name_str += char_len;
-        name_char_len++;
+      is_mb_char = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
+      if (is_mb_char) {
+        byte_length = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end - name_str, 1);
+        name_str += byte_length;
+        if (share::is_mysql_mode()) {
+          name_len++;
+        } else {
+          name_len += byte_length;
+        }
         continue;
       }
     }
-
     if (check_for_path_char && ('/' == *name_str || '\\' == *name_str || '~' == *name_str || '.' == *name_str)) {
       ret = OB_ERR_WRONG_IDENT_NAME;
       LOG_WARN("Incorrect database name", K(name), K(ret));
     } else {
       name_str++;
-      name_char_len++;
+      name_len++;
     }
   }
   if (OB_SUCC(ret)) {
     if (last_char_is_space) {
       ret = OB_ERR_WRONG_IDENT_NAME;
       LOG_WARN("incorrect ident name", K(name), K(ret));
-    } else if (name_char_len > static_cast<size_t>(max_ident_len)) {
+    } else if (name_len > static_cast<size_t>(max_ident_len)) {
       ret = OB_ERR_TOO_LONG_IDENT;
-      LOG_WARN("ident name is too long", K(name), K(ret));
+      LOG_WARN("ident name is too long", K(ret), K(name), K(name.length()), K(name_len));
     }
   }
   return ret;

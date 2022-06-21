@@ -117,11 +117,13 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
           }
 
           if (OB_SUCC(ret)) {
-            const int64_t max_user_table_name_length =
-                share::is_oracle_mode() ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
-            if (view_name.length() > max_user_table_name_length) {
-              ret = OB_ERR_TOO_LONG_IDENT;
-              LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, view_name.length(), view_name.ptr());
+            ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+            bool perserve_lettercase = false;
+            if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
+              LOG_WARN("fail to get name case mode", K(ret), K(mode));
+            } else if (FALSE_IT(perserve_lettercase = share::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE))) {
+            } else if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(CS_TYPE_UTF8MB4_GENERAL_CI, perserve_lettercase, view_name))) {
+              LOG_WARN("fail to check and convert view_name", K(ret), K(view_name));
             } else {
               table_schema.set_tenant_id(session_info_->get_effective_tenant_id());
               table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
@@ -304,8 +306,6 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
               // do nothing
             }
           }
-
-          // 检查 mysql 模式下列名定义
           if (share::is_mysql_mode() && !(is_sync_ddl_user && session_info_->is_inner())) {
             if (OB_FAIL(ret)) {
               // do nothing
