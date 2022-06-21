@@ -6941,7 +6941,7 @@ int ObPGStorage::get_max_cleanout_log_ts(ObIArray<int64_t> &sstable_cleanout_log
       last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
-      if (log_ts_array.at(i) < last_replay_log_ts) {
+      if (log_ts_array.at(i) <= last_replay_log_ts) {
         if (OB_FAIL(sstable_cleanout_log_ts.push_back(log_ts_array.at(i)))) {
           LOG_WARN("failed to push back log ts", K(ret), K(pkey_));
         }
