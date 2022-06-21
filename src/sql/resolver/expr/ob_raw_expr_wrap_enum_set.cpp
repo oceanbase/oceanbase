@@ -865,6 +865,8 @@ int ObRawExprWrapEnumSet::visit_query_ref_expr(
       } else if (NULL != new_expr) {
         // replace with new wrapped expr
         ref_stmt->get_select_item(0).expr_ = new_expr;
+        expr.get_column_types().at(0) = new_expr->get_result_type();
+        LOG_TRACE("succeed to wrap enum to str", K(dest_type), K(*new_expr), K(expr));
       } else { /*do nothing*/
       }
     }

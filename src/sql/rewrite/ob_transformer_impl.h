@@ -110,13 +110,14 @@ public:
           contain_for_update_(false),
           contain_domain_index_(false),
           update_global_index_(false),
-          contain_unpivot_query_(false)
+          contain_unpivot_query_(false),
+          contain_enum_set_values_(false)
     {}
 
     bool all_found() const
     {
       return contain_hie_query_ && contain_sequence_ && contain_for_update_ && contain_domain_index_ &&
-             update_global_index_ && contain_unpivot_query_;
+             update_global_index_ && contain_unpivot_query_ && contain_enum_set_values_;
     }
 
     bool contain_hie_query_;
@@ -125,6 +126,7 @@ public:
     bool contain_domain_index_;
     bool update_global_index_;
     bool contain_unpivot_query_;
+    bool contain_enum_set_values_;
   };
   int check_stmt_functions(ObDMLStmt* stmt, StmtFunc& func);
   inline ObTransformerCtx* get_trans_ctx()
