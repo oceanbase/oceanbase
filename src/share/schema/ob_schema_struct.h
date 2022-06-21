@@ -247,6 +247,8 @@ enum ObIndexStatus {
   INDEX_STATUS_MAX = 8,
 };
 
+bool can_rereplicate_index_status(const ObIndexStatus &idst);
+
 enum ObPartitionStatus {
   PARTITION_STATUS_INVALID = -1,
   PARTITION_STATUS_ACTIVE = 0,
@@ -3264,6 +3266,10 @@ public:
     is_mock_global_index_invalid_ = is_invalid;
   }
   bool can_read_index() const
+  {
+    return true;
+  }
+  inline bool can_rereplicate_global_index_table() const
   {
     return true;
   }

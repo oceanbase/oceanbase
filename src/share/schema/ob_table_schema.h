@@ -639,6 +639,13 @@ public:
   {
     return INDEX_STATUS_AVAILABLE == index_status && !is_dropped_schema;
   }
+  inline bool can_rereplicate_global_index_table() const
+  {
+    // 1. index which can rereplicate
+    // 2. is mocked invalid for standby cluster
+    return is_global_index_table() && !is_dropped_schema() &&
+           (can_rereplicate_index_status(index_status_) || is_mock_global_index_invalid());
+  }
   inline bool is_final_invalid_index() const;
   inline void set_index_status(const ObIndexStatus index_status)
   {

@@ -7743,6 +7743,12 @@ const char* ob_view_check_option_str(const ViewCheckOption option)
   return ret;
 }
 
+bool can_rereplicate_index_status(const ObIndexStatus &idst)
+{
+  // unusable index can also rereplicate
+  return INDEX_STATUS_AVAILABLE == idst || INDEX_STATUS_UNUSABLE == idst;
+}
+
 const char* ob_index_status_str(ObIndexStatus status)
 {
   const char* ret = "invalid";
