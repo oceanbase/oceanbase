@@ -1004,7 +1004,9 @@ int ObStoreFile::auto_extend_file_size()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(free_block_cnt_ > 0)) {
   } else if (OB_FAIL(extend_file_size_task())) {
-    LOG_WARN("Fail to extend file size", K(ret));
+    if (ret != OB_NOT_READY_TO_EXTEND_FILE) {
+      LOG_WARN("Fail to extend file size", K(ret));
+    }
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::StoreFileGC, gc_task_, 0, false))) { 
     LOG_WARN("Fail to schedule gc task to mark and sweep", K(ret));
   } else {
@@ -1178,11 +1180,9 @@ int ObStoreFile::mark_macro_blocks()
   return ret;
 }
 
-// should lock before using to protect free_block_cnt_ opt
-int ObStoreFile::extend_file_size_task()
+bool ObStoreFile::check_auto_extend_param() 
 {
-  lib::ObMutexGuard guard(resize_file_lock_); // lock resize file opt 
-  int ret = OB_SUCCESS;
+  bool is_start_extend  = false;
   if (OB_ISNULL(store_file_system_)) {
   } else {
     int64_t datafile_maxsize = GCONF.datafile_maxsize;
@@ -1191,95 +1191,121 @@ int ObStoreFile::extend_file_size_task()
     if (OB_UNLIKELY(datafile_maxsize <= 0) ||
         OB_UNLIKELY(datafile_next <= 0) ||
         OB_UNLIKELY(datafile_size <= 0)) {
-      LOG_DEBUG("Do not extend file size, datafile params not set", K(ret), 
+      LOG_DEBUG("Do not extend file size, datafile param not set", 
         K(datafile_maxsize), 
         K(datafile_next), 
         K(datafile_size));
     } else if (datafile_maxsize <= datafile_size) {
-      LOG_DEBUG("Do not extend file size, maxsize should bigger than datafile size", 
-        K(ret), 
+      LOG_DEBUG("Do not extend file size, maxsize is smaller than datafile size", 
         K(datafile_maxsize), 
         K(datafile_size));
     } else {
-      disable_mark_sweep(); // lock and wait mark_and_sweep block option done
-      if (OB_FAIL(wait_mark_sweep_finish())) {
-        LOG_WARN("fail to wait mark and sweep finish", K(ret));
+      int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
+      if (datafile_maxsize - cur_total_data_file_size <= 0) {
+        LOG_DEBUG("Do not extend file size, ssblock file reach maxsize limit", 
+          K(datafile_maxsize), 
+          K(cur_total_data_file_size));
       } else {
-        lib::ObMutexGuard guard(block_lock_); // lock block info update opt
-        bool is_extend_size = false;
-        int64_t total_block_cnt = store_file_system_->get_total_macro_block_count();
-        int64_t free_block_cnt_to_extend = 
-          total_block_cnt - total_block_cnt * GCONF._datafile_usage_upper_bound_percentage / 100;
-        // here we can see auto extend disk premise: 
-        // 1. free_block_cnt ratio is less than one percentage (default 10%)
-        // 2. free_block_cnt is less than one value (512 = 1G)
-        if (free_block_cnt_to_extend < free_block_cnt_ && 
-            (free_block_cnt_ > AUTO_EXTEND_LEAST_FREE_BLOCK_CNT)) {
-          LOG_DEBUG("Do not extend file, not reach extend trigger.", 
-            K(free_block_cnt_to_extend), 
+        is_start_extend = true;
+      }
+    }
+  }
+  return is_start_extend;
+}
+
+int ObStoreFile::calc_auto_extend_size(int64_t &actual_extend_size) 
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+    ret = OB_ERR_NULL_VALUE;
+  } else {
+    int64_t datafile_maxsize = GCONF.datafile_maxsize;
+    int64_t datafile_next = GCONF.datafile_next;
+    int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
+    // attention: max_extend_file maybe less than zero in the following situations:
+    // 1. alter datafile_size as A, alter datafile_maxsize as B, and A < B
+    // 2. auto extend to size to C ( A < C < B )
+    // 3. alter datafile_maxsize as D ( A < D < C )
+    int64_t max_extend_file = datafile_maxsize - cur_total_data_file_size; 
+    // calc actual_extend_size, following the rules:
+    // 1. if datafile_next less than 1G, actual_extend_size equal to min(1G, datafile_maxsize * 10%)
+    // 2. if datafile_next large than 1G, actual_extend_size equal to min(datafile_next, max_extend_file)
+    if (datafile_next < DATAFILE_NEXT_MIN) {
+      int64_t min_extend_size = datafile_maxsize * 10 / 100;
+      actual_extend_size = 
+        min_extend_size < DATAFILE_NEXT_MIN ? min_extend_size : DATAFILE_NEXT_MIN;
+      if (actual_extend_size > max_extend_file) { // take the smaller
+        actual_extend_size = max_extend_file;
+      }
+    } else {
+      actual_extend_size = 
+        datafile_next < max_extend_file ? datafile_next : max_extend_file;
+    }
+    if (actual_extend_size <= 0) {
+      ret = OB_CS_OUTOF_DISK_SPACE;
+      LOG_WARN("No more disk space to extend, is full now", K(ret),
+        K(datafile_maxsize),
+        K(cur_total_data_file_size)); 
+    }
+  }
+  return ret;
+}
+
+// should lock before using to protect free_block_cnt_ opt
+int ObStoreFile::extend_file_size_task()
+{
+  lib::ObMutexGuard guard(resize_file_lock_); // lock resize file opt
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+  } else if (!check_auto_extend_param()) {
+    ret = OB_NOT_READY_TO_EXTEND_FILE;
+    LOG_DEBUG("Check auto extend over, no need to start ssbfile auto extend", 
+      K(ret));
+  } else {
+    disable_mark_sweep(); // lock and wait mark_and_sweep block option done
+    if (OB_FAIL(wait_mark_sweep_finish())) {
+      LOG_WARN("Extend file size fail, wait mark and sweep finish fail", 
+        K(ret));
+    } else {
+      lib::ObMutexGuard guard(block_lock_); // lock block info update opt
+      int64_t total_block_cnt = store_file_system_->get_total_macro_block_count();
+      int64_t free_block_cnt_to_extend = 
+        total_block_cnt - total_block_cnt * GCONF._datafile_usage_upper_bound_percentage / 100;
+      // here we can see auto extend disk premise: 
+      // 1. free_block_cnt ratio is less than one percentage (default 10%)
+      // 2. free_block_cnt is less than one value (512 = 1G)
+      if (free_block_cnt_to_extend < free_block_cnt_ && 
+          (free_block_cnt_ > AUTO_EXTEND_LEAST_FREE_BLOCK_CNT)) {
+        LOG_DEBUG("Do not extend file, not reach extend trigger.", 
+          K(free_block_cnt_to_extend), 
+          K(free_block_cnt_), 
+          K(total_block_cnt));
+      } else {
+        LOG_DEBUG("Start to do auto ssblock file extend.");
+        int64_t actual_extend_size = 0;
+        if (is_doing_disk_extend()) { // is_doing_disk_extend == true means there have not finish extend task yet, 
+                                      // here DO NOT resize_file again!!!
+          LOG_INFO("Do extend file, there has doing extend job, only need to mark free block.", 
             K(free_block_cnt_), 
-            K(total_block_cnt));
+            "total blocks",
+            store_file_system_->get_total_macro_block_count());
+        } else if (OB_FAIL(calc_auto_extend_size(actual_extend_size))) {
+          LOG_DEBUG("calc auto extend size error, maybe ssblock file has reach its maxsize", 
+            K(ret)); 
+        } else if (OB_FAIL(store_file_system_->resize_file(0, 0, actual_extend_size))) {
+          LOG_WARN("Extend file size fail, maybe disk is out of space already", 
+            K(actual_extend_size));
+        } else if (OB_FAIL(refresh_block_meta())){
+          LOG_WARN("Extend file size fail, fresh block meta error", K(ret));
         } else {
-          is_extend_size = true;
-          int64_t disk_in_use = total_block_cnt - free_block_cnt_;
-          LOG_INFO("Auto extend, start to extend disk.", 
-            K(free_block_cnt_to_extend), 
-            K(free_block_cnt_), 
-            K(total_block_cnt), 
-            K(disk_in_use));
-        }
-        if (is_extend_size) {
-          if (is_doing_disk_extend()) { // is_doing_disk_extend == true means there have not finish extend task yet, 
-                                        // here DO NOT resize_file again!!!
-            LOG_INFO("Do extend file, there has doing extend job, only need to mark free block.", 
-              K(free_block_cnt_), 
-              "total blocks,",
-              store_file_system_->get_total_macro_block_count());
-          } else {
-            // calculate max extend size, max_extend_file maybe less than zero in the following situation:
-            // 1. alter datafile_size as A, alter datafile_maxsize as B, and A < B
-            // 2. auto extend to size to C ( A < C < B )
-            // 3. alter datafile_maxsize as D ( A < D < C )
-            int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
-            int64_t max_extend_file = datafile_maxsize - cur_total_data_file_size; 
-            // calc actual_extend_size, following the rules:
-            // 1. if datafile_next less than 1G, actual_extend_size equal to min(1G, datafile_maxsize * 10%)
-            // 2. if datafile_next large than 1G, actual_extend_size equal to min(datafile_next, max_extend_file)
-            int64_t actual_extend_size;
-            if (datafile_next < DATAFILE_NEXT_MIN) {
-              int64_t min_extend_size = datafile_maxsize * 10 / 100;
-              actual_extend_size = 
-                min_extend_size < DATAFILE_NEXT_MIN ? min_extend_size : DATAFILE_NEXT_MIN;
-              if (actual_extend_size > max_extend_file) { // take the smaller
-                actual_extend_size = max_extend_file;
-              }
-            } else {
-              actual_extend_size = 
-                datafile_next < max_extend_file ? datafile_next : max_extend_file;
-            }
-            if (actual_extend_size <= 0) {
-              ret = OB_CS_OUTOF_DISK_SPACE;
-              LOG_DEBUG("No more disk space to extend, is full now", K(ret),
-                K(datafile_maxsize),
-                K(cur_total_data_file_size)); 
-            } else if (OB_FAIL(store_file_system_->resize_file(0, 0, actual_extend_size))) {
-              LOG_WARN("Extend file fail.", 
-                K(actual_extend_size), 
-                K(datafile_maxsize), 
-                K(datafile_next));
-            } else if (OB_FAIL(refresh_block_meta())){
-              LOG_WARN("Extend file size fail, fresh block meta error", K(ret));
-            } else {
-              start_doing_disk_extend(); // set doing disk extend enable to skip auto extend check until mark_and_sweep done
-              LOG_INFO("Extend file success.", 
-                K(actual_extend_size), 
-                K(store_file_system_->get_total_data_size()));
-            }
-          }
+          start_doing_disk_extend(); // set doing disk extend enable to skip auto extend check until mark_and_sweep done
+          LOG_INFO("Extend file success, will mark and sweep blocks later", 
+            K(actual_extend_size), 
+            K(store_file_system_->get_total_data_size()));
         }
       }
-      enable_mark_sweep(); // restart gc task 
     }
+    enable_mark_sweep(); // enable mark 
   }
   return ret;
 }
@@ -1292,7 +1318,9 @@ void ObStoreFile::ssblock_check_and_extend()
     LOG_WARN("Extend file is doing now, skip this round.");
   } else {
     if (OB_FAIL(extend_file_size_task())) {
-      LOG_WARN("Fail to extend file size", K(ret));
+      if (ret != OB_NOT_READY_TO_EXTEND_FILE) {
+        LOG_WARN("Fail to extend file size", K(ret));
+      }
     } else {
       LOG_DEBUG("Success to extend file size");
     }
@@ -1368,8 +1396,10 @@ void ObStoreFile::mark_and_sweep()
     // finish doing entire mark and sweep process
     // is_mark_sweep_enabled==true means mark and sweep process is not being broken yet
     if (is_mark_sweep_enabled()) { 
-      finish_doing_disk_extend();
-      STORAGE_LOG(INFO, "finish doing mark_and_sweep without suspend ");
+      if (is_doing_disk_extend()) {
+        finish_doing_disk_extend();
+        STORAGE_LOG(INFO, "finish doing mark_and_sweep without suspend ");
+      }
     }
     STORAGE_LOG(INFO, "mark_and_sweep free blocks.", K(print_buffer_), K(free_cnt), K(hold_cnt));
     set_mark_sweep_done();

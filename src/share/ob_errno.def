@@ -1582,6 +1582,12 @@ DEFINE_ERROR(OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, -9069, -1, "HY000", "del
 DEFINE_ERROR(OB_NO_SUCH_FILE_OR_DIRECTORY, -9100, -1, "HY000", "no such file or directory");
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory already exist");
 
+////////////////////////////////////////////////////////////////
+//error code for storage auto extend file
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_ERR_RESIZE_FILE_TO_SMALLER, -9200, -1, "HY000", "Extend ssblock file to smaller is not allowed");
+DEFINE_ERROR(OB_MARK_BLOCK_INFO_TIMEOUT, -9201, -1, "HY000", "Mark blocks timeout(5s) in auto extend process when alloc block fail");
+DEFINE_ERROR(OB_NOT_READY_TO_EXTEND_FILE, -9202, -1, "HY000", "Auto extend param is not ready to start extending file");
 
 ////////////////////////////////////////////////////////////////
 //error code for PL/SQL  -9500 ~ -10000

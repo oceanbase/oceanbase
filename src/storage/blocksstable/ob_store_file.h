@@ -375,6 +375,8 @@ private:
   virtual ~ObStoreFile();
   int  alloc_block(ObMacroBlockHandle& macro_handle);
   int  mark_macro_blocks();
+  int  calc_auto_extend_size(int64_t &actual_extend_size);
+  bool check_auto_extend_param();
   int  extend_file_size_task();
   int  auto_extend_file_size();
   void free_block(const uint32_t block_idx, bool& is_freed);
