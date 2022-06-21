@@ -87,7 +87,7 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow*& row)
           }
           case TOTAL_SIZE: {
             cells[cell_idx].set_int(
-                OB_FILE_SYSTEM.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size());
+                OB_FILE_SYSTEM.get_total_macro_block_max_count() * OB_FILE_SYSTEM.get_macro_block_size());
             break;
           }
           case USED_SIZE: {
