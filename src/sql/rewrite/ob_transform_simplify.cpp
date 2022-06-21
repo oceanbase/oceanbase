@@ -2789,34 +2789,26 @@ int ObTransformSimplify::simplify_win_expr(ObRawExpr* expr, bool& trans_happened
     ObIArray<OrderItem>& order_items = win_expr->get_order_items();
     ObSEArray<ObRawExpr*, 4> new_partition_exprs;
     ObSEArray<OrderItem, 4> new_order_items;
-    common::hash::ObPlacementHashSet<ObRawExpr*, 32> expr_set;
+    ObSEArray<ObRawExpr *, 4> added_expr;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_exprs.count(); ++i) {
-      ObRawExpr* part_expr = partition_exprs.at(i);
-      int hash_ret = expr_set.exist_refactored(part_expr);
-      if (OB_HASH_NOT_EXIST == hash_ret) {
-        if (OB_FAIL(expr_set.set_refactored(part_expr))) {
-          LOG_WARN("failed to add expr into hash set", K(ret));
-        } else if (OB_FAIL(new_partition_exprs.push_back(part_expr))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
-      } else if (OB_HASH_EXIST != hash_ret) {
-        ret = hash_ret;
-        LOG_WARN("failed to get expr from hash set", K(ret));
+      ObRawExpr *part_expr = partition_exprs.at(i);
+      if (ObRawExprUtils::find_expr(added_expr, part_expr)) {
+        // do nothing
+      } else if (OB_FAIL(new_partition_exprs.push_back(part_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(added_expr.push_back(part_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
-      ObRawExpr* order_expr = order_items.at(i).expr_;
-      int hash_ret = expr_set.exist_refactored(order_expr);
-      if (OB_HASH_NOT_EXIST == hash_ret) {
-        if (OB_FAIL(expr_set.set_refactored(order_expr))) {
-          LOG_WARN("failed to add expr into hash set", K(ret));
-        } else if (OB_FAIL(new_order_items.push_back(order_items.at(i)))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
-      } else if (OB_HASH_EXIST != hash_ret) {
-        ret = hash_ret;
-        LOG_WARN("failed to get expr from hash set", K(ret));
+      ObRawExpr *order_expr = order_items.at(i).expr_;
+      if (ObRawExprUtils::find_expr(added_expr, order_expr)) {
+        // do nothing
+      } else if (OB_FAIL(new_order_items.push_back(order_items.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(added_expr.push_back(order_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
     if (OB_SUCC(ret) && new_order_items.count() == 0 && order_items.count() > 0) {
