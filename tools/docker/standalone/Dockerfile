@@ -13,9 +13,6 @@ RUN mkdir /root/pkg && \
     wget https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/oceanbase-ce-${VERSION}.el7.x86_64.rpm -q && \
     wget https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/oceanbase-ce-libs-${VERSION}.el7.x86_64.rpm -q && \
     rm -rf /usr/obd/mirror/remote/* && \
-    obd mirror clone *.rpm && \
-    obd mirror list local && \
-    rm -rf /root/base /root/pkg && \
     yum clean all
 
 COPY boot /root/boot/

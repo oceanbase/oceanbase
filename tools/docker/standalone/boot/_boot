@@ -5,6 +5,17 @@ source _env
 
 STAMP="$(date +%s)"
 
+function is_true() {
+  value=$1
+  # convert value to upper case string(can work in bash 4.x)
+  value=${value^^}
+  
+  if [ "x${value}" == "xNO" ] || [ "x${value}" == "xFALSE" ] || [ "x${value}" == "x0" ]; then
+    return 1
+  fi
+  return 0
+}
+
 # return 0 if mini_mode is nil or 'no'/'false'/0
 # 0 means true and 1 for false in bash
 function is_mini_mode() {
@@ -12,13 +23,17 @@ function is_mini_mode() {
   then
     return 1
   fi
+  
+  return `is_true ${MINI_MODE}`
+}
 
-  # convert MINI_MODE to upper case string(can work in bash 4.x)
-  mini_mode=${MINI_MODE^^}
-  if [ "x${mini_mode}" == "xNO" ] || [ "x${mini_mode}" == "xFALSE" ] || [ "x${mini_mode}" == "x0" ]; then
-    return 1
+function exit_while_error() {
+  if test -z ${EXIT_WHILE_ERROR}
+  then
+    return 0 
   fi
-  return 0
+
+  return `is_true ${EXIT_WHILE_ERROR}`
 }
 
 function remove_disk_check_logic_in_obd() {
@@ -29,7 +44,16 @@ function remove_disk_check_logic_in_obd() {
   sed -i "s/critical(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/alert(EC_OBSERVER_NOT_ENOUGH_DISK_4_CLOG/g" $start_check_file
 }
 
-[[ -f boot.yaml ]] && echo "find boot.yaml, skip configuring..." || {
+# We should decide whether the observer's data exists and
+# whether the obd has the information of the cluster
+
+if [ -f "$HOME/.obd/cluster/${OB_CLUSTER_NAME}/config.yaml" ]; then
+  echo "find obd deploy information, skip configuring..." 
+  echo "start ob cluster ..."
+  obd cluster start $OB_CLUSTER_NAME
+
+else # nothing here, bootstrap
+
   echo "generate boot.yaml ..."
   TMPFILE="boot.${STAMP}.yaml"
 
@@ -51,14 +75,27 @@ function remove_disk_check_logic_in_obd() {
   echo "create boot dirs and deploy ob cluster ..."
   mkdir -p $OB_HOME_PATH
 
+  obd mirror clone /root/pkg/*.rpm \
+  && obd mirror list local
+
   remove_disk_check_logic_in_obd
   obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
     && obd cluster tenant create "${OB_CLUSTER_NAME}" -n ${OB_TENANT_NAME} \
     && obclient -h127.1 -uroot@${OB_TENANT_NAME} -A -P${OB_MYSQL_PORT} < init_tenant_user.sql \
-    && mv -f $TMPFILE boot.yaml
-}
+    && mv -f $TMPFILE ${OB_HOME_PATH}/boot.yaml \
+    && echo "deploy success!"
+fi
 
-[[ -f boot.yaml ]] && {
-  echo "start ob cluster ..."
-  obd cluster start $OB_CLUSTER_NAME
-} && echo "boot success!" && exec /sbin/init
+if [ $? -eq 0 ]; then
+  echo "boot success!"
+else
+  echo "boot failed!"
+  if exit_while_error
+  then
+    exit 1
+  else
+    echo "Please check the log file ${OB_HOME_PATH}/log/observer.log"
+  fi
+fi
+exec /sbin/init
+
