@@ -107,6 +107,20 @@ int ObTableQueryP::get_partition_ids(uint64_t table_id, ObIArray<int64_t> &part_
   return ret;
 }
 
+void ObTableQueryP::set_htable_compressor()
+{
+  int ret = OB_SUCCESS;
+  // hbase model, compress the result packet
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
+  if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
+                  GCONF.tableapi_transport_compress_func, compressor_type))) {
+    compressor_type = INVALID_COMPRESSOR;
+  } else if (NONE_COMPRESSOR == compressor_type) {
+    compressor_type = INVALID_COMPRESSOR;
+  }
+  this->set_result_compress_type(compressor_type);
+}
+
 int ObTableQueryP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -143,16 +157,7 @@ int ObTableQueryP::try_process()
   } else {
     if (arg_.query_.get_htable_filter().is_valid()) {
       // hbase model, compress the result packet
-      ObCompressorType compressor_type = INVALID_COMPRESSOR;
-      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
-                      GCONF.tableapi_transport_compress_func, compressor_type))) {
-        compressor_type = INVALID_COMPRESSOR;
-      } else if (NONE_COMPRESSOR == compressor_type) {
-        compressor_type = INVALID_COMPRESSOR;
-      }
-      this->set_result_compress_type(compressor_type);
-      ret = OB_SUCCESS; // reset ret
-      LOG_DEBUG("[yzfdebug] use compressor", K(compressor_type));
+      set_htable_compressor();
     }
     // one_result references to result_
     ObTableQueryResult *one_result = nullptr;

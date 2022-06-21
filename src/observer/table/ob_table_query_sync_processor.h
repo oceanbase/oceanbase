@@ -34,6 +34,7 @@ public:
       timestamp_(0),
       query_(),
       result_iterator_(nullptr),
+      htable_result_iterator_(nullptr),
       allocator_(ObModIds::TABLE_PROC),
       table_service_ctx_(allocator_),
       iterator_mementity_(nullptr)
@@ -42,6 +43,7 @@ public:
   
   void set_timestamp(int64_t timestamp) { timestamp_ = timestamp; }
   void set_result_iterator(ObNormalTableQueryResultIterator* iter);
+  void set_htable_result_iterator(table::ObHTableFilterOperator *iter);
   int deep_copy_select_columns(const ObTableQuery &query);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
@@ -50,6 +52,7 @@ public:
   int64_t get_timestamp() { return timestamp_; }
   ObTableServiceQueryCtx *get_table_service_ctx() {return &table_service_ctx_;}
   ObNormalTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
+  table::ObHTableFilterOperator *get_htable_result_iterator() { return htable_result_iterator_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
 
 public:
@@ -63,6 +66,7 @@ private:
   uint64_t timestamp_;
   ObTableQuery query_; // only select_columns is correct
   ObNormalTableQueryResultIterator *result_iterator_;
+  table::ObHTableFilterOperator *htable_result_iterator_;
   ObArenaAllocator allocator_;
   ObTableServiceQueryCtx table_service_ctx_;
   lib::MemoryContext iterator_mementity_;
@@ -181,6 +185,7 @@ private:
   int query_scan_with_old_context(const int64_t timeout);
   int query_scan_with_new_context(ObTableQuerySyncSession * session_ctx, table::ObTableQueryResultIterator *result_iterator, 
     const int64_t timeout);
+  void set_htable_compressor();
 
 private:
   void set_trans_from_session(ObTableQuerySyncSession *query_session);

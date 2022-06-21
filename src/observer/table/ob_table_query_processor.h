@@ -39,7 +39,8 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
-  int get_partition_ids(uint64_t table_id, common::ObIArray<int64_t> &part_ids);
+  int  get_partition_ids(uint64_t table_id, common::ObIArray<int64_t> &part_ids);
+  void set_htable_compressor();
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryP);
 private:
   common::ObArenaAllocator allocator_;

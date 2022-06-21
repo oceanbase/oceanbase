@@ -21,6 +21,7 @@
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "ob_htable_filter_operator.h"
 #include "sql/engine/expr/ob_expr_add.h"
+
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;

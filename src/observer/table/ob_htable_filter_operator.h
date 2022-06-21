@@ -247,15 +247,26 @@ public:
   void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
   // parse the filter string
   int parse_filter_string(common::ObArenaAllocator* allocator);
+
+public:
+  // query async
+  virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
+  void set_query(const ObTableQuery *query) {query_ = query;}
+  void set_query_sync() { is_query_sync_ = true ; }
+
 private:
-  const ObTableQuery &query_;
+  const ObTableQuery *query_;
   ObHTableRowIterator row_iterator_;
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
   int32_t batch_size_;
   int64_t max_result_size_;
+
+private:
+  // query async
   bool is_first_result_;
+  bool is_query_sync_;
 };
 
 } // end namespace table
