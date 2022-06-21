@@ -9170,16 +9170,17 @@ int ObCodeGeneratorImpl::get_cell_idx(
   if (OB_ISNULL(raw_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret));
-  } else if (!raw_expr->has_flag(IS_COLUMNLIZED)) {
-    if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
-      skip = true;
-    } else {
+  } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
+    skip = true;
+    LOG_TRACE("skip const expr", K(*raw_expr), K(cell_idx));
+  }
+  if (OB_SUCC(ret) && !skip) {
+    if (!raw_expr->has_flag(IS_COLUMNLIZED)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("param expr should have be columnlized", K(*raw_expr));
+    } else if (OB_FAIL(idx_provider.get_idx(raw_expr, cell_idx))) {
+      LOG_ERROR("partition by expr should have be columnlized", K(ret), K(*raw_expr));
     }
-  } else if (OB_FAIL(idx_provider.get_idx(raw_expr, cell_idx))) {
-    LOG_ERROR("partition by expr should have be columnlized", K(ret), K(*raw_expr));
-  } else { /* do nothing. */
   }
   return ret;
 }
