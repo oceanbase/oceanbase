@@ -444,8 +444,12 @@ bool ObTTLUtil::check_can_process_tenant_tasks(uint64_t tenant_id)
     int ret = OB_SUCCESS;
     bool is_restore = true;
     if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().
-                            check_tenant_is_restore(NULL, tenant_id, is_restore))) {
-      LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
+                  check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+      if (OB_TENANT_NOT_EXIST != ret) {
+        LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id), K(common::lbt()));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else {
       bret = !is_restore;
     }

@@ -675,6 +675,7 @@ TEST_F(TestTableTTL, dag_report)
 }
 #endif 
 
+#if 0
 class TestRsTTL : public::testing::Test {
 public:
   TestRsTTL() {};
@@ -829,7 +830,6 @@ void TestRsTTL::TearDown()
  * send msg
  * insert into table
 */
-#if 0
 TEST_F(TestRsTTL, ttl_basic)
 {
   int ret = OB_SUCCESS;

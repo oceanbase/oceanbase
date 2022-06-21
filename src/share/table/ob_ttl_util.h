@@ -26,8 +26,8 @@ namespace common
 
 enum TRIGGER_TYPE
 {
-  PERIODIC_TRIGGER = 1,
-  USER_TRIGGER
+  PERIODIC_TRIGGER = 0,
+  USER_TRIGGER = 1,
 };
 
 enum ObTTLTaskType {
@@ -41,20 +41,20 @@ enum ObTTLTaskType {
 
 enum ObTTLTaskStatus 
 { 
+  // for obsever
   OB_TTL_TASK_PREPARE = 0,  //inner state
   OB_TTL_TASK_RUNNING = 1,
   OB_TTL_TASK_PENDING = 2,
   OB_TTL_TASK_CANCEL  = 3,
   OB_TTL_TASK_FINISH  = 4,  //inner state
   OB_TTL_TASK_MOVING  = 5,
-
+  // for rs
   OB_RS_TTL_TASK_CREATE = 15,
-  OB_RS_TTL_TASK_SUSPEND,
+  OB_RS_TTL_TASK_SUSPEND = 16,
+  OB_RS_TTL_TASK_CANCEL = 17,
+  OB_RS_TTL_TASK_MOVE = 18,
 
-  OB_RS_TTL_TASK_CANCEL,
-  OB_RS_TTL_TASK_MOVE,
-
-  OB_TTL_TASK_INVALID
+  OB_TTL_TASK_INVALID 
 };
 
 typedef struct ObTTLStatus {

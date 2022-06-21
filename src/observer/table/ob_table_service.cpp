@@ -2295,12 +2295,12 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
         } else {
           cur_version_++;
         }
-        if (cur_version_ > max_version_) {
+        if (max_version_ > 0 && cur_version_ > max_version_) {
           max_version_cnt_++;
           cur_del_rows_++;
           is_last_row_ttl_ = false;
           break;
-        } else if (cell_ts + time_to_live_ < common::ObTimeUtility::current_time()) {
+        } else if (time_to_live_ > 0 && (cell_ts + time_to_live_ < ObTimeUtility::current_time())) {
           ttl_cnt_++;
           cur_del_rows_++;
           is_last_row_ttl_ = true;
@@ -2350,7 +2350,7 @@ int ObTableTTLDeleteRowIterator::init(const ObTableTTLOperation &ttl_operation)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ttl_operation.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ttl operation", K(ret));
+    LOG_WARN("invalid ttl operation", K(ret), K(ttl_operation));
   } else {
     time_to_live_ = ttl_operation.time_to_live_;
     max_version_ = ttl_operation.max_version_;

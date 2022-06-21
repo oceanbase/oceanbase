@@ -340,7 +340,7 @@ public:
   bool is_valid() const
   {
     return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != table_id_ &&
-           max_version_ > 0 && time_to_live_ > 0 && del_row_limit_ > 0;
+           (max_version_ > 0 || time_to_live_ > 0) && del_row_limit_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(max_version),  K_(time_to_live), K_(del_row_limit), K_(start_rowkey), K_(start_qualifier));
 public:

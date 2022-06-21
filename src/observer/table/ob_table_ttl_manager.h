@@ -24,9 +24,6 @@ namespace oceanbase
 namespace observer
 {
 
-using storage::ObIPartitionGroup;
-
-
 struct ObTTLTaskCtx
 {
 public :
@@ -63,20 +60,6 @@ public:
   bool                    is_dirty_;
 };
 
-class ObTTLEventTask : public common::ObDLinkBase<ObTTLEventTask>
-{
-public:
-  ObTTLEventTask(): ttl_key_(),
-                    partition_cnt_(OB_INVALID_INDEX),
-                    next_free_slot_(OB_INVALID_INDEX)
-                    {}
-  ObTTLStatusKey ttl_key_;
-  int64_t partition_cnt_;
-
-  uint64_t next_free_slot_;
-  uint64_t slot_id_;
-};
-
 class OBTTLTimerPeriodicTask : public common::ObTimerTask {
 public: 
   OBTTLTimerPeriodicTask() {}
@@ -96,8 +79,8 @@ public:
   int proc_rs_cmd(uint64_t tenant_id, uint64_t task_id, 
                   bool is_usr_trigger, obrpc::ObTTLRequestArg::TTLRequestType cmd);
   int report_task_status(ObTTLTaskInfo& task_info, 
-               ObTTLPara& task_para, bool& is_stop);
-  void on_leader_active(ObIPartitionGroup* partition);
+                         ObTTLPara& task_para, bool& is_stop);
+  void on_leader_active(storage::ObIPartitionGroup* partition);
   void on_schema_changed(uint64_t schema_changed_tenant_id);
   
   /*timer handle function*/
@@ -159,7 +142,7 @@ private:
   int generate_one_partition_task(ObTTLTaskInfo& task_info, ObTTLPara& para);
   int get_ttl_para_from_schema(const share::schema::ObTableSchema *table_schema, 
                            ObTTLPara& para, bool& is_tableapi_schema);
-  int check_partition_can_gen_ttl(ObIPartitionGroup *partition,
+  int check_partition_can_gen_ttl(storage::ObIPartitionGroup *partition,
                                   ObTTLPara &para, bool& can_ttl);
   int check_and_do_rsp(uint64_t tenant_id);
   void mark_tenant_need_check(uint64_t tenant_id);
@@ -180,7 +163,7 @@ private:
   int sync_sys_table(ObPartitionKey& pkey);
   int construct_sys_table_record(ObTTLTaskCtx* ctx, common::ObTTLStatus& ttl_record);
   int try_schedule_task(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* ctx);
-  int try_schedule_next_task(ObTTLTenantInfo* tenant_info);
+  int try_schedule_remaining_tasks(ObTTLTenantInfo* tenant_info);
   bool can_schedule_tenant(const ObTTLTenantInfo &tenant_info);
   bool can_schedule_task(const ObTTLTaskCtx &ttl_task);
   int check_cmd_state_valid(common::ObTTLTaskStatus current_state, common::ObTTLTaskStatus incoming_state);
@@ -190,7 +173,7 @@ private:
                                   common::ObArenaAllocator& allocator);
   void mark_ttl_ctx_dirty(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* ctx);
   void check_ttl_tenant_state(uint64_t tenant_id);
-  int Transform_cmd_and_state(obrpc::ObTTLRequestArg::TTLRequestType& cmd, common::ObTTLTaskStatus& state);
+  int transform_cmd_to_state(const obrpc::ObTTLRequestArg::TTLRequestType& cmd, common::ObTTLTaskStatus& state);
   int try_schedule_prepare_task(ObPartitionKey& pkey);
   void mark_tenant_checked(uint64_t tenant_id);
   int mark_tenant_droped(const uint64_t& tenant_id);

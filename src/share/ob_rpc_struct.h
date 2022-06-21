@@ -8409,12 +8409,6 @@ public:
     TTL_INVALID_TYPE = 5 
   };
   
-  enum TTLTriggerType {
-    SYS_TRIGGER_TYPE = 1,
-    USER_TRIGGER_TYPE,
-    INVALID_TRIGGER_TYPE,
-  };
-
   ObTTLRequestArg()
     : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
   {}

@@ -3758,7 +3758,6 @@ int ObService::broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, ob
 int ObService::ttl_request(const obrpc::ObTTLRequestArg &arg, obrpc::ObTTLResult &result)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("ttl_request run", K(ret), K(arg)); // todo@dazhi: just for debug
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("service do not init", KR(ret), K(arg));
@@ -3766,7 +3765,7 @@ int ObService::ttl_request(const obrpc::ObTTLRequestArg &arg, obrpc::ObTTLResult
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
   } else if (OB_FAIL(ObTTLManager::get_instance().proc_rs_cmd(arg.tenant_id_, arg.task_id_,
-                      ObTTLRequestArg::TTLTriggerType::USER_TRIGGER_TYPE == arg.trigger_type_,
+                      TRIGGER_TYPE::USER_TRIGGER == arg.trigger_type_,
                       static_cast<ObTTLRequestArg::TTLRequestType>(arg.cmd_code_)))) {
     LOG_WARN("fail to process rs command", K(ret), K(arg));
   }

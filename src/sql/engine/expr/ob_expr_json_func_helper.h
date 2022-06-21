@@ -22,8 +22,6 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_parse.h"
 
-using namespace oceanbase::common;
-
 namespace oceanbase
 {
 namespace sql

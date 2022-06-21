@@ -21,8 +21,9 @@ namespace rootserver
 {
 class ObRootService;
 
-typedef common::ObArray<common::ObAddr> ServerList;
-typedef common::hash::ObHashSet<common::ObAddr> ServerInfoSet;
+class ObTTLServerInfo;
+typedef common::ObArray<ObTTLServerInfo> TTLServerInfos;
+typedef common::hash::ObHashSet<common::ObAddr> ServerSet;
 
 /**
  * the task for clear ttl history task in __all_ttl_task_status_history
@@ -35,32 +36,41 @@ public:
   virtual void runTimerTask() override;
   void destroy() {}
 
+  static const int64_t OB_KV_TTL_GC_INTERVAL =  120 * 1000L * 1000L; // 120s 
 private:
   ObRootService& root_service_;
 };
 
-typedef struct RsTenantTask {
-  common::ObTTLStatus ttl_status_;
-  ServerList send_servers_;
-  ServerList eliminate_servers_;
-  ServerList rsp_servers_;
-  bool all_responsed_;
+struct ObTTLServerInfo
+{
+public:
+  ObTTLServerInfo() : addr_(), is_responsed_(false) {}
+  ~ObTTLServerInfo() = default;
+  TO_STRING_KV(K_(addr), K_(is_responsed));
+public:
+  common::ObAddr addr_; 
+  bool is_responsed_;
+};
 
+struct RsTenantTask
+{
+public:
   RsTenantTask() 
-    : ttl_status_(),
-      send_servers_(),
-      eliminate_servers_(),
-      rsp_servers_(),
-      all_responsed_(false) {}
+    : ttl_status_(), server_infos_(), all_responsed_(false)
+  {}
+  ~RsTenantTask() = default;
+  int set_server_responsed(const ObAddr& server_addr);
+  void set_servers_not_responsed();
+  TO_STRING_KV(K_(ttl_status),
+               K_(server_infos),
+               K_(all_responsed));
+public:
+  common::ObTTLStatus ttl_status_;
+  common::ObArray<ObTTLServerInfo> server_infos_;
+  bool all_responsed_;
+};
 
-TO_STRING_KV(K_(ttl_status),
-             K_(send_servers),
-             K_(eliminate_servers),
-             K_(rsp_servers),
-             K_(all_responsed));
-} RsTenantTask;
-
-typedef struct ObTTLTenantTask {
+struct ObTTLTenantTask {
   ObArray<RsTenantTask> tasks_;
   bool need_refresh_;
   uint64_t tenant_id_;
@@ -82,7 +92,7 @@ typedef struct ObTTLTenantTask {
                K_(need_refresh),
                K_(tenant_id),
                K_(is_del));
-} ObTTLTenantTask;
+};
 
 /*
  * the scheduler for all ttl and max version deletion tasks executed in root service
@@ -93,7 +103,7 @@ typedef struct ObTTLTenantTask {
 class ObTTLScheduler : private common::ObTimerTask
 {
 public:
-  static const int64_t SCHEDULE_PERIOD = 20 * 1000L * 1000L; // 20s 
+  static const int64_t SCHEDULE_PERIOD = 15 * 1000L * 1000L; // 15s 
   explicit ObTTLScheduler(ObRootService& rs) 
     : is_inited_(false),
       root_service_(rs),
@@ -156,7 +166,7 @@ private:
       need_refresh_(true),
       is_inited_(false) {}
 
-  int update_task_on_responsed(RsTenantTask& task);
+  int update_task_on_all_responsed(RsTenantTask& task);
 
   virtual bool is_enable_ttl(uint64_t tenant_id);
 
@@ -170,36 +180,29 @@ private:
   virtual int insert_tenant_task(ObTTLStatus& ttl_task);
 
   virtual int update_task_status(uint64_t tenant_id,
-                                  uint64_t task_id,
-                                  int64_t rs_new_status);
+                                 uint64_t task_id,
+                                 int64_t rs_new_status);
 
 
   bool tenant_exist(uint64_t tenant_id);
   virtual int update_tenant_tasks(uint64_t tenant_id, common::ObTTLStatusArray& tasks);
 
-  virtual int get_alive_servers(uint64_t tenant_id,
-                        ServerList& server_infos);
+  int get_server_infos(uint64_t tenant_id,
+                       common::ObArray<ObTTLServerInfo>& server_infos);
   /* variables */
   virtual int fetch_ttl_task_id(uint64_t tenant_id, int64_t &new_task_id);
   // RS-> observer ttl request
-  virtual int dispatch_ttl_request(ServerList& addrs, 
-                                   ServerList& eliminate_addrs, 
-                                   uint64_t tenant_id,
-                                   int ttl_cmd,
-                                   int trigger_type,
-                                   int64_t task_id);
-  virtual int get_valid_servers(ServerList& all_list, ServerList& remove_list, ServerList& ret_list);
+  virtual int dispatch_ttl_request(const common::ObArray<ObTTLServerInfo>& server_infos, 
+                                   uint64_t tenant_id, int ttl_cmd,
+                                   int trigger_type, int64_t task_id);
 
   int add_tenant(uint64_t tenant_id);
   void delete_tenant(uint64_t tenant_id);
   bool need_refresh_tenant(uint64_t tenant_id);
-  bool need_task_retry(RsTenantTask& rs_task);
+  bool need_retry_task(RsTenantTask& rs_task);
   // need lock
-  int get_tenant_tasks_ptr(uint64_t tenant_id,
-                           ObTTLTenantTask*& tasks_ptr);
-  int get_task_ptr(uint64_t tenant_id,
-                    uint64_t task_id, 
-                    RsTenantTask*& ten_task);
+  int get_tenant_ptr(uint64_t tenant_id, ObTTLTenantTask*& tasks_ptr);
+  int get_task_ptr(uint64_t tenant_id, uint64_t task_id, RsTenantTask*& ten_task);
   int user_cmd_upon_task(ObTTLTaskType task_type,
                          ObTTLTaskStatus curr_state,
                          ObTTLTaskStatus &next_state,
@@ -219,8 +222,6 @@ private:
 
   void refresh_deleted_tenants();
 
-  bool is_addr_exist(ServerList& addr_arr, const ObAddr& addr);
-
 private:
   lib::ObMutex mutex_; // lib::ObMutexGuard guard(mutex_);
   ObArray<ObTTLTenantTask> ten_task_arr_;
@@ -229,7 +230,7 @@ private:
   bool is_inited_;
 
 
-  const int64_t OB_TTL_TASK_RETRY_INTERVAL = ObTTLScheduler::SCHEDULE_PERIOD * 15; // retry interval 300s
+  const int64_t OB_TTL_TASK_RETRY_INTERVAL = 60*1000*1000; // 3min
 };
 
 #define TTLMGR ObTTLTenantTaskMgr::get_instance()

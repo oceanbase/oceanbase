@@ -20,6 +20,7 @@ namespace oceanbase
 namespace observer
 {
 
+// value not greater than 0 is invalid, which is ignored in ttl task
 struct ObTTLPara final
 {
 public:
@@ -27,7 +28,7 @@ public:
                 max_version_(0) {}
   bool is_valid() const
   {
-    return ttl_ > 0 && max_version_ > 0;
+    return ttl_ > 0 || max_version_ > 0;
   }
   TO_STRING_KV(K_(ttl), K_(max_version));
 public:

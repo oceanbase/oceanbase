@@ -322,8 +322,8 @@ int ObTTLManager::check_cmd_state_valid(common::ObTTLTaskStatus current_state, c
   return ret;
 }
 
-int ObTTLManager::Transform_cmd_and_state(ObTTLRequestArg::TTLRequestType& cmd, 
-                                          common::ObTTLTaskStatus& state)
+int ObTTLManager::transform_cmd_to_state(const ObTTLRequestArg::TTLRequestType& cmd, 
+                                         common::ObTTLTaskStatus& state)
 {
   int ret = OB_SUCCESS;
   if (cmd == ObTTLRequestArg::TTL_TRIGGER_TYPE || cmd == ObTTLRequestArg::TTL_RESUME_TYPE) {
@@ -341,35 +341,35 @@ int ObTTLManager::Transform_cmd_and_state(ObTTLRequestArg::TTLRequestType& cmd,
   return ret;
 }
 
-/*rs msg call*/
+// RS TTL message entrance
 int ObTTLManager::proc_rs_cmd(uint64_t tenant_id, uint64_t task_id, 
                               bool is_usr_trigger, ObTTLRequestArg::TTLRequestType cmd)
 {
   int ret = OB_SUCCESS;
   ObTTLTenantInfo* tenant_info = NULL;
-  common::ObTTLTaskStatus state;
-  bool is_create_tenant_task = false;
+  common::ObTTLTaskStatus expected_state;
+  bool need_create_tenant_info = false;
 
   common::ObSpinLockGuard guard(lock_);
-  if (OB_FAIL(Transform_cmd_and_state(cmd, state))) {
+  if (OB_FAIL(transform_cmd_to_state(cmd, expected_state))) {
     LOG_WARN("invalid cmd type", K(tenant_id), K(task_id), K(is_usr_trigger), K(cmd));
   } else {
-    is_create_tenant_task = (OB_TTL_TASK_RUNNING == state) ? true : false;
+    need_create_tenant_info = (OB_TTL_TASK_RUNNING == expected_state) ? true : false;
   }
   
   if (OB_FAIL(ret)) {
   } else if (!is_init_) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("ttl manager not init", K(tenant_id), K(task_id), K(is_usr_trigger));
-  } else if (OB_ISNULL(tenant_info = get_tenant_info(tenant_id, is_create_tenant_task))) {
+  } else if (OB_ISNULL(tenant_info = get_tenant_info(tenant_id, need_create_tenant_info))) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("fail to get ttl tenant info", K(tenant_id));
-  } else if (OB_FAIL(check_cmd_state_valid(tenant_info->state_, state))) {
+  } else if (OB_FAIL(check_cmd_state_valid(tenant_info->state_, expected_state))) {
     LOG_WARN("ttl cmd state machine is wrong", K(ret), K(tenant_id), K(task_id), K(is_usr_trigger));
   } else {
     tenant_info->cmd_type_ = cmd;
     if (OB_INVALID_ID == tenant_info->task_id_) {
-      if (OB_TTL_TASK_RUNNING == state) {
+      if (OB_TTL_TASK_RUNNING == expected_state) {
         //new ttl tenant
         tenant_info->task_id_ = task_id;
         tenant_info->is_usr_trigger_ = is_usr_trigger;
@@ -377,25 +377,25 @@ int ObTTLManager::proc_rs_cmd(uint64_t tenant_id, uint64_t task_id,
         tenant_info->need_check_ = true;
         tenant_info->is_dirty_ = true;
         LOG_INFO("new tenent info", K(ret), K(tenant_id), K(tenant_info->task_id_));
-      } else {
+      } else if (OB_INVALID_ID == tenant_info->task_id_) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid task id for current state", K(ret), K(state), K(tenant_id),
-                                                    K(task_id), K(tenant_info->task_id_));
+        LOG_WARN("invalid task id for current state", K(ret), K(expected_state), K(tenant_id),
+                                                      K(task_id), K(tenant_info->task_id_));
       }
-    } else if (tenant_info->state_ == state) {
-      //duplicate
-      LOG_INFO("tenant state is duplicated", K(ret), K(state));
+    } else if (tenant_info->state_ == expected_state) {
+      //duplicate msg
+      LOG_INFO("tenant state is duplicated", K(ret), K(expected_state));
     } else {
-      tenant_info->state_ = state;
+      tenant_info->state_ = expected_state;
       tenant_info->is_dirty_ = true;
     }
 
     if (OB_SUCC(ret)) {
       //receive the msg, need to rsp
       tenant_info->rsp_time_ = ObTimeUtility::current_time();
-    }    
+    }
   }
-  LOG_INFO("finish process rs cmd", K(ret), K(tenant_id), K(task_id), K(state));
+  LOG_INFO("finish process rs cmd", K(ret), K(tenant_id), K(task_id), K(expected_state));
   return ret;
 }
 
@@ -405,10 +405,7 @@ void ObTTLManager::mark_tenant_need_check(uint64_t tenant_id)
   ObTTLTenantInfo* tenant_info = NULL;
   if (common::ObTTLUtil::check_can_process_tenant_tasks(tenant_id)) {
     common::ObSpinLockGuard guard(lock_);
-    if (OB_ISNULL(tenant_info = get_tenant_info(tenant_id, false))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get ttl tenant info", K(ret));
-    } else if (!tenant_info->need_check_) {
+    if (OB_NOT_NULL(tenant_info = get_tenant_info(tenant_id, false))) {
       tenant_info->need_check_ = true;
     }
   }
@@ -500,7 +497,7 @@ int ObTTLManager::report_task_status(ObTTLTaskInfo& task_info, ObTTLPara& task_p
   }
 
   //schedule task
-  if (is_stop && OB_FAIL(try_schedule_next_task(tenant_info))) {
+  if (is_stop && OB_FAIL(try_schedule_remaining_tasks(tenant_info))) {
     LOG_WARN("fail to try schedule task", K(ret));
   } 
   return ret;
@@ -770,7 +767,7 @@ int ObTTLManager::inner_handle_one_partition_event(ObTTLTenantInfo* tenant_info,
   
   if (OB_ISNULL(ctx) || OB_ISNULL(tenant_info)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("tenant info ot ctx is null", K(ret), K(tenant_info), K(ctx));
+    LOG_WARN("tenant info or ctx is null", K(ret), K(tenant_info), K(ctx));
   } else if (ctx->task_status_ != tenant_info->state_) {
     if (OB_TTL_TASK_RUNNING == tenant_info->state_) {
       if (OB_TTL_TASK_PENDING == ctx->task_status_) {
@@ -793,7 +790,11 @@ int ObTTLManager::inner_handle_one_partition_event(ObTTLTenantInfo* tenant_info,
     }
 
     if (try_schedule && OB_FAIL(try_schedule_task(tenant_info, ctx))) {
-      LOG_WARN("fail to try schedule dag task", K(ret), K(ctx->task_info_.pkey_));
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("fail to try schedule dag task", K(ret), K(ctx->task_info_.pkey_));
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
     LOG_DEBUG("handle one partition event", K(ret), K(ctx->task_status_), K(tenant_info->state_));
   }
@@ -880,8 +881,10 @@ int ObTTLManager::get_ttl_para_from_schema(const schema::ObTableSchema *table_sc
     } else {
       para.ttl_ =  hc_desc.get_time_to_live();
       para.max_version_ = hc_desc.get_max_version();
-      can_ttl = true;
-      LOG_DEBUG("success to find a ttl partition", K(ret), K(para));
+      if (OB_LIKELY(para.is_valid())) {
+        can_ttl = true;
+        LOG_DEBUG("success to find a ttl partition", K(ret), K(para));
+      }
     }
   } else {}
   return ret;
@@ -939,7 +942,11 @@ int ObTTLManager::try_schedule_prepare_task(ObPartitionKey& pkey)
     // do nothing
   } else if (FALSE_IT(ctx->task_status_ = OB_TTL_TASK_PENDING)) {
   } else if (OB_FAIL(try_schedule_task(tenant_info, ctx))) {
-    LOG_WARN("fail to schedule task", K(ret));
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("fail to schedule task", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
   } 
   LOG_DEBUG("try schedule prepare task", K(ret), K(pkey.get_tenant_id()), K(pkey.get_table_id()));
   return ret;
@@ -964,7 +971,7 @@ int ObTTLManager::sync_sys_table(ObPartitionKey& pkey)
       LOG_WARN("ctx is null", K(ret));
     } else if (OB_UNLIKELY(!ctx->is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid partition task ctx", K(ret), K(ctx));
+      LOG_WARN("invalid partition task ctx", K(ret), KPC(ctx));
     } else {
       cp_ctx = *ctx;
       if (ctx->task_info_.row_key_.empty()) {
@@ -1123,6 +1130,7 @@ int ObTTLManager::construct_task_record_filter(const uint64_t& task_id,
   return ret;
 }
 
+// deprecated
 int ObTTLManager::deep_copy_all_tenant_ctxs(common::ObSArray<ObTTLTaskCtx>& ctx_array, 
                                             common::ObArenaAllocator& allocator,
                                             uint64_t tenant_id)
@@ -1174,10 +1182,10 @@ int ObTTLManager::move_record_to_history_table(uint64_t tenant_id)
         LOG_WARN("failt to start trans", K(ret), K(ttl_record.tenant_id_));
       } else {
         ObTTLStatusKey key(ttl_record.tenant_id_, ttl_record.table_id_, 
-                          ttl_record.partition_id_, ttl_record.task_id_);
+                           ttl_record.partition_id_, ttl_record.task_id_);
         if (OB_FAIL(ObTTLUtil::insert_ttl_task(ttl_record.tenant_id_,
-                                              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
-                                              trans, ttl_record))) {
+                                               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
+                                               trans, ttl_record))) {
           LOG_WARN("fail to insert ttl task into __all_ttl_task_status_history.", K(ret));
         } else if (OB_FAIL(common::ObTTLUtil::delete_ttl_task(ttl_record.tenant_id_,
                                         share::OB_ALL_KV_TTL_TASK_TNAME,
@@ -1294,7 +1302,7 @@ bool ObTTLManager::can_schedule_task(const ObTTLTaskCtx &ttl_task)
   return ttl_task.task_status_ == OB_TTL_TASK_PENDING || ttl_task.task_status_ == OB_TTL_TASK_PREPARE;
 }
 
-int ObTTLManager::try_schedule_next_task(ObTTLTenantInfo* tenant_info)
+int ObTTLManager::try_schedule_remaining_tasks(ObTTLTenantInfo* tenant_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_info)) {
@@ -1311,16 +1319,20 @@ int ObTTLManager::try_schedule_next_task(ObTTLTenantInfo* tenant_info)
         LOG_ERROR("fatal err, ttl ctx in map is null", K(ret), K(tenant_info->tenant_id_));
       } else if (can_schedule_task(*ctx)) {
         if (OB_FAIL(try_schedule_task(tenant_info, ctx))) {
-          LOG_WARN("fail to schedule task", K(ret));
-        } else {
-          ret = OB_ITER_END;
+          if (OB_EAGAIN != ret) {
+            LOG_WARN("fail to schedule task", K(ret));
+          }
         }
       }
+    }
+    if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
     }
   }
   return ret;
 }
 
+// try schedule partition task, reutrn OB_EAGAIN if dag scheduler is full 
 int ObTTLManager::try_schedule_task(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* ctx)
 {
   int ret = OB_SUCCESS;
@@ -1328,9 +1340,7 @@ int ObTTLManager::try_schedule_task(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* 
     LOG_WARN("invalid argument", K(ret), KP(tenant_info), KP(ctx));
   } else if (can_schedule_tenant(*tenant_info) && can_schedule_task(*ctx)) {
     if (OB_FAIL(generate_ttl_dag(ctx->task_info_, ctx->ttl_para_))) {
-      if (OB_SIZE_OVERFLOW != ret) {
-        ret = OB_SUCCESS;
-      } else {
+      if (OB_EAGAIN != ret) {
         LOG_WARN("fail to generate dag task", K(ret));
       }
     } else {

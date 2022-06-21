@@ -280,6 +280,7 @@ int ObTableTTLDeleteTask::process()
 int ObTableTTLDeleteTask::process_one()
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtil::current_time();
   ObPartitionKey pkey = info_->pkey_;
   uint64_t tenant_id = pkey.get_tenant_id();
   uint64_t table_id = pkey.get_table_id();
@@ -339,7 +340,8 @@ int ObTableTTLDeleteTask::process_one()
     info_->err_code_ = ret; 
     LOG_DEBUG("finish delete", K(ret), KPC_(info));
   }
-  LOG_DEBUG("finish process one", K(ret), K(result.get_max_version_del_row()), K(result.get_ttl_del_row()), K(result.get_del_row()));
+  int64_t cost = ObTimeUtil::current_time() - start_time;
+  LOG_DEBUG("finish process one", K(ret), K(cost), K(result.get_max_version_del_row()), K(result.get_ttl_del_row()), K(result.get_del_row()));
   return ret;
 }
 
