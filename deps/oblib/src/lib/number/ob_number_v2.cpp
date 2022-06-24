@@ -3198,7 +3198,7 @@ int ObNumber::format_v2(char* buf, const int64_t buf_len, int64_t& pos, int16_t 
     LOG_WARN("argument is invalid", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_UNLIKELY((buf_len - pos) < max_need_size)) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_INFO("size is overflow", K(buf_len), K(pos), K(max_need_size), KPC(this), K(scale), K(ret));
+    LOG_TRACE("size is overflow", K(buf_len), K(pos), K(max_need_size), KPC(this), K(scale), K(ret));
   } else if (OB_FAIL(format_int64(buf, pos, scale, is_finish))) {
     LOG_ERROR("format_int64 failed", KPC(this), K(ret));
   } else if (is_finish) {
