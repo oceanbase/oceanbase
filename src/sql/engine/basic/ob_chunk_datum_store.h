@@ -307,14 +307,14 @@ public:
     Block() : magic_(0), blk_size_(0), rows_(0)
     {}
 
-    static int inline min_buf_size(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size)
+    static int inline min_buf_size(const common::ObIArray<ObExpr*>& exprs, int64_t row_extend_size, ObEvalCtx& ctx, int64_t& size)
     {
       int ret = OB_SUCCESS;
       size = 0;
       if (OB_FAIL(row_store_size(exprs, ctx, size))) {
         SQL_ENG_LOG(WARN, "failed to calc store row size", K(ret));
       } else {
-        size += BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer);
+        size += BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer) + row_extend_size;
       }
       return ret;
     }

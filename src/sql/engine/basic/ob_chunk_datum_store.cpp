@@ -831,7 +831,7 @@ int ObChunkDatumStore::add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx
     if (NULL == cur_blk_) {
       int64_t min_buf_size = 0;
       Block* new_blk = nullptr;
-      if (OB_FAIL(Block::min_buf_size(exprs, *ctx, min_buf_size))) {
+      if (OB_FAIL(Block::min_buf_size(exprs, row_extend_size_, *ctx, min_buf_size))) {
       } else if (OB_FAIL(alloc_block_buffer(new_blk, min_buf_size, false))) {
         LOG_WARN("alloc block failed", K(ret));
       } else {
@@ -844,7 +844,7 @@ int ObChunkDatumStore::add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx
       if (OB_FAIL(cur_blk_->append_row(exprs, ctx, cur_blk_buffer_, row_extend_size_, stored_row))) {
         if (OB_BUF_NOT_ENOUGH == ret) {
           int64_t min_buf_size = 0;
-          if (OB_FAIL(Block::min_buf_size(exprs, *ctx, min_buf_size))) {
+          if (OB_FAIL(Block::min_buf_size(exprs, row_extend_size_, *ctx, min_buf_size))) {
           } else if (OB_FAIL(switch_block(min_buf_size))) {
             if (OB_EXCEED_MEM_LIMIT != ret) {
               LOG_WARN("switch block failed", K(ret));

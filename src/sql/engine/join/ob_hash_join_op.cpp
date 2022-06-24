@@ -807,6 +807,7 @@ int64_t ObHashJoinOp::calc_partition_count(int64_t input_size, int64_t part_size
 {
   int64_t estimate_part_count = input_size / part_size + 1;
   int64_t partition_cnt = 8;
+  estimate_part_count = max(0, estimate_part_count);
   while (partition_cnt < estimate_part_count) {
     partition_cnt <<= 1;
   }
@@ -825,6 +826,7 @@ int64_t ObHashJoinOp::calc_partition_count_by_cache_aware(
   if (max_part_count < partition_cnt) {
     partition_cnt = max_part_count;
   }
+  global_mem_bound_size = max(0, global_mem_bound_size);
   while (partition_cnt * PAGE_SIZE > global_mem_bound_size) {
     partition_cnt >>= 1;
   }
@@ -854,7 +856,7 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
   const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   // default data memory size: 80%
   int64_t extra_memory_size = get_extra_memory_size();
-  int64_t memory_size = extra_memory_size + input_size;
+  int64_t memory_size = (extra_memory_size + input_size) < 0 ? input_size : (extra_memory_size + input_size);
   if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(ObSqlWorkAreaType::HASH_WORK_AREA, tenant_id, hash_area_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
   } else if (FALSE_IT(remain_data_memory_size_ = hash_area_size * 80 / 100)) {
