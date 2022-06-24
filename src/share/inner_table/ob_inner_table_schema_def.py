@@ -10214,6 +10214,18 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_global_transaction',
   keywords = all_def_keywords['__all_tenant_global_transaction']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12326',
+  real_tenant_id=True,
+  table_name = '__all_virtual_kv_ttl_task',
+  keywords = all_def_keywords['__all_kv_ttl_task']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12327',
+  real_tenant_id=True,
+  table_name = '__all_virtual_kv_ttl_task_history',
+  keywords = all_def_keywords['__all_kv_ttl_task_history']))
+
 ################################################################################
 # Oracle Virtual Table(15000,20000]
 ################################################################################
@@ -14630,6 +14642,7 @@ def_table_schema(
       b.table_name as TABLE_NAME,
       a.table_id as TABLE_ID,
       a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
       usec_to_time(a.task_start_time) as START_TIME,
       usec_to_time(a.task_update_time) as END_TIME,
       case a.trigger_type
@@ -14675,6 +14688,7 @@ def_table_schema(
       b.table_name as TABLE_NAME,
       a.table_id as TABLE_ID,
       a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
       usec_to_time(a.task_start_time) as START_TIME,
       usec_to_time(a.task_update_time) as END_TIME,
       case a.trigger_type
@@ -14695,6 +14709,88 @@ def_table_schema(
       a.ret_code as RET_CODE
       FROM oceanbase.__all_kv_ttl_task_history a left outer JOIN oceanbase.__all_table_v2 b on
           a.table_id = ((a.tenant_id << 40) | b.table_id)    
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_KV_TTL_TASKS',
+  table_id        = '21307',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21308',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
 """.replace("\n", " ")
 )
 

@@ -767,6 +767,8 @@ public:
   static int all_virtual_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pg_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_global_transaction_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_database_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -1079,6 +1081,8 @@ public:
   static int column_privileges_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_kv_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_kv_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -1803,6 +1807,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_backup_backupset_task_schema,
   ObInnerTableSchema::all_virtual_pg_backup_backupset_task_schema,
   ObInnerTableSchema::all_virtual_global_transaction_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_history_schema,
   ObInnerTableSchema::all_virtual_table_agent_schema,
   ObInnerTableSchema::all_virtual_column_agent_schema,
   ObInnerTableSchema::all_virtual_database_agent_schema,
@@ -2136,6 +2142,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::column_privileges_schema,
   ObInnerTableSchema::dba_ob_kv_ttl_tasks_schema,
   ObInnerTableSchema::dba_ob_kv_ttl_task_history_schema,
+  ObInnerTableSchema::cdb_ob_kv_ttl_tasks_schema,
+  ObInnerTableSchema::cdb_ob_kv_ttl_task_history_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -4070,11 +4078,11 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 
 const int64_t OB_CORE_TABLE_COUNT = 5;
 const int64_t OB_SYS_TABLE_COUNT = 189;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 463;
-const int64_t OB_SYS_VIEW_COUNT = 362;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1020;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 465;
+const int64_t OB_SYS_VIEW_COUNT = 364;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1024;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1023;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1027;
 
 } // end namespace share
 } // end namespace oceanbase

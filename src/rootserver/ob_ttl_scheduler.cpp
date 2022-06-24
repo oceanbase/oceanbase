@@ -1134,7 +1134,7 @@ int ObTTLTenantTaskMgr::fetch_ttl_task_id(uint64_t tenant_id, int64_t &new_task_
                                           tmp_task_id, 0))) {
     LOG_WARN("fail to fetch new ttl task id", K(ret), "id_type", share::OB_MAX_USED_TTL_TASK_ID_TYPE);
   } else {
-    new_task_id = tmp_task_id;
+    new_task_id = extract_pure_id(tmp_task_id);
   }
   return ret;
 }

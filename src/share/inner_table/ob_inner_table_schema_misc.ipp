@@ -1598,6 +1598,8 @@ case OB_ALL_VIRTUAL_FUNC_TID:
 case OB_ALL_VIRTUAL_FUNC_HISTORY_TID:
 case OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TID:
 case OB_ALL_VIRTUAL_HISTOGRAM_STAT_TID:
+case OB_ALL_VIRTUAL_KV_TTL_TASK_TID:
+case OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_META_TABLE_TID:
 case OB_ALL_VIRTUAL_OBJAUTH_TID:
 case OB_ALL_VIRTUAL_OBJAUTH_HISTORY_TID:
@@ -2341,6 +2343,38 @@ case OB_ALL_VIRTUAL_USER_HISTORY_TID:
       } else if (OB_FAIL(iter->set_column_name_with_tenant_id("table_id"))) {
         SERVER_LOG(WARN, "set column_name with tenant_id failed",
                    K(ret), "column_name", "table_id");
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_KV_TTL_TASK_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      const bool record_real_tenant_id = true;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_KV_TTL_TASK_TID, record_real_tenant_id, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      const bool record_real_tenant_id = true;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_KV_TTL_TASK_HISTORY_TID, record_real_tenant_id, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
       } else {
        vt_iter = iter;
       }
