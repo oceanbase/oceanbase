@@ -741,24 +741,8 @@ int ObStorageLogWriter::process_logs_in_batch(
   }
 
   if (OB_FAIL(ret)) {
-    // wake up logs not sync
-    for (int64_t i = sync_index + 1; i < item_cnt; ++i) {
-      if (OB_ISNULL(items[i])) {
-        LOG_ERROR("log_item in items is null", K(ret), KP(items[i]));
-      } else {
-        ObStorageLogItem *log_item = reinterpret_cast<ObStorageLogItem *>(items[i]);
-        if (i == sync_index + 1) {
-          // set build cursor and write cursor with the specified log item in queue
-          ObMutexGuard guard(build_log_mutex_);
-          build_cursor_ = log_item->start_cursor_;
-          write_cursor_ = log_item->start_cursor_;
-        }
-        // aggregate_logs_to_buffer may fail for invalid cursor arguments,
-        // we just finish flush and let upper layer retry
-        log_item->finish_flush(ret);
-      }
-    }
-    LOG_ERROR("slog write failed, record cursor", K(ret), K_(build_cursor), K_(write_cursor));
+    LOG_ERROR("failing to write slog is not allowed", K(ret), K_(build_cursor), K_(write_cursor));
+    ob_abort();
   }
   finish_cnt = item_cnt;
   return ret;
@@ -843,26 +827,20 @@ int ObStorageLogWriter::write_logs_local(common::ObIBaseLogItem** items, const i
   const int64_t offset = flush_cursor_.offset_;
   const int64_t start_ts = ObTimeUtility::fast_current_time();
 
-  if (OB_FAIL(file_store_->write(write_buf, write_len, offset))) {
-    // should never happen
-    LOG_ERROR("failed to write slog", K(ret));
-  } else {
-    batch_write_len_ = 0;
-    const int64_t duration = ObTimeUtility::fast_current_time() - start_ts;
-    if (duration > 10000) {
-      LOG_INFO("slow write logs local",
-          K(duration),
-          K(write_len),
-          K(cur_idx),
-          K(sync_idx),
-          K(item_cnt),
-          "sync_cnt",
-          cur_idx - sync_idx);
+  while (OB_FAIL(file_store_->write(write_buf, write_len, offset))) {
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      LOG_ERROR("fail to write slog", K(ret));
     }
+  }
+  batch_write_len_ = 0;
+  const int64_t duration = ObTimeUtility::fast_current_time() - start_ts;
+  if (duration > 10000) {
+    LOG_INFO("slow write logs local", K(duration), K(write_len), K(cur_idx), K(sync_idx), K(item_cnt),
+      "sync_cnt", cur_idx - sync_idx);
+  }
 
-    if (OB_FAIL(sync_log(items, sync_idx, cur_idx))) {
-      LOG_ERROR("sync_log failed", K(ret), K(sync_idx), K(cur_idx));
-    }
+  if (OB_FAIL(sync_log(items, sync_idx, cur_idx))) {
+    LOG_ERROR("sync_log failed", K(ret), K(sync_idx), K(cur_idx));
   }
   return ret;
 }
