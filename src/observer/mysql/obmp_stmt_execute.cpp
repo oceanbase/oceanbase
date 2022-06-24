@@ -772,6 +772,7 @@ int ObMPStmtExecute::do_process(
         if (OB_NOT_NULL(plan_ctx)) {
           audit_record.consistency_level_ = plan_ctx->get_consistency_level();
         }
+        audit_record.tenant_id_=session.get_effective_tenant_id();
         audit_record.update_stage_stat();
       }
       // update v$sql statistics

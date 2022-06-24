@@ -1566,3 +1566,18 @@ DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]
 DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
     "specifies whether ttl task is enbled",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// query response time
+DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
+    "Enable or disable QUERY_RESPONSE_TIME statistics collecting"
+    "The default value is False. Value: TRUE: turned on FALSE: turned off",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
+    "Flush QUERY_RESPONSE_TIME table and re-read query_response_time_range_base"
+    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
+    "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
+    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE)); 
+

@@ -7,7 +7,7 @@ function(ob_unittest case)
   if (case MATCHES "^test_.*")
     add_test(${case} ${case})
   endif()
-  target_link_libraries(${case} PRIVATE oceanbase gtest gmock)
+  target_link_libraries(${case} PRIVATE oceanbase gtest gmock ${DEP_DIR}/lib/mariadb/libmariadb.so.3)
   disable_pch(${case})
   target_include_directories(${case}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/deps/oblib/unittest ${DEP_DIR}/include)

@@ -1677,6 +1677,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
             }
             break;
           }
+            
+          case OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID: {
+            ObInfoSchemaQueryResponseTimeTable* query_response_time_table = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaQueryResponseTimeTable, query_response_time_table))) {
+              query_response_time_table->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator*>(query_response_time_table);
+            }
+            break;
+          }
+
           case OB_ALL_VIRTUAL_SQL_AUDIT_TID: {
             ObGvSqlAudit* sql_audit_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObGvSqlAudit, sql_audit_table))) {

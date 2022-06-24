@@ -56,6 +56,8 @@ EVENT_INFO(FUSE_ROW_CACHE_MISS, fuse_row_cache_miss)
 #include "lib/net/ob_addr.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "observer/virtual_table/ob_information_query_response_time.h"
+#include "observer/mysql/ob_query_response_time.h"
 namespace oceanbase {
 namespace sql {
 struct ObExecRecord {
@@ -341,6 +343,7 @@ struct ObAuditRecordData {
       EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
       EVENT_ADD(SYS_TIME_MODEL_DB_CPU, cpu_time);
     }
+    observer::ObRSTCollector::get_instance().collect_query_response_time(tenant_id_,elapsed_time);
   }
 
   bool is_timeout() const

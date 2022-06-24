@@ -644,6 +644,7 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(const ObPhysicalPla
 
     audit_record.exec_timestamp_ = exec_timestamp;
     audit_record.exec_record_ = exec_record;
+    audit_record.tenant_id_=session->get_effective_tenant_id();
 
     audit_record.update_stage_stat();
 

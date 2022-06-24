@@ -37,12 +37,14 @@
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/ob_server.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "observer/mysql/ob_query_response_time.h"
 
 namespace oceanbase {
 using namespace common;
 using namespace obrpc;
 using namespace share;
 using namespace share::schema;
+using namespace observer;
 namespace sql {
 typedef ObAlterSystemResolverUtil Util;
 
@@ -2443,6 +2445,14 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                 if (OB_FAIL(check_auto_update_reserved_backup_timestamp(item.value_.str()))) {
                   LOG_WARN("cannot set enable log archive true", K(ret));
                 }
+              } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_FLUSH)) {
+                if(OB_FAIL(observer::ObRSTCollector::get_instance().flush_query_response_time(item.exec_tenant_id_, item.value_.str()))){
+                  LOG_WARN("set query response time flush", K(ret));
+                }  
+              } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_STATS)) {
+                if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
+                  LOG_WARN("set query response time stats", K(ret));
+                }  
               }
             }
           }

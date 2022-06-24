@@ -128,6 +128,58 @@ int ObInnerTableSchema::dba_ob_kv_ttl_task_history_schema(ObTableSchema &table_s
   return ret;
 }
 
+int ObInnerTableSchema::query_response_time_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_INFORMATION_SCHEMA_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_QUERY_RESPONSE_TIME_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_QUERY_RESPONSE_TIME_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select response_time as RESPONSE_TIME,                    count as COUNT,                    total as TOTAL                    from oceanbase.__all_virtual_query_response_time                    where is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) and                    tenant_id = effective_tenant_id() )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
 int ObInnerTableSchema::cdb_ob_kv_ttl_tasks_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

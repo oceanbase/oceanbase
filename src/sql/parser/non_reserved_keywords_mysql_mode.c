@@ -680,7 +680,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {
     {"up", UP},
     {"times", TIMES},
     {"backupround", BACKUPROUND},
-    {"TTL", TTL}};
+    {"TTL", TTL},
+    {"query_response_time",QUERY_RESPONSE_TIME}};
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html
  ALTER TABLE

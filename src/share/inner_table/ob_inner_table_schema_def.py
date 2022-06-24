@@ -10214,6 +10214,25 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_global_transaction',
   keywords = all_def_keywords['__all_tenant_global_transaction']))
 
+def_table_schema(
+  tablegroup_id='OB_INVALID_ID',
+  table_name='__all_virtual_query_response_time',
+  table_id='12325',
+  table_type='VIRTUAL_TABLE',
+  gm_columns=[],
+  rowkey_columns=[
+  ],
+  normal_columns=[
+    ('tenant_id', 'int', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int'),
+    ('response_time', 'bigint:14', 'false', '0'),
+    ('count',  'bigint:14', 'false', '0'),
+    ('total',  'bigint:14', 'false', '0')
+  ],
+  partition_columns=['svr_ip', 'svr_port'],
+)
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12326',
   real_tenant_id=True,
@@ -14710,6 +14729,24 @@ def_table_schema(
       FROM oceanbase.__all_kv_ttl_task_history a left outer JOIN oceanbase.__all_table_v2 b on
           a.table_id = ((a.tenant_id << 40) | b.table_id)    
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  database_id='OB_INFORMATION_SCHEMA_ID',
+  table_name='QUERY_RESPONSE_TIME',
+  table_id='21306',
+  table_type='SYSTEM_VIEW',
+  gm_columns=[],
+  rowkey_columns=[],
+  in_tenant_space=True,
+  view_definition="""select response_time as RESPONSE_TIME,
+                   count as COUNT,
+                   total as TOTAL
+                   from oceanbase.__all_virtual_query_response_time
+                   where is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) and
+                   tenant_id = effective_tenant_id()
+""".replace("\n", " "),
+  normal_columns=[],
 )
 
 def_table_schema(

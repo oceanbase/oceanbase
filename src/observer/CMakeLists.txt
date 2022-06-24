@@ -6,6 +6,7 @@ ob_set_subtarget(ob_server mysql
   mysql/ob_mysql_request_manager.cpp
   mysql/ob_mysql_result_set.cpp
   mysql/ob_query_driver.cpp
+  mysql/ob_query_response_time.cpp
   mysql/ob_query_retry_ctrl.cpp
   mysql/ob_sync_cmd_driver.cpp
   mysql/ob_sync_plan_driver.cpp
@@ -187,6 +188,7 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_information_table_constraints_table.cpp
   virtual_table/ob_information_table_privileges_table.cpp
   virtual_table/ob_information_user_privileges_table.cpp
+  virtual_table/ob_information_query_response_time.cpp
   virtual_table/ob_iterate_virtual_table.cpp
   virtual_table/ob_mem_leak_checker_info.cpp
   virtual_table/ob_mysql_db_table.cpp

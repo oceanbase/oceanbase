@@ -206,6 +206,7 @@ int ObPxTaskProcess::process()
         audit_record.exec_record_ = exec_record;
 
         // Accumulated time of update phase
+        audit_record.tenant_id_=session->get_effective_tenant_id();
         audit_record.update_stage_stat();
 
         ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session, *arg_.exec_ctx_);

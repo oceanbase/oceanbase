@@ -613,6 +613,7 @@ int ObInnerSQLConnection::process_record(ObInnerSQLResult& res, sql::ObSQLSessio
     table_row_count_list = &(plan_ctx->get_table_row_count_list());
   }
 
+  audit_record.tenant_id_ = session.get_effective_tenant_id();
   audit_record.update_stage_stat();
 
   // update v$sql statistics
