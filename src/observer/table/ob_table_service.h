@@ -166,7 +166,7 @@ class ObTableTTLDeleteRowIterator : public common::ObNewRowIterator
 {
 public:
   ObTableTTLDeleteRowIterator():
-    is_inited_(false), time_to_live_(0), max_version_(0),
+    is_inited_(false), max_version_(0), time_to_live_ms_(0),
     limit_del_rows_(-1), cur_del_rows_(0), cur_version_(0), cur_rowkey_(), cur_qualifier_(),
     max_version_cnt_(0), ttl_cnt_(0), scan_cnt_(0), is_last_row_ttl_(true) {}
   ~ObTableTTLDeleteRowIterator() {}
@@ -177,8 +177,8 @@ public:
 public:
   bool is_inited_;
   common::ObNewRowIterator *scan_result_;
-  uint64_t time_to_live_;
-  uint64_t max_version_;
+  int32_t max_version_;
+  int64_t time_to_live_ms_; // ttl in millisecond
   uint64_t limit_del_rows_; // maximum delete row
   uint64_t cur_del_rows_; // current delete row
   uint64_t cur_version_;

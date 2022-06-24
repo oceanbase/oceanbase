@@ -853,11 +853,16 @@ int ObTTLManager::check_all_tenant_mem()
                                 memstore_limit,
                                 freeze_cnt)) ) {
           LOG_WARN("fail to get tenant memstore info for tenant ", K(ret), K(tenant_id));
-        } else if (active_memstore_used > minor_freeze_trigger) {
-          tenant_info->ttl_continue_ = false;
-          LOG_INFO("will stop all the running task",  K(tenant_id), K(active_memstore_used), K(minor_freeze_trigger));
+        } else if (total_memstore_used > minor_freeze_trigger) {
+          if (tenant_info->ttl_continue_) {
+            tenant_info->ttl_continue_ = false;
+            LOG_INFO("will stop all the running ttl task",  K(tenant_id), K(total_memstore_used), K(minor_freeze_trigger));
+          }
         } else {
-          tenant_info->ttl_continue_ = true;
+          if (!tenant_info->ttl_continue_) {
+            tenant_info->ttl_continue_ = true;
+            LOG_INFO("continue to execute all the ttl task", K(tenant_id), K(total_memstore_used), K(minor_freeze_trigger));
+          }
         }
       }
     }

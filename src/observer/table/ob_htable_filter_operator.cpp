@@ -46,12 +46,12 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
             if (elem->name_.case_compare("TimeToLive") == 0) {
               json::Value *ttl_val = elem->value_;
               if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
-                time_to_live_ = static_cast<int64_t>(ttl_val->get_number());
+                time_to_live_ = static_cast<int32_t>(ttl_val->get_number());
               }
             } else if (elem->name_.case_compare("MaxVersions") == 0) {
               json::Value *max_version_val = elem->value_;
               if (NULL != max_version_val && max_version_val->get_type() == json::JT_NUMBER) {
-                max_version_ = static_cast<int64_t>(max_version_val->get_number());
+                max_version_ = static_cast<int32_t>(max_version_val->get_number());
               }
             }
           }  // end foreach

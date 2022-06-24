@@ -2175,9 +2175,7 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
                                            query.get_offset(), ctx.scan_param_))) {
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(part_service_->table_scan(ctx.scan_param_, ctx.scan_result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("fail to scan table", K(ret));
-    }
+    LOG_WARN("fail to scan table", K(ret));
   } else {
     ttl_row_iter.set_scan_result(ctx.scan_result_);
     int64_t affected_rows = 0;
@@ -2196,9 +2194,7 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
         ctx.scan_param_.column_ids_,
         &ttl_row_iter,
         affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to delete", K(ret), K(table_id));
-      }
+      LOG_WARN("failed to delete", K(ret), K(table_id));
     } else {
       LOG_DEBUG("delete rows", K(ret), K(affected_rows));
     }
@@ -2287,7 +2283,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
         ObHTableCellEntity cell(row);
         ObString cell_rowkey = cell.get_rowkey();
         ObString cell_qualifier = cell.get_qualifier();
-        int64_t cell_ts = -cell.get_timestamp(); // obhtable timestamp is nagative
+        int64_t cell_ts = -cell.get_timestamp(); // obhtable timestamp is nagative in ms
         if ((cell_rowkey != cur_rowkey_) || (cell_qualifier != cur_qualifier_)) {
           cur_version_ = 1;
           cur_rowkey_ = cell_rowkey;
@@ -2300,7 +2296,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           cur_del_rows_++;
           is_last_row_ttl_ = false;
           break;
-        } else if (time_to_live_ > 0 && (cell_ts + time_to_live_ < ObTimeUtility::current_time())) {
+        } else if (time_to_live_ms_ > 0 && (cell_ts + time_to_live_ms_ < ObHTableUtils::current_time_millis())) {
           ttl_cnt_++;
           cur_del_rows_++;
           is_last_row_ttl_ = true;
@@ -2333,7 +2329,7 @@ void ObTableTTLDeleteRowIterator::reset()
 {
   is_inited_ = false;
   scan_result_ = NULL;
-  time_to_live_ = 0;
+  time_to_live_ms_ = 0;
   max_version_ = 0;
   limit_del_rows_ = 0;
   cur_del_rows_ = 0;
@@ -2352,7 +2348,7 @@ int ObTableTTLDeleteRowIterator::init(const ObTableTTLOperation &ttl_operation)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ttl operation", K(ret), K(ttl_operation));
   } else {
-    time_to_live_ = ttl_operation.time_to_live_;
+    time_to_live_ms_ = ttl_operation.time_to_live_ * 1000l;
     max_version_ = ttl_operation.max_version_;
     limit_del_rows_ = ttl_operation.del_row_limit_;
     cur_rowkey_ = ttl_operation.start_rowkey_;

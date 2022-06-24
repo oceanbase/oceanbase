@@ -101,7 +101,7 @@ private:
                         is_usr_trigger_(false),
                         need_check_(false),
                         is_dirty_(false),
-                        ttl_continue_(false),
+                        ttl_continue_(true),
                         cmd_type_(obrpc::ObTTLRequestArg::TTL_INVALID_TYPE),
                         rsp_time_(OB_INVALID_ID),
                         state_(common::ObTTLTaskStatus::OB_TTL_TASK_INVALID),

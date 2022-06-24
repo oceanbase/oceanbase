@@ -303,7 +303,7 @@ int ObTableTTLDeleteTask::process_one()
   if (OB_FAIL(start_trans())) {
     LOG_WARN("fail to start tx", K(ret));
   } else if (OB_FAIL(GCTX.table_service_->execute_ttl_delete(ctx, op, result))) {
-    LOG_WARN("fail to execute ttl delete", K(ret));
+    LOG_WARN("fail to execute ttl delete, need rollback", K(ret));
   } else {/* do nothing */}
 
   ctx.reset_ttl_ctx(GCTX.par_ser_);

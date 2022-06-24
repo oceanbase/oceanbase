@@ -329,8 +329,8 @@ private:
 class ObTableTTLOperation
 {
 public:
-  ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, uint64_t max_version,
-                      int64_t time_to_live, uint64_t del_row_limit, ObString start_rowkey, 
+  ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, int32_t max_version,
+                      int32_t time_to_live, uint64_t del_row_limit, ObString start_rowkey, 
                       ObString start_qualifier):
                       tenant_id_(tenant_id), table_id_(table_id), max_version_(max_version),
                       time_to_live_(time_to_live), del_row_limit_(del_row_limit),
@@ -346,8 +346,8 @@ public:
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
-  uint64_t max_version_;
-  int64_t time_to_live_;
+  int32_t max_version_;
+  int32_t time_to_live_;
   uint64_t del_row_limit_;
   ObString start_rowkey_;
   ObString start_qualifier_;
