@@ -139,7 +139,7 @@ private:
   static int expand_stddev_samp_expr(ObTransformerCtx* ctx, ObAggFunRawExpr* aggr_expr, ObRawExpr*& replace_expr,
       ObIArray<ObAggFunRawExpr*>& new_aggr_items);
 
-  static int add_cast_expr(ObTransformerCtx* ctx, ObRawExpr* expr, ObExprResType& dst_type, ObRawExpr*& new_expr);
+  static int add_cast_expr(ObTransformerCtx* ctx, ObRawExpr* expr, const ObExprResType& dst_type, ObRawExpr*& new_expr);
 
   static int add_win_exprs(
       ObSelectStmt* select_stmt, ObIArray<ObRawExpr*>& replace_exprs, ObIArray<ObWinFunRawExpr*>& new_win_exprs);
