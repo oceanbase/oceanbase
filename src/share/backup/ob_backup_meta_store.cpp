@@ -81,7 +81,13 @@ int64_t ObBackupMeta::get_total_macro_block_count() const
 }
 
 ObBackupMetaFileStore::ObBackupMetaFileStore()
-    : is_inited_(false), pos_(-1), cur_mem_file_(), allocator_(), base_path_info_(), meta_file_path_list_()
+    : is_inited_(false),
+      pos_(-1),
+      cur_mem_file_(),
+      allocator_(),
+      base_path_info_(),
+      meta_file_path_list_(),
+      need_swith_next_file_(false)
 {}
 
 ObBackupMetaFileStore::~ObBackupMetaFileStore()
@@ -122,6 +128,8 @@ int ObBackupMetaFileStore::next(ObBackupMeta& backup_meta)
         LOG_WARN("memory file should not be null", KR(ret), K(mem_file));
       } else if (OB_FAIL(may_need_parse_common_header(mem_file))) {
         LOG_WARN("failed to parse common header", KR(ret));
+      } else if (need_swith_next_file_) {
+        FLOG_INFO("backup data has incomplete data, skip it", KPC(mem_file));
       } else if (OB_FAIL(parse_sealed_message(mem_file, backup_meta, end_of_one_block))) {
         LOG_WARN("failed to parse sealed message", KR(ret));
       } else if (mem_file->reader_.pos() == mem_file->end_pos_) {
@@ -227,7 +235,7 @@ int ObBackupMetaFileStore::get_next_mem_file(MemoryFile*& mem_file)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup meta file store not init", KR(ret));
-  } else if (cur_mem_file_.reader_.remain() > 0 && !cur_mem_file_.meet_file_end_mark_) {
+  } else if (cur_mem_file_.reader_.remain() > 0 && !cur_mem_file_.meet_file_end_mark_ && !need_swith_next_file_) {
     mem_file = &cur_mem_file_;
   } else {
     LOG_INFO("current memory file", K(cur_mem_file_.reader_));
@@ -246,6 +254,7 @@ int ObBackupMetaFileStore::get_next_mem_file(MemoryFile*& mem_file)
         LOG_WARN("failed to assign mem file", KR(ret), K(tmp_mem_file));
       } else {
         mem_file = &cur_mem_file_;
+        need_swith_next_file_ = false;
       }
     }
   }
@@ -262,6 +271,9 @@ int ObBackupMetaFileStore::may_need_parse_common_header(MemoryFile*& mem_file)
     LOG_WARN("backup meta file store do not init", KR(ret));
   } else if (!mem_file->need_parse_common_header_) {
     // do not need parse common header
+  } else if (reader.remain() < sizeof(ObBackupCommonHeader)) {
+    FLOG_INFO("backup data has incomplete data, skip it", KPC(mem_file));
+    need_swith_next_file_ = true;
   } else if (OB_FAIL(parse_common_header(reader, common_header))) {
     LOG_WARN("failed to parse common header", KR(ret));
   } else if (OB_FAIL(common_header.check_valid())) {

@@ -118,6 +118,7 @@ private:
   common::ObArenaAllocator allocator_;
   share::ObBackupBaseDataPathInfo base_path_info_;
   common::ObArray<share::ObBackupPath> meta_file_path_list_;
+  bool need_swith_next_file_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMetaFileStore);
