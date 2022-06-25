@@ -1258,6 +1258,25 @@ int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey &pgke
   return ret;
 }
 
+int ObRecoveryPointSchemaFilter::check_table_exist_in_recovery_schema(const uint64_t table_id, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  is_exist = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("recovery point schema filter do not init", K(ret));
+  } else if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check table is local index get invalid argument");
+  } else if (FALSE_IT(schema_guard = &recovery_point_schema_guard_)) {
+  } else if (OB_FAIL(check_table_exist_(table_id, *schema_guard, is_exist))) {
+    STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_id));
+  }
+  return ret;
+}
+
 /***********************ObBackupRestoreTableSchemaChecker***************************/
 int ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
     const share::schema::ObTableSchema *table_schema, bool &need_skip, const bool is_restore_point)
