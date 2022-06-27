@@ -8119,6 +8119,16 @@ int ObPGStorage::update_backup_points(
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> snapshot_versions;
   const bool is_restore_point = false;
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_CREATE_BACKUP_POINT_ERROR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_CREATE_BACKUP_POINT_ERROR", K(ret));
+    }
+  }
+#endif
+
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_points.count(); i++) {
     const int64_t snapshot_ts = backup_points.at(i);
     const int64_t schema_version = schema_versions.at(i);

@@ -898,6 +898,8 @@ int ObPartitionGroupMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle &
             ObBackupInfoMgr::get_instance().get_base_data_restore_schema_version(tenant_id, restore_schema_version))) {
       STORAGE_LOG(WARN, "failed to  get base data restore schema version", K(ret), K(tenant_id), K(restore_info));
     } else {
+      // here get min schema because restore may cut data. pg meta record schema version for cut data if restore
+      // snapshot version is smaller than backup point create end snapshot.
       current_schema_version = std::min(pg_meta_.storage_info_.get_data_info().get_schema_version(),
           backup_pg_meta_info_.pg_meta_.storage_info_.get_data_info().get_schema_version());
     }

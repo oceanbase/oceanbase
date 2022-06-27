@@ -625,6 +625,7 @@ public:
   int do_filter_pg_partitions(const common::ObPartitionKey& pg_key, common::ObPartitionArray& partitions);
   int check_if_table_miss_by_schema(
       const common::ObPartitionKey& pgkey, const common::hash::ObHashSet<uint64_t>& table_ids);
+  int check_table_exist_in_recovery_schema(const uint64_t table_id, bool &is_exist);
 
   TO_STRING_KV(
       K_(is_inited), K_(tenant_id), K_(tenant_recovery_point_schema_version), K_(tenant_current_schema_version));

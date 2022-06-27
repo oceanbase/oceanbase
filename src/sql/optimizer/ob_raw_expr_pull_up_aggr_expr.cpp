@@ -280,8 +280,14 @@ int ObRawExprPullUpAggrExpr::visit(ObAggFunRawExpr& expr)
               LOG_WARN("failed to set esitmate_ndv param", K(ret));
             } else if (OB_FAIL(new_expr->formalize(session_info_))) {
               LOG_WARN("failed to formalize estimate_ndv function", K(ret));
-            } else {
-              // do nothing
+            } else if (expr.get_result_type() != new_expr_->get_result_type() &&
+                       OB_FAIL(ObRawExprUtils::create_cast_expr(
+                           expr_factory_, new_expr_, expr.get_result_type(), new_expr, session_info_))) {
+              LOG_WARN("create cast expr failed", K(ret));
+            } else if (OB_ISNULL(new_expr_ = new_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr is null", K_(new_expr), K(ret));
+            } else { /*do nothing*/
             }
           }
         }

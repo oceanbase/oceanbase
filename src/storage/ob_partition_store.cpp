@@ -4552,6 +4552,7 @@ int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_ve
       ObTablesHandle tmp_handle;
       ObTablesHandle new_handle;
       ObMultiVersionTableStore *table_store = NULL;
+      bool is_exist = false;
       if (OB_FAIL(store_map_->get(index_id, table_store))) {
         LOG_WARN("failed to get table store", K(ret), K(index_id));
       } else if (OB_ISNULL(table_store)) {
@@ -4559,7 +4560,9 @@ int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_ve
         LOG_WARN("table store should not be null", K(ret), "index_id", index_id);
       } else if (OB_FAIL(table_store->get_multi_version_start(multi_version_start))) {
         LOG_WARN("failed to get multi_version_start", K(ret), K(pkey_), K(index_id));
-      } else if (meta_->create_timestamp_ < snapshot_version && multi_version_start > snapshot_version) {
+      } else if (OB_FAIL(schema_filter.check_table_exist_in_recovery_schema(index_id, is_exist))) {
+        LOG_WARN("failed to check table exist in recovery schema", K(ret), K(index_id));
+      } else if (is_exist && meta_->create_timestamp_ < snapshot_version && multi_version_start > snapshot_version) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table store has not kept multi version",
             K(ret),
