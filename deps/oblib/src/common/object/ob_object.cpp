@@ -1005,7 +1005,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     }
     default:
       offset = 0;
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_NOT_SUPPORTED;
       _OB_LOG(WARN, "unexpected data type=%u", data_type);
   }
   return ret;

@@ -23,6 +23,7 @@
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "./blocksstable/ob_data_file_prepare.h"
+#include "./blocksstable/ob_row_generate.h"
 
 namespace oceanbase {
 using namespace storage;
@@ -187,6 +188,7 @@ public:
   void test_multi_sort_round(
       const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt, const int64_t merge_count);
   void test_memory_sort_round(const int64_t buf_mem_limit, const int64_t items_count);
+  void test_avx512_sort_type();
   void test_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt);
   void test_multi_task_sort(
       const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt, const int64_t task_cnt);
@@ -629,6 +631,109 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+void TestParallelExternalSort::test_avx512_sort_type()
+{
+  int row_count = 1;
+  int TEST_COLUMN_CNT = 5;
+  int TEST_ROWKEY_COLUMN_CNT = 2;
+  int64_t table_id = combine_id(1, 3001);
+  // init column
+  char name[OB_MAX_FILE_NAME_LENGTH];
+  memset(name, 0, sizeof(name));
+  for (int64_t i = 0; i < TEST_COLUMN_CNT; ++i) {
+    ObRowGenerate row_generate_;
+    ObArenaAllocator allocator_;
+    ObObjType obj_type;
+    ObObjMeta meta_type;
+    ObColumnSchemaV2 column;
+
+    ObTableSchema table_schema_;
+    // init table schema
+    table_schema_.reset();
+    ASSERT_EQ(OB_SUCCESS, table_schema_.set_table_name("test_i_store"));
+    table_schema_.set_tenant_id(1);
+    table_schema_.set_tablegroup_id(1);
+    table_schema_.set_database_id(1);
+    table_schema_.set_table_id(table_id);
+    //table_schema_.set_rowkey_column_num(TEST_ROWKEY_COLUMN_CNT);
+    table_schema_.set_max_used_column_id(1);
+    table_schema_.set_block_size(4 * 1024);
+    table_schema_.set_compress_func_name("none");
+
+    column.reset();
+    column.set_table_id(table_id);
+    column.set_column_id(i);
+    column.set_data_length(1);
+    sprintf(name, "test%020ld", i);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    if (i == 0) {
+      obj_type = common::ObCharType;
+    } else if (i == 1) {
+      obj_type = common::ObHexStringType;
+    } else if (i == 2) {
+      obj_type = common::ObDoubleType;
+    } else if (i == 3) {
+      obj_type = common::ObVarcharType;
+    } else {
+      obj_type = common::ObTinyIntType;
+    }
+
+    meta_type.set_type(obj_type);
+    column.set_meta_type(meta_type);
+    if (ob_is_string_type(obj_type) && obj_type != ObHexStringType) {
+      meta_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      meta_type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      column.set_meta_type(meta_type);
+    }
+
+    column.set_rowkey_position(1);
+    ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
+
+    row_generate_.init(table_schema_, &allocator_);
+
+    int ret = OB_SUCCESS;
+    typedef ObExternalSortRound<TestItem, TestItemCompare> SortRound;
+    typedef ObMemorySortRound<TestItem, TestItemCompare> MemorySortRound;
+    SortRound sort_round;
+    MemorySortRound memory_sort_round;
+    ObVector<ObStoreRow*> item_list_;
+    for (int64_t i = 0; i < row_count; i++) {
+      ObStoreRow* row = new ObStoreRow();
+      item_list_.push_back(row);
+      void *rptr = allocator_.alloc(sizeof(ObObj));
+      ObObj *cells = new (rptr) ObObj;
+      item_list_[i]->row_val_.assign(cells, 1);
+      row_generate_.get_next_row(*item_list_[i]);
+    }
+
+    uint64_t* keys = NULL;
+    ObStoreRow** values = NULL;
+    int64_t items_size = item_list_.size();
+    if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    } else if (OB_ISNULL(values = static_cast<ObStoreRow**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+      values[i] = item_list_.at(i);
+    }
+
+
+    SortWithAvx512<ObStoreRow> sortWithAvx;
+    ret = sortWithAvx.sort(keys, values, items_size);
+    if (obj_type == common::ObHexStringType) {
+      ASSERT_EQ(OB_NOT_SUPPORTED, ret);
+    } else {
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+
+    allocator_.free(keys);
+    allocator_.free(*values);
+  }
+}
+
 void TestParallelExternalSort::test_sort(
     const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt)
 {
@@ -991,6 +1096,11 @@ TEST_F(TestParallelExternalSort, test_memory_sort_round)
   for (int64_t i = 100; i < 1000; i *= 10) {
     test_memory_sort_round(buf_mem_limit, i);
   }
+}
+
+TEST_F(TestParallelExternalSort, test_avx512_sort_type)
+{
+  test_avx512_sort_type();
 }
 
 

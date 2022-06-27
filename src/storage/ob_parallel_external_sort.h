@@ -1586,12 +1586,22 @@ int ObMemorySortRound<T, Compare>::build_fragment()
         STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
         SortWithAvx512<T> sortWithAvx;
         ret = sortWithAvx.sort(keys, values, items_size);
-        if (OB_FAIL(ret)) {
-          STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
+        if (OB_SUCC(ret)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
+            item_list_.at(i) = values[i];
+          }
+        } else {
+          if (ret == OB_NOT_SUPPORTED) {
+            STORAGE_LOG(WARN, "ob type is not supported by avx512, switch to std::sort");
+            std::sort(item_list_.begin(), item_list_.end(), *compare_);
+            if (OB_FAIL(compare_->result_code_)) {
+              ret = compare_->result_code_;
+              STORAGE_LOG(WARN, "fail to sort item list", K(ret));
+            }
+          } else {
+              STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
+          }
         }
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
-        item_list_.at(i) = values[i];
       }
       if (keys != NULL) { allocator_.free(keys); }
       if (values != NULL) { allocator_.free(values); }
