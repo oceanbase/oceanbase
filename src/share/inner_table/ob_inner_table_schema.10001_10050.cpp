@@ -464,7 +464,7 @@ int ObInnerTableSchema::tenant_virtual_table_column_schema(ObTableSchema &table_
       MAX_COLLATION_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -509,7 +509,7 @@ int ObInnerTableSchema::tenant_virtual_table_column_schema(ObTableSchema &table_
       COLUMN_DEFAULT_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
