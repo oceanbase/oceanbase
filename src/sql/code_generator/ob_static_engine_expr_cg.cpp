@@ -986,10 +986,6 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr,
     if (OB_ISNULL(parent_expr) || OB_UNLIKELY(parent_expr->arg_cnt_ < var_idx + 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param", KPC(parent_expr));
-	  } else if (OB_UNLIKELY(var_expr->datum_meta_.type_ != origin_expr->datum_meta_.type_
-                || var_expr->datum_meta_.cs_type_ != origin_expr->datum_meta_.cs_type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec var meta diff from origin expr meta", K(ret), KPC(origin_expr), KPC(var_expr));
     } else {
       parent_expr->args_[var_idx] = origin_expr;
     }
@@ -1015,17 +1011,24 @@ int ObStaticEngineExprCG::replace_var_rt_expr(ObExpr* origin_expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), KPC(parent_expr));
       } else if (T_EXEC_VAR == var_expr->type_) {
-		    if (OB_UNLIKELY(var_expr->datum_meta_.type_ != origin_expr->datum_meta_.type_
-                || var_expr->datum_meta_.cs_type_ != origin_expr->datum_meta_.cs_type_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("exec var meta diff from origin expr meta", K(ret), KPC(origin_expr), KPC(var_expr));
-        } else {
-          parent_expr->args_[var_idx] = origin_expr;
-        }
+        parent_expr->args_[var_idx] = origin_expr;
         break;
       } else {
         parent_expr = var_expr;
       }
+    }
+  }
+  if (OB_SUCC(ret) && T_EXEC_VAR == var_expr->type_) {
+    if (OB_UNLIKELY(
+            ObNullType != var_expr->datum_meta_.type_ && ObNullType != origin_expr->datum_meta_.type_ &&
+            ob_obj_type_class(var_expr->datum_meta_.type_) != ob_obj_type_class(origin_expr->datum_meta_.type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec var meta diff from origin expr meta", K(ret), KPC(origin_expr), KPC(var_expr));
+    } else if (OB_UNLIKELY(ob_is_string_or_lob_type(var_expr->datum_meta_.type_) &&
+                           ob_is_string_or_lob_type(origin_expr->datum_meta_.type_) &&
+                           var_expr->datum_meta_.cs_type_ != origin_expr->datum_meta_.cs_type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec var collation diff from origin expr collation", K(ret), KPC(origin_expr), KPC(var_expr));
     }
   }
   return ret;
