@@ -848,76 +848,22 @@ int ObExprRegexContext::pre_process_replace_str(const ObString& text, const ObSt
                 before_is_escape = true;
                 need_copy_last = (length_to - 1 != i);
               } else if (!before_is_escape) {
-                switch (to_ptr[i + 1]) {
-                  case '1':
-                    MEMCPY(tmp_buf, subexpr_array.at(0).ptr(), subexpr_array.at(0).length());
-                    tmp_buf += subexpr_array.at(0).length();
-                    real_tot_length += subexpr_array.at(0).length();
+                if (to_ptr[i + 1] >= '1' && to_ptr[i + 1] <= '9') {
+                  int64_t idx = to_ptr[i + 1] - '1';
+                  if (OB_UNLIKELY(idx < 0 || idx >= subexpr_array.count())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("get unexpected error", K(ret), K(idx), K(subexpr_array));
+                  } else {
+                    MEMCPY(tmp_buf, subexpr_array.at(idx).ptr(), subexpr_array.at(idx).length());
+                    tmp_buf += subexpr_array.at(idx).length();
+                    real_tot_length += subexpr_array.at(idx).length();
                     ++i;
                     need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '2':
-                    MEMCPY(tmp_buf, subexpr_array.at(1).ptr(), subexpr_array.at(1).length());
-                    tmp_buf += subexpr_array.at(1).length();
-                    real_tot_length += subexpr_array.at(1).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '3':
-                    MEMCPY(tmp_buf, subexpr_array.at(2).ptr(), subexpr_array.at(2).length());
-                    tmp_buf += subexpr_array.at(2).length();
-                    real_tot_length += subexpr_array.at(2).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '4':
-                    MEMCPY(tmp_buf, subexpr_array.at(3).ptr(), subexpr_array.at(3).length());
-                    tmp_buf += subexpr_array.at(3).length();
-                    real_tot_length += subexpr_array.at(3).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '5':
-                    MEMCPY(tmp_buf, subexpr_array.at(4).ptr(), subexpr_array.at(4).length());
-                    tmp_buf += subexpr_array.at(4).length();
-                    real_tot_length += subexpr_array.at(4).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '6':
-                    MEMCPY(tmp_buf, subexpr_array.at(5).ptr(), subexpr_array.at(5).length());
-                    tmp_buf += subexpr_array.at(5).length();
-                    real_tot_length += subexpr_array.at(5).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '7':
-                    MEMCPY(tmp_buf, subexpr_array.at(6).ptr(), subexpr_array.at(6).length());
-                    tmp_buf += subexpr_array.at(6).length();
-                    real_tot_length += subexpr_array.at(6).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '8':
-                    MEMCPY(tmp_buf, subexpr_array.at(7).ptr(), subexpr_array.at(7).length());
-                    tmp_buf += subexpr_array.at(7).length();
-                    real_tot_length += subexpr_array.at(7).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                  case '9':
-                    MEMCPY(tmp_buf, subexpr_array.at(8).ptr(), subexpr_array.at(8).length());
-                    tmp_buf += subexpr_array.at(8).length();
-                    real_tot_length += subexpr_array.at(8).length();
-                    ++i;
-                    need_copy_last = (length_to - 1 != i);
-                    break;
-                    break;
-                  default:
-                    MEMCPY(tmp_buf, to_ptr + i, 1);
-                    tmp_buf += 1;
-                    ++real_tot_length;
-                    break;
+                  }
+                } else {
+                  MEMCPY(tmp_buf, to_ptr + i, 1);
+                  tmp_buf += 1;
+                  ++real_tot_length;
                 }
               } else {
                 MEMCPY(tmp_buf, to_ptr + i, 1);
