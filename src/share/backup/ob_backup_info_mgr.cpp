@@ -954,6 +954,34 @@ int ObBackupInfoMgr::get_base_data_restore_schema_version(const uint64_t tenant_
   return ret;
 }
 
+int ObBackupInfoMgr::get_restore_backup_snapshot_version(const uint64_t tenant_id, int64_t &snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObSimplePhysicalRestoreJob simple_job_info;
+  snapshot_version = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get_restore_info_from_cache", K(ret), K(tenant_id));
+    } else if (OB_FAIL(reload())) {
+      LOG_WARN("failed to reload", K(ret));
+    } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+      LOG_WARN("failed to get restore info from cache again", K(ret), K(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    snapshot_version = simple_job_info.snapshot_version_;
+    if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
+      FLOG_INFO("get_restore_info", K(ret), K(tenant_id), K(simple_job_info));
+    }
+  }
+  return ret;
+}
+
 ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::GetRestoreBackupInfoParam()
     : backup_dest_(nullptr),
       backup_cluster_name_(nullptr),
