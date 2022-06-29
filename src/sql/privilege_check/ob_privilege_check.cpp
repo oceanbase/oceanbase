@@ -2321,8 +2321,9 @@ int ObPrivilegeCheck::can_do_operation_on_db(const ObSessionPrivInfo& session_pr
         db_name.length(),
         db_name.ptr());
   } else if (0 == db_name.case_compare(OB_INFORMATION_SCHEMA_NAME) ||
-             0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME) || 0 == db_name.case_compare(OB_MYSQL_SCHEMA_NAME) ||
-             0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
+             0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME)
+             //|| 0 == db_name.case_compare(OB_MYSQL_SCHEMA_NAME)
+             || 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
     if (session_priv.tenant_id_ != OB_SYS_TENANT_ID) {
       if ((0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME)) &&
           ((0 == session_priv.user_name_.compare(OB_RESTORE_USER_NAME)) ||
