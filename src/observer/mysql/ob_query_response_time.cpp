@@ -176,7 +176,10 @@ int ObRSTCollector::flush_query_response_time(uint64_t tenant_id,const ObString&
 
 int ObRSTCollector::enable_query_response_time(uint64_t tenant_id){
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ret = collector_map_.set_refactored(tenant_id, new ObRSTTimeCollector()))) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if(tenant_config->query_response_time_stats){
+        SERVER_LOG(INFO, "query_response_time_stats already turn on", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ret = collector_map_.set_refactored(tenant_id, new ObRSTTimeCollector()))) {
         if (OB_HASH_EXIST == ret) {
             ret = OB_ERR_ALREADY_EXISTS;
         }
@@ -186,7 +189,10 @@ int ObRSTCollector::enable_query_response_time(uint64_t tenant_id){
 
 int ObRSTCollector::free_query_response_time(uint64_t tenant_id){
     int ret = OB_SUCCESS;
-    if (OB_FAIL(collector_map_.erase_refactored(tenant_id))) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if(!tenant_config->query_response_time_stats){
+        SERVER_LOG(INFO, "query_response_time_stats already turn off", K(ret), K(tenant_id));
+    } else if (OB_FAIL(collector_map_.erase_refactored(tenant_id))) {
         SERVER_LOG(WARN,"erase the time collector failed", K(tenant_id));
     }
     return ret;

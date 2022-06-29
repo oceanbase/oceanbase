@@ -1113,7 +1113,7 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         } else {
           show_resv_ctx.stmt_type_ = stmt::T_SHOW_QUERY_RESPONSE_TIME;
           GEN_SQL_STEP_1(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME);
-          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME, OB_INFORMATION_SCHEMA_NAME, OB_QUERY_RESPONSE_TIME_TNAME);
+          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME, OB_SYS_DATABASE_NAME, OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME);
         }
         break;
       }
