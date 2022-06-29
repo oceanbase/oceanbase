@@ -426,7 +426,7 @@ int ObTransformQueryPushDown::check_where_condition_push_down(
   } else if (view_stmt->has_set_op() || view_stmt->has_limit() || view_stmt->has_window_function() ||
              view_stmt->is_contains_assignment()) {
     can_be = false;
-  } else if (view_stmt->has_group_by() || select_stmt->has_rollup()) {
+  } else if (view_stmt->has_group_by() || view_stmt->has_rollup()) {
     bool is_invalid = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_invalid && i < select_stmt->get_condition_size(); ++i) {
       const ObRawExpr* cond_expr = NULL;
