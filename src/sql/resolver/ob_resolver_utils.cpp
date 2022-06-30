@@ -3807,10 +3807,17 @@ int ObResolverUtils::resolve_data_type(const ParseNode& type_node, const ObStrin
           ret = OB_ERR_TOO_BIG_SCALE;
           LOG_USER_ERROR(OB_ERR_TOO_BIG_SCALE, scale, ident_name.ptr(), OB_MAX_DOUBLE_FLOAT_SCALE);
           LOG_WARN("scale of double overflow", K(ret), K(scale), K(precision));
-        } else if (OB_UNLIKELY(precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
+        } else if (OB_UNLIKELY(OB_DECIMAL_NOT_SPECIFIED == scale &&
+                               precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
           ret = OB_ERR_COLUMN_SPEC;
           LOG_USER_ERROR(OB_ERR_COLUMN_SPEC, ident_name.length(), ident_name.ptr());
           LOG_WARN("precision of double overflow", K(ret), K(scale), K(precision));
+        } else if (OB_UNLIKELY(OB_DECIMAL_NOT_SPECIFIED != scale &&
+                   precision > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH)) {
+          ret = OB_ERR_TOO_BIG_DISPLAYWIDTH;
+          LOG_USER_ERROR(OB_ERR_TOO_BIG_DISPLAYWIDTH,
+                         ident_name.ptr(),
+                         OB_MAX_INTEGER_DISPLAY_WIDTH);
         } else if (OB_UNLIKELY(precision < scale)) {
           ret = OB_ERR_M_BIGGER_THAN_D;
           LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, to_cstring(ident_name));
