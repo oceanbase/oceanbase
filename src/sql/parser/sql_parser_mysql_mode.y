@@ -4536,6 +4536,10 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
 {
+  if (T_FLOAT != $1[0] && NULL != $2 && -1 == $2->int16_values_[1]) {
+    yyerror(&@2, result, "double type not support double(M) syntax\n");
+    YYERROR;
+  }
   malloc_terminal_node($$, result->malloc_pool_, ($3[0] || $4[0]) ? $1[0] + (T_UFLOAT - T_FLOAT) : $1[0]);
   if (NULL != $2) {
     $$->int16_values_[0] = $2->int16_values_[0];
@@ -4756,6 +4760,14 @@ opt_float_precision:
 | '(' INTNUM ')'
 {
   malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
+  $$->int16_values_[0] = $2->value_;
+  $$->int16_values_[1] = -1;
+}
+| '(' DECIMAL_VAL ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
+  int err_no = 0;
+  $2->value_ = ob_strntoll($2->str_value_, $2->str_len_, 10, NULL, &err_no);
   $$->int16_values_[0] = $2->value_;
   $$->int16_values_[1] = -1;
 }
