@@ -265,7 +265,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema& table_schema, const ObCo
             CS_TYPE_BINARY != column_schema.get_collation_type()) {
           cur_row_.cells_[cell_idx].set_varchar(ObCharset::collation_name(column_schema.get_collation_type()));
         } else {
-          cur_row_.cells_[cell_idx].set_varchar(ObString("NULL"));
+          cur_row_.cells_[cell_idx].set_null();
         }
         cur_row_.cells_[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -329,8 +329,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema& table_schema, const ObCo
             cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
           }
         } else if (def_obj.is_null()) {
-          // NOTICE: default value is NULL need print string "NULL"
-          cur_row_.cells_[cell_idx].set_varchar("NULL");
+          cur_row_.cells_[cell_idx].set_null();
         } else if (def_obj.is_bit()) {
           if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
             LOG_WARN("fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));

@@ -4937,10 +4937,10 @@ def_table_schema(
 
   normal_columns = [
   ('type', 'varchar:COLUMN_TYPE_LENGTH'),
-  ('collation', 'varchar:MAX_COLLATION_LENGTH'),
+  ('collation', 'varchar:MAX_COLLATION_LENGTH', 'true'),
   ('null', 'varchar:COLUMN_NULLABLE_LENGTH'),
   ('key', 'varchar:COLUMN_KEY_LENGTH'),
-  ('default', 'varchar:COLUMN_DEFAULT_LENGTH'),
+  ('default', 'varchar:COLUMN_DEFAULT_LENGTH', 'true'),
   ('extra', 'varchar:COLUMN_EXTRA_LENGTH'),
   ('privileges', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH'),
   ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
