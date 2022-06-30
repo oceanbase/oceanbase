@@ -102,6 +102,7 @@ public:
   static int fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy &sql_proxy,
       ObLogArchiveBackupInfo &new_backup_info, ObNonFrozenBackupPieceInfo &new_backup_piece);
   int64_t get_log_archive_checkpoint_interval() const;
+  int get_restore_backup_snapshot_version(const uint64_t tenant_id, int64_t &snapshot_version);
 
 private:
   static const int64_t DEFAULT_UPDATE_INTERVAL_US = 10 * 1000 * 1000;  // 10s

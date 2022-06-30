@@ -14180,10 +14180,38 @@ int ObRestoreTailoredFinishTask::process()
       LOG_WARN("failed to get all saved info", K(ret));
     } else {
       ObDataStorageInfo &storage_info = save_info.get_data_info();
+      ObBaseStorageInfo &clog_info = save_info.get_clog_info();
       const int64_t publish_version = std::min(storage_info.get_publish_version(), restore_snapshot_version);
       storage_info.set_publish_version(publish_version);
       storage_info.set_schema_version(schema_version_);
-      if (OB_FAIL(partition_group->set_storage_info(save_info))) {
+      int16_t restore_flag = REPLICA_NOT_RESTORE;
+      restore_flag = partition_group->get_pg_storage().get_restore_state();
+      const int64_t clog_info_log_id = clog_info.get_last_replay_log_id();
+      const int64_t data_info_log_id = storage_info.get_last_replay_log_id();
+
+      if (REPLICA_RESTORE_CUT_DATA == restore_flag) {
+        int64_t backup_snapshot_version = 0;
+        bool is_snapshot_restore = false;
+        if (OB_FAIL(ObBackupInfoMgr::get_instance().get_restore_backup_snapshot_version(
+                pg_key.get_tenant_id(), backup_snapshot_version))) {
+          LOG_WARN("failed to get backup snapshot version", K(ret));
+        } else if (OB_FAIL(ObRestoreBackupInfoUtil::check_is_snapshot_restore(backup_snapshot_version,
+                       ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.restore_snapshot_version_,
+                       ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.cluster_version_,
+                       is_snapshot_restore))) {
+          LOG_WARN("failed to check is snapshot restore", K(ret), KPC(ctx_));
+        } else if (is_snapshot_restore && clog_info_log_id < data_info_log_id) {
+          clog_info.set_last_replay_log_id(data_info_log_id);
+          FLOG_INFO("push clog info log id",
+              "orginal clog info log id",
+              clog_info_log_id,
+              "data info log id",
+              data_info_log_id);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(partition_group->set_storage_info(save_info))) {
         LOG_WARN("failed to set storage info", K(ret), K(save_info));
       }
     }

@@ -5329,8 +5329,8 @@ int ObDMLResolver::parse_qb_in_rewrite_hint(const ParseNode* hint_node, common::
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("qb table name has no one children.", K(ret));
     } else if (OB_ISNULL(qb_table_name->children_[0])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("qb table name has null children.", K(ret));
+      // allowed use hint like USE_CONCAT()
+      type = hint_type;
     } else if (OB_FAIL(resolve_qb_name_node(qb_table_name->children_[0], qb_name))) {
       LOG_WARN("failed to resolve the rewrite hint.", K(ret));
     } else if (OB_FAIL(qb_names.push_back(qb_name))) {

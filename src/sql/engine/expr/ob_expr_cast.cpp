@@ -143,7 +143,8 @@ int ObExprCast::get_cast_string_len(ObExprResType& type1, ObExprResType& type2, 
       case ObEnumInnerType:
       case ObSetInnerType:
       case ObURowIDType:
-      case ObLobType: {
+      case ObLobType:
+      case ObJsonType: {
         res_len = type1.get_length();
         length_semantics = type1.get_length_semantics();
         break;

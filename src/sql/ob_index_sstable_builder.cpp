@@ -1632,7 +1632,7 @@ int ObIndexSSTableBuilder::split_ranges(ObArray<ObArray<ObNewRange>>& ranges_arr
                        "SELECT %.*s FROM "
                        "(SELECT %.*s, bucket, ROW_NUMBER() OVER (PARTITION BY bucket ORDER BY %.*s) rn FROM "
                        "(SELECT %.*s, NTILE(%ld) OVER (ORDER BY %.*s) bucket FROM "
-                       "(SELECT %.*s FROM %s%.*s%s.%s%.*s%s SAMPLE BLOCK(%g) %s %ld) a) b) c WHERE rn = 1 "
+                       "(SELECT %.*s FROM %s%.*s%s.%s%.*s%s SAMPLE BLOCK(%g)) a) b) c WHERE rn = 1 "
                        "GROUP BY %.*s ORDER BY %.*s",
                        static_cast<int>(col_alias.length()),
                        col_alias.ptr(),
@@ -1659,8 +1659,6 @@ int ObIndexSSTableBuilder::split_ranges(ObArray<ObArray<ObNewRange>>& ranges_arr
                        sample_table.get_table_name_str().ptr(),
                        name_quote(),
                        sample_pct,
-                       oracle_mode_ ? "WHERE ROWNUM <=" : "LIMIT",
-                       max_sample_rows * 2,
 
                        static_cast<int>(col_alias.length()),
                        col_alias.ptr(),

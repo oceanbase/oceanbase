@@ -158,6 +158,7 @@ int ObPxCoord::rescan(ObExecContext& ctx) const
     LOG_WARN("get physical operator context failed", K(ret));
   } else if (OB_FAIL(terminate_running_dfos(ctx, px_ctx->coord_info_.dfo_mgr_))) {
     LOG_WARN("fail to release px resources in QC inner_close", K(ret));
+  } else if (FALSE_IT(clear_interrupt(px_ctx))) {
   } else if (OB_FAIL(destroy_all_channel(*px_ctx))) {
     LOG_WARN("release dtl channel failed", K(ret));
   } else if (FALSE_IT(unregister_first_buffer_cache(ctx, *px_ctx))) {
@@ -166,6 +167,8 @@ int ObPxCoord::rescan(ObExecContext& ctx) const
     LOG_WARN("failed to free allocator", K(ret));
   } else if (FALSE_IT(px_ctx->reset_for_rescan())) {
     // nop
+  } else if (OB_FAIL(register_interrupt(px_ctx))) {
+    LOG_WARN("fail to register interrupt", K(ret));
   } else if (OB_FAIL(init_dfo_mgr(ObDfoInterruptIdGen(px_ctx->interrupt_id_,
                                       (uint32_t)GCTX.server_id_,
                                       (uint32_t)px_ctx->qc_id_,

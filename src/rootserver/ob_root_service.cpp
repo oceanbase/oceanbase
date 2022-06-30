@@ -2853,8 +2853,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg& arg)
       LOG_WARN("failed to update baseline schema version", K(ret));
     } else if (OB_FAIL(global_proxy.get_baseline_schema_version(frozen_version, baseline_schema_version_))) {
       LOG_WARN("fail to get baseline schema version", KR(ret));
-    } else if (OB_FAIL(set_max_trx_size_config())) {
-      LOG_WARN("fail to set max trx size config", K(ret));
+    // } else if (OB_FAIL(set_max_trx_size_config())) {
+    // LOG_WARN("fail to set max trx size config", K(ret));
     } else if (OB_FAIL(set_1pc_config())) {
       LOG_WARN("fail to set one phase commit config", K(ret));
     } else if (OB_FAIL(set_enable_oracle_priv_check())) {

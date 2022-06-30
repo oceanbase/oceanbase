@@ -69,7 +69,6 @@ class ObRSTTimeCollector {
 public:
 
   ObRSTUtility utility_;
-  lib::ObMutex mutex_;
   uint32_t count_[OB_QRT_OVERALL_COUNT];
   uint64_t total_[OB_QRT_OVERALL_COUNT];
 

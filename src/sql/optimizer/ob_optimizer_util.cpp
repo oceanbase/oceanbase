@@ -4764,6 +4764,17 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr* expr, bool& is_los
             is_lossless = true;
           }
         }
+      } else if (ObBitTC == column_tc) {
+        if (ObNumberTC == dst_tc) {
+          const double log10_2 = 0.30103;
+          ObAccuracy lossless_acc = column_type.get_accuracy();
+          if (dst_acc.get_scale() >= 0 &&
+              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() * log10_2) {
+            // log10(2) = 0.30102999566398114; log10(2^n) = n*log10(2);
+            // cast(b'111' as decimal(1,0)) is lossless
+            is_lossless = true;
+          }
+        }
       } else if (ObFloatTC == column_tc || ObDoubleTC == column_tc) {
         if (ObDoubleTC == dst_tc) {
           if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
