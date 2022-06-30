@@ -173,6 +173,10 @@ public:
   {
     end_ret_ = ret;
   }
+  int get_end_ret()
+  {
+    return end_ret_;
+  }
   bool need_rollback();
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier), K_(exec_ctx), K_(des_phy_plan),
       K_(sqc_init_args), KP_(sub_coord));
