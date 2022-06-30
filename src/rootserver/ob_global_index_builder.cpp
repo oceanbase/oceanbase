@@ -1568,7 +1568,7 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
                        cluster_id,
                        filter_flag_replica))) {
           LOG_WARN("fail to get partition info", K(ret), K(pkey));
-        } else if (OB_FAIL(filter.set_replica_status(REPLICA_STATUS_NORMAL))) {
+        } else if (OB_FAIL(filter.set_persistent_replica_status_not_equal(REPLICA_STATUS_OFFLINE))) {
           LOG_WARN("fail to set replica status", K(ret));
         } else if (OB_FAIL(filter.set_filter_log_replica())) {
           LOG_WARN("fail to set filter log replica", K(ret));
