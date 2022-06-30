@@ -2649,14 +2649,8 @@ int ObDatabaseSchema::get_first_primary_zone_inherit(share::schema::ObSchemaGett
     const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs, common::ObZone& first_primary_zone) const
 {
   int ret = OB_SUCCESS;
-  const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
   first_primary_zone.reset();
-  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-    LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-  } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-    ret = OB_TENANT_NOT_EXIST;
-    LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-  } else if (primary_zone_.empty() || simple_tenant->is_restore()) {
+  if (primary_zone_.empty()) {
     const share::schema::ObTenantSchema* tenant_schema = nullptr;
     if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
       LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
@@ -2722,17 +2716,7 @@ int ObDatabaseSchema::get_primary_zone_inherit(ObSchemaGetterGuard& schema_guard
   int ret = OB_SUCCESS;
   bool use_tenant_primary_zone = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   primary_zone.reset();
-  if (!use_tenant_primary_zone) {
-    const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_primary_zone = simple_tenant->is_restore();
-    }
-  }
+
   if (OB_FAIL(ret)) {
   } else if (!get_primary_zone().empty() && !use_tenant_primary_zone) {
     if (OB_FAIL(primary_zone.set_primary_zone_array(get_primary_zone_array()))) {
@@ -5233,16 +5217,9 @@ int ObTablegroupSchema::get_first_primary_zone_inherit(share::schema::ObSchemaGe
     const common::ObIArray<rootserver::ObReplicaAddr>& replica_addrs, common::ObZone& first_primary_zone) const
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = get_tenant_id();
-  const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
   first_primary_zone.reset();
-  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-    LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-  } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-    ret = OB_TENANT_NOT_EXIST;
-    LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-  } else if (get_primary_zone().empty() || simple_tenant->is_restore()) {
-    const share::schema::ObTenantSchema* tenant_schema = nullptr;
+  if (get_primary_zone().empty()) {
+    const share::schema::ObTenantSchema *tenant_schema = nullptr;
     if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
       LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
     } else if (OB_UNLIKELY(nullptr == tenant_schema)) {
@@ -5358,15 +5335,22 @@ int ObTablegroupSchema::get_zone_replica_attr_array_inherit(
   int ret = OB_SUCCESS;
   bool use_tenant_locality = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   locality.reset();
-  if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
+  if (!use_tenant_locality && !locality_info_.locality_str_.empty()) {
+    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
     if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
       LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
     } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
       ret = OB_TENANT_NOT_EXIST;
       LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
+    } else if (simple_tenant->is_restore()) {
+      bool has_not_f_replica = false;
+      if (OB_FAIL(check_has_own_not_f_replica(has_not_f_replica))) {
+        LOG_WARN("failed to check has not f replica", KR(ret));
+      } else if (has_not_f_replica) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_WARN(
+            "has not full replica while tenant is restore, try latter", KR(ret), K(locality_info_), KPC(simple_tenant));
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -5394,17 +5378,7 @@ int ObTablegroupSchema::get_locality_str_inherit(
   int ret = OB_SUCCESS;
   bool use_tenant_locality = OB_SYS_TENANT_ID != tenant_id_ && GCTX.is_standby_cluster();
   locality_str = &get_locality_str();
-  if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
-    if (OB_FAIL(guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
-    }
-  }
+
   if (OB_FAIL(ret)) {
   } else if (use_tenant_locality || nullptr == locality_str || locality_str->empty()) {
     const ObSimpleTenantSchema* tenant_schema = nullptr;
@@ -5414,6 +5388,18 @@ int ObTablegroupSchema::get_locality_str_inherit(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get tenant schema", K(ret), "tenant_id", get_tenant_id());
     } else {
+      if (tenant_schema->is_restore()) {
+        bool has_not_f_replica = false;
+        if (OB_FAIL(check_has_own_not_f_replica(has_not_f_replica))) {
+          LOG_WARN("failed to check has not f replica", KR(ret));
+        } else if (has_not_f_replica) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("has not full replica while tenant is restore, try latter",
+              KR(ret),
+              K(locality_info_),
+              KPC(tenant_schema));
+        }
+      }
       locality_str = &tenant_schema->get_locality_str();
     }
   }
@@ -5493,17 +5479,7 @@ int ObTablegroupSchema::get_primary_zone_inherit(ObSchemaGetterGuard& schema_gua
   int ret = OB_SUCCESS;
   bool use_tenant_primary_zone = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   primary_zone.reset();
-  if (!use_tenant_primary_zone) {
-    const share::schema::ObSimpleTenantSchema* simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_primary_zone = simple_tenant->is_restore();
-    }
-  }
+
   if (OB_FAIL(ret)) {
   } else if (!get_primary_zone().empty() && !use_tenant_primary_zone) {
     if (OB_FAIL(primary_zone.set_primary_zone_array(get_primary_zone_array()))) {
@@ -5599,6 +5575,27 @@ int ObTablegroupSchema::get_full_replica_num(share::schema::ObSchemaGetterGuard&
     } else {
       for (int64_t i = 0; i < zone_locality.count(); ++i) {
         num += zone_locality.at(i).get_full_replica_num();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTablegroupSchema::check_has_own_not_f_replica(bool &has_not_f_replica) const
+{
+  int ret = OB_SUCCESS;
+  has_not_f_replica = false;
+  if (locality_info_.locality_str_.empty()) {
+    has_not_f_replica = false;
+  } else {
+    FOREACH_CNT_X(locality, locality_info_.zone_replica_attr_array_, OB_SUCC(ret) && !has_not_f_replica)
+    {
+      if (OB_ISNULL(locality)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid locality set", K(ret), KP(locality));
+      } else if (locality->get_specific_replica_num() != locality->get_full_replica_num() ||
+                 OB_ALL_SERVER_CNT == locality->get_readonly_replica_num()) {
+        has_not_f_replica = true;
       }
     }
   }

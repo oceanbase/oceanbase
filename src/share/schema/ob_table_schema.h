@@ -419,6 +419,8 @@ public:
       const common::ObRegion& region, bool& readonly_at_all) const;
   int check_has_all_server_readonly_replica(share::schema::ObSchemaGetterGuard& guard, bool& has) const;
   int check_is_all_server_readonly_replica(share::schema::ObSchemaGetterGuard& guard, bool& is) const;
+  virtual int check_has_own_not_f_replica(bool &has_not_f_replica) const override;
+
   void reset_locality_options();
 
   void reset_primary_zone_options();
