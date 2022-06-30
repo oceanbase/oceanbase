@@ -1272,6 +1272,7 @@ int ObGlobalIndexBuilder::do_build_single_replica(
     ObGlobalIndexTask* task, const share::schema::ObTableSchema* index_schema, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
   ObRootService *root_service = NULL;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -1284,12 +1285,19 @@ int ObGlobalIndexBuilder::do_build_single_replica(
     LOG_WARN("root service ptr is null", K(ret));
   } else {
     sql::ObIndexSSTableBuilder::BuildIndexJob job;
+    int64_t parallel_server_target = 5;
+    int tmp_ret = OB_SUCCESS;
     job.job_id_ = index_schema->get_table_id();
     job.schema_version_ = task->schema_version_;
     job.snapshot_version_ = snapshot;
     job.data_table_id_ = index_schema->get_data_table_id();
     job.index_table_id_ = index_schema->get_table_id();
-    job.degree_of_parallelism_ = 10;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ObSchemaUtils::get_tenant_int_variable(
+                                       OB_SYS_TENANT_ID, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_server_target)))) {
+      STORAGE_LOG(WARN, "failed to get sys tenant parallel server target", K(tmp_ret));
+    }
+    job.degree_of_parallelism_ = std::max(10L, parallel_server_target * 2);
+    job.degree_of_parallelism_ = std::min(96L, job.degree_of_parallelism_);
     const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
     const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
     if (OB_FAIL(root_service->submit_index_sstable_build_task(job, *this, abs_timeout_us))) {
