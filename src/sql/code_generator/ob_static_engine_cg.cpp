@@ -1156,7 +1156,7 @@ int ObStaticEngineCG::fill_sort_funcs(
   if (OB_FAIL(sort_funcs.init(collations.count()))) {
     LOG_WARN("failed to init sort functions", K(ret));
   } else {
-    for (int64_t i = 0; i < collations.count(); ++i) {
+    for (int64_t i = 0; i < collations.count() && OB_SUCC(ret); ++i) {
       const ObSortFieldCollation& sort_collation = collations.at(i);
       ObExpr* expr = nullptr;
       if (OB_FAIL(sort_exprs.at(sort_collation.field_idx_, expr))) {

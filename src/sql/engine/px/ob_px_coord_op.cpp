@@ -147,6 +147,7 @@ int ObPxCoordOp::rescan()
   ObDfo* root_dfo = NULL;
   if (OB_FAIL(terminate_running_dfos(coord_info_.dfo_mgr_))) {
     LOG_WARN("fail to release px resources in QC inner_close", K(ret));
+  } else if (FALSE_IT(clear_interrupt())) {
   } else if (OB_FAIL(destroy_all_channel())) {
     LOG_WARN("release dtl channel failed", K(ret));
   } else if (FALSE_IT(unregister_first_buffer_cache())) {
@@ -155,6 +156,8 @@ int ObPxCoordOp::rescan()
     LOG_WARN("failed to free allocator", K(ret));
   } else if (FALSE_IT(reset_for_rescan())) {
     // nop
+  } else if (OB_FAIL(register_interrupt())) {
+    LOG_WARN("fail to register interrupt", K(ret));
   } else if (OB_FAIL(init_dfo_mgr(ObDfoInterruptIdGen(interrupt_id_,
                                       (uint32_t)GCTX.server_id_,
                                       (uint32_t)(static_cast<const ObPxCoordSpec*>(&get_spec()))->qc_id_,

@@ -1160,7 +1160,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP: {
-      if (OB_FAIL(parse_mysql_timestamp_value(static_cast<EMySQLFieldType>(type), data, param))) {
+      if (OB_FAIL(parse_mysql_timestamp_value(static_cast<EMySQLFieldType>(type), data, param, tz_info))) {
         LOG_WARN("parse timestamp value from client failed", K(ret));
       }
       break;
@@ -1453,7 +1453,8 @@ int ObMPStmtExecute::copy_or_convert_str(common::ObIAllocator& allocator, const 
   return ret;
 }
 
-int ObMPStmtExecute::parse_mysql_timestamp_value(const EMySQLFieldType field_type, const char*& data, ObObj& param)
+int ObMPStmtExecute::parse_mysql_timestamp_value(
+    const EMySQLFieldType field_type, const char *&data, ObObj &param, const common::ObTimeZoneInfo *tz_info)
 {
   int ret = OB_SUCCESS;
   int8_t length = 0;
@@ -1524,7 +1525,12 @@ int ObMPStmtExecute::parse_mysql_timestamp_value(const EMySQLFieldType field_typ
   }
   if (OB_SUCC(ret)) {
     if (field_type == MYSQL_TYPE_TIMESTAMP) {
-      param.set_timestamp(value);
+      int64_t ts_value = 0;
+      if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(value, tz_info, ts_value))) {
+        LOG_WARN("datetime to timestamp failed", K(ret));
+      } else {
+        param.set_timestamp(ts_value);
+      }
     } else if (field_type == MYSQL_TYPE_DATETIME) {
       param.set_datetime(value);
     } else if (field_type == MYSQL_TYPE_DATE) {

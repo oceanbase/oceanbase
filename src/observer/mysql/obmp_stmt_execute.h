@@ -42,10 +42,11 @@ public:
 
   // Parse basic param value, no MYSQL_TYPE_COMPLEX or MYSQL_TYPE_CURSOR.
   // see parse_param_value()
-  static int parse_basic_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
-      const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-      const common::ObTimeZoneInfo* tz_info, ObObj& param);
-  static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type, const char*& data, ObObj& param);
+  static int parse_basic_param_value(ObIAllocator &allocator, const uint32_t type, const ObCharsetType charset,
+      const ObCollationType cs_type, const ObCollationType ncs_type, const char *&data,
+      const common::ObTimeZoneInfo *tz_info, ObObj &param);
+  static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type, const char *&data, ObObj &param,
+      const common::ObTimeZoneInfo *tz_info);
   static int parse_oracle_timestamp_value(
       const obmysql::EMySQLFieldType field_type, const char*& data, const ObTimeConvertCtx& cvrt_ctx, ObObj& param);
   static int parse_mysql_time_value(const char*& data, ObObj& param);
