@@ -694,9 +694,6 @@ int ObTransformJoinElimination::eliminate_outer_join(ObDMLStmt* stmt, bool& tran
           LOG_WARN("semi info is null", K(ret));
         } else if (OB_FAIL(ObOptimizerUtil::remove_item(semi_infos.at(i)->left_table_ids_, table_ids))) {
           LOG_WARN("failed to eliminate outer join in from items.", K(ret));
-        } else if (OB_UNLIKELY(semi_infos.at(i)->left_table_ids_.empty())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("left_table_ids_ is empty", K(ret));
         }
       }
       if (OB_FAIL(ret)) {

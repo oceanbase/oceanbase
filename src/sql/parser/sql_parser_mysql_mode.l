@@ -1349,7 +1349,7 @@ BEGIN(in_c_comment);
     // for 'select -   -1 from dual'
     // the first neg sign is not copied when it is parsed
     // but when the second neg sign is parsed, the first neg sign must be put where is should be
-    if ('-' == yytext[0]) {
+    if ('-' == yytext[0] && IS_NEED_PARAMETERIZE) {
       REPUT_NEG_SIGN(p);
       p->minus_ctx_.pos_ = p->no_param_sql_len_;
       p->minus_ctx_.raw_sql_offset_ = yylloc->first_column - 1;
