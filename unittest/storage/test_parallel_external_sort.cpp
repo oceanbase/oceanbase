@@ -188,6 +188,7 @@ public:
   void test_multi_sort_round(
       const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt, const int64_t merge_count);
   void test_memory_sort_round(const int64_t buf_mem_limit, const int64_t items_count);
+  void test_memory_avx512sort();
   void test_avx512_sort_type();
   void test_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt);
   void test_multi_task_sort(
@@ -734,6 +735,57 @@ void TestParallelExternalSort::test_avx512_sort_type()
   }
 }
 
+
+void TestParallelExternalSort::test_memory_avx512sort()
+{
+  int ret = OB_SUCCESS;
+  ObVector<TestItem*> total_items;
+  ObVector<TestItem*> verify_items;
+  
+  TestItemCompare compare(ret);
+
+  ret = generate_items(1000, false, total_items);
+  ret = generate_items(1000, false, verify_items);
+  
+  for (int64_t i = 0; i < total_items.size(); ++i) {
+    verify_items.at(i) = total_items.at(i);
+  }
+
+  if (__builtin_cpu_supports("avx512f")) {
+    uint64_t* keys = NULL;
+    TestItem** values = NULL;
+    int64_t items_size = total_items.size();
+    if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    } else if (OB_ISNULL(values = static_cast<TestItem**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+      values[i] = total_items.at(i);
+    }
+
+    if (OB_SUCC(ret)) {
+      STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
+      SortWithAvx512<TestItem> sortWithAvx;
+      ret = sortWithAvx.sort(keys, values, items_size);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+        total_items.at(i) = values[i];
+      }
+    }
+    if (keys != NULL) { allocator_.free(keys); }
+    if (values != NULL) { allocator_.free(values); }
+  }
+
+  std::sort(verify_items.begin(), verify_items.end(), compare);
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
+    // printf("i %ld total_items.at(i)->get_key(): %ld, verify_items.at(i)->get_key(): %ld\n", i, total_items.at(i)->get_key(), verify_items.at(i)->get_key());
+    ASSERT_EQ(total_items.at(i)->get_key(), verify_items.at(i)->get_key());
+  }
+}
+
 void TestParallelExternalSort::test_sort(
     const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt)
 {
@@ -1101,6 +1153,11 @@ TEST_F(TestParallelExternalSort, test_memory_sort_round)
 TEST_F(TestParallelExternalSort, test_avx512_sort_type)
 {
   test_avx512_sort_type();
+}
+
+TEST_F(TestParallelExternalSort, test_memory_avx512sort)
+{
+  test_memory_avx512sort();
 }
 
 
