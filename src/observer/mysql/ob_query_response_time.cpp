@@ -71,7 +71,7 @@ int ObRSTUtility::setup(uint base)
     return 0;
 }
 
-ObRSTTimeCollector::ObRSTTimeCollector():mutex_()
+ObRSTTimeCollector::ObRSTTimeCollector()
 {
     flush();
 }
@@ -81,8 +81,8 @@ ObRSTTimeCollector::~ObRSTTimeCollector()
 int ObRSTTimeCollector::flush()
 {
     for(int i = 0; i < OB_QRT_OVERALL_COUNT + 1; i++) {
-        count_[i] = 0;
-        total_[i] = 0;
+        ATOMIC_SET(&count_[i], 0);
+        ATOMIC_SET(&total_[i], 0);
     }
     return 0;
 }
@@ -92,8 +92,8 @@ int ObRSTTimeCollector::collect(uint64_t time)
     int i = 0;
     for(int count = utility_.bound_count(); count > i; ++i) {
         if(utility_.bound(i) > time) {
-            count_[i]++;
-            total_[i] += time;
+            ATOMIC_INC(&count_[i]);
+            ATOMIC_FAA(&total_[i],time);
             break;
         }
     }
@@ -140,7 +140,6 @@ int ObRSTCollector::collect_query_response_time(uint64_t tenant_id, uint64_t tim
         if (OB_FAIL(ret = collector_map_.get_refactored(tenant_id, time_collector))){
           SERVER_LOG(WARN, "time collector of the tenant does not exist", K(tenant_id), K(time), K(ret));
         } else {
-            lib::ObMutexGuard guard(time_collector->mutex_);
             if(OB_FAIL(ret = time_collector->collect(time))){
                 SERVER_LOG(WARN, "time collector of the tenant collect time failed", K(tenant_id), K(time), K(ret));
             }
@@ -163,7 +162,6 @@ int ObRSTCollector::flush_query_response_time(uint64_t tenant_id,const ObString&
         if (OB_FAIL(ret = collector_map_.get_refactored(tenant_id, time_collector))){
             SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
         } else {
-            lib::ObMutexGuard guard(time_collector->mutex_);
             if (OB_FAIL(ret = time_collector->setup(tenant_config->query_response_time_range_base))){
                 SERVER_LOG(WARN, "time collector of the tenant set range base failed", K(ret), K(tenant_id));
             } else if (OB_FAIL(ret = time_collector->flush())){
