@@ -173,7 +173,10 @@ int ObExprDllUdf::init_udf(const common::ObIArray<ObRawExpr*>& param_exprs)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(udf_attributes_.push_back(expr->get_expr_name()))) {
+      ObString str;
+      if (OB_FAIL(ob_write_string(allocator_, expr->get_expr_name(), str))) {
+        LOG_WARN("copy string failed", K(ret));
+      } else if (OB_FAIL(udf_attributes_.push_back(str))) {
         LOG_WARN("failed to push back", K(ret));
       } else if (OB_FAIL(udf_attributes_types_.push_back(expr->get_result_type()))) {
         LOG_WARN("failed to push back", K(ret));
