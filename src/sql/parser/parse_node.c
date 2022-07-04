@@ -567,19 +567,41 @@ int64_t get_question_mark(ObQuestionMarkCtx* ctx, void* malloc_pool, const char*
   if (OB_UNLIKELY(NULL == ctx || NULL == name)) {
     (void)fprintf(stderr, "ERROR question mark ctx or name is NULL\n");
   } else {
-    bool valid_name = true;
-    for (int64_t i = 0; valid_name && -1 == idx && i < ctx->count_; ++i) {
-      if (NULL == ctx->name_[i]) {
-        (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
-        valid_name = false;
-      } else if (0 == STRCASECMP(ctx->name_[i], name)) {
-        idx = i;
-      }
+    if (NULL == ctx->name_ && 0 == ctx->capacity_) {
+      ctx->capacity_ = MAX_QUESTION_MARK;
+      // the errocde will be ignored here. TO BE FIXED.
+      ctx->name_ = (char **)parse_malloc(sizeof(char*) * MAX_QUESTION_MARK, malloc_pool);
     }
-    if (-1 == idx && valid_name) {
-      int64_t len = 0;
-      ctx->name_[ctx->count_] = parse_strdup(name, malloc_pool, &len);
-      idx = ctx->count_++;
+    if (ctx->name_ != NULL) {
+      bool valid_name = true;
+      for (int64_t i = 0; valid_name && -1 == idx && i < ctx->count_; ++i) {
+        if (NULL == ctx->name_[i]) {
+          (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
+          valid_name = false;
+        } else if (0 == STRCASECMP(ctx->name_[i], name)) {
+          idx = i;
+        }
+      }
+      if (-1 == idx && valid_name) {
+        if (ctx->count_ >= ctx->capacity_) {
+          void *buf = parse_malloc(sizeof(char*) * (ctx->capacity_ * 2), malloc_pool);
+          if (OB_UNLIKELY(NULL == buf)) {
+            ctx->name_ = NULL;
+            (void)printf("ERROR malloc memory failed\n");
+          } else {
+            MEMCPY(buf, ctx->name_, sizeof(char*) * ctx->capacity_);
+            ctx->capacity_ *= 2;
+            ctx->name_ = (char **)buf;
+          }
+        }
+        if (ctx->name_ != NULL) {
+          int64_t len = 0;
+          ctx->name_[ctx->count_] = parse_strdup(name, malloc_pool, &len);
+          idx = ctx->count_++;
+        }
+      }
+    } else {
+      (void)fprintf(stderr, "ERROR question mark name buffer is null\n");
     }
   }
   return idx;

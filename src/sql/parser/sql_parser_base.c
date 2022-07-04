@@ -64,6 +64,8 @@ int parse_reset(ParseResult* p)
     p->question_mark_ctx_.count_ = 0;
     p->question_mark_ctx_.by_ordinal_ = false;
     p->question_mark_ctx_.by_name_ = false;
+    p->question_mark_ctx_.name_ = NULL;
+    p->question_mark_ctx_.capacity_ = 0;
     p->sql_mode_ = 0;
 
     p->has_encount_comment_ = false;
