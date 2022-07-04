@@ -980,7 +980,7 @@ int ObChunkRowStore::load_next_chunk_blocks(ChunkIterator& it)
     LOG_DEBUG(
         "load chunk", KP(last_blk_end), K_(it.cur_iter_blk_->blk_size), KP(chunk_end), K(chunk_end - last_blk_end));
     if (chunk_end > last_blk_end) {
-      MEMCPY(it.chunk_mem_, last_blk_end, chunk_end - last_blk_end);
+      MEMMOVE(it.chunk_mem_, last_blk_end, chunk_end - last_blk_end);
       read_off += chunk_end - last_blk_end;
     }
   }
@@ -1103,6 +1103,10 @@ int ObChunkRowStore::load_next_block(ChunkIterator& it)
   } else if (it.cur_nth_blk_ < -1 || it.cur_nth_blk_ >= n_blocks_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("row should be saved", K(ret), K_(it.cur_nth_blk), K_(n_blocks));
+  }  else if (it.chunk_read_size_ > ObChunkRowStore::BLOCK_SIZE
+             && it.chunk_read_size_ < this->max_blk_size_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected read size", K(ret), K(it.chunk_read_size_), K(this->max_blk_size_));
   } else if (is_file_open() && !it.read_file_iter_end()) {
     if (it.chunk_read_size_ > 0 && it.chunk_read_size_ >= this->max_blk_size_) {
       if (OB_FAIL(load_next_chunk_blocks(it))) {
@@ -1351,6 +1355,11 @@ int ObChunkRowStore::ChunkIterator::init(ObChunkRowStore* store, int64_t chunk_r
   int ret = OB_SUCCESS;
   store_ = store;
   chunk_read_size_ = chunk_read_size;
+  CK (is_valid());
+  if (OB_SUCC(ret) && chunk_read_size > ObChunkRowStore::BLOCK_SIZE
+                   && chunk_read_size < store_->max_blk_size_) {
+    chunk_read_size_ = store_->max_blk_size_;
+  }
   return ret;
 }
 

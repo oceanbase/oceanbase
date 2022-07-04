@@ -2327,16 +2327,20 @@ CAST_FUNC_NAME(number, double)
 {
   EVAL_ARG()
   {
-    const number::ObNumber nmb(child_res->get_number());
-    const char* nmb_buf = nmb.format();
-    if (OB_ISNULL(nmb_buf)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("nmb_buf is NULL", K(ret));
+    if (child_res->is_null()) {
+      res_datum.set_null();
     } else {
-      ObString num_str(strlen(nmb_buf), nmb_buf);
-      DEF_IN_OUT_TYPE();
-      if (OB_FAIL(common_string_double(expr, in_type, out_type, num_str, res_datum))) {
-        LOG_WARN("common_string_double failed", K(ret), K(num_str));
+      const number::ObNumber nmb(child_res->get_number());
+      const char *nmb_buf = nmb.format();
+      if (OB_ISNULL(nmb_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nmb_buf is NULL", K(ret));
+      } else {
+        ObString num_str(strlen(nmb_buf), nmb_buf);
+        DEF_IN_OUT_TYPE();
+        if (OB_FAIL(common_string_double(expr, in_type, out_type, num_str, res_datum))) {
+          LOG_WARN("common_string_double failed", K(ret), K(num_str));
+        }
       }
     }
   }
@@ -5277,104 +5281,129 @@ int uint_to_set(const uint64_t input_value, const ObIArray<ObString>& str_values
 
 CAST_ENUMSET_FUNC_NAME(int, enum)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(child_res->get_int());
-    uint64_t value = 0;
-    ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_ENUM(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(child_res->get_int());
+      uint64_t value = 0;
+      ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_ENUM(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(int, set)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(child_res->get_int());
-    uint64_t value = 0;
-    ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_SET(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(child_res->get_int());
+      uint64_t value = 0;
+      ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_SET(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(uint, enum)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = child_res->get_uint();
-    uint64_t value = 0;
-    ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_ENUM(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = child_res->get_uint();
+      uint64_t value = 0;
+      ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_ENUM(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(uint, set)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = child_res->get_uint();
-    uint64_t value = 0;
-    ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_SET(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = child_res->get_uint();
+      uint64_t value = 0;
+      ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_SET(value);
+    }
   }
   return ret;
 }
 
+
 CAST_ENUMSET_FUNC_NAME(float, enum)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_float()));
-    uint64_t value = 0;
-    ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_ENUM(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_float()));
+      uint64_t value = 0;
+      ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_ENUM(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(float, set)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_float()));
-    uint64_t value = 0;
-    ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_SET(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_float()));
+      uint64_t value = 0;
+      ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_SET(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(double, enum)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_double()));
-    uint64_t value = 0;
-    ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_ENUM(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_double()));
+      uint64_t value = 0;
+      ret = uint_to_enum(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_ENUM(value);
+    }
   }
   return ret;
 }
 
 CAST_ENUMSET_FUNC_NAME(double, set)
 {
-  EVAL_ARG()
-  {
-    int warning = 0;
-    uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_double()));
-    uint64_t value = 0;
-    ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
-    SET_RES_SET(value);
+  EVAL_ARG() {
+    if (child_res->is_null()) {
+      res_datum.set_null();
+    } else {
+      int warning = 0;
+      uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(child_res->get_double()));
+      uint64_t value = 0;
+      ret = uint_to_set(val_uint, str_values, cast_mode, warning, value);
+      SET_RES_SET(value);
+    }
   }
   return ret;
 }
@@ -5385,6 +5414,7 @@ CAST_ENUMSET_FUNC_NAME(number, enum)
   int warning = 0;
   if (OB_FAIL(number_double(expr, ctx, res_datum))) {
     LOG_WARN("fail to cast number to double", K(expr), K(ret));
+  } else if (res_datum.is_null()) {
   } else {
     uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(res_datum.get_double()));
     uint64_t value = 0;
@@ -5400,6 +5430,7 @@ CAST_ENUMSET_FUNC_NAME(number, set)
   int warning = 0;
   if (OB_FAIL(number_double(expr, ctx, res_datum))) {
     LOG_WARN("fail to cast number to double", K(expr), K(ret));
+  } else if (res_datum.is_null()) {
   } else {
     uint64_t val_uint = static_cast<uint64_t>(static_cast<int64_t>(res_datum.get_double()));
     uint64_t value = 0;

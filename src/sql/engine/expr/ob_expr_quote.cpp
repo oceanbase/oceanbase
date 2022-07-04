@@ -44,7 +44,7 @@ int ObExprQuote::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
     }
   } else {
     type.set_varchar();
-    type.set_length(type1.get_length());
+    type.set_length(2 * type1.get_length() + 2);
     if OB_FAIL (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type())) {
       LOG_WARN("aggregate charset for res failed", K(ret));
     } else {
