@@ -1824,8 +1824,8 @@ void ObRawExprUtils::need_extra_cast(const ObExprResType& src_type, const ObExpr
   need_extra_cast_for_dst_type = false;
   const ObCharsetType& src_cs = ObCharset::charset_type_by_coll(src_type.get_collation_type());
   const ObCharsetType& dst_cs = ObCharset::charset_type_by_coll(dst_type.get_collation_type());
-  bool nonstr_to_str = !src_type.is_string_type() && dst_type.is_string_type();
-  bool str_to_nonstr = src_type.is_string_type() && !dst_type.is_string_type();
+  bool nonstr_to_str = (!src_type.is_string_or_lob_locator_type() && dst_type.is_string_or_lob_locator_type());
+  bool str_to_nonstr = (src_type.is_string_or_lob_locator_type() && !dst_type.is_string_or_lob_locator_type());
 
   if (src_type.is_null() || dst_type.is_null()) {
     // do nothing
@@ -1843,7 +1843,7 @@ void ObRawExprUtils::need_extra_cast(const ObExprResType& src_type, const ObExpr
 int ObRawExprUtils::setup_extra_cast_utf8_type(const ObExprResType& type, ObExprResType& utf8_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!type.is_string_type())) {
+  if (OB_UNLIKELY(!type.is_string_or_lob_locator_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("in type must be string type", K(ret), K(type));
   } else {
