@@ -499,7 +499,15 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
       }
     }
     if (OB_SUCC(ret) || !is_oracle_mode()) {
-      LOG_DEBUG("Number from sci last ", K(cur), K(i), K(str + i), K(length), K(valid_len), K(ret), K(warning));
+      LOG_DEBUG("Number from sci last ",
+          K(cur),
+          K(i),
+          "str",
+          ObString(length, str),
+          K(length),
+          K(valid_len),
+          K(ret),
+          K(warning));
       while (cur == ' ' && i < length - 1) {
         cur = str[++i];
       }
