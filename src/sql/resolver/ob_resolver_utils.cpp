@@ -1462,6 +1462,14 @@ int ObResolverUtils::check_partition_range_value_result_type(
           }
         }
       } else {
+        if (OB_SUCC(ret) && !is_allow) {
+          if (part_value_expr_type == part_column_expr_type) {
+            is_allow = true;
+          } else if (ObDateTimeType == part_column_expr_type &&
+                     (ObDateType == part_value_expr_type || ObTimeType == part_value_expr_type)) {
+            is_allow = true;
+          }
+        }
         bool is_out_of_range = true;
         /* for mysql mode only (siged -> unsigned ) */
         if (part_value_expr.is_const_expr() && (part_value_expr_tc == ObIntTC || part_value_expr_tc == ObNumberTC) &&
