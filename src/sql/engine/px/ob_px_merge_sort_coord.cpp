@@ -33,6 +33,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
 OB_SERIALIZE_MEMBER((ObPxMergeSortCoordInput, ObPxReceiveInput));
+OB_SERIALIZE_MEMBER((ObPxMergeSortCoord, ObPxCoord), sort_columns_);
 
 int ObPxMergeSortCoord::ObPxMergeSortCoordEventListener::on_root_data_channel_setup()
 {
@@ -77,6 +78,9 @@ int ObPxMergeSortCoord::inner_open(ObExecContext& ctx) const
     LOG_WARN("fail init fifo allocator", K(ret));
   } else if (OB_FAIL(setup_scheduler(*px_ctx))) {
     LOG_WARN("fail setup scheduler", K(ret));
+  } else if (sort_columns_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sort_column could not be empty", K(ret));
   } else {
     px_ctx->row_heap_.set_sort_columns(sort_columns_);
     px_ctx->metric_.set_id(get_id());
