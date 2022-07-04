@@ -823,6 +823,8 @@ bool ObCreateTableArg::is_allow_when_upgrade() const
   return bret;
 }
 
+OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_);
+
 bool ObCreateTableLikeArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !origin_db_name_.empty() && !origin_table_name_.empty() &&

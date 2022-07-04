@@ -8822,12 +8822,29 @@ int ObDDLOperator::insert_temp_table_info(ObMySQLTransaction& trans, const ObTab
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid schema service", K(ret));
-  } else if (false == table_schema.is_tmp_table()) {
-    // do nothing...
+  } else if (table_schema.is_ctas_tmp_table() || table_schema.is_tmp_table()) {
+    if (is_inner_table(table_schema.get_table_id())) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("create tmp sys table not allowed", K(ret), "table_id", table_schema.get_table_id());
+    } else if (OB_FAIL(schema_service->get_table_sql_service().insert_temp_table_info(trans, table_schema))) {
+      LOG_WARN("insert_temp_table_info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::delete_temp_table_info(ObMySQLTransaction& trans, const ObTableSchema& table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService* schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid schema service", K(ret));
   } else if (is_inner_table(table_schema.get_table_id())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("create tmp sys table not allowed", K(ret), "table_id", table_schema.get_table_id());
-  } else if (OB_FAIL(schema_service->get_table_sql_service().insert_temp_table_info(trans, table_schema))) {
+  } else if (OB_FAIL(schema_service->get_table_sql_service().delete_from_all_temp_table(
+    	              trans, table_schema.get_tenant_id(), table_schema.get_table_id()))) {
     LOG_WARN("insert_temp_table_info failed", K(ret));
   }
   return ret;

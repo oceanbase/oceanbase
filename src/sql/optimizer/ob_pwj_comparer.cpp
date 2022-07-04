@@ -76,6 +76,12 @@ int PwjTable::init(const ObTableSchema& table_schema, const ObPhyTableLocationIn
       }
     }
   }
+  if (OB_SUCC(ret)
+      && ((share::schema::PARTITION_LEVEL_TWO == part_level_) || (share::schema::PARTITION_LEVEL_ONE == part_level_))
+      && 0 == part_number_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected part number", K(ref_table_id_), K(table_schema), K(phy_tbl_info));
+  }
   return ret;
 }
 

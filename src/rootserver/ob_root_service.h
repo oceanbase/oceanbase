@@ -953,7 +953,7 @@ public:
   int create_database(const obrpc::ObCreateDatabaseArg& arg, obrpc::UInt64& db_id);
   int create_tablegroup(const obrpc::ObCreateTablegroupArg& arg, obrpc::UInt64& tg_id);
   int get_frozen_status(const obrpc::Int64& arg, storage::ObFrozenStatus& frozen_status);
-  int create_table(const obrpc::ObCreateTableArg& arg, obrpc::UInt64& table_id);
+  int create_table(const obrpc::ObCreateTableArg& arg, obrpc::ObCreateTableRes& res);
   int alter_database(const obrpc::ObAlterDatabaseArg& arg);
   int alter_table(const obrpc::ObAlterTableArg& arg, obrpc::ObAlterTableRes& res);
   int alter_tablegroup(const obrpc::ObAlterTablegroupArg& arg);

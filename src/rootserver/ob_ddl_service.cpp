@@ -4551,6 +4551,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg, 
             if (OB_FAIL(ddl_operator.update_table_attribute(
                     new_table_schema, trans, operation_type, &alter_table_arg.ddl_stmt_str_))) {
               LOG_WARN("failed to update data table schema version and max used column is!", K(ret));
+            } else if (alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID) &&
+                       0 == new_table_schema.get_session_id() &&
+                       !new_table_schema.is_tmp_table() &&
+                       OB_FAIL(ddl_operator.delete_temp_table_info(trans, new_table_schema))) {
+              LOG_WARN("failed to delete temp table info", K(ret));
             }
           }
 

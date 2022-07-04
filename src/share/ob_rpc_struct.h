@@ -1016,6 +1016,23 @@ public:
   // New members of ObCreateTableArg need to pay attention to the implementation of is_allow_when_upgrade
 };
 
+struct ObCreateTableRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCreateTableRes() : table_id_(OB_INVALID_ID), schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObCreateTableRes &other)
+  {
+    table_id_ = other.table_id_;
+    schema_version_ = other.schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(table_id), K_(schema_version));
+  uint64_t table_id_;
+  int64_t schema_version_;
+};
+
 struct ObCreateTableLikeArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 

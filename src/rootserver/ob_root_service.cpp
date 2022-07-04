@@ -4187,7 +4187,7 @@ int ObRootService::logical_restore_partitions(const obrpc::ObRestorePartitionsAr
   return ret;
 }
 
-int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
+int ObRootService::create_table(const ObCreateTableArg& arg, ObCreateTableRes& res)
 {
   LOG_DEBUG("receive create table arg", K(arg));
   int ret = OB_SUCCESS;
@@ -4352,7 +4352,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
       LOG_WARN("push_back failed", K(ret));
     } else {
       RS_TRACE(generate_schema_index);
-      table_id = table_schema.get_table_id();
+      res.table_id_ = table_schema.get_table_id();
       // generate index schemas
       ObIndexBuilder index_builder(ddl_service_);
       ObTableSchema index_schema;
@@ -4485,7 +4485,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
           }
           // get child column schema.
           if (OB_SUCC(ret)) {
-            foreign_key_info.child_table_id_ = table_id;
+            foreign_key_info.child_table_id_ = res.table_id_;
             foreign_key_info.parent_table_id_ = parent_schema->get_table_id();
             for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_arg.child_columns_.count(); j++) {
               const ObString& column_name = foreign_key_arg.child_columns_.at(j);
@@ -4579,12 +4579,21 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
             K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = table_schema.get_tenant_id();
+      if (is_inner_table(res.table_id_)) {
+        tenant_id = OB_SYS_TENANT_ID;
+      }
+      if (OB_FAIL(schema_service_->get_tenant_schema_version(tenant_id, res.schema_version_))) {
+        LOG_WARN("failed to get tenant schema version", K(ret));
+      }
+    }
   }
 
   RS_TRACE(create_table_end);
   FORCE_PRINT_TRACE(THE_RS_TRACE, "[create table]");
   int64_t cost = ObTimeUtility::current_time() - begin_time;
-  ROOTSERVICE_EVENT_ADD("ddl", "create_table", K(ret), K(table_id), K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl", "create_table", K(ret), "table_id", res.table_id_, K(cost));
   return ret;
 }
 
@@ -9725,7 +9734,7 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg& arg)
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("table is physical or logical split can not split", K(ret), K(schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "table is in physial or logical split, ddl operation");
-  } else if (0 != schema->get_session_id() && false == schema->is_tmp_table()) {
+  } else if (schema->is_ctas_tmp_table()) {
     if (!alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)) {
       // to prevet alter table after failed to create table, the table is invisible.
       ret = OB_OP_NOT_ALLOW;

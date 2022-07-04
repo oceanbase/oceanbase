@@ -115,7 +115,7 @@ int ObUpgradeUtils::create_tenant_table(
   } else {
     obrpc::ObCreateTableArg arg;
     uint64_t table_id = OB_INVALID_ID;
-    obrpc::UInt64 new_table_id(OB_INVALID_ID);
+    obrpc::ObCreateTableRes res;
     table_id = combine_id(tenant_id, extract_pure_id(table_schema.get_table_id()));
     bool exist = false;
     if (OB_FAIL(check_table_exist(table_id, exist))) {
@@ -163,21 +163,21 @@ int ObUpgradeUtils::create_tenant_table(
           if (OB_ISNULL(GCTX.root_service_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid global context", K(ret), K(GCTX));
-          } else if (OB_FAIL(GCTX.root_service_->create_table(arg, new_table_id))) {
-            LOG_WARN("fail to create table", K(ret), K(arg), K(new_table_id));
+          } else if (OB_FAIL(GCTX.root_service_->create_table(arg, res))) {
+            LOG_WARN("fail to create table", K(ret), K(arg), K(res));
           }
         } else {
           if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid global context", K(ret), K(GCTX));
-          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->create_table(arg, new_table_id))) {
-            LOG_WARN("fail to create table", K(ret), K(arg), K(new_table_id));
+          } else if (OB_FAIL(GCTX.rs_rpc_proxy_->create_table(arg, res))) {
+            LOG_WARN("fail to create table", K(ret), K(arg), K(res));
           }
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (table_id != new_table_id) {
-        LOG_WARN("table_id not match", K(ret), K(table_id), K(new_table_id));
+      } else if (table_id != res.table_id_) {
+        LOG_WARN("table_id not match", K(ret), K(table_id), K(res.table_id_));
       } else {
         LOG_INFO("[UPGRADE] create tenant space table end", K(ret), K(tenant_id), K(table_id));
       }
@@ -447,7 +447,7 @@ int ObUpgradeUtils::force_create_tenant_table(
     } else {
       obrpc::ObCreateTableArg arg;
       uint64_t table_id = OB_INVALID_ID;
-      obrpc::UInt64 new_table_id(OB_INVALID_ID);
+      obrpc::ObCreateTableRes res;
       table_id = combine_id(tenant_id, extract_pure_id(table_schema.get_table_id()));
 
       arg.if_not_exist_ = true;
@@ -469,10 +469,10 @@ int ObUpgradeUtils::force_create_tenant_table(
       } else if (OB_ISNULL(GCTX.root_service_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid global context", K(ret), K(GCTX));
-      } else if (OB_FAIL(GCTX.root_service_->create_table(arg, new_table_id))) {
-        LOG_WARN("fail to create table", K(ret), K(arg), K(new_table_id));
-      } else if (table_id != new_table_id) {
-        LOG_WARN("table_id not match", K(ret), K(table_id), K(new_table_id));
+      } else if (OB_FAIL(GCTX.root_service_->create_table(arg, res))) {
+        LOG_WARN("fail to create table", K(ret), K(arg), K(res));
+      } else if (table_id != res.table_id_) {
+        LOG_WARN("table_id not match", K(ret), K(table_id), K(res.table_id_));
       } else {
         LOG_INFO("create table", K(ret), K(table_id));
       }
