@@ -1064,6 +1064,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected NULL", K(param_expr), K(my_session_), K(ret));
         } else {
+          result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObLobType]);
           result_type.set_collation_type(my_session_->get_nls_collation());
           result_type.set_calc_collation_type(my_session_->get_nls_collation());
           result_type.set_collation_level(CS_LEVEL_IMPLICIT);
