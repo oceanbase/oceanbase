@@ -1680,7 +1680,7 @@ protected:
       conn_ = NULL;
       mysql_cmd_ = obmysql::OB_MYSQL_COM_SLEEP;
       cur_query_start_time_ = 0;
-      cur_state_start_time_ = 0;
+      cur_state_start_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       wait_timeout_ = 0;
       interactive_timeout_ = 0;
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
