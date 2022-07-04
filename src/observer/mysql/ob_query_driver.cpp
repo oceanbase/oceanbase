@@ -170,11 +170,17 @@ int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet& resul
 {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
-  const ObSQLSessionInfo& my_session = result.get_session();
-  if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
+  const ObSQLSessionInfo &my_session = result.get_session();
+  ObArenaAllocator *allocator = NULL;
+  if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+    LOG_WARN("fail to get lob fake allocator", K(ret));
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lob fake allocator is null.", K(ret), K(value));
+  } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
     LOG_WARN("fail to get result charset", K(ret));
   } else {
-    OZ(value.convert_string_value_charset(charset_type, result.get_mem_pool()));
+    OZ (value.convert_string_value_charset(charset_type, *allocator));
   }
   return ret;
 }
@@ -249,8 +255,13 @@ int ObQueryDriver::convert_lob_value_charset(common::ObObj& value, sql::ObResult
       int32_t header_len = value.get_val_len() - lob_locator->payload_size_;
       int32_t str_len = lob_locator->payload_size_ * 4;
       uint32_t result_len = 0;
-      ObIAllocator& allocator = result.get_mem_pool();
-      if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator.alloc(header_len + str_len))))) {
+      ObArenaAllocator *allocator = NULL;
+      if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+        LOG_WARN("fail to get lob fake allocator", K(ret));
+      } else if (OB_ISNULL(allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("lob fake allocator is null.", K(ret), K(value));
+      } else if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator->alloc(header_len + str_len))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc memory failed", K(ret), K(header_len), K(str_len));
       } else {
@@ -330,7 +341,7 @@ int ObQueryDriver::convert_lob_locator_to_longtext(ObObj& value, ObResultSet& re
       ObArenaAllocator* allocator = NULL;
       if (OB_FAIL(value.get_string(str))) {
         STORAGE_LOG(WARN, "Failed to get string from obj", K(ret), K(value));
-      } else if (OB_FAIL(result.get_exec_context().get_lob_fake_allocator(allocator))) {
+      } else if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
         LOG_WARN("fail to get lob fake allocator", K(ret));
       } else if (FALSE_IT(allocator->reset())) {
       } else if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(str.length() + sizeof(ObLobLocator))))) {

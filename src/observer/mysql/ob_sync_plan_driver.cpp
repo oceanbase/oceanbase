@@ -220,6 +220,7 @@ int ObSyncPlanDriver::response_query_result(
   session_.get_trans_desc().consistency_wait();
   MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? BINARY : TEXT;
   const common::ColumnsFieldIArray *fields = NULL;
+  ObArenaAllocator *convert_allocator = NULL; //just for convert charset
   if (OB_SUCC(ret)) {
     fields = result.get_field_columns();
     if (OB_ISNULL(fields)) {
@@ -237,11 +238,19 @@ int ObSyncPlanDriver::response_query_result(
         LOG_WARN("fail to response query header", K(ret), K(row_num), K(can_retry));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(convert_allocator))) {
+        LOG_WARN("fail to get lob fake allocator", K(ret));
+      } else if (OB_ISNULL(convert_allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("allocator is unexpected", K(ret));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < row->get_count(); i++) {
       ObObj &value = row->get_cell(i);
       if (result.is_ps_protocol()) {
         if (value.get_type() != fields->at(i).type_.get_type()) {
-          ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL, CS_TYPE_INVALID);
+          ObCastCtx cast_ctx(convert_allocator, NULL, CM_WARN_ON_FAIL, CS_TYPE_INVALID);
           if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(), cast_ctx, value, value))) {
             LOG_WARN("failed to cast object", K(ret), K(value), K(value.get_type()), K(fields->at(i).type_.get_type()));
           }
@@ -270,7 +279,7 @@ int ObSyncPlanDriver::response_query_result(
         LOG_WARN("response packet fail", K(ret), KP(row), K(row_num), K(can_retry));
         // break;
       } else {
-        // LOG_DEBUG("response row succ", K(*row));
+        convert_allocator->reset();
       }
       if (OB_SUCC(ret)) {
         ++row_num;

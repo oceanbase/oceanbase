@@ -165,7 +165,7 @@ public:
   {
     return expr_op_size_ > 0 && NULL != expr_op_ctx_store_;
   }
-  int get_lob_fake_allocator(common::ObArenaAllocator*& allocator);
+  int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
 
   int init_eval_ctx();
   void destroy_eval_ctx();
@@ -798,8 +798,10 @@ protected:
   // dynamic partition pruning for right TSC of NLJ
   ObGIPruningInfo gi_pruning_info_;
 
-  ObSchedInfo sched_info_;
-  lib::MemoryContext lob_fake_allocator_;
+  ObSchedInfo sched_info_; 
+
+  // just for convert charset in query response result
+  lib::MemoryContext convert_allocator_;
 
   // serialize operator inputs of %root_op_ subplan if root_op_ is not NULL
   const ObPhyOperator* root_op_;

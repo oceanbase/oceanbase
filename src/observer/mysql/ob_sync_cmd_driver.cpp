@@ -258,6 +258,13 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       OMPKRow rp(sm_row);
       if (OB_FAIL(sender_.response_packet(rp))) {
         LOG_WARN("response packet fail", K(ret), KP(row));
+      } else {
+        ObArenaAllocator *allocator = NULL;
+        if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+          LOG_WARN("fail to get lob fake allocator", K(ret));
+        } else if (OB_NOT_NULL(allocator)) {
+          allocator->reset();
+        }
       }
     }
   }
