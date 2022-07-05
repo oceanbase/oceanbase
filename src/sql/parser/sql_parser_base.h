@@ -240,7 +240,7 @@ do {                                                                            
     setup_token_pos_info(node, word_start - 1, word_end - word_start + 1);  \
   } while (0)
 
-//oralce下生成非保留关键字结点请使用该宏,区别于mysql的是做了大写的转换
+//oracle下生成非保留关键字结点请使用该宏,区别于mysql的是做了大写的转换
 #define get_oracle_non_reserved_node(node, malloc_pool, expr_start, expr_end) \
   do {                                                                 \
     malloc_terminal_node(node, malloc_pool, T_IDENT);                   \

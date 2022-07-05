@@ -406,7 +406,7 @@ public:
                                 const common::ObDataTypeCastParams &dtc_params);
 
   // get_tablet_ranges gets range of a index.
-  // This function can not be used untill physical plan is opened.
+  // This function can not be used until physical plan is opened.
 
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
                                 bool &all_single_value_ranges,

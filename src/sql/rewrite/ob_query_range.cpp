@@ -4545,7 +4545,7 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
 
 
 //  AND single key part (itself) and items in item_next_ list
-//  Each item in item_next_ list must be unkown item untill physical plan open
+//  Each item in item_next_ list must be unkown item until physical plan open
 //
 //  E.g.
 //       (A1 and ?1 and ?2 and ... and ?m) and (A2 and ?I and ?II and ... and ?n)
