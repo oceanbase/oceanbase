@@ -296,7 +296,8 @@ ObLink* ObLockWaitMgr::check_timeout()
         iter->on_retry_lock(hash);
         TRANS_LOG(INFO, "current task should be waken up", K(*iter));
       } else if (0 == iter->sessid_) {
-        // do nothing, may be rpc plan, sessionid is not setted
+        // when lock wait in dag worker, session is not exist
+        need_check_session = false;
       } else {
         // do nothing
       }
