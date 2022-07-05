@@ -1436,13 +1436,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
         } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
         } else {
-          if (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()) {
-            aggr_expr->set_real_param_col_count(expr.get_real_param_count());
-            aggr_expr->set_all_param_col_count(expr.get_param_count());  
-          } else {
-            aggr_expr->set_real_param_col_count(1);
-            aggr_expr->set_all_param_col_count(1);  
-          }
+          aggr_expr->set_real_param_col_count(expr.get_real_param_count());
+          aggr_expr->set_all_param_col_count(expr.get_param_count());
           if (OB_SUCCESS == ret &&
               (T_FUN_GROUP_CONCAT == expr.get_expr_type() || T_FUN_GROUP_RANK == expr.get_expr_type() ||
                   T_FUN_GROUP_DENSE_RANK == expr.get_expr_type() || T_FUN_GROUP_PERCENT_RANK == expr.get_expr_type() ||
