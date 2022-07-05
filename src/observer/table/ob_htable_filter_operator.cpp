@@ -32,7 +32,7 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
   } else if (OB_FAIL(json_parser.init(&allocator))) {
     LOG_WARN("failed to init json parser", K(ret));
   } else if (OB_FAIL(json_parser.parse(str.ptr(), str.length(), ast))) {
-    LOG_WARN("failed to parse", K(ret), K(str));
+    LOG_DEBUG("failed to parse", K(ret), K(str));
     ret = OB_SUCCESS;
   } else if (NULL != ast
              && ast->get_type() == json::JT_OBJECT

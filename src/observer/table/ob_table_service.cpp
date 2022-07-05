@@ -1736,7 +1736,7 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_ERROR("NULL ptr", K(ret), K(table_schema));
   } else if (OB_FAIL(get_index_id_by_name(schema_guard, table_id, index_name, index_id,
                                           rowkey_columns_type, index_schema))) {

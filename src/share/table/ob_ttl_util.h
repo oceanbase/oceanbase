@@ -24,6 +24,17 @@ namespace oceanbase
 namespace common
 {
 
+#define OB_TTL_RESPONSE_MASK (1 << 5)
+#define OB_TTL_STATUS_MASK  (OB_TTL_RESPONSE_MASK - 1)
+
+#define SET_TASK_PURE_STATUS(status, state) ((status) = ((state) & OB_TTL_STATUS_MASK) + ((status & OB_TTL_RESPONSE_MASK)))
+#define SET_TASK_RESPONSE(status, state) ((status) |= (((state) & 1) << 5))
+#define SET_TASK_STATUS(status, pure_status, is_responsed) { SET_TASK_PURE_STATUS(status, pure_status), SET_TASK_RESPONSE(status, is_responsed); }
+
+#define EVAL_TASK_RESPONSE(status) (((status) & OB_TTL_RESPONSE_MASK) >> 5)
+#define EVAL_TASK_PURE_STATUS(status) (static_cast<ObTTLTaskStatus>((status) & OB_TTL_STATUS_MASK))
+
+
 enum TRIGGER_TYPE
 {
   PERIODIC_TRIGGER = 0,
@@ -106,6 +117,7 @@ typedef struct ObTTLStatus {
               K_(ttl_del_cnt),
               K_(max_version_del_cnt),
               K_(scan_cnt),
+              K_(row_key),
               K_(ret_code));
 } ObTTLStatus;
 
@@ -210,6 +222,11 @@ public:
                              common::ObISQLClient& proxy, 
                              ObTTLStatus& task);
 
+  static int replace_ttl_task(uint64_t tenant_id,
+                             const char* tname,
+                             common::ObISQLClient& proxy, 
+                             ObTTLStatus& task);
+
   static int update_ttl_task(uint64_t tenant_id,
                              const char* tname,
                              common::ObISQLClient& proxy, 
@@ -230,7 +247,8 @@ public:
   static int delete_ttl_task(uint64_t tenant_id,
                              const char* tname,
                              common::ObISQLClient& proxy, 
-                             ObTTLStatusKey& key);
+                             ObTTLStatusKey& key,
+                             int64_t &affect_rows);
 
   static int read_ttl_tasks(uint64_t tenant_id,
                             const char* tname,
@@ -239,6 +257,8 @@ public:
                             ObTTLStatusArray& result_arr,
                             bool for_update = false,
                             common::ObIAllocator *allocator = NULL);
+
+  static int remove_all_task_to_history_table(uint64_t tenant_id, uint64_t task_id, common::ObISQLClient& proxy);
 
   static bool check_can_do_work();
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);

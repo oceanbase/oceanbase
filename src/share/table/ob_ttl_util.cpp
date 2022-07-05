@@ -29,10 +29,11 @@ bool ObTTLTime::is_same_day(int64_t ttl_time1, int64_t ttl_time2)
   time_t param1 = static_cast<time_t>(ttl_time1 / 1000000l);
   time_t param2 = static_cast<time_t>(ttl_time2 / 1000000l);
   
-  struct tm *t1 = localtime(&param1);
-  struct tm *t2 = localtime(&param1);
+  struct tm tm1, tm2;
+  ::localtime_r(&param1, &tm1);
+  ::localtime_r(&param2, &tm2);
 
-  return (t1 && t2 && t1->tm_mday == t2->tm_mday);
+  return (tm1.tm_yday == tm2.tm_yday);
 }
 
 bool ObTTLUtil::extract_val(const char* ptr, uint64_t len, int& val)
@@ -135,12 +136,13 @@ int ObTTLUtil::insert_ttl_task(uint64_t tenant_id,
               " VALUE "
               "(now(), now(), %ld, %ld, %ld,"
               " %ld, %ld, %ld, %ld, %ld, "
-              " %ld, %ld, %ld,'%s', '%s')", // 12
+              " %ld, %ld, %ld,'%.*s', '%.*s')", // 12
               tname, // 0
               tenant_id, task.table_id_, task.partition_id_,
               task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
               task.ttl_del_cnt_, task.max_version_del_cnt_,
-              task.scan_cnt_, task.row_key_.ptr(), task.ret_code_.ptr()))) {
+              task.scan_cnt_, task.row_key_.length(), task.row_key_.ptr(),
+              task.ret_code_.length(), task.ret_code_.ptr()))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affect_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
@@ -167,12 +169,13 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
 
   if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
               "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
-              " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, row_key = '%s', ret_code = '%s'"
-              " WHERE "
-              "tenant_id = %ld AND table_id = %ld AND partition_id = %ld AND task_id = %ld ",
+              " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, row_key = '%*.s', ret_code = '%*.s'"
+              " WHERE tenant_id = %ld AND table_id = %ld AND partition_id = %ld AND task_id = %ld ",
               tname, // 0
               task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-              task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, task.row_key_.ptr(), task.ret_code_.ptr(),
+              task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_,
+              task.row_key_.length(), task.row_key_.ptr(),
+              task.ret_code_.length(), task.ret_code_.ptr(),
               tenant_id, task.table_id_, key.partition_id_, key.task_id_))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affect_rows))) {
@@ -260,12 +263,13 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
 
   if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
               "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
-              " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, row_key = '%s', ret_code = '%s'"
+              " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, row_key = '%*.s', ret_code = '%*.s'"
               " WHERE "
               "tenant_id = %ld AND table_id = %ld AND partition_id = %ld AND task_id = %ld ",
               tname, // 0
               task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-              task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, task.row_key_.ptr(), task.ret_code_.ptr(),
+              task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_,
+              task.row_key_.length(), task.row_key_.ptr(), task.ret_code_.length(), task.ret_code_.ptr(),
               tenant_id, task.table_id_, task.partition_id_, task.task_id_))) {
     LOG_WARN("sql assign fmt failed", K(ret));
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affect_rows))) {
@@ -280,11 +284,11 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
 int ObTTLUtil::delete_ttl_task(uint64_t tenant_id,
                                const char* tname,
                                common::ObISQLClient& proxy,
-                               ObTTLStatusKey& key)
+                               ObTTLStatusKey& key,
+                               int64_t &affect_rows)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  int64_t affect_rows = 0;
 
   if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE "
                              "tenant_id = %ld AND table_id = %ld "
@@ -396,11 +400,13 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
                 ObString rowkey; 
                 char *rowkey_buf = nullptr;
                 EXTRACT_VARCHAR_FIELD_MYSQL(*result, "row_key", rowkey);
-                if (OB_ISNULL(rowkey_buf = static_cast<char *>(allocator->alloc(rowkey.length())))) {
-                  LOG_WARN("failt to allocate memory", K(ret));
-                } else {
-                  MEMCPY(rowkey_buf, rowkey.ptr(), rowkey.length());
-                  result_arr.at(idx).row_key_.assign(rowkey_buf, rowkey.length());
+                if (OB_SUCC(ret) && !rowkey.empty()) {
+                  if (OB_ISNULL(rowkey_buf = static_cast<char *>(allocator->alloc(rowkey.length())))) {
+                    LOG_WARN("failt to allocate memory", K(ret), K(rowkey));
+                  } else {
+                    MEMCPY(rowkey_buf, rowkey.ptr(), rowkey.length());
+                    result_arr.at(idx).row_key_.assign(rowkey_buf, rowkey.length());
+                  }
                 }
               }
 
@@ -408,13 +414,15 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
                 ObString err_msg; 
                 char *err_buf = nullptr;
                 EXTRACT_VARCHAR_FIELD_MYSQL(*result, "ret_code", err_msg);
-                if (OB_ISNULL(err_buf = static_cast<char *>(allocator->alloc(err_msg.length())))) {
-                  LOG_WARN("failt to allocate memory", K(ret), K(err_msg.length()));
-                } else {
-                  MEMCPY(err_buf, err_msg.ptr(), err_msg.length());
-                  result_arr.at(idx).ret_code_.assign(err_buf, err_msg.length());
+                if (OB_SUCC(ret) && !err_msg.empty()) {
+                  if (OB_ISNULL(err_buf = static_cast<char *>(allocator->alloc(err_msg.length())))) {
+                    LOG_WARN("failt to allocate memory", K(ret), K(err_msg));
+                  } else {
+                    MEMCPY(err_buf, err_msg.ptr(), err_msg.length());
+                    result_arr.at(idx).ret_code_.assign(err_buf, err_msg.length());
+                  }
                 }
-              }
+             }
             }
           }
         }
@@ -455,6 +463,59 @@ bool ObTTLUtil::check_can_process_tenant_tasks(uint64_t tenant_id)
     }
   }
   return bret;
+}
+
+int ObTTLUtil::remove_all_task_to_history_table(uint64_t tenant_id, uint64_t task_id, common::ObISQLClient& proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affect_rows = 0;
+  if (OB_FAIL(sql.assign_fmt("insert into %s select * from %s "
+              " where task_id = %ld and partition_id != -1 and table_id != -1",
+              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
+              share::OB_ALL_KV_TTL_TASK_TNAME,
+              task_id))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affect_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
+  } else {
+    LOG_INFO("success to execute sql", K(ret), K(tenant_id), K(sql), K(affect_rows));
+  }
+
+  return ret;
+} 
+
+int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
+                               const char* tname,
+                               common::ObISQLClient& proxy,
+                               ObTTLStatus& task)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affect_rows = 0;
+
+  if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
+              "(gmt_create, gmt_modified, tenant_id, table_id, partition_id, "
+              "task_id, task_start_time, task_update_time, trigger_type, status,"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code)"
+              " VALUE "
+              "(now(), now(), %ld, %ld, %ld,"
+              " %ld, %ld, %ld, %ld, %ld, "
+              " %ld, %ld, %ld,'%.*s', '%.*s')", // 12
+              tname, // 0
+              tenant_id, task.table_id_, task.partition_id_,
+              task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
+              task.ttl_del_cnt_, task.max_version_del_cnt_,
+              task.scan_cnt_, task.row_key_.length(), task.row_key_.ptr(),
+              task.ret_code_.length(), task.ret_code_.ptr()))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affect_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("success to execute sql", K(ret), K(sql));
+  }
+
+  return ret;
 }
 
 } // end namespace rootserver

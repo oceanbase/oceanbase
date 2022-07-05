@@ -23,16 +23,6 @@ namespace oceanbase
 namespace rootserver
 {
 
-#define OB_TTL_RESPONSE_MASK (1 << 5)
-#define OB_TTL_STATUS_MASK  (OB_TTL_RESPONSE_MASK - 1)
-
-#define SET_TASK_PURE_STATUS(status, state) ((status) = ((state) & OB_TTL_STATUS_MASK) + ((status & OB_TTL_RESPONSE_MASK)))
-#define SET_TASK_RESPONSE(status, state) ((status) |= (((state) & 1) << 5))
-#define SET_TASK_STATUS(status, pure_status, is_responsed) { SET_TASK_PURE_STATUS(status, pure_status), SET_TASK_RESPONSE(status, is_responsed); }
-
-#define EVAL_TASK_RESPONSE(status) (((status) & OB_TTL_RESPONSE_MASK) >> 5)
-#define EVAL_TASK_PURE_STATUS(status) (static_cast<ObTTLTaskStatus>((status) & OB_TTL_STATUS_MASK))
-
 ObClearTTLStatusHistoryTask::ObClearTTLStatusHistoryTask(ObRootService& rs)
   : root_service_(rs)
 {
@@ -158,6 +148,8 @@ int ObTTLTenantTaskMgr::add_tenant(uint64_t tenant_id)
     tenant_task.tenant_id_ = tenant_id;
     if (OB_FAIL(ten_task_arr_.push_back(tenant_task))) {
       LOG_WARN("fail to store tenant task", K(ret));
+    } else {
+      LOG_INFO("add tenant to tenant task array", K(tenant_id), K(tenant_task));
     }
   }
   return ret;
@@ -170,6 +162,7 @@ void ObTTLTenantTaskMgr::delete_tenant(uint64_t tenant_id)
     if (ten_task.tenant_id_ == tenant_id) {
       ten_task.reset();
       ten_task_arr_.remove(i);
+      LOG_INFO("remove tennat task in tenant task array", K(tenant_id), K(ten_task_arr_));
       break;
     }
   }
@@ -306,7 +299,7 @@ int ObTTLTenantTaskMgr::add_ttl_task(uint64_t tenant_id,
             }
 
             if (curr_state != next_state) {
-              if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, static_cast<int64_t>(next_state)))) {
+              if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, static_cast<int64_t>(next_state), *GCTX.sql_proxy_))) {
                 LOG_WARN("fail to update ttl tasks", K(ret));
               } else {
                 // update memory status only
@@ -348,7 +341,7 @@ int ObTTLTenantTaskMgr::add_ttl_task(uint64_t tenant_id,
           } else if (next_state != curr_state) {
             // update status
             if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_,
-                                           static_cast<int64_t>(next_state)))) {
+                                           static_cast<int64_t>(next_state), *GCTX.sql_proxy_))) {
               LOG_WARN("fail to update ttl tasks", K(ret));
             } else {
               rs_task.all_responsed_ = false;
@@ -382,6 +375,12 @@ int ObTTLTenantTaskMgr::add_ttl_task(uint64_t tenant_id,
     }
   }
 
+  if (ret == OB_EAGAIN) {
+    // it's a success cmd, cannot return OB_EAGAIN to user 
+    LOG_INFO("reset OB_EAGAIN to OB_SUCCESS, because ttl scheduler will resend later");
+    ret = OB_SUCCESS;
+  }
+
   return ret;
 }
 
@@ -398,7 +397,7 @@ int ObTTLTenantTaskMgr::add_ttl_task_internal(uint64_t tenant_id,
   if (OB_FAIL(get_tenant_ptr(tenant_id, tenant_ptr))) {
     LOG_WARN("fail to get tenant task ptr", K(ret));
   } else if (OB_FAIL(in_active_time(tenant_id, is_active_time))) {
-      LOG_WARN("fail to eval active time", K(ret));
+    LOG_WARN("fail to eval active time", K(ret));
   } else {
     bool enable_ttl = is_enable_ttl(tenant_id);
     ObTTLTenantTask& tenant_ref = *tenant_ptr;
@@ -437,7 +436,7 @@ bool ObTTLTenantTaskMgr::need_retry_task(RsTenantTask& rs_task)
 {
   bool bool_ret = false;
   int64_t cur_time = ObTimeUtility::current_time();
-  bool_ret = (cur_time - rs_task.ttl_status_.task_update_time_ < OB_TTL_TASK_RETRY_INTERVAL) || 
+  bool_ret = (cur_time - rs_task.ttl_status_.task_update_time_ >= OB_TTL_TASK_RETRY_INTERVAL) || 
              (rs_task.server_infos_.count() == 0);
   return bool_ret;
 }
@@ -485,7 +484,7 @@ int ObTTLTenantTaskMgr::process_tenant_tasks(uint64_t tenant_id)
       ObTTLTaskType ttl_task_type = ObTTLTaskType::OB_TTL_INVALID;
 
       LOG_INFO("process_tenant_tasks begin", K(tenant_id), K(task_count), K(status_responsed),
-                  K(curr_state), K(task_count));
+                                             K(curr_state), K(task_count));
 
       if (task_count > 1) {
         if (!(curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL || 
@@ -510,8 +509,8 @@ int ObTTLTenantTaskMgr::process_tenant_tasks(uint64_t tenant_id)
           }
         }
       } else {
-        LOG_INFO("process_tenant_tasks begin", K(tenant_id), K(task_count),
-                    K(curr_state), K(task_count));
+        LOG_INFO("process_tenant_tasks begin", K(tenant_id), K(task_count), K(status_responsed),
+                                               K(curr_state), K(task_count));
         // task_count == 1
         if (status_responsed) {
           next_state = next_status(curr_state);
@@ -551,7 +550,7 @@ int ObTTLTenantTaskMgr::process_tenant_tasks(uint64_t tenant_id)
 
         if (OB_SUCC(ret) && curr_state != next_state) {
           if (OB_FAIL(update_task_status(tenant_id, cur_task.ttl_status_.task_id_,
-                                                static_cast<int64_t>(next_state)))) {
+                                                static_cast<int64_t>(next_state), *GCTX.sql_proxy_))) {
             LOG_WARN("fail to update ttl tasks", K(ret));
           } else {
             cur_task.all_responsed_ = false;
@@ -589,7 +588,8 @@ int ObTTLTenantTaskMgr::insert_tenant_task(ObTTLStatus& ttl_task)
 
 int ObTTLTenantTaskMgr::update_task_status(uint64_t tenant_id,
                                            uint64_t task_id,
-                                           int64_t status)
+                                           int64_t status,
+                                           common::ObISQLClient& proxy)
 {
   int ret = OB_SUCCESS;
   ObTTLStatusKey key(tenant_id, OB_INVALID_ID, OB_INVALID_ID, task_id);
@@ -611,7 +611,7 @@ int ObTTLTenantTaskMgr::update_task_status(uint64_t tenant_id,
   } else {
     if (OB_FAIL(ObTTLUtil::update_ttl_task(tenant_id,
                                            share::OB_ALL_KV_TTL_TASK_TNAME,
-                                           *GCTX.sql_proxy_,
+                                           proxy,
                                            key,
                                            update_fields))) {
       LOG_WARN("fail to update ttl task status.", K(ret), K(tenant_id), K(task_id), K(status));
@@ -627,12 +627,13 @@ int ObTTLTenantTaskMgr::delete_task(uint64_t tenant_id, uint64_t task_id)
 {
   int ret = OB_SUCCESS;
   ObTTLStatusKey key(tenant_id, OB_INVALID_ID, OB_INVALID_ID, task_id);
+  int64_t affected_rows = 0;
   if (OB_FAIL(ObTTLUtil::delete_ttl_task(tenant_id,
                                         share::OB_ALL_KV_TTL_TASK_TNAME,
-                                        *GCTX.sql_proxy_, key))) {
+                                        *GCTX.sql_proxy_, key, affected_rows))) {
     LOG_WARN("fail to delete ttl tasks status", K(ret), K(tenant_id), K(task_id));
   } else {
-    LOG_DEBUG("success to delete ttl tasks status", K(ret), K(tenant_id), K(task_id));
+    LOG_DEBUG("success to delete ttl tasks status", K(ret), K(tenant_id), K(task_id), K(affected_rows));
   }
 
   return ret;
@@ -724,6 +725,8 @@ int ObTTLTenantTaskMgr::refresh_tenant(uint64_t tenant_id)
     } else if (OB_FAIL(update_tenant_tasks(tenant_id, ttl_tasks))) {
       LOG_WARN("fail to update tenant tasks", K(ret), K(tenant_id));
     }
+
+    LOG_INFO("refresh tenant task from system table", K(tenant_id));
   }
   return ret;
 }
@@ -731,25 +734,19 @@ int ObTTLTenantTaskMgr::refresh_tenant(uint64_t tenant_id)
 int ObTTLTenantTaskMgr::refresh_all()
 {
   int ret = OB_SUCCESS;
-  if (!need_refresh_) {
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(get_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get tenant ids", K(ret));
   } else {
-    ObArray<uint64_t> tenant_ids;
-    
-    if (OB_FAIL(get_tenant_ids(tenant_ids))) {
-      LOG_WARN("fail to get tenant ids", K(ret));
-    } else {
-      for (size_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-        uint64_t tenant_id = tenant_ids.at(i);
-        if (OB_FAIL(refresh_tenant(tenant_id))) {
-          LOG_WARN("fail to refresh tenant", K(ret), K(tenant_id));
-        }
+    LOG_INFO("get all tenant ids", K(tenant_ids));
+    for (size_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      uint64_t tenant_id = tenant_ids.at(i);
+      if (OB_FAIL(refresh_tenant(tenant_id))) {
+        LOG_WARN("fail to refresh tenant", K(ret), K(tenant_id));
       }
     }
-
-    if (OB_SUCC(ret) && tenant_ids.count() > 0) {
-      need_refresh_ = false;
-    }
   }
+
   return ret;
 }
 
@@ -803,8 +800,7 @@ int ObTTLTenantTaskMgr::alter_status_and_add_ttl_task(uint64_t tenant_id)
   if (OB_FAIL(in_active_time(tenant_id, is_active_time))) {
     LOG_WARN("fail to eval active time", K(ret));
   } else if (OB_FAIL(get_tenant_ptr(tenant_id, tenant_ptr))) {
-    need_refresh_ = true;
-    LOG_WARN("fail to get tenant task ptr", K(tenant_id), K(ret));
+    LOG_WARN("fail to get tenant task ptr, need refresh", K(tenant_id), K(ret));
   } else {
     ObTTLTenantTask& tenant_ref = *tenant_ptr;
     size_t task_count = tenant_ref.tasks_.count();
@@ -824,7 +820,7 @@ int ObTTLTenantTaskMgr::alter_status_and_add_ttl_task(uint64_t tenant_id)
         if (!status_responsed) {
           int64_t tmp_status = 0;
           SET_TASK_STATUS(tmp_status, cur_state, 1);
-          if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, tmp_status))) {
+          if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, tmp_status, *GCTX.sql_proxy_))) {
               LOG_WARN("fail to update ttl tasks", K(ret));
           } else {
             rs_task.set_servers_not_responsed();
@@ -862,7 +858,7 @@ int ObTTLTenantTaskMgr::alter_status_and_add_ttl_task(uint64_t tenant_id)
               *  send move to servers, update status
              */
             LOG_INFO("alter status and add ttl task", K(next_state));
-            if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, next_state))) {
+            if (OB_FAIL(update_task_status(tenant_id, rs_task.ttl_status_.task_id_, next_state, *GCTX.sql_proxy_))) {
                 LOG_WARN("fail to update ttl tasks", K(ret));
             } else {
               LOG_INFO("alter status and add ttl task", K(next_state));
@@ -1098,7 +1094,7 @@ int ObTTLTenantTaskMgr::dispatch_ttl_request(const TTLServerInfos& server_infos,
     }
   }
 
-  LOG_INFO("send ttl server ttl request", K(ret), K(arg), K(send_cnt), K(server_infos.count()));
+  LOG_INFO("send ttl server ttl request", K(ret), K(arg), K(send_cnt), K(server_infos.count()), K(server_infos));
   return ret;
 }
 
@@ -1210,8 +1206,12 @@ void ObTTLTenantTaskMgr::refresh_deleted_tenants()
           exist = (del_ten_arr_.at(k) == tenant_id);
         }
         
-        if (!exist && OB_FAIL(del_ten_arr_.push_back(tenant_id))) {
-          LOG_WARN("fail to store deleted tenant id", K(ret));
+        if (!exist) {
+          if (OB_FAIL(del_ten_arr_.push_back(tenant_id))) {
+            LOG_WARN("fail to store deleted tenant id", K(ret));
+          } else {
+            LOG_INFO("add tennat id to del tenant array", K(ret), K(tenant_id), K(del_ten_arr_));
+          }
         }
       }
     }
@@ -1248,6 +1248,7 @@ int ObTTLTenantTaskMgr::process_tenant_task_rsp(uint64_t tenant_id,
                                                 const ObAddr& server_addr)
 {
   int ret = OB_SUCCESS;
+  TTLMGR.refresh_all();
   lib::ObMutexGuard guard(mutex_);
   RsTenantTask* rs_task_ptr = NULL;
 
@@ -1255,8 +1256,10 @@ int ObTTLTenantTaskMgr::process_tenant_task_rsp(uint64_t tenant_id,
     LOG_WARN("fail to get tasks ptr", K(ret), K(tenant_id), K(task_id));
   } else {
     RsTenantTask& rs_task = *rs_task_ptr;
+
     if (OB_FAIL(rsp_task_status(static_cast<ObTTLTaskType>(task_type), EVAL_TASK_PURE_STATUS(rs_task.ttl_status_.status_)))) {
-      LOG_WARN("response task type incorrect", K(ret), K(tenant_id), K(task_id), K(task_type));
+      LOG_WARN("response task type incorrect",
+               K(ret), K(tenant_id), K(task_id), K(task_type), K(EVAL_TASK_PURE_STATUS(rs_task.ttl_status_.status_)));
     } else if (OB_FAIL(rs_task.set_server_responsed(server_addr))) {
       LOG_WARN("fail to set server responsed", K(ret), K(tenant_id), K(task_id));
     } else if (!EVAL_TASK_RESPONSE(rs_task.ttl_status_.status_) && 
@@ -1282,22 +1285,49 @@ int ObTTLTenantTaskMgr::update_task_on_all_responsed(RsTenantTask& task)
   ObTTLTaskStatus next_state, cur_state;
   cur_state = EVAL_TASK_PURE_STATUS(task.ttl_status_.status_);
   next_state = next_status(cur_state);
+  bool is_move = false;
 
   int64_t task_status = static_cast<int64_t>(next_state);
   if (next_state == cur_state) {
     // move or suspend
     SET_TASK_RESPONSE(task_status, 1);
+    if (cur_state == OB_RS_TTL_TASK_MOVE) {
+      is_move = true;
+    }
   }
   
   if (task.ttl_status_.status_ == task_status) {
     // SUSPEND or MOVED
-  } else if (OB_FAIL(update_task_status(tenant_id, task.ttl_status_.task_id_, task_status))) {
-    LOG_WARN("fail to update ttl tasks", K(ret), K(task.ttl_status_.task_id_), K(cur_state), K(next_state), K(task_status));
   } else {
-    // update stauts and update time
-    task.ttl_status_.status_ = task_status;
-    task.all_responsed_ = false;
-    task.set_servers_not_responsed();
+    ObMySQLTransaction trans; 
+    uint64_t task_id = task.ttl_status_.task_id_;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null GCTX.sql_proxy_", K(ret));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) { 
+      LOG_WARN("fail to start transation", K(ret), K(tenant_id));
+    } else if (OB_FAIL(update_task_status(tenant_id, task_id, task_status, *GCTX.sql_proxy_))) {
+      LOG_WARN("fail to update ttl tasks", K(ret), K(task_id), K(cur_state), K(next_state), K(task_status));
+    } else if (is_move && OB_FAIL(ObTTLUtil::remove_all_task_to_history_table(tenant_id, task_id, trans))) {
+      // NOTE: if parition was removed and observer restart, task won't be moved by observer itself
+      LOG_WARN("fail to move task to history table", K(tenant_id), K(task_id));
+    } else {}
+
+    if (trans.is_started()) {
+      bool commit = (OB_SUCCESS == ret);
+      int tmp_ret = ret;
+      if (OB_FAIL(trans.end(commit))) {
+        LOG_WARN("faile to end trans", "commit", commit, K(ret));
+      }
+      ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    }
+    
+    if (OB_SUCC(ret)) {
+      // update stauts and update time
+      task.ttl_status_.status_ = task_status;
+      task.all_responsed_ = false;
+      task.set_servers_not_responsed();
+    }
   }
 
   return ret;
@@ -1389,16 +1419,22 @@ void ObTTLScheduler::runTimerTask()
 int RsTenantTask::set_server_responsed(const ObAddr& server_addr)
 {
   int ret = OB_SUCCESS;
+  bool find_server = false;
   TTLServerInfos& server_infos = server_infos_;
   if (OB_UNLIKELY(!server_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(server_addr));
   } else {
-    for (int64_t i = 0; i < server_infos.count(); ++i) {
+    for (int64_t i = 0; i < server_infos.count() && !find_server; ++i) {
       if (server_addr == server_infos.at(i).addr_) {
         server_infos.at(i).is_responsed_ = true;
-        break;
+        find_server = true;
       }
+    }
+
+    if (!find_server) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("cannot find addr in sever infos", K(ret), K(server_addr), K(server_infos));
     }
   }
   return ret;

@@ -163,7 +163,6 @@ private:
     : mutex_(),
       ten_task_arr_(),
       del_ten_arr_(),
-      need_refresh_(true),
       is_inited_(false) {}
 
   int update_task_on_all_responsed(RsTenantTask& task);
@@ -181,7 +180,8 @@ private:
 
   virtual int update_task_status(uint64_t tenant_id,
                                  uint64_t task_id,
-                                 int64_t rs_new_status);
+                                 int64_t rs_new_status,
+                                 common::ObISQLClient& proxy);
 
 
   bool tenant_exist(uint64_t tenant_id);
@@ -226,11 +226,9 @@ private:
   lib::ObMutex mutex_; // lib::ObMutexGuard guard(mutex_);
   ObArray<ObTTLTenantTask> ten_task_arr_;
   ObArray<uint64_t> del_ten_arr_;
-  bool need_refresh_;
   bool is_inited_;
 
-
-  const int64_t OB_TTL_TASK_RETRY_INTERVAL = 60*1000*1000; // 3min
+  const int64_t OB_TTL_TASK_RETRY_INTERVAL = 15*1000*1000; // 15s
 };
 
 #define TTLMGR ObTTLTenantTaskMgr::get_instance()

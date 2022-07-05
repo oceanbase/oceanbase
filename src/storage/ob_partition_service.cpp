@@ -10369,11 +10369,8 @@ int ObPartitionService::internal_leader_active(const ObCbTask& active_task)
       const bool is_normal_pg = !(guard.get_partition_group()->get_pg_storage().is_restore());
       if ((OB_SYS_TENANT_ID != pkey.get_tenant_id()) && is_normal_pg) {
         (void)clog_mgr_->add_pg_archive_task(partition);
+        observer::ObTTLManager::get_instance().on_leader_active(pkey);
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      observer::ObTTLManager::get_instance().on_leader_active(partition);
     }
   }
 

@@ -35,7 +35,9 @@ public :
                    task_end_time_(OB_INVALID_ID),
                    failure_times_(0),
                    rsp_time_(OB_INVALID_ID),
-                   is_dirty_(false) {}
+                   is_dirty_(false),
+                   is_moved_(false),
+                   need_refresh_(true) {}
   bool is_valid()
   {
     return task_info_.is_valid() && ttl_para_.is_valid();
@@ -43,10 +45,9 @@ public :
 
   TO_STRING_KV(K_(task_info), K_(task_status), K_(ttl_para), K_(task_start_time),
                K_(last_modify_time), K_(task_end_time), K_(failure_times),
-               K_(rsp_time), K_(is_dirty));
+               K_(rsp_time), K_(is_dirty), K_(is_moved), K_(need_refresh));
 
 public:
-                   
   ObTTLTaskInfo           task_info_;
   common::ObTTLTaskStatus task_status_;
   ObTTLPara               ttl_para_;
@@ -57,7 +58,9 @@ public:
 
   int64_t                 rsp_time_;
   bool                    is_invalid_;
-  bool                    is_dirty_;
+  bool                    is_dirty_; // should sync sys table for tasks
+  bool                    is_moved_;
+  bool                    need_refresh_; // should refresh task from task table
 };
 
 class OBTTLTimerPeriodicTask : public common::ObTimerTask {
@@ -80,7 +83,7 @@ public:
                   bool is_usr_trigger, obrpc::ObTTLRequestArg::TTLRequestType cmd);
   int report_task_status(ObTTLTaskInfo& task_info, 
                          ObTTLPara& task_para, bool& is_stop);
-  void on_leader_active(storage::ObIPartitionGroup* partition);
+  void on_leader_active(const ObPartitionKey& pkey);
   void on_schema_changed(uint64_t schema_changed_tenant_id);
   
   /*timer handle function*/
@@ -105,26 +108,40 @@ private:
                         cmd_type_(obrpc::ObTTLRequestArg::TTL_INVALID_TYPE),
                         rsp_time_(OB_INVALID_ID),
                         state_(common::ObTTLTaskStatus::OB_TTL_TASK_INVALID),
-                        is_droped_(false) {}
-    PartTasksMap                      part_task_map_;
-    common::ObArenaAllocator          allocator_;                
-    uint64_t                          tenant_id_;
-    uint64_t                          task_id_;
-    bool                              is_usr_trigger_;
-    bool                              need_check_; /*need scan partition & check*/
-    bool                              is_dirty_;  /*need check the current ctx task*/
-    bool                              ttl_continue_;
-    obrpc::ObTTLRequestArg::TTLRequestType             cmd_type_;
-    int64_t                           rsp_time_;
-    common::ObTTLTaskStatus           state_;
-    bool                              is_droped_;                    
-
-  public:
+                        is_droped_(false),
+                        is_finished_(false)
+    {}
     void destory()
     {
       part_task_map_.destroy();
       allocator_.reset();
     }
+    TO_STRING_KV(K_(tenant_id),
+                 K_(task_id),
+                 K_(is_usr_trigger),
+                 K_(need_check),
+                 K_(is_dirty),
+                 K_(ttl_continue),
+                 K_(cmd_type),
+                 K_(rsp_time),
+                 K_(state),
+                 K_(is_droped),
+                 K_(is_finished));
+
+  public:
+      PartTasksMap                      part_task_map_;
+      common::ObArenaAllocator          allocator_;                
+      uint64_t                          tenant_id_;
+      uint64_t                          task_id_;
+      bool                              is_usr_trigger_;
+      bool                              need_check_; /*need scan partition & check*/
+      bool                              is_dirty_;  /*need check the current ctx task*/
+      bool                              ttl_continue_;
+      obrpc::ObTTLRequestArg::TTLRequestType         cmd_type_;
+      int64_t                           rsp_time_; // OB_INVALID_ID means no need response
+      common::ObTTLTaskStatus           state_;
+      bool                              is_droped_;   // tenant is droped
+      bool                              is_finished_; // all delete task is finished (or canceled)
   };
 
   typedef common::hash::ObHashMap<int64_t, ObTTLTenantInfo*> TenantPartsMap;
@@ -142,7 +159,7 @@ private:
   int generate_one_partition_task(ObTTLTaskInfo& task_info, ObTTLPara& para);
   int get_ttl_para_from_schema(const share::schema::ObTableSchema *table_schema, 
                            ObTTLPara& para, bool& is_tableapi_schema);
-  int check_partition_can_gen_ttl(storage::ObIPartitionGroup *partition,
+  int check_partition_can_gen_ttl(const ObPartitionKey& pkey,
                                   ObTTLPara &para, bool& can_ttl);
   int check_and_do_rsp(uint64_t tenant_id);
   void mark_tenant_need_check(uint64_t tenant_id);
@@ -163,20 +180,22 @@ private:
   int sync_sys_table(ObPartitionKey& pkey);
   int construct_sys_table_record(ObTTLTaskCtx* ctx, common::ObTTLStatus& ttl_record);
   int try_schedule_task(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* ctx);
-  int try_schedule_remaining_tasks(ObTTLTenantInfo* tenant_info);
+  int try_schedule_remaining_tasks(ObTTLTenantInfo* tenant_info, const ObTTLTaskCtx *current_ctx);
   bool can_schedule_tenant(const ObTTLTenantInfo &tenant_info);
   bool can_schedule_task(const ObTTLTaskCtx &ttl_task);
-  int check_cmd_state_valid(common::ObTTLTaskStatus current_state, common::ObTTLTaskStatus incoming_state);
-  int deep_copy_all_tenant_ctxs(common::ObSArray<ObTTLTaskCtx>& ctx_array, common::ObArenaAllocator& allocator,
-                            uint64_t tenant_id);
-  int from_ttl_record(ObPartitionKey& pkey, common::ObTTLStatus& record, 
-                                  common::ObArenaAllocator& allocator);
+  int check_cmd_state_valid(const common::ObTTLTaskStatus current_state,
+                            const common::ObTTLTaskStatus incoming_state);
+  int copy_all_tenant_ctxs(common::ObSArray<ObTTLTaskCtx *>& ctx_array, uint64_t tenant_id);
+  int from_ttl_record(ObPartitionKey& pkey, common::ObTTLStatus& record, bool with_status = true, bool with_err_code = true);
   void mark_ttl_ctx_dirty(ObTTLTenantInfo* tenant_info, ObTTLTaskCtx* ctx);
   void check_ttl_tenant_state(uint64_t tenant_id);
   int transform_cmd_to_state(const obrpc::ObTTLRequestArg::TTLRequestType& cmd, common::ObTTLTaskStatus& state);
   int try_schedule_prepare_task(ObPartitionKey& pkey);
   void mark_tenant_checked(uint64_t tenant_id);
   int mark_tenant_droped(const uint64_t& tenant_id);
+  int check_and_reset_droped_tenant();
+  obrpc::ObTTLRequestArg::TTLRequestType transform_state_to_cmd(const int64_t state);
+  int refresh_partition_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);
 
 private:
   static const int64_t DEFAULT_TTL_BUCKET_NUM = 100;
@@ -192,6 +211,7 @@ private:
   common::ObTimer ttl_timer_;
   OBTTLTimerPeriodicTask periodic_task_;
   common::ObSpinLock lock_;
+  bool is_first_cmd_; // recovery tenant info after restart  
   
 private:
   void stop();
@@ -203,7 +223,8 @@ private:
                    periodic_delay_(TTL_PERIODIC_DELAY),
                    ttl_timer_(),
                    periodic_task_(),
-                   lock_()
+                   lock_(),
+                   is_first_cmd_(true)
   {}
   ~ObTTLManager() {}
 };

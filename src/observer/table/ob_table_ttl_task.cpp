@@ -55,10 +55,10 @@ int ObTableTTLDeleteTask::init(const ObTTLPara &ttl_para, ObTTLTaskInfo &ttl_inf
       ObRowkey rowkey;
       int64_t pos = 0;
       if (OB_FAIL(rowkey.deserialize(allocator_, ttl_info.row_key_.ptr(), ttl_info.row_key_.length(), pos))) {
-        LOG_WARN("fail to deserialize rowkey",  K(ret));
+        LOG_WARN("fail to deserialize rowkey",  K(ret), K(ttl_info.row_key_));
       } else if (rowkey.get_obj_cnt() != 2) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(rowkey));
+        LOG_WARN("invalid argument", K(ret), K(rowkey), K(ttl_info.row_key_));
       } else {
         first_key_ = rowkey.get_obj_ptr()[0].get_string();
         second_key_ = rowkey.get_obj_ptr()[1].get_string();
@@ -326,7 +326,7 @@ int ObTableTTLDeleteTask::process_one()
     char *buf = static_cast<char *>(allocator_.alloc(buf_len));
     int64_t pos = 0;
     if (OB_FAIL(row_key.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to deserialize", K(ret));
+      LOG_WARN("fail to serialize", K(ret));
     } else {
       result_key.assign_ptr(buf, buf_len);
     }
