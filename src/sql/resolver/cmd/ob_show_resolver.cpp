@@ -1113,7 +1113,8 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         } else {
           show_resv_ctx.stmt_type_ = stmt::T_SHOW_QUERY_RESPONSE_TIME;
           GEN_SQL_STEP_1(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME);
-          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME, OB_SYS_DATABASE_NAME, OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME);
+          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME, 
+              OB_SYS_DATABASE_NAME, OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME, real_tenant_id);
         }
         break;
       }
@@ -2081,7 +2082,8 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_ENGINES, NULL, "SELECT * FROM %s.%s ", NULL, NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES, NULL, "SELECT * FROM %s.%s ", "SELECT * FROM %s.%s ", NULL);
 
-DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, NULL, "SELECT * FROM %s.%s ", NULL, NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, NULL, 
+    "SELECT response_time as RESPONSE_TIME, count as COUNT, total as TOTAL FROM %s.%s where tenant_id = %lu", NULL, NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLLATION, NULL,
     "SELECT collation AS `Collation`, charset AS `Charset`, id AS `Id`, is_default AS `Default`, is_compiled AS "
