@@ -1863,14 +1863,9 @@ int ObTableService::fill_query_scan_ranges(ObTableServiceCtx &ctx,
   return ret;
 }
 
-int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
-                                          const ObIArray<uint64_t> &output_column_ids,
-                                          int64_t schema_version,
-                                          ObQueryFlag::ScanOrder scan_order,
-                                          uint64_t index_id,
-                                          int32_t limit,
-                                          int32_t offset,
-                                          storage::ObTableScanParam &scan_param)
+int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx, const ObIArray<uint64_t> &output_column_ids,
+    int64_t schema_version, ObQueryFlag::ScanOrder scan_order, uint64_t index_id, int32_t limit, int32_t offset,
+    storage::ObTableScanParam &scan_param, bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
@@ -1889,7 +1884,7 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
                          );
   scan_param.scan_flag_.flag_ = query_flag.flag_;
   scan_param.reserved_cell_count_ = output_column_ids.count() + 10;
-  scan_param.for_update_ = false;
+  scan_param.for_update_ = for_update;
   scan_param.column_ids_.reset();
   scan_param.pkey_ = part_key;
   scan_param.schema_version_ = schema_version;
@@ -2051,8 +2046,7 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
     }
   }
   if (OB_SUCC(ret)) {
-    if (0 != query.get_offset()
-        || -1 != query.get_limit()) {
+    if (0 != query.get_offset()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("htable scan should not set Offset and Limit", K(ret), K(query));
     } else if (ObQueryFlag::Forward != query.get_scan_order() && ObQueryFlag::Reverse != query.get_scan_order()) {
@@ -2064,8 +2058,8 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
 }
 
 int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
-                                  table::ObTableQueryResult &one_result,
-                                  table::ObTableQueryResultIterator *&query_result)
+    table::ObTableQueryResult &one_result, table::ObTableQueryResultIterator *&query_result,
+    bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
@@ -2107,9 +2101,15 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
                                             (table_id != index_id) ? padding_num : -1,
                                             ctx.scan_param_))) {
     LOG_WARN("failed to fill range", K(ret));
-  } else if (OB_FAIL(fill_query_scan_param(ctx, output_column_ids, schema_version,
-                                           query.get_scan_order(), index_id, query.get_limit(),
-                                           query.get_offset(), ctx.scan_param_))) {
+  } else if (OB_FAIL(fill_query_scan_param(ctx,
+                 output_column_ids,
+                 schema_version,
+                 query.get_scan_order(),
+                 index_id,
+                 query.get_limit(),
+                 query.get_offset(),
+                 ctx.scan_param_,
+                 for_update))) {
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(part_service_->table_scan(ctx.scan_param_, ctx.scan_result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {

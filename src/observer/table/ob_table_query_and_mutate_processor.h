@@ -40,9 +40,9 @@ protected:
 
 private:
   int get_partition_ids(uint64_t table_id, common::ObIArray<int64_t> &part_ids);
-  int check_rowkey_and_generate_mutations(
-      ObTableQueryResult &one_row,
-      ObTableBatchOperation *&mutations);
+  int check_rowkey_and_generate_mutations(ObTableQueryResult &one_row, ObTableBatchOperation *&mutations);
+  // rewrite htable query to avoid lock too much rows for update
+  int rewrite_htable_query_if_need(const ObTableOperation &mutaion, ObTableQuery &query);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
 private:
   common::ObArenaAllocator allocator_;

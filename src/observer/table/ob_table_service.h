@@ -257,9 +257,9 @@ public:
   int multi_replace(ObTableServiceCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
   int multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
 
+  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query, table::ObTableQueryResult &one_result,
+      table::ObTableQueryResultIterator *&query_result, bool for_update = false);
   int batch_execute(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
-  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
-                    table::ObTableQueryResult &one_result, table::ObTableQueryResultIterator *&query_result);
   int execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result);
 private:
   static int cons_rowkey_infos(const share::schema::ObTableSchema &table_schema,
@@ -357,7 +357,8 @@ private:
                             uint64_t index_id,
                             int32_t limit,
                             int32_t offset,
-                            storage::ObTableScanParam &scan_param);
+                            storage::ObTableScanParam &scan_param,
+                            bool for_update = false);
   int check_htable_query_args(const ObTableQuery &query);
 private:
   int fill_new_entity(
