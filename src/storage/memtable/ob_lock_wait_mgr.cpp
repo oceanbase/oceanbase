@@ -296,12 +296,11 @@ ObLink* ObLockWaitMgr::check_timeout()
         iter->on_retry_lock(hash);
         TRANS_LOG(INFO, "current task should be waken up", K(*iter));
       } else if (0 == iter->sessid_) {
-        // when lock wait in dag worker, session is not exist
-        need_check_session = false;
+        // do nothing, may be rpc plan, sessionid is not setted
       } else {
         // do nothing
       }
-      if (need_check_session) {
+      if (need_check_session && iter->sessid_ != 0) { // when lock wait in dag worker, session is not exist
         sql::ObSQLSessionInfo* session_info = NULL;
         int ret = OB_SUCCESS;
         int tmp_ret = OB_SUCCESS;
