@@ -26,7 +26,7 @@ ObIndexTransStatusReporter::~ObIndexTransStatusReporter()
 {}
 
 int ObIndexTransStatusReporter::report_wait_trans_status(const uint64_t index_table_id, const int svr_type,
-    const int64_t partition_id, const ObIndexTransStatus& status, ObMySQLProxy& sql_proxy)
+    const int64_t partition_id, const ObIndexTransStatus &status, ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
@@ -48,7 +48,7 @@ int ObIndexTransStatusReporter::report_wait_trans_status(const uint64_t index_ta
         OB_FAIL(dml.add_column("schema_version", status.schema_version_))) {
       LOG_WARN("fail to add column", K(ret));
     } else {
-      ObDMLExecHelper exec(sql_proxy, OB_SYS_TENANT_ID);
+      ObDMLExecHelper exec(sql_client, OB_SYS_TENANT_ID);
       int64_t affected_rows = 0;
       if (OB_FAIL(exec.exec_insert_update(OB_ALL_INDEX_WAIT_TRANSACTION_STATUS_TNAME, dml, affected_rows))) {
         LOG_WARN("fail to exeucte dml", K(ret));
@@ -58,7 +58,7 @@ int ObIndexTransStatusReporter::report_wait_trans_status(const uint64_t index_ta
   return ret;
 }
 
-int ObIndexTransStatusReporter::delete_wait_trans_status(const uint64_t index_table_id, ObMySQLProxy& sql_proxy)
+int ObIndexTransStatusReporter::delete_wait_trans_status(const uint64_t index_table_id, ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == index_table_id) {
@@ -70,7 +70,7 @@ int ObIndexTransStatusReporter::delete_wait_trans_status(const uint64_t index_ta
         OB_FAIL(dml.add_pk_column(K(index_table_id)))) {
       LOG_WARN("fail to add column", K(ret), K(index_table_id));
     } else {
-      ObDMLExecHelper exec(sql_proxy, OB_SYS_TENANT_ID);
+      ObDMLExecHelper exec(sql_client, OB_SYS_TENANT_ID);
       int64_t affected_rows = 0;
       if (OB_FAIL(exec.exec_delete(OB_ALL_INDEX_WAIT_TRANSACTION_STATUS_TNAME, dml, affected_rows))) {
         LOG_WARN("fail to exec delete", K(ret));

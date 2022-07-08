@@ -170,8 +170,9 @@ private:
   int wait_trans_end(bool& is_end);
   int wait_build_index_end(bool& is_end);
   bool need_print_log();
-  int calc_snapshot_version(const int64_t max_commit_version, int64_t& snapshot_version);
-  int acquire_snapshot(const int64_t snapshot_version, const int64_t data_table_id, const int64_t schema_version);
+  int calc_snapshot_version(const int64_t max_commit_version, int64_t &snapshot_version);
+  int acquire_snapshot(const int64_t snapshot_version, const int64_t data_table_id, const int64_t schema_version,
+      common::ObMySQLTransaction &trans);
   int release_snapshot();
   int remove_index_build_stat_record();
 
