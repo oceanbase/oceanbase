@@ -95,6 +95,7 @@ public:
 
   // Initialize DTL service.
   int init();
+  void stop();
 
   ObDtlRpcProxy& get_rpc_proxy();
   const ObDtlRpcProxy& get_rpc_proxy() const;

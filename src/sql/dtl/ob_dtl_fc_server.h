@@ -170,6 +170,7 @@ public:
   }
 
   int init();
+  void stop();
   void destroy();
   // check tenant dfc resource every 10 seconds
   void runTimerTask();

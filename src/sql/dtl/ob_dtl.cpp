@@ -288,6 +288,11 @@ int ObDtl::init()
   return ret;
 }
 
+void ObDtl::stop()
+{
+  dfc_server_.stop();
+}
+
 int ObDtl::create_channel(
     uint64_t tenant_id, uint64_t chid, const ObAddr& peer, ObDtlChannel*& chan, ObDtlFlowControl* dfc)
 {

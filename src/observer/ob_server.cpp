@@ -606,6 +606,11 @@ int ObServer::stop()
   }
   LOG_WARN("distributed scheduler manager has stopped");
 
+  if (OB_NOT_NULL(dtl::ObDtl::instance())) {
+    DTL.stop();
+  }
+  LOG_INFO("sqldtl stop");
+
   LOG_INFO("begin stop GDS");
   GDS.stop();
   LOG_WARN("GDS stopped");
