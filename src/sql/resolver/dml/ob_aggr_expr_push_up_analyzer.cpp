@@ -234,10 +234,6 @@ int32_t ObAggrExprPushUpAnalyzer::get_final_aggr_level() const
       final_aggr_level = column_level;
     }
   }
-  if (final_aggr_level < 0) {
-    // count(const_expr)
-    final_aggr_level = cur_aggr_level;
-  }
   // in mysql mode if the final_aggr_level < 0, the aggr's params are const. e.g., count(const_expr);
   return final_aggr_level;
 }
