@@ -2554,6 +2554,8 @@ static int number_year(
     } else if (in.get_number().is_negative()) {
       uint8_t value = 0;
       if (CAST_FAIL(ObTimeConverter::int_to_year(INT_MIN, value))) {
+      } else {
+        SET_RES_YEAR(out);
       }
     } else {
       ObObj from;
