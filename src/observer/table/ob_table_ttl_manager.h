@@ -196,6 +196,7 @@ private:
   int check_and_reset_droped_tenant();
   obrpc::ObTTLRequestArg::TTLRequestType transform_state_to_cmd(const int64_t state);
   int refresh_partition_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);
+  bool is_ttl_comment(const ObString &str);
 
 private:
   static const int64_t DEFAULT_TTL_BUCKET_NUM = 100;

@@ -990,7 +990,9 @@ int ObTTLManager::get_ttl_para_from_schema(const schema::ObTableSchema *table_sc
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is null", K(ret));
   } else if (!table_schema->get_comment_str().empty()) {
-    if (OB_FAIL(hc_desc.from_string(table_schema->get_comment_str()))) {
+    if (!is_ttl_comment(table_schema->get_comment_str())) {
+      // do nothing
+    } else if (OB_FAIL(hc_desc.from_string(table_schema->get_comment_str()))) {
       LOG_WARN("fail to get ttl para from schema", K(table_schema->get_comment_str()), K(ret));
     } else {
       para.ttl_ =  hc_desc.get_time_to_live();
@@ -1002,6 +1004,33 @@ int ObTTLManager::get_ttl_para_from_schema(const schema::ObTableSchema *table_sc
     }
   } else {}
   return ret;
+}
+
+bool ObTTLManager::is_ttl_comment(const ObString &str)
+{
+  bool bret = false;
+  const int32_t length = str.length(); 
+  const char *start = str.ptr();
+  const char *end = str.ptr() + length;
+
+  while (start < end && isspace(*start)) {
+    start++;
+  }
+  if (start < end && *start == '{') {
+    start++;
+    while (start < end && isspace(*start)) {
+      start++;
+    }
+    if (start < end) {
+      const char *hcolumn_str = "\"HColumnDescriptor\"";
+      const uint32_t hcolumn_str_len = strlen(hcolumn_str); 
+      if (end - start >= hcolumn_str_len) {
+        bret = (0 == STRNCASECMP(start, hcolumn_str, hcolumn_str_len));
+      }
+    }
+  }
+
+  return bret;
 }
 
 int ObTTLManager::check_partition_can_gen_ttl(const ObPartitionKey& pkey,
