@@ -52,7 +52,7 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
   } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right) || OB_UNLIKELY(0 == sort_column_index_.count())) {
     result_code_ = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right), K(sort_column_index_.count()), K_(result_code));
-  } else {
+  } else {    
     for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
       const int64_t index = sort_column_index_.at(i);
       if (index < left->row_val_.count_ && index < right->row_val_.count_) {
@@ -85,3 +85,4 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
 } /* namespace oceanbase */
 
 #endif /* OB_STORE_ROW_COMPARER_H_ */
+

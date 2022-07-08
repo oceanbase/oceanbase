@@ -17,6 +17,7 @@
 #include <algorithm>
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_vector.h"
+#include "lib/container/ob_array.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/random/ob_random.h"
 #include "lib/string/ob_string.h"
@@ -24,6 +25,8 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "./blocksstable/ob_data_file_prepare.h"
 #include "./blocksstable/ob_row_generate.h"
+#include "storage/ob_store_row_comparer.h"
+#include "storage/compaction/ob_partition_merge_util.h"
 
 namespace oceanbase {
 using namespace storage;
@@ -188,7 +191,6 @@ public:
   void test_multi_sort_round(
       const int64_t buf_cap, const int64_t items_count, const int64_t task_cnt, const int64_t merge_count);
   void test_memory_sort_round(const int64_t buf_mem_limit, const int64_t items_count);
-  void test_memory_avx512sort();
   void test_avx512_sort_type();
   void test_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt);
   void test_multi_task_sort(
@@ -632,21 +634,74 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+bool isSupportedByAvx512Sort(int obj_type) {
+  if (obj_type == common::ObHexStringType || 
+      obj_type == common::ObTinyTextType ||
+      obj_type == common::ObTextType ||
+      obj_type == common::ObMediumTextType ||
+      obj_type == common::ObLongTextType ||
+      obj_type == common::ObEnumType ||
+      obj_type == common::ObSetType ||
+      obj_type == common::ObEnumInnerType ||
+      obj_type == common::ObSetInnerType ||
+      obj_type == common::ObTimestampTZType ||
+      obj_type == common::ObTimestampLTZType ||
+      obj_type == common::ObTimestampNanoType ||
+      obj_type == common::ObRawType ||
+      obj_type == common::ObIntervalYMType ||
+      obj_type == common::ObIntervalDSType ||
+      obj_type == common::ObNumberFloatType ||
+      obj_type == common::ObNVarchar2Type ||
+      obj_type == common::ObNCharType ||
+      obj_type == common::ObURowIDType ||
+      obj_type == common::ObLobType ||
+      obj_type == common::ObJsonType) {      
+    return false;
+  }
+  return true;
+}
+
 void TestParallelExternalSort::test_avx512_sort_type()
 {
-  int row_count = 1;
-  int TEST_COLUMN_CNT = 5;
+  if (!(__builtin_cpu_supports("avx512f"))) {
+    return;
+  }
+
+  int row_count = 1000;
+  int TEST_OBJ_TYPE_CNT = common::ObJsonType;
   int TEST_ROWKEY_COLUMN_CNT = 2;
   int64_t table_id = combine_id(1, 3001);
   // init column
   char name[OB_MAX_FILE_NAME_LENGTH];
+
   memset(name, 0, sizeof(name));
-  for (int64_t i = 0; i < TEST_COLUMN_CNT; ++i) {
+  for (int64_t type = 0; type <= TEST_OBJ_TYPE_CNT; ++type) {
+    if (type == common::ObExtendType || 
+        type == common::ObUnknownType || 
+        type == common::ObEnumType ||
+        type == common::ObSetType ||
+        type == common::ObEnumInnerType ||
+        type == common::ObSetInnerType ||
+        type == common::ObRawType ||
+        type == common::ObNumberFloatType ||
+        type == common::ObLobType ||
+        type == common::ObJsonType
+        ) {
+      //these types result in error -4016 for table_schema_.add_column(column)     
+      //, which is not related to avx512 sort. So skip these types
+      continue;
+    }
     ObRowGenerate row_generate_;
     ObArenaAllocator allocator_;
     ObObjType obj_type;
     ObObjMeta meta_type;
     ObColumnSchemaV2 column;
+
+    ObArray<int64_t> sort_column_indexes;
+    sort_column_indexes.push_back(0);
+
+    int comp_ret = OB_SUCCESS;
+    ObStoreRowComparer comparer(comp_ret, sort_column_indexes);
 
     ObTableSchema table_schema_;
     // init table schema
@@ -656,32 +711,21 @@ void TestParallelExternalSort::test_avx512_sort_type()
     table_schema_.set_tablegroup_id(1);
     table_schema_.set_database_id(1);
     table_schema_.set_table_id(table_id);
-    //table_schema_.set_rowkey_column_num(TEST_ROWKEY_COLUMN_CNT);
     table_schema_.set_max_used_column_id(1);
     table_schema_.set_block_size(4 * 1024);
     table_schema_.set_compress_func_name("none");
 
     column.reset();
     column.set_table_id(table_id);
-    column.set_column_id(i);
+    column.set_column_id(1);
     column.set_data_length(1);
-    sprintf(name, "test%020ld", i);
+    sprintf(name, "test%020ld", type);
     ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
-    if (i == 0) {
-      obj_type = common::ObCharType;
-    } else if (i == 1) {
-      obj_type = common::ObHexStringType;
-    } else if (i == 2) {
-      obj_type = common::ObDoubleType;
-    } else if (i == 3) {
-      obj_type = common::ObVarcharType;
-    } else {
-      obj_type = common::ObTinyIntType;
-    }
 
+    obj_type = (ObObjType)type;
     meta_type.set_type(obj_type);
     column.set_meta_type(meta_type);
-    if (ob_is_string_type(obj_type) && obj_type != ObHexStringType) {
+    if (ob_is_string_type(obj_type) && obj_type != ObHexStringType && obj_type != ObExtendType) {
       meta_type.set_collation_level(CS_LEVEL_IMPLICIT);
       meta_type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
       column.set_meta_type(meta_type);
@@ -690,14 +734,16 @@ void TestParallelExternalSort::test_avx512_sort_type()
     column.set_rowkey_position(1);
     ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
 
+    const int64_t file_buf_size = MACRO_BLOCK_SIZE;
+    const int64_t buf_mem_limit = 8 * 1024 * 1024;
+    const int64_t expire_timestamp = 0;
+
     row_generate_.init(table_schema_, &allocator_);
 
     int ret = OB_SUCCESS;
-    typedef ObExternalSortRound<TestItem, TestItemCompare> SortRound;
-    typedef ObMemorySortRound<TestItem, TestItemCompare> MemorySortRound;
-    SortRound sort_round;
-    MemorySortRound memory_sort_round;
+
     ObVector<ObStoreRow*> item_list_;
+    ObVector<ObStoreRow*> verify_items;
     for (int64_t i = 0; i < row_count; i++) {
       ObStoreRow* row = new ObStoreRow();
       item_list_.push_back(row);
@@ -707,9 +753,20 @@ void TestParallelExternalSort::test_avx512_sort_type()
       row_generate_.get_next_row(*item_list_[i]);
     }
 
+    for (int64_t i = row_count - 1; i >= 0; i--) {
+      ObStoreRow* item = item_list_[i];
+      ObStoreRow* verify_row = new ObStoreRow();
+      const int64_t buf_len = item->get_deep_copy_size();
+      int64_t pos = 0;
+      char* buf = static_cast<char*>(allocator_.alloc(buf_len));
+      ASSERT_EQ(OB_SUCCESS, verify_row->deep_copy(*item, buf, buf_len, pos));
+
+      verify_items.push_back(verify_row); 
+    }    
+
     uint64_t* keys = NULL;
     ObStoreRow** values = NULL;
-    int64_t items_size = item_list_.size();
+    int64_t items_size = verify_items.size();
     if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
@@ -717,72 +774,31 @@ void TestParallelExternalSort::test_avx512_sort_type()
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
-      values[i] = item_list_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < verify_items.size(); ++i) {
+      values[i] = verify_items.at(i);
     }
-
 
     SortWithAvx512<ObStoreRow> sortWithAvx;
     ret = sortWithAvx.sort(keys, values, items_size);
-    if (obj_type == common::ObHexStringType) {
+    if (!isSupportedByAvx512Sort(type)) {
       ASSERT_EQ(OB_NOT_SUPPORTED, ret);
+      std::sort(verify_items.begin(), verify_items.end(), comparer);
     } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < verify_items.size(); ++i) {
+        verify_items.at(i) = values[i];
+      }
       ASSERT_EQ(OB_SUCCESS, ret);
+    }
+
+    std::sort(item_list_.begin(), item_list_.end(), comparer);
+
+    for (int64_t i = 0; i < verify_items.size(); ++i) {
+      ret = comparer(item_list_.at(i), verify_items.at(i));
+      ASSERT_EQ(ret, 0);
     }
 
     allocator_.free(keys);
     allocator_.free(*values);
-  }
-}
-
-
-void TestParallelExternalSort::test_memory_avx512sort()
-{
-  int ret = OB_SUCCESS;
-  ObVector<TestItem*> total_items;
-  ObVector<TestItem*> verify_items;
-  
-  TestItemCompare compare(ret);
-
-  ret = generate_items(1000, false, total_items);
-  ret = generate_items(1000, false, verify_items);
-  
-  for (int64_t i = 0; i < total_items.size(); ++i) {
-    verify_items.at(i) = total_items.at(i);
-  }
-
-  if (__builtin_cpu_supports("avx512f")) {
-    uint64_t* keys = NULL;
-    TestItem** values = NULL;
-    int64_t items_size = total_items.size();
-    if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-    } else if (OB_ISNULL(values = static_cast<TestItem**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
-      values[i] = total_items.at(i);
-    }
-
-    if (OB_SUCC(ret)) {
-      STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
-      SortWithAvx512<TestItem> sortWithAvx;
-      ret = sortWithAvx.sort(keys, values, items_size);
-      ASSERT_EQ(OB_SUCCESS, ret);
-      for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
-        total_items.at(i) = values[i];
-      }
-    }
-    if (keys != NULL) { allocator_.free(keys); }
-    if (values != NULL) { allocator_.free(values); }
-  }
-
-  std::sort(verify_items.begin(), verify_items.end(), compare);
-  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
-    // printf("i %ld total_items.at(i)->get_key(): %ld, verify_items.at(i)->get_key(): %ld\n", i, total_items.at(i)->get_key(), verify_items.at(i)->get_key());
-    ASSERT_EQ(total_items.at(i)->get_key(), verify_items.at(i)->get_key());
   }
 }
 
@@ -1153,11 +1169,6 @@ TEST_F(TestParallelExternalSort, test_memory_sort_round)
 TEST_F(TestParallelExternalSort, test_avx512_sort_type)
 {
   test_avx512_sort_type();
-}
-
-TEST_F(TestParallelExternalSort, test_memory_avx512sort)
-{
-  test_memory_avx512sort();
 }
 
 
