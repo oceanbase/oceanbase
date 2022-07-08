@@ -2198,25 +2198,19 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
     } else {
       LOG_DEBUG("delete rows", K(ret), K(affected_rows));
     }
-    // fix del cnt incorrect because delete row failed
-    uint64_t iter_ttl_cnt = ttl_row_iter.ttl_cnt_;
-    uint64_t iter_max_version_cnt = ttl_row_iter.max_version_cnt_;
-    uint64_t iter_return_cnt = iter_ttl_cnt + iter_max_version_cnt;
-    if (OB_FAIL(ret)) {
-      if (OB_UNLIKELY(affected_rows != iter_return_cnt - 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexpected affect rows", K(ret), K(affected_rows), K(iter_return_cnt));
-      } else {
-        ttl_row_iter.is_last_row_ttl_ ? iter_ttl_cnt-- : iter_max_version_cnt--; 
-      }
-    } else {
+
+    if (OB_SUCC(ret)) {
+      uint64_t iter_ttl_cnt = ttl_row_iter.ttl_cnt_;
+      uint64_t iter_max_version_cnt = ttl_row_iter.max_version_cnt_;
+      uint64_t iter_return_cnt = iter_ttl_cnt + iter_max_version_cnt;
       if (OB_UNLIKELY(affected_rows != iter_return_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected affect rows", K(ret), K(affected_rows), K(iter_return_cnt));
+      } else {
+        result.ttl_del_rows_ = iter_ttl_cnt;
+        result.max_version_del_rows_ = iter_max_version_cnt;
       }
     }
-    result.ttl_del_rows_ = iter_ttl_cnt;
-    result.max_version_del_rows_ = iter_max_version_cnt;
     result.end_rowkey_ = ttl_row_iter.cur_rowkey_;
     result.end_qualifier_ = ttl_row_iter.cur_qualifier_;
     result.scan_rows_ = ttl_row_iter.scan_cnt_;
