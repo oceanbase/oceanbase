@@ -663,6 +663,7 @@ bool isSupportedByAvx512Sort(int obj_type) {
 
 void TestParallelExternalSort::test_avx512_sort_type()
 {
+#ifdef ENABLE_AVX512F
   if (!(__builtin_cpu_supports("avx512f"))) {
     return;
   }
@@ -800,6 +801,9 @@ void TestParallelExternalSort::test_avx512_sort_type()
     allocator_.free(keys);
     allocator_.free(*values);
   }
+#elif
+  return;
+#endif
 }
 
 void TestParallelExternalSort::test_sort(
