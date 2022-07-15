@@ -634,33 +634,6 @@ void TestParallelExternalSort::test_memory_sort_round(const int64_t buf_mem_limi
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-bool isSupportedByAvx512Sort(int obj_type) {
-  if (obj_type == common::ObHexStringType || 
-      obj_type == common::ObTinyTextType ||
-      obj_type == common::ObTextType ||
-      obj_type == common::ObMediumTextType ||
-      obj_type == common::ObLongTextType ||
-      obj_type == common::ObEnumType ||
-      obj_type == common::ObSetType ||
-      obj_type == common::ObEnumInnerType ||
-      obj_type == common::ObSetInnerType ||
-      obj_type == common::ObTimestampTZType ||
-      obj_type == common::ObTimestampLTZType ||
-      obj_type == common::ObTimestampNanoType ||
-      obj_type == common::ObRawType ||
-      obj_type == common::ObIntervalYMType ||
-      obj_type == common::ObIntervalDSType ||
-      obj_type == common::ObNumberFloatType ||
-      obj_type == common::ObNVarchar2Type ||
-      obj_type == common::ObNCharType ||
-      obj_type == common::ObURowIDType ||
-      obj_type == common::ObLobType ||
-      obj_type == common::ObJsonType) {      
-    return false;
-  }
-  return true;
-}
-
 void TestParallelExternalSort::test_avx512_sort_type()
 {
 #ifdef ENABLE_AVX512F
@@ -781,14 +754,14 @@ void TestParallelExternalSort::test_avx512_sort_type()
 
     SortWithAvx512<ObStoreRow> sortWithAvx;
     ret = sortWithAvx.sort(keys, values, items_size);
-    if (!isSupportedByAvx512Sort(type)) {
-      ASSERT_EQ(OB_NOT_SUPPORTED, ret);
-      std::sort(verify_items.begin(), verify_items.end(), comparer);
-    } else {
+    if (SortWithAvx512<ObStoreRow>::isSupportedByAvx512Sort(type)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < verify_items.size(); ++i) {
         verify_items.at(i) = values[i];
       }
       ASSERT_EQ(OB_SUCCESS, ret);
+    } else {
+      ASSERT_EQ(OB_NOT_SUPPORTED, ret);
+      std::sort(verify_items.begin(), verify_items.end(), comparer);
     }
 
     std::sort(item_list_.begin(), item_list_.end(), comparer);

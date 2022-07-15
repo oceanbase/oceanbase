@@ -656,7 +656,7 @@ public:
     int32_t size;
     while (OB_SUCC(ret) && next_ids_ < row_val_.count_ && buf < buf_end) {
       size = buf_end - buf;
-      ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size, &extra_data_);
+      ret = row_val_.cells_[next_ids_].make_sort_key(buf, offset_, size);
       if (OB_FAIL(ret)) {
         STORAGE_LOG(WARN, "failed to make sort key", K(ret), K(buf), K(offset_), K(size));
         break;

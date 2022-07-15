@@ -43,6 +43,24 @@ public:
       }
       return ret;
     }
+
+    static bool isSupportedByAvx512Sort(int obj_type) {
+      if (obj_type == common::ObTinyIntType || 
+          obj_type == common::ObSmallIntType ||
+          obj_type == common::ObInt32Type ||
+          obj_type == common::ObIntType ||
+          obj_type == common::ObUTinyIntType ||
+          obj_type == common::ObUSmallIntType ||
+          obj_type == common::ObUInt32Type ||
+          obj_type == common::ObUInt64Type ||
+          obj_type == common::ObFloatType ||
+          obj_type == common::ObDoubleType ||
+          obj_type == common::ObUFloatType ||
+          obj_type == common::ObUDoubleType) {      
+        return true;
+      }
+      return false;
+    }    
 private:
     /*
     * Due to the sorting algorithm implemented by the vectorization method can 
