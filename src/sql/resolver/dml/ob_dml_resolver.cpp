@@ -1641,7 +1641,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
       }
     }
     // resolve special expression, like functions, e.g abs, concat
-    // actually not so special, hmm...
+    // acutally not so special, hmm...
     if (OB_SUCC(ret)) {
       // update flag info
       if (OB_FAIL(expr->extract_info())) {
@@ -2928,7 +2928,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       && T_INTO_SCOPE != current_scope_
       && NULL != params_.secondary_namespace_) { //仅PL里的SQL出现了外部变量需要替换成QUESTIONMARK，纯SQL语境的不需要
     if (OB_FAIL(replace_pl_relative_expr_to_question_mark(real_ref_expr))) {
-      LOG_WARN("failed to replace pl relative expr to question mark", K(ret), KPC(real_ref_expr), K(q_name));
+      LOG_WARN("failed to replace pl realtive expr to question mark", K(ret), KPC(real_ref_expr), K(q_name));
     }
   }
 
@@ -4564,7 +4564,7 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
     char* table_buf = static_cast<char*>(allocator_->alloc(sizeof(ObJsonTableDef)));
     if (OB_ISNULL(table_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory json table def buffer", K(ret));
+      LOG_WARN("faield to allocate memory json table def buffer", K(ret));
     } else {
       table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef());
       table_def->doc_expr_ = json_doc_expr;
@@ -6670,7 +6670,7 @@ int ObDMLResolver::resolve_limit_clause(const ParseNode *node)
   return ret;
 }
 
-// Forbit select with order by limit exists in subquery in Oracle mode
+// Forbit select with order by limit exists in subquery in Oralce mode
 // eg: select 1 from t1 where c1 in (select d1 from t2 order by c1); --error
 // 如果subquery中同时存在fetch clause,则是允许存在order by:
 // eg: select 1 from t1 where c1 in (select d1 from t2 order by c1 fetch next 1 rows only); --right
@@ -7008,7 +7008,7 @@ int ObDMLResolver::check_pad_generated_column(const ObSQLSessionInfo &session_in
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
       } else if (OB_FAIL(index_table_schema->has_column(column_schema.get_column_id(), is_stored_column))) {
-        LOG_WARN("failed to check if column is in index schema", K(ret));
+        LOG_WARN("falied to check if column is in index schema", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -7521,7 +7521,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     } else if (OB_FAIL(build_padding_expr(session_info, column_schema, ref_expr))) {
       LOG_WARN("build padding expr for self failed", K(ret));
     } else if (OB_FAIL(ref_expr->formalize(session_info))) {
-      LOG_WARN("formalize column reference expr failed", K(ret));
+      LOG_WARN("formailize column reference expr failed", K(ret));
     } else if (ObRawExprUtils::need_column_conv(column.get_result_type(), *ref_expr)) {
       if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*expr_factory, *allocator_,
                                                          column, ref_expr, session_info))) {
@@ -9595,7 +9595,7 @@ bool ObDMLResolver::check_generated_column_has_json_constraint(const ObSelectStm
   @param skip_check:
     bugfix:
     if the all the three conditions are true, we can skip the check and directly copy the select_item to column_item:
-    1. the function is called directly or indirectly from resolve_star. (e.g., in select * from xxxx)
+    1. the function is called directly or indirectly from reslove_star. (e.g., in select * from xxxx)
     2. is oracle mode
     3. the column to be checked is a duplicable column in joined table (excepet the using).
       for example:  t1 (c1, c2, c3), t2 (c2, c3, c4)
@@ -12061,7 +12061,7 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
     LOG_WARN("check rowscn table colum namespace failed", K(ret));
   } else if (OB_ISNULL(table_item)) {
     ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("ORA_ROWSCN pseudo column only available in basic table", K(ret));
+    LOG_WARN("ORA_ROWSCN pseudo column only avaliable in basic table", K(ret));
   } else if (OB_FAIL(get_stmt()->get_ora_rowscn_column(table_item->table_id_,
                                                        pseudo_column_expr))) {
       LOG_WARN("failed to get ora_rowscn column", K(ret), K(table_item));
@@ -12794,7 +12794,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
         ObDDLSchemaVersionHint ddlSchemaVersionHit;
         if (OB_FAIL(resolve_table_relation_in_hint(*child0,
                                                     ddlSchemaVersionHit.table_))) {
-          LOG_WARN("failed to resolve simple table list in hint", K(ret));
+          LOG_WARN("failed to resovle simple table list in hint", K(ret));
         } else if (T_INT != child1->type_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected value type in ddl schema version", "type", get_type_name(child1->type_));
@@ -14879,7 +14879,7 @@ int ObDMLResolver::resolve_with_clause_opt_alias_colnames(const ParseNode *parse
     LOG_WARN("invalid argument", K(ret), K(table_item));
   } else if (OB_ISNULL(parse_tree)) {
     if (OB_FAIL(ObResolverUtils::check_duplicated_column(*table_item->ref_query_))) {
-      // check duplicate column name for generated table
+      // check duplicate column name for genereated table
       LOG_WARN("check duplicated column failed", K(ret));
     }
   } else {
