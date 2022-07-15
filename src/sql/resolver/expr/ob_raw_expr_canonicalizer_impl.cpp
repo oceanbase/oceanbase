@@ -453,7 +453,7 @@ int ObRawExprCanonicalizerImpl::push_not(ObRawExpr *&expr)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(push_not(expr->get_param_expr(i))))) {
-        LOG_WARN("fialed to push not expr", K(ret));
+        LOG_WARN("failed to push not expr", K(ret));
       }
     }
   }
