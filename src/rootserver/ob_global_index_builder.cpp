@@ -1216,6 +1216,12 @@ int ObGlobalIndexBuilder::hold_snapshot(const ObGlobalIndexTask* task, const int
       LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info1))) {
       LOG_WARN("fail to acquire snapshot", K(ret));
+    } else if (!info2.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(info2));
+    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().set_index_building_snapshot(
+                   proxy, info2.table_id_, info2.snapshot_ts_))) {
+      LOG_WARN("fail to set index building snapshot", KR(ret), K(info2));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot_for_building_index(
                    trans, info2, info2.table_id_))) {
       LOG_WARN("fail to acquire snapshot", K(ret));

@@ -931,9 +931,13 @@ int ObRSBuildIndexTask::acquire_snapshot(const int64_t snapshot_version, const i
     info.schema_version_ = schema_version;
     info.tenant_id_ = extract_tenant_id(index_id_);
     info.table_id_ = data_table_id;
+    common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
     if (!info.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(info));
+    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().set_index_building_snapshot(
+                   proxy, info.table_id_, info.snapshot_ts_))) {
+      LOG_WARN("fail to set index building snapshot", KR(ret), K(info));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot_for_building_index(trans, info, index_id_))) {
       LOG_WARN("fail to acquire snapshot", K(ret), K(index_id_), K(data_table_id), K(info));
     }
