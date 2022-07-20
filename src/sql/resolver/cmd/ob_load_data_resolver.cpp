@@ -133,38 +133,32 @@ int ObLoadDataResolver::resolve(const ParseNode& parse_tree)
           } else if (secure_file_priv.empty()) {
             // pass security check
           } else {
+             /* here is to check when "set global secure_file_priv=real_secure_file_path"
+            *  1. real_secure_file_path should be a legal dir
+            *  2. real_secure_file_path shoule own the same 'priv' with full_file_path
+            */
             struct stat path_stat;
-            if (0 != stat(secure_file_priv.ptr(), &path_stat)) {
+            char real_secure_file_path[DEFAULT_BUF_LENGTH];
+            MEMSET(real_secure_file_path, 0, sizeof(real_secure_file_path));
+            char* buf = NULL;
+            if (NULL == (buf = realpath(to_cstring(secure_file_priv), real_secure_file_path))) {
+                // pass
+            } else if (0 != stat(real_secure_file_path, &path_stat)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("stat error", K(ret), K(secure_file_priv));
             } else if (!S_ISDIR(path_stat.st_mode)) {
               ret = OB_ERR_NO_PRIVILEGE;
               LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_file_path));
             } else {
-              char* real_secure_file = nullptr;
-              if (NULL == (real_secure_file = realpath(to_cstring(secure_file_priv), buf))) {
-                // pass
-              } else {
-                int64_t data_len = strlen(real_secure_file);
-                ObString secure_file_priv_tmp = secure_file_priv;
-                ObString full_file_path_tmp = full_file_path;
-                ObString secure_file_priv_cut;
-
-                if (data_len < DEFAULT_BUF_LENGTH && real_secure_file[data_len - 1] != '/') {
-                  real_secure_file[data_len++] = '/';
-                  real_secure_file[data_len++] = '\0';
-                  secure_file_priv = real_secure_file;
-                } else {
-                  secure_file_priv.reset();
-                }
-                while (!(secure_file_priv_cut = secure_file_priv_tmp.split_on('/')).empty()) {
-                  ObString full_file_path_cut = full_file_path_tmp.split_on('/');
-                  if (0 != full_file_path_cut.case_compare(secure_file_priv_cut)) {
-                    ret = OB_ERR_NO_PRIVILEGE;
-                    LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_file_path));
-                    break;
-                  }
-                }
+            //check  exist the same 'prev'
+              int64_t data_len = strlen(real_secure_file_path);
+              // case like "set global secure_file_priv= '/tmp/' " should be valid
+              if (data_len < DEFAULT_BUF_LENGTH && real_secure_file_path[data_len - 1] != '/') {
+                real_secure_file_path[data_len++] = '/';
+              } 
+              if(full_file_path.length() < data_len || 0 != MEMCMP(real_secure_file_path, full_file_path.ptr(), data_len)){
+                  ret = OB_ERR_NO_PRIVILEGE;
+                  LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_file_path));
               }
             }
           }
