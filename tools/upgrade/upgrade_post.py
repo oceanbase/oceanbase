@@ -8132,18 +8132,8 @@
 #
 ## 31. check the _max_trx_size
 #def check_max_trx_size_config(query_cur, cur):
-#  (desc, results) = query_cur.exec_query(
-#      """
-#      select distinct(value) from __all_sys_parameter where name like '_max_trx_size'
-#      """)
-#  if len(results) != 1:
-#    raise MyError("failed to get config of _max_trx_size")
-#
-#  if results[0][0] == '100M':
-#    set_parameter(cur, '_max_trx_size', '100G')
-#    logging.info('set _max_trx_size to default value 100G')
-#  else:
-#    logging.info('leave _max_trx_size untouch ' + str(results[0][0]))
+#  set_parameter(cur, '_max_trx_size', '100G')
+#  logging.info('set _max_trx_size to default value 100G')
 #
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
