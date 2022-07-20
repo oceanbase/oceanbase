@@ -1331,7 +1331,7 @@ DEF_STR(backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_dest_option",
 DEF_STR(backup_backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_backup_dest_option",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(backup_log_archive_option, OB_CLUSTER_PARAMETER, "OPTIONAL",
+DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(backup_log_archive_option, OB_CLUSTER_PARAMETER, "OPTIONAL COMPRESSION=ENABLE",
     common::ObConfigLogArchiveOptionsChecker, "backup log archive option, support MANDATORY/OPTIONAL, COMPRESSION",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
