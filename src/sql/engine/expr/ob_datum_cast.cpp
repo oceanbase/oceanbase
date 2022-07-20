@@ -2215,7 +2215,8 @@ static int common_string_json(const ObExpr &expr,
       if (is_need_charset_convert == false) {
         j_text.assign_ptr(in_str.ptr(), in_str.length());
       }
-      bool is_enumset_to_str = (expr.args_[0]->type_ == T_FUN_SET_TO_STR);
+      bool is_enumset_to_str = ((expr.args_[0]->type_ == T_FUN_SET_TO_STR)
+                                || (expr.args_[0]->type_ == T_FUN_ENUM_TO_STR));
       ObIJsonBase *j_base = NULL;
       ObJsonOpaque j_opaque(j_text, in_type);
       ObJsonString j_string(j_text.ptr(), j_text.length());
