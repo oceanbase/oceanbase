@@ -1353,6 +1353,9 @@ int ObPartitionService::create_new_partition(const common::ObPartitionKey& key, 
   } else if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(key), K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "partition service is not running.", K(ret), K(is_running_));
   } else {
     if (NULL == (partition = cp_fty_->get_partition(key.get_tenant_id()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1392,6 +1395,9 @@ int ObPartitionService::add_new_partition(ObIPartitionGroupGuard& partition_guar
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "partition service is not running.", K(ret), K(is_running_));
   } else if (OB_ISNULL(partition = (partition_guard.get_partition_group()))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(partition), K(ret));
@@ -1718,6 +1724,9 @@ int ObPartitionService::create_batch_pg_partitions(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "the partition service has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "partition service is not running.", K(ret), K(is_running_));
   } else if (OB_FAIL(batch_res.reserve(batch_arg.count()))) {
     STORAGE_LOG(WARN, "reserver res array failed, ", K(ret));
   } else if (OB_FAIL(target_batch_arg.reserve(batch_arg.count()))) {
@@ -2183,6 +2192,9 @@ int ObPartitionService::create_batch_partition_groups(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "the partition service has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "partition service is not running.", K(ret), K(is_running_));
   } else if (batch_arg.count() <= 0 || !batch_arg.at(0).pg_key_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), "count", batch_arg.count());
@@ -8746,6 +8758,9 @@ int ObPartitionService::remove_partition_from_pg(
   } else if (!pg_key.is_valid() || !pkey.is_valid() || !pg_key.is_pg()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(pkey));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "partition service is not running.", K(ret), K(is_running_));
   } else if (OB_FAIL(get_partition(pg_key, guard))) {
     STORAGE_LOG(WARN, "get partition failed", K(ret), K(pg_key), K(pkey));
   } else if (OB_UNLIKELY(NULL == guard.get_partition_group())) {
