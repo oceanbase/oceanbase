@@ -1529,6 +1529,7 @@ int ObWindowFunctionOp::get_pos(RowsReader& row_reader, WinFuncCell& wf_cell, co
         cmp_mode = cmp_mode << 1;
       }
       pos = row_idx;
+      bool re_direction = false;
       int step = cmp_mode & ROLL ? 1 : 0;
       int64_t cmp_times = 0;
       ObDatum* cmp_val = NULL;
@@ -1547,9 +1548,10 @@ int ObWindowFunctionOp::get_pos(RowsReader& row_reader, WinFuncCell& wf_cell, co
         cmp_times++;
         ObDatum cur_val;
         bool match = false;
-        const ObRADatumStore::StoredRow* a_row = NULL;
-        is_preceding ? (pos -= step) : (pos += step);
-        const bool overflow = is_preceding ? pos < wf_cell.part_first_row_idx_ : pos > get_part_end_idx();
+        const ObRADatumStore::StoredRow *a_row = NULL;
+        (is_preceding ^ re_direction) ? (pos -= step) : (pos += step);
+        const bool overflow = 
+            (is_preceding ^ re_direction) ? pos < wf_cell.part_first_row_idx_ : pos > get_part_end_idx();
         if (overflow) {
           match = true;
         } else if (OB_FAIL(row_reader.get_row(pos, a_row))) {
@@ -1580,13 +1582,23 @@ int ObWindowFunctionOp::get_pos(RowsReader& row_reader, WinFuncCell& wf_cell, co
 
         if (OB_SUCC(ret)) {
           if (match) {
-            if (step <= 1) {
+            if (pos == row_idx && !(cmp_mode & ROLL)) {
+              // for LE/GE, if equal to current row,
+              // change cmp_mode to search opposite direction.
+              if (LE == cmp_mode) {
+                cmp_mode = G;
+              } else if (GE == cmp_mode) {
+                cmp_mode = L;
+              }
+              re_direction = true;
+              step = 1;
+            } else if (step <= 1) {
               if (cmp_mode & ROLL) {
-                is_preceding ? pos += step : pos -= step;
+                (is_preceding ^ re_direction) ? pos += step : pos -= step;
               }
               break;
             } else {
-              is_preceding ? pos += step : pos -= step;
+              (is_preceding ^ re_direction) ? pos += step : pos -= step;
               step = 1;
             }
           } else {
