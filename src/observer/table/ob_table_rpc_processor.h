@@ -156,6 +156,7 @@ protected:
   virtual void audit_on_finish() {}
   virtual void save_request_string() = 0;
   virtual void generate_sql_id() = 0;
+  virtual int check_table_index_supported(uint64_t table_id, bool &is_supported);
 
   // set trans consistency level
   void set_consistency_level(const ObTableConsistencyLevel consistency_level) { consistency_level_ = consistency_level; }

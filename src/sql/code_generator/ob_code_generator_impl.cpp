@@ -350,7 +350,8 @@ int ObCodeGeneratorImpl::set_other_properties(const ObLogPlan& log_plan, ObPhysi
       bool has_dep_table = false;
       for (int64_t i = 0; OB_SUCC(ret) && !exist && i < dependency_table->count(); i++) {
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
-          if (OB_FAIL(ObSQLUtils::has_global_index(schema_guard, dependency_table->at(i).object_id_, exist))) {
+          uint64_t tenant_id = extract_tenant_id(dependency_table->at(i).object_id_);
+          if (OB_FAIL(schema_guard->check_global_index_exist(tenant_id, dependency_table->at(i).object_id_, exist))) {
             LOG_WARN("fail to judge global index", K(ret));
           }
           has_dep_table = true;
