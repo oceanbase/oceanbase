@@ -4084,7 +4084,9 @@ static int string_number(
       }
     }
     if (CAST_FAIL(ret)) {
+      LOG_WARN("string_number failed", K(ret), K(in), K(expect_type), K(cast_mode));
     } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+      LOG_WARN("numeric_negative_check failed", K(ret), K(in), K(cast_mode));
     } else {
       out.set_number(expect_type, value);
     }

@@ -896,10 +896,11 @@ static OB_INLINE int common_string_number(
     }
   }
 
+  const ObCastMode cast_mode = expr.extra_;
   if (CAST_FAIL(ret)) {
-    LOG_WARN("string_number failed", K(ret));
+    LOG_WARN("string_number failed", K(ret), K(in_type), K(out_type), K(cast_mode), K(in_str));
   } else if (ObUNumberType == out_type && CAST_FAIL(numeric_negative_check(nmb))) {
-    LOG_WARN("numeric_negative_check failed", K(ret));
+    LOG_WARN("numeric_negative_check failed", K(ret), K(in_type), K(cast_mode), K(in_str));
   }
   return ret;
 }
