@@ -585,11 +585,20 @@ TEST_F(TestTmpFile, test_big_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info.buf_ = read_buf;
 
+  io_info.size_ = write_size;
+  ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(handle.size_ < handle.expect_read_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.wait(timeout_ms));
+  ASSERT_EQ(write_size, handle.get_data_size());
+  int cmp = memcmp(handle.get_buffer(), write_buf, handle.get_data_size());
+  ASSERT_EQ(0, cmp);
+
   io_info.size_ = macro_block_size;
   ret = ObTmpFileManager::get_instance().pread(io_info, 100, timeout_ms, handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(macro_block_size, handle.get_data_size());
-  int cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
   ASSERT_EQ(0, cmp);
 
   io_info.size_ = write_size;
@@ -1068,7 +1077,7 @@ TEST_F(TestTmpFile, test_write_less_than_macro_block_size)
   ASSERT_EQ(0, cmp);
 
   ret = ObTmpFileManager::get_instance().pread(io_info, 20, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(256 - 20, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + 20, 256 - 20);
   ASSERT_EQ(0, cmp);
@@ -1157,7 +1166,7 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
 
   io_info.size_ = macro_block_size;
   ret = ObTmpFileManager::get_instance().pread(io_info, 400, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(macro_block_size + 256 - 400, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + 400, macro_block_size + 256 - 400);
   ASSERT_EQ(0, cmp);
@@ -1178,7 +1187,7 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
 
   io_info.size_ = 200;
   ret = ObTmpFileManager::get_instance().pread(io_info, macro_block_size + 100, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(156, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + macro_block_size + 100, handle.get_data_size());
   ASSERT_EQ(0, cmp);
