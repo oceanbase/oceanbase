@@ -1016,6 +1016,10 @@ DEF_BOOL(enable_election_group, OB_CLUSTER_PARAMETER, "True",
     "specifies whether election group is turned on. "
     "Value:  True:turned on;  False: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_trans_ctx_size_limit, OB_TENANT_PARAMETER, "True",
+    "specifies whether trans ctx size limit is turned on or not. "
+    "Value: True:turned on;  False: turned off",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // Tablet config
 DEF_CAP_WITH_CHECKER(tablet_size, OB_CLUSTER_PARAMETER, "128M", common::ObConfigTabletSizeChecker,

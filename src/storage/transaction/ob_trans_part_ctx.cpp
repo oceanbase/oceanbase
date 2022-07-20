@@ -36,6 +36,7 @@
 #include "election/ob_election.h"
 #include "ob_trans_split_adapter.h"
 #include "ob_trans_coord_ctx.h"
+#include "observer/omt//ob_tenant_config_mgr.h"
 
 namespace oceanbase {
 
@@ -1708,7 +1709,7 @@ int ObPartTransCtx::on_sync_log_success(
         // The log is completed, we need verify the txn checksum
         need_checksum_ = true;
       }
-      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
         TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if (cluster_version_after_3100_() && need_record_log()) {
         if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
@@ -1805,7 +1806,7 @@ int ObPartTransCtx::on_sync_log_success(
       // need submit redo_prepare log when log_type equal OB_LOG_TRANS_REDO
       if (OB_LOG_TRANS_REDO == log_type) {
         // record the redo log id
-        if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+        if (!is_xa_last_empty_redo_log_() && OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
         } else if (cluster_version_after_3100_() && need_record_log()) {
           if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
@@ -1949,7 +1950,7 @@ int ObPartTransCtx::on_sync_log_success(
         need_checksum_ = true;
       }
       start_us = ObTimeUtility::fast_current_time();
-      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
         TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if ((OB_LOG_TRANS_STATE & log_type) != 0) {
         // do nothing
@@ -4858,13 +4859,20 @@ bool ObPartTransCtx::need_record_log() const
   // three variables is larger than 1014KB and we need write record log to make sure the trans state
   // table can be dumped successfully.
   bool bool_ret = false;
-  int total_size = participants_serialize_size_ + undo_serialize_size_ + redo_log_id_serialize_size_;
-
+  int64_t participants_serialize_size = participants_.get_serialize_size();
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
+  int total_size = participants_serialize_size + undo_serialize_size + redo_log_id_serialize_size;
   if (total_size > OB_MAX_TRANS_SERIALIZE_SIZE) {
     bool_ret = true;
-    TRANS_LOG(INFO, "need flush record log.", K(participants_serialize_size_),
-              K(undo_serialize_size_), K(redo_log_id_serialize_size_), K(total_size),
-              K(OB_MAX_TRANS_SERIALIZE_SIZE), KPC(this));
+    TRANS_LOG(INFO,
+        "need flush record log.",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(total_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        KPC(this));
   }
 
   return bool_ret;
@@ -4942,7 +4950,7 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
         ret = mt_ctx_.fill_redo_log(mutator.get_data(), available_capacity, mutator.get_position());
         timeguard.click();
         if (OB_SUCCESS == ret) {
-          log.set_last();
+            log.set_last();
           has_gen_last_redo_log_ = true;
         }
         // For XA txn, if the partition has no mutator, we also need append a
@@ -8378,7 +8386,24 @@ int ObPartTransCtx::handle_2pc_abort_request_(const ObTransMsg& msg)
   return handle_2pc_abort_request_raw_(msg.get_msg_type(), msg.get_status());
 }
 
-int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t msg_type)
+#ifdef ERRSIM
+#define INJECT_2PC_PREPARE_RETRY_ERRSIM                                                                              \
+  do {                                                                                                               \
+    int64_t participants_serialize_size = participants_.get_serialize_size();                                        \
+    if (participants_serialize_size > 4096 && OB_FAIL(E(EventTable::EN_HANDLE_PREPARE_MESSAGE_EAGAIN) OB_SUCCESS)) { \
+      ret = OB_EAGAIN;                                                                                               \
+      TRANS_LOG(INFO,                                                                                                \
+          "ERRSIM Inject OB_EAGAIN error when handle 2pc prepare request",                                           \
+          KR(ret),                                                                                                   \
+          K(participants_serialize_size));                                                                           \
+    }                                                                                                                \
+  } while (false);
+#else
+#define INJECT_2PC_PREPARE_RETRY_ERRSIM
+#endif
+
+int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase &msg,
+                                       const int64_t msg_type)
 {
   int ret = OB_SUCCESS;
 
@@ -8489,6 +8514,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
         // do nothing
       }
     }
+    INJECT_2PC_PREPARE_RETRY_ERRSIM
   } else {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "unexpected msg", K(ret), K(msg_type), K(*this));
@@ -10845,7 +10871,7 @@ int ObPartTransCtx::mark_frozen_data(
   return ret;
 }
 
-int ObPartTransCtx::submit_log_for_split(bool& log_finished)
+int ObPartTransCtx::submit_log_for_split(bool &log_finished)
 {
   int ret = OB_SUCCESS;
   bool has_redo_log = false;
@@ -12174,20 +12200,56 @@ void ObPartTransCtx::DEBUG_SYNC_slow_txn_during_2pc_prepare_phase_for_physical_b
   }
 }
 
-
-// for more explanation of this function, see ObPartTransCtx::need_record_log()
-int ObPartTransCtx::calc_serialize_size_and_set_redo_log_(const int64_t log_id)
+int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionArray &participants)
 {
   int ret = OB_SUCCESS;
-  redo_log_id_serialize_size_ += serialization::encoded_length_vi64(log_id);
-  if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
-    redo_log_id_serialize_size_ -= serialization::encoded_length_vi64(log_id);
-    TRANS_LOG(WARN, "prev redo log id push back error", KR(ret), K(log_id), KPC(this));
-  } else {
-    // push back redo log success
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  bool enable_trans_ctx_size_limit = false;
+  if (tenant_config.is_valid()) {
+    enable_trans_ctx_size_limit = tenant_config->_enable_trans_ctx_size_limit;
   }
+
+  if (enable_trans_ctx_size_limit) {
+    if (OB_FAIL(do_calc_and_set_participants_(participants))) {
+      TRANS_LOG(WARN,
+          "do calc and set participants failed. set tenant config _enable_trans_ctx_size_limit=false may be able to "
+          "handle this.",
+          KR(ret), K(enable_trans_ctx_size_limit));
+    }
+  } else if (OB_FAIL(set_participants_(participants))) {
+    TRANS_LOG(WARN, "set participants failed.", KR(ret), K(enable_trans_ctx_size_limit));
+  }
+
   return ret;
 }
+
+#ifdef ERRSIM
+#define INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM                                                       \
+  do {                                                                                                \
+    if (OB_FAIL(E(EventTable::EN_PARTICIPANTS_SIZE_OVERFLOW) OB_SUCCESS)) {                           \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 1500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;                                                           \
+    } else if (OB_FAIL(E(EventTable::EN_PART_PLUS_UNDO_OVERFLOW) OB_SUCCESS)) {                       \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 7500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;                                                           \
+    } else if (participants_serialize_size > 4096 &&                                                  \
+               OB_FAIL(E(EventTable::EN_HANDLE_PREPARE_MESSAGE_EAGAIN) OB_SUCCESS)) {                 \
+      TRANS_LOG(INFO, "ERRSIM set participants once", KR(ret), K(participants_serialize_size));       \
+    }                                                                                                 \
+                                                                                                      \
+    OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE; \
+                                                                                                      \
+    TRANS_LOG(INFO,                                                                                   \
+        "ERRSIM modify trans ctx serialize size ",                                                    \
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),                                                               \
+        K(OB_MIN_REDO_LOG_SERIALIZE_SIZE),                                                            \
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE));                                                        \
+                                                                                                      \
+    ret = OB_SUCCESS;                                                                                 \
+  } while (false);
+#else
+#define INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM
+#endif
 
 /*
  * There are three kinds of cases when set participants. We calculate serialize size and do
@@ -12219,83 +12281,92 @@ int ObPartTransCtx::calc_serialize_size_and_set_redo_log_(const int64_t log_id)
  *          └────────────────────────────────────────────┘
  * Flush record log can make trans state table be successfully dumped.
  */
-int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionArray &participants)
+int ObPartTransCtx::do_calc_and_set_participants_(const ObPartitionArray &participants)
 {
   int ret = OB_SUCCESS;
-  int64_t tmp_participants_size = participants_serialize_size_ + participants.get_serialize_size();
+  int64_t participants_serialize_size = participants_.get_serialize_size() + participants.get_serialize_size();
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
   bool has_redo_log = false;
   bool need_submit_record_log = false;
 
-#ifdef ERRSIM
-  // test if this function can handle participants size overflow successfully
-  if (OB_FAIL(E(EventTable::EN_PARTICIPANTS_SIZE_OVERFLOW) OB_SUCCESS)) {
-    OB_MAX_TRANS_SERIALIZE_SIZE = 1500;
-    OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;
-  } else if (OB_FAIL(E(EventTable::EN_PART_PLUS_UNDO_OVERFLOW) OB_SUCCESS)) {
-    OB_MAX_TRANS_SERIALIZE_SIZE = 7500;
-    OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;
-  }
+  INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM
 
-  OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
-
-  TRANS_LOG(INFO, "ERRSIM modify trans ctx serialize size ", K(OB_MAX_TRANS_SERIALIZE_SIZE),
-            K(OB_MIN_REDO_LOG_SERIALIZE_SIZE), K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE));
-
-  ret = OB_SUCCESS;
-#endif
-
-  if (OB_UNLIKELY(tmp_participants_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+  if (OB_UNLIKELY(participants_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
     // case 1
     ret = OB_ERR_UNEXPECTED;
     int64_t participants_count = participants.count();
-    TRANS_LOG(ERROR, "participants is unexpected too large.", KR(ret), K(participants_count),
-              K(tmp_participants_size), KPC(this));
-  } else if (OB_UNLIKELY(tmp_participants_size + undo_serialize_size_
-                         > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    TRANS_LOG(ERROR,
+        "participants is unexpected too large.",
+        KR(ret),
+        K(participants_count),
+        K(participants_serialize_size),
+        KPC(this));
+  } else if (OB_UNLIKELY(participants_serialize_size + undo_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
     // case 2
-    // undo_serialize_size_ is an estimate value. Here we update undo serialize size before checking
-    // because a large range undo action can remove some little range undo actions.
-    undo_serialize_size_ = undo_status_.get_serialize_size();
-    if (tmp_participants_size + undo_serialize_size_ > OB_MAX_TRANS_SERIALIZE_SIZE) {
-      TRANS_LOG(WARN, "transaction is too large. flush record log can not handle it",
-                K(tmp_participants_size), K(participants_serialize_size_), K(undo_serialize_size_),
-                K(OB_MAX_TRANS_SERIALIZE_SIZE), K(trans_id_), KPC(this));
-      set_status_(OB_TRANS_NEED_ROLLBACK);
+    TRANS_LOG(WARN,
+        "transaction is too large. flush record log can not handle it",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        K(trans_id_),
+        KPC(this));
+    set_status_(OB_TRANS_NEED_ROLLBACK);
 
-      // Reset undo status to make trans state table can be dumped.
-      undo_status_.reset();
-      undo_serialize_size_ = 0;
-    }
+    // Reset undo status to make trans state table can be dumped.
+    undo_status_.reset();
+    undo_serialize_size = 0;
   } else {
     // normal case, set participants directly
   }
 
-  if (OB_SUCC(ret)
-      && OB_UNLIKELY(tmp_participants_size + undo_serialize_size_ + redo_log_id_serialize_size_
-                     > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+  if (OB_SUCC(ret) && OB_UNLIKELY(participants_serialize_size + undo_serialize_size + redo_log_id_serialize_size >
+                                  OB_MAX_TRANS_SERIALIZE_SIZE)) {
     // case 3
     need_submit_record_log = true;
-    int64_t participants_size = tmp_participants_size;
-    int64_t real_undo_size = undo_status_.get_serialize_size();
-    int64_t total_size = participants_size + redo_log_id_serialize_size_ + undo_serialize_size_;
-    TRANS_LOG(INFO, "flush record log to reserve space for participants", K(participants_size),
-              K(undo_serialize_size_), K(real_undo_size), K(redo_log_id_serialize_size_),
-              K(total_size), K(OB_MAX_TRANS_SERIALIZE_SIZE), KPC(this));
+    int64_t total_size = participants_serialize_size + redo_log_id_serialize_size + undo_serialize_size;
+    TRANS_LOG(INFO,
+        "flush record log to reserve space for participants",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(total_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        KPC(this));
   }
 
   if (OB_FAIL(ret)) {
     // participants is too large, this function can not handle it
-  } else if (OB_UNLIKELY(need_submit_record_log)
-             && OB_FAIL(submit_log_async_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+  } else if (OB_UNLIKELY(need_submit_record_log) && OB_FAIL(submit_log_async_(OB_LOG_TRANS_RECORD, has_redo_log))) {
     TRANS_LOG(WARN, "submit record log failed", KR(ret), KPC(this));
   } else if (OB_FAIL(set_participants_(participants))) {
     TRANS_LOG(WARN, "set participants error", KR(ret), KPC(this), K(participants));
-  } else {
-    participants_serialize_size_ = tmp_participants_size;
   }
 
   return ret;
 }
+
+#ifdef ERRSIM
+#define INJECT_CALC_AND_SET_UNDO_ERRSIM                                                               \
+  do {                                                                                                \
+    if (OB_FAIL(E(EventTable::EN_UNDO_ACTIONS_SIZE_OVERFLOW) OB_SUCCESS)) {                           \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 7500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 4900;                                                          \
+    }                                                                                                 \
+                                                                                                      \
+    OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE; \
+                                                                                                      \
+    TRANS_LOG(INFO,                                                                                   \
+        "ERRSIM modify trans ctx serialize size ",                                                    \
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),                                                               \
+        K(OB_MIN_REDO_LOG_SERIALIZE_SIZE),                                                            \
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE));                                                        \
+                                                                                                      \
+    ret = OB_SUCCESS;                                                                                 \
+  } while (false);
+#else
+#define INJECT_CALC_AND_SET_UNDO_ERRSIM
+#endif
 
 /*
  * There are two cases when set undo status. We calculate serialize size and do something to avoid
@@ -12326,60 +12397,49 @@ int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionA
  *          └────────────────────────────────────────────┘
  * Flush record log can make trans state table be successfully dumped.
  */
-int ObPartTransCtx::calc_serialize_size_and_set_undo_(const int64_t undo_to,
-                                                      const int64_t undo_from)
+int ObPartTransCtx::calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from)
 {
   int ret = OB_SUCCESS;
   ObUndoAction undo_action(undo_to, undo_from);
-  undo_serialize_size_ += undo_action.get_serialize_size();
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
   bool has_redo_log = false;
   bool updated_size = false;
 
-#ifdef ERRSIM
-  // test if this function can handle participants size overflow successfully
-  if (OB_FAIL(E(EventTable::EN_UNDO_ACTIONS_SIZE_OVERFLOW) OB_SUCCESS)) {
-    OB_MAX_TRANS_SERIALIZE_SIZE = 4100;
-    OB_MIN_REDO_LOG_SERIALIZE_SIZE = 1500;
-  TRANS_LOG(INFO, "ERRSIM modify trans ctx serialize size for case 4", K(OB_MAX_TRANS_SERIALIZE_SIZE),
-            K(OB_MIN_REDO_LOG_SERIALIZE_SIZE));
-  }
-  OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
-  ret = OB_SUCCESS;
-#endif
+  INJECT_CALC_AND_SET_UNDO_ERRSIM
 
-  if (OB_UNLIKELY(undo_serialize_size_ > OB_MAX_UNDO_ACTION_SERIALIZE_SIZE)) {
-    // undo_serialize_size_ is an estimate value. Here we update undo serialize size before checking
-    // because a large range undo action can remove some little range undo actions.
-    undo_serialize_size_ = undo_status_.get_serialize_size();
-    updated_size = true;
-  }
-
-  if (undo_serialize_size_ > OB_MAX_UNDO_ACTION_SERIALIZE_SIZE) {
+  if (undo_serialize_size > OB_MAX_UNDO_ACTION_SERIALIZE_SIZE) {
     // case 4
     set_status_(OB_TRANS_NEED_ROLLBACK);
     ret = OB_SIZE_OVERFLOW;
-    TRANS_LOG(WARN, "size overflow when set undo action", KR(ret), K(undo_serialize_size_),
-              K(redo_log_id_serialize_size_), K(participants_serialize_size_),
-              K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE), KPC(this));
-
-  } else if (OB_UNLIKELY(undo_serialize_size_ + redo_log_id_serialize_size_
-                         > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    TRANS_LOG(WARN,
+        "size overflow when set undo action",
+        KR(ret),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE),
+        KPC(this));
+  } else if (OB_UNLIKELY(undo_serialize_size + redo_log_id_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
     // case 5
-    TRANS_LOG(INFO, "flush record log to reserve space for undo", K(undo_serialize_size_),
-              K(redo_log_id_serialize_size_), K(OB_MAX_TRANS_SERIALIZE_SIZE));
+    TRANS_LOG(INFO,
+        "flush record log to reserve space for undo",
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE));
     if (OB_FAIL(submit_log_async_(OB_LOG_TRANS_RECORD, has_redo_log))) {
-      TRANS_LOG(WARN, "submit record log failed", KR(ret), K(undo_serialize_size_),
-                K(redo_log_id_serialize_size_), K(OB_MAX_TRANS_SERIALIZE_SIZE), KPC(this));
+      TRANS_LOG(WARN,
+          "submit record log failed",
+          KR(ret),
+          K(undo_serialize_size),
+          K(redo_log_id_serialize_size),
+          K(OB_MAX_TRANS_SERIALIZE_SIZE),
+          KPC(this));
     }
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(undo_status_.undo(undo_to, undo_from))) {
     TRANS_LOG(WARN, "record rollback action failed", KR(ret), K(undo_action), KPC(this));
-  }
-
-  if (OB_FAIL(ret) && !updated_size) {
-    undo_serialize_size_ -= undo_action.get_serialize_size();
   }
 
   return ret;
