@@ -108,6 +108,7 @@ public:
   }
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
+  virtual int compute_const_exprs() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
   double get_distinct_card() const
