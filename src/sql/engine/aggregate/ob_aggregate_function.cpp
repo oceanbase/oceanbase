@@ -3285,7 +3285,6 @@ int ObAggregateFunction::get_json_arrayagg_result(const ObAggregateExpression *&
             LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
           } else {
             converted_obj.set_string(val_type, converted_str);
-            converted_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
             cs_type = CS_TYPE_UTF8MB4_BIN;
           }
         }
@@ -3430,7 +3429,6 @@ int ObAggregateFunction::get_json_objectagg_result(const ObAggregateExpression *
                 LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
               } else {
                 converted_obj.set_string(val_type1, converted_str);
-                converted_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
                 cs_type1 = CS_TYPE_UTF8MB4_BIN;
               }
             }
