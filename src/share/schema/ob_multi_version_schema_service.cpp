@@ -1489,7 +1489,7 @@ int ObMultiVersionSchemaService::get_tenant_schema_guard(const uint64_t tenant_i
     ObSchemaStore* sys_schema_store = NULL;
     ObSchemaStore* tenant_schema_store = NULL;
     if (OB_INVALID_TENANT_ID == tenant_id) {
-      ret = OB_INVALID_TENANT_ID;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
     } else if (OB_FAIL(guard.fast_reset())) {
       LOG_WARN("fail to reset schema guard", K(ret));
@@ -4272,7 +4272,7 @@ int ObMultiVersionSchemaService::set_tenant_received_broadcast_version(const uin
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TENANT_ID == tenant_id) {
-    ret = OB_INVALID_TENANT_ID;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id), K(version));
   } else if (version != OB_CORE_SCHEMA_VERSION) {
     if (!GCTX.is_schema_splited()) {

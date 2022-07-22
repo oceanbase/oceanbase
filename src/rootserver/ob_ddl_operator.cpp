@@ -279,14 +279,11 @@ int ObDDLOperator::drop_tenant_to_recyclebin(ObSqlString& new_tenant_name, ObTen
       LOG_WARN("set tenant name failed", K(ret));
     } else if (FALSE_IT(recycle_object.set_object_name(new_tenant_name.string()))) {
       LOG_WARN("fail to set object name", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(schema_service_impl->insert_recyclebin_object(recycle_object, trans))) {
-        LOG_WARN("insert recycle object failed", K(ret));
-      } else if (OB_FAIL(schema_service_impl->get_tenant_sql_service().drop_tenant_to_recyclebin(
-                     new_tenant_schema, trans, OB_DDL_DROP_TENANT_TO_RECYCLEBIN, ddl_stmt_str))) {
-        LOG_WARN("alter_tenant failed,", K(ret));
-      }
+    } else if (OB_FAIL(schema_service_impl->insert_recyclebin_object(recycle_object, trans))) {
+      LOG_WARN("insert recycle object failed", K(ret));
+    } else if (OB_FAIL(schema_service_impl->get_tenant_sql_service().drop_tenant_to_recyclebin(
+                   new_tenant_schema, trans, OB_DDL_DROP_TENANT_TO_RECYCLEBIN, ddl_stmt_str))) {
+      LOG_WARN("alter_tenant failed,", K(ret));
     }
   }
   return ret;
@@ -3338,7 +3335,7 @@ int ObDDLOperator::add_table_subpartitions(const ObTableSchema& orig_table_schem
         LOG_WARN("add inc part info failed", K(ret));
       }
       new_table_schema.set_schema_version(new_schema_version);
-      if (OB_FAIL(schema_service->get_table_sql_service().update_subpartition_option(
+      if (FAILEDx(schema_service->get_table_sql_service().update_subpartition_option(
               trans, new_table_schema, update_part_array))) {
         LOG_WARN("update sub partition option failed");
       }
@@ -6748,7 +6745,7 @@ int ObDDLOperator::init_tenant_config(const uint64_t tenant_id, ObMySQLTransacti
           EXTRACT_INT_FIELD_MYSQL(*rs, "svr_port", var_svr_port, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*rs, "config_version", var_config_version, int64_t);
           max_version = std::max(max_version, var_config_version);
-          if (OB_FAIL(sql.append_fmt("%s('%.*s', '%.*s', '%.*s', %ld, '%.*s', '%.*s', '%.*s',"
+          if (FAILEDx(sql.append_fmt("%s('%.*s', '%.*s', '%.*s', %ld, '%.*s', '%.*s', '%.*s',"
                                      "'%.*s', '%.*s', '%.*s', '%.*s', '%.*s', %ld)",
                   is_first ? " " : ", ",
                   var_zone.length(),
