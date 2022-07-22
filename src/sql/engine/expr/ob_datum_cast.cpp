@@ -3478,7 +3478,8 @@ CAST_FUNC_NAME(year, int)
   {
     uint8_t in_val = child_res->get_uint8();
     int64_t out_val = 0;
-    if (OB_FAIL(common_year_int(expr, ObIntType, in_val, out_val))) {
+    ObObjType out_type = expr.datum_meta_.type_;
+    if (OB_FAIL(common_year_int(expr, out_type, in_val, out_val))) {
       LOG_WARN("common_year_int failed", K(ret));
     } else {
       res_datum.set_int(out_val);
@@ -3498,7 +3499,7 @@ CAST_FUNC_NAME(year, uint)
       LOG_WARN("year_to_int failed", K(ret));
     } else {
       out_val = static_cast<uint64_t>(val_int);
-      if (out_type < ObSmallIntType && CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
+      if (out_type < ObUSmallIntType && CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
         LOG_WARN("uint_range_check failed", K(ret));
       } else {
         res_datum.set_uint(out_val);
