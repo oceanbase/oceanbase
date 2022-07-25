@@ -1965,25 +1965,34 @@ int ObLogDiskManager::get_total_disk_space(int64_t& total_space) const
 
 int ObLogDiskManager::get_total_disk_space_(int64_t& total_space) const
 {
-  int ret = OB_EAGAIN;
-  struct statfs fsst;
-  // try every disk until succeed
-  for (int32_t i = 0; OB_FAIL(ret) && i < MAX_DISK_COUNT; i++) {
-    if (OB_LDS_GOOD == disk_slots_[i].get_state()) {
-      if (0 != ::statfs(disk_slots_[i].get_disk_path(), &fsst)) {
-        ret = OB_IO_ERROR;
-        COMMON_LOG(WARN, "statfs error", K(ret), K(errno), KERRMSG);
-      } else {
-        ret = OB_SUCCESS;
-        total_space = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks;
+  int ret = OB_SUCCESS;
+  const int64_t clog_disk_limit_size = ObServerConfig::get_instance().clog_disk_limit_size;
+
+  if (clog_disk_limit_size != 0){
+    total_space = clog_disk_limit_size;
+  }else{
+    const int64_t clog_disk_limit_percent = 30;
+    struct statfs fsst;
+    ret = OB_EAGAIN;
+    // try every disk until succeed
+    for (int32_t i = 0; OB_FAIL(ret) && i < MAX_DISK_COUNT; i++) {
+      if (OB_LDS_GOOD == disk_slots_[i].get_state()) {
+        if (0 != ::statfs(disk_slots_[i].get_disk_path(), &fsst)) {
+          ret = OB_IO_ERROR;
+          COMMON_LOG(WARN, "statfs error", K(ret), K(errno), KERRMSG);
+        } else {
+          ret = OB_SUCCESS;
+          total_space = ((int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks) * clog_disk_limit_percent / 100LL;
+        }
       }
+    }
+
+    if (OB_FAIL(ret)) {
+      ret = OB_IO_ERROR;
+      COMMON_LOG(ERROR, "all disks fail", K(ret));
     }
   }
 
-  if (OB_FAIL(ret)) {
-    ret = OB_IO_ERROR;
-    COMMON_LOG(ERROR, "all disks fail", K(ret));
-  }
   return ret;
 }
 

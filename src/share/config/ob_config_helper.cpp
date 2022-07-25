@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "share/ob_encryption_util.h"
 #include "share/table/ob_ttl_util.h"
+#include <sys/vfs.h>
 
 namespace oceanbase {
 using namespace share;
@@ -471,6 +472,26 @@ bool ObConfigUseLargePagesChecker::check(const ObConfigItem& t) const
   for (int i = 0; i < ARRAYSIZEOF(lib::use_large_pages_confs) && !is_valid; i++) {
     if (0 == ObString::make_string(lib::use_large_pages_confs[i]).case_compare(t.str())) {
       is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
+bool ObConfigClogDiskLimitSizeChecker::check(const ObConfigItem& t) const
+{
+  bool is_valid = false;
+  struct statfs fsst;
+  const char* path = GCONF.data_dir;
+
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
+  if (is_valid){
+    if (OB_UNLIKELY(0 != statfs(path, &fsst))) {
+      is_valid = false;
+      OB_LOG(ERROR, "statfs error", K(OB_IO_ERROR), K(path));
+    } else {
+      const int64_t total_size = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks;
+      is_valid = (value <= total_size);
+      OB_LOG(WARN, "clog_disk_limit_size is greater than disk size", K(is_valid), K(value), K(total_size));
     }
   }
   return is_valid;

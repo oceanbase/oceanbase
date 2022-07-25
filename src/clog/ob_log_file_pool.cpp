@@ -417,19 +417,30 @@ int ObLogWriteFilePool::create_tmp_file(const file_id_t file_id, char* fname, co
 int ObLogWriteFilePool::update_free_quota(const char* path, const int64_t percent, const int64_t limit_percent)
 {
   int ret = OB_SUCCESS;
+  const int64_t clog_disk_limit_size = ObServerConfig::get_instance().clog_disk_limit_size;
+  int64_t used_size = 0;
   struct statfs fsst;
+
   if (NULL == path || 0 > percent || 100 < percent || 0 > limit_percent || 100 < limit_percent) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_UNLIKELY(0 != statfs(path, &fsst))) {
     ret = OB_IO_ERROR;
     CLOG_LOG(ERROR, "statfs error", K(ret), K(path), K(errno), KERRMSG);
+  } else if (is_inited_ && OB_FAIL(get_total_used_size(used_size))) {
+    ret = OB_IO_ERROR;  
+    COMMON_LOG(ERROR, "get_total_used_size fail", K(ret));
   } else {
-    const int64_t total_size = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks;
-    const int64_t free_quota =
-        (int64_t)fsst.f_bsize * ((int64_t)fsst.f_blocks * percent / 100LL - (int64_t)(fsst.f_blocks - fsst.f_bavail));
-    const int64_t used_size = (int64_t)fsst.f_bsize * (int64_t)(fsst.f_blocks - fsst.f_bavail);
-    int64_t limit_quota = (int64_t)fsst.f_bsize *
-                          ((int64_t)fsst.f_blocks * limit_percent / 100LL - (int64_t)(fsst.f_blocks - fsst.f_bavail));
+    int64_t total_size = 0;
+    if (clog_disk_limit_size != 0){
+      total_size = clog_disk_limit_size;
+    }else{
+      const int64_t clog_disk_limit_percent = 30;
+      total_size = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks * clog_disk_limit_percent / 100LL;
+    }
+    
+    const int64_t free_quota = total_size * percent / 100LL - used_size;
+    int64_t limit_quota = total_size * limit_percent / 100LL - used_size;
+
     if (100 == limit_percent) {
       limit_quota = limit_quota - RESERVED_QUOTA_2;
     }

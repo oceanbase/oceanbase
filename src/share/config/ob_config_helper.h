@@ -417,6 +417,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObConfigClogDiskLimitSizeChecker : public ObConfigChecker {
+public:
+  ObConfigClogDiskLimitSizeChecker()
+  {}
+  virtual ~ObConfigClogDiskLimitSizeChecker(){};
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigClogDiskLimitSizeChecker);
+};
+
 // config item container
 class ObConfigStringKey {
 public:
