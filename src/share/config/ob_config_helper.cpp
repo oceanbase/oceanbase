@@ -491,7 +491,6 @@ bool ObConfigClogDiskLimitSizeChecker::check(const ObConfigItem& t) const
     } else {
       const int64_t total_size = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks;
       is_valid = (value <= total_size);
-      OB_LOG(WARN, "clog_disk_limit_size is greater than disk size", K(is_valid), K(value), K(total_size));
     }
   }
   return is_valid;
