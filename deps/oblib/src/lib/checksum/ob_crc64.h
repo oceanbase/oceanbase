@@ -66,7 +66,6 @@ inline uint64_t ob_crc64_sse42(const void* pv, int64_t cb)
   return (*ob_crc64_sse42_func)(0, static_cast<const char*>(pv), cb);
 }
 
-uint64_t ob_crc64_isal(uint64_t uCRC64, const void* pv, int64_t cb);
 uint64_t crc64_sse42_manually(uint64_t crc, const char* buf, int64_t len);
 uint64_t fast_crc64_sse42_manually(uint64_t crc, const char* buf, int64_t len);
 
