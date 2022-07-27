@@ -1971,7 +1971,6 @@ int ObLogDiskManager::get_total_disk_space_(int64_t& total_space) const
   if (clog_disk_limit_size != 0){
     total_space = clog_disk_limit_size;
   }else{
-    const int64_t clog_disk_limit_percent = 30;
     struct statfs fsst;
     ret = OB_EAGAIN;
     // try every disk until succeed
@@ -1982,7 +1981,7 @@ int ObLogDiskManager::get_total_disk_space_(int64_t& total_space) const
           COMMON_LOG(WARN, "statfs error", K(ret), K(errno), KERRMSG);
         } else {
           ret = OB_SUCCESS;
-          total_space = ((int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks) * clog_disk_limit_percent / 100LL;
+          total_space = ((int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks);
         }
       }
     }
