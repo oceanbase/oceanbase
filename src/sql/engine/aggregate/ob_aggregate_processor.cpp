@@ -1384,13 +1384,13 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             LOG_WARN("fail to add row", K(ret));
           } else {
             if (aggr_fun == T_FUN_JSON_ARRAYAGG || aggr_fun == T_FUN_JSON_OBJECTAGG) {
-              int64_t len = param_exprs->count();
+              int64_t len = aggr_info.param_exprs_.count();
               if (OB_FAIL(extra->reserve_bool_mark_count(len))) {
                 LOG_WARN("reserve_bool_mark_count failed", K(ret), K(len));
               }
               for (int64_t i = 0; OB_SUCC(ret) && i < len; i++) {
                 ObExpr *tmp = NULL;
-                if (OB_FAIL(param_exprs->at(i, tmp))){
+                if (OB_FAIL(aggr_info.param_exprs_.at(i, tmp))){
                   LOG_WARN("fail to get param_exprs[i]", K(ret));
                 } else {
                   bool is_bool = (tmp->is_boolean_ == 1);
