@@ -14,7 +14,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/checksum/ob_crc64.h"
 #include "share/ob_thread_mgr.h"
-#include <sys/statfs.h>
+#include <sys/statvfs.h>
 #include "common/log/ob_log_dir_scanner.h"
 #include "share/ob_thread_define.h"
 #include "clog/ob_log_file_pool.h"
@@ -1971,17 +1971,17 @@ int ObLogDiskManager::get_total_disk_space_(int64_t& total_space) const
   if (clog_disk_limit_size != 0){
     total_space = clog_disk_limit_size;
   }else{
-    struct statfs fsst;
+    struct statvfs svfs;
     ret = OB_EAGAIN;
     // try every disk until succeed
     for (int32_t i = 0; OB_FAIL(ret) && i < MAX_DISK_COUNT; i++) {
       if (OB_LDS_GOOD == disk_slots_[i].get_state()) {
-        if (0 != ::statfs(disk_slots_[i].get_disk_path(), &fsst)) {
+        if (0 != ::statvfs(disk_slots_[i].get_disk_path(), &svfs)) {
           ret = OB_IO_ERROR;
-          COMMON_LOG(WARN, "statfs error", K(ret), K(errno), KERRMSG);
+          COMMON_LOG(WARN, "statvfs error", K(ret), K(errno), KERRMSG);
         } else {
           ret = OB_SUCCESS;
-          total_space = ((int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks);
+          total_space = ((int64_t)svfs.f_bsize * (int64_t)svfs.f_blocks);
         }
       }
     }

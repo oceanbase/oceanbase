@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/vfs.h>
+#include <sys/statvfs.h>
 #include <libgen.h>
 #include "lib/file/ob_file.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -419,7 +420,6 @@ int ObLogWriteFilePool::update_free_quota(const char* path, const int64_t percen
 {
   int ret = OB_SUCCESS;
   int64_t used_size = 0;
-  struct statfs fsst;
 
   if (NULL == path || 0 > percent || 100 < percent || 0 > limit_percent || 100 < limit_percent) {
     ret = OB_INVALID_ARGUMENT;
@@ -450,18 +450,18 @@ int ObLogWriteFilePool::init_free_quota(const char* path, const int64_t percent,
 int ObLogWriteFilePool::calculate_free_quota(const char* path, const int64_t used_size, const int64_t percent, const int64_t limit_percent)
 {
   int ret = OB_SUCCESS;
-  struct statfs fsst;
+  struct statvfs svfs;
   const int64_t clog_disk_limit_size = ObServerConfig::get_instance().clog_disk_limit_size;
   int64_t total_size = 0;
 
-  if (OB_UNLIKELY(0 != statfs(path, &fsst))) {
+  if (OB_UNLIKELY(0 != statvfs(path, &svfs))) {
     ret = OB_IO_ERROR;
-    CLOG_LOG(ERROR, "statfs error", K(ret), K(path), K(errno), KERRMSG);
+    CLOG_LOG(ERROR, "statvfs error", K(ret), K(path), K(errno), KERRMSG);
   } else{
     if (clog_disk_limit_size != 0){
       total_size = clog_disk_limit_size;
     }else{
-      total_size = (int64_t)fsst.f_bsize * (int64_t)fsst.f_blocks;
+      total_size = (int64_t)svfs.f_bsize * (int64_t)svfs.f_blocks;
     }
     
     const int64_t free_quota = total_size * percent / 100LL - used_size;
