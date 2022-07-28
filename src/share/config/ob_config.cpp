@@ -308,6 +308,11 @@ bool ObConfigIntegralItem::parse_range(const char *range)
       if ('(' == buff[i] || '[' == buff[i]) {
         p_left = buff + i;
       } else if (buff[i] == ',') {
+        buff[i] = '\0';
+        // remove redundant blank
+        while (buff[i+1] == ' ') {
+          i++;
+        }
         p_middle = buff + i;
       } else if (')' == buff[i] || ']' == buff[i]) {
         p_right = buff + i;
@@ -384,6 +389,9 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info, const char *name, con
 
 double ObConfigDoubleItem::parse(const char *str, bool &valid) const
 {
+  if (STRCASECMP("_parallel_server_sleep_time", name()) == 0){
+    valid = true;
+  }
   double v = 0.0;
   if (OB_ISNULL(str) || OB_UNLIKELY('\0' == str[0])) {
     valid = false;
@@ -421,6 +429,11 @@ bool ObConfigDoubleItem::parse_range(const char *range)
       if ('(' == buff[i] || '[' == buff[i]) {
         p_left = buff + i;
       } else if (',' == buff[i]) {
+        buff[i] = '\0';
+        // remove redundant blank
+        while (buff[i+1] == ' ') {
+          i++;
+        }
         p_middle = buff + i;
       } else if (')' == buff[i] || ']' == buff[i]) {
         p_right = buff + i;
