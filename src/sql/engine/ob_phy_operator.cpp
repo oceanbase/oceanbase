@@ -486,6 +486,7 @@ int ObPhyOperator::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   if (OB_ITER_END == ret && NULL != op_ctx) {
     int tmp_ret = drain_exch(ctx);
     if (OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
       LOG_WARN("drain exchange data failed", K(tmp_ret));
     }
     if (op_ctx->got_first_row_) {

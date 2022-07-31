@@ -53,13 +53,12 @@ public:
   virtual ~ObBasicNestedLoopJoinOp(){};
 
   virtual int inner_open() override;
-  virtual int open_right_child();
   virtual int rescan() override;
   virtual int inner_close() final;
 
   virtual OperatorOpenOrder get_operator_open_order() const override final
   {
-    return OPEN_SELF_ONLY;
+    return OPEN_SELF_FIRST;
   }
 
   int prepare_rescan_params(bool is_group = false);
@@ -77,9 +76,6 @@ public:
 
   int save_left_row();
   int recover_left_row();
-
-protected:
-  bool open_right_child_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBasicNestedLoopJoinOp);

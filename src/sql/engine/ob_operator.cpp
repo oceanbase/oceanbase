@@ -623,6 +623,7 @@ int ObOperator::get_next_row()
   } else if (OB_ITER_END == ret) {
     int tmp_ret = drain_exch();
     if (OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
       LOG_WARN("drain exchange data failed", K(tmp_ret));
     }
     if (got_first_row_) {
