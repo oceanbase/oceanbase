@@ -402,6 +402,7 @@ int ObSQLSessionInfo::close_all_ps_stmt()
         iter->second = NULL;
       }
     }
+    ps_session_info_allocator_.reset();
     ps_session_info_map_.reuse();
   }
   return ret;
@@ -663,14 +664,21 @@ ObPsCache* ObSQLSessionInfo::get_ps_cache()
     if (NULL != ps_cache_) {
       ps_cache_->dec_ref_count();
     }
+    const uint64_t tenant_id = lib::current_resource_owner_id();
     ObPCMemPctConf pc_mem_conf;
+    ObMemAttr mem_attr;
+    mem_attr.label_ = "PsSessionInfo";
+    mem_attr.tenant_id_ = tenant_id;
+    mem_attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
     if (OB_FAIL(get_pc_mem_conf(pc_mem_conf))) {
       LOG_ERROR("failed to get pc mem conf");
       ps_cache_ = NULL;
     } else {
-      ps_cache_ = plan_cache_manager_->get_or_create_ps_cache(lib::current_resource_owner_id(), pc_mem_conf);
+      ps_cache_ = plan_cache_manager_->get_or_create_ps_cache(tenant_id, pc_mem_conf);
       if (OB_ISNULL(ps_cache_)) {
-        LOG_WARN("failed to get ps plan cache");
+        LOG_WARN("failed to get ps pl an cache");
+      } else {
+        ps_session_info_allocator_.set_attr(mem_attr);
       }
     }
   }
