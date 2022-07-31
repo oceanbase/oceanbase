@@ -621,7 +621,7 @@ int ObTmpFile::aio_read_without_lock(const ObTmpFileIOInfo &io_info, int64_t &of
     ret = OB_ITER_END;
   } else if (OB_FAIL(handle.prepare_read(io_info.size_, offset, io_info.io_desc_, io_info.buf_, this))) {
     STORAGE_LOG(WARN, "fail to prepare read io handle", K(ret), K(io_info), K(offset));
-  } else if (once_aio_read_batch_without_lock(io_info, offset, handle)) {
+  } else if (OB_FAIL(once_aio_read_batch_without_lock(io_info, offset, handle))) {
     STORAGE_LOG(WARN, "fail to read one batch", K(ret), K(offset), K(handle));
   } else {
     handle.set_last_read_offset(offset);
@@ -648,7 +648,7 @@ int ObTmpFile::once_aio_read_batch(
     STORAGE_LOG(WARN, "unexpected error, null tmp file extent", K(ret), KP(tmp), K(io_info));
   } else if (OB_UNLIKELY(remain_size > 0 && offset >= tmp->get_global_end())) {
     ret = OB_ITER_END;
-  } else if (once_aio_read_batch_without_lock(io_info, offset, handle)) {
+  } else if (OB_FAIL(once_aio_read_batch_without_lock(io_info, offset, handle))) {
     STORAGE_LOG(WARN, "fail to read one batch", K(ret), K(offset), K(handle));
   } else {
     handle.set_last_read_offset(offset);
