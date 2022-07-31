@@ -95,6 +95,7 @@ public:
   int allocate_groupby_below(const ObIArray<ObRawExpr*>& distinct_exprs, const bool can_push,
       ObLogicalOperator*& exchange_point,
       common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& group_push_down_replaced_exprs);
+  int check_can_pullup_gi(const ObLogicalOperator *op, bool &can_pullup);
   int should_push_down_group_by(AllocExchContext& ctx, ObIArray<ObRawExpr*>& distinct_exprs, bool& should_push_groupby,
       bool& should_push_distinct);
   virtual uint64_t hash(uint64_t seed) const override;
