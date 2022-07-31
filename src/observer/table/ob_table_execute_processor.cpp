@@ -115,9 +115,16 @@ int ObTableApiExecuteP::try_process()
   uint64_t table_id = arg_.table_id_;
   bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
-  if (ObTableOperationType::GET != table_operation.type() &&
-      OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
-    LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  if (ObTableOperationType::GET != table_operation.type()) {
+    if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+      LOG_WARN("failed to get table id", K(ret));
+    } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+      LOG_WARN("fail to check index supported", K(ret), K(table_id));
+    }
+  }
+  
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_UNLIKELY(!is_index_supported)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index type is not supported by table api", K(ret));

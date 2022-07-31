@@ -150,11 +150,13 @@ int ObTableBatchExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
-  uint64_t table_id = arg_.table_id_;
+  uint64_t table_id = OB_INVALID_ID;
   bool is_index_supported = true;
   if (batch_operation.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("no operation in the batch", K(ret));
+  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
   } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
     LOG_WARN("fail to check index supported", K(ret), K(table_id));
   } else if (OB_UNLIKELY(!is_index_supported)) {
