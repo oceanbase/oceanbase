@@ -6086,8 +6086,6 @@ int ObStaticEngineCG::extract_non_aggr_expr(ObExpr* input, const ObRawExpr* raw_
   } else if (OB_ISNULL(input)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "input is null", KP(input), K(ret));
-  } else if (raw_input != NULL && (raw_input->has_flag(IS_CONST) || raw_input->has_flag(IS_CONST_EXPR))) {
-    LOG_DEBUG("no aggr expr is const, ignore", KPC(raw_input));
   } else if (has_exist_in_array(exist_in_child, input) && !has_exist_in_array(not_exist_in_aggr, input) &&
              (NULL == not_exist_in_groupby || !has_exist_in_array(*not_exist_in_groupby, input)) &&
              (NULL == not_exist_in_rollup || !has_exist_in_array(*not_exist_in_rollup, input))) {
