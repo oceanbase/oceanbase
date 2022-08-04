@@ -5244,7 +5244,32 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] = {
         cast_not_expected_enum_set, /*set*/
     },
     {
-        /*text -> enum_or_set*/
+        /*OTimestamp -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*Raw -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*Interval -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*RowID -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*Lob -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*Json -> enum_or_set*/
         cast_not_support_enum_set, /*enum*/
         cast_not_support_enum_set, /*set*/
     },
