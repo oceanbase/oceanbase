@@ -82,6 +82,7 @@ void TestRowCache::init(ObRowCacheValue& cache, const int64_t value)
   } else {
     char* buf = reinterpret_cast<char*>(arena_.alloc(1024));
     ObRowWriter writer;
+    writer.init();
     ObStoreRow row;
     init(row, value);
     int64_t pos = 0;

@@ -88,6 +88,7 @@ void ObMacroBlockWriter::reset()
   micro_writer_ = &flat_writer_;
   flat_writer_.reuse();
   flat_reader_.reset();
+  row_writer_.reset();
   sstable_index_writer_ = NULL;
   task_index_writer_ = NULL;
   macro_blocks_[0].reset();
@@ -107,6 +108,8 @@ void ObMacroBlockWriter::reset()
   last_key_.reset();
   has_lob_ = false;
   lob_writer_.reset();
+  obj_buf_.reset();
+  checker_obj_buf_.reset();
   check_flat_reader_.reset();
   check_sparse_reader_.reset();
   micro_rowkey_hashs_.reset();
@@ -133,6 +136,12 @@ int ObMacroBlockWriter::open(ObDataStoreDesc& data_store_desc, const ObMacroData
   } else if (!block_write_ctx_.file_handle_.is_valid() &&
              OB_FAIL(block_write_ctx_.file_handle_.assign(data_store_desc.file_handle_))) {
     STORAGE_LOG(WARN, "fail to set file handle", K(ret), K(data_store_desc.file_handle_));
+  } else if (OB_FAIL(row_writer_.init())) {
+    STORAGE_LOG(WARN, "fail to init row_writer_, ", K(ret));
+  } else if (OB_FAIL(obj_buf_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
+  } else if (OB_FAIL(checker_obj_buf_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init checker_obj_buf_, ", K(ret));
   } else {
     macro_handle_.set_file(data_store_desc.file_handle_.get_storage_file());
     // need to build index tree with leaf node
@@ -673,13 +682,18 @@ int ObMacroBlockWriter::save_root_micro_block()
                      common::OB_MAX_ROW_KEY_LENGTH))) {
         STORAGE_LOG(WARN, "Fail to copy last key", K(ret), K_(last_key));
       }
-      for (int64_t it = micro_reader.begin(); OB_SUCC(ret) && it != micro_reader.end(); ++it) {
-        row.row_val_.cells_ = reinterpret_cast<ObObj*>(checker_obj_buf_);
-        row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-        if (OB_FAIL(micro_reader.get_row(it, row))) {
-          STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K_(*index_store_desc));
-        } else if (OB_FAIL(task_top_block_descs->writer_.append_row(row))) {
-          STORAGE_LOG(WARN, "fail to append row", K(ret), K(it), K_(*index_store_desc));
+      const int64_t request_count = index_column_map_.get_request_count();
+      if (OB_FAIL(checker_obj_buf_.reserve(request_count))) {
+        STORAGE_LOG(WARN, "fail to reserve memory for checker_obj_buf_, ", K(ret));
+      } else {
+        for (int64_t it = micro_reader.begin(); OB_SUCC(ret) && it != micro_reader.end(); ++it) {
+          row.row_val_.cells_ = checker_obj_buf_.get_buf();
+          row.row_val_.count_ = request_count;
+          if (OB_FAIL(micro_reader.get_row(it, row))) {
+            STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K_(*index_store_desc));
+          } else if (OB_FAIL(task_top_block_descs->writer_.append_row(row))) {
+            STORAGE_LOG(WARN, "fail to append row", K(ret), K(it), K_(*index_store_desc));
+          }
         }
       }
     }
@@ -751,13 +765,18 @@ int ObMacroBlockWriter::merge_root_micro_block()
         if (OB_FAIL(micro_reader.init(block_data, &index_column_map_))) {
           STORAGE_LOG(WARN, "failed to init micro block reader", K(ret));
         }
-        for (int64_t it = micro_reader.begin(); OB_SUCC(ret) && it != micro_reader.end(); ++it) {
-          row.row_val_.cells_ = reinterpret_cast<ObObj*>(checker_obj_buf_);
-          row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-          if (OB_FAIL(micro_reader.get_row(it, row))) {
-            STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
-          } else if (OB_FAIL(update_index_tree(0 /* update from 0th level */, &row))) {
-            STORAGE_LOG(WARN, "fail to update_index_tree", K(ret), K(it), K(*data_store_desc_));
+        const int64_t request_count = index_column_map_.get_request_count();
+        if (OB_FAIL(checker_obj_buf_.reserve(request_count))) {
+          STORAGE_LOG(WARN, "fail to reserve memory for checker_obj_buf_, ", K(ret));
+        } else {
+          for (int64_t it = micro_reader.begin(); OB_SUCC(ret) && it != micro_reader.end(); ++it) {
+            row.row_val_.cells_ = checker_obj_buf_.get_buf();
+            row.row_val_.count_ = request_count;
+            if (OB_FAIL(micro_reader.get_row(it, row))) {
+              STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
+            } else if (OB_FAIL(update_index_tree(0 /* update from 0th level */, &row))) {
+              STORAGE_LOG(WARN, "fail to update_index_tree", K(ret), K(it), K(*data_store_desc_));
+            }
           }
         }
       }
@@ -1368,14 +1387,19 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock& micro_block)
       STORAGE_LOG(WARN, "micro_block_reader init failed", K(micro_block), K(ret));
     } else {
       ObStoreRow row;
-      for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
-        row.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-        row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-        row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-        if (OB_FAIL(micro_reader->get_row(it, row))) {
-          STORAGE_LOG(WARN, "get_row failed", K(ret));
-        } else if (OB_FAIL(append_row(row, split_size, true))) {
-          STORAGE_LOG(WARN, "append_row failed", "row", row, K(split_size), K(ret));
+      const int64_t request_count = micro_block.column_map_->get_request_count();
+      if (OB_FAIL(obj_buf_.reserve(request_count))) {
+        STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
+      } else {
+        for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
+          row.row_val_.cells_ = obj_buf_.get_buf();
+          row.row_val_.count_ = request_count;
+          row.capacity_ = request_count;
+          if (OB_FAIL(micro_reader->get_row(it, row))) {
+            STORAGE_LOG(WARN, "get_row failed", K(ret));
+          } else if (OB_FAIL(append_row(row, split_size, true))) {
+            STORAGE_LOG(WARN, "append_row failed", "row", row, K(split_size), K(ret));
+          }
         }
       }
 
@@ -1474,19 +1498,23 @@ int ObMacroBlockWriter::calc_micro_column_checksum(
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(column_checksum), K(column_cnt));
   } else {
     ObStoreRow row;
-    for (int64_t iter = reader.begin(); OB_SUCC(ret) && iter != reader.end(); ++iter) {
-      row.row_val_.cells_ = reinterpret_cast<ObObj*>(checker_obj_buf_);
-      row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-      if (OB_FAIL(reader.get_row(iter, row))) {
-        STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter));
-      } else if (row.row_val_.count_ != column_cnt) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(
-            WARN, "error unexpected, row column count is invalid", K(ret), K(row.row_val_.count_), K(column_cnt));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-          column_checksum[i] += row.row_val_.cells_[i].checksum_v2(0);
+    if (OB_FAIL(checker_obj_buf_.reserve(column_cnt))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for checker_obj_buf_, ", K(ret));
+    } else {
+      for (int64_t iter = reader.begin(); OB_SUCC(ret) && iter != reader.end(); ++iter) {
+        row.row_val_.cells_ = checker_obj_buf_.get_buf();
+        row.row_val_.count_ = column_cnt;
+        row.capacity_ = column_cnt;
+        if (OB_FAIL(reader.get_row(iter, row))) {
+          STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter));
+        } else if (row.row_val_.count_ != column_cnt) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(
+              WARN, "error unexpected, row column count is invalid", K(ret), K(row.row_val_.count_), K(column_cnt));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+            column_checksum[i] += row.row_val_.cells_[i].checksum_v2(0);
+          }
         }
       }
     }
@@ -1525,9 +1553,9 @@ int ObMacroBlockWriter::build_column_map(const ObDataStoreDesc* data_desc, ObCol
   } else {
     column_map.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < data_desc->row_column_count_; ++i) {
-      col_desc.col_id_ = data_desc->column_ids_[i];
-      col_desc.col_type_ = data_desc->column_types_[i];
-      col_desc.col_order_ = data_desc->column_orders_[i];
+      col_desc.col_id_ = data_desc->column_ids_.get_buf()[i];
+      col_desc.col_type_ = data_desc->column_types_.get_buf()[i];
+      col_desc.col_order_ = data_desc->column_orders_.get_buf()[i];
       if (OB_FAIL(out_cols.push_back(col_desc))) {
         STORAGE_LOG(WARN, "Fail to push col desc to array, ", K(ret));
       }
@@ -1582,6 +1610,24 @@ int ObMacroBlockWriter::prepare_micro_block_reader(
   return ret;
 }
 
+int ObMacroBlockWriter::get_column_count(int64_t& request_count)
+{
+  int ret = OB_SUCCESS;
+  if(data_store_desc_->need_index_tree_) {
+    request_count = index_column_map_.get_request_count();
+  } else {
+    if (FLAT_ROW_STORE == data_store_desc_->row_store_type_) {
+      request_count = column_map_.get_request_count();
+    } else if (SPARSE_ROW_STORE == data_store_desc_->row_store_type_) {
+      request_count = data_store_desc_->row_column_count_;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "Unexpeceted row store type", K(ret), K(data_store_desc_->row_store_type_));
+    }
+  }
+  return ret;
+}
+
 int ObMacroBlockWriter::print_micro_block_row(ObIMicroBlockReader* micro_reader)
 {
   int ret = OB_SUCCESS;
@@ -1590,14 +1636,21 @@ int ObMacroBlockWriter::print_micro_block_row(ObIMicroBlockReader* micro_reader)
     STORAGE_LOG(WARN, "get_row failed", K(ret), K(micro_reader));
   } else {
     ObStoreRow row;
-    row.row_val_.cells_ = reinterpret_cast<ObObj*>(checker_obj_buf_);
-    row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-    for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
-      row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      if (OB_FAIL(micro_reader->get_row(it, row))) {
-        STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
-      } else {  // print error row
-        FLOG_WARN("error micro block row", K(it), K(row));
+    int64_t request_count = 0;
+    if (OB_FAIL(get_column_count(request_count))) {
+      STORAGE_LOG(WARN, "fail to get column count, ", K(ret), K(request_count));
+    } else if (OB_FAIL(checker_obj_buf_.reserve(request_count))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for checker_obj_buf_, ", K(ret));
+    } else {
+      row.row_val_.cells_ = checker_obj_buf_.get_buf();
+      row.capacity_ = request_count;
+      row.row_val_.count_ = request_count;
+      for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
+        if (OB_FAIL(micro_reader->get_row(it, row))) {
+          STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
+        } else {  // print error row
+          FLOG_WARN("error micro block row", K(it), K(row));
+        }
       }
     }
   }
@@ -1617,14 +1670,21 @@ int ObMacroBlockWriter::check_micro_block_checksum(
   } else {
     ObStoreRow row;
     int64_t new_checksum = 0;
-    for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
-      row.row_val_.cells_ = reinterpret_cast<ObObj*>(checker_obj_buf_);
-      row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-      if (OB_FAIL(micro_reader->get_row(it, row))) {
-        STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_), K(column_map_));
-      } else {
-        new_checksum = ObIMicroBlockWriter::cal_row_checksum(row, new_checksum);
+    int64_t request_count = 0;
+    if (OB_FAIL(get_column_count(request_count))) {
+      STORAGE_LOG(WARN, "fail to get column count, ", K(ret), K(request_count));
+    } else if (OB_FAIL(checker_obj_buf_.reserve(request_count))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for checker_obj_buf_, ", K(ret));
+    } else {
+      for (int64_t it = micro_reader->begin(); OB_SUCC(ret) && it != micro_reader->end(); ++it) {
+        row.row_val_.cells_ = checker_obj_buf_.get_buf();
+        row.row_val_.count_ = request_count;
+        row.capacity_ = request_count;
+        if (OB_FAIL(micro_reader->get_row(it, row))) {
+          STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_), K(column_map_));
+        } else {
+          new_checksum = ObIMicroBlockWriter::cal_row_checksum(row, new_checksum);
+        }
       }
     }
     if (OB_SUCC(ret)) {

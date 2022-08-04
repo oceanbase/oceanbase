@@ -32,6 +32,7 @@ class ObRowWriter {
 public:
   ObRowWriter();
   virtual ~ObRowWriter();
+  int init();
   int write(const common::ObNewRow& row, char* buf, const int64_t buf_size, const common::ObRowStoreType row_store_type,
       int64_t& pos);
   int write(const int64_t rowkey_column_count, const storage::ObStoreRow& row, char* buf, const int64_t buf_size,
@@ -42,6 +43,7 @@ public:
   int write_sparse_row(const int64_t rowkey_column_count, const storage::ObStoreRow& row, char* buf,
       const int64_t buf_size, int64_t& pos, int64_t& rowkey_start_pos, int64_t& rowkey_end_pos,
       const bool only_row_key = false);
+  void reset();
 
 private:
   struct NumberAllocator {
@@ -99,10 +101,16 @@ private:
   ObRowHeader* row_header_;
   int64_t column_index_count_;
   common::number::ObNumber tmp_number_;
-  uint16_t column_ids_[common::OB_ROW_MAX_COLUMNS_COUNT];  // for sparse row
-  int8_t column_indexs_8_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  int16_t column_indexs_16_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  int32_t column_indexs_32_[common::OB_ROW_MAX_COLUMNS_COUNT];
+  // uint16_t column_ids_[common::OB_ROW_MAX_COLUMNS_COUNT];  // for sparse row
+  // int8_t column_indexs_8_[common::OB_ROW_MAX_COLUMNS_COUNT];
+  // int16_t column_indexs_16_[common::OB_ROW_MAX_COLUMNS_COUNT];
+  // int32_t column_indexs_32_[common::OB_ROW_MAX_COLUMNS_COUNT];
+  storage::ObRowBuffer<uint16_t> column_ids_;
+  storage::ObRowBuffer<int8_t> column_indexs_8_;
+  storage::ObRowBuffer<int16_t> column_indexs_16_;
+  storage::ObRowBuffer<int32_t> column_indexs_32_;
+  common::ObArenaAllocator allocator_;
+  bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObRowWriter);
 };
 

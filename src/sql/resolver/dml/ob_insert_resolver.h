@@ -119,7 +119,7 @@ protected:
   {
     is_oracle_tmp_table_ = is_temp_table;
   }
-  common::hash::ObPlacementHashSet<uint64_t>& get_insert_column_ids()
+  common::hash::ObPlacementHashSet<uint64_t, 8209>& get_insert_column_ids()
   {
     return insert_column_ids_;
   }
@@ -132,7 +132,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInsertResolver);
 
 private:
-  common::hash::ObPlacementHashSet<uint64_t> insert_column_ids_;
+  common::hash::ObPlacementHashSet<uint64_t, 8209> insert_column_ids_;
   int64_t row_count_;
   ObSelectResolver* sub_select_resolver_;
   bool autoinc_col_added_;

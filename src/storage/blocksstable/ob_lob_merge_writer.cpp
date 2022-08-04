@@ -39,6 +39,7 @@ ObLobMergeWriter::~ObLobMergeWriter()
 void ObLobMergeWriter::reset()
 {
   orig_lob_macro_blocks_.reset();
+  buffer_.reset();
   block_write_ctx_.reset();
   lob_writer_.reset();
   data_store_desc_ = NULL;
@@ -79,6 +80,8 @@ int ObLobMergeWriter::init(const ObMacroDataSeq& macro_start_seq, const ObDataSt
     } else if (!block_write_ctx_.file_handle_.is_valid() &&
                OB_FAIL(block_write_ctx_.file_handle_.assign(data_store_desc.file_handle_))) {
       STORAGE_LOG(WARN, "Failed to assign file handle", K(ret));
+    } else if (OB_FAIL(buffer_.init(&block_write_ctx_.allocator_))) {
+      STORAGE_LOG(WARN, "Failed to init buffer_, ", K(ret));
     } else {
       macro_start_seq_ = lob_data_seq.get_data_seq();
       use_old_macro_block_count_ = 0;
@@ -220,7 +223,7 @@ int ObLobMergeWriter::overflow_lob_objs(const ObStoreRow& row, const ObStoreRow*
       int64_t idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < lob_col_idxs.count(); i++) {
         idx = lob_col_idxs.at(i);
-        int64_t column_id = row.is_sparse_row_ ? row.column_ids_[idx] : data_store_desc_->column_ids_[idx];
+        int64_t column_id = row.is_sparse_row_ ? row.column_ids_[idx] : data_store_desc_->column_ids_.get_buf()[idx];
         const ObObj& src_obj = row.row_val_.cells_[idx];
         ObObj& lob_obj = result_row_.row_val_.cells_[idx];
         int64_t orig_obj_length = src_obj.get_data_length();
@@ -410,10 +413,15 @@ int ObLobMergeWriter::write_lob_obj(
 int ObLobMergeWriter::copy_row_(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
-  result_row_ = row;
-  result_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(buffer_);
-  result_row_.row_val_.count_ = row.row_val_.count_;
-  MEMCPY(buffer_, row.row_val_.cells_, sizeof(ObObj) * row.row_val_.count_);
+  int64_t request_count = data_store_desc_->row_column_count_;
+  if OB_FAIL(buffer_.reserve(request_count)) {
+    STORAGE_LOG(WARN, "fail to reserve memory for buffer_, ", K(ret));
+  } else {
+    result_row_ = row;
+    result_row_.row_val_.cells_ = buffer_.get_buf();
+    result_row_.row_val_.count_ = row.row_val_.count_;
+    MEMCPY(buffer_.get_buf(), row.row_val_.cells_, sizeof(ObObj) * row.row_val_.count_);
+  }
   return ret;
 }
 

@@ -170,15 +170,54 @@ int ObRowWriter::write_char(
     }                                                                                      \
   }
 
-ObRowWriter::ObRowWriter() : buf_(NULL), buf_size_(0), start_pos_(0), pos_(0), row_header_(NULL), column_index_count_(0)
+ObRowWriter::ObRowWriter() 
+  : buf_(NULL),
+    buf_size_(0),
+    start_pos_(0),
+    pos_(0),
+    row_header_(NULL),
+    column_index_count_(0),
+    is_inited_(false)
 {}
 
 ObRowWriter::~ObRowWriter()
-{}
+{
+  reset();
+}
 
 ObRowWriter::NumberAllocator::NumberAllocator(char* buf, const int64_t buf_size, int64_t& pos)
     : buf_(buf), buf_size_(buf_size), pos_(pos)
 {}
+
+void ObRowWriter::reset()
+{
+  column_ids_.reset();
+  column_indexs_8_.reset();
+  column_indexs_16_.reset();
+  column_indexs_32_.reset();
+  allocator_.reset();
+  is_inited_ = false;
+}
+
+int ObRowWriter::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "init twice", K(ret));
+  } else if (OB_FAIL(column_ids_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_ids_, ", K(ret));
+  } else if (OB_FAIL(column_indexs_8_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_indexs_8_, ", K(ret));
+  } else if (OB_FAIL(column_indexs_16_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_indexs_16_, ", K(ret));
+  } else if (OB_FAIL(column_indexs_32_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_indexs_32_, ", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
 
 int ObRowWriter::write_oracle_timestamp(const ObOTimestampData& ot_data, const common::ObOTimestampMetaAttrType otmat)
 {
@@ -477,16 +516,24 @@ int ObRowWriter::append_sparse_store_row(const int64_t rowkey_column_count, cons
     if (OB_FAIL(cell_writer.init(buf_ + pos_, buf_size_, DENSE))) {  // init CellWriter
       STORAGE_LOG(WARN, "Failed to init CellWriter", K(buf_), K(pos_), K(buf_size_));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < end_index; ++i) {
-      const int64_t column_index = cell_writer.size() + pos_ - start_pos_;  // record offset
-      column_indexs_8_[i] = static_cast<int8_t>(column_index);
-      column_indexs_16_[i] = static_cast<int16_t>(column_index);
-      column_indexs_32_[i] = static_cast<int32_t>(column_index);
-      if (OB_FAIL(cell_writer.append(row.row_val_.cells_[i]))) {
-        if (OB_BUF_NOT_ENOUGH != ret) {
-          STORAGE_LOG(WARN, "cell writer fail to append column.", K(ret), K(i), K(row.row_val_.cells_[i]));
+    if (OB_FAIL(column_indexs_8_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_8_, ", K(ret));
+    } else if (OB_FAIL(column_indexs_16_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_16_, ", K(ret));
+    } else if (OB_FAIL(column_indexs_32_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_32_, ", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < end_index; ++i) {
+        const int64_t column_index = cell_writer.size() + pos_ - start_pos_;  // record offset
+        column_indexs_8_.get_buf()[i] = static_cast<int8_t>(column_index);
+        column_indexs_16_.get_buf()[i] = static_cast<int16_t>(column_index);
+        column_indexs_32_.get_buf()[i] = static_cast<int32_t>(column_index);
+        if (OB_FAIL(cell_writer.append(row.row_val_.cells_[i]))) {
+          if (OB_BUF_NOT_ENOUGH != ret) {
+            STORAGE_LOG(WARN, "cell writer fail to append column.", K(ret), K(i), K(row.row_val_.cells_[i]));
+          }
+          break;
         }
-        break;
       }
     }
   }
@@ -494,7 +541,7 @@ int ObRowWriter::append_sparse_store_row(const int64_t rowkey_column_count, cons
     pos_ += cell_writer.size();
     column_index_count_ += end_index;
     if (rowkey_column_count < end_index) {
-      rowkey_length = column_indexs_32_[rowkey_column_count] + start_pos_ - rowkey_start_pos;
+      rowkey_length = column_indexs_32_.get_buf()[rowkey_column_count] + start_pos_ - rowkey_start_pos;
     } else {
       rowkey_length = pos_ - rowkey_start_pos;
     }
@@ -513,23 +560,31 @@ int ObRowWriter::append_store_row(const int64_t rowkey_column_count, const ObSto
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid row input argument.", K(row), K(rowkey_column_count), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < end_index; ++i) {
-      const int64_t column_index = pos_ - start_pos_;
-      column_indexs_8_[i] = static_cast<int8_t>(column_index);
-      column_indexs_16_[i] = static_cast<int16_t>(column_index);
-      column_indexs_32_[i] = static_cast<int32_t>(column_index);
-      if (OB_FAIL(append_column(row.row_val_.cells_[i]))) {
-        if (OB_BUF_NOT_ENOUGH != ret) {
-          STORAGE_LOG(WARN, "row writer fail to append column.", K(ret), K(i), K(row.row_val_.cells_[i]));
+    if (OB_FAIL(column_indexs_8_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_8_, ", K(ret));
+    } else if (OB_FAIL(column_indexs_16_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_16_, ", K(ret));
+    } else if (OB_FAIL(column_indexs_32_.reserve(end_index))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for column_indexs_32_, ", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < end_index; ++i) {
+        const int64_t column_index = pos_ - start_pos_;
+        column_indexs_8_.get_buf()[i] = static_cast<int8_t>(column_index);
+        column_indexs_16_.get_buf()[i] = static_cast<int16_t>(column_index);
+        column_indexs_32_.get_buf()[i] = static_cast<int32_t>(column_index);
+        if (OB_FAIL(append_column(row.row_val_.cells_[i]))) {
+          if (OB_BUF_NOT_ENOUGH != ret) {
+            STORAGE_LOG(WARN, "row writer fail to append column.", K(ret), K(i), K(row.row_val_.cells_[i]));
+          }
+          break;
         }
-        break;
       }
     }
   }
   if (OB_SUCC(ret)) {
     column_index_count_ += end_index;
     if (rowkey_column_count < end_index) {
-      rowkey_length = column_indexs_32_[rowkey_column_count] + start_pos_ - rowkey_start_pos;
+      rowkey_length = column_indexs_32_.get_buf()[rowkey_column_count] + start_pos_ - rowkey_start_pos;
     } else {
       rowkey_length = pos_ - rowkey_start_pos;
     }
@@ -574,18 +629,18 @@ int ObRowWriter::append_column_index()
 {
   int ret = OB_SUCCESS;
   int64_t column_index_bytes = 0;
-  if (OB_FAIL(get_int_byte(column_indexs_32_[column_index_count_ - 1], column_index_bytes))) {
+  if (OB_FAIL(get_int_byte(column_indexs_32_.get_buf()[column_index_count_ - 1], column_index_bytes))) {
     STORAGE_LOG(WARN,
         "fail to get column_index_bytes, ",
         K(ret),
         "column_index_value",
-        column_indexs_32_[column_index_count_ - 1]);
+        column_indexs_32_.get_buf()[column_index_count_ - 1]);
   } else if (1 == column_index_bytes) {
     const int64_t copy_size = sizeof(int8_t) * column_index_count_;
     if (pos_ + copy_size > buf_size_) {
       ret = OB_BUF_NOT_ENOUGH;
     } else {
-      MEMCPY(buf_ + pos_, column_indexs_8_, copy_size);
+      MEMCPY(buf_ + pos_, column_indexs_8_.get_buf(), copy_size);
       pos_ += copy_size;
     }
   } else if (2 == column_index_bytes) {
@@ -593,7 +648,7 @@ int ObRowWriter::append_column_index()
     if (pos_ + copy_size > buf_size_) {
       ret = OB_BUF_NOT_ENOUGH;
     } else {
-      MEMCPY(buf_ + pos_, column_indexs_16_, copy_size);
+      MEMCPY(buf_ + pos_, column_indexs_16_.get_buf(), copy_size);
       pos_ += copy_size;
     }
   } else if (4 == column_index_bytes) {
@@ -601,7 +656,7 @@ int ObRowWriter::append_column_index()
     if (pos_ + copy_size > buf_size_) {
       ret = OB_BUF_NOT_ENOUGH;
     } else {
-      MEMCPY(buf_ + pos_, column_indexs_32_, copy_size);
+      MEMCPY(buf_ + pos_, column_indexs_32_.get_buf(), copy_size);
       pos_ += copy_size;
     }
   } else {

@@ -107,6 +107,7 @@ TEST_F(TestRowWriter, test_init)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
+  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow valid_store_row;
   ObStoreRow invalid_store_row;
@@ -204,6 +205,7 @@ TEST_F(TestRowWriter, buf_not_enough)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
+  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow valid_store_row;
   ObStoreRow invalid_store_row;
@@ -264,6 +266,7 @@ TEST_F(TestRowWriter, data_type)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
+  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -364,6 +367,7 @@ TEST_F(TestRowWriter, char_binary_overflow)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
+  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow valid_store_row;
   ObStoreRow invalid_store_row;
@@ -405,6 +409,7 @@ TEST_F(TestRowWriter, write_only_key_column)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
+  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow valid_store_row;
   ObStoreRow invalid_store_row;

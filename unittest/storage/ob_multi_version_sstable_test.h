@@ -402,13 +402,19 @@ void ObMultiVersionSSTableTest::prepare_data_store_desc(
   desc_.schema_version_ = SCHEMA_VERSION;
   desc_.snapshot_version_ = DATA_VERSION;
   strcpy(desc_.compressor_name_, compressor_name);
+  desc_.column_ids_.init(&allocator_);
+  desc_.column_types_.init(&allocator_);
+  desc_.column_orders_.init(&allocator_);
+  desc_.column_ids_.reserve(column_cnt_);
+  desc_.column_types_.reserve(column_cnt_);
+  desc_.column_orders_.reserve(column_cnt_);
   for (int i = 0; i < column_cnt_; i++) {
-    desc_.column_ids_[i] = i + OB_APP_MIN_COLUMN_ID;
-    desc_.column_types_[i] = data_iter_[0].get_column_type()[i];
+    desc_.column_ids_.get_buf()[i] = i + OB_APP_MIN_COLUMN_ID;
+    desc_.column_types_.get_buf()[i] = data_iter_[0].get_column_type()[i];
     if (i == rowkey_cnt_ - 2) {
-      desc_.column_ids_[i] = OB_HIDDEN_TRANS_VERSION_COLUMN_ID;
+      desc_.column_ids_.get_buf()[i] = OB_HIDDEN_TRANS_VERSION_COLUMN_ID;
     } else if (i == rowkey_cnt_ - 1) {
-      desc_.column_ids_[i] = OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID;
+      desc_.column_ids_.get_buf()[i] = OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID;
     }
   }
   schema_.compressor_ = desc_.compressor_name_;

@@ -1539,6 +1539,8 @@ int ObLogicDataChecksumCalculate::init(const int64_t schema_rowkey_count, const 
     LOG_WARN("data buffer fail to ensure space.", K(ret), K(macro_block_size));
   } else if (OB_FAIL(last_rowkey_buf_.ensure_space(OB_MALLOC_NORMAL_BLOCK_SIZE, ObModIds::OB_PARTITION_MIGRATOR))) {
     LOG_WARN("fetch logical row fail to allocator memory for last key buf.", K(ret));
+  } else if (OB_FAIL(row_writer_.init())) {
+    LOG_WARN("fail to init row_writer_.", K(ret));
   } else {
     schema_rowkey_count_ = schema_rowkey_count;
     data_checksum_ = data_checksum;

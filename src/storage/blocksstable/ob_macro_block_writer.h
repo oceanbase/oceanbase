@@ -159,6 +159,7 @@ private:
   int write_micro_block(const ObMicroBlockDesc& micro_block_desc, int64_t& data_offset);
 
   int prepare_micro_block_reader(const char* buf, const int64_t size, ObIMicroBlockReader*& micro_reader);
+  int get_column_count(int64_t& request_count);
   int print_micro_block_row(ObIMicroBlockReader* micro_reader);
 
 private:
@@ -206,10 +207,12 @@ private:
   ObColumnMap column_map_;
   ObColumnMap index_column_map_;
   blocksstable::ObMacroBlockReader macro_reader_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];          // for reader to get row
-  char checker_obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];  // for calc or varify checksum, can
-                                                                                    // NOT use same buf of data row
-  ObMicroBlockReader check_flat_reader_;
+  // char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];          // for reader to get row
+  // char checker_obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];  // for calc or varify checksum, can
+  //                                                                                   // NOT use same buf of data row
+  storage::ObRowBuffer<ObObj> obj_buf_;          // for reader to get row
+  storage::ObRowBuffer<ObObj> checker_obj_buf_;  // for calc or varify checksum, can not use same buf of data row
+  ObMicroBlockReader check_flat_reader_; 
   ObSparseMicroBlockReader check_sparse_reader_;
   common::ObArray<uint32_t> micro_rowkey_hashs_;
   storage::ObSSTableRowkeyHelper* rowkey_helper_;

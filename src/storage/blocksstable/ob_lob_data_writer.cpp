@@ -304,7 +304,7 @@ int ObLobMacroBlockWriter::init_header(
           column_types_[i] = column_types.at(i);
           column_checksum_[i] = 0;
           if (i < header_->rowkey_column_count_) {
-            column_orders_[i] = desc_.column_orders_[i];
+            column_orders_[i] = desc_.column_orders_.get_buf()[i];
           } else {
             column_orders_[i] = ObOrderType::ASC;
           }
@@ -687,10 +687,10 @@ int ObLobDataWriter::init(const ObDataStoreDesc& desc, const int64_t start_seq)
     } else {
       rowkey_column_cnt_ = desc.rowkey_column_count_;
       for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_cnt_; i++) {
-        if (OB_FAIL(column_ids_.push_back(static_cast<uint16_t>(desc.column_ids_[i])))) {
-          STORAGE_LOG(WARN, "Failed to push back rowkey column id", "column_id", desc.column_ids_[i], K(ret));
-        } else if (OB_FAIL(column_types_.push_back(desc.column_types_[i]))) {
-          STORAGE_LOG(WARN, "Failed to push back rowkey column type", "column_type", desc.column_types_[i], K(ret));
+        if (OB_FAIL(column_ids_.push_back(static_cast<uint16_t>(desc.column_ids_.get_buf()[i])))) {
+          STORAGE_LOG(WARN, "Failed to push back rowkey column id", "column_id", desc.column_ids_.get_buf()[i], K(ret));
+        } else if (OB_FAIL(column_types_.push_back(desc.column_types_.get_buf()[i]))) {
+          STORAGE_LOG(WARN, "Failed to push back rowkey column type", "column_type", desc.column_types_.get_buf()[i], K(ret));
         }
       }
       if (OB_SUCC(ret)) {
