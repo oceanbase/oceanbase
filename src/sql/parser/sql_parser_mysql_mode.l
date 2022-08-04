@@ -183,6 +183,7 @@ GENERATED                     { REPUT_TOKEN_NEG_SIGN(GENERATED); }
 GRANT                         { REPUT_TOKEN_NEG_SIGN(GRANT); }
 GROUP                         { REPUT_TOKEN_NEG_SIGN(GROUP); }
 HAVING                        { REPUT_TOKEN_NEG_SIGN(HAVING); }
+HELP                          { REPUT_TOKEN_NEG_SIGN(HELP); }
 HIGH_PRIORITY                 { REPUT_TOKEN_NEG_SIGN(HIGH_PRIORITY); }
 HOUR_MICROSECOND              { REPUT_TOKEN_NEG_SIGN(HOUR_MICROSECOND); }
 HOUR_MINUTE                   { REPUT_TOKEN_NEG_SIGN(HOUR_MINUTE); }

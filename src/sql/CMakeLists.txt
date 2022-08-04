@@ -887,6 +887,7 @@ ob_set_subtarget(ob_sql resolver
   resolver/dcl/ob_drop_user_resolver.cpp
   resolver/dcl/ob_drop_user_stmt.cpp
   resolver/dcl/ob_grant_resolver.cpp
+  resolver/dcl/ob_help_resolver.cpp
   resolver/dcl/ob_grant_stmt.cpp
   resolver/dcl/ob_lock_user_resolver.cpp
   resolver/dcl/ob_lock_user_stmt.cpp

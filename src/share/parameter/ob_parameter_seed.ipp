@@ -1267,13 +1267,13 @@ ERRSIM_DEF_INT(fake_report_server_tenant_start_ts, OB_CLUSTER_PARAMETER, "0", "[
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 ERRSIM_DEF_INT(_backup_pg_retry_max_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "the max of one pg backup retry count, Range: [0,max) in integer, 0 means that pg backup no need retry",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-        
+    "the max of one pg backup retry count, Range: [0,max) in integer, 0 means that pg backup no need retry",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 ERRSIM_DEF_INT(_backup_pg_max_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "the max of pg backup batch count, Range: [0,max) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-        
+    "the max of pg backup batch count, Range: [0,max) in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 #ifdef TRANS_MODULE_TEST
 DEF_INT(module_test_trx_memory_errsim_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100]",
     "the percentage of memory errsim. Rang:[0, 100]",
@@ -1374,8 +1374,8 @@ DEF_CAP(log_archive_batch_buffer_limit, OB_CLUSTER_PARAMETER, "1G", "[4M,)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(gc_wait_archive, OB_CLUSTER_PARAMETER, "True",
-         "control whether partition GC need to wait for all partition log be archived",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    "control whether partition GC need to wait for all partition log be archived",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(backup_recovery_window, OB_CLUSTER_PARAMETER, "0", "[0,)",
     "backup expired day limit, 0 means not expired"
@@ -1567,8 +1567,7 @@ DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "[0:00:00, 24:00
 DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]",
     "the time to recycle ttl history. Range: [1d, 180d]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
-    "specifies whether ttl task is enbled",
+DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False", "specifies whether ttl task is enbled",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // query response time
@@ -1583,5 +1582,4 @@ DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
 DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
     "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
-    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE)); 
-
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

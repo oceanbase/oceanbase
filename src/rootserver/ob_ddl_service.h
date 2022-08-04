@@ -823,6 +823,7 @@ public:
       const uint64_t tenant_id, share::schema::ObSchemaGetterGuard& schema_guard, int64_t& pz_entity_count);
   int refresh_unit_replica_counter(const uint64 tenant_id);
   int check_restore_point_allow(const int64_t tenant_id, const int64_t table_id);
+  int init_help_tables(share::schema::ObTenantSchema& tenant_schema);
 
 private:
   // used only by create normal tenant

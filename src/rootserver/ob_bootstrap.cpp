@@ -52,6 +52,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_multi_cluster_util.h"
+#include "rootserver/ob_fill_help_table.h"
 #include "rootserver/ob_freeze_info_manager.h"
 
 namespace oceanbase {
@@ -799,6 +800,8 @@ int ObBootstrap::execute_bootstrap()
     LOG_WARN("fail to init gts service data", K(ret));
   } else if (OB_FAIL(init_backup_inner_table())) {
     LOG_WARN("failed tro init backup inner table", K(ret));
+  } else if (OB_FAIL(init_help_tables())) { 
+    LOG_WARN("failed to init all help table", K(ret));
   } else {
     ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   }
@@ -1634,6 +1637,45 @@ int ObBootstrap::init_system_data(const uint64_t server_id)
     LOG_WARN("fail to insert first freeze schema", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::init_help_tables() {
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObMySQLProxy& sql_proxy = ddl_service_.get_sql_proxy();
+  int64_t expect_affect_rows = help_affect_rows;
+  int64_t affect_rows = 0;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check_inner_stat failed", K(ret));
+  } else if (OB_FAIL(trans.start(&sql_proxy))) {
+    LOG_WARN("failed to start trans", K(ret));
+  } else {
+    ObSqlString sql;
+    int64_t affected = 0;
+    for(const char** iter = &fill_help_tables_cmd[0]; OB_SUCC(ret) && *iter != NULL; iter++) {
+      if (OB_FAIL(sql.assign(*iter))) {
+        LOG_WARN("assign sql failed", K(ret));
+      } if (OB_FAIL(trans.write(sql.ptr(), affected))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (is_zero_row(affected)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected rows", K(ret), K(affected));
+      } else {
+        affect_rows += affected;
+        LOG_TRACE("execute sql success", K(sql));
+      }
+    }
+    if(affect_rows != expect_affect_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect affected rows", K(expect_affect_rows), K(affect_rows));
+    }
+    int tmp_ret = trans.end(OB_SUCC(ret));
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
   return ret;
 }
 

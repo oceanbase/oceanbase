@@ -746,6 +746,7 @@ static const NonReservedKeyword Mysql_sql_keywords_in_pl[] = {
     {"flush", FLUSH},
     {"function", FUNCTION},
     {"grant", GRANT},
+    {"help", HELP},
     {"hosts", HOSTS},
     {"index", INDEX},
     {"insert", INSERT},

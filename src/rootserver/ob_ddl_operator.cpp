@@ -1204,7 +1204,11 @@ int ObDDLOperator::create_table(ObTableSchema& table_schema, ObMySQLTransaction&
   } else {
     table_schema.set_schema_version(new_schema_version);
     if (OB_FAIL(schema_service->get_table_sql_service().create_table(
-            table_schema, trans, ddl_stmt_str, need_sync_schema_version, is_truncate_table))) {
+            table_schema,
+            trans,
+            ddl_stmt_str,
+            need_sync_schema_version,
+            is_truncate_table))) {
       RS_LOG(WARN, "failed to create table", K(ret));
     } else if (OB_FAIL(sync_version_for_cascade_table(table_schema.get_depend_table_ids(), trans))) {
       RS_LOG(WARN, "fail to sync cascade depend table", K(ret));
@@ -2956,10 +2960,11 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                     // cannot alter json column to any default value
                     // text column also cannot be alter to null in mysql
                     ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
-                    LOG_USER_ERROR(OB_ERR_BLOB_CANT_HAVE_DEFAULT, new_column_schema.get_column_name_str().length(),
-                                   new_column_schema.get_column_name_str().ptr());
+                    LOG_USER_ERROR(OB_ERR_BLOB_CANT_HAVE_DEFAULT,
+                        new_column_schema.get_column_name_str().length(),
+                        new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "JSON column can't have a default value!", K(default_value), K(ret));
-                   } else if (!new_column_schema.is_nullable() && default_value.is_null()) {
+                  } else if (!new_column_schema.is_nullable() && default_value.is_null()) {
                     ret = OB_INVALID_DEFAULT;
                     LOG_USER_ERROR(OB_INVALID_DEFAULT,
                         new_column_schema.get_column_name_str().length(),
@@ -6242,7 +6247,6 @@ int ObDDLOperator::init_tenant_env(
     }
     // TODO [profile]
   }
-
   return ret;
 }
 
@@ -6390,14 +6394,14 @@ int ObDDLOperator::init_tenant_databases(
     if (!is_oracle_mode) {
       if (OB_FAIL(
               init_tenant_database(tenant_schema, mysql_schema, OB_MYSQL_SCHEMA_ID, "MySql schema", trans, false))) {
-        RS_LOG(WARN, "insert information_schema failed", K(tenant_id), K(ret));
+        RS_LOG(WARN, "insert mysql schema failed", K(tenant_id), K(ret));
       } else if (OB_FAIL(init_tenant_database(tenant_schema,
                      information_schema,
                      OB_INFORMATION_SCHEMA_ID,
                      "information_schema",
                      trans,
                      false))) {
-        RS_LOG(WARN, "insert mysql schema failed", K(tenant_id), K(ret));
+        RS_LOG(WARN, "insert information_schema failed", K(tenant_id), K(ret));
       } else if (OB_FAIL(init_tenant_database(
                      tenant_schema, test_schema, OB_USER_DATABASE_ID, "test schema", trans, is_oracle_mode))) {
         RS_LOG(WARN, "insert test schema failed", K(tenant_id), K(ret));
@@ -7240,28 +7244,23 @@ int ObDDLOperator::set_passwd(const uint64_t tenant_id, const uint64_t user_id, 
   return ret;
 }
 
-int ObDDLOperator::set_max_connections(
-    const uint64_t tenant_id,
-    const uint64_t user_id,
-    const uint64_t max_connections_per_hour,
-    const uint64_t max_user_connections,
-    const ObString *ddl_stmt_str,
-    common::ObMySQLTransaction &trans)
+int ObDDLOperator::set_max_connections(const uint64_t tenant_id, const uint64_t user_id,
+    const uint64_t max_connections_per_hour, const uint64_t max_user_connections, const ObString* ddl_stmt_str,
+    common::ObMySQLTransaction& trans)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  ObSchemaService* schema_sql_service = schema_service_.get_schema_service();
   if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_id and user_id must not be null", K(tenant_id), K(user_id), K(ret));
   } else if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_SYS;
-    LOG_ERROR("schama service_impl and schema manage must not null",
-        "schema_service_impl", schema_sql_service, K(ret));
+    LOG_ERROR("schama service_impl and schema manage must not null", "schema_service_impl", schema_sql_service, K(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
   } else {
-    const ObUserInfo *user_info = NULL;
+    const ObUserInfo* user_info = NULL;
     if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
       LOG_WARN("failed to get user info", K(ret));
     } else if (OB_ISNULL(user_info)) {
@@ -7279,7 +7278,7 @@ int ObDDLOperator::set_max_connections(
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_max_connections(
-                        new_user_info, new_schema_version, ddl_stmt_str, trans))) {
+                     new_user_info, new_schema_version, ddl_stmt_str, trans))) {
         LOG_WARN("Failed to set passwd", K(tenant_id), K(user_id), K(ret));
       }
     }

@@ -454,6 +454,9 @@ def add_column(column, rowkey_id, index_id, part_key_pos, column_id=0):
     elif column_type == 'longtext':
       column_type = 'ObLongTextType'
       column_length = 0
+    elif column_type == 'text':
+      column_type = 'ObTextType'
+      column_length = 0
     elif column_type == 'longblob':
       column_type = 'ObLongTextType'
       column_length = 0

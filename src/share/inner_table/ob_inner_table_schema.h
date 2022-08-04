@@ -329,6 +329,10 @@ public:
   static int all_sequence_schema(share::schema::ObTableSchema &table_schema);
   static int all_charset_schema(share::schema::ObTableSchema &table_schema);
   static int all_collation_schema(share::schema::ObTableSchema &table_schema);
+  static int help_category_schema(share::schema::ObTableSchema &table_schema);
+  static int help_keyword_schema(share::schema::ObTableSchema &table_schema);
+  static int help_topic_schema(share::schema::ObTableSchema &table_schema);
+  static int help_relation_schema(share::schema::ObTableSchema &table_schema);
   static int all_local_index_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_dummy_schema(share::schema::ObTableSchema &table_schema);
   static int all_frozen_map_schema(share::schema::ObTableSchema &table_schema);
@@ -1368,6 +1372,10 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_sequence_schema,
   ObInnerTableSchema::all_charset_schema,
   ObInnerTableSchema::all_collation_schema,
+  ObInnerTableSchema::help_category_schema,
+  ObInnerTableSchema::help_keyword_schema,
+  ObInnerTableSchema::help_topic_schema,
+  ObInnerTableSchema::help_relation_schema,
   ObInnerTableSchema::all_local_index_status_schema,
   ObInnerTableSchema::all_dummy_schema,
   ObInnerTableSchema::all_frozen_map_schema,
@@ -2394,6 +2402,10 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SYS_VARIABLE_TID,
   OB_ALL_SYS_STAT_TID,
   OB_ALL_COLUMN_STATISTIC_TID,
+  OB_HELP_CATEGORY_TID,
+  OB_HELP_KEYWORD_TID,
+  OB_HELP_TOPIC_TID,
+  OB_HELP_RELATION_TID,
   OB_ALL_DUMMY_TID,
   OB_ALL_CLOG_HISTORY_INFO_V2_TID,
   OB_ALL_OUTLINE_TID,
@@ -3257,6 +3269,10 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SYS_VARIABLE_TNAME,
   OB_ALL_SYS_STAT_TNAME,
   OB_ALL_COLUMN_STATISTIC_TNAME,
+  OB_HELP_CATEGORY_TNAME,
+  OB_HELP_KEYWORD_TNAME,
+  OB_HELP_TOPIC_TNAME,
+  OB_HELP_RELATION_TNAME,
   OB_ALL_DUMMY_TNAME,
   OB_ALL_CLOG_HISTORY_INFO_V2_TNAME,
   OB_ALL_OUTLINE_TNAME,
@@ -4083,12 +4099,12 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 5;
-const int64_t OB_SYS_TABLE_COUNT = 189;
+const int64_t OB_SYS_TABLE_COUNT = 193;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 466;
 const int64_t OB_SYS_VIEW_COUNT = 365;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1026;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1030;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1029;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1033;
 
 } // end namespace share
 } // end namespace oceanbase

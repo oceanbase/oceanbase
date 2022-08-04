@@ -175,6 +175,7 @@ virtual int set_table_locality(
   virtual int init_sequence_id();
   virtual int init_system_data(const uint64_t server_id);
   virtual int init_all_zone_table();
+  virtual int init_help_tables();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient& sql_client);
   virtual int init_server_id(const uint64_t server_id);
   virtual int add_rs_list(uint64_t& server_id);

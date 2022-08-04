@@ -398,6 +398,7 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
     SET_STMT_TYPE(T_RELEASE_SAVEPOINT);
     SET_STMT_TYPE(T_ROLLBACK_SAVEPOINT);
     SET_STMT_TYPE(T_SHOW_QUERY_RESPONSE_TIME);
+    SET_STMT_TYPE(T_HELP);
 #undef SET_STMT_TYPE
     case T_ROLLBACK:
     case T_COMMIT: {

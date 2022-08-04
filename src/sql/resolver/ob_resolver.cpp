@@ -67,6 +67,7 @@
 #include "sql/resolver/dcl/ob_drop_user_resolver.h"
 #include "sql/resolver/dcl/ob_rename_user_resolver.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
+#include "sql/resolver/dcl/ob_help_resolver.h"
 #include "sql/resolver/dcl/ob_lock_user_resolver.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 #include "sql/resolver/dcl/ob_revoke_resolver.h"
@@ -596,6 +597,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_QUERY_RESPONSE_TIME:
       case T_SHOW_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
+        break;
+      }
+      case T_HELP: {
+        REGISTER_STMT_RESOLVER(Help);
         break;
       }
       case T_CREATE_USER: {

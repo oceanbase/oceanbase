@@ -3689,6 +3689,8 @@ int ObRootService::create_tenant(const ObCreateTenantArg& arg, UInt64& tenant_id
       LOG_WARN("get_frozen_info failed", K(ret));
     } else if (OB_FAIL(ddl_service_.create_tenant(arg, tenant_schema, frozen_version))) {
       LOG_WARN("create_tenant failed", K(arg), K(tenant_schema), K(frozen_version), K(ret));
+    } else if (OB_FAIL(ddl_service_.init_help_tables(tenant_schema))) {
+      LOG_WARN("init help table failed", K(tenant_schema), K(ret));
     } else {
       tenant_id = tenant_schema.get_tenant_id();
     }

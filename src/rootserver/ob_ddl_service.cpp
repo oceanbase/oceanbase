@@ -11268,6 +11268,46 @@ int ObDDLService::create_sys_tenant(const obrpc::ObCreateTenantArg &arg, share::
   return ret;
 }
 
+int ObDDLService::init_help_tables(share::schema::ObTenantSchema& tenant_schema) {
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  int64_t start = ObTimeUtility::current_time();
+  int64_t expect_affect_rows = help_affect_rows;
+  int64_t affect_rows = 0;
+  uint64_t tenant_id = tenant_schema.get_tenant_id();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check_inner_stat failed", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy_))) {
+    LOG_WARN("failed to start trans", K(ret));
+  } else {
+    ObSqlString sql;
+    int64_t affected = 0;
+    for(const char** iter = &fill_help_tables_cmd[0]; *iter != NULL; iter++) {
+      if (OB_FAIL(sql.assign(*iter))) {
+        LOG_WARN("assign sql failed", K(ret));
+      } if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      } else if (is_zero_row(affected)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected rows", K(ret), K(affected));
+      } else {
+        affect_rows += affected;
+        LOG_TRACE("execute sql success", K(sql));
+      }
+    }
+    if(affect_rows != expect_affect_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect affected rows", K(expect_affect_rows), K(affect_rows));
+    }
+
+    int tmp_ret = trans.end(OB_SUCC(ret));
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
+  return ret;
+} 
 /* The reconstruction of zone_list follows the following rules:
  * 1. When creating tenant, the zone_list specified by the user will be ignored. Use the zone list of resource_pool.
  *  We still retain the zone_list column in the all_tenant table and the zone_list field in the tenantSchema.

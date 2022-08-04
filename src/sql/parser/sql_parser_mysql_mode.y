@@ -432,6 +432,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece
 %type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
+%type <node> help_stmt ident_or_text
 
 %start sql_stmt
 %%
@@ -493,6 +494,7 @@ stmt:
   | alter_outline_stmt      { $$ = $1; question_mark_issue($$, result); }
   | drop_outline_stmt       { $$ = $1; check_question_mark($$, result); }
   | show_stmt               { $$ = $1; check_question_mark($$, result); }
+  | help_stmt               { $$ = $1; check_question_mark($$, result); }
   | prepare_stmt            { $$ = $1; question_mark_issue($$, result); }
   | variable_set_stmt       { $$ = $1; question_mark_issue($$, result); }
   | execute_stmt            { $$ = $1; check_question_mark($$, result); }
@@ -9470,6 +9472,33 @@ TRADITIONAL
 { malloc_terminal_node($$, result->malloc_pool_, T_FORMAT_JSON); }
 ;
 
+/*****************************************************************************
+ *
+ *	help grammar 
+ * 
+ *****************************************************************************/
+help_stmt:
+HELP ident_or_text
+{
+  $$=$2;
+  $$->type_=T_HELP;
+}          
+;
+
+ident_or_text:
+  NAME_OB     { $$=$1;}
+| text_string { $$=$1;}
+;
+
+
+/*
+ * execute_stmt:
+ * EXECUTE stmt_name opt_using_args
+ * {
+ *  malloc_non_terminal_node($$, result->malloc_pool_, T_EXECUTE, 2, $2, $3);
+ *}
+ *;
+ */
 
 /*****************************************************************************
  *
