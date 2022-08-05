@@ -473,7 +473,6 @@ int ObMicroBlockRowScanner::init(const ObTableIterParam& param, ObTableAccessCon
     STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
   } else {
     const int64_t request_count = column_map_.get_request_count();
-    // const int64_t request_count = OB_ROW_MAX_COLUMNS_COUNT;
     if (OB_FAIL(obj_buf_.reserve(request_count * ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT))) {
       STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
     } else {
@@ -524,7 +523,6 @@ int ObMicroBlockRowScanner::inner_get_next_row(const ObStoreRow*& row)
   } else {
     ObStoreRow& dest_row = rows_[0];
     const int64_t request_count = column_map_.get_request_count();
-    // const int64_t request_count = OB_ROW_MAX_COLUMNS_COUNT;
     dest_row.row_val_.count_ = request_count;
     if (OB_FAIL(reader_->get_row(current_, dest_row))) {
       STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret), K(macro_id_));
@@ -936,7 +934,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_directly(
       row = &cur_micro_row_;
     } else {
       const int64_t request_count = column_map_.get_request_count();
-      // const int64_t request_count = OB_ROW_MAX_COLUMNS_COUNT;
       if (OB_FAIL(tmp_row_obj_buf_.reserve(request_count))) {
         STORAGE_LOG(WARN, "fail to reserve memory for tmp_row_obj_buf_, ", K(ret));
       } else {
@@ -1069,7 +1066,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           row = &cur_micro_row_;
         } else {
           const int64_t request_count = column_map_.get_request_count();
-          // const int64_t request_count = OB_ROW_MAX_COLUMNS_COUNT;
           if (OB_FAIL(tmp_row_obj_buf_.reserve(request_count))) {
             STORAGE_LOG(WARN, "fail to reserve memory for tmp_row_obj_buf_, ", K(ret));
           } else {
@@ -1447,7 +1443,6 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::open(const MacroBlockId& macro
       STORAGE_LOG(WARN, "failed to set base scan param", K(ret), K(is_left_border), K(is_right_border), K(macro_id));
     } else {
       const int64_t request_count = column_map_.get_request_count();
-      // const int64_t request_count = OB_ROW_MAX_COLUMNS_COUNT;
       if (OB_FAIL(obj_buf_.reserve(request_count))) {
         STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_", K(ret));
       } else if (OB_FAIL(col_id_buf_.reserve(request_count))) {

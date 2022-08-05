@@ -101,10 +101,6 @@ private:
   ObRowHeader* row_header_;
   int64_t column_index_count_;
   common::number::ObNumber tmp_number_;
-  // uint16_t column_ids_[common::OB_ROW_MAX_COLUMNS_COUNT];  // for sparse row
-  // int8_t column_indexs_8_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  // int16_t column_indexs_16_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  // int32_t column_indexs_32_[common::OB_ROW_MAX_COLUMNS_COUNT];
   storage::ObRowBuffer<uint16_t> column_ids_;
   storage::ObRowBuffer<int8_t> column_indexs_8_;
   storage::ObRowBuffer<int16_t> column_indexs_16_;

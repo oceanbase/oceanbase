@@ -264,9 +264,6 @@ void ObDataStoreDesc::reset()
   column_ids_.reset();
   column_types_.reset();
   column_orders_.reset();
-  // MEMSET(column_types_, 0, sizeof(column_types_));
-  // MEMSET(column_types_, 0, sizeof(column_types_));
-  // MEMSET(column_orders_, 0, sizeof(column_orders_));
   need_calc_column_checksum_ = false;
   need_index_tree_ = false;
   store_micro_block_column_checksum_ = false;
@@ -325,9 +322,6 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
     MEMCPY(column_types_.get_buf(), desc.column_types_.get_buf(), sizeof(ObObjMeta) * row_column_count_);
     MEMCPY(column_orders_.get_buf(), desc.column_orders_.get_buf(), sizeof(ObOrderType) * row_column_count_);
   }
-  // MEMCPY(column_ids_, desc.column_ids_, sizeof(column_ids_));
-  // MEMCPY(column_types_, desc.column_types_, sizeof(column_types_));
-  // MEMCPY(column_orders_, desc.column_orders_, sizeof(column_orders_));
   need_calc_column_checksum_ = desc.need_calc_column_checksum_;
   store_micro_block_column_checksum_ = desc.store_micro_block_column_checksum_;
   snapshot_version_ = desc.snapshot_version_;

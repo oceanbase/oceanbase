@@ -76,7 +76,6 @@ private:
   int64_t use_old_macro_block_count_;
   bool is_inited_;
   storage::ObStoreRow result_row_;
-  // char buffer_[sizeof(common::ObObj) * common::OB_ROW_MAX_COLUMNS_COUNT];
   storage::ObRowBuffer<ObObj> buffer_;
 };
 

@@ -53,9 +53,6 @@ struct ObDataStoreDesc {
   bool is_major_;
 
   char compressor_name_[common::OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH];
-  // uint64_t column_ids_[common::OB_MAX_COLUMN_NUMBER];
-  // common::ObObjMeta column_types_[common::OB_MAX_COLUMN_NUMBER];
-  // common::ObOrderType column_orders_[common::OB_MAX_COLUMN_NUMBER];
   storage::ObRowBuffer<uint64_t> column_ids_;
   storage::ObRowBuffer<ObObjMeta> column_types_;
   storage::ObRowBuffer<ObOrderType> column_orders_;

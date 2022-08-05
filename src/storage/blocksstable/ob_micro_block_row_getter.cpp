@@ -171,9 +171,6 @@ int ObMicroBlockRowGetter::get_row(const ObStoreRowkey& rowkey, const MacroBlock
                  column_map_.rebuild(macro_meta, param_->need_build_column_map(column_map_.get_schema_version())))) {
     LOG_WARN("fail to rebuild column map", K(ret), K(macro_meta));
   } else {
-    // row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    // row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-    // row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
     if (!context_->enable_put_row_cache()) {
       if (OB_FAIL(obj_buf_.reserve(column_map_.get_request_count()))) {
         STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_, ", K(ret));
@@ -214,9 +211,6 @@ int ObMicroBlockRowGetter::get_row(const ObStoreRowkey& rowkey, const MacroBlock
       }
     } else {
       // need read full row to put row cache
-      // full_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(full_row_obj_buf_);
-      // full_row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      // full_row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
       if (OB_FAIL(full_row_obj_buf_.reserve(macro_meta.meta_->column_number_))) {
         STORAGE_LOG(WARN, "failed to reserve memory for full_row_obj_buf, ", K(ret));
       } else {
