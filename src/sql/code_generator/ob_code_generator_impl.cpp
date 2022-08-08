@@ -3415,7 +3415,6 @@ int ObCodeGeneratorImpl::convert_distinct(ObLogDistinct& op, const PhyOpsDesc& c
     } else if (FALSE_IT((input_row_desc = child_ops.at(0).second,
                    input_projector = child_ops.at(0).first->get_projector(),
                    input_projector_size = child_ops.at(0).first->get_projector_size()))) {
-      ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(create_phy_op_desc(phy_op_type, distinct_op, out_row_desc, out_ops, op.get_op_id()))) {
       LOG_WARN("failed to create phy op and desc", K(ret));
     } else if (OB_FAIL(copy_row_desc(*input_row_desc, *out_row_desc))) {
