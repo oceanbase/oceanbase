@@ -1296,8 +1296,17 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues& op, ObExprValuesSpec& spec,
         ObRawExpr *output_raw_expr = op.get_output_exprs().at(i);
         const common::ObIArray<common::ObString> &str_values =
           output_raw_expr->get_enum_set_values();
-        if (OB_FAIL(spec.str_values_array_.at(i).assign(str_values))) {
-          LOG_WARN("fail to assign", K(ret), K(i), K(str_values));
+        if (!str_values.empty()) {
+          if (OB_FAIL(spec.str_values_array_.at(i).prepare_allocate(str_values.count()))) {
+            LOG_WARN("init fixed array failed", K(ret));
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < str_values.count(); ++j) {
+              if (OB_FAIL(deep_copy_ob_string(
+                      phy_plan_->get_allocator(), str_values.at(j), spec.str_values_array_.at(i).at(j)))) {
+                LOG_WARN("failed to deep copy string", K(ret), K(str_values));
+              }
+            }
+          }
         }
       }
       LOG_DEBUG("finish assign str_values_array", K(ret), K(spec.str_values_array_));
