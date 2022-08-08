@@ -304,8 +304,13 @@ public:
   static int is_table_on_null_side_recursively(
       const TableItem* table_item, uint64_t table_id, bool& found, bool& is_on_null_side);
 
-  static int get_referenced_columns(const ObDMLStmt* stmt, const uint64_t table_id,
-      const common::ObIArray<ObRawExpr*>& keys, common::ObIArray<ObRawExpr*>& columns);
+  static int is_table_on_null_side_of_parent(
+      const ObDMLStmt *stmt, uint64_t source_table_id, uint64_t target_table_id, bool &is_on_null_side);
+  static int find_common_joined_table(
+      JoinedTable *joined_table, uint64_t source_table_id, uint64_t target_table_id, JoinedTable *&target_joined_table);
+
+  static int get_referenced_columns(const ObDMLStmt *stmt, const uint64_t table_id,
+      const common::ObIArray<ObRawExpr *> &keys, common::ObIArray<ObRawExpr *> &columns);
 
   static int get_non_referenced_columns(const ObDMLStmt* stmt, const uint64_t table_id,
       const common::ObIArray<ObRawExpr*>& keys, common::ObIArray<ObRawExpr*>& columns);

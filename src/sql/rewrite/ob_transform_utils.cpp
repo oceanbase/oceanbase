@@ -4726,17 +4726,18 @@ bool ObTransformUtils::is_subarray(const ObRelIds& table_ids, const common::ObIA
   return bool_ret;
 }
 
-int ObTransformUtils::check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* source_table,
-    TableItem* target_table, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-    ObStmtMapInfo& stmt_map_info, bool& is_loseless,
-    EqualSets* input_equal_sets)  // default value NULL
+int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt, ObTransformerCtx *ctx, TableItem *source_table,
+    TableItem *target_table, ObSQLSessionInfo *session_info, ObSchemaChecker *schema_checker,
+    ObStmtMapInfo &stmt_map_info, bool is_on_null_side, bool &is_loseless,
+    EqualSets *input_equal_sets /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   bool is_contain = false;
   bool source_unique = false;
   bool target_unique = false;
-  ObSEArray<ObRawExpr*, 16> source_exprs;
-  ObSEArray<ObRawExpr*, 16> target_exprs;
+  ObSEArray<ObRawExpr *, 16> source_exprs;
+  ObSEArray<ObRawExpr *, 16> target_exprs;
+  ObSEArray<ObRawExpr *, 8> target_tab_cols;
   is_loseless = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(source_table) || OB_ISNULL(target_table) || OB_ISNULL(schema_checker)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4754,6 +4755,10 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx
                  target_exprs,
                  input_equal_sets))) {
     LOG_WARN("failed to extract lossless join columns", K(ret));
+  } else if (OB_FAIL(stmt->get_column_exprs(target_table->table_id_, target_tab_cols))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else if (is_on_null_side && !target_tab_cols.empty() && target_exprs.empty()) {
+    is_loseless = false;
   } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(
                  *stmt, source_table, source_exprs, session_info, schema_checker, source_unique))) {
     LOG_WARN("failed to check exprs unique", K(ret));

@@ -548,9 +548,10 @@ public:
 
   static bool is_subarray(const ObRelIds& table_ids, const common::ObIArray<ObRelIds>& other);
 
-  static int check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* source_table,
-      TableItem* target_table, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      ObStmtMapInfo& stmt_map_info, bool& is_loseless, EqualSets* input_equal_sets = NULL);
+
+  static int check_loseless_join(ObDMLStmt *stmt, ObTransformerCtx *ctx, TableItem *source_table,
+      TableItem *target_table, ObSQLSessionInfo *session_info, ObSchemaChecker *schema_checker,
+      ObStmtMapInfo &stmt_map_info, bool is_on_null_side, bool &is_loseless, EqualSets *input_equal_sets = NULL);
 
   static int check_relations_containment(ObDMLStmt* stmt, const common::ObIArray<TableItem*>& source_rels,
       const common::ObIArray<TableItem*>& target_rels, common::ObIArray<ObStmtMapInfo>& stmt_map_infos,
