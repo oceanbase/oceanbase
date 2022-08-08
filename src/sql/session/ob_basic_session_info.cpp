@@ -4633,5 +4633,14 @@ int ObExecEnv::store(ObBasicSessionInfo& session)
   return ret;
 }
 
+bool ObBasicSessionInfo::is_xa_trans()
+{
+  int bool_ret = false;
+  if (trans_desc_.is_valid() && trans_desc_.is_xa_local_trans()) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 }  // end of namespace sql
 }  // end of namespace oceanbase

@@ -1371,6 +1371,7 @@ public:
   {
     return trans_desc_.get_standalone_stmt_desc().is_valid();
   }
+  bool is_xa_trans();
 
   bool is_server_status_in_transaction() const;
 
