@@ -402,8 +402,11 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
         if (e_cnt < 4) {
           e_value = e_neg ? (e_value * 10 - (cur - '0')) : (e_value * 10 + cur - '0');
         }
-        cur = str[++i];
         e_cnt++;
+        if (++i >= length) {
+          break;
+        }
+        cur = str[i];
       }
 
       LOG_DEBUG("ObNumber from sci E", K(warning), K(e_neg), K(e_cnt), K(e_value), K(valid_len), K(i));
