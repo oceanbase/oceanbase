@@ -104,6 +104,7 @@ namespace share
   static const char* const OB_SV_SESSION_TRACK_SCHEMA = "session_track_schema";
   static const char* const OB_SV_SESSION_TRACK_SYSTEM_VARIABLES = "session_track_system_variables";
   static const char* const OB_SV_SESSION_TRACK_STATE_CHANGE = "session_track_state_change";
+  static const char* const OB_SV_DEFAULT_STORAGE_ENGINE = "default_storage_engine";
   static const char* const OB_SV_DEFAULT_REPLICA_NUM = "ob_default_replica_num";
   static const char* const OB_SV_INTERM_RESULT_MEM_LIMIT = "ob_interm_result_mem_limit";
   static const char* const OB_SV_PROXY_PARTITION_HIT = "ob_proxy_partition_hit";

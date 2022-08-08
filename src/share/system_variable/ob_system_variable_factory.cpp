@@ -140,6 +140,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "debug_sync",
   "default_authentication_plugin",
   "default_password_lifetime",
+  "default_storage_engine",
   "disabled_storage_engines",
   "div_precision_increment",
   "error_count",
@@ -341,6 +342,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DEBUG_SYNC,
   SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
   SYS_VAR_DEFAULT_PASSWORD_LIFETIME,
+  SYS_VAR_DEFAULT_STORAGE_ENGINE,
   SYS_VAR_DISABLED_STORAGE_ENGINES,
   SYS_VAR_DIV_PRECISION_INCREMENT,
   SYS_VAR_ERROR_COUNT,
@@ -589,6 +591,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "session_track_schema",
   "session_track_system_variables",
   "session_track_state_change",
+  "default_storage_engine",
   "ob_default_replica_num",
   "ob_interm_result_mem_limit",
   "ob_proxy_partition_hit",
@@ -950,6 +953,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSessionTrackSchema)
         + sizeof(ObSysVarSessionTrackSystemVariables)
         + sizeof(ObSysVarSessionTrackStateChange)
+        + sizeof(ObSysVarDefaultStorageEngine)
         + sizeof(ObSysVarObDefaultReplicaNum)
         + sizeof(ObSysVarObIntermResultMemLimit)
         + sizeof(ObSysVarObProxyPartitionHit)
@@ -1826,6 +1830,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SESSION_TRACK_STATE_CHANGE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSessionTrackStateChange));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultStorageEngine", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_STORAGE_ENGINE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultStorageEngine));
       }
     }
     if (OB_SUCC(ret)) {
@@ -3801,6 +3814,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSessionTrackStateChange())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSessionTrackStateChange", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DEFAULT_STORAGE_ENGINE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultStorageEngine)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultStorageEngine)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultStorageEngine", K(ret));
       }
       break;
     }
