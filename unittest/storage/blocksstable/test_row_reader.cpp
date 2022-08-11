@@ -322,7 +322,6 @@ TEST_F(TestRowReader, test_cell_reader)
   int ret = OB_SUCCESS;
   int num = 50;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[num];
   uint16_t column_ids[num];
   ObStoreRow writer_row;
@@ -443,7 +442,6 @@ TEST_F(TestRowReader, read_flat_row_from_flat_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -524,7 +522,6 @@ TEST_F(TestRowReader, read_flat_row_from_flat_storage2)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -582,7 +579,6 @@ TEST_F(TestRowReader, read_overflow)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -660,7 +656,6 @@ TEST_F(TestRowReader, read_sparse_row_from_flat_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -724,7 +719,6 @@ TEST_F(TestRowReader, flat_row_test)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -793,7 +787,6 @@ TEST_F(TestRowReader, flat_row_test_about_trans_id_flag_change)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -846,7 +839,6 @@ TEST_F(TestRowReader, read_flat_row_from_sparse_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -945,7 +937,6 @@ TEST_F(TestRowReader, read_sparse_row_from_sparse_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1042,7 +1033,6 @@ TEST_F(TestRowReader, sparse_row_test)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1147,7 +1137,6 @@ TEST_F(TestRowReader, sparse_row_with_trans_id)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1229,7 +1218,6 @@ TEST_F(TestRowReader, read_index_column_in_flat_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1290,7 +1278,6 @@ TEST_F(TestRowReader, flat_row_with_trans_id)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1352,7 +1339,6 @@ TEST_F(TestRowReader, read_full_sparse_row)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1427,7 +1413,6 @@ TEST_F(TestRowReader, read_index_column_in_sparse_storage)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1503,7 +1488,6 @@ TEST_F(TestRowReader, test_skip_column)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1634,7 +1618,6 @@ TEST_F(TestRowReader, read_multi)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1697,7 +1680,6 @@ TEST_F(TestRowReader, read_flat_rowkey)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1784,7 +1766,6 @@ TEST_F(TestRowReader, read_sparse_rowkey)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1868,7 +1849,6 @@ TEST_F(TestRowReader, read_not_exist_column)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -1942,7 +1922,6 @@ TEST_F(TestRowReader, unknown_type)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -2012,7 +1991,6 @@ TEST_F(TestRowReader, obj_cast_write_read_different)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;
@@ -2067,7 +2045,6 @@ TEST_F(TestRowReader, sparse_row_about_lob)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
-  row_writer.init();
   oceanbase::common::ObObj objs[column_num];
   ObStoreRow writer_row;
   writer_row.row_val_.cells_ = objs;

@@ -59,8 +59,6 @@ int ObMicroBlockWriter::init(const int64_t micro_block_size_limit, const int64_t
     STORAGE_LOG(WARN, "micro block writer fail to reserve header.", K(ret), K(column_count));
   } else if (OB_FAIL(index_buffer_.write(static_cast<int32_t>(0)))) {
     STORAGE_LOG(WARN, "index buffer fail to write first offset.", K(ret));
-  } else if (OB_FAIL(row_writer_.init())) {
-    STORAGE_LOG(WARN, "fail to init row_writer_.", K(ret));
   } else {
     rowkey_column_count_ = rowkey_column_count;
     micro_block_size_limit_ = micro_block_size_limit;
@@ -165,7 +163,6 @@ void ObMicroBlockWriter::reset()
   ObIMicroBlockWriter::reuse();
   micro_block_size_limit_ = 0;
   column_count_ = 0;
-  row_writer_.reset();
   rowkey_column_count_ = 0;
   header_ = NULL;
   last_rowkey_pos_.reset();

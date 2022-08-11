@@ -1599,16 +1599,17 @@ public:
       STORAGE_LOG(WARN, "invalid arguments", K(ret));
     } else {
       allocator_ = allocator;
-      data_ = reinterpret_cast<T*>(data_buf_);
+      data_ = data_buf_;
       capacity_ = LOCAL_BUFFER_SIZE;
       is_inited_ = true;
     }
     return ret;
   }
 
+  // notice that we do not call the desconstructor of T
   void reset()
   {
-    if (OB_NOT_NULL(data_) && reinterpret_cast<T*>(data_buf_) != data_) {
+    if (OB_NOT_NULL(data_) && data_ != data_buf_) {
       allocator_->free(data_);
     }
     data_ = NULL;
@@ -1617,19 +1618,25 @@ public:
     is_inited_ = false;
   }
 
-  inline int reserve(int capacity) {
+  inline int reserve(int64_t capacity) {
     int ret = OB_SUCCESS;
-    if (capacity > capacity_) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      STORAGE_LOG(ERROR, "row buffer has not been initialized", K(ret));
+    } else if (capacity < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid arguments", K(ret));
+    } else if (capacity > capacity_) {
       int64_t new_size = capacity * sizeof(T);
       T* new_data = reinterpret_cast<T*>(allocator_->alloc(new_size));
       if (OB_ISNULL(new_data)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc new_data", K(ret));
       } else {
-        if (reinterpret_cast<T*>(data_buf_) != data_) {
+        if (data_ != data_buf_) {
           allocator_->free(data_);
         }
-        data_ = new_data;
+        data_ = new (new_data) T[capacity];
         capacity_ = capacity;
       }
     }
@@ -1641,9 +1648,20 @@ public:
     return data_;
   }
 
+  inline T& operator[](int64_t idx)
+  {
+    OB_ASSERT(idx >= 0 && idx < capacity_);
+    return data_[idx];
+  }
+
+  inline const T& operator[](int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < capacity_);
+    return data_[idx];
+  }
 
 private:
-  char data_buf_[LOCAL_BUFFER_SIZE * sizeof(T)];
+  T data_buf_[LOCAL_BUFFER_SIZE];
   T* data_;
   ObIAllocator* allocator_;
   int64_t capacity_;

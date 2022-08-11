@@ -224,7 +224,7 @@ int ObMacroBlockBuilder::open(storage::ObSSTableMergeCtx& ctx, const int64_t idx
         share::schema::ColumnMap* cols_id_map_ptr = new (buf) share::schema::ColumnMap(allocator_);
         ObArray<uint64_t> col_id_array;
         for (int i = 0; OB_SUCC(ret) && i < desc_.row_column_count_; ++i) {
-          if (OB_FAIL(col_id_array.push_back(desc_.column_ids_.get_buf()[i]))) {
+          if (OB_FAIL(col_id_array.push_back(desc_.column_ids_[i]))) {
             STORAGE_LOG(WARN, "Fail to push", K(ret));
           }
         }
@@ -501,16 +501,16 @@ OB_INLINE int ObMacroBlockBuilder::check_row_column(const storage::ObStoreRow& r
 
   if (obj.is_nop_value() || obj.is_null()) {
     // pass
-  } else if (obj.get_type() != desc_.column_types_.get_buf()[idx].get_type()) {
+  } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
         "column_type",
-        desc_.column_types_.get_buf()[idx],
+        desc_.column_types_[idx],
         "col id",
-        desc_.column_ids_.get_buf()[idx],
+        desc_.column_ids_[idx],
         K_(desc),
         K(row));
   }
@@ -523,16 +523,16 @@ OB_INLINE int ObMacroBlockBuilder::check_sparse_row_column(const ObObj& obj, con
   int ret = OB_SUCCESS;
   if (obj.is_nop_value() || obj.is_null()) {
     // pass
-  } else if (obj.get_type() != desc_.column_types_.get_buf()[idx].get_type()) {
+  } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
         "column_type",
-        desc_.column_types_.get_buf()[idx],
+        desc_.column_types_[idx],
         "col id",
-        desc_.column_ids_.get_buf()[idx],
+        desc_.column_ids_[idx],
         K_(desc));
   }
 

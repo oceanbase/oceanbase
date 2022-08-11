@@ -88,7 +88,6 @@ void ObMacroBlockWriter::reset()
   micro_writer_ = &flat_writer_;
   flat_writer_.reuse();
   flat_reader_.reset();
-  row_writer_.reset();
   sstable_index_writer_ = NULL;
   task_index_writer_ = NULL;
   macro_blocks_[0].reset();
@@ -136,8 +135,6 @@ int ObMacroBlockWriter::open(ObDataStoreDesc& data_store_desc, const ObMacroData
   } else if (!block_write_ctx_.file_handle_.is_valid() &&
              OB_FAIL(block_write_ctx_.file_handle_.assign(data_store_desc.file_handle_))) {
     STORAGE_LOG(WARN, "fail to set file handle", K(ret), K(data_store_desc.file_handle_));
-  } else if (OB_FAIL(row_writer_.init())) {
-    STORAGE_LOG(WARN, "fail to init row_writer_, ", K(ret));
   } else if (OB_FAIL(obj_buf_.init(&allocator_))) {
     STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
   } else if (OB_FAIL(checker_obj_buf_.init(&allocator_))) {
@@ -1553,9 +1550,9 @@ int ObMacroBlockWriter::build_column_map(const ObDataStoreDesc* data_desc, ObCol
   } else {
     column_map.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < data_desc->row_column_count_; ++i) {
-      col_desc.col_id_ = data_desc->column_ids_.get_buf()[i];
-      col_desc.col_type_ = data_desc->column_types_.get_buf()[i];
-      col_desc.col_order_ = data_desc->column_orders_.get_buf()[i];
+      col_desc.col_id_ = data_desc->column_ids_[i];
+      col_desc.col_type_ = data_desc->column_types_[i];
+      col_desc.col_order_ = data_desc->column_orders_[i];
       if (OB_FAIL(out_cols.push_back(col_desc))) {
         STORAGE_LOG(WARN, "Fail to push col desc to array, ", K(ret));
       }

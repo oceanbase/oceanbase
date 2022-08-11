@@ -30,6 +30,7 @@ ObLobMergeWriter::ObLobMergeWriter()
       data_store_desc_(NULL),
       macro_start_seq_(-1),
       use_old_macro_block_count_(0),
+      allocator_(ObModIds::OB_LOB_MERGE_WRITER),
       is_inited_(false)
 {}
 
@@ -46,6 +47,7 @@ void ObLobMergeWriter::reset()
   macro_start_seq_ = -1;
   use_old_macro_block_count_ = 0;
   result_row_.reset();
+  allocator_.reset();
   is_inited_ = false;
 }
 
@@ -80,7 +82,7 @@ int ObLobMergeWriter::init(const ObMacroDataSeq& macro_start_seq, const ObDataSt
     } else if (!block_write_ctx_.file_handle_.is_valid() &&
                OB_FAIL(block_write_ctx_.file_handle_.assign(data_store_desc.file_handle_))) {
       STORAGE_LOG(WARN, "Failed to assign file handle", K(ret));
-    } else if (OB_FAIL(buffer_.init(&block_write_ctx_.allocator_))) {
+    } else if (OB_FAIL(buffer_.init(&allocator_))) {
       STORAGE_LOG(WARN, "Failed to init buffer_, ", K(ret));
     } else {
       macro_start_seq_ = lob_data_seq.get_data_seq();
@@ -223,7 +225,7 @@ int ObLobMergeWriter::overflow_lob_objs(const ObStoreRow& row, const ObStoreRow*
       int64_t idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < lob_col_idxs.count(); i++) {
         idx = lob_col_idxs.at(i);
-        int64_t column_id = row.is_sparse_row_ ? row.column_ids_[idx] : data_store_desc_->column_ids_.get_buf()[idx];
+        int64_t column_id = row.is_sparse_row_ ? row.column_ids_[idx] : data_store_desc_->column_ids_[idx];
         const ObObj& src_obj = row.row_val_.cells_[idx];
         ObObj& lob_obj = result_row_.row_val_.cells_[idx];
         int64_t orig_obj_length = src_obj.get_data_length();
@@ -414,7 +416,7 @@ int ObLobMergeWriter::copy_row_(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
   int64_t request_count = data_store_desc_->row_column_count_;
-  if OB_FAIL(buffer_.reserve(request_count)) {
+  if OB_FAIL(buffer_.reserve(row.row_val_.count_)) {
     STORAGE_LOG(WARN, "fail to reserve memory for buffer_, ", K(ret));
   } else {
     result_row_ = row;

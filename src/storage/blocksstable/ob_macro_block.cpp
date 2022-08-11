@@ -218,9 +218,9 @@ int ObDataStoreDesc::init(const ObTableSchema& table_schema, const int64_t data_
               ret = OB_SIZE_OVERFLOW;
               STORAGE_LOG(WARN, "column type&id list overflow.", K(ret));
             } else {
-              column_ids_.get_buf()[i] = column_list.at(i).col_id_;
-              column_types_.get_buf()[i] = column_list.at(i).col_type_;
-              column_orders_.get_buf()[i] = column_list.at(i).col_order_;
+              column_ids_[i] = column_list.at(i).col_id_;
+              column_types_[i] = column_list.at(i).col_type_;
+              column_orders_[i] = column_list.at(i).col_order_;
             }
           }
         }
@@ -857,9 +857,9 @@ int ObMacroBlock::reserve_header(const ObDataStoreDesc& spec)
       header_->partition_id_ = spec.partition_id_;
       // copy column id & type array;
       for (int64_t i = 0; i < header_->column_count_; ++i) {
-        column_ids_[i] = static_cast<int16_t>(spec.column_ids_.get_buf()[i]);
-        column_types_[i] = spec.column_types_.get_buf()[i];
-        column_orders_[i] = spec.column_orders_.get_buf()[i];
+        column_ids_[i] = static_cast<int16_t>(spec.column_ids_[i]);
+        column_types_[i] = spec.column_types_[i];
+        column_orders_[i] = spec.column_orders_[i];
       }
     }
   }

@@ -89,7 +89,7 @@ int ObBlockIntermediateBuilder::init(const int64_t rowkey_column_count)
       STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
     } else {
       intermediate_row_.flag_ = common::ObActionFlag::OP_ROW_EXIST;
-      intermediate_row_.row_val_.cells_ = new (obj_buf_.get_buf()) ObObj[rowkey_column_count_ + 1];
+      intermediate_row_.row_val_.cells_ = obj_buf_.get_buf();
       intermediate_row_.row_val_.count_ = rowkey_column_count_ + 1;
       intermediate_row_.row_val_.projector_ = nullptr;
       intermediate_row_.row_val_.projector_size_ = 0;

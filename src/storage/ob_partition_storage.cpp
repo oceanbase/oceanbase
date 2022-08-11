@@ -7380,9 +7380,9 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
         row.flag_ = ObActionFlag::OP_ROW_EXIST;
         for (int64_t i = 0; OB_SUCC(ret) && i < data_desc.row_column_count_; i++) {
           ObColDesc col_desc;
-          col_desc.col_id_ = data_desc.column_ids_.get_buf()[i];
-          col_desc.col_order_ = data_desc.column_orders_.get_buf()[i];
-          col_desc.col_type_ = data_desc.column_types_.get_buf()[i];
+          col_desc.col_id_ = data_desc.column_ids_[i];
+          col_desc.col_order_ = data_desc.column_orders_[i];
+          col_desc.col_type_ = data_desc.column_types_[i];
           if (OB_FAIL(col_descs.push_back(col_desc))) {
             LOG_WARN("failed to push back col desc", K(ret));
           } else if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {

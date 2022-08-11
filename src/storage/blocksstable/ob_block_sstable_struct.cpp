@@ -2607,8 +2607,6 @@ int write_compact_rowkey(ObBufferWriter& buffer_writer, const common::ObObj* end
   if (NULL == endkey || count <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments.", KP(endkey), K(count), K(ret));
-  } else if (OB_FAIL(writer.init())) {
-    LOG_WARN("init writer failed.", K(ret));
   } else if (OB_FAIL(writer.write(row, buffer_writer.data(), buffer_writer.capacity(), row_store_type, pos))) {
     LOG_WARN(" write_compact_rowkey failed.", K(ret), K(buffer_writer.capacity()), K(pos));
   } else if (OB_FAIL(buffer_writer.set_pos(pos))) {
