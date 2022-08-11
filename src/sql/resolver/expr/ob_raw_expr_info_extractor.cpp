@@ -515,7 +515,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
     } else if (T_FUN_NORMAL_UDF == expr.get_expr_type()
                || T_FUN_AGG_UDF == expr.get_expr_type()) {
       /*
-       * it seems we have no chioce but to set the udf uncalculable.
+       * it seems we have no choice but to set the udf uncalculable.
        * we can not say a udf expr is const or not util we finish the xxx_init() function.
        * but we do the xxx_init() at the expr deduce type stage which was done after we
        * extractor info from expr.
