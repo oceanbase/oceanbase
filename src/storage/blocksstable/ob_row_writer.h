@@ -103,7 +103,6 @@ private:
   int8_t column_indexs_8_[common::OB_ROW_MAX_COLUMNS_COUNT];
   int16_t column_indexs_16_[common::OB_ROW_MAX_COLUMNS_COUNT];
   int32_t column_indexs_32_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObRowWriter);
 };
 
