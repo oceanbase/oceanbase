@@ -415,7 +415,6 @@ int ObLobMergeWriter::write_lob_obj(
 int ObLobMergeWriter::copy_row_(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
-  int64_t request_count = data_store_desc_->row_column_count_;
   if OB_FAIL(buffer_.reserve(row.row_val_.count_)) {
     STORAGE_LOG(WARN, "fail to reserve memory for buffer_, ", K(ret));
   } else {

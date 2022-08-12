@@ -77,7 +77,7 @@ private:
   common::ObArenaAllocator allocator_;
   bool is_inited_;
   storage::ObStoreRow result_row_;
-  storage::ObRowBuffer<ObObj> buffer_;
+  storage::ObDynamicBuffer<ObObj> buffer_;
 };
 
 }  // end namespace blocksstable

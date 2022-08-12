@@ -1574,16 +1574,16 @@ struct ObRowStat {
 };
 
 template <typename T, int64_t LOCAL_BUFFER_SIZE=64>
-class ObRowBuffer {
+class ObDynamicBuffer {
 public:
-  ObRowBuffer()
+  ObDynamicBuffer()
     : data_(NULL),
       allocator_(NULL),
       capacity_(0),
       is_inited_(false)
   {}
 
-  virtual ~ObRowBuffer()
+  virtual ~ObDynamicBuffer()
   {
     reset();
   }
@@ -1628,7 +1628,7 @@ public:
       STORAGE_LOG(WARN, "invalid arguments", K(ret));
     } else if (capacity > capacity_) {
       int64_t new_size = capacity * sizeof(T);
-      T* new_data = reinterpret_cast<T*>(allocator_->alloc(new_size));
+      void* new_data = allocator_->alloc(new_size);
       if (OB_ISNULL(new_data)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc new_data", K(ret));

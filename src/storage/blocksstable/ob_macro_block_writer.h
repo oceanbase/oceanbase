@@ -207,8 +207,8 @@ private:
   ObColumnMap column_map_;
   ObColumnMap index_column_map_;
   blocksstable::ObMacroBlockReader macro_reader_;
-  storage::ObRowBuffer<ObObj> obj_buf_;          // for reader to get row
-  storage::ObRowBuffer<ObObj> checker_obj_buf_;  // for calc or varify checksum, can not use same buf of data row
+  storage::ObDynamicBuffer<ObObj> obj_buf_;          // for reader to get row
+  storage::ObDynamicBuffer<ObObj> checker_obj_buf_;  // for calc or varify checksum, can not use same buf of data row
   ObMicroBlockReader check_flat_reader_; 
   ObSparseMicroBlockReader check_sparse_reader_;
   common::ObArray<uint32_t> micro_rowkey_hashs_;

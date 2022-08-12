@@ -214,7 +214,7 @@ int ObDataStoreDesc::init(const ObTableSchema& table_schema, const int64_t data_
           STORAGE_LOG(WARN, "fail to reserve memory for column_orders_, ", K(ret));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
-            if (i >= common::OB_MAX_COLUMN_NUMBER) {
+            if (i >= row_column_count_) {
               ret = OB_SIZE_OVERFLOW;
               STORAGE_LOG(WARN, "column type&id list overflow.", K(ret));
             } else {
