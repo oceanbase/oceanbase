@@ -67,6 +67,8 @@ public:
   bool is_empty() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
+  static const int64_t MAX_PAGE_NUMS = 252; // 2^MAX_ORDER - 2^MIN_ORDER
+
 private:
   void free_align(const int32_t start_page_id, const int32_t page_nums, ObTmpFileArea*& area);
   ObTmpFileArea* find_buddy(const int32_t page_nums, const int32_t start_page_id);
@@ -74,6 +76,7 @@ private:
   {
     return std::pow(2, ObTmpFilePageBuddy::MAX_ORDER) - 1;
   }
+  static const int MIN_ORDER = 2;
   static const int MAX_ORDER = 8;
   ObTmpFileArea* free_area_[ObTmpFilePageBuddy::MAX_ORDER];
   int64_t max_cont_page_nums_;
@@ -295,8 +298,8 @@ private:
   static constexpr double DEFAULT_PAGE_IO_MERGE_RATIO = 0.5;
 
   ObTmpTenantMacroBlockManager tmp_block_manager_;
-  ObTmpTenantMemBlockManager tmp_mem_block_manager_;
   ObTmpPageCache* page_cache_;
+  ObTmpTenantMemBlockManager tmp_mem_block_manager_;
   ObStorageFileHandle file_handle_;
   common::ObConcurrentFIFOAllocator allocator_;
   common::SpinRWLock lock_;
@@ -325,11 +328,11 @@ public:
 
   OB_INLINE int64_t get_mblk_page_nums() const
   {
-    return OB_FILE_SYSTEM.get_macro_block_size() / ObTmpMacroBlock::get_default_page_size() - 1;
+    return OB_FILE_SYSTEM.get_macro_block_size() / ObTmpMacroBlock::get_default_page_size() - 4;
   }
   OB_INLINE int64_t get_block_size() const
   {
-    return OB_FILE_SYSTEM.get_macro_block_size() - ObTmpMacroBlock::get_default_page_size();
+    return OB_FILE_SYSTEM.get_macro_block_size() - 4 * ObTmpMacroBlock::get_default_page_size();
   }
 
 private:

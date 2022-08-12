@@ -39,13 +39,13 @@ int ObTmpFilePageBuddy::init(common::ObIAllocator& allocator)
     STORAGE_LOG(WARN, "ObTmpFilePageBuddy has not been inited", K(ret));
   } else {
     allocator_ = &allocator;
-    buf_ = reinterpret_cast<ObTmpFileArea*>(
-        allocator_->alloc(sizeof(ObTmpFileArea) * std::pow(2, ObTmpFilePageBuddy::MAX_ORDER) - 1));
+    buf_ = reinterpret_cast<ObTmpFileArea *>(
+        allocator_->alloc(sizeof(ObTmpFileArea) * (std::pow(2, MAX_ORDER) - std::pow(2, MIN_ORDER))));
     if (NULL == buf_) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc a buf", K(ret));
     } else {
-      max_cont_page_nums_ = std::pow(2, ObTmpFilePageBuddy::MAX_ORDER - 1);
+      max_cont_page_nums_ = std::pow(2, MAX_ORDER - 1);
       /**
        *  page buddy free_list for a new block:
        *  -------------- --------- --------- --------- --------- --------- --------- --------- -------
@@ -55,8 +55,11 @@ int ObTmpFilePageBuddy::init(common::ObIAllocator& allocator)
        *  -------------- --------- --------- --------- --------- --------- --------- --------- -------
        */
       int64_t nums = max_cont_page_nums_;
-      for (int32_t i = MAX_ORDER - 1; i >= 0; --i) {
-        char* buf = reinterpret_cast<char*>(&(buf_[start_id]));
+      for (int32_t i = MIN_ORDER - 1; i >= 0; --i) {
+        free_area_[i] = NULL;
+      }
+      for (int32_t i = MAX_ORDER - 1; i >= MIN_ORDER; --i) {
+        char *buf = reinterpret_cast<char *>(&(buf_[start_id]));
         free_area_[i] = new (buf) ObTmpFileArea(start_id, nums);
         start_id += nums;
         nums /= 2;
@@ -89,13 +92,14 @@ int ObTmpFilePageBuddy::alloc_all_pages()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFilePageBuddy has not been inited", K(ret));
   } else if (is_empty()) {
-    for (int32_t i = 0; i < ObTmpFilePageBuddy::MAX_ORDER; ++i) {
+    for (int32_t i = 0; i < MAX_ORDER; ++i) {
       while (NULL != free_area_[i]) {
         tmp = free_area_[i];
         free_area_[i] = tmp->next_;
         tmp->~ObTmpFileArea();
       }
     }
+
     max_cont_page_nums_ = 0;
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -118,7 +122,7 @@ int ObTmpFilePageBuddy::alloc(const int32_t page_nums,
   } else {
     int32_t index = std::ceil(std::log(page_nums) / std::log(2));
     bool is_alloced = false;
-    for (int32_t i = index; i < ObTmpFilePageBuddy::MAX_ORDER && !is_alloced; ++i) {
+    for (int32_t i = index; i < MAX_ORDER && !is_alloced; ++i) {
       if (NULL != free_area_[i]) {
         int64_t num = i - index;
         ObTmpFileArea* tmp = free_area_[i];
@@ -185,7 +189,13 @@ void ObTmpFilePageBuddy::free_align(const int32_t start_page_id, const int32_t p
 bool ObTmpFilePageBuddy::is_empty() const
 {
   bool is_empty = true;
-  for (int32_t i = 0; i < ObTmpFilePageBuddy::MAX_ORDER; ++i) {
+  for (int32_t i = 0; i < MIN_ORDER && is_empty; ++i) {
+    if (NULL != free_area_[i]) {
+      is_empty = false;
+      break;
+    }
+  }
+  for (int32_t i = MIN_ORDER; i < MAX_ORDER && is_empty; ++i) {
     if (NULL == free_area_[i]) {
       is_empty = false;
       break;
@@ -200,7 +210,7 @@ int64_t ObTmpFilePageBuddy::to_string(char* buf, const int64_t buf_len) const
   bool first = true;
   ObTmpFileArea* area = NULL;
   common::databuff_printf(buf, buf_len, pos, "{");
-  for (int32_t i = 0; i < ObTmpFilePageBuddy::MAX_ORDER; ++i) {
+  for (int32_t i = 0; i < MAX_ORDER; ++i) {
     area = free_area_[i];
     if (NULL != area) {
       common::databuff_print_kv(buf, buf_len, pos, "page_nums", static_cast<int64_t>(std::pow(2, i)));
@@ -231,45 +241,51 @@ int64_t ObTmpFilePageBuddy::to_string(char* buf, const int64_t buf_len) const
 
 void ObTmpFilePageBuddy::free(const int32_t start_page_id, const int32_t page_nums)
 {
-  int32_t start_id = start_page_id;
-  int32_t nums = page_nums;
-  int32_t length = 0;
-  while (nums > 0) {
-    /**
-     * PURPOSE: align free area into power of 2.
-     *
-     *   The probable value of alloc_start_id:
-     *    page nums                  start page id
-     *       128       0 ---------------- 128 ------------------- 256
-     *       64        0 ------ 64 ------ 128 ------- 192 ------- 256
-     *       32        0 - 32 - 64 - 96 - 128 - 160 - 192 - 224 - 256
-     *       ...                          ...
-     *   So, the maximum number of consecutive pages from a start_page_id is the
-     *   gcd(greatest common divisor) between it and 512, except 0. The maximum
-     *   consecutive page nums of 0 is 256.
-     *
-     *   The layout of free area in alocated area :
-     *        |<---------------alloc_page_nums--------------->|
-     *                             <---- |<--free_page_nums-->|
-     *        |==========================|====================|
-     *   alloc_start                free_page_id       alloc_end
-     *
-     *   So, free_end always equal to alloc_end.
-     *
-     *   Based on two observations above, the algorithm is designed as follows:
-     */
-    length = 2;
-    while (0 == start_id % length && length <= nums) {
-      length *= 2;
-    }
-    length = std::min(length / 2, nums);
+  if (OB_UNLIKELY(start_page_id + page_nums >= std::pow(2, MAX_ORDER))) {
+    STORAGE_LOG(ERROR, "page id more than max numbers in block", K(start_page_id), K(page_nums));
+    ob_abort();
+  } else {
+    int32_t start_id = start_page_id;
+    int32_t nums = page_nums;
+    int32_t length = 0;
+    while (nums > 0) {
+      /**
+       * PURPOSE: align free area into power of 2.
+       *
+       *   The probable value of alloc_start_id:
+       *    page nums                  start page id
+       *       128       0 ---------------- 128 ------------------- 256
+       *       64        0 ------ 64 ------ 128 ------- 192 ------- 256
+       *       32        0 - 32 - 64 - 96 - 128 - 160 - 192 - 224 - 256
+       *       ...                          ...
+       *   So, the maximum number of consecutive pages from a start_page_id is the
+       *   gcd(greatest common divisor) between it and 512, except 0. The maximum
+       *   consecutive page nums of 0 is 256.
+       *
+       *   The layout of free area in alocated area :
+       *        |<---------------alloc_page_nums--------------->|
+       *                             <---- |<--free_page_nums-->|
+       *        |==========================|====================|
+       *   alloc_start                free_page_id       alloc_end
+       *
+       *   So, free_end always equal to alloc_end.
+       *
+       *   Based on two observations above, the algorithm is designed as follows:
+       */
+      length = 2;
+      while (0 == start_id % length && length <= nums) {
+        length *= 2;
+      }
+      length = std::min(length / 2, nums);
 
-    char* buf = reinterpret_cast<char*>(&(buf_[start_id]));
-    ObTmpFileArea* area = new (buf) ObTmpFileArea(start_id, length);
-    free_align(area->start_page_id_, area->page_nums_, area);
-    start_id += length;
-    nums -= length;
+      char* buf = reinterpret_cast<char*>(&(buf_[start_id]));
+      ObTmpFileArea* area = new (buf) ObTmpFileArea(start_id, length);
+      free_align(area->start_page_id_, area->page_nums_, area);
+      start_id += length;
+      nums -= length;
+    }
   }
+
 }
 
 ObTmpFileArea* ObTmpFilePageBuddy::find_buddy(const int32_t page_nums, const int32_t start_page_id)
@@ -704,7 +720,7 @@ int64_t ObTmpTenantMacroBlockManager::get_next_blk_id()
 }
 
 ObTmpTenantFileStore::ObTmpTenantFileStore()
-    : tmp_block_manager_(), tmp_mem_block_manager_(), page_cache_(NULL), file_handle_(), allocator_(), is_inited_(false)
+    : tmp_block_manager_(), page_cache_(NULL), tmp_mem_block_manager_(), file_handle_(), allocator_(), is_inited_(false)
 {}
 
 ObTmpTenantFileStore::~ObTmpTenantFileStore()
@@ -1036,7 +1052,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io
   int64_t remain_size = io_info.size_;
   int64_t size = std::min(ObTmpMacroBlock::get_default_page_size() - offset, remain_size);
   int32_t page_nums = 0;
-  common::ObSEArray<ObTmpPageIOInfo, 255> page_io_infos;
+  common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS> page_io_infos;
   do {
     ObTmpPageCacheKey key(io_info.block_id_, page_start_id, io_info.tenant_id_);
     ObTmpPageValueHandle p_handle;

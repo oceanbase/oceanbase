@@ -150,12 +150,12 @@ int ObTmpPageCache::prefetch(
     callback.offset_ = info.offset_;
     callback.buf_size_ = info.size_;
     callback.allocator_ = &allocator_;
-    void* buf = allocator_.alloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, 255>));
+    void* buf = allocator_.alloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>));
     if (NULL == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc a buf", K(ret), K(info));
     } else {
-      callback.page_io_infos_ = new (buf) common::ObSEArray<ObTmpPageIOInfo, 255>();
+      callback.page_io_infos_ = new (buf) common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>();
       callback.page_io_infos_->assign(page_io_infos);
       if (OB_FAIL(read_io(info, callback, mb_handle))) {
         if (mb_handle.get_io_handle().is_empty()) {
@@ -798,7 +798,7 @@ int ObTmpTenantMemBlockManager::free_extent(const int64_t free_page_nums, const 
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else if (free_page_nums < 0 || free_page_nums > mblk_page_nums_ || NULL == t_mblk) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(free_page_nums), K(*t_mblk));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(free_page_nums), KPC(t_mblk));
   } else if (OB_FAIL(refresh_dir_to_blk_map(t_mblk->get_dir_id(), t_mblk))) {
     STORAGE_LOG(WARN, "fail to refresh dir_to_blk_map", K(ret), K(*t_mblk));
   } else {

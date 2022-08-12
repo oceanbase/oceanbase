@@ -32,7 +32,7 @@ public:
   static const int64_t SCANNER_CAPACITY = 256L << 10;  // 256K
 
   // adapt to block size in tmp file.
-  static const int64_t SCANNER_MEM_LIMIT = (8 << 20) - (32 << 10);  // 8MB - 32K
+  static const int64_t SCANNER_MEM_LIMIT = (8 << 20) - (128 << 10);  // 8MB - 128K
 
   ObIntermResultPool();
   virtual ~ObIntermResultPool();
