@@ -1,0 +1,4787 @@
+result_format: 4
+set @@ob_enable_plan_cache = 0;
+// sleep 2
+drop table if exists t1, t2;
+create table t1(col_int int, col_decimal decimal, col_varchar varchar(100),
+                col_date date, col_datetime datetime, col_timestamp timestamp,
+                col_null int);
+insert into t1 values(123, 123.123, 'invalid char', '2020-01-01 12:12:12', '0000-00-00 00:00:00.000', '2020-01-01 12:12:12.1234', null);
+insert into t1 values(123, 123.123, '2020-01-01', '2019-01-01', '0000-00-00', '2020-01-01', null);
+
+// to check type
+create table t2 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+insert into t2 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+insert into t2 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+
+// sleep 2
+select col_int, to_days(col_int) from t1;
++---------+------------------+
+| col_int | to_days(col_int) |
++---------+------------------+
+|     123 |           730507 |
+|     123 |           730507 |
++---------+------------------+
+select col_decimal, to_days(col_decimal) from t1;
++-------------+----------------------+
+| col_decimal | to_days(col_decimal) |
++-------------+----------------------+
+|         123 |               730507 |
+|         123 |               730507 |
++-------------+----------------------+
+select col_varchar, to_days(col_varchar) from t1;
++--------------+----------------------+
+| col_varchar  | to_days(col_varchar) |
++--------------+----------------------+
+| invalid char |                 NULL |
+| 2020-01-01   |               737790 |
++--------------+----------------------+
+select col_date, to_days(col_date) from t1;
++------------+-------------------+
+| col_date   | to_days(col_date) |
++------------+-------------------+
+| 2020-01-01 |            737790 |
+| 2019-01-01 |            737425 |
++------------+-------------------+
+select col_datetime, to_days(col_datetime) from t1;
++---------------------+-----------------------+
+| col_datetime        | to_days(col_datetime) |
++---------------------+-----------------------+
+| 0000-00-00 00:00:00 |                  NULL |
+| 0000-00-00 00:00:00 |                  NULL |
++---------------------+-----------------------+
+select col_timestamp, to_days(col_timestamp) from t1;
++---------------------+------------------------+
+| col_timestamp       | to_days(col_timestamp) |
++---------------------+------------------------+
+| 2020-01-01 12:12:12 |                 737790 |
+| 2020-01-01 00:00:00 |                 737790 |
++---------------------+------------------------+
+select to_days(col_null) from t1;
++-------------------+
+| to_days(col_null) |
++-------------------+
+|              NULL |
+|              NULL |
++-------------------+
+
+select col_int, time_to_usec(col_int) from t1;
+ERROR 42000: Invalid argument for time_to_usec()
+select col_decimal, time_to_usec(col_decimal) from t1;
+ERROR 42000: Invalid argument for time_to_usec()
+select col_varchar, time_to_usec(col_varchar) from t1;
++--------------+---------------------------+
+| col_varchar  | time_to_usec(col_varchar) |
++--------------+---------------------------+
+| invalid char |      -9223372022400000000 |
+| 2020-01-01   |          1577808000000000 |
++--------------+---------------------------+
+select col_date, time_to_usec(col_date) from t1;
++------------+------------------------+
+| col_date   | time_to_usec(col_date) |
++------------+------------------------+
+| 2020-01-01 |       1577808000000000 |
+| 2019-01-01 |       1546272000000000 |
++------------+------------------------+
+select col_datetime, time_to_usec(col_datetime) from t1;
++---------------------+----------------------------+
+| col_datetime        | time_to_usec(col_datetime) |
++---------------------+----------------------------+
+| 0000-00-00 00:00:00 |       -9223372022400000000 |
+| 0000-00-00 00:00:00 |       -9223372022400000000 |
++---------------------+----------------------------+
+select col_timestamp, time_to_usec(col_timestamp) from t1;
++---------------------+-----------------------------+
+| col_timestamp       | time_to_usec(col_timestamp) |
++---------------------+-----------------------------+
+| 2020-01-01 12:12:12 |            1577851932000000 |
+| 2020-01-01 00:00:00 |            1577808000000000 |
++---------------------+-----------------------------+
+select time_to_usec(col_null) from t1;
+ERROR 42000: Invalid argument for time_to_usec()
+
+select col_int, usec_to_time(col_int) from t1;
++---------+----------------------------+
+| col_int | usec_to_time(col_int)      |
++---------+----------------------------+
+|     123 | 1970-01-01 08:00:00.000123 |
+|     123 | 1970-01-01 08:00:00.000123 |
++---------+----------------------------+
+select col_decimal, usec_to_time(col_decimal) from t1;
++-------------+----------------------------+
+| col_decimal | usec_to_time(col_decimal)  |
++-------------+----------------------------+
+|         123 | 1970-01-01 08:00:00.000123 |
+|         123 | 1970-01-01 08:00:00.000123 |
++-------------+----------------------------+
+select col_varchar, usec_to_time(col_varchar) from t1;
++--------------+----------------------------+
+| col_varchar  | usec_to_time(col_varchar)  |
++--------------+----------------------------+
+| invalid char | 1970-01-01 08:00:00.000000 |
+| 2020-01-01   | 1970-01-01 08:00:00.002020 |
++--------------+----------------------------+
+select col_date, usec_to_time(col_date) from t1;
++------------+----------------------------+
+| col_date   | usec_to_time(col_date)     |
++------------+----------------------------+
+| 2020-01-01 | 1970-01-01 08:00:20.200101 |
+| 2019-01-01 | 1970-01-01 08:00:20.190101 |
++------------+----------------------------+
+select col_datetime, usec_to_time(col_datetime) from t1;
++---------------------+----------------------------+
+| col_datetime        | usec_to_time(col_datetime) |
++---------------------+----------------------------+
+| 0000-00-00 00:00:00 | 1970-01-01 08:00:00.000000 |
+| 0000-00-00 00:00:00 | 1970-01-01 08:00:00.000000 |
++---------------------+----------------------------+
+select col_timestamp, usec_to_time(col_timestamp) from t1;
++---------------------+-----------------------------+
+| col_timestamp       | usec_to_time(col_timestamp) |
++---------------------+-----------------------------+
+| 2020-01-01 12:12:12 | 1970-08-23 03:08:21.121212  |
+| 2020-01-01 00:00:00 | 1970-08-23 03:08:21.000000  |
++---------------------+-----------------------------+
+select usec_to_time(col_null) from t1;
++------------------------+
+| usec_to_time(col_null) |
++------------------------+
+| NULL                   |
+| NULL                   |
++------------------------+
+
+select str_to_date(null, null);
++-------------------------+
+| str_to_date(null, null) |
++-------------------------+
+| NULL                    |
++-------------------------+
+select str_to_date('2019-01-01 10:10:10', null);
++------------------------------------------+
+| str_to_date('2019-01-01 10:10:10', null) |
++------------------------------------------+
+| NULL                                     |
++------------------------------------------+
+select str_to_date(null, '%Y-%c-%d %T');
++----------------------------------+
+| str_to_date(null, '%Y-%c-%d %T') |
++----------------------------------+
+| NULL                             |
++----------------------------------+
+select str_to_date('2019-01-01 10:10:10', '%Y-%c-%d %T');
++---------------------------------------------------+
+| str_to_date('2019-01-01 10:10:10', '%Y-%c-%d %T') |
++---------------------------------------------------+
+| 2019-01-01 10:10:10                               |
++---------------------------------------------------+
+select str_to_date('invalid char', '%Y-%c-%d %T');
++--------------------------------------------+
+| str_to_date('invalid char', '%Y-%c-%d %T') |
++--------------------------------------------+
+| NULL                                       |
++--------------------------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: 'invalid char' for function str_to_date
+select str_to_date('2019-01-01 10:10:10', 'invalid char');
++----------------------------------------------------+
+| str_to_date('2019-01-01 10:10:10', 'invalid char') |
++----------------------------------------------------+
+| NULL                                               |
++----------------------------------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-01-01 10:10:10' for function str_to_date
+
+select to_days(c1), time_to_usec(c1), usec_to_time(c1) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c1, c1) from t2;
++----------------------------+
+| str_to_date(c1, c1)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c2) from t2;
++---------------------+
+| str_to_date(c1, c2) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c3) from t2;
++----------------------------+
+| str_to_date(c1, c3)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c4) from t2;
++---------------------+
+| str_to_date(c1, c4) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c5) from t2;
++----------------------------+
+| str_to_date(c1, c5)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c6) from t2;
++---------------------+
+| str_to_date(c1, c6) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c7) from t2;
++----------------------------+
+| str_to_date(c1, c7)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c8) from t2;
++---------------------+
+| str_to_date(c1, c8) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c9) from t2;
++----------------------------+
+| str_to_date(c1, c9)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c10) from t2;
++----------------------+
+| str_to_date(c1, c10) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c11) from t2;
++----------------------------+
+| str_to_date(c1, c11)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c1, c12) from t2;
++----------------------+
+| str_to_date(c1, c12) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c13) from t2;
++----------------------+
+| str_to_date(c1, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c14) from t2;
++----------------------+
+| str_to_date(c1, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c15) from t2;
++----------------------+
+| str_to_date(c1, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c16) from t2;
++----------------------+
+| str_to_date(c1, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c17) from t2;
++----------------------+
+| str_to_date(c1, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c18) from t2;
++----------------------+
+| str_to_date(c1, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c19) from t2;
++----------------------+
+| str_to_date(c1, c19) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c20) from t2;
++----------------------+
+| str_to_date(c1, c20) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c21) from t2;
++----------------------+
+| str_to_date(c1, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c1, c22) from t2;
++----------------------------+
+| str_to_date(c1, c22)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c2), time_to_usec(c2), usec_to_time(c2) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c2, c1) from t2;
++---------------------+
+| str_to_date(c2, c1) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c2) from t2;
++----------------------------+
+| str_to_date(c2, c2)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c3) from t2;
++---------------------+
+| str_to_date(c2, c3) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c4) from t2;
++----------------------------+
+| str_to_date(c2, c4)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c5) from t2;
++---------------------+
+| str_to_date(c2, c5) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c6) from t2;
++----------------------------+
+| str_to_date(c2, c6)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c7) from t2;
++---------------------+
+| str_to_date(c2, c7) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c8) from t2;
++----------------------------+
+| str_to_date(c2, c8)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c9) from t2;
++---------------------+
+| str_to_date(c2, c9) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c10) from t2;
++----------------------------+
+| str_to_date(c2, c10)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c11) from t2;
++----------------------+
+| str_to_date(c2, c11) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c12) from t2;
++----------------------------+
+| str_to_date(c2, c12)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c13) from t2;
++----------------------+
+| str_to_date(c2, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c14) from t2;
++----------------------+
+| str_to_date(c2, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c15) from t2;
++----------------------+
+| str_to_date(c2, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c16) from t2;
++----------------------+
+| str_to_date(c2, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c17) from t2;
++----------------------+
+| str_to_date(c2, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c18) from t2;
++----------------------+
+| str_to_date(c2, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c19) from t2;
++----------------------------+
+| str_to_date(c2, c19)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c20) from t2;
++----------------------------+
+| str_to_date(c2, c20)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c2, c21) from t2;
++----------------------+
+| str_to_date(c2, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c2, c22) from t2;
++----------------------+
+| str_to_date(c2, c22) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c3), time_to_usec(c3), usec_to_time(c3) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c3, c1) from t2;
++----------------------------+
+| str_to_date(c3, c1)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c2) from t2;
++---------------------+
+| str_to_date(c3, c2) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c3) from t2;
++----------------------------+
+| str_to_date(c3, c3)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c4) from t2;
++---------------------+
+| str_to_date(c3, c4) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c5) from t2;
++----------------------------+
+| str_to_date(c3, c5)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c6) from t2;
++---------------------+
+| str_to_date(c3, c6) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c7) from t2;
++----------------------------+
+| str_to_date(c3, c7)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c8) from t2;
++---------------------+
+| str_to_date(c3, c8) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c9) from t2;
++----------------------------+
+| str_to_date(c3, c9)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c10) from t2;
++----------------------+
+| str_to_date(c3, c10) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c11) from t2;
++----------------------------+
+| str_to_date(c3, c11)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c3, c12) from t2;
++----------------------+
+| str_to_date(c3, c12) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c13) from t2;
++----------------------+
+| str_to_date(c3, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c14) from t2;
++----------------------+
+| str_to_date(c3, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c15) from t2;
++----------------------+
+| str_to_date(c3, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c16) from t2;
++----------------------+
+| str_to_date(c3, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c17) from t2;
++----------------------+
+| str_to_date(c3, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c18) from t2;
++----------------------+
+| str_to_date(c3, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c19) from t2;
++----------------------+
+| str_to_date(c3, c19) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c20) from t2;
++----------------------+
+| str_to_date(c3, c20) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c21) from t2;
++----------------------+
+| str_to_date(c3, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c3, c22) from t2;
++----------------------------+
+| str_to_date(c3, c22)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c4), time_to_usec(c4), usec_to_time(c4) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c4, c1) from t2;
++---------------------+
+| str_to_date(c4, c1) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c2) from t2;
++----------------------------+
+| str_to_date(c4, c2)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c3) from t2;
++---------------------+
+| str_to_date(c4, c3) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c4) from t2;
++----------------------------+
+| str_to_date(c4, c4)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c5) from t2;
++---------------------+
+| str_to_date(c4, c5) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c6) from t2;
++----------------------------+
+| str_to_date(c4, c6)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c7) from t2;
++---------------------+
+| str_to_date(c4, c7) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c8) from t2;
++----------------------------+
+| str_to_date(c4, c8)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c9) from t2;
++---------------------+
+| str_to_date(c4, c9) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c10) from t2;
++----------------------------+
+| str_to_date(c4, c10)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c11) from t2;
++----------------------+
+| str_to_date(c4, c11) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c12) from t2;
++----------------------------+
+| str_to_date(c4, c12)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c13) from t2;
++----------------------+
+| str_to_date(c4, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c14) from t2;
++----------------------+
+| str_to_date(c4, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c15) from t2;
++----------------------+
+| str_to_date(c4, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c16) from t2;
++----------------------+
+| str_to_date(c4, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c17) from t2;
++----------------------+
+| str_to_date(c4, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c18) from t2;
++----------------------+
+| str_to_date(c4, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c19) from t2;
++----------------------------+
+| str_to_date(c4, c19)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c20) from t2;
++----------------------------+
+| str_to_date(c4, c20)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c4, c21) from t2;
++----------------------+
+| str_to_date(c4, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c4, c22) from t2;
++----------------------+
+| str_to_date(c4, c22) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c5), time_to_usec(c5), usec_to_time(c5) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c5, c1) from t2;
++----------------------------+
+| str_to_date(c5, c1)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c2) from t2;
++---------------------+
+| str_to_date(c5, c2) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c3) from t2;
++----------------------------+
+| str_to_date(c5, c3)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c4) from t2;
++---------------------+
+| str_to_date(c5, c4) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c5) from t2;
++----------------------------+
+| str_to_date(c5, c5)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c6) from t2;
++---------------------+
+| str_to_date(c5, c6) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c7) from t2;
++----------------------------+
+| str_to_date(c5, c7)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c8) from t2;
++---------------------+
+| str_to_date(c5, c8) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c9) from t2;
++----------------------------+
+| str_to_date(c5, c9)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c10) from t2;
++----------------------+
+| str_to_date(c5, c10) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c11) from t2;
++----------------------------+
+| str_to_date(c5, c11)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c5, c12) from t2;
++----------------------+
+| str_to_date(c5, c12) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c13) from t2;
++----------------------+
+| str_to_date(c5, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c14) from t2;
++----------------------+
+| str_to_date(c5, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c15) from t2;
++----------------------+
+| str_to_date(c5, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c16) from t2;
++----------------------+
+| str_to_date(c5, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c17) from t2;
++----------------------+
+| str_to_date(c5, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c18) from t2;
++----------------------+
+| str_to_date(c5, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c19) from t2;
++----------------------+
+| str_to_date(c5, c19) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c20) from t2;
++----------------------+
+| str_to_date(c5, c20) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c21) from t2;
++----------------------+
+| str_to_date(c5, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c5, c22) from t2;
++----------------------------+
+| str_to_date(c5, c22)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c6), time_to_usec(c6), usec_to_time(c6) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c6, c1) from t2;
++---------------------+
+| str_to_date(c6, c1) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c2) from t2;
++----------------------------+
+| str_to_date(c6, c2)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c3) from t2;
++---------------------+
+| str_to_date(c6, c3) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c4) from t2;
++----------------------------+
+| str_to_date(c6, c4)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c5) from t2;
++---------------------+
+| str_to_date(c6, c5) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c6) from t2;
++----------------------------+
+| str_to_date(c6, c6)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c7) from t2;
++---------------------+
+| str_to_date(c6, c7) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c8) from t2;
++----------------------------+
+| str_to_date(c6, c8)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c9) from t2;
++---------------------+
+| str_to_date(c6, c9) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c10) from t2;
++----------------------------+
+| str_to_date(c6, c10)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c11) from t2;
++----------------------+
+| str_to_date(c6, c11) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c12) from t2;
++----------------------------+
+| str_to_date(c6, c12)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c13) from t2;
++----------------------+
+| str_to_date(c6, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c14) from t2;
++----------------------+
+| str_to_date(c6, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c15) from t2;
++----------------------+
+| str_to_date(c6, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c16) from t2;
++----------------------+
+| str_to_date(c6, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c17) from t2;
++----------------------+
+| str_to_date(c6, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c18) from t2;
++----------------------+
+| str_to_date(c6, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c19) from t2;
++----------------------------+
+| str_to_date(c6, c19)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c20) from t2;
++----------------------------+
+| str_to_date(c6, c20)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c6, c21) from t2;
++----------------------+
+| str_to_date(c6, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c6, c22) from t2;
++----------------------+
+| str_to_date(c6, c22) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c7), time_to_usec(c7), usec_to_time(c7) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c7, c1) from t2;
++----------------------------+
+| str_to_date(c7, c1)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c2) from t2;
++---------------------+
+| str_to_date(c7, c2) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c3) from t2;
++----------------------------+
+| str_to_date(c7, c3)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c4) from t2;
++---------------------+
+| str_to_date(c7, c4) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c5) from t2;
++----------------------------+
+| str_to_date(c7, c5)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c6) from t2;
++---------------------+
+| str_to_date(c7, c6) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c7) from t2;
++----------------------------+
+| str_to_date(c7, c7)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c8) from t2;
++---------------------+
+| str_to_date(c7, c8) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c9) from t2;
++----------------------------+
+| str_to_date(c7, c9)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c10) from t2;
++----------------------+
+| str_to_date(c7, c10) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c11) from t2;
++----------------------------+
+| str_to_date(c7, c11)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c7, c12) from t2;
++----------------------+
+| str_to_date(c7, c12) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c13) from t2;
++----------------------+
+| str_to_date(c7, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c14) from t2;
++----------------------+
+| str_to_date(c7, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c15) from t2;
++----------------------+
+| str_to_date(c7, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c16) from t2;
++----------------------+
+| str_to_date(c7, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c17) from t2;
++----------------------+
+| str_to_date(c7, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c18) from t2;
++----------------------+
+| str_to_date(c7, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c19) from t2;
++----------------------+
+| str_to_date(c7, c19) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c20) from t2;
++----------------------+
+| str_to_date(c7, c20) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c21) from t2;
++----------------------+
+| str_to_date(c7, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c7, c22) from t2;
++----------------------------+
+| str_to_date(c7, c22)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c8), time_to_usec(c8), usec_to_time(c8) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c8, c1) from t2;
++---------------------+
+| str_to_date(c8, c1) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c2) from t2;
++----------------------------+
+| str_to_date(c8, c2)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c3) from t2;
++---------------------+
+| str_to_date(c8, c3) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c4) from t2;
++----------------------------+
+| str_to_date(c8, c4)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c5) from t2;
++---------------------+
+| str_to_date(c8, c5) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c6) from t2;
++----------------------------+
+| str_to_date(c8, c6)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c7) from t2;
++---------------------+
+| str_to_date(c8, c7) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c8) from t2;
++----------------------------+
+| str_to_date(c8, c8)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c9) from t2;
++---------------------+
+| str_to_date(c8, c9) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c10) from t2;
++----------------------------+
+| str_to_date(c8, c10)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c11) from t2;
++----------------------+
+| str_to_date(c8, c11) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c12) from t2;
++----------------------------+
+| str_to_date(c8, c12)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c13) from t2;
++----------------------+
+| str_to_date(c8, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c14) from t2;
++----------------------+
+| str_to_date(c8, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c15) from t2;
++----------------------+
+| str_to_date(c8, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c16) from t2;
++----------------------+
+| str_to_date(c8, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c17) from t2;
++----------------------+
+| str_to_date(c8, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c18) from t2;
++----------------------+
+| str_to_date(c8, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c19) from t2;
++----------------------------+
+| str_to_date(c8, c19)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c20) from t2;
++----------------------------+
+| str_to_date(c8, c20)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c8, c21) from t2;
++----------------------+
+| str_to_date(c8, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c8, c22) from t2;
++----------------------+
+| str_to_date(c8, c22) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c9), time_to_usec(c9), usec_to_time(c9) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c9, c1) from t2;
++----------------------------+
+| str_to_date(c9, c1)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c2) from t2;
++---------------------+
+| str_to_date(c9, c2) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c3) from t2;
++----------------------------+
+| str_to_date(c9, c3)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c4) from t2;
++---------------------+
+| str_to_date(c9, c4) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c5) from t2;
++----------------------------+
+| str_to_date(c9, c5)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c6) from t2;
++---------------------+
+| str_to_date(c9, c6) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c7) from t2;
++----------------------------+
+| str_to_date(c9, c7)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c8) from t2;
++---------------------+
+| str_to_date(c9, c8) |
++---------------------+
+| NULL                |
+| NULL                |
++---------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c9) from t2;
++----------------------------+
+| str_to_date(c9, c9)        |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c10) from t2;
++----------------------+
+| str_to_date(c9, c10) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c11) from t2;
++----------------------------+
+| str_to_date(c9, c11)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c9, c12) from t2;
++----------------------+
+| str_to_date(c9, c12) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c13) from t2;
++----------------------+
+| str_to_date(c9, c13) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c14) from t2;
++----------------------+
+| str_to_date(c9, c14) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c15) from t2;
++----------------------+
+| str_to_date(c9, c15) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c16) from t2;
++----------------------+
+| str_to_date(c9, c16) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c17) from t2;
++----------------------+
+| str_to_date(c9, c17) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c18) from t2;
++----------------------+
+| str_to_date(c9, c18) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c19) from t2;
++----------------------+
+| str_to_date(c9, c19) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c20) from t2;
++----------------------+
+| str_to_date(c9, c20) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c21) from t2;
++----------------------+
+| str_to_date(c9, c21) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c9, c22) from t2;
++----------------------------+
+| str_to_date(c9, c22)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c10), time_to_usec(c10), usec_to_time(c10) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c10, c1) from t2;
++----------------------+
+| str_to_date(c10, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c2) from t2;
++----------------------------+
+| str_to_date(c10, c2)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c3) from t2;
++----------------------+
+| str_to_date(c10, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c4) from t2;
++----------------------------+
+| str_to_date(c10, c4)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c5) from t2;
++----------------------+
+| str_to_date(c10, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c6) from t2;
++----------------------------+
+| str_to_date(c10, c6)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c7) from t2;
++----------------------+
+| str_to_date(c10, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c8) from t2;
++----------------------------+
+| str_to_date(c10, c8)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c9) from t2;
++----------------------+
+| str_to_date(c10, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c10) from t2;
++----------------------------+
+| str_to_date(c10, c10)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c11) from t2;
++-----------------------+
+| str_to_date(c10, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c12) from t2;
++----------------------------+
+| str_to_date(c10, c12)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c13) from t2;
++-----------------------+
+| str_to_date(c10, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c14) from t2;
++-----------------------+
+| str_to_date(c10, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c15) from t2;
++-----------------------+
+| str_to_date(c10, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c16) from t2;
++-----------------------+
+| str_to_date(c10, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c17) from t2;
++-----------------------+
+| str_to_date(c10, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c18) from t2;
++-----------------------+
+| str_to_date(c10, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c19) from t2;
++----------------------------+
+| str_to_date(c10, c19)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c20) from t2;
++----------------------------+
+| str_to_date(c10, c20)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c10, c21) from t2;
++-----------------------+
+| str_to_date(c10, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c10, c22) from t2;
++-----------------------+
+| str_to_date(c10, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c11), time_to_usec(c11), usec_to_time(c11) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c11, c1) from t2;
++----------------------------+
+| str_to_date(c11, c1)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c2) from t2;
++----------------------+
+| str_to_date(c11, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c3) from t2;
++----------------------------+
+| str_to_date(c11, c3)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c4) from t2;
++----------------------+
+| str_to_date(c11, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c5) from t2;
++----------------------------+
+| str_to_date(c11, c5)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c6) from t2;
++----------------------+
+| str_to_date(c11, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c7) from t2;
++----------------------------+
+| str_to_date(c11, c7)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c8) from t2;
++----------------------+
+| str_to_date(c11, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c9) from t2;
++----------------------------+
+| str_to_date(c11, c9)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c10) from t2;
++-----------------------+
+| str_to_date(c11, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c11) from t2;
++----------------------------+
+| str_to_date(c11, c11)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c11, c12) from t2;
++-----------------------+
+| str_to_date(c11, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c13) from t2;
++-----------------------+
+| str_to_date(c11, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c14) from t2;
++-----------------------+
+| str_to_date(c11, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c15) from t2;
++-----------------------+
+| str_to_date(c11, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c16) from t2;
++-----------------------+
+| str_to_date(c11, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c17) from t2;
++-----------------------+
+| str_to_date(c11, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c18) from t2;
++-----------------------+
+| str_to_date(c11, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c19) from t2;
++-----------------------+
+| str_to_date(c11, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c20) from t2;
++-----------------------+
+| str_to_date(c11, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c21) from t2;
++-----------------------+
+| str_to_date(c11, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function str_to_date
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select str_to_date(c11, c22) from t2;
++----------------------------+
+| str_to_date(c11, c22)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '-1' for function str_to_date
+select to_days(c12), time_to_usec(c12), usec_to_time(c12) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c12, c1) from t2;
++----------------------+
+| str_to_date(c12, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c2) from t2;
++----------------------------+
+| str_to_date(c12, c2)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c3) from t2;
++----------------------+
+| str_to_date(c12, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c4) from t2;
++----------------------------+
+| str_to_date(c12, c4)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c5) from t2;
++----------------------+
+| str_to_date(c12, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c6) from t2;
++----------------------------+
+| str_to_date(c12, c6)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c7) from t2;
++----------------------+
+| str_to_date(c12, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c8) from t2;
++----------------------------+
+| str_to_date(c12, c8)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c9) from t2;
++----------------------+
+| str_to_date(c12, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c10) from t2;
++----------------------------+
+| str_to_date(c12, c10)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c11) from t2;
++-----------------------+
+| str_to_date(c12, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c12) from t2;
++----------------------------+
+| str_to_date(c12, c12)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c13) from t2;
++-----------------------+
+| str_to_date(c12, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c14) from t2;
++-----------------------+
+| str_to_date(c12, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c15) from t2;
++-----------------------+
+| str_to_date(c12, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c16) from t2;
++-----------------------+
+| str_to_date(c12, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c17) from t2;
++-----------------------+
+| str_to_date(c12, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c18) from t2;
++-----------------------+
+| str_to_date(c12, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c19) from t2;
++----------------------------+
+| str_to_date(c12, c19)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c20) from t2;
++----------------------------+
+| str_to_date(c12, c20)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c12, c21) from t2;
++-----------------------+
+| str_to_date(c12, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select str_to_date(c12, c22) from t2;
++-----------------------+
+| str_to_date(c12, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+Warning	1411	Incorrect datetime value: '2' for function str_to_date
+select to_days(c13), time_to_usec(c13), usec_to_time(c13) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c13, c1) from t2;
++----------------------+
+| str_to_date(c13, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c2) from t2;
++----------------------+
+| str_to_date(c13, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c3) from t2;
++----------------------+
+| str_to_date(c13, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c4) from t2;
++----------------------+
+| str_to_date(c13, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c5) from t2;
++----------------------+
+| str_to_date(c13, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c6) from t2;
++----------------------+
+| str_to_date(c13, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c7) from t2;
++----------------------+
+| str_to_date(c13, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c8) from t2;
++----------------------+
+| str_to_date(c13, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c9) from t2;
++----------------------+
+| str_to_date(c13, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c10) from t2;
++-----------------------+
+| str_to_date(c13, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c11) from t2;
++-----------------------+
+| str_to_date(c13, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c12) from t2;
++-----------------------+
+| str_to_date(c13, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c13) from t2;
++----------------------------+
+| str_to_date(c13, c13)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c13, c14) from t2;
++-----------------------+
+| str_to_date(c13, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c15) from t2;
++-----------------------+
+| str_to_date(c13, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c16) from t2;
++-----------------------+
+| str_to_date(c13, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c17) from t2;
++-----------------------+
+| str_to_date(c13, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c18) from t2;
++-----------------------+
+| str_to_date(c13, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c19) from t2;
++-----------------------+
+| str_to_date(c13, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c20) from t2;
++-----------------------+
+| str_to_date(c13, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c21) from t2;
++-----------------------+
+| str_to_date(c13, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select str_to_date(c13, c22) from t2;
++-----------------------+
+| str_to_date(c13, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '3.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-3.5' for function str_to_date
+select to_days(c14), time_to_usec(c14), usec_to_time(c14) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c14, c1) from t2;
++----------------------+
+| str_to_date(c14, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c2) from t2;
++----------------------+
+| str_to_date(c14, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c3) from t2;
++----------------------+
+| str_to_date(c14, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c4) from t2;
++----------------------+
+| str_to_date(c14, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c5) from t2;
++----------------------+
+| str_to_date(c14, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c6) from t2;
++----------------------+
+| str_to_date(c14, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c7) from t2;
++----------------------+
+| str_to_date(c14, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c8) from t2;
++----------------------+
+| str_to_date(c14, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c9) from t2;
++----------------------+
+| str_to_date(c14, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c10) from t2;
++-----------------------+
+| str_to_date(c14, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c11) from t2;
++-----------------------+
+| str_to_date(c14, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c12) from t2;
++-----------------------+
+| str_to_date(c14, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c13) from t2;
++-----------------------+
+| str_to_date(c14, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c14) from t2;
++----------------------------+
+| str_to_date(c14, c14)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c14, c15) from t2;
++-----------------------+
+| str_to_date(c14, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c16) from t2;
++-----------------------+
+| str_to_date(c14, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c17) from t2;
++-----------------------+
+| str_to_date(c14, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c18) from t2;
++-----------------------+
+| str_to_date(c14, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c19) from t2;
++-----------------------+
+| str_to_date(c14, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c20) from t2;
++-----------------------+
+| str_to_date(c14, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c21) from t2;
++-----------------------+
+| str_to_date(c14, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select str_to_date(c14, c22) from t2;
++-----------------------+
+| str_to_date(c14, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '4.5' for function str_to_date
+select to_days(c15), time_to_usec(c15), usec_to_time(c15) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c15, c1) from t2;
++----------------------+
+| str_to_date(c15, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c2) from t2;
++----------------------+
+| str_to_date(c15, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c3) from t2;
++----------------------+
+| str_to_date(c15, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c4) from t2;
++----------------------+
+| str_to_date(c15, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c5) from t2;
++----------------------+
+| str_to_date(c15, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c6) from t2;
++----------------------+
+| str_to_date(c15, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c7) from t2;
++----------------------+
+| str_to_date(c15, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c8) from t2;
++----------------------+
+| str_to_date(c15, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c9) from t2;
++----------------------+
+| str_to_date(c15, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c10) from t2;
++-----------------------+
+| str_to_date(c15, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c11) from t2;
++-----------------------+
+| str_to_date(c15, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c12) from t2;
++-----------------------+
+| str_to_date(c15, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c13) from t2;
++-----------------------+
+| str_to_date(c15, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c14) from t2;
++-----------------------+
+| str_to_date(c15, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c15) from t2;
++----------------------------+
+| str_to_date(c15, c15)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c15, c16) from t2;
++-----------------------+
+| str_to_date(c15, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c17) from t2;
++-----------------------+
+| str_to_date(c15, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c18) from t2;
++-----------------------+
+| str_to_date(c15, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c19) from t2;
++-----------------------+
+| str_to_date(c15, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c20) from t2;
++-----------------------+
+| str_to_date(c15, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c21) from t2;
++-----------------------+
+| str_to_date(c15, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select str_to_date(c15, c22) from t2;
++-----------------------+
+| str_to_date(c15, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '5.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '-5.5' for function str_to_date
+select to_days(c16), time_to_usec(c16), usec_to_time(c16) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c16, c1) from t2;
++----------------------+
+| str_to_date(c16, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c2) from t2;
++----------------------+
+| str_to_date(c16, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c3) from t2;
++----------------------+
+| str_to_date(c16, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c4) from t2;
++----------------------+
+| str_to_date(c16, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c5) from t2;
++----------------------+
+| str_to_date(c16, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c6) from t2;
++----------------------+
+| str_to_date(c16, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c7) from t2;
++----------------------+
+| str_to_date(c16, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c8) from t2;
++----------------------+
+| str_to_date(c16, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c9) from t2;
++----------------------+
+| str_to_date(c16, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c10) from t2;
++-----------------------+
+| str_to_date(c16, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c11) from t2;
++-----------------------+
+| str_to_date(c16, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c12) from t2;
++-----------------------+
+| str_to_date(c16, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c13) from t2;
++-----------------------+
+| str_to_date(c16, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c14) from t2;
++-----------------------+
+| str_to_date(c16, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c15) from t2;
++-----------------------+
+| str_to_date(c16, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c16) from t2;
++----------------------------+
+| str_to_date(c16, c16)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c16, c17) from t2;
++-----------------------+
+| str_to_date(c16, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c18) from t2;
++-----------------------+
+| str_to_date(c16, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c19) from t2;
++-----------------------+
+| str_to_date(c16, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c20) from t2;
++-----------------------+
+| str_to_date(c16, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c21) from t2;
++-----------------------+
+| str_to_date(c16, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select str_to_date(c16, c22) from t2;
++-----------------------+
+| str_to_date(c16, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '6.5' for function str_to_date
+select to_days(c17), time_to_usec(c17), usec_to_time(c17) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c17, c1) from t2;
++----------------------+
+| str_to_date(c17, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c2) from t2;
++----------------------+
+| str_to_date(c17, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c3) from t2;
++----------------------+
+| str_to_date(c17, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c4) from t2;
++----------------------+
+| str_to_date(c17, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c5) from t2;
++----------------------+
+| str_to_date(c17, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c6) from t2;
++----------------------+
+| str_to_date(c17, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c7) from t2;
++----------------------+
+| str_to_date(c17, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c8) from t2;
++----------------------+
+| str_to_date(c17, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c9) from t2;
++----------------------+
+| str_to_date(c17, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c10) from t2;
++-----------------------+
+| str_to_date(c17, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c11) from t2;
++-----------------------+
+| str_to_date(c17, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c12) from t2;
++-----------------------+
+| str_to_date(c17, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c13) from t2;
++-----------------------+
+| str_to_date(c17, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c14) from t2;
++-----------------------+
+| str_to_date(c17, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c15) from t2;
++-----------------------+
+| str_to_date(c17, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c16) from t2;
++-----------------------+
+| str_to_date(c17, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c17) from t2;
++----------------------------+
+| str_to_date(c17, c17)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c17, c18) from t2;
++-----------------------+
+| str_to_date(c17, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c19) from t2;
++-----------------------+
+| str_to_date(c17, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c20) from t2;
++-----------------------+
+| str_to_date(c17, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c21) from t2;
++-----------------------+
+| str_to_date(c17, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select str_to_date(c17, c22) from t2;
++-----------------------+
+| str_to_date(c17, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function str_to_date
+Warning	1411	Incorrect datetime value: '-8' for function str_to_date
+select to_days(c18), time_to_usec(c18), usec_to_time(c18) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c18, c1) from t2;
++----------------------+
+| str_to_date(c18, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c2) from t2;
++----------------------+
+| str_to_date(c18, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c3) from t2;
++----------------------+
+| str_to_date(c18, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c4) from t2;
++----------------------+
+| str_to_date(c18, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c5) from t2;
++----------------------+
+| str_to_date(c18, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c6) from t2;
++----------------------+
+| str_to_date(c18, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c7) from t2;
++----------------------+
+| str_to_date(c18, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c8) from t2;
++----------------------+
+| str_to_date(c18, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c9) from t2;
++----------------------+
+| str_to_date(c18, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c10) from t2;
++-----------------------+
+| str_to_date(c18, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c11) from t2;
++-----------------------+
+| str_to_date(c18, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c12) from t2;
++-----------------------+
+| str_to_date(c18, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c13) from t2;
++-----------------------+
+| str_to_date(c18, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c14) from t2;
++-----------------------+
+| str_to_date(c18, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c15) from t2;
++-----------------------+
+| str_to_date(c18, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c16) from t2;
++-----------------------+
+| str_to_date(c18, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c17) from t2;
++-----------------------+
+| str_to_date(c18, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c18) from t2;
++----------------------------+
+| str_to_date(c18, c18)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c18, c19) from t2;
++-----------------------+
+| str_to_date(c18, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c20) from t2;
++-----------------------+
+| str_to_date(c18, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select str_to_date(c18, c21) from t2;
++----------------------------+
+| str_to_date(c18, c21)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c18, c22) from t2;
++-----------------------+
+| str_to_date(c18, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+Warning	1411	Incorrect datetime value: '9' for function str_to_date
+select to_days(c19), time_to_usec(c19), usec_to_time(c19) from t2;
++--------------+-------------------+----------------------------+
+| to_days(c19) | time_to_usec(c19) | usec_to_time(c19)          |
++--------------+-------------------+----------------------------+
+|       737759 |  1575172800000000 | 1970-08-23 00:40:01.120000 |
+|       737759 |  1575172800000000 | 1970-08-23 00:40:01.120000 |
++--------------+-------------------+----------------------------+
+select str_to_date(c19, c1) from t2;
++----------------------+
+| str_to_date(c19, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c2) from t2;
++----------------------------+
+| str_to_date(c19, c2)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c3) from t2;
++----------------------+
+| str_to_date(c19, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c4) from t2;
++----------------------------+
+| str_to_date(c19, c4)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c5) from t2;
++----------------------+
+| str_to_date(c19, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c6) from t2;
++----------------------------+
+| str_to_date(c19, c6)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c7) from t2;
++----------------------+
+| str_to_date(c19, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c8) from t2;
++----------------------------+
+| str_to_date(c19, c8)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c9) from t2;
++----------------------+
+| str_to_date(c19, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c10) from t2;
++----------------------------+
+| str_to_date(c19, c10)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c11) from t2;
++-----------------------+
+| str_to_date(c19, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c12) from t2;
++----------------------------+
+| str_to_date(c19, c12)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c13) from t2;
++-----------------------+
+| str_to_date(c19, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c14) from t2;
++-----------------------+
+| str_to_date(c19, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c15) from t2;
++-----------------------+
+| str_to_date(c19, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c16) from t2;
++-----------------------+
+| str_to_date(c19, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c17) from t2;
++-----------------------+
+| str_to_date(c19, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c18) from t2;
++-----------------------+
+| str_to_date(c19, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c19) from t2;
++----------------------------+
+| str_to_date(c19, c19)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c19, c20) from t2;
++-----------------------+
+| str_to_date(c19, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c21) from t2;
++-----------------------+
+| str_to_date(c19, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select str_to_date(c19, c22) from t2;
++-----------------------+
+| str_to_date(c19, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-01 12:00:00' for function str_to_date
+select to_days(c20), time_to_usec(c20), usec_to_time(c20) from t2;
++--------------+-------------------+----------------------------+
+| to_days(c20) | time_to_usec(c20) | usec_to_time(c20)          |
++--------------+-------------------+----------------------------+
+|       737761 |  1575324000000000 | 1970-08-23 00:40:03.060000 |
+|       737761 |  1575324000000000 | 1970-08-23 00:40:03.060000 |
++--------------+-------------------+----------------------------+
+select str_to_date(c20, c1) from t2;
++----------------------+
+| str_to_date(c20, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c2) from t2;
++----------------------------+
+| str_to_date(c20, c2)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c3) from t2;
++----------------------+
+| str_to_date(c20, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c4) from t2;
++----------------------------+
+| str_to_date(c20, c4)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c5) from t2;
++----------------------+
+| str_to_date(c20, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c6) from t2;
++----------------------------+
+| str_to_date(c20, c6)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c7) from t2;
++----------------------+
+| str_to_date(c20, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c8) from t2;
++----------------------------+
+| str_to_date(c20, c8)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c9) from t2;
++----------------------+
+| str_to_date(c20, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c10) from t2;
++----------------------------+
+| str_to_date(c20, c10)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c11) from t2;
++-----------------------+
+| str_to_date(c20, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c12) from t2;
++----------------------------+
+| str_to_date(c20, c12)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c13) from t2;
++-----------------------+
+| str_to_date(c20, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c14) from t2;
++-----------------------+
+| str_to_date(c20, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c15) from t2;
++-----------------------+
+| str_to_date(c20, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c16) from t2;
++-----------------------+
+| str_to_date(c20, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c17) from t2;
++-----------------------+
+| str_to_date(c20, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c18) from t2;
++-----------------------+
+| str_to_date(c20, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c19) from t2;
++-----------------------+
+| str_to_date(c20, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c20) from t2;
++----------------------------+
+| str_to_date(c20, c20)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c20, c21) from t2;
++-----------------------+
+| str_to_date(c20, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select str_to_date(c20, c22) from t2;
++-----------------------+
+| str_to_date(c20, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+Warning	1411	Incorrect datetime value: '2019-12-03 06:00:00' for function str_to_date
+select to_days(c21), time_to_usec(c21), usec_to_time(c21) from t2;
++--------------+----------------------+----------------------------+
+| to_days(c21) | time_to_usec(c21)    | usec_to_time(c21)          |
++--------------+----------------------+----------------------------+
+|         NULL | -9223372022400000000 | 1970-01-01 08:00:00.000010 |
+|         NULL | -9223372022400000000 | 1970-01-01 08:00:00.000010 |
++--------------+----------------------+----------------------------+
+select str_to_date(c21, c1) from t2;
++----------------------+
+| str_to_date(c21, c1) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c2) from t2;
++----------------------+
+| str_to_date(c21, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c3) from t2;
++----------------------+
+| str_to_date(c21, c3) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c4) from t2;
++----------------------+
+| str_to_date(c21, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c5) from t2;
++----------------------+
+| str_to_date(c21, c5) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c6) from t2;
++----------------------+
+| str_to_date(c21, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c7) from t2;
++----------------------+
+| str_to_date(c21, c7) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c8) from t2;
++----------------------+
+| str_to_date(c21, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c9) from t2;
++----------------------+
+| str_to_date(c21, c9) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c10) from t2;
++-----------------------+
+| str_to_date(c21, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c11) from t2;
++-----------------------+
+| str_to_date(c21, c11) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c12) from t2;
++-----------------------+
+| str_to_date(c21, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c13) from t2;
++-----------------------+
+| str_to_date(c21, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c14) from t2;
++-----------------------+
+| str_to_date(c21, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c15) from t2;
++-----------------------+
+| str_to_date(c21, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c16) from t2;
++-----------------------+
+| str_to_date(c21, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c17) from t2;
++-----------------------+
+| str_to_date(c21, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c18) from t2;
++----------------------------+
+| str_to_date(c21, c18)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c21, c19) from t2;
++-----------------------+
+| str_to_date(c21, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c20) from t2;
++-----------------------+
+| str_to_date(c21, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select str_to_date(c21, c21) from t2;
++----------------------------+
+| str_to_date(c21, c21)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+select str_to_date(c21, c22) from t2;
++-----------------------+
+| str_to_date(c21, c22) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '9.5' for function str_to_date
+select to_days(c22), time_to_usec(c22), usec_to_time(c22) from t2;
+ERROR 42000: Invalid argument for time_to_usec()
+select str_to_date(c22, c1) from t2;
++----------------------------+
+| str_to_date(c22, c1)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c2) from t2;
++----------------------+
+| str_to_date(c22, c2) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c3) from t2;
++----------------------------+
+| str_to_date(c22, c3)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c4) from t2;
++----------------------+
+| str_to_date(c22, c4) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c5) from t2;
++----------------------------+
+| str_to_date(c22, c5)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c6) from t2;
++----------------------+
+| str_to_date(c22, c6) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c7) from t2;
++----------------------------+
+| str_to_date(c22, c7)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c8) from t2;
++----------------------+
+| str_to_date(c22, c8) |
++----------------------+
+| NULL                 |
+| NULL                 |
++----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c9) from t2;
++----------------------------+
+| str_to_date(c22, c9)       |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c10) from t2;
++-----------------------+
+| str_to_date(c22, c10) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c11) from t2;
++----------------------------+
+| str_to_date(c22, c11)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| NULL                       |
++----------------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c12) from t2;
++-----------------------+
+| str_to_date(c22, c12) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c13) from t2;
++-----------------------+
+| str_to_date(c22, c13) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c14) from t2;
++-----------------------+
+| str_to_date(c22, c14) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c15) from t2;
++-----------------------+
+| str_to_date(c22, c15) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c16) from t2;
++-----------------------+
+| str_to_date(c22, c16) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c17) from t2;
++-----------------------+
+| str_to_date(c22, c17) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c18) from t2;
++-----------------------+
+| str_to_date(c22, c18) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c19) from t2;
++-----------------------+
+| str_to_date(c22, c19) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c20) from t2;
++-----------------------+
+| str_to_date(c22, c20) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c21) from t2;
++-----------------------+
+| str_to_date(c22, c21) |
++-----------------------+
+| NULL                  |
+| NULL                  |
++-----------------------+
+Warnings:
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+Warning	1411	Incorrect datetime value: '10.5' for function str_to_date
+select str_to_date(c22, c22) from t2;
++----------------------------+
+| str_to_date(c22, c22)      |
++----------------------------+
+| 1970-01-01 00:00:00.000000 |
+| 1970-01-01 00:00:00.000000 |
++----------------------------+
+
+drop table t1;
