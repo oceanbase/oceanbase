@@ -92,7 +92,7 @@ private:
         if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator, sub_type, IsGeog, true, sub_g))) {
           LOG_WARN("failed to create wkb", K(ret), K(sub_type));
         } else {
-          // Length is not used, cannot get real length untill iter move to the next
+          // Length is not used, cannot get real length until iter move to the next
           ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
           sub_g->set_data(wkb_nosrid);
           sub_g->set_srid(g->get_srid());

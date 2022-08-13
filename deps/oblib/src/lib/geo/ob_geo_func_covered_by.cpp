@@ -143,7 +143,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPoint, ObWkbGeomC
         if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator, sub_type, false, true, sub_g2))) {
           LOG_WARN("failed to create wkb", K(ret), K(sub_type));
         } else {
-          // Length is not used, cannot get real length untill iter move to the next
+          // Length is not used, cannot get real length until iter move to the next
           ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
           sub_g2->set_data(wkb_nosrid);
           sub_g2->set_srid(g2->get_srid());
@@ -636,7 +636,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPoint, ObWkbGeogC
         if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator, sub_type, true, true, sub_g2))) {
           LOG_WARN("failed to create wkb", K(ret), K(sub_type));
         } else {
-          // Length is not used, cannot get real length untill iter move to the next
+          // Length is not used, cannot get real length until iter move to the next
           ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
           sub_g2->set_data(wkb_nosrid);
           sub_g2->set_srid(g2->get_srid());
