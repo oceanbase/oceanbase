@@ -54,7 +54,7 @@ public:
   int init(common::ObIAllocator& allocator);
   void destroy();
   int alloc_all_pages();
-  int alloc(const int32_t page_nums, int32_t &start_page_id, int32_t &alloced_page_nums);
+  int alloc(const int32_t page_nums, int32_t& start_page_id, int32_t& alloced_page_nums);
   void free(const int32_t start_page_id, const int32_t page_nums);
   OB_INLINE int64_t get_max_cont_page_nums() const
   {
@@ -72,10 +72,8 @@ public:
 private:
   void free_align(const int32_t start_page_id, const int32_t page_nums, ObTmpFileArea*& area);
   ObTmpFileArea* find_buddy(const int32_t page_nums, const int32_t start_page_id);
-  static int get_max_page_nums()
-  {
-    return std::pow(2, ObTmpFilePageBuddy::MAX_ORDER) - 1;
-  }
+
+private:
   static const int MIN_ORDER = 2;
   static const int MAX_ORDER = 8;
   ObTmpFileArea* free_area_[ObTmpFilePageBuddy::MAX_ORDER];
@@ -236,13 +234,9 @@ public:
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock*& t_mblk);
   int free_macro_block(const int64_t block_id);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock*& t_mblk);
-  OB_INLINE int64_t get_mblk_page_nums() const
-  {
-    return mblk_page_nums_;
-  }
   OB_INLINE int64_t get_block_size() const
   {
-    return mblk_page_nums_ * ObTmpMacroBlock::get_default_page_size();
+    return ObTmpFilePageBuddy::MAX_PAGE_NUMS * ObTmpMacroBlock::get_default_page_size();
   }
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId>& macro_id_list);
   void print_block_usage();
@@ -253,7 +247,6 @@ private:
 private:
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
   typedef common::hash::ObHashMap<int64_t, ObTmpMacroBlock*, common::hash::SpinReadWriteDefendMode> TmpMacroBlockMap;
-  int64_t mblk_page_nums_;
   common::ObIAllocator* allocator_;
   TmpMacroBlockMap blocks_;  // all of block meta.
   static int64_t next_blk_id_;
@@ -326,13 +319,9 @@ public:
   int get_macro_block_list(common::ObIArray<TenantTmpBlockCntPair>& tmp_block_cnt_pairs);
   int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
 
-  OB_INLINE int64_t get_mblk_page_nums() const
+  static int64_t get_block_size()
   {
-    return OB_FILE_SYSTEM.get_macro_block_size() / ObTmpMacroBlock::get_default_page_size() - 4;
-  }
-  OB_INLINE int64_t get_block_size() const
-  {
-    return OB_FILE_SYSTEM.get_macro_block_size() - 4 * ObTmpMacroBlock::get_default_page_size();
+    return ObTmpFilePageBuddy::MAX_PAGE_NUMS * ObTmpMacroBlock::get_default_page_size();
   }
 
 private:

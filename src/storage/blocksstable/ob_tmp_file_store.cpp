@@ -290,10 +290,10 @@ void ObTmpFilePageBuddy::free(const int32_t start_page_id, const int32_t page_nu
 
 ObTmpFileArea* ObTmpFilePageBuddy::find_buddy(const int32_t page_nums, const int32_t start_page_id)
 {
-  ObTmpFileArea* tmp = NULL;
-  if (get_max_page_nums() < page_nums || page_nums <= 0 || start_page_id < 0 || start_page_id >= get_max_page_nums()) {
+  ObTmpFileArea *tmp = NULL;
+  if (MAX_PAGE_NUMS < page_nums || page_nums <= 0 || start_page_id < 0 || start_page_id >= MAX_PAGE_NUMS) {
     STORAGE_LOG(WARN, "invalid argument", K(page_nums), K(start_page_id));
-  } else if (get_max_page_nums() == page_nums) {
+  } else if (MAX_PAGE_NUMS == page_nums) {
     // no buddy, so, nothing to do.
   } else {
     tmp = free_area_[static_cast<int32_t>(std::log(page_nums) / std::log(2))];
@@ -332,7 +332,7 @@ ObTmpMacroBlock::ObTmpMacroBlock()
       dir_id_(-1),
       tenant_id_(0),
       page_buddy_(),
-      free_page_nums_(0),
+      free_page_nums_(ObTmpFilePageBuddy::MAX_PAGE_NUMS),
       buffer_(NULL),
       handle_(),
       using_extents_(),
@@ -360,7 +360,6 @@ int ObTmpMacroBlock::init(
     block_id_ = block_id;
     dir_id_ = dir_id;
     tenant_id_ = tenant_id;
-    free_page_nums_ = OB_TMP_FILE_STORE.get_mblk_page_nums();
     is_disked_ = false;
     is_washing_ = false;
     is_inited_ = true;
@@ -464,7 +463,7 @@ int ObTmpMacroBlock::alloc_all_pages(ObTmpFileExtent& extent)
   } else {
     extent.set_block_id(get_block_id());
     extent.set_start_page_id(0);
-    extent.set_page_nums(OB_TMP_FILE_STORE.get_mblk_page_nums());
+    extent.set_page_nums(ObTmpFilePageBuddy::MAX_PAGE_NUMS);
     extent.alloced();
     free_page_nums_ -= extent.get_page_nums();
     if (OB_FAIL(using_extents_.push_back(&extent))) {
@@ -538,11 +537,7 @@ void ObTmpMacroBlock::set_io_desc(const common::ObIODesc& io_desc)
   io_desc_ = io_desc;
 }
 
-ObTmpTenantMacroBlockManager::ObTmpTenantMacroBlockManager()
-    : mblk_page_nums_(OB_FILE_SYSTEM.get_macro_block_size() / ObTmpMacroBlock::get_default_page_size() - 1),
-      allocator_(),
-      blocks_(),
-      is_inited_(false)
+ObTmpTenantMacroBlockManager::ObTmpTenantMacroBlockManager() : allocator_(), blocks_(), is_inited_(false)
 {}
 
 ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
@@ -673,11 +668,11 @@ void ObTmpTenantMacroBlockManager::print_block_usage()
   }
   double disk_fragment_ratio = 0;
   if (0 != disk_count) {
-    disk_fragment_ratio = disk_fragment * 1.0 / (disk_count * mblk_page_nums_);
+    disk_fragment_ratio = disk_fragment * 1.0 / (disk_count * ObTmpFilePageBuddy::MAX_PAGE_NUMS);
   }
   double mem_fragment_ratio = 0;
   if (0 != mem_count) {
-    mem_fragment_ratio = mem_fragment * 1.0 / (mem_count * mblk_page_nums_);
+    mem_fragment_ratio = mem_fragment * 1.0 / (mem_count * ObTmpFilePageBuddy::MAX_PAGE_NUMS);
   }
   STORAGE_LOG(INFO,
       "the block usage for temporary files",
@@ -775,9 +770,10 @@ int ObTmpTenantFileStore::alloc(
   int64_t alloc_size = size;
   int64_t block_size = tmp_block_manager_.get_block_size();
   // In buddy allocation, if free space in one block isn't powers of 2, need upper align.
-  int64_t max_cont_size_per_block =
-      (tmp_block_manager_.get_mblk_page_nums() + 1) / 2 * ObTmpMacroBlock::get_default_page_size();
-  ObTmpMacroBlock* t_mblk = NULL;
+  int64_t max_order = std::ceil(std::log(ObTmpFilePageBuddy::MAX_PAGE_NUMS) / std::log(2));
+  int64_t origin_max_cont_page_nums = std::pow(2, max_order - 1);
+  int64_t max_cont_size_per_block = origin_max_cont_page_nums * ObTmpMacroBlock::get_default_page_size();
+  ObTmpMacroBlock *t_mblk = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
@@ -807,7 +803,7 @@ int ObTmpTenantFileStore::alloc(
       } else {
         if (alloc_size < block_size) {
           int64_t nums = std::ceil(alloc_size * 1.0 / ObTmpMacroBlock::get_default_page_size());
-          if (OB_FAIL(free_extent(t_mblk->get_block_id(), nums, tmp_block_manager_.get_mblk_page_nums() - nums))) {
+          if (OB_FAIL(free_extent(t_mblk->get_block_id(), nums, ObTmpFilePageBuddy::MAX_PAGE_NUMS - nums))) {
             STORAGE_LOG(WARN, "fail to free pages", K(ret), K(t_mblk->get_block_id()));
           } else {
             extent.set_page_nums(nums);
