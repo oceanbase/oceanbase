@@ -1,0 +1,15 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner : nijia.nj
+#owner group : sql2
+#description : test information_schema.schemata
+
+use information_schema;
+select * from schemata limit 0;
+--disable_result_log
+select schema_name from schemata;
+--enable_result_log
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view schemata;
+desc schemata;

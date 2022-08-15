@@ -1,0 +1,277 @@
+result_format: 4
+
+alter system flush plan cache global;
+
+
+drop table if exists t;
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+
+
+alter system flush plan cache global;
+
+
+set ob_enable_plan_cache = false;
+select not 1 from dual;
++-------+
+| not 1 |
++-------+
+|     0 |
++-------+
+select not 1.0 from dual;
++---------+
+| not 1.0 |
++---------+
+|       0 |
++---------+
+select not null from dual;
++----------+
+| not null |
++----------+
+|     NULL |
++----------+
+select not 'hello' from dual;
++-------------+
+| not 'hello' |
++-------------+
+|           1 |
++-------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'hello'
+
+select not t1 from t;
++--------+
+| not t1 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t2 from t;
++--------+
+| not t2 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t3 from t;
++--------+
+| not t3 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t4 from t;
++--------+
+| not t4 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t5 from t;
++--------+
+| not t5 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t6 from t;
++--------+
+| not t6 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t7 from t;
++--------+
+| not t7 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t8 from t;
++--------+
+| not t8 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t9 from t;
++--------+
+| not t9 |
++--------+
+|      0 |
+|   NULL |
++--------+
+select not t10 from t;
++---------+
+| not t10 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t11 from t;
++---------+
+| not t11 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t12 from t;
++---------+
+| not t12 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t13 from t;
++---------+
+| not t13 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t14 from t;
++---------+
+| not t14 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t15 from t;
++---------+
+| not t15 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t16 from t;
++---------+
+| not t16 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t17 from t;
++---------+
+| not t17 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t18 from t;
++---------+
+| not t18 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t19 from t;
++---------+
+| not t19 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t20 from t;
++---------+
+| not t20 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t21 from t;
++---------+
+| not t21 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t22 from t;
++---------+
+| not t22 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t23 from t;
++---------+
+| not t23 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t24 from t;
++---------+
+| not t24 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t25 from t;
++---------+
+| not t25 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t26 from t;
++---------+
+| not t26 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t27 from t;
++---------+
+| not t27 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t28 from t;
++---------+
+| not t28 |
++---------+
+|       0 |
+|    NULL |
++---------+
+select not t29 from t;
++---------+
+| not t29 |
++---------+
+|       0 |
+|    NULL |
++---------+
+

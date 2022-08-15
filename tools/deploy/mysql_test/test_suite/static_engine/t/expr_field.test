@@ -1,0 +1,25 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select field(1, 3, 2, 1, NULL);
+select field(1, 3, 2, 1, NULL, 1);
+select field(NULL, 3, 2, 1, NULL);
+select field(2, 3, NULL, 2, 1, NULL);
+select field(1, 3, 2, "1", NULL);
+select field(1, 3, 2.2, "1", NULL);
+select field("abc", 3.2, "def", 'abc');
+
+connection syscon;
+--sleep 2

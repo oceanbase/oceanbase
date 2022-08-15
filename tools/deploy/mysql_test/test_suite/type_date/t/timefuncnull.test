@@ -1,0 +1,30 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL1
+# Test of date adjust functions
+# tags: datatype
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (pk int primary key, t datetime(6));
+insert into t1 values(1,'2014-10-02 19:42:00');
+insert into t1 values(2,'2014-10-04 19:42:00');
+insert into t1 values(3,'2014-10-05 19:42:00');
+insert into t1 values(4,'2014-10-06 19:42:00');
+insert into t1 values(5,'2014-10-07 19:42:00');
+insert into t1 values(6,'2014-10-08 19:42:00');
+insert into t1 values(7,'2014-10-09 19:42:00');
+insert into t1 values(8,'2014-10-12 19:42:00');
+insert into t1 values(9,'2014-10-23 19:42:00');
+insert into t1 values(10,null);
+#test null and time func
+select DATE_ADD(null, INTERVAL 5 DAY);
+select DATE_sub(null, INTERVAL 5 DAY);
+select STR_TO_DATE(null, '%Y-%m-%d');
+select DATE_FORMAT(null, '%Y/%m/%D');
+select time_to_usec(null);
+select usec_to_time(null);
+select EXTRACT(DAY FROM null);

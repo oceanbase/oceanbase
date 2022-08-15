@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tenant_file_super_block_checkpoint_writer.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/ob_tenant_file_mgr.h"
 
 using namespace oceanbase::common;
@@ -98,11 +99,21 @@ int ObTenantFileSuperBlockCheckpointWriter::write_checkpoint(blocksstable::ObSto
     LOG_INFO("get all tenant file infos", K(tenant_file_infos));
     ObTenantFileSuperBlockItem item;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_file_infos.count(); ++i) {
+      bool tenant_has_been_dropped = false;
       ObTenantFileInfo& file_info = *tenant_file_infos.at(i);
       ObTenantFileCheckpointEntry file_checkpoint_entry;
       if (OB_FAIL(file_checkpoint_map.get_refactored(file_info.tenant_key_, file_checkpoint_entry))) {
         if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
+          // in case any deleted tenant file info is leaked, check schema for sure
+          share::schema::ObSchemaGetterGuard schema_guard;
+          if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_schema_guard(schema_guard))) {
+            LOG_ERROR("fail to get schema guard", K(ret));
+          } else if (OB_FAIL(schema_guard.check_formal_guard())) {
+            LOG_WARN("fail to check formal schema guard", K(ret));
+          } else if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(
+                         file_info.tenant_key_.tenant_id_, tenant_has_been_dropped))) {
+            LOG_ERROR("fail to check if tenant has been dropped", K(ret), K(file_info));
+          }
         } else {
           LOG_WARN("fail to get from file checkpoint map", K(ret));
         }
@@ -112,7 +123,7 @@ int ObTenantFileSuperBlockCheckpointWriter::write_checkpoint(blocksstable::ObSto
         file_info.tenant_file_super_block_.pg_meta_entry_ = file_checkpoint_entry.super_block_.pg_meta_entry_;
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !tenant_has_been_dropped) {
         ObTenantFileSuperBlockCheckpointEntry entry(*tenant_file_infos.at(i));
         item.set_tenant_file_entry(entry);
         if (OB_FAIL(writer_.write_item(&item))) {

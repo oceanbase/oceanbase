@@ -1,0 +1,2584 @@
+drop database if exists bushy_leading_hint_db;
+create database bushy_leading_hint_db;
+use bushy_leading_hint_db;
+drop table if exists nn1;
+drop table if exists nn2;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+create table nn1(c1 int, c2 int, c3 varchar(10));
+create table nn2(d1 int, d2 int, d3 varchar(10));
+create table t1(a int, b int, c int);
+create table t2(a int, b int, c int);
+create table t3(a int, b int, c int);
+result_format: 4
+explain_protocol: 2 
+### 1, 基本测试  ###
+EXPLAIN select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST. ROWS |COST      |
+-----------------------------------------------
+|0 |SCALAR GROUP BY|    |1         |8050479355|
+|1 | HASH JOIN     |    |9605960100|5706597501|
+|2 |  TABLE SCAN   |c   |100000    |61860     |
+|3 |  HASH JOIN    |    |9801000   |6088891   |
+|4 |   TABLE SCAN  |b   |100000    |64066     |
+|5 |   TABLE SCAN  |a   |10000     |80811     |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d2 * a.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d2 * a.c2)])
+  1 - output([a.c1 + b.d2 * a.c2]), filter(nil), 
+      equal_conds([b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0)
+  3 - output([a.c1], [b.d2], [a.c2], [b.d1]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  4 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+  5 - output([a.c1], [a.c2]), filter([a.c2 < 5]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
++----------+---------------------+
+| count(*) | sum(a.c1+b.d2*a.c2) |
++----------+---------------------+
+|        0 |                NULL |
++----------+---------------------+
+
+EXPLAIN select /*+ leading(c,  (b , a) ) */ count(a.c1), sum(a.c2+b.d2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on c.c1 = b.d2 + 1 where a.c2 < 15  ;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST. ROWS |COST      |
+-----------------------------------------------
+|0 |SCALAR GROUP BY|    |1         |8944325397|
+|1 | HASH JOIN     |    |9702990000|6576767969|
+|2 |  TABLE SCAN   |c   |100000    |61860     |
+|3 |  HASH JOIN    |    |9801000   |6068310   |
+|4 |   TABLE SCAN  |b   |100000    |61860     |
+|5 |   TABLE SCAN  |a   |10000     |80811     |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(a.c1)], [T_FUN_SUM(a.c2 + b.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(a.c1)], [T_FUN_SUM(a.c2 + b.d2)])
+  1 - output([a.c1], [a.c2 + b.d2]), filter(nil), 
+      equal_conds([c.c1 = b.d2 + 1]), other_conds(nil)
+  2 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0)
+  3 - output([a.c1], [a.c2], [b.d2], [b.d2 + 1]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  4 - output([b.d2]), filter(nil), 
+      access([b.d2]), partitions(p0)
+  5 - output([a.c1], [a.c2]), filter([a.c2 < 15]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+ leading(c,  (b , a) ) */ count(a.c1), sum(a.c2+b.d2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on c.c1 = b.d2 + 1 where a.c2 < 15  ;
++-------------+----------------+
+| count(a.c1) | sum(a.c2+b.d2) |
++-------------+----------------+
+|           0 |           NULL |
++-------------+----------------+
+
+EXPLAIN select /*+ leading((c, d), (a , b) ) */ count(*),sum(a.c1),sum(b.d2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME|EST. ROWS    |COST         |
+-----------------------------------------------------
+|0 |SCALAR GROUP BY|    |1            |8.380092e+12 |
+|1 | HASH JOIN     |    |9.414801e+12 |5.583958e+12 |
+|2 |  HASH JOIN    |    |98010000     |58414634     |
+|3 |   TABLE SCAN  |c   |100000       |64066        |
+|4 |   TABLE SCAN  |d   |100000       |61860        |
+|5 |  HASH JOIN    |    |9801000      |6003290      |
+|6 |   TABLE SCAN  |a   |10000        |80811        |
+|7 |   TABLE SCAN  |b   |100000       |64066        |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1)], [T_FUN_SUM(b.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1)], [T_FUN_SUM(b.d2)])
+  1 - output([a.c1], [b.d2]), filter(nil), 
+      equal_conds([b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1]), filter(nil), 
+      equal_conds([d.c2 = c.c2]), other_conds(nil)
+  3 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  4 - output([d.c2]), filter(nil), 
+      access([d.c2]), partitions(p0)
+  5 - output([a.c1], [b.d2], [b.d1]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  6 - output([a.c1]), filter([a.c2 < 5]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  7 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+
+select /*+ leading((c, d), (a , b) ) */ count(*),sum(a.c1),sum(b.d2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
++----------+-----------+-----------+
+| count(*) | sum(a.c1) | sum(b.d2) |
++----------+-----------+-----------+
+|        0 |      NULL |      NULL |
++----------+-----------+-----------+
+
+EXPLAIN select /*+ leading(c, d, (a , b)) */ count(*),sum(a.c1+b.d1+c.c1-d.c2) from 
+nn1 a, nn2 b , nn1 c, nn1 d 
+where a.c1 = b.d2 and b.d1 = c.c1 and d.c2 = c.c2;
+Query Plan
+=======================================================
+|ID|OPERATOR       |NAME|EST. ROWS     |COST          |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY|    |1             |7.881015e+13  |
+|1 | HASH JOIN     |    |9.414801e+13  |5.583777e+13  |
+|2 |  HASH JOIN    |    |98010000      |58414634      |
+|3 |   TABLE SCAN  |c   |100000        |64066         |
+|4 |   TABLE SCAN  |d   |100000        |61860         |
+|5 |  HASH JOIN    |    |98010000      |58396259      |
+|6 |   TABLE SCAN  |a   |100000        |61860         |
+|7 |   TABLE SCAN  |b   |100000        |64066         |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d1 + c.c1 - d.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d1 + c.c1 - d.c2)])
+  1 - output([a.c1 + b.d1 + c.c1 - d.c2]), filter(nil), 
+      equal_conds([b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1], [d.c2]), filter(nil), 
+      equal_conds([d.c2 = c.c2]), other_conds(nil)
+  3 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  4 - output([d.c2]), filter(nil), 
+      access([d.c2]), partitions(p0)
+  5 - output([a.c1], [b.d1]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  6 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  7 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+
+select /*+ leading(c, d, (a , b)) */ count(*),sum(a.c1+b.d1+c.c1-d.c2) from 
+nn1 a, nn2 b , nn1 c, nn1 d 
+where a.c1 = b.d2 and b.d1 = c.c1 and d.c2 = c.c2;
++----------+--------------------------+
+| count(*) | sum(a.c1+b.d1+c.c1-d.c2) |
++----------+--------------------------+
+|        0 |                     NULL |
++----------+--------------------------+
+
+EXPLAIN select /*+ leading(c,  (a ,d, b) ) use_hash(c,d) */ count(a.c1),sum(b.d1*b.d2-a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+Query Plan
+=============================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST     |
+---------------------------------------------
+|0 |SCALAR GROUP BY|    |1        |472450168|
+|1 | HASH JOIN     |    |461372348|359873990|
+|2 |  TABLE SCAN   |c   |100000   |64066    |
+|3 |  HASH JOIN    |    |48029801 |28858467 |
+|4 |   HASH JOIN   |    |49005    |195270   |
+|5 |    TABLE SCAN |a   |10000    |80811    |
+|6 |    TABLE SCAN |d   |500      |72438    |
+|7 |   TABLE SCAN  |b   |100000   |64066    |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(a.c1)], [T_FUN_SUM(b.d1 * b.d2 - a.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(a.c1)], [T_FUN_SUM(b.d1 * b.d2 - a.c2)])
+  1 - output([a.c1], [b.d1 * b.d2 - a.c2]), filter(nil), 
+      equal_conds([d.c2 = c.c2], [b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  3 - output([a.c1], [b.d1], [b.d2], [a.c2], [d.c2]), filter(nil), 
+      equal_conds([d.c1 = b.d2]), other_conds(nil)
+  4 - output([a.c1], [a.c2], [d.c2], [d.c1]), filter(nil), 
+      equal_conds([d.c2 = a.c1]), other_conds(nil)
+  5 - output([a.c1], [a.c2]), filter([a.c2 < 5]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  6 - output([d.c2], [d.c1]), filter([d.c1 = d.c2]), 
+      access([d.c2], [d.c1]), partitions(p0)
+  7 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+
+select /*+ leading(c,  (a ,d, b) ) use_hash(c,d) */ count(a.c1),sum(b.d1*b.d2-a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
++-------------+---------------------+
+| count(a.c1) | sum(b.d1*b.d2-a.c2) |
++-------------+---------------------+
+|           0 |                NULL |
++-------------+---------------------+
+
+EXPLAIN select /*+ leading(c,  (d, b) ) */ count(*) 
+from  nn2 b, nn1 c, nn1 d
+where b.d1 = c.c1 and d.c2 = c.c2 and d.c1 = b.d2;
+Query Plan
+=============================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST     |
+---------------------------------------------
+|0 |SCALAR GROUP BY|    |1        |913518336|
+|1 | HASH JOIN     |    |941480150|733683949|
+|2 |  TABLE SCAN   |c   |100000   |64066    |
+|3 |  HASH JOIN    |    |98010000 |58416840 |
+|4 |   TABLE SCAN  |d   |100000   |64066    |
+|5 |   TABLE SCAN  |b   |100000   |64066    |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      equal_conds([b.d1 = c.c1], [d.c2 = c.c2]), other_conds(nil)
+  2 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  3 - output([b.d1], [d.c2]), filter(nil), 
+      equal_conds([d.c1 = b.d2]), other_conds(nil)
+  4 - output([d.c2], [d.c1]), filter(nil), 
+      access([d.c2], [d.c1]), partitions(p0)
+  5 - output([b.d1], [b.d2]), filter(nil), 
+      access([b.d1], [b.d2]), partitions(p0)
+
+select /*+ leading(c,  (d, b) ) */ count(*) 
+from  nn2 b, nn1 c, nn1 d
+where b.d1 = c.c1 and d.c2 = c.c2 and d.c1 = b.d2;
++----------+
+| count(*) |
++----------+
+|        0 |
++----------+
+
+EXPLAIN select /*+ leading(t2, (t1, t3), t7, (t8, t9), (t4, t5, t6)) */
+count(*) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1 
+and t1.c3 = 'hello11' and t2.c2 < 4 ;
+Query Plan
+=================================================================================
+|ID|OPERATOR                     |NAME|EST. ROWS           |COST                |
+---------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY              |    |1                   |3.657784e+23        |
+|1 | HASH JOIN                   |    |4.214917e+23        |2.852683e+23        |
+|2 |  HASH JOIN                  |    |4.567804e+16        |2.709096e+16        |
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |47551773548         |33650150006         |
+|4 |    HASH JOIN                |    |475518              |564912              |
+|5 |     TABLE SCAN              |t2  |10000               |80811               |
+|6 |     HASH JOIN               |    |4852                |187694              |
+|7 |      TABLE SCAN             |t1  |990                 |110903              |
+|8 |      TABLE SCAN             |t3  |500                 |72438               |
+|9 |    MATERIAL                 |    |100000              |80235               |
+|10|     TABLE SCAN              |t7  |100000              |61860               |
+|11|   HASH JOIN                 |    |98010000            |58394053            |
+|12|    TABLE SCAN               |t8  |100000              |61860               |
+|13|    TABLE SCAN               |t9  |100000              |61860               |
+|14|  MERGE JOIN                 |    |96059601000         |57043655452         |
+|15|   MERGE JOIN                |    |98010000            |58661407            |
+|16|    SORT                     |    |100000              |252929              |
+|17|     TABLE SCAN              |t4  |100000              |61860               |
+|18|    SORT                     |    |100000              |252929              |
+|19|     TABLE SCAN              |t5  |100000              |61860               |
+|20|   SORT                      |    |100000              |252929              |
+|21|    TABLE SCAN               |t6  |100000              |61860               |
+=================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1], [t6.c1 = t7.c1]), other_conds(nil)
+  2 - output([t3.c1], [t7.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  3 - output([t3.c1], [t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  5 - output([t2.c1]), filter([t2.c2 < 4]), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+  6 - output([t3.c1], [t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  7 - output([t1.c1]), filter([t1.c3 = 'hello11']), 
+      access([t1.c1], [t1.c3]), partitions(p0)
+  8 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  9 - output([t7.c1]), filter(nil)
+  10 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  11 - output([t8.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  12 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  13 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  14 - output([t4.c1], [t6.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  15 - output([t4.c1], [t5.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  16 - output([t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  17 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  18 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  19 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  20 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  21 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+
+select /*+ leading(t2, (t1, t3), t7, (t8, t9), (t4, t5, t6)) */
+count(*) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1 
+and t1.c3 = 'hello11' and t2.c2 < 4 ;
++----------+
+| count(*) |
++----------+
+|        0 |
++----------+
+
+EXPLAIN select /*+ leading(t1,t2,t3,(t4,t5,t6),(t7,t8)) */ count(*),sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5 , nn2 t6, nn1 t7, nn2 t8
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and 
+t4.d1 = t1.c1 and t5.c1 = t2.d2 and t6.d2 = t3.c1 AND
+t7.c1 = t2.d1 and t7.c2 = t5.c1 and t8.d1 = t4.d2 and t8.d2 = t6.d2;
+Query Plan
+==================================================================================
+|ID|OPERATOR                      |NAME|EST. ROWS           |COST                |
+----------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY               |    |1                   |9.398245e+21        |
+|1 | HASH JOIN                    |    |8.345138e+21        |7.362007e+21        |
+|2 |  HASH JOIN                   |    |9.043821e+19        |6.878214e+19        |
+|3 |   HASH JOIN                  |    |96059601000         |57191122317         |
+|4 |    HASH JOIN                 |    |98010000            |58416840            |
+|5 |     TABLE SCAN               |t1  |100000              |64066               |
+|6 |     TABLE SCAN               |t2  |100000              |64066               |
+|7 |    TABLE SCAN                |t3  |100000              |61860               |
+|8 |   NESTED-LOOP JOIN CARTESIAN |    |1.000000e+15        |7.076464e+14        |
+|9 |    NESTED-LOOP JOIN CARTESIAN|    |10000000000         |7076537535          |
+|10|     TABLE SCAN               |t4  |100000              |64066               |
+|11|     MATERIAL                 |    |100000              |80235               |
+|12|      TABLE SCAN              |t5  |100000              |61860               |
+|13|    MATERIAL                  |    |100000              |80235               |
+|14|     TABLE SCAN               |t6  |100000              |61860               |
+|15|  NESTED-LOOP JOIN CARTESIAN  |    |10000000000         |7181005020          |
+|16|   TABLE SCAN                 |t7  |100000              |64066               |
+|17|   MATERIAL                   |    |100000              |100817              |
+|18|    TABLE SCAN                |t8  |100000              |64066               |
+==================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.d1 + t3.c1 + t4.d2 - t5.c1 + t6.d2 - t7.c1 - t8.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.d1 + t3.c1 + t4.d2 - t5.c1 + t6.d2 - t7.c1 - t8.d2)])
+  1 - output([t1.c1 + t2.d1 + t3.c1 + t4.d2 - t5.c1 + t6.d2 - t7.c1 - t8.d2]), filter(nil), 
+      equal_conds([t7.c1 = t2.d1], [t7.c2 = t5.c1], [t8.d1 = t4.d2], [t8.d2 = t6.d2]), other_conds(nil)
+  2 - output([t1.c1], [t2.d1], [t3.c1], [t4.d2], [t5.c1], [t6.d2]), filter(nil), 
+      equal_conds([t4.d1 = t1.c1], [t5.c1 = t2.d2], [t6.d2 = t3.c1]), other_conds(nil)
+  3 - output([t1.c1], [t2.d1], [t3.c1], [t2.d2]), filter(nil), 
+      equal_conds([t1.c2 = t3.c1]), other_conds(nil)
+  4 - output([t1.c1], [t2.d1], [t2.d2], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.d1]), other_conds(nil)
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  6 - output([t2.d1], [t2.d2]), filter(nil), 
+      access([t2.d1], [t2.d2]), partitions(p0)
+  7 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0)
+  8 - output([t4.d2], [t5.c1], [t6.d2], [t4.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([t4.d2], [t5.c1], [t4.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  10 - output([t4.d1], [t4.d2]), filter(nil), 
+      access([t4.d1], [t4.d2]), partitions(p0)
+  11 - output([t5.c1]), filter(nil)
+  12 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  13 - output([t6.d2]), filter(nil)
+  14 - output([t6.d2]), filter(nil), 
+      access([t6.d2]), partitions(p0)
+  15 - output([t7.c1], [t8.d2], [t7.c2], [t8.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  16 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0)
+  17 - output([t8.d2], [t8.d1]), filter(nil)
+  18 - output([t8.d1], [t8.d2]), filter(nil), 
+      access([t8.d1], [t8.d2]), partitions(p0)
+
+select /*+ leading(t1,t2,t3,(t4,t5,t6),(t7,t8)) */ count(*),sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5 , nn2 t6, nn1 t7, nn2 t8
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and 
+t4.d1 = t1.c1 and t5.c1 = t2.d2 and t6.d2 = t3.c1 AND
+t7.c1 = t2.d1 and t7.c2 = t5.c1 and t8.d1 = t4.d2 and t8.d2 = t6.d2;
++----------+------------------------------------------------------+
+| count(*) | sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2) |
++----------+------------------------------------------------------+
+|        0 |                                                 NULL |
++----------+------------------------------------------------------+
+
+EXPLAIN select /*+ leading(c, (d, (a,b))) */ count(a.c1+b.d2+a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+Query Plan
+==================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS    |COST         |
+------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1            |9.273318e+12 |
+|1 | HASH JOIN                  |    |9.414801e+12 |7.474974e+12 |
+|2 |  TABLE SCAN                |c   |100000       |64066        |
+|3 |  NESTED-LOOP JOIN CARTESIAN|    |980100000000 |724281093079 |
+|4 |   TABLE SCAN               |d   |100000       |61860        |
+|5 |   MATERIAL                 |    |9801000      |13207172     |
+|6 |    HASH JOIN               |    |9801000      |6003290      |
+|7 |     TABLE SCAN             |a   |10000        |80811        |
+|8 |     TABLE SCAN             |b   |100000       |64066        |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(a.c1 + b.d2 + a.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(a.c1 + b.d2 + a.c2)])
+  1 - output([a.c1 + b.d2 + a.c2]), filter(nil), 
+      equal_conds([d.c2 = c.c2], [b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  3 - output([a.c1], [b.d2], [a.c2], [d.c2], [b.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([d.c2]), filter(nil), 
+      access([d.c2]), partitions(p0)
+  5 - output([a.c1], [b.d2], [a.c2], [b.d1]), filter(nil)
+  6 - output([a.c1], [b.d2], [a.c2], [b.d1]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  7 - output([a.c1], [a.c2]), filter([a.c2 < 5]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  8 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+
+select /*+ leading(c, (d, (a,b))) */ count(a.c1+b.d2+a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
++-----------------------+
+| count(a.c1+b.d2+a.c2) |
++-----------------------+
+|                     0 |
++-----------------------+
+
+EXPLAIN select /*+ leading(t2,  (t1, (t3 , (t7,  (t8, (t9 ,  (t4, (t5, (t6))))))))) */
+count(*),sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
+from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+Query Plan
+=====================================================================================
+|ID|OPERATOR                         |NAME|EST. ROWS           |COST                |
+-------------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                  |    |1                   |3.792487e+26        |
+|1 | MERGE JOIN                      |    |4.257289e+26        |2.528101e+26        |
+|2 |  SORT                           |    |100000              |252929              |
+|3 |   TABLE SCAN                    |t2  |100000              |61860               |
+|4 |  MERGE JOIN                     |    |4.343729e+23        |2.580911e+23        |
+|5 |   SORT                          |    |100000              |252929              |
+|6 |    TABLE SCAN                   |t1  |100000              |61860               |
+|7 |   MERGE JOIN                    |    |4.431924e+20        |4.113088e+20        |
+|8 |    SORT                         |    |500                 |73171               |
+|9 |     TABLE SCAN                  |t3  |500                 |72438               |
+|10|    MERGE JOIN                   |    |9.043821e+19        |1.359770e+20        |
+|11|     SORT                        |    |100000              |254319              |
+|12|      TABLE SCAN                 |t7  |100000              |61860               |
+|13|     SORT                        |    |9.414801e+18        |7.346846e+19        |
+|14|      HASH JOIN                  |    |9.414801e+18        |5.594100e+18        |
+|15|       TABLE SCAN                |t8  |100000              |64066               |
+|16|       NESTED-LOOP JOIN CARTESIAN|    |9.605960e+15        |7.199026e+15        |
+|17|        TABLE SCAN               |t9  |100000              |61860               |
+|18|        MATERIAL                 |    |96059601000         |145300260450        |
+|19|         MERGE JOIN              |    |96059601000         |57043698704         |
+|20|          SORT                   |    |100000              |274554              |
+|21|           TABLE SCAN            |t4  |100000              |64066               |
+|22|          MERGE JOIN             |    |98010000            |58683033            |
+|23|           SORT                  |    |100000              |252929              |
+|24|            TABLE SCAN           |t5  |100000              |61860               |
+|25|           SORT                  |    |100000              |274554              |
+|26|            TABLE SCAN           |t6  |100000              |64066               |
+=====================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2) + cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2)], [T_FUN_COUNT(t9.c1)])
+  1 - output([t9.c1], [t1.c1 + t2.c1 + t3.c1 + t4.c2 - t5.c1 + t6.c2 - t7.c1 - t8.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  2 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
+  3 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  4 - output([t1.c1], [t3.c1], [t4.c2], [t5.c1], [t6.c2], [t7.c1], [t8.c2], [t9.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
+  6 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  7 - output([t3.c1], [t4.c2], [t5.c1], [t6.c2], [t7.c1], [t8.c2], [t9.c1], [t3.c2]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+  8 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c1, ASC])
+  9 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  10 - output([t4.c2], [t5.c1], [t6.c2], [t7.c1], [t8.c2], [t9.c1], [t4.c1]), filter(nil), 
+      equal_conds([t6.c1 = t7.c1], [t7.c1 = t8.c1]), other_conds(nil)
+  11 - output([t7.c1]), filter(nil), sort_keys([t7.c1, ASC], [t7.c1, ASC])
+  12 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  13 - output([t4.c2], [t5.c1], [t6.c2], [t8.c2], [t9.c1], [t4.c1], [t6.c1], [t8.c1]), filter(nil), sort_keys([t6.c1, ASC], [t8.c1, ASC])
+  14 - output([t4.c2], [t5.c1], [t6.c2], [t8.c2], [t9.c1], [t4.c1], [t6.c1], [t8.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  15 - output([t8.c1], [t8.c2]), filter(nil), 
+      access([t8.c1], [t8.c2]), partitions(p0)
+  16 - output([t4.c2], [t5.c1], [t6.c2], [t9.c1], [t4.c1], [t6.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  17 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  18 - output([t4.c2], [t5.c1], [t6.c2], [t4.c1], [t6.c1]), filter(nil)
+  19 - output([t4.c2], [t5.c1], [t6.c2], [t4.c1], [t6.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  20 - output([t4.c2], [t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  21 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  22 - output([t5.c1], [t6.c2], [t6.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  23 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  24 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  25 - output([t6.c2], [t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  26 - output([t6.c1], [t6.c2]), filter(nil), 
+      access([t6.c1], [t6.c2]), partitions(p0)
+
+select /*+ leading(t2,  (t1, (t3 , (t7,  (t8, (t9 ,  (t4, (t5, (t6))))))))) */
+count(*),sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
+from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
++----------+-------------------------------------------------------------------+
+| count(*) | sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1) |
++----------+-------------------------------------------------------------------+
+|        0 |                                                              NULL |
++----------+-------------------------------------------------------------------+
+
+EXPLAIN select /*+ leading(t1, ((t2, t3), t4), (t5, t6)) */ count(t1.c1), count(t2.d1 * t3.c1), sum(t4.d1 + t5.c1)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2 and 
+ t4.d1 = t5.c1 + t6.d2 and t2.d2 = t5.c1 and t2.d1 = t6.d2 and 
+  t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1;
+Query Plan
+==========================================================================
+|ID|OPERATOR                      |NAME|EST. ROWS       |COST            |
+--------------------------------------------------------------------------
+|0 |SCALAR GROUP BY               |    |1               |5.069834e+15    |
+|1 | HASH JOIN                    |    |1.153431e+15    |4.727273e+15    |
+|2 |  HASH JOIN                   |    |4.802980e+13    |3.541698e+15    |
+|3 |   TABLE SCAN                 |t1  |100000          |64066           |
+|4 |   NESTED-LOOP JOIN CARTESIAN |    |1.000000e+15    |7.180911e+14    |
+|5 |    NESTED-LOOP JOIN CARTESIAN|    |10000000000     |7076537535      |
+|6 |     TABLE SCAN               |t2  |100000          |64066           |
+|7 |     MATERIAL                 |    |100000          |80235           |
+|8 |      TABLE SCAN              |t3  |100000          |61860           |
+|9 |    MATERIAL                  |    |100000          |100817          |
+|10|     TABLE SCAN               |t4  |100000          |64066           |
+|11|  NESTED-LOOP JOIN CARTESIAN  |    |10000000000     |7076537535      |
+|12|   TABLE SCAN                 |t5  |100000          |64066           |
+|13|   MATERIAL                   |    |100000          |80235           |
+|14|    TABLE SCAN                |t6  |100000          |61860           |
+==========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(t2.d1 * t3.c1)], [T_FUN_SUM(t4.d1 + t5.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(t1.c1)], [T_FUN_COUNT(t2.d1 * t3.c1)], [T_FUN_SUM(t4.d1 + t5.c1)])
+  1 - output([t1.c1], [t2.d1 * t3.c1], [t4.d1 + t5.c1]), filter(nil), 
+      equal_conds([t4.d1 = t5.c1 + t6.d2], [t2.d2 = t5.c1], [t2.d1 = t6.d2], [t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1]), other_conds(nil)
+  2 - output([t1.c1], [t2.d1], [t3.c1], [t4.d1], [t2.d2], [t1.c1 + t4.d2]), filter(nil), 
+      equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds([t1.c1 + t2.d2 = t4.d1 + t1.c2])
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  4 - output([t2.d1], [t3.c1], [t4.d1], [t2.d2], [t4.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([t2.d1], [t3.c1], [t2.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([t2.d1], [t2.d2]), filter(nil), 
+      access([t2.d1], [t2.d2]), partitions(p0)
+  7 - output([t3.c1]), filter(nil)
+  8 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0)
+  9 - output([t4.d1], [t4.d2]), filter(nil)
+  10 - output([t4.d1], [t4.d2]), filter(nil), 
+      access([t4.d1], [t4.d2]), partitions(p0)
+  11 - output([t5.c1], [t6.d2], [t5.c1 + t6.d2], [t5.c2 + t6.d2 - 1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  12 - output([t5.c1], [t5.c2]), filter(nil), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  13 - output([t6.d2]), filter(nil)
+  14 - output([t6.d2]), filter(nil), 
+      access([t6.d2]), partitions(p0)
+
+select /*+ leading(t1, ((t2, t3), t4), (t5, t6)) */ count(t1.c1), count(t2.d1 * t3.c1), sum(t4.d1 + t5.c1)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2 and 
+ t4.d1 = t5.c1 + t6.d2 and t2.d2 = t5.c1 and t2.d1 = t6.d2 and 
+  t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1;
++--------------+----------------------+--------------------+
+| count(t1.c1) | count(t2.d1 * t3.c1) | sum(t4.d1 + t5.c1) |
++--------------+----------------------+--------------------+
+|            0 |                    0 |               NULL |
++--------------+----------------------+--------------------+
+
+EXPLAIN select /*+ leading(t1, ((t2, t3), t4)) */ count(*), sum(t2.d1 * t3.c1 - t4.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2;
+Query Plan
+=========================================================================
+|ID|OPERATOR                     |NAME|EST. ROWS       |COST            |
+-------------------------------------------------------------------------
+|0 |SCALAR GROUP BY              |    |1               |3.553417e+15    |
+|1 | HASH JOIN                   |    |4.802980e+13    |3.541698e+15    |
+|2 |  TABLE SCAN                 |t1  |100000          |64066           |
+|3 |  NESTED-LOOP JOIN CARTESIAN |    |1.000000e+15    |7.180911e+14    |
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |10000000000     |7076537535      |
+|5 |    TABLE SCAN               |t2  |100000          |64066           |
+|6 |    MATERIAL                 |    |100000          |80235           |
+|7 |     TABLE SCAN              |t3  |100000          |61860           |
+|8 |   MATERIAL                  |    |100000          |100817          |
+|9 |    TABLE SCAN               |t4  |100000          |64066           |
+=========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t2.d1 * t3.c1 - t4.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t2.d1 * t3.c1 - t4.d2)])
+  1 - output([t2.d1 * t3.c1 - t4.d2]), filter(nil), 
+      equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1]), other_conds([t1.c1 + t2.d2 = t4.d1 + t1.c2])
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  3 - output([t2.d1], [t3.c1], [t4.d2], [t2.d2], [t4.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([t2.d1], [t3.c1], [t2.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([t2.d1], [t2.d2]), filter(nil), 
+      access([t2.d1], [t2.d2]), partitions(p0)
+  6 - output([t3.c1]), filter(nil)
+  7 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0)
+  8 - output([t4.d2], [t4.d1]), filter(nil)
+  9 - output([t4.d1], [t4.d2]), filter(nil), 
+      access([t4.d1], [t4.d2]), partitions(p0)
+
+select /*+ leading(t1, ((t2, t3), t4)) */ count(*), sum(t2.d1 * t3.c1 - t4.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2;
++----------+----------------------------+
+| count(*) | sum(t2.d1 * t3.c1 - t4.d2) |
++----------+----------------------------+
+|        0 |                       NULL |
++----------+----------------------------+
+
+EXPLAIN select /*+ leading(t1, (t2, t3)) */ count(*), sum(t2.d1+t3.c2)
+from nn1 t1, nn2 t2, nn1 t3
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 =t3.c1+t2.d2;
+Query Plan
+==============================================================
+|ID|OPERATOR                    |NAME|EST. ROWS  |COST       |
+--------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1          |12409200897|
+|1 | HASH JOIN                  |    |480298005  |12292006804|
+|2 |  TABLE SCAN                |t1  |100000     |64066      |
+|3 |  NESTED-LOOP JOIN CARTESIAN|    |10000000000|7181005020 |
+|4 |   TABLE SCAN               |t2  |100000     |64066      |
+|5 |   MATERIAL                 |    |100000     |100817     |
+|6 |    TABLE SCAN              |t3  |100000     |64066      |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t2.d1 + t3.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t2.d1 + t3.c2)])
+  1 - output([t2.d1 + t3.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.d1], [t1.c2 = t3.c1], [t1.c1 = t3.c1 + t2.d2]), other_conds(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  3 - output([t2.d1], [t3.c2], [t3.c1], [t3.c1 + t2.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([t2.d1], [t2.d2]), filter(nil), 
+      access([t2.d1], [t2.d2]), partitions(p0)
+  5 - output([t3.c2], [t3.c1]), filter(nil)
+  6 - output([t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c1], [t3.c2]), partitions(p0)
+
+select /*+ leading(t1, (t2, t3)) */ count(*), sum(t2.d1+t3.c2)
+from nn1 t1, nn2 t2, nn1 t3
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 =t3.c1+t2.d2;
++----------+------------------+
+| count(*) | sum(t2.d1+t3.c2) |
++----------+------------------+
+|        0 |             NULL |
++----------+------------------+
+
+### 3, 复杂测试(集合、子查询中等)  ###
+EXPLAIN SELECT count(*), sum(b.d1) from
+  nn1 a,  nn2 b,  nn1 c
+WHERE
+  a.c1 = b.d1   and b.d2 = c.c1   and c.c2 in (
+    select
+      /*+ leading(x, ((y, z), x2, (y2,y3))) no_use_hash(y2, y3) */
+      x.c1
+    from nn1 x, nn2 y, nn1 z, nn1 x2, nn1 y2, nn1 y3
+    where x.c2 = y.d2 and y.d1 = z.c2 and y2.c1 = y3.c1
+  );
+Query Plan
+=======================================================================================
+|ID|OPERATOR                          |NAME |EST. ROWS           |COST                |
+---------------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                   |     |1                   |9.983687e+23        |
+|1 | HASH JOIN                        |     |95099004990         |9.983687e+23        |
+|2 |  TABLE SCAN                      |a    |100000              |61860               |
+|3 |  MERGE JOIN                      |     |97029900            |9.983687e+23        |
+|4 |   SORT                           |     |99000               |9.983687e+23        |
+|5 |    HASH SEMI JOIN                |     |99000               |9.983687e+23        |
+|6 |     TABLE SCAN                   |c    |100000              |64066               |
+|7 |     SUBPLAN SCAN                 |VIEW1|9.414801e+23        |6.893247e+23        |
+|8 |      HASH JOIN                   |     |9.414801e+23        |5.593798e+23        |
+|9 |       TABLE SCAN                 |x    |100000              |64066               |
+|10|       NESTED-LOOP JOIN CARTESIAN |     |9.605960e+20        |6.897886e+20        |
+|11|        NESTED-LOOP JOIN CARTESIAN|     |9.801000e+12        |6.935632e+12        |
+|12|         HASH JOIN                |     |98010000            |58414634            |
+|13|          TABLE SCAN              |y    |100000              |64066               |
+|14|          TABLE SCAN              |z    |100000              |61860               |
+|15|         MATERIAL                 |     |100000              |78030               |
+|16|          TABLE SCAN              |x2   |100000              |59654               |
+|17|        MATERIAL                  |     |98010000            |94680818            |
+|18|         MERGE JOIN               |     |98010000            |58661407            |
+|19|          SORT                    |     |100000              |252929              |
+|20|           TABLE SCAN             |y2   |100000              |61860               |
+|21|          SORT                    |     |100000              |252929              |
+|22|           TABLE SCAN             |y3   |100000              |61860               |
+|23|   SORT                           |     |100000              |274554              |
+|24|    TABLE SCAN                    |b    |100000              |64066               |
+=======================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1)])
+  1 - output([b.d1]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  3 - output([b.d1]), filter(nil), 
+      equal_conds([b.d2 = c.c1]), other_conds(nil)
+  4 - output([c.c1]), filter(nil), sort_keys([c.c1, ASC])
+  5 - output([c.c1]), filter(nil), 
+      equal_conds([c.c2 = VIEW1.c1]), other_conds(nil)
+  6 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  7 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  8 - output([x.c1]), filter(nil), 
+      equal_conds([x.c2 = y.d2]), other_conds(nil)
+  9 - output([x.c2], [x.c1]), filter(nil), 
+      access([x.c2], [x.c1]), partitions(p0)
+  10 - output([y.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  11 - output([y.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  12 - output([y.d2]), filter(nil), 
+      equal_conds([y.d1 = z.c2]), other_conds(nil)
+  13 - output([y.d2], [y.d1]), filter(nil), 
+      access([y.d2], [y.d1]), partitions(p0)
+  14 - output([z.c2]), filter(nil), 
+      access([z.c2]), partitions(p0)
+  15 - output([1]), filter(nil)
+  16 - output([1]), filter(nil), 
+      access([x2.__pk_increment]), partitions(p0)
+  17 - output([1]), filter(nil)
+  18 - output([1]), filter(nil), 
+      equal_conds([y2.c1 = y3.c1]), other_conds(nil)
+  19 - output([y2.c1]), filter(nil), sort_keys([y2.c1, ASC])
+  20 - output([y2.c1]), filter(nil), 
+      access([y2.c1]), partitions(p0)
+  21 - output([y3.c1]), filter(nil), sort_keys([y3.c1, ASC])
+  22 - output([y3.c1]), filter(nil), 
+      access([y3.c1]), partitions(p0)
+  23 - output([b.d1], [b.d2]), filter(nil), sort_keys([b.d2, ASC])
+  24 - output([b.d1], [b.d2]), filter(nil), 
+      access([b.d1], [b.d2]), partitions(p0)
+
+SELECT count(*), sum(b.d1) from
+  nn1 a,  nn2 b,  nn1 c
+WHERE
+  a.c1 = b.d1   and b.d2 = c.c1   and c.c2 in (
+    select
+      /*+ leading(x, ((y, z), x2, (y2,y3))) no_use_hash(y2, y3) */
+      x.c1
+    from nn1 x, nn2 y, nn1 z, nn1 x2, nn1 y2, nn1 y3
+    where x.c2 = y.d2 and y.d1 = z.c2 and y2.c1 = y3.c1
+  );
++----------+-----------+
+| count(*) | sum(b.d1) |
++----------+-----------+
+|        0 |      NULL |
++----------+-----------+
+
+EXPLAIN select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
+union ALL
+select /* leading(t2, t1, (t4, t3, (t6, t5))) */ sum(t1.c1), max(t2.c2)+sum(t5.c1-t6.c2) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 55;
+Query Plan
+==================================================================================
+|ID|OPERATOR                      |NAME|EST. ROWS           |COST                |
+----------------------------------------------------------------------------------
+|0 |UNION ALL                     |    |2                   |1.848325e+20        |
+|1 | SCALAR GROUP BY              |    |1                   |1.074258e+20        |
+|2 |  HASH JOIN                   |    |8.687458e+19        |8.622818e+19        |
+|3 |   HASH JOIN                  |    |9.043821e+18        |5.363726e+18        |
+|4 |    HASH JOIN                 |    |92274469443         |54815299356         |
+|5 |     TABLE SCAN               |t6  |98010               |78605               |
+|6 |     HASH JOIN                |    |96059601            |57274293            |
+|7 |      TABLE SCAN              |t5  |98010               |80811               |
+|8 |      TABLE SCAN              |t4  |100000              |64066               |
+|9 |    NESTED-LOOP JOIN CARTESIAN|    |10000000000         |7076537535          |
+|10|     TABLE SCAN               |t3  |100000              |64066               |
+|11|     MATERIAL                 |    |100000              |80235               |
+|12|      TABLE SCAN              |t1  |100000              |61860               |
+|13|   TABLE SCAN                 |t2  |100000              |64066               |
+|14| SCALAR GROUP BY              |    |1                   |7.740665e+19        |
+|15|  HASH JOIN                   |    |8.687458e+19        |5.160548e+19        |
+|16|   TABLE SCAN                 |t1  |100000              |61860               |
+|17|   HASH JOIN                  |    |8.863849e+16        |5.265328e+16        |
+|18|    TABLE SCAN                |t2  |100000              |64066               |
+|19|    HASH JOIN                 |    |9.043821e+13        |5.372236e+13        |
+|20|     TABLE SCAN               |t3  |100000              |64066               |
+|21|     HASH JOIN                |    |92274469443         |54813560253         |
+|22|      TABLE SCAN              |t4  |100000              |64066               |
+|23|      HASH JOIN               |    |94148015            |56156658            |
+|24|       TABLE SCAN             |t5  |98010               |80811               |
+|25|       TABLE SCAN             |t6  |98010               |80811               |
+==================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0))], [T_FUN_SUM(t2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t2.c1)])
+  2 - output([t2.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1], [t2.c2 = t3.c1]), other_conds(nil)
+  3 - output([t1.c1], [t3.c1]), filter(nil), 
+      equal_conds([t3.c2 = t4.c1]), other_conds(nil)
+  4 - output([t4.c1]), filter(nil), 
+      equal_conds([t5.c2 = t6.c1]), other_conds(nil)
+  5 - output([t6.c1]), filter([t6.c1 != 44]), 
+      access([t6.c1]), partitions(p0)
+  6 - output([t4.c1], [t5.c2]), filter(nil), 
+      equal_conds([t4.c2 = t5.c1]), other_conds(nil)
+  7 - output([t5.c1], [t5.c2]), filter([t5.c2 != 44]), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  8 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  9 - output([t1.c1], [t3.c1], [t3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  10 - output([t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c1], [t3.c2]), partitions(p0)
+  11 - output([t1.c1]), filter(nil)
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  13 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+  14 - output([T_FUN_SUM(t1.c1)], [cast(T_FUN_MAX(t2.c2), DECIMAL(11, 0)) + T_FUN_SUM(t5.c1 - t6.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_MAX(t2.c2)], [T_FUN_SUM(t5.c1 - t6.c2)])
+  15 - output([t1.c1], [t2.c2], [t5.c1 - t6.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  16 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  17 - output([t2.c2], [t5.c1], [t6.c2], [t2.c1]), filter(nil), 
+      equal_conds([t2.c2 = t3.c1]), other_conds(nil)
+  18 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+  19 - output([t5.c1], [t6.c2], [t3.c1]), filter(nil), 
+      equal_conds([t3.c2 = t4.c1]), other_conds(nil)
+  20 - output([t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c1], [t3.c2]), partitions(p0)
+  21 - output([t5.c1], [t6.c2], [t4.c1]), filter(nil), 
+      equal_conds([t4.c2 = t5.c1]), other_conds(nil)
+  22 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  23 - output([t5.c1], [t6.c2]), filter(nil), 
+      equal_conds([t5.c2 = t6.c1]), other_conds(nil)
+  24 - output([t5.c1], [t5.c2]), filter([t5.c2 != 55]), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  25 - output([t6.c1], [t6.c2]), filter([t6.c1 != 55]), 
+      access([t6.c1], [t6.c2]), partitions(p0)
+
+select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
+union ALL
+select /* leading(t2, t1, (t4, t3, (t6, t5))) */ sum(t1.c1), max(t2.c2)+sum(t5.c1-t6.c2) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 55;
++----------+------------+
+| count(*) | sum(t2.c1) |
++----------+------------+
+|        0 |       NULL |
+|     NULL |       NULL |
++----------+------------+
+
+EXPLAIN select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
+nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
+where mod(t1.c1, 3) = mod(t2.d2,2) and mod(t1.c1,5) = mod(t3.c1,4) and mod(t1.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t1.c2, 5) = mod(t5.c1, 6) and mod(t1.c1, 3) = mod(t6.d2, 2) and mod(t1.c1, 4) = mod(t7.c1,3) AND
+    mod(t1.c1, 7) = mod(t8.d1, 3) and mod(t1.c2, 5) = mod(t9.c1, 4) AND
+      mod(t2.d1,5) = mod(t3.c1,4) and mod(t2.d2, 7) = mod(t4.d1, 3) AND 
+    mod(t2.d2, 5) = mod(t5.c1, 6) and mod(t2.d1, 3) = mod(t6.d2, 2) and mod(t2.d1, 4) = mod(t7.c1,3) AND
+    mod(t2.d1, 7) = mod(t8.d1, 3) and mod(t2.d2, 5) = mod(t9.c1, 4) AND
+     mod(t3.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t3.c2, 5) = mod(t5.c1, 6) and mod(t3.c1, 3) = mod(t6.d2, 2) and mod(t3.c1, 4) = mod(t7.c1,3) AND
+    mod(t3.c1, 7) = mod(t8.d1, 3) and mod(t3.c2, 5) = mod(t9.c1, 4) AND
+mod(t4.d2, 5) = mod(t5.c1, 6) and mod(t4.d1, 3) = mod(t6.d2, 2) and mod(t4.d1, 4) = mod(t7.c1,3) AND
+    mod(t4.d1, 7) = mod(t8.d1, 3) and mod(t4.d2, 5) = mod(t9.c1, 4) and 
+     mod(t5.c1, 2) = mod(t6.d2, 5) and mod(t5.c1, 4) = mod(t7.c1,1) AND
+    mod(t5.c1, 7) = mod(t8.d1, 6) and mod(t5.c2, 5) = mod(t9.c1, 4) AND
+     mod(t6.d1, 4) = mod(t7.c1,3) AND
+    mod(t6.d1, 7) = mod(t8.d1, 3) and mod(t6.d2, 5) = mod(t9.c1, 4) AND
+    mod(t7.c1, 7) = mod(t8.d1, 3) and mod(t7.c2, 5) = mod(t9.c1, 4) AND
+    mod(t8.d2, 5) = mod(t9.c1, 14)    ;
+Query Plan
+===============================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST     |
+-----------------------------------------------
+|0 |SCALAR GROUP BY  |    |1        |121810478|
+|1 | HASH JOIN       |    |1        |121810478|
+|2 |  HASH JOIN      |    |1        |121721296|
+|3 |   HASH JOIN     |    |2        |121567394|
+|4 |    TABLE SCAN   |t9  |100000   |61860    |
+|5 |    HASH JOIN    |    |1        |121390158|
+|6 |     HASH JOIN   |    |40       |121281543|
+|7 |      HASH JOIN  |    |50000000 |29942983 |
+|8 |       TABLE SCAN|t8  |100000   |64066    |
+|9 |       TABLE SCAN|t7  |100000   |64066    |
+|10|      HASH JOIN  |    |1250     |273556   |
+|11|       TABLE SCAN|t6  |100000   |64066    |
+|12|       TABLE SCAN|t5  |3        |80811    |
+|13|     TABLE SCAN  |t4  |100000   |64066    |
+|14|   HASH JOIN     |    |7        |153893   |
+|15|    TABLE SCAN   |t3  |500      |72438    |
+|16|    TABLE SCAN   |t1  |3        |80811    |
+|17|  TABLE SCAN     |t2  |1        |89183    |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t9.c1 - t5.c1 + t4.d2 - t1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t9.c1 - t5.c1 + t4.d2 - t1.c1)])
+  1 - output([t9.c1 - t5.c1 + t4.d2 - t1.c1]), filter(nil), 
+      equal_conds([t1.c1 % 3 = t2.d2 % 2], [t2.d1 % 5 = t3.c1 % 4], [t2.d2 % 5 = t5.c1 % 6], [t2.d1 % 7 = t8.d1 % 3]), other_conds(nil)
+  2 - output([t9.c1], [t5.c1], [t4.d2], [t1.c1], [t1.c1 % 3], [t3.c1 % 4], [t5.c1 % 6], [t8.d1 % 3]), filter(nil), 
+      equal_conds([t1.c2 % 7 = t4.d1 % 3], [t1.c2 % 5 = t5.c1 % 6], [t1.c1 % 3 = t6.d2 % 2], [t1.c1 % 4 = t7.c1 % 3], [t1.c1 % 7 = t8.d1 % 3], [t1.c2 % 5 = t9.c1 % 4], [t3.c2 % 7 = t4.d1 % 3], [t3.c2 % 5 = t5.c1 % 6], [t3.c1 % 7 = t8.d1 % 3]), other_conds(nil)
+  3 - output([t9.c1], [t5.c1], [t4.d2], [t8.d1], [t4.d1 % 3], [t5.c1 % 6], [t6.d2 % 2], [t7.c1 % 3], [t8.d1 % 3], [t9.c1 % 4], [t4.d1 % 3], [t5.c1 % 6], [t8.d1 % 3]), filter(nil), 
+      equal_conds([t7.c2 % 5 = t9.c1 % 4], [t8.d2 % 5 = t9.c1 % 14]), other_conds(nil)
+  4 - output([t9.c1], [t9.c1 % 4], [t9.c1 % 14]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  5 - output([t5.c1], [t4.d2], [t8.d1], [t4.d1], [t6.d2], [t7.c1], [t5.c1 % 6], [t7.c2 % 5], [t8.d2 % 5]), filter(nil), 
+      equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 4 = t7.c1 % 3], [t4.d1 % 7 = t8.d1 % 3]), other_conds(nil)
+  6 - output([t5.c1], [t8.d1], [t6.d2], [t7.c1], [t5.c1 % 6], [t7.c2], [t8.d2], [t5.c1 % 6], [t7.c1 % 3], [t8.d1 % 3]), filter(nil), 
+      equal_conds([t5.c1 % 4 = t7.c1 % 1], [t5.c1 % 7 = t8.d1 % 6], [t6.d1 % 4 = t7.c1 % 3], [t6.d1 % 7 = t8.d1 % 3]), other_conds(nil)
+  7 - output([t8.d1], [t7.c1], [t7.c2], [t8.d2], [t7.c1 % 1], [t8.d1 % 6], [t7.c1 % 3], [t8.d1 % 3]), filter(nil), 
+      equal_conds([t7.c1 % 7 = t8.d1 % 3]), other_conds(nil)
+  8 - output([t8.d1], [t8.d2], [t8.d1 % 3]), filter(nil), 
+      access([t8.d1], [t8.d2]), partitions(p0)
+  9 - output([t7.c1], [t7.c2], [t7.c1 % 7]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0)
+  10 - output([t5.c1], [t6.d2], [t5.c1 % 6], [t5.c1 % 4], [t5.c1 % 7], [t6.d1 % 4], [t6.d1 % 7]), filter(nil), 
+      equal_conds([t5.c1 % 2 = t6.d2 % 5]), other_conds(nil)
+  11 - output([t6.d2], [t6.d1], [t6.d2 % 5]), filter(nil), 
+      access([t6.d2], [t6.d1]), partitions(p0)
+  12 - output([t5.c1], [t5.c1 % 6], [t5.c1 % 2]), filter([t5.c1 % 6 = t5.c1 % 2], [t5.c1 % 6 = t5.c2 % 5]), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  13 - output([t4.d1], [t4.d2], [t4.d2 % 5], [t4.d1 % 4], [t4.d1 % 7]), filter(nil), 
+      access([t4.d1], [t4.d2]), partitions(p0)
+  14 - output([t1.c1], [t3.c1], [t1.c1 % 3], [t1.c2 % 7], [t1.c2 % 5], [t1.c1 % 3], [t1.c1 % 4], [t1.c1 % 7], [t1.c2 % 5], [t3.c2 % 7], [t3.c2 % 5], [t3.c1 % 7]), filter(nil), 
+      equal_conds([t1.c1 % 5 = t3.c1 % 4]), other_conds(nil)
+  15 - output([t3.c1], [t3.c2], [t3.c2 % 7], [t3.c1 % 4]), filter([t3.c2 % 7 = t3.c1 % 3]), 
+      access([t3.c1], [t3.c2]), partitions(p0)
+  16 - output([t1.c1], [t1.c2], [t1.c1 % 3], [t1.c2 % 7], [t1.c1 % 4], [t1.c1 % 5]), filter([t1.c1 % 3 = t1.c2 % 7], [t1.c1 % 5 = t1.c1 % 4]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  17 - output([t2.d2 % 2], [t2.d1 % 5], [t2.d2 % 5], [t2.d1 % 7]), filter([t2.d2 % 2 = t2.d2 % 7], [t2.d2 % 2 = t2.d1 % 3], [t2.d1 % 5 = t2.d1 % 4]), 
+      access([t2.d2], [t2.d1]), partitions(p0)
+
+select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
+nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
+where mod(t1.c1, 3) = mod(t2.d2,2) and mod(t1.c1,5) = mod(t3.c1,4) and mod(t1.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t1.c2, 5) = mod(t5.c1, 6) and mod(t1.c1, 3) = mod(t6.d2, 2) and mod(t1.c1, 4) = mod(t7.c1,3) AND
+    mod(t1.c1, 7) = mod(t8.d1, 3) and mod(t1.c2, 5) = mod(t9.c1, 4) AND
+      mod(t2.d1,5) = mod(t3.c1,4) and mod(t2.d2, 7) = mod(t4.d1, 3) AND 
+    mod(t2.d2, 5) = mod(t5.c1, 6) and mod(t2.d1, 3) = mod(t6.d2, 2) and mod(t2.d1, 4) = mod(t7.c1,3) AND
+    mod(t2.d1, 7) = mod(t8.d1, 3) and mod(t2.d2, 5) = mod(t9.c1, 4) AND
+     mod(t3.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t3.c2, 5) = mod(t5.c1, 6) and mod(t3.c1, 3) = mod(t6.d2, 2) and mod(t3.c1, 4) = mod(t7.c1,3) AND
+    mod(t3.c1, 7) = mod(t8.d1, 3) and mod(t3.c2, 5) = mod(t9.c1, 4) AND
+mod(t4.d2, 5) = mod(t5.c1, 6) and mod(t4.d1, 3) = mod(t6.d2, 2) and mod(t4.d1, 4) = mod(t7.c1,3) AND
+    mod(t4.d1, 7) = mod(t8.d1, 3) and mod(t4.d2, 5) = mod(t9.c1, 4) and 
+     mod(t5.c1, 2) = mod(t6.d2, 5) and mod(t5.c1, 4) = mod(t7.c1,1) AND
+    mod(t5.c1, 7) = mod(t8.d1, 6) and mod(t5.c2, 5) = mod(t9.c1, 4) AND
+     mod(t6.d1, 4) = mod(t7.c1,3) AND
+    mod(t6.d1, 7) = mod(t8.d1, 3) and mod(t6.d2, 5) = mod(t9.c1, 4) AND
+    mod(t7.c1, 7) = mod(t8.d1, 3) and mod(t7.c2, 5) = mod(t9.c1, 4) AND
+    mod(t8.d2, 5) = mod(t9.c1, 14)    ;
++----------+------------------------------+
+| count(*) | sum(t9.c1-t5.c1+t4.d2-t1.c1) |
++----------+------------------------------+
+|        0 |                         NULL |
++----------+------------------------------+
+
+EXPLAIN select /*+ leading(a (c ,(b, d))) */ count(*),sum(a.c1) from nn1 a, (select * from nn2) b, 
+(select * from nn1 cc group by c1,c2) c, nn2 d 
+where a.c1 = c.c1 and b.d2 = d.d1 and c.c2 = d.d2;
+Query Plan
+=======================================================
+|ID|OPERATOR         |NAME|EST. ROWS    |COST         |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1            |7.889927e+12 |
+|1 | HASH JOIN       |    |9.414801e+12 |5.592688e+12 |
+|2 |  TABLE SCAN     |a   |100000       |61860        |
+|3 |  HASH JOIN      |    |9605960101   |5787812376   |
+|4 |   SUBPLAN SCAN  |c   |10001        |111242       |
+|5 |    HASH GROUP BY|    |10001        |109862       |
+|6 |     TABLE SCAN  |cc  |100000       |64066        |
+|7 |   HASH JOIN     |    |98010000     |58396259     |
+|8 |    TABLE SCAN   |nn2 |100000       |61860        |
+|9 |    TABLE SCAN   |d   |100000       |64066        |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1)])
+  1 - output([a.c1]), filter(nil), 
+      equal_conds([a.c1 = c.c1]), other_conds(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  3 - output([c.c1]), filter(nil), 
+      equal_conds([c.c2 = d.d2]), other_conds(nil)
+  4 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2])
+  5 - output([cc.c1], [cc.c2]), filter(nil), 
+      group([cc.c1], [cc.c2]), agg_func(nil)
+  6 - output([cc.c1], [cc.c2]), filter(nil), 
+      access([cc.c1], [cc.c2]), partitions(p0)
+  7 - output([d.d2]), filter(nil), 
+      equal_conds([nn2.d2 = d.d1]), other_conds(nil)
+  8 - output([nn2.d2]), filter(nil), 
+      access([nn2.d2]), partitions(p0)
+  9 - output([d.d1], [d.d2]), filter(nil), 
+      access([d.d1], [d.d2]), partitions(p0)
+
+select /*+ leading(a (c ,(b, d))) */ count(*),sum(a.c1) from nn1 a, (select * from nn2) b, 
+(select * from nn1 cc group by c1,c2) c, nn2 d 
+where a.c1 = c.c1 and b.d2 = d.d1 and c.c2 = d.d2;
++----------+-----------+
+| count(*) | sum(a.c1) |
++----------+-----------+
+|        0 |      NULL |
++----------+-----------+
+
+EXPLAIN select /*+ leading(a (c ,(b, d))) */count(*), sum(b.d2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                     |NAME|EST. ROWS     |COST          |
+---------------------------------------------------------------------
+|0 |SCALAR GROUP BY              |    |1             |7.891735e+13  |
+|1 | HASH JOIN                   |    |9.414801e+13  |5.594496e+13  |
+|2 |  TABLE SCAN                 |a   |100000        |61860         |
+|3 |  HASH JOIN                  |    |96059601000   |75954328743   |
+|4 |   TABLE SCAN                |c   |100000        |64066         |
+|5 |   NESTED-LOOP JOIN CARTESIAN|    |10000000000   |7076537535    |
+|6 |    TABLE SCAN               |b   |100000        |64066         |
+|7 |    MATERIAL                 |    |100000        |80235         |
+|8 |     TABLE SCAN              |d   |100000        |61860         |
+=====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(b.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(b.d2)])
+  1 - output([b.d2]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  3 - output([b.d2], [b.d1]), filter(nil), 
+      equal_conds([b.d2 = c.c1], [c.c2 = d.d2]), other_conds(nil)
+  4 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  5 - output([b.d2], [b.d1], [d.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([b.d1], [b.d2]), filter(nil), 
+      access([b.d1], [b.d2]), partitions(p0)
+  7 - output([d.d2]), filter(nil)
+  8 - output([d.d2]), filter(nil), 
+      access([d.d2]), partitions(p0)
+
+select /*+ leading(a (c ,(b, d))) */count(*), sum(b.d2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2;
++----------+-----------+
+| count(*) | sum(b.d2) |
++----------+-----------+
+|        0 |      NULL |
++----------+-----------+
+
+EXPLAIN select (select /*+ leading(a (c ,(b, d))) */ count(x.c2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2 and x.c1 = a.c1 + b.d1 + c.c2 - d.d2 * 5) as x
+from nn1 x;
+Query Plan
+===================================================================
+|ID|OPERATOR                     |NAME|EST. ROWS   |COST          |
+-------------------------------------------------------------------
+|0 |SUBPLAN FILTER               |    |1           |2.405975e+13  |
+|1 | SCALAR GROUP BY             |    |1           |83167         |
+|2 |  TABLE SCAN                 |x   |100000      |64066         |
+|3 | HASH JOIN                   |    |470740074701|2.399478e+13  |
+|4 |  TABLE SCAN                 |a   |100000      |61860         |
+|5 |  HASH JOIN                  |    |96059601000 |75954328743   |
+|6 |   TABLE SCAN                |c   |100000      |64066         |
+|7 |   NESTED-LOOP JOIN CARTESIAN|    |10000000000 |7076537535    |
+|8 |    TABLE SCAN               |b   |100000      |64066         |
+|9 |    MATERIAL                 |    |100000      |80235         |
+|10|     TABLE SCAN              |d   |100000      |61860         |
+===================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([subquery(1)]), filter(nil), 
+      exec_params_([T_FUN_COUNT(x.c2)], [x.c1]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([T_FUN_COUNT(x.c2)], [x.c1]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(x.c2)])
+  2 - output([x.c1], [x.c2]), filter(nil), 
+      access([x.c1], [x.c2]), partitions(p0)
+  3 - output([?]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds([? = a.c1 + b.d1 + c.c2 - d.d2 * 5])
+  4 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  5 - output([b.d1], [c.c2], [d.d2]), filter(nil), 
+      equal_conds([b.d2 = c.c1], [c.c2 = d.d2]), other_conds(nil)
+  6 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  7 - output([b.d1], [d.d2], [b.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  8 - output([b.d1], [b.d2]), filter(nil), 
+      access([b.d1], [b.d2]), partitions(p0)
+  9 - output([d.d2]), filter(nil)
+  10 - output([d.d2]), filter(nil), 
+      access([d.d2]), partitions(p0)
+
+select (select /*+ leading(a (c ,(b, d))) */ count(x.c2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2 and x.c1 = a.c1 + b.d1 + c.c2 - d.d2 * 5) as x
+from nn1 x;
++------+
+| x    |
++------+
+| NULL |
++------+
+
+EXPLAIN select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
+ (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
+ and t3.c1 in (1,2);
+Query Plan
+==============================================================
+|ID|OPERATOR                   |NAME |EST. ROWS  |COST       |
+--------------------------------------------------------------
+|0 |SCALAR GROUP BY            |     |1          |77137853108|
+|1 | NESTED-LOOP JOIN CARTESIAN|     |1921192020 |76770881602|
+|2 |  HASH JOIN                |     |970299     |75411299985|
+|3 |   NESTED-LOOP JOIN        |     |990        |75410628385|
+|4 |    SUBPLAN SCAN           |VIEW1|1          |75410533268|
+|5 |     SCALAR GROUP BY       |     |1          |75410533268|
+|6 |      HASH JOIN            |     |96059601000|57061957944|
+|7 |       TABLE SCAN          |x    |100000     |61860      |
+|8 |       HASH JOIN           |     |98010000   |58414634   |
+|9 |        TABLE SCAN         |y    |100000     |64066      |
+|10|        TABLE SCAN         |z    |100000     |61860      |
+|11|    TABLE SCAN             |t1   |100000     |64066      |
+|12|   TABLE SCAN              |t2   |100000     |61860      |
+|13|  MATERIAL                 |     |1980       |70596      |
+|14|   TABLE SCAN              |t3   |1980       |70232      |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t1.c1)])
+  1 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([t1.c1]), filter(nil), 
+      equal_conds([t2.c2 = t1.c2]), other_conds(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds([t1.c1 = VIEW1.count(*)]), nl_params_(nil)
+  4 - output([VIEW1.count(*)]), filter(nil), 
+      access([VIEW1.count(*)])
+  5 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  6 - output([1]), filter(nil), 
+      equal_conds([x.c1 = y.d1]), other_conds(nil)
+  7 - output([x.c1]), filter(nil), 
+      access([x.c1]), partitions(p0)
+  8 - output([y.d1]), filter(nil), 
+      equal_conds([y.d2 = z.c1]), other_conds(nil)
+  9 - output([y.d1], [y.d2]), filter(nil), 
+      access([y.d1], [y.d2]), partitions(p0)
+  10 - output([z.c1]), filter(nil), 
+      access([z.c1]), partitions(p0)
+  11 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  12 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+  13 - output([1]), filter(nil)
+  14 - output([1]), filter([t3.c1 IN (1, 2)]), 
+      access([t3.c1]), partitions(p0)
+
+select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
+ (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
+ and t3.c1 in (1,2);
++------------+
+| sum(t1.c1) |
++------------+
+|       NULL |
++------------+
+
+### 4, 错误、无效或冗余的指定测试  ###
+EXPLAIN select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+Query Plan
+========================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS       |COST            |
+------------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1               |8.064079e+15    |
+|1 | HASH JOIN                  |    |9.605960e+15    |5.720197e+15    |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |9.801000e+12    |6.935632e+12    |
+|3 |   HASH JOIN                |    |98010000        |58414634        |
+|4 |    TABLE SCAN              |d   |100000          |64066           |
+|5 |    TABLE SCAN              |c   |100000          |61860           |
+|6 |   MATERIAL                 |    |100000          |80235           |
+|7 |    TABLE SCAN              |b   |100000          |61860           |
+|8 |  TABLE SCAN                |a   |100000          |61860           |
+========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1 + d.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1 + d.d2)])
+  1 - output([b.d1 + d.d2]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  2 - output([b.d1], [d.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([d.d2]), filter(nil), 
+      equal_conds([c.c2 = d.d1]), other_conds(nil)
+  4 - output([d.d1], [d.d2]), filter(nil), 
+      access([d.d1], [d.d2]), partitions(p0)
+  5 - output([c.c2]), filter(nil), 
+      access([c.c2]), partitions(p0)
+  6 - output([b.d1]), filter(nil)
+  7 - output([b.d1]), filter(nil), 
+      access([b.d1]), partitions(p0)
+  8 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+
+select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
++----------+----------------+
+| count(*) | sum(b.d1+d.d2) |
++----------+----------------+
+|        0 |           NULL |
++----------+----------------+
+
+EXPLAIN select /*+ leading((d, (c), (b)) , (a)) */  count(*),sum(a.c1+b.d2+c.c1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d2  and c.c2 = d.d2;
+Query Plan
+========================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS       |COST            |
+------------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1               |8.064079e+15    |
+|1 | HASH JOIN                  |    |9.605960e+15    |5.720197e+15    |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |9.801000e+12    |6.935631e+12    |
+|3 |   HASH JOIN                |    |98010000        |58396259        |
+|4 |    TABLE SCAN              |d   |100000          |61860           |
+|5 |    TABLE SCAN              |c   |100000          |64066           |
+|6 |   MATERIAL                 |    |100000          |80235           |
+|7 |    TABLE SCAN              |b   |100000          |61860           |
+|8 |  TABLE SCAN                |a   |100000          |61860           |
+========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d2 + c.c1 + d.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(a.c1 + b.d2 + c.c1 + d.d2)])
+  1 - output([a.c1 + b.d2 + c.c1 + d.d2]), filter(nil), 
+      equal_conds([a.c1 = b.d2]), other_conds(nil)
+  2 - output([b.d2], [c.c1], [d.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([c.c1], [d.d2]), filter(nil), 
+      equal_conds([c.c2 = d.d2]), other_conds(nil)
+  4 - output([d.d2]), filter(nil), 
+      access([d.d2]), partitions(p0)
+  5 - output([c.c2], [c.c1]), filter(nil), 
+      access([c.c2], [c.c1]), partitions(p0)
+  6 - output([b.d2]), filter(nil)
+  7 - output([b.d2]), filter(nil), 
+      access([b.d2]), partitions(p0)
+  8 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+
+select /*+ leading((d, (c), (b)) , (a)) */  count(*),sum(a.c1+b.d2+c.c1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d2  and c.c2 = d.d2;
++----------+--------------------------+
+| count(*) | sum(a.c1+b.d2+c.c1+d.d2) |
++----------+--------------------------+
+|        0 |                     NULL |
++----------+--------------------------+
+
+EXPLAIN select /*+ leading(b, (c d)) a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+Query Plan
+========================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS       |COST            |
+------------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1               |8.064283e+15    |
+|1 | HASH JOIN                  |    |9.605960e+15    |5.720402e+15    |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |9.801000e+12    |7.140422e+12    |
+|3 |   TABLE SCAN               |b   |100000          |61860           |
+|4 |   MATERIAL                 |    |98010000        |112425375       |
+|5 |    HASH JOIN               |    |98010000        |58396259        |
+|6 |     TABLE SCAN             |c   |100000          |61860           |
+|7 |     TABLE SCAN             |d   |100000          |64066           |
+|8 |  TABLE SCAN                |a   |100000          |61860           |
+========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1 + d.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(b.d1 + d.d2)])
+  1 - output([b.d1 + d.d2]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  2 - output([b.d1], [d.d2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([b.d1]), filter(nil), 
+      access([b.d1]), partitions(p0)
+  4 - output([d.d2]), filter(nil)
+  5 - output([d.d2]), filter(nil), 
+      equal_conds([c.c2 = d.d1]), other_conds(nil)
+  6 - output([c.c2]), filter(nil), 
+      access([c.c2]), partitions(p0)
+  7 - output([d.d1], [d.d2]), filter(nil), 
+      access([d.d1], [d.d2]), partitions(p0)
+  8 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+
+select /*+ leading(b, (c d)) a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
++----------+----------------+
+| count(*) | sum(b.d1+d.d2) |
++----------+----------------+
+|        0 |           NULL |
++----------+----------------+
+
+EXPLAIN select /*+ leading(b1, (c1 d1 ) a1) */  count(*), sum(b.d2+d.d1*c.c1-a.c1) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+Query Plan
+=======================================================================
+|ID|OPERATOR                   |NAME|EST. ROWS       |COST            |
+-----------------------------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1               |9.342100e+15    |
+|1 | NESTED-LOOP JOIN CARTESIAN|    |9.605960e+15    |6.998218e+15    |
+|2 |  HASH JOIN                |    |98010000        |58396259        |
+|3 |   TABLE SCAN              |a   |100000          |61860           |
+|4 |   TABLE SCAN              |b   |100000          |64066           |
+|5 |  MATERIAL                 |    |98010000        |112425375       |
+|6 |   HASH JOIN               |    |98010000        |58396259        |
+|7 |    TABLE SCAN             |d   |100000          |61860           |
+|8 |    TABLE SCAN             |c   |100000          |64066           |
+=======================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(b.d2 + d.d1 * c.c1 - a.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(b.d2 + d.d1 * c.c1 - a.c1)])
+  1 - output([b.d2 + d.d1 * c.c1 - a.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([b.d2], [a.c1]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  3 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  4 - output([b.d1], [b.d2]), filter(nil), 
+      access([b.d1], [b.d2]), partitions(p0)
+  5 - output([d.d1], [c.c1]), filter(nil)
+  6 - output([d.d1], [c.c1]), filter(nil), 
+      equal_conds([c.c2 = d.d1]), other_conds(nil)
+  7 - output([d.d1]), filter(nil), 
+      access([d.d1]), partitions(p0)
+  8 - output([c.c2], [c.c1]), filter(nil), 
+      access([c.c2], [c.c1]), partitions(p0)
+
+select /*+ leading(b1, (c1 d1 ) a1) */  count(*), sum(b.d2+d.d1*c.c1-a.c1) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
++----------+--------------------------+
+| count(*) | sum(b.d2+d.d1*c.c1-a.c1) |
++----------+--------------------------+
+|        0 |                     NULL |
++----------+--------------------------+
+
+EXPLAIN select /*+ leading((((t2,t1,t4),t3),t5), (t6),(t7))*/ count(*), sum(t6.c1+t7.c1+t4.c2) from 
+nn1 t1, nn1 t2, nn1 t3, nn1  t4, nn1 t5, nn1 t6, nn1 t7
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1;
+Query Plan
+====================================================================================
+|ID|OPERATOR                        |NAME|EST. ROWS           |COST                |
+------------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                 |    |1                   |3.713206e+20        |
+|1 | MERGE JOIN                     |    |4.431924e+20        |2.631803e+20        |
+|2 |  MERGE JOIN                    |    |4.521910e+17        |2.685499e+17        |
+|3 |   MERGE JOIN                   |    |4.613723e+14        |2.999941e+14        |
+|4 |    SORT                        |    |470740074701        |2.629763e+13        |
+|5 |     HASH JOIN                  |    |470740074701        |2.406748e+13        |
+|6 |      NESTED-LOOP JOIN CARTESIAN|    |9.801000e+12        |7.038000e+12        |
+|7 |       HASH JOIN                |    |98010000            |58394053            |
+|8 |        TABLE SCAN              |t2  |100000              |61860               |
+|9 |        TABLE SCAN              |t1  |100000              |61860               |
+|10|       MATERIAL                 |    |100000              |100817              |
+|11|        TABLE SCAN              |t4  |100000              |64066               |
+|12|      TABLE SCAN                |t3  |500                 |72438               |
+|13|    SORT                        |    |100000              |252929              |
+|14|     TABLE SCAN                 |t5  |100000              |61860               |
+|15|   SORT                         |    |100000              |252929              |
+|16|    TABLE SCAN                  |t6  |100000              |61860               |
+|17|  SORT                          |    |100000              |252929              |
+|18|   TABLE SCAN                   |t7  |100000              |61860               |
+====================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t6.c1 + t7.c1 + t4.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t6.c1 + t7.c1 + t4.c2)])
+  1 - output([t6.c1 + t7.c1 + t4.c2]), filter(nil), 
+      equal_conds([t6.c1 = t7.c1]), other_conds(nil)
+  2 - output([t6.c1], [t4.c2]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  3 - output([t4.c2], [t5.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  4 - output([t4.c2], [t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  5 - output([t4.c2], [t4.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2], [t3.c1 = t4.c1]), other_conds(nil)
+  6 - output([t4.c2], [t4.c1], [t1.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  7 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  8 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  9 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  10 - output([t4.c2], [t4.c1]), filter(nil)
+  11 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  12 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  13 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  14 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  15 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  16 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+  17 - output([t7.c1]), filter(nil), sort_keys([t7.c1, ASC])
+  18 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+select /*+ leading((((t2,t1,t4),t3),t5), (t6),(t7))*/ count(*), sum(t6.c1+t7.c1+t4.c2) from 
+nn1 t1, nn1 t2, nn1 t3, nn1  t4, nn1 t5, nn1 t6, nn1 t7
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1;
++----------+------------------------+
+| count(*) | sum(t6.c1+t7.c1+t4.c2) |
++----------+------------------------+
+|        0 |                   NULL |
++----------+------------------------+
+
+EXPLAIN select /*+ leading(t4,t6,t5) */ count(*), sum(t2.c2+t3.c1)
+from nn1 t1 left join nn1 t2 on t1.c1 = t2.c1 left JOIN
+nn1 t3 on t3.c2 IN(1,23,4,2,5,6) join nn1 t4 on t3.c1=t4.c1 join nn1 t5 on t4.c2=t5.c2 
+join nn1 t6 on t5.c1 = t6.c2 left join nn1 t7 on t1.c1=t7.c1;
+Query Plan
+===================================================================================
+|ID|OPERATOR                       |NAME|EST. ROWS           |COST                |
+-----------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                |    |1                   |4.515457e+23        |
+|1 | HASH OUTER JOIN               |    |5.372030e+23        |3.204666e+23        |
+|2 |  HASH JOIN                    |    |5.481103e+20        |3.543583e+20        |
+|3 |   NESTED-LOOP JOIN CARTESIAN  |    |9.414801e+18        |6.858953e+18        |
+|4 |    HASH JOIN                  |    |96059601000         |87302993787         |
+|5 |     NESTED-LOOP JOIN CARTESIAN|    |10000000000         |7076537535          |
+|6 |      TABLE SCAN               |t4  |100000              |64066               |
+|7 |      MATERIAL                 |    |100000              |80235               |
+|8 |       TABLE SCAN              |t6  |100000              |61860               |
+|9 |     TABLE SCAN                |t5  |100000              |64066               |
+|10|    MATERIAL                   |    |98010000            |112425375           |
+|11|     HASH OUTER JOIN           |    |98010000            |58396259            |
+|12|      TABLE SCAN               |t1  |100000              |61860               |
+|13|      TABLE SCAN               |t2  |100000              |64066               |
+|14|   TABLE SCAN                  |t3  |5940                |72438               |
+|15|  TABLE SCAN                   |t7  |100000              |61860               |
+===================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t2.c2 + t3.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t2.c2 + t3.c1)])
+  1 - output([t2.c2 + t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t7.c1]), other_conds(nil)
+  2 - output([t2.c2], [t3.c1], [t1.c1]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+  3 - output([t2.c2], [t1.c1], [t4.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([t4.c1]), filter(nil), 
+      equal_conds([t4.c2 = t5.c2], [t5.c1 = t6.c2]), other_conds(nil)
+  5 - output([t4.c1], [t4.c2], [t6.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  7 - output([t6.c2]), filter(nil)
+  8 - output([t6.c2]), filter(nil), 
+      access([t6.c2]), partitions(p0)
+  9 - output([t5.c2], [t5.c1]), filter(nil), 
+      access([t5.c2], [t5.c1]), partitions(p0)
+  10 - output([t2.c2], [t1.c1]), filter(nil)
+  11 - output([t2.c2], [t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  13 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+  14 - output([t3.c1]), filter([t3.c2 IN (1, 23, 4, 2, 5, 6)]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  15 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+select /*+ leading(t4,t6,t5) */ count(*), sum(t2.c2+t3.c1)
+from nn1 t1 left join nn1 t2 on t1.c1 = t2.c1 left JOIN
+nn1 t3 on t3.c2 IN(1,23,4,2,5,6) join nn1 t4 on t3.c1=t4.c1 join nn1 t5 on t4.c2=t5.c2 
+join nn1 t6 on t5.c1 = t6.c2 left join nn1 t7 on t1.c1=t7.c1;
++----------+------------------+
+| count(*) | sum(t2.c2+t3.c1) |
++----------+------------------+
+|        0 |             NULL |
++----------+------------------+
+
+### 6, 嵌套hint和hint的print测试  ###
+EXPLAIN select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+Query Plan
+=============================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST     |
+---------------------------------------------
+|0 |SCALAR GROUP BY|    |1        |472792374|
+|1 | HASH JOIN     |    |461372348|360216196|
+|2 |  TABLE SCAN   |c   |100000   |64066    |
+|3 |  HASH JOIN    |    |48029801 |29200673 |
+|4 |   TABLE SCAN  |a   |10000    |80811    |
+|5 |   HASH JOIN   |    |490050   |460608   |
+|6 |    TABLE SCAN |d   |500      |72438    |
+|7 |    TABLE SCAN |b   |100000   |64066    |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(a.c1 + b.d2)], [T_FUN_SUM(b.d2 + b.d2 * a.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(a.c1 + b.d2)], [T_FUN_SUM(b.d2 + b.d2 * a.c1)])
+  1 - output([a.c1 + b.d2], [b.d2 + b.d2 * a.c1]), filter(nil), 
+      equal_conds([d.c2 = c.c2], [b.d1 = c.c1]), other_conds(nil)
+  2 - output([c.c1], [c.c2]), filter(nil), 
+      access([c.c1], [c.c2]), partitions(p0)
+  3 - output([a.c1], [b.d2], [d.c2], [b.d1]), filter(nil), 
+      equal_conds([d.c2 = a.c1]), other_conds(nil)
+  4 - output([a.c1]), filter([a.c2 < 5]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  5 - output([b.d2], [d.c2], [b.d1]), filter(nil), 
+      equal_conds([d.c1 = b.d2]), other_conds(nil)
+  6 - output([d.c2], [d.c1]), filter([d.c1 = d.c2]), 
+      access([d.c2], [d.c1]), partitions(p0)
+  7 - output([b.d2], [b.d1]), filter(nil), 
+      access([b.d2], [b.d1]), partitions(p0)
+
+select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
++------------------+---------------------+
+| count(a.c1+b.d2) | sum(b.d2+b.d2*a.c1) |
++------------------+---------------------+
+|                0 |                NULL |
++------------------+---------------------+
+
+create view v1 as  select /*+ leading(c,  b , a ) use_hash(b a) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2, c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select /*+ LEADING(c b a) USE_HASH((b) (a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+
+create view v2 as  select /*+ leading(c,  (b , a)) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+show create view v2;
+View	Create View	character_set_client	collation_connection
+v2	CREATE VIEW `v2` AS select /*+ LEADING(c (b a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+
+create view v3 as select /*+ leading(c, (d, (a,b))) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b 
+on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+show create view v3;
+View	Create View	character_set_client	collation_connection
+v3	CREATE VIEW `v3` AS select /*+ LEADING(c (d (a b))) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from (((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) join `bushy_leading_hint_db`.`nn1` `d` on ((`bushy_leading_hint_db`.`d`.`c2` = `bushy_leading_hint_db`.`c`.`c2`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+
+create view v4 as 
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9)), (t4, t5, t6)) */
+t1.c1 as x, t3.c2 as y, t5.c2 as z from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+show create view v4;
+View	Create View	character_set_client	collation_connection
+v4	CREATE VIEW `v4` AS select /*+ LEADING(t2 (t1 t3) (t7 (t8 t9)) (t4 t5 t6)) */`bushy_leading_hint_db`.`t1`.`c1` AS `x`,`bushy_leading_hint_db`.`t3`.`c2` AS `y`,`bushy_leading_hint_db`.`t5`.`c2` AS `z` from `bushy_leading_hint_db`.`nn1` `t1`,`bushy_leading_hint_db`.`nn1` `t2`,`bushy_leading_hint_db`.`nn1` `t3`,`bushy_leading_hint_db`.`nn1` `t4`,`bushy_leading_hint_db`.`nn1` `t5`,`bushy_leading_hint_db`.`nn1` `t6`,`bushy_leading_hint_db`.`nn1` `t7`,`bushy_leading_hint_db`.`nn1` `t8`,`bushy_leading_hint_db`.`nn1` `t9` where (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t3`.`c2`) and (`bushy_leading_hint_db`.`t2`.`c1` = `bushy_leading_hint_db`.`t3`.`c1`) and (`bushy_leading_hint_db`.`t3`.`c1` = `bushy_leading_hint_db`.`t4`.`c1`) and (`bushy_leading_hint_db`.`t4`.`c1` = `bushy_leading_hint_db`.`t5`.`c1`) and (`bushy_leading_hint_db`.`t5`.`c1` = `bushy_leading_hint_db`.`t6`.`c1`) and (`bushy_leading_hint_db`.`t6`.`c1` = `bushy_leading_hint_db`.`t7`.`c1`) and (`bushy_leading_hint_db`.`t7`.`c1` = `bushy_leading_hint_db`.`t8`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`)	utf8mb4	utf8mb4_general_ci
+EXPLAIN select count(*), sum(x+y-z*4) from v4;
+Query Plan
+================================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS           |COST                |
+--------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1                   |3.920151e+26        |
+|1 | HASH JOIN                  |    |4.257289e+26        |2.881360e+26        |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |4.613723e+19        |3.361230e+19        |
+|3 |   HASH JOIN                |    |480298005           |285722945           |
+|4 |    TABLE SCAN              |t2  |100000              |61860               |
+|5 |    HASH JOIN               |    |490050              |534664              |
+|6 |     TABLE SCAN             |t1  |100000              |61860               |
+|7 |     TABLE SCAN             |t3  |500                 |72438               |
+|8 |   MATERIAL                 |    |96059601000         |109997592500        |
+|9 |    MERGE JOIN              |    |96059601000         |57043655452         |
+|10|     SORT                   |    |100000              |252929              |
+|11|      TABLE SCAN            |t7  |100000              |61860               |
+|12|     MERGE JOIN             |    |98010000            |58661407            |
+|13|      SORT                  |    |100000              |252929              |
+|14|       TABLE SCAN           |t8  |100000              |61860               |
+|15|      SORT                  |    |100000              |252929              |
+|16|       TABLE SCAN           |t9  |100000              |61860               |
+|17|  MERGE JOIN                |    |96059601000         |57043677078         |
+|18|   MERGE JOIN               |    |98010000            |58683033            |
+|19|    SORT                    |    |100000              |252929              |
+|20|     TABLE SCAN             |t4  |100000              |61860               |
+|21|    SORT                    |    |100000              |274554              |
+|22|     TABLE SCAN             |t5  |100000              |64066               |
+|23|   SORT                     |    |100000              |252929              |
+|24|    TABLE SCAN              |t6  |100000              |61860               |
+================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t3.c2 - t5.c2 * 4)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t3.c2 - t5.c2 * 4)])
+  1 - output([t1.c1 + t3.c2 - t5.c2 * 4]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1], [t6.c1 = t7.c1]), other_conds(nil)
+  2 - output([t1.c1], [t3.c2], [t3.c1], [t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([t1.c1], [t3.c2], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  5 - output([t1.c1], [t3.c2], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  6 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  7 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  8 - output([t7.c1]), filter(nil)
+  9 - output([t7.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  10 - output([t7.c1]), filter(nil), sort_keys([t7.c1, ASC])
+  11 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  12 - output([t8.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  13 - output([t8.c1]), filter(nil), sort_keys([t8.c1, ASC])
+  14 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  15 - output([t9.c1]), filter(nil), sort_keys([t9.c1, ASC])
+  16 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  17 - output([t5.c2], [t4.c1], [t6.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  18 - output([t5.c2], [t4.c1], [t5.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  19 - output([t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  20 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  21 - output([t5.c2], [t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  22 - output([t5.c1], [t5.c2]), filter(nil), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  23 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  24 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+
+select count(*), sum(x+y-z*4) from v4;
++----------+--------------+
+| count(*) | sum(x+y-z*4) |
++----------+--------------+
+|        0 |         NULL |
++----------+--------------+
+
+EXPLAIN select /*+ leading(t2, (t1, t3), (t7, (t8, t9))) */
+count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+Query Plan
+===================================================================================
+|ID|OPERATOR                       |NAME|EST. ROWS           |COST                |
+-----------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                |    |1                   |5.427614e+26        |
+|1 | HASH JOIN                     |    |4.257289e+26        |4.388823e+26        |
+|2 |  MERGE JOIN                   |    |4.431924e+25        |2.631837e+25        |
+|3 |   MERGE JOIN                  |    |4.521910e+22        |2.718869e+22        |
+|4 |    SORT                       |    |4.613723e+19        |3.636932e+20        |
+|5 |     NESTED-LOOP JOIN CARTESIAN|    |4.613723e+19        |3.361230e+19        |
+|6 |      MERGE JOIN               |    |480298005           |285820977           |
+|7 |       SORT                    |    |100000              |252929              |
+|8 |        TABLE SCAN             |t2  |100000              |61860               |
+|9 |       MERGE JOIN              |    |490050              |630610              |
+|10|        SORT                   |    |100000              |252929              |
+|11|         TABLE SCAN            |t1  |100000              |61860               |
+|12|        SORT                   |    |500                 |73171               |
+|13|         TABLE SCAN            |t3  |500                 |72438               |
+|14|      MATERIAL                 |    |96059601000         |109997592500        |
+|15|       MERGE JOIN              |    |96059601000         |57043655452         |
+|16|        SORT                   |    |100000              |252929              |
+|17|         TABLE SCAN            |t7  |100000              |61860               |
+|18|        MERGE JOIN             |    |98010000            |58661407            |
+|19|         SORT                  |    |100000              |252929              |
+|20|          TABLE SCAN           |t8  |100000              |61860               |
+|21|         SORT                  |    |100000              |252929              |
+|22|          TABLE SCAN           |t9  |100000              |61860               |
+|23|    SORT                       |    |100000              |252929              |
+|24|     TABLE SCAN                |t6  |100000              |61860               |
+|25|   SORT                        |    |100000              |274554              |
+|26|    TABLE SCAN                 |t5  |100000              |64066               |
+|27|  TABLE SCAN                   |t4  |100000              |64066               |
+===================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(T_FUN_COUNT(*), DECIMAL(20, 0)) + T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1)])
+  1 - output([t1.c1 + t4.c2 + t5.c1 + t5.c2 - 5 * t9.c1]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1], [t4.c1 = t5.c1]), other_conds(nil)
+  2 - output([t1.c1], [t5.c1], [t5.c2], [t9.c1], [t3.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  3 - output([t1.c1], [t9.c1], [t3.c1], [t6.c1]), filter(nil), 
+      equal_conds([t6.c1 = t7.c1]), other_conds(nil)
+  4 - output([t1.c1], [t9.c1], [t3.c1], [t7.c1]), filter(nil), sort_keys([t7.c1, ASC])
+  5 - output([t1.c1], [t9.c1], [t3.c1], [t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([t1.c1], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  7 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
+  8 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  9 - output([t1.c1], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  10 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
+  11 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  12 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c2, ASC])
+  13 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  14 - output([t9.c1], [t7.c1]), filter(nil)
+  15 - output([t9.c1], [t7.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  16 - output([t7.c1]), filter(nil), sort_keys([t7.c1, ASC])
+  17 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  18 - output([t9.c1], [t8.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  19 - output([t8.c1]), filter(nil), sort_keys([t8.c1, ASC])
+  20 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  21 - output([t9.c1]), filter(nil), sort_keys([t9.c1, ASC])
+  22 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  23 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  24 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+  25 - output([t5.c1], [t5.c2]), filter(nil), sort_keys([t5.c1, ASC])
+  26 - output([t5.c1], [t5.c2]), filter(nil), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  27 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9))) */
+count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
++-----------------------------------------------+
+| count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) |
++-----------------------------------------------+
+|                                          NULL |
++-----------------------------------------------+
+
+EXPLAIN select /*+ leading(t2, t1, t3, (t4, (t5, t6)), (t8, (t9, t7))) */
+count(*), sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 >= t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c2 and t8.c2 = t9.c1 and t8.c1 <= t2.c1 and t1.c1 = t9.c1;
+Query Plan
+=================================================================================
+|ID|OPERATOR                     |NAME|EST. ROWS           |COST                |
+---------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY              |    |1                   |4.355726e+25        |
+|1 | HASH JOIN                   |    |4.730321e+25        |3.201514e+25        |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |1.537908e+19        |1.120410e+19        |
+|3 |   MERGE JOIN                |    |160099335           |167221992           |
+|4 |    MERGE JOIN               |    |98010000            |58661407            |
+|5 |     SORT                    |    |100000              |252929              |
+|6 |      TABLE SCAN             |t2  |100000              |61860               |
+|7 |     SORT                    |    |100000              |252929              |
+|8 |      TABLE SCAN             |t1  |100000              |61860               |
+|9 |    SORT                     |    |167                 |81033               |
+|10|     TABLE SCAN              |t3  |167                 |80811               |
+|11|   MATERIAL                  |    |96059601000         |109997592500        |
+|12|    MERGE JOIN               |    |96059601000         |57043655452         |
+|13|     SORT                    |    |100000              |252929              |
+|14|      TABLE SCAN             |t4  |100000              |61860               |
+|15|     MERGE JOIN              |    |98010000            |58661407            |
+|16|      SORT                   |    |100000              |252929              |
+|17|       TABLE SCAN            |t5  |100000              |61860               |
+|18|      SORT                   |    |100000              |252929              |
+|19|       TABLE SCAN            |t6  |100000              |61860               |
+|20|  HASH JOIN                  |    |32019867000         |32611769323         |
+|21|   TABLE SCAN                |t8  |33334               |72438               |
+|22|   NESTED-LOOP JOIN CARTESIAN|    |10000000000         |7076535329          |
+|23|    TABLE SCAN               |t9  |100000              |61860               |
+|24|    MATERIAL                 |    |100000              |80235               |
+|25|     TABLE SCAN              |t7  |100000              |61860               |
+=================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t5.c1 + t6.c1 - t7.c1 - t8.c2 * t9.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t5.c1 + t6.c1 - t7.c1 - t8.c2 * t9.c1)])
+  1 - output([t1.c1 + t5.c1 + t6.c1 - t7.c1 - t8.c2 * t9.c1]), filter(nil), 
+      equal_conds([t6.c1 = t7.c1], [t1.c1 = t9.c1]), other_conds(nil)
+  2 - output([t1.c1], [t5.c1], [t6.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  5 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
+  6 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  7 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
+  8 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  9 - output([t3.c2]), filter(nil), sort_keys([t3.c2, ASC])
+  10 - output([t3.c2]), filter([t3.c2 = t3.c1], [t3.c2 >= t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  11 - output([t5.c1], [t6.c1]), filter(nil)
+  12 - output([t5.c1], [t6.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  13 - output([t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  14 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  15 - output([t5.c1], [t6.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  16 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  17 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  18 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  19 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+  20 - output([t7.c1], [t8.c2], [t9.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c2], [t8.c2 = t9.c1]), other_conds(nil)
+  21 - output([t8.c2]), filter([t8.c2 >= t8.c1]), 
+      access([t8.c2], [t8.c1]), partitions(p0)
+  22 - output([t7.c1], [t9.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  23 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  24 - output([t7.c1]), filter(nil)
+  25 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+select /*+ leading(t2, t1, t3, (t4, (t5, t6)), (t8, (t9, t7))) */
+count(*), sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 >= t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c2 and t8.c2 = t9.c1 and t8.c1 <= t2.c1 and t1.c1 = t9.c1;
++----------+------------------------------------------+
+| count(*) | sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) |
++----------+------------------------------------------+
+|        0 |                                     NULL |
++----------+------------------------------------------+
+
+EXPLAIN select /*+ leading(t2, (t1, t3), (t7, t8, t9), (t4, t5, t6)) */
+count(*), sum(t1.c1-t7.c2-t8.c1-t9.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+Query Plan
+================================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS           |COST                |
+--------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1                   |3.920151e+26        |
+|1 | HASH JOIN                  |    |4.257289e+26        |2.881360e+26        |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |4.613723e+19        |3.457608e+19        |
+|3 |   HASH JOIN                |    |480298005           |285722945           |
+|4 |    TABLE SCAN              |t2  |100000              |61860               |
+|5 |    HASH JOIN               |    |490050              |534664              |
+|6 |     TABLE SCAN             |t1  |100000              |61860               |
+|7 |     TABLE SCAN             |t3  |500                 |72438               |
+|8 |   MATERIAL                 |    |96059601000         |145300260450        |
+|9 |    MERGE JOIN              |    |96059601000         |57043698704         |
+|10|     MERGE JOIN             |    |98010000            |58683033            |
+|11|      SORT                  |    |100000              |274554              |
+|12|       TABLE SCAN           |t7  |100000              |64066               |
+|13|      SORT                  |    |100000              |252929              |
+|14|       TABLE SCAN           |t8  |100000              |61860               |
+|15|     SORT                   |    |100000              |274554              |
+|16|      TABLE SCAN            |t9  |100000              |64066               |
+|17|  MERGE JOIN                |    |96059601000         |57043655452         |
+|18|   MERGE JOIN               |    |98010000            |58661407            |
+|19|    SORT                    |    |100000              |252929              |
+|20|     TABLE SCAN             |t4  |100000              |61860               |
+|21|    SORT                    |    |100000              |252929              |
+|22|     TABLE SCAN             |t5  |100000              |61860               |
+|23|   SORT                     |    |100000              |252929              |
+|24|    TABLE SCAN              |t6  |100000              |61860               |
+================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t7.c2 - t8.c1 - t9.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t7.c2 - t8.c1 - t9.c2)])
+  1 - output([t1.c1 - t7.c2 - t8.c1 - t9.c2]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1], [t6.c1 = t7.c1]), other_conds(nil)
+  2 - output([t1.c1], [t7.c2], [t8.c1], [t9.c2], [t3.c1], [t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([t1.c1], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  5 - output([t1.c1], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  6 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  7 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  8 - output([t7.c2], [t8.c1], [t9.c2], [t7.c1]), filter(nil)
+  9 - output([t7.c2], [t8.c1], [t9.c2], [t7.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  10 - output([t7.c2], [t8.c1], [t7.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  11 - output([t7.c2], [t7.c1]), filter(nil), sort_keys([t7.c1, ASC])
+  12 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0)
+  13 - output([t8.c1]), filter(nil), sort_keys([t8.c1, ASC])
+  14 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  15 - output([t9.c2], [t9.c1]), filter(nil), sort_keys([t9.c1, ASC])
+  16 - output([t9.c1], [t9.c2]), filter(nil), 
+      access([t9.c1], [t9.c2]), partitions(p0)
+  17 - output([t4.c1], [t6.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  18 - output([t4.c1], [t5.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  19 - output([t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  20 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  21 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  22 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  23 - output([t6.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  24 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+
+select /*+ leading(t2, (t1, t3), (t7, t8, t9), (t4, t5, t6)) */
+count(*), sum(t1.c1-t7.c2-t8.c1-t9.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
++----------+------------------------------+
+| count(*) | sum(t1.c1-t7.c2-t8.c1-t9.c2) |
++----------+------------------------------+
+|        0 |                         NULL |
++----------+------------------------------+
+
+EXPLAIN select /*+ leading(t1, (t2  t3), (t4, t5  (t6, t7))) use_hash(t4, t5) use_hash(t6,t7) */
+count(*), sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+Query Plan
+====================================================================================
+|ID|OPERATOR                        |NAME|EST. ROWS           |COST                |
+------------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                 |    |1                   |3.792486e+26        |
+|1 | MERGE JOIN                     |    |4.257289e+26        |2.528099e+26        |
+|2 |  MERGE JOIN                    |    |4.343729e+23        |2.579427e+23        |
+|3 |   MERGE JOIN                   |    |4.431924e+20        |2.628494e+20        |
+|4 |    MERGE JOIN                  |    |480298005           |521833951           |
+|5 |     SORT                       |    |100000              |254319              |
+|6 |      TABLE SCAN                |t1  |100000              |61860               |
+|7 |     SORT                       |    |50000000            |189596160           |
+|8 |      NESTED-LOOP JOIN CARTESIAN|    |50000000            |36038682            |
+|9 |       TABLE SCAN               |t2  |100000              |61860               |
+|10|       MATERIAL                 |    |500                 |72622               |
+|11|        TABLE SCAN              |t3  |500                 |72438               |
+|12|    MERGE JOIN                  |    |9.414801e+13        |5.583821e+13        |
+|13|     SORT                       |    |98010000            |365268805           |
+|14|      HASH JOIN                 |    |98010000            |58396259            |
+|15|       TABLE SCAN               |t4  |100000              |61860               |
+|16|       TABLE SCAN               |t5  |100000              |64066               |
+|17|     SORT                       |    |98010000            |346233210           |
+|18|      HASH JOIN                 |    |98010000            |58394053            |
+|19|       TABLE SCAN               |t6  |100000              |61860               |
+|20|       TABLE SCAN               |t7  |100000              |61860               |
+|21|   SORT                         |    |100000              |274554              |
+|22|    TABLE SCAN                  |t8  |100000              |64066               |
+|23|  SORT                          |    |100000              |252929              |
+|24|   TABLE SCAN                   |t9  |100000              |61860               |
+====================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t5.c2 + t6.c1) - cast(T_FUN_MAX(t2.c1 * t8.c2), DECIMAL(22, 0))]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 - t5.c2 + t6.c1)], [T_FUN_MAX(t2.c1 * t8.c2)])
+  1 - output([t1.c1 - t5.c2 + t6.c1], [t2.c1 * t8.c2]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  2 - output([t1.c1], [t5.c2], [t6.c1], [t2.c1], [t8.c2], [t8.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  3 - output([t1.c1], [t5.c2], [t6.c1], [t2.c1], [t7.c1]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+  4 - output([t1.c1], [t2.c1], [t3.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1], [t1.c1 = t3.c2]), other_conds(nil)
+  5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC], [t1.c1, ASC])
+  6 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  7 - output([t2.c1], [t3.c1], [t3.c2]), filter(nil), sort_keys([t2.c1, ASC], [t3.c2, ASC])
+  8 - output([t2.c1], [t3.c1], [t3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  10 - output([t3.c1], [t3.c2]), filter(nil)
+  11 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  12 - output([t5.c2], [t6.c1], [t7.c1], [t4.c1]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1]), other_conds(nil)
+  13 - output([t5.c2], [t4.c1], [t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  14 - output([t5.c2], [t4.c1], [t5.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  15 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  16 - output([t5.c1], [t5.c2]), filter(nil), 
+      access([t5.c1], [t5.c2]), partitions(p0)
+  17 - output([t6.c1], [t7.c1]), filter(nil), sort_keys([t6.c1, ASC])
+  18 - output([t6.c1], [t7.c1]), filter(nil), 
+      equal_conds([t6.c1 = t7.c1]), other_conds(nil)
+  19 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+  20 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  21 - output([t8.c2], [t8.c1]), filter(nil), sort_keys([t8.c1, ASC])
+  22 - output([t8.c1], [t8.c2]), filter(nil), 
+      access([t8.c1], [t8.c2]), partitions(p0)
+  23 - output([t9.c1]), filter(nil), sort_keys([t9.c1, ASC])
+  24 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+
+select /*+ leading(t1, (t2  t3), (t4, t5  (t6, t7))) use_hash(t4, t5) use_hash(t6,t7) */
+count(*), sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
++----------+-------------------------------------------+
+| count(*) | sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) |
++----------+-------------------------------------------+
+|        0 |                                      NULL |
++----------+-------------------------------------------+
+EXPLAIN select /*+ leading(t2  (t7, t1 (t8, t9))) */
+count(*) , sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+Query Plan
+======================================================================================
+|ID|OPERATOR                          |NAME|EST. ROWS           |COST                |
+--------------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                   |    |1                   |5.427610e+26        |
+|1 | HASH JOIN                        |    |4.257289e+26        |4.388820e+26        |
+|2 |  MERGE JOIN                      |    |4.431924e+25        |2.631804e+25        |
+|3 |   MERGE JOIN                     |    |4.521910e+22        |2.685930e+22        |
+|4 |    MERGE JOIN                    |    |4.613723e+19        |3.430853e+19        |
+|5 |     MERGE JOIN                   |    |9.414801e+18        |5.645928e+18        |
+|6 |      SORT                        |    |100000              |252929              |
+|7 |       TABLE SCAN                 |t2  |100000              |61860               |
+|8 |      SORT                        |    |9.605960e+15        |6.085465e+16        |
+|9 |       HASH JOIN                  |    |9.605960e+15        |5.697140e+15        |
+|10|        NESTED-LOOP JOIN CARTESIAN|    |10000000000         |7076535329          |
+|11|         TABLE SCAN               |t7  |100000              |61860               |
+|12|         MATERIAL                 |    |100000              |80235               |
+|13|          TABLE SCAN              |t1  |100000              |61860               |
+|14|        HASH JOIN                 |    |98010000            |58414634            |
+|15|         TABLE SCAN               |t8  |100000              |64066               |
+|16|         TABLE SCAN               |t9  |100000              |61860               |
+|17|     SORT                         |    |500                 |73171               |
+|18|      TABLE SCAN                  |t3  |500                 |72438               |
+|19|    SORT                          |    |100000              |252929              |
+|20|     TABLE SCAN                   |t4  |100000              |61860               |
+|21|   SORT                           |    |100000              |252929              |
+|22|    TABLE SCAN                    |t5  |100000              |61860               |
+|23|  TABLE SCAN                      |t6  |100000              |61860               |
+======================================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t5.c1 + t8.c2 * t9.c1 - t3.c1 * 4)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1 + t5.c1 + t8.c2 * t9.c1 - t3.c1 * 4)])
+  1 - output([t1.c1 + t5.c1 + t8.c2 * t9.c1 - t3.c1 * 4]), filter(nil), 
+      equal_conds([t5.c1 = t6.c1], [t6.c1 = t7.c1]), other_conds(nil)
+  2 - output([t1.c1], [t5.c1], [t8.c2], [t9.c1], [t3.c1], [t7.c1]), filter(nil), 
+      equal_conds([t4.c1 = t5.c1]), other_conds(nil)
+  3 - output([t1.c1], [t8.c2], [t9.c1], [t3.c1], [t7.c1], [t4.c1]), filter(nil), 
+      equal_conds([t3.c1 = t4.c1]), other_conds(nil)
+  4 - output([t1.c1], [t8.c2], [t9.c1], [t3.c1], [t7.c1]), filter(nil), 
+      equal_conds([t1.c1 = t3.c2]), other_conds(nil)
+  5 - output([t1.c1], [t8.c2], [t9.c1], [t7.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  6 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
+  7 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  8 - output([t1.c1], [t8.c2], [t9.c1], [t7.c1]), filter(nil), sort_keys([t1.c1, ASC])
+  9 - output([t1.c1], [t8.c2], [t9.c1], [t7.c1]), filter(nil), 
+      equal_conds([t7.c1 = t8.c1]), other_conds(nil)
+  10 - output([t1.c1], [t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  11 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+  12 - output([t1.c1]), filter(nil)
+  13 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  14 - output([t8.c2], [t9.c1], [t8.c1]), filter(nil), 
+      equal_conds([t8.c1 = t9.c1]), other_conds(nil)
+  15 - output([t8.c1], [t8.c2]), filter(nil), 
+      access([t8.c1], [t8.c2]), partitions(p0)
+  16 - output([t9.c1]), filter(nil), 
+      access([t9.c1]), partitions(p0)
+  17 - output([t3.c1], [t3.c2]), filter(nil), sort_keys([t3.c2, ASC])
+  18 - output([t3.c2], [t3.c1]), filter([t3.c2 = t3.c1]), 
+      access([t3.c2], [t3.c1]), partitions(p0)
+  19 - output([t4.c1]), filter(nil), sort_keys([t4.c1, ASC])
+  20 - output([t4.c1]), filter(nil), 
+      access([t4.c1]), partitions(p0)
+  21 - output([t5.c1]), filter(nil), sort_keys([t5.c1, ASC])
+  22 - output([t5.c1]), filter(nil), 
+      access([t5.c1]), partitions(p0)
+  23 - output([t6.c1]), filter(nil), 
+      access([t6.c1]), partitions(p0)
+
+select /*+ leading(t2  (t7, t1 (t8, t9))) */
+count(*) , sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
++----------+--------------------------------------+
+| count(*) | sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) |
++----------+--------------------------------------+
+|        0 |                                 NULL |
++----------+--------------------------------------+
+
+EXPLAIN select /*+ leading(t1,t4,(t2,t3)) */
+count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
+where t1.c1 = t2.c1 and  t3.c1 = t4.c1 and t1.c2 = t3.c2;
+Query Plan
+====================================================================
+|ID|OPERATOR                    |NAME|EST. ROWS     |COST          |
+--------------------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1             |9.960018e+13  |
+|1 | HASH JOIN                  |    |9.414801e+13  |7.163885e+13  |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000000000   |7181005020    |
+|3 |   TABLE SCAN               |t1  |100000        |64066         |
+|4 |   MATERIAL                 |    |100000        |100817        |
+|5 |    TABLE SCAN              |t4  |100000        |64066         |
+|6 |  NESTED-LOOP JOIN CARTESIAN|    |10000000000   |7181002814    |
+|7 |   TABLE SCAN               |t2  |100000        |61860         |
+|8 |   MATERIAL                 |    |100000        |100817        |
+|9 |    TABLE SCAN              |t3  |100000        |64066         |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1) - T_FUN_SUM(t4.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t4.c2)])
+  1 - output([t1.c1], [t4.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1], [t3.c1 = t4.c1], [t1.c2 = t3.c2]), other_conds(nil)
+  2 - output([t1.c1], [t4.c2], [t4.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  4 - output([t4.c2], [t4.c1]), filter(nil)
+  5 - output([t4.c1], [t4.c2]), filter(nil), 
+      access([t4.c1], [t4.c2]), partitions(p0)
+  6 - output([t2.c1], [t3.c1], [t3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  7 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  8 - output([t3.c1], [t3.c2]), filter(nil)
+  9 - output([t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c1], [t3.c2]), partitions(p0)
+
+select /*+ leading(t1,t4,(t2,t3)) */
+count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
+where t1.c1 = t2.c1 and  t3.c1 = t4.c1 and t1.c2 = t3.c2;
++----------+-----------------------+
+| count(*) | sum(t1.c1)-sum(t4.c2) |
++----------+-----------------------+
+|        0 |                  NULL |
++----------+-----------------------+
+
+### 7, 带qb_name的测试  ###
+EXPLAIN select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 asc, x.c2 asc, x.c3 desc;
+Query Plan
+==========================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST    |
+----------------------------------------------------------
+|0 |SORT                         |    |50000    |94778881|
+|1 | SUBPLAN FILTER              |    |50000    |94664996|
+|2 |  TABLE SCAN                 |x   |100000   |66272   |
+|3 |  LIMIT                      |    |1        |94584922|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |1        |94584922|
+|5 |    HASH JOIN                |    |1        |171458  |
+|6 |     TABLE SCAN              |c   |100000   |61860   |
+|7 |     TABLE SCAN              |d   |1        |36      |
+|8 |    MATERIAL                 |    |98010000 |94413464|
+|9 |     HASH JOIN               |    |98010000 |58394053|
+|10|      TABLE SCAN             |a   |100000   |61860   |
+|11|      TABLE SCAN             |b   |100000   |61860   |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([x.c1], [x.c2], [x.c3]), filter(nil), sort_keys([x.c1, ASC], [x.c2, ASC], [x.c3, DESC])
+  1 - output([x.c1], [x.c2], [x.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([x.c1], [x.c2], [x.c3]), filter(nil), 
+      access([x.c1], [x.c2], [x.c3]), partitions(p0)
+  3 - output([1]), filter(nil), limit(1), offset(nil)
+  4 - output([1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([1]), filter(nil), 
+      equal_conds([c.c2 = d.d1]), other_conds(nil)
+  6 - output([c.c2]), filter(nil), 
+      access([c.c2]), partitions(p0)
+  7 - output([d.d1]), filter(nil), 
+      access([d.d1]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  10 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  11 - output([b.d1]), filter(nil), 
+      access([b.d1]), partitions(p0)
+
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 asc, x.c2 asc, x.c3 desc;
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
++------+------+------+
+
+EXPLAIN select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x)  LEADING(a c b d)*/  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c2 asc, x.c3 desc;
+Query Plan
+==========================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST    |
+----------------------------------------------------------
+|0 |SORT                         |    |50000    |94778881|
+|1 | SUBPLAN FILTER              |    |50000    |94664996|
+|2 |  TABLE SCAN                 |x   |100000   |66272   |
+|3 |  LIMIT                      |    |1        |94584922|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |1        |94584922|
+|5 |    HASH JOIN                |    |1        |171458  |
+|6 |     TABLE SCAN              |c   |100000   |61860   |
+|7 |     TABLE SCAN              |d   |1        |36      |
+|8 |    MATERIAL                 |    |98010000 |94413464|
+|9 |     HASH JOIN               |    |98010000 |58394053|
+|10|      TABLE SCAN             |a   |100000   |61860   |
+|11|      TABLE SCAN             |b   |100000   |61860   |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([x.c1], [x.c2], [x.c3]), filter(nil), sort_keys([x.c1, DESC], [x.c2, ASC], [x.c3, DESC])
+  1 - output([x.c1], [x.c2], [x.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([x.c1], [x.c2], [x.c3]), filter(nil), 
+      access([x.c1], [x.c2], [x.c3]), partitions(p0)
+  3 - output([1]), filter(nil), limit(1), offset(nil)
+  4 - output([1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([1]), filter(nil), 
+      equal_conds([c.c2 = d.d1]), other_conds(nil)
+  6 - output([c.c2]), filter(nil), 
+      access([c.c2]), partitions(p0)
+  7 - output([d.d1]), filter(nil), 
+      access([d.d1]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      equal_conds([a.c1 = b.d1]), other_conds(nil)
+  10 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  11 - output([b.d1]), filter(nil), 
+      access([b.d1]), partitions(p0)
+
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x)  LEADING(a c b d)*/  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c2 asc, x.c3 desc;
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
++------+------+------+
+
+EXPLAIN select /*+ LEADING(@x3x b d (a c)) */
+* from nn1 x
+where exists (select /*+ qb_name(x3x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
+Query Plan
+================================================================
+|ID|OPERATOR                      |NAME|EST. ROWS  |COST       |
+----------------------------------------------------------------
+|0 |SORT                          |    |50000      |20451913903|
+|1 | SUBPLAN FILTER               |    |50000      |20451797046|
+|2 |  TABLE SCAN                  |x   |100000     |66272      |
+|3 |  LIMIT                       |    |1          |20451716973|
+|4 |   HASH JOIN                  |    |1          |20451716972|
+|5 |    NESTED-LOOP JOIN CARTESIAN|    |10000000000|7076535329 |
+|6 |     TABLE SCAN               |b   |100000     |61860      |
+|7 |     MATERIAL                 |    |100000     |80235      |
+|8 |      TABLE SCAN              |d   |100000     |61860      |
+|9 |    NESTED-LOOP JOIN CARTESIAN|    |1          |80271      |
+|10|     TABLE SCAN               |a   |1          |36         |
+|11|     MATERIAL                 |    |100000     |80235      |
+|12|      TABLE SCAN              |c   |100000     |61860      |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([x.c1], [x.c2], [x.c3]), filter(nil), sort_keys([x.c1, DESC], [x.c3, DESC], [x.c2, ASC])
+  1 - output([x.c1], [x.c2], [x.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([x.c1], [x.c2], [x.c3]), filter(nil), 
+      access([x.c1], [x.c2], [x.c3]), partitions(p0)
+  3 - output([1]), filter(nil), limit(1), offset(nil)
+  4 - output([1]), filter(nil), 
+      equal_conds([a.c1 = b.d1], [c.c2 = d.d1]), other_conds(nil)
+  5 - output([b.d1], [d.d1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([b.d1]), filter(nil), 
+      access([b.d1]), partitions(p0)
+  7 - output([d.d1]), filter(nil)
+  8 - output([d.d1]), filter(nil), 
+      access([d.d1]), partitions(p0)
+  9 - output([a.c1], [c.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  10 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0)
+  11 - output([c.c2]), filter(nil)
+  12 - output([c.c2]), filter(nil), 
+      access([c.c2]), partitions(p0)
+
+select /*+ LEADING(@x3x b d (a c)) */
+* from nn1 x
+where exists (select /*+ qb_name(x3x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
++------+------+------+
+
+### 8, 通过bushy 扩展能获取较好的计划  ###
+EXPLAIN select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
+where t1.c1 = t2.c1 and 
+      t4.d1 = t5.d1 AND
+      t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
+Query Plan
+=======================================================
+|ID|OPERATOR       |NAME|EST. ROWS     |COST          |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY|    |1             |4.275041e+13  |
+|1 | HASH JOIN     |    |4.802980e+13  |2.848587e+13  |
+|2 |  HASH JOIN    |    |98010000      |58394053      |
+|3 |   TABLE SCAN  |t1  |100000        |61860         |
+|4 |   TABLE SCAN  |t2  |100000        |61860         |
+|5 |  HASH JOIN    |    |98010000      |58396259      |
+|6 |   TABLE SCAN  |t4  |100000        |61860         |
+|7 |   TABLE SCAN  |t5  |100000        |64066         |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)], [T_FUN_MIN(t2.c1) + T_FUN_MAX(t5.d2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)], [T_FUN_MIN(t2.c1)], [T_FUN_MAX(t5.d2)])
+  1 - output([t2.c1], [t5.d2]), filter(nil), 
+      equal_conds([t1.c1 + t2.c1 = t4.d1 + t5.d2]), other_conds(nil)
+  2 - output([t2.c1], [t1.c1 + t2.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  5 - output([t5.d2], [t4.d1 + t5.d2]), filter(nil), 
+      equal_conds([t4.d1 = t5.d1]), other_conds(nil)
+  6 - output([t4.d1]), filter(nil), 
+      access([t4.d1]), partitions(p0)
+  7 - output([t5.d1], [t5.d2]), filter(nil), 
+      access([t5.d1], [t5.d2]), partitions(p0)
+
+select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
+where t1.c1 = t2.c1 and 
+      t4.d1 = t5.d1 AND
+      t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
++----------+-----------------------+
+| count(*) | min(t2.c1)+max(t5.d2) |
++----------+-----------------------+
+|        0 |                  NULL |
++----------+-----------------------+
+
+explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=======================================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST         |
+-------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |960597   |2.764048e+12 |
+|1 | HASH JOIN           |    |98010000 |58439627     |
+|2 |  TABLE SCAN         |t3  |100000   |66272        |
+|3 |  TABLE SCAN         |t1  |100000   |66272        |
+|4 | MATERIAL            |    |100000   |80235        |
+|5 |  TABLE SCAN         |t2  |100000   |61860        |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  1 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  2 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  4 - output([t2.b]), filter(nil)
+  5 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+
+explain select /*+leading(t1 t2 t3)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+drop table nn1;
+drop table nn2;
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+drop database bushy_leading_hint_db;

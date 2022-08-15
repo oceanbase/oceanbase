@@ -1602,12 +1602,15 @@ TEST_F(TestTmpFile, test_page_buddy)
   int32_t page_nums = 64;
   int32_t alloced_page_nums = 64;
   int32_t start_page_id = -1;
+  ASSERT_EQ(true, page_buddy_1.is_empty());
   ret = page_buddy_1.alloc(page_nums, start_page_id, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_1.is_empty());
 
   int32_t start_page_id_2 = -1;
   ret = page_buddy_1.alloc(page_nums, start_page_id_2, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_1.is_empty());
 
   page_buddy_1.free(start_page_id + 63, page_nums - 63);
   page_buddy_1.free(start_page_id_2 + 1, page_nums - 1);
@@ -1620,11 +1623,14 @@ TEST_F(TestTmpFile, test_page_buddy)
 
   ObTmpFilePageBuddy page_buddy_2;
   ret = page_buddy_2.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, page_buddy_2.is_empty());
   start_page_id = 0;
   ret = page_buddy_2.alloc_all_pages();
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_2.is_empty());
 
-  int32_t free_nums = 511 - 129;
+  int32_t free_nums = 252 - 129;
   page_buddy_2.free(start_page_id + 129, free_nums);
   free_nums = 127;
   page_buddy_2.free(start_page_id + 2, free_nums);
@@ -1645,6 +1651,20 @@ TEST_F(TestTmpFile, test_page_buddy)
     ASSERT_EQ(true, page_buddy_3.is_empty());
     STORAGE_LOG(INFO, "page buddy", K(page_buddy_3));
   }
+
+  ObTmpFilePageBuddy page_buddy_4;
+  ret = page_buddy_4.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, page_buddy_4.is_empty());
+
+  page_nums = 2;
+  alloced_page_nums = -1;
+  start_page_id = -1;
+  ASSERT_EQ(true, page_buddy_4.is_empty());
+  ret = page_buddy_4.alloc(page_nums, start_page_id, alloced_page_nums);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(alloced_page_nums, page_nums);
+  ASSERT_EQ(false, page_buddy_4.is_empty());
 }
 
 }  // end namespace unittest

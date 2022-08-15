@@ -81,9 +81,9 @@ TEST_F(TestTenantFileMgr, test_file_op)
       OB_SERVER_FILE_MGR.add_pg(
           ObTenantFileKey(handle2.get_storage_file()->get_tenant_id(), handle2.get_storage_file()->get_file_id()),
           pg_key2));
-  ASSERT_NE(handle1.get_storage_file(), handle2.get_storage_file());
+  ASSERT_EQ(handle1.get_storage_file(), handle2.get_storage_file());
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.get_all_tenant_file_infos(allocator, tenant_file_infos));
-  ASSERT_EQ(2, tenant_file_infos.count());
+  ASSERT_EQ(1, tenant_file_infos.count());
 
   // alloc less than 10000 files
   for (int64_t i = 0; OB_SUCC(ret) && i < 9998; ++i) {
@@ -96,7 +96,7 @@ TEST_F(TestTenantFileMgr, test_file_op)
             pg_key));
   }
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.get_all_tenant_file_infos(allocator, tenant_file_infos));
-  ASSERT_EQ(10, tenant_file_infos.count());
+  ASSERT_EQ(1, tenant_file_infos.count());
 
   // alloc more than 10000 files
   for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
@@ -109,7 +109,7 @@ TEST_F(TestTenantFileMgr, test_file_op)
             pg_key));
   }
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.get_all_tenant_file_infos(allocator, tenant_file_infos));
-  ASSERT_EQ(11, tenant_file_infos.count());
+  ASSERT_EQ(1, tenant_file_infos.count());
 }
 
 TEST_F(TestTenantFileMgr, test_update_tenant_file_super_block)

@@ -37,6 +37,10 @@ int TransResult::assign(const TransResult& other)
   OZ(response_partitions_.assign(other.response_partitions_));
   OX(is_incomplete_ = other.is_incomplete_);
   OX(max_sql_no_ = other.max_sql_no_);
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "assign failed, txn will be aborted", K(ret), KPC(this), K(other));
+    set_incomplete();
+  }
   return ret;
 }
 
@@ -58,6 +62,10 @@ int TransResult::merge_result(const TransResult& other)
   if (OB_NOT_NULL(trans_desc_)) {
     OX(trans_desc_->set_max_sql_no(get_max_sql_no()));
   }
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "merge failed, txn will be aborted", K(ret), KPC(this), K(other));
+    set_incomplete();
+  }
   return ret;
 }
 
@@ -66,6 +74,10 @@ int TransResult::merge_total_partitions(const ObPartitionArray& partitions)
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> lock_guard(lock_);
   OZ(append_array_no_dup(total_partitions_, partitions), partitions);
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "merge failed, txn will be aborted", K(ret), KPC(this), K(partitions));
+    set_incomplete();
+  }
   return ret;
 }
 
@@ -74,6 +86,10 @@ int TransResult::merge_response_partitions(const common::ObPartitionArray& parti
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> lock_guard(lock_);
   OZ(append_array_no_dup(response_partitions_, partitions), partitions);
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "merge failed, txn will be aborted", K(ret), KPC(this), K(partitions));
+    set_incomplete();
+  }
   return ret;
 }
 
@@ -82,6 +98,10 @@ int TransResult::merge_part_epoch_list(const transaction::ObPartitionEpochArray&
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> lock_guard(lock_);
   OZ(append_array_no_dup(part_epoch_list_, part_epoch_list), part_epoch_list);
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "merge failed, txn will be aborted", K(ret), KPC(this), K(part_epoch_list));
+    set_incomplete();
+  }
   return ret;
 }
 

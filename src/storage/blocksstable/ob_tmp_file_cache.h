@@ -310,7 +310,6 @@ private:
   common::ObSEArray<ObMacroBlockHandle*, 1> write_handles_;
   TmpMacroBlockMap t_mblk_map_;  // <block id, tmp macro block>
   Map dir_to_blk_map_;           // <dir id, block id>
-  int64_t mblk_page_nums_;
   int64_t free_page_nums_;
   double blk_nums_threshold_;  // free_page_nums / total_page_nums
   ObTmpBlockCache* block_cache_;

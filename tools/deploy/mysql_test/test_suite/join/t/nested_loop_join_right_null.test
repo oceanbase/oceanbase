@@ -1,0 +1,36 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# tags: optimizer
+# description: OUR GOAL: Make all this simple and effective!
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+create table t1 (id int primary key, i2 int);
+create table t2 (id int primary key, i2 int);
+insert/*trace*/ into t1(id) values (75);
+insert/*trace*/ into t1(id) values (79);
+insert/*trace*/ into t1(id) values (78);
+insert/*trace*/ into t1(id) values (77);
+insert/*trace*/ into t1(id) values (104);
+insert/*trace*/ into t1(id) values (103);
+insert/*trace*/ into t1(id) values (102);
+insert/*trace*/ into t1(id) values (101);
+insert/*trace*/ into t1(id) values (105);
+insert/*trace*/ into t1(id) values (106);
+insert/*trace*/ into t1(id) values (107);
+insert/*trace*/ into t2(id) values (107),(75),(1000);
+select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
+--echo
+select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
+--echo
+select a.id , b.id from t1 a, t2 b where a.id = b.id and a.id>200 and a.id<200;
+--echo
+select a.id, b.id from t1 a, t2 b where a.id = a.id and a.id>200 and a.id<200;
+
+drop table t1, t2;
