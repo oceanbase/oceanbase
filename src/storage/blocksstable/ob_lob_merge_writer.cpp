@@ -30,7 +30,7 @@ ObLobMergeWriter::ObLobMergeWriter()
       data_store_desc_(NULL),
       macro_start_seq_(-1),
       use_old_macro_block_count_(0),
-      allocator_(ObModIds::OB_LOB_MERGE_WRITER),
+      allocator_("LobMergeWriter"),
       is_inited_(false)
 {}
 

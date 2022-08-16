@@ -1625,7 +1625,7 @@ public:
       STORAGE_LOG(ERROR, "row buffer has not been initialized", K(ret));
     } else if (capacity < 0) {
       ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "invalid arguments", K(ret));
+      STORAGE_LOG(WARN, "invalid arguments", K(ret), K(capacity));
     } else if (capacity > capacity_) {
       int64_t new_size = capacity * sizeof(T);
       void* new_data = allocator_->alloc(new_size);

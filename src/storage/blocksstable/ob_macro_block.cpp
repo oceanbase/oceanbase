@@ -305,22 +305,25 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
   has_lob_column_ = desc.has_lob_column_;
   is_major_ = desc.is_major_;
   MEMCPY(compressor_name_, desc.compressor_name_, OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH);
+  column_ids_.reset();
+  column_types_.reset();
+  column_orders_.reset();
   if (OB_FAIL(column_ids_.init(&allocator_))) {
     STORAGE_LOG(WARN, "fail to init column_ids_, ", K(ret));
   } else if (OB_FAIL(column_types_.init(&allocator_))) {
     STORAGE_LOG(WARN, "fail to init column_types_, ", K(ret));
   } else if (OB_FAIL(column_orders_.init(&allocator_))) {
     STORAGE_LOG(WARN, "fail to init column_orders_, ", K(ret));
-  } else if (OB_FAIL(column_ids_.reserve(row_column_count_))) {
+  } else if (OB_FAIL(column_ids_.reserve(desc.row_column_count_))) {
     STORAGE_LOG(WARN, "fail to reserve memory for column_ids_, ", K(ret));
-  } else if (OB_FAIL(column_types_.reserve(row_column_count_))) {
+  } else if (OB_FAIL(column_types_.reserve(desc.row_column_count_))) {
     STORAGE_LOG(WARN, "fail to reserve memory for column_types_, ", K(ret));
-  } else if (OB_FAIL(column_orders_.reserve(row_column_count_))) {
+  } else if (OB_FAIL(column_orders_.reserve(desc.row_column_count_))) {
     STORAGE_LOG(WARN, "fail to reserve memory for column_orders_, ", K(ret));
   } else {
-    MEMCPY(column_ids_.get_buf(), desc.column_ids_.get_buf(), sizeof(uint64_t) * row_column_count_);
-    MEMCPY(column_types_.get_buf(), desc.column_types_.get_buf(), sizeof(ObObjMeta) * row_column_count_);
-    MEMCPY(column_orders_.get_buf(), desc.column_orders_.get_buf(), sizeof(ObOrderType) * row_column_count_);
+    MEMCPY(column_ids_.get_buf(), desc.column_ids_.get_buf(), sizeof(uint64_t) * desc.row_column_count_);
+    MEMCPY(column_types_.get_buf(), desc.column_types_.get_buf(), sizeof(ObObjMeta) * desc.row_column_count_);
+    MEMCPY(column_orders_.get_buf(), desc.column_orders_.get_buf(), sizeof(ObOrderType) * desc.row_column_count_);
   }
   need_calc_column_checksum_ = desc.need_calc_column_checksum_;
   store_micro_block_column_checksum_ = desc.store_micro_block_column_checksum_;

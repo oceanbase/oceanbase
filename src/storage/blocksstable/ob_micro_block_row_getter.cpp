@@ -340,6 +340,7 @@ int ObMicroBlockRowGetter::project_cache_row(const ObStoreRowkey& rowkey, const 
   } else {
     row_.row_val_.cells_ = obj_buf_.get_buf();
     row_.row_val_.count_ = request_count;
+    row_.capacity_ = request_count;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
       store_index = column_indexs[i].store_index_;
