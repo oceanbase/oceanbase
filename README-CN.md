@@ -1,59 +1,60 @@
 # 什么是 OceanBase 数据库
 
-OceanBase 数据库是一个原生的分布式关系数据库，它是完全由蚂蚁集团自主研发的项目。OceanBase 数据库构建在通用服务器集群上，基于 Paxos 协议和分布式架构，提供金融级高可用和线性伸缩能力，不依赖特定硬件架构，具备高可用、线性扩展、高性能、低成本等核心技术优势。
+OceanBase 是蚂蚁集团历经12年完全自主研发的企业级原生分布式数据库，始于2010年，已连续 8 年稳定支撑双 11，创新推出“三地五中心”城市级容灾新标准，是全球唯一在 TPC-C 和 TPC-H 测试上都刷新了世界纪录的国产原生分布式数据库。产品采用自研的一体化架构，兼顾分布式架构的扩展性与集中式架构的性能优势，用一套引擎同时支持 TP 和 AP 的混合负载，具有数据强一致、高可用、高性能、在线扩展、高度兼容 SQL 标准和主流关系数据库、对应用透明，高性价比等特点。
+
+OceanBase 数据库支持蚂蚁集团的全部核心业务，以及银行、保险、证券、运营商等多个行业的数百个客户的核心业务系统。
 
 OceanBase 数据库具有如下特点：
 
-- 高可用
-    单服务器故障能够自愈，支持跨城多机房容灾，数据零丢失，可满足金融行业 6 级容灾标准（RPO=0，RTO<=30 秒）。
-- 线性扩展
-    透明扩展，自动负载均衡，应用透明的水平扩展，集群规模可超过 1500 节点，数据量可达 PB 级，单表记录万亿行。
-- MySQL 高度兼容
-    兼容 MySQL 协议、语法和使用习惯，MySQL 客户端工具可以直接访问 OceanBase 数据库。
-- 高性能
-    准内存级数据变更操作、独创的编码压缩技术，结合线性水平扩展，TPC-C 测试达到 7.07 亿 tpmC。
-- 低成本
-    使用 PC 服务器和低端 SSD，高存储压缩率降低存储成本，高性能降低计算成本，多租户混部充分利用系统资源。
-- 多租户
-    原生支持多租户构架，同一套数据库集群可以为多个独立业务提供服务，租户间数据隔离，降低部署和运维成本。
+- 稳定可信赖
 
-OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险、证券、运营商等多个行业的数百个客户的核心业务系统。
+    经历双 11 共 9 年的验证，蚂蚁集团百万规模使用，单服务器故障自愈，跨城多机房容灾，数据多副本存储，创新推出“三地五中心”城市级容灾新标准，最高可达金融 6 级标准（RPO=0，RTO<=30 秒）。
+- 海量数据高性能
+
+    海量数据下， 支持在线事务处理 OLTP 和在线分析处理 OLAP 业务线性扩展， 并相互隔离。TPC-C 以 6000 万数据量下获得 7.07 亿 tpmC， TPC-H 获得 1526 万 QphH @30000GB 。
+- 大幅提升 KV 能力
+
+    支持 OBKV 能力，提供 HBase 模型和 Table 模型的 NoSQL 能力。二级索引下 OBKV 性能指数级提升，有效避免 HBase 性能抖动问题。
+- 更低的存储和运维成本
+
+    支持部署运行在 PC 服务器和低端 SSD，高存储压缩率降低存储成本，无中心化设计和多租户混部大幅提升计算资源利用率。支持主流生态产品（Prometheus、Canal 等）和一体化设计让运维更轻松。
+- 兼容 MySQL 开源生态
+
+    与 MySQL生态高度兼容，提供数据库全生命周期的工具产品，组件化架构全面开放生态，从开发调试到生产运维及数据传输全方位护航。
+
 
 ## 快速上手
 
 查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
 
+## 系统架构
+## ![image.png](https://gw.alipayobjects.com/mdn/ob_asset/afts/img/A*kMfJS7VVN70AAAAAAAAAAAAAARQnAQ)
+
+## Roadmap
+
+![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1660643534293-a5f53258-a9ac-462c-b9fd-9832901853c2.png#clientId=u5d9acd3a-25ad-4&crop=0&crop=0&crop=1&crop=1&from=paste&height=352&id=u0f71535e&margin=%5Bobject%20Object%5D&name=image.png&originHeight=528&originWidth=1683&originalType=binary&ratio=1&rotation=0&showTitle=false&size=719961&status=done&style=none&taskId=u676e97dd-1309-42b9-b380-a423c27199c&title=&width=1122)
+
+Link: [3.1.5 function list](https://github.com/oceanbase/oceanbase/milestone/6)
+
+## 用户案例
+
+更多用户案例, 请参考 [用户案例](https://www.oceanbase.com/customer/home).
+
 ## 文档
 
 - [简体中文](https://open.oceanbase.com/docs)
-- 英文（English）（Coming soon）
+- [English](https://www.oceanbase.com/en/docs)
 
-## 客户端
 
-- [OBClient](https://github.com/oceanbase/obclient)
 
 ## 许可证
 
 OceanBase 数据库使用 [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPubL-2.0) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
 
-## 兼容性列表
-
-| 操作系统 | 版本 | 架构 | 编译 | 包部署 | 编译部署 | mysqltest |
-| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Arch | Rolling | x86_64 | ✅ | ❌ | ❌ | ❌ |
-| CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
-| openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 
 ## OceanBase开发者手册
+OceanBase 社区热情欢迎每一位对数据库技术热爱的开发者，期待携手开启思维碰撞之旅。无论是文档格式调整或文字修正、Bug 问题修复还是增加新功能，都是对 OceanBase 社区参与和贡献方式之一，立刻开启您的 First Contribution 吧！
 
 1. [如何编译OceanBase源码](https://github.com/oceanbase/oceanbase/wiki/how_to_build)
 2. [如何设置IDE开发环境](https://github.com/oceanbase/oceanbase/wiki/how_to_setup_ide)
@@ -64,23 +65,21 @@ OceanBase 数据库使用 [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPub
 7. [如何修bug](https://github.com/oceanbase/oceanbase/wiki/how_to_fix_bug)
 
 
-
-
 ## 获取帮助
 
 如果您在使用 OceanBase 数据库时遇到任何问题，欢迎通过以下方式寻求帮助：
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
 - [官方网站](https://open.oceanbase.com/)
+- [English](https://oceanbase.com/en)
+
 
 ## Community
 
  - [论坛](https://open.oceanbase.com/answer)
- - [钉钉 33254054](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding0e936c01b36c156d60c3ef38bbf6dadc&594d9=30470&cbdbhh=qwertyuiop&origin=1)
- - [微信 oceanbasecommunity](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
+ - [钉钉群 33254054](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding12cfbe0afb058f3cde5ce625ff4abdf6&53108=bb418&cbdbhh=qwertyuiop&origin=1)
+ - [微信 OBCE666](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
  - [oceanbase.slack](https://oceanbase.slack.com/)
- - Mailist [Comming soon]
 
-## Roadmap
 
-请参考[Roadmap](wiki/roadmap). 
+
