@@ -3787,13 +3787,15 @@ int ObBasicSessionInfo::get_foreign_key_checks(int64_t& foreign_key_checks) cons
 
 int ObBasicSessionInfo::get_capture_plan_baseline(bool& v) const
 {
-  v = sys_vars_cache_.get_optimizer_capture_sql_plan_baselines();
+  // v = sys_vars_cache_.get_optimizer_capture_sql_plan_baselines();
+  v = false;
   return OB_SUCCESS;
 }
 
 int ObBasicSessionInfo::get_use_plan_baseline(bool& v) const
 {
-  v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
+  // v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
+  v = false;
   return OB_SUCCESS;
 }
 
