@@ -31,6 +31,16 @@ public:
     part_values_.reset();
   }
   TO_STRING_KV(K_(runner_server), K_(part_values));
+  int assign(const ServerOpInfo &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(part_values_.assign(other.part_values_))) {
+      LOG_WARN("assign part_values failed", K(ret), K(other));
+    } else {
+      runner_server_ = other.runner_server_;
+    }
+    return ret;
+  }
 
   ObAddr runner_server_;
   ObSEArray<PartValuesInfo, 1> part_values_;

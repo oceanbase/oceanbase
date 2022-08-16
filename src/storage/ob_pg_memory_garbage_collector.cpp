@@ -129,6 +129,9 @@ int ObPGMemoryGarbageCollector::check_tenant_pg_exist(const uint64_t tenant_id, 
   {
     ObIPartitionGroup* pg = curr->get_pg();
     is_exist = pg->get_partition_key().get_tenant_id() == tenant_id;
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 1 minute
+      LOG_INFO("tenant pg memory garbage exist", "pg_key", pg->get_partition_key());
+    }
   }
   return ret;
 }

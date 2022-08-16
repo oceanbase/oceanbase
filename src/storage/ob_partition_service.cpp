@@ -12660,6 +12660,9 @@ int ObPartitionService::check_tenant_pg_exist(const uint64_t tenant_id, bool& is
           STORAGE_LOG(WARN, "get partition failed", K(ret));
         } else if (partition->get_partition_key().get_tenant_id() == tenant_id) {
           is_exist = true;
+          if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 1 minute
+            LOG_INFO("tenant partition exist", "pg_key", partition->get_partition_key());
+          }
           break;
         }
       }
