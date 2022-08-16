@@ -5143,7 +5143,8 @@ int ObCodeGeneratorImpl::convert_multi_table_insert_up_info(
         }
       }
     }
-    if (OB_SUCC(ret) && !index_dml_info.assignments_.empty()) {
+    if (OB_SUCC(ret)) {
+      // must generate insert and delete subplan for all data_table and global index_table, for multi_insert_up
       // delete subplan will be produced by update operation of insert_up
       // so if assignments is empty, it indicates no need to generate delete subplan
       OZ(convert_delete_subplan(op, index_dml_info, update_row_desc, subplans.at(ObMultiTableInsertUp::DELETE_OP)));
