@@ -125,6 +125,10 @@ bool ObPGLogArchiveStatus::operator<(const ObPGLogArchiveStatus& other)
     b_ret = true;
   } else if (log_archive_round_ > other.log_archive_round_) {
     b_ret = false;
+  } else if (cur_piece_id_ < other.cur_piece_id_) {
+    b_ret = true;
+  } else if (cur_piece_id_ > other.cur_piece_id_) {
+    b_ret = false;
   } else if (is_stopped()) {
     b_ret = false;
   } else if (other.is_stopped()) {

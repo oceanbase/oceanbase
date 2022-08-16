@@ -1260,6 +1260,7 @@ int ObTenantPhysicalRestoreMeta::locate_log(const ObPGKey& restore_pg_key, const
 {
   int ret = OB_SUCCESS;
   uint64_t last_piece_base_log_id = OB_INVALID_ID;
+  const int64_t start_time = ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant restore meta is not inited", K(ret), K(archive_pg_key), K(archive_pg_key), K(start_log_id));
@@ -1284,10 +1285,12 @@ int ObTenantPhysicalRestoreMeta::locate_log(const ObPGKey& restore_pg_key, const
                  end_file_id))) {
     if (OB_ITER_END != ret) {
       LOG_WARN(
-          "failed to locate_start_file_id_in_piece_", K(ret), K(archive_pg_key), K(archive_pg_key), K(start_log_id));
+          "failed to locate_start_file_id_in_piece_", K(ret), K(restore_pg_key), K(archive_pg_key), K(start_log_id));
     }
   } else { /*do nothing*/
   }
+  const int64_t cost = ObTimeUtility::current_time() - start_time;
+  LOG_INFO("locate_log cost", K(cost), K(restore_pg_key), K(archive_pg_key), K(start_log_id));
   return ret;
 }
 
@@ -1443,6 +1446,7 @@ int ObTenantPhysicalRestoreMeta::locate_piece_(const ObPGKey& restore_pg_key, co
     // situation with multi_piece
     bool has_data_in_prev_piece = false;
     // assign value to start_piece_idx
+    common::ObTimeGuard time_guard("[ARCHIVE_RESTORE] locate_piece", 1 * 1000 * 1000LL);
     for (int64_t idx = 0; OB_SUCC(ret) && 0 > start_piece_idx && idx < total_piece_cnt; ++idx) {
       ObArchiveLogFileStore* file_store = file_store_array_.at(idx);
       ObArchiveKeyContent archive_key_content;
@@ -1611,6 +1615,7 @@ int ObTenantPhysicalRestoreMeta::locate_start_file_id_in_piece_(const ObPGKey& r
   uint64_t min_file_id = 0;
   uint64_t max_file_id = 0;
   bool archive_file_exists = true;
+  common::ObTimeGuard time_guard("[ARCHIVE_RESTORE] locate_start_file_id", 1000 * 1000LL);
   if (OB_ISNULL(file_store)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("file_store is NULL", KR(ret), K(restore_pg_key), K(archive_pg_key), K(start_piece_idx));
