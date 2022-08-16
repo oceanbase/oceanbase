@@ -674,12 +674,8 @@ void ObArchiveMgr::do_check_switch_archive_()
     has_encount_fatal_error = true;
   } else if (need_start) {
     // start a new archive round
-    if (OB_UNLIKELY(!non_frozen_piece_info.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      has_encount_fatal_error = true;
-      ARCHIVE_LOG(ERROR, "non_piece_info is not valid", K(non_frozen_piece_info), KR(ret));
-    } else if (OB_FAIL(non_frozen_piece_info.get_backup_piece_info(cur_piece_id, cur_piece_create_date))) {
-      ARCHIVE_LOG(ERROR, "failed to get_backup_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
+    if (OB_FAIL(extract_cur_piece_info_(non_frozen_piece_info, cur_piece_id, cur_piece_create_date))) {
+      ARCHIVE_LOG(ERROR, "failed to extract_cur_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
       has_encount_fatal_error = true;
     } else if (OB_FAIL(start_archive_(backup_info, cur_piece_id, cur_piece_create_date))) {
       ARCHIVE_LOG(WARN,
@@ -697,8 +693,12 @@ void ObArchiveMgr::do_check_switch_archive_()
     }
   } else if (need_force_stop) {
     // force stop archive
-    archive_round_mgr_.set_archive_force_stop(backup_info.status_.incarnation_, backup_info.status_.round_);
-    ARCHIVE_LOG(INFO, "force set log_archive_status STOPPED");
+    if (OB_FAIL(archive_round_mgr_.set_archive_force_stop(
+            backup_info.status_.incarnation_, backup_info.status_.round_, backup_info.status_.backup_piece_id_))) {
+      ARCHIVE_LOG(ERROR, "failed to force set log_archive_status STOPPED", K(backup_info), K(ret));
+    } else {
+      ARCHIVE_LOG(INFO, "force set log_archive_status STOPPED", K(backup_info));
+    }
   } else if (need_switch_piece) {
 #ifdef ERRSIM
     ret = E(EventTable::EN_LOG_ARCHIVE_BLOCK_SWITCH_PIECE) OB_SUCCESS;
@@ -884,20 +884,27 @@ int ObArchiveMgr::check_if_need_switch_log_archive_(const ObLogArchiveBackupInfo
     ARCHIVE_LOG(INFO, "need_force_stop", K(backup_info), K(rs_piece_id), K(is_in_stop_status), K(diff_ir));
   } else if (ObLogArchiveStatus::STATUS::DOING == status && is_in_archive_doing_status() && !diff_ir &&
              0 != cur_piece_id) {
-    if (OB_UNLIKELY(!non_frozen_piece_info.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(ERROR, "non_piece_info is not valid", K(non_frozen_piece_info), KR(ret));
-    } else if (OB_FAIL(non_frozen_piece_info.get_backup_piece_info(rs_piece_id, rs_piece_create_date))) {
-      ARCHIVE_LOG(ERROR, "failed to get_backup_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
+    if (OB_FAIL(extract_cur_piece_info_(non_frozen_piece_info, rs_piece_id, rs_piece_create_date))) {
+      ARCHIVE_LOG(ERROR, "failed to extract_cur_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
     } else if (rs_piece_id == cur_piece_id) {
       // do nothing
     } else if (rs_piece_id == cur_piece_id + 1) {
       need_switch_piece = true;
       ARCHIVE_LOG(INFO, "need switch piece", K(backup_info), K(rs_piece_id), K(cur_piece_id));
-    } else {
-      ARCHIVE_LOG(ERROR, "invalid rs_piece_id", K(backup_info), K(rs_piece_id), K(cur_piece_id));
+    } else if (rs_piece_id < cur_piece_id) {
+      ret = OB_ERR_UNEXPECTED;
       ObPartitionKey unused_pkey;
       mark_encounter_fatal_err(unused_pkey, incarnation, round);
+      ARCHIVE_LOG(ERROR, "invalid rs_piece_id", KR(ret), K(backup_info), K(rs_piece_id), K(cur_piece_id));
+    } else {
+      // rs_piece_id > cur_piece_id + 1
+      // if only follower replica in local observer, refreshing of backup info is stucked for long time
+      need_switch_piece = true;
+      ARCHIVE_LOG(WARN,
+          "Attention: local backup_info may has not been refreshed for long time",
+          K(backup_info),
+          K(rs_piece_id),
+          K(cur_piece_id));
     }
   } else { /*do nothing*/
   }
@@ -933,5 +940,18 @@ bool ObArchiveMgr::check_ob_ready_()
   return 0 < GCTX.server_id_ && NULL != partition_service_ && partition_service_->is_scan_disk_finished();
 }
 
+int ObArchiveMgr::extract_cur_piece_info_(
+    const ObNonFrozenBackupPieceInfo &non_frozen_piece_info, int64_t &rs_piece_id, int64_t &rs_piece_create_ts) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!non_frozen_piece_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "non_piece_info is not valid", K(non_frozen_piece_info), KR(ret));
+  } else if (OB_FAIL(non_frozen_piece_info.get_backup_piece_info(rs_piece_id, rs_piece_create_ts))) {
+    ARCHIVE_LOG(ERROR, "failed to get_backup_piece_info", K(non_frozen_piece_info), KR(ret));
+  } else { /*do nothing*/
+  }
+  return ret;
+}
 }  // namespace archive
 }  // namespace oceanbase

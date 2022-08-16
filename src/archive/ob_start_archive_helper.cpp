@@ -187,18 +187,25 @@ int StartArchiveHelper::get_tenant_archive_status_(ObLogArchiveSimpleInfo& info)
   // get archive progress with pg_key, takeover_ts_
   if (OB_FAIL(
           ObLogArchiveInfoMgr::get_instance().get_log_archive_status(pg_key_.get_tenant_id(), takeover_ts_, info))) {
-    ARCHIVE_LOG(WARN, "get_log_archive_status fail", KR(ret));
+    ARCHIVE_LOG(WARN, "get_log_archive_status fail", K(pg_key_), KR(ret));
   } else if (OB_UNLIKELY(!info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ObLogArchiveSimpleInfo is not valid", KR(ret), K(info));
   } else if (share::ObLogArchiveStatus::STATUS::BEGINNING != info.status_ &&
              share::ObLogArchiveStatus::STATUS::DOING != info.status_) {
     ret = OB_EAGAIN;
-    ARCHIVE_LOG(WARN, "no doing archive status, retry later", KR(ret), K(info));
+    ARCHIVE_LOG(WARN, "no doing archive status, retry later", KR(ret), K(pg_key_), K(info));
   } else {
-    tenant_archive_checkpoint_ts_ = info.checkpoint_ts_;
+    int64_t piece_id = archive_mgr_.get_archive_round_mgr().get_cur_piece_id();
+    if (OB_UNLIKELY(piece_id != info.cur_piece_id_)) {
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+        ARCHIVE_LOG(WARN, "piece_id is not consistent", KR(ret), K(pg_key_), K(info), K(piece_id));
+      }
+    } else {
+      tenant_archive_checkpoint_ts_ = info.checkpoint_ts_;
+    }
   }
-
   return ret;
 }
 
