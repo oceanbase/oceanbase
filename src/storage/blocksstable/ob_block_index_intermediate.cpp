@@ -63,8 +63,8 @@ void ObBlockIntermediateBuilder::reset()
 {
   intermediate_row_.reset();
   header_.reset();
-  allocator_.reset();
   obj_buf_.reset();
+  allocator_.reset();
   rowkey_column_count_ = 0;
   is_inited_ = false;
 }

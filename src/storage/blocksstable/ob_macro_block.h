@@ -51,6 +51,7 @@ struct ObDataStoreDesc {
   storage::ObSSTableMergeInfo* merge_info_;
   bool has_lob_column_;
   bool is_major_;
+  common::ObArenaAllocator allocator_;
 
   char compressor_name_[common::OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH];
   storage::ObDynamicBuffer<uint64_t> column_ids_;
@@ -75,7 +76,6 @@ struct ObDataStoreDesc {
   int64_t major_working_cluster_version_;
   bool iter_complement_;
   bool is_unique_index_;
-  common::ObArenaAllocator allocator_;
   
   ObDataStoreDesc()
   {
