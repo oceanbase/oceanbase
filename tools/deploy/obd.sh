@@ -421,12 +421,12 @@ function display {
   obd cluster display $deploy_name
 }
 
-function tenant_create {
+function create_tenant {
   get_deploy_name
   obd cluster tenant create $deploy_name $extra_args
 }
 
-function tenant_drop {
+function drop_tenant {
   get_deploy_name
   obd cluster tenant drop $deploy_name $extra_args
 }
@@ -480,9 +480,9 @@ list [-n DEPLOY_NAME]                    List cluster.
 
 display [-n DEPLOY_NAME]                 Display cluster info.
 
-tenant_create [-n DEPLOY_NAME]           Create tenant.
+create_tenant [-n DEPLOY_NAME]           Create tenant.
 
-tenant_drop [-n DEPLOY_NAME]             Drop tenant.
+drop_tenant [-n DEPLOY_NAME]             Drop tenant.
 
 sysbench [-n DEPLOY_NAME]                Run sysbench, use '--help' for more details.
 
@@ -644,11 +644,11 @@ function main() {
     display)
     display
     ;;
-    tenant_create)
-    tenant_create
+    create_tenant)
+    create_tenant
     ;;
-    tenant_drop)
-    tenant_drop
+    drop_tenant)
+    drop_tenant
     ;;
     sysbench)
     sysbench
