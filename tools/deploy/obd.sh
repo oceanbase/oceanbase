@@ -249,7 +249,6 @@ function get_obproxy {
 
     get_version_and_release
     get_baseurl
-    obd mirror disable remote
     if [[ "$baseurl" != "" && "$version" != "" && "$release" != "" ]]
     then
       pkg_name="obproxy-$version-$release.x86_64.rpm"
@@ -548,9 +547,27 @@ function main() {
     case "$1" in
       -v ) VERBOSE_FLAG='-v'; set -x; shift ;;
       --with-local-obproxy) WITH_LOCAL_PROXY="1";SKIP_COPY="1"; shift ;;
-      -c | --config ) YAML_CONF="$2"; shift 2 ;;
+      -c | --config ) 
+      if [[ "$commond" == "deploy" || "$commond" == "redeploy" ||  "$commond" == "mysqltest" ]]
+      then
+      YAML_CONF="$2"
+      shift 2 
+      else
+      extra_args="$extra_args $1"
+      shift
+      fi
+      ;;
       -n | --deploy-name ) DEPLOY_NAME="$2"; shift 2 ;;
-      -p | --data-path ) DATA_PATH="$2"; shift 2 ;;
+      -p | --data-path ) 
+      if [[ "$commond" == "prepare" ]]
+      then
+        DATA_PATH="$2";
+        shift 2 
+      else
+        extra_args="$extra_args $1"
+        shift
+      fi
+      ;;
       -N ) NO_CONFIRM="1"; shift ;;
       --ip ) IPADDRESS="$2"; shift 2 ;;
       # --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
@@ -565,7 +582,6 @@ function main() {
   if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
-  obd mirror disable remote
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
@@ -583,7 +599,7 @@ function main() {
     deploy
     ;;
     redeploy)
-    deploy_cluster
+    deploy
     ;;
     start)
     start_cluster
