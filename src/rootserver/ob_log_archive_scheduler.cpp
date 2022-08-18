@@ -1190,7 +1190,7 @@ int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS &last_
       }
       case ObLogArchiveStatus::STOPPING: {
         DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING);
-        if (OB_FAIL(stop_log_archive_backup_(false /*force stop*/, sys_info, sys_non_frozen_piece))) {
+        if (OB_FAIL(stop_log_archive_backup_(is_force_cancel_(), sys_info, sys_non_frozen_piece))) {
           LOG_WARN("failed to stop log archive backup", K(ret), K(sys_info));
         }
         break;
