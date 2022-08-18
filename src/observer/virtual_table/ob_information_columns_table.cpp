@@ -344,13 +344,20 @@ int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta &obj_meta, const ObAc
   if (OB_FAIL(ob_sql_type_str(
           obj_meta, accuracy, type_info, default_length_semantics, column_type_str_, column_type_str_len_, pos))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
-      if (OB_UNLIKELY(
-              NULL == (column_type_str_ = static_cast<char *>(allocator_->realloc(
-                           column_type_str_, OB_MAX_SYS_PARAM_NAME_LENGTH, OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
+      void *tmp_ptr = NULL;
+      if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
+                                   data_type_str_, OB_MAX_SYS_PARAM_NAME_LENGTH, OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(data_type_str_ = static_cast<char *>(tmp_ptr))) {
+      } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(column_type_str_,
+                                          OB_MAX_SYS_PARAM_NAME_LENGTH,
+                                          OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
       } else {
         pos = 0;
+        column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(
             obj_meta, accuracy, type_info, default_length_semantics, column_type_str_, column_type_str_len_, pos);
