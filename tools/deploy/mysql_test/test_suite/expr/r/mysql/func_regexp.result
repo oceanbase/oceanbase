@@ -6287,3 +6287,18 @@ insert into t values ('');
 select c1 regexp 'ddd' from t;
 c1 regexp 'ddd'
 0
+drop table if exists t1, t2;
+create table t1(c1 int, c2 varchar(10));
+insert into t1 values(1, '1');
+create table t2(c1 int);
+insert into t2 values(1), (2);
+select t2.*, (select t1.c1 from t1 where t1.c2 REGEXP t2.c1 limit 1 ) from t2;
+c1	(select t1.c1 from t1 where t1.c2 REGEXP t2.c1 limit 1 )
+1	1
+2	NULL
+select t2.*, (select t1.c1 from t1 where t1.c2 REGEXP t2.c1+1-1 limit 1 ) from t2;
+c1	(select t1.c1 from t1 where t1.c2 REGEXP t2.c1+1-1 limit 1 )
+1	1
+2	NULL
+drop table t1;
+drop table t2;
