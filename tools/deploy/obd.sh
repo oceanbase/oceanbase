@@ -458,79 +458,44 @@ Usage: $entrance <commond> [options]
 Available commonds:
 
 prepare  [-p DATA_PATH -h HOST]          Prepare for deployment.
-
 deploy -c YAML_CONF [-n DEPLOY_NAME]     Deploy a cluster by a deploy yaml file. Default deploy name will be the name of yaml file.
-
 redeploy [-c YAML_CONF -n DEPLOY_NAME]   Redeploy cluster. 
-
 reinstall [-n DEPLOY_NAME]               Reinstall cluster. (Change bin file, sync libs and restart)
-
 start [-n DEPLOY_NAME]                   Start cluster. 
-
 stop [-n DEPLOY_NAME]                    Stop a started cluster.
-
 restart [-n DEPLOY_NAME]                 Restart cluster.
-
 destroy [-n DEPLOY_NAME]                 Destroy cluster.
-
 upgrade [-n DEPLOY_NAME]                 Upgrade cluster.
-
 list [-n DEPLOY_NAME]                    List cluster.
-
 display [-n DEPLOY_NAME]                 Display cluster info.
-
 create_tenant [-n DEPLOY_NAME]           Create tenant.
-
 drop_tenant [-n DEPLOY_NAME]             Drop tenant.
-
 sysbench [-n DEPLOY_NAME]                Run sysbench, use '--help' for more details.
-
 tpch [-n DEPLOY_NAME]                    Run tpch test, use '--help' for more details.
-
 tpcc [-n DEPLOY_NAME]                    Run tpcc test, use '--help' for more details.
-
 tpcds [-n DEPLOY_NAME]                   Run tpcds test, use '--help' for more details.
-
 mysqltest [-n DEPLOY_NAME]               Run mysqltest, use '--help' for more details.
-
 pid [-n DEPLOY_NAME]                     Get pid list for servers, use '--help' for more details.
-
 ssh [-n DEPLOY_NAME]                     Ssh to target server and change directory to log path, use '--help' for more details.
-
 less [-n DEPLOY_NAME]                    Use command less to the observer.log, use '--help' for more details.
-
 gdb [-n DEPLOY_NAME]                     Use gdb to attch target server, use '--help' for more details.
-
 sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
-
 sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
-
 mysql [-n DEPLOY_NAME]                   Connect to target server by root@mysql, use '--help' for more details.
-
 oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle, use '--help' for more details.
 
 Options:
 -V, --version                            Show version of obd.
-
 -c YAML_CONF, --config=YAML_CONF         The deploy yaml file.
-
 -n DEPLOY_NAME, --deploy-name=DEPLOY_NAME
                                          The name of the deployment.
-
 -v VERBOSE                               Activate verbose output.
-
 -p DATA_PATH, --data-path=DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
-
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
-
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
-
 --with-local-obproxy                     Use local obproxy.
-
 --skip-copy                              Skip copy.sh.
-
 --cp                                     Exec copy.sh.
-
 --reboot                                 Redeploy cluster before mysqltest
 
 https://yuque.antfin-inc.com/docs/share/7f5dc9e8-dbe8-4f59-852d-b7ce57b88fdd
