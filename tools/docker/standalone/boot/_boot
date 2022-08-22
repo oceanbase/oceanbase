@@ -65,6 +65,8 @@ else # nothing here, bootstrap
     cp -f boot-tmp.yaml $TMPFILE
   fi
 
+  cat obagent.yaml >> $TMPFILE
+
   sed -i "s|@OB_HOME_PATH@|${OB_HOME_PATH}|g" $TMPFILE
   sed -i "s|@OB_MYSQL_PORT@|${OB_MYSQL_PORT}|g" $TMPFILE
   sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
@@ -75,8 +77,8 @@ else # nothing here, bootstrap
   echo "create boot dirs and deploy ob cluster ..."
   mkdir -p $OB_HOME_PATH
 
-  obd mirror clone /root/pkg/*.rpm \
-  && obd mirror list local
+  #obd mirror clone /root/pkg/*.rpm \
+  #&& obd mirror list local
 
   remove_disk_check_logic_in_obd
   obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE \
