@@ -44,6 +44,7 @@ int ObExprJsonKeys::calc_result_typeN(ObExprResType& type,
   } else {
     // set result to json
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     
     // set type of json_doc
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_KEYS))) {

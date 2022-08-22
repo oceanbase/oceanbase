@@ -55,6 +55,7 @@ int ObExprJsonReplace::calc_result_typeN(ObExprResType& type,
       }
     }
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   }
   return ret;
 }

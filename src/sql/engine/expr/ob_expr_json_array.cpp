@@ -51,6 +51,7 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
   } else {
     // param_num >= 0
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     for (int64_t i = 0; i < param_num; i++) {
       if (ob_is_string_type(types_stack[i].get_type())) {
         if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
