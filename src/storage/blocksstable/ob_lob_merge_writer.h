@@ -74,9 +74,10 @@ private:
   const ObDataStoreDesc* data_store_desc_;
   int64_t macro_start_seq_;
   int64_t use_old_macro_block_count_;
+  common::ObArenaAllocator allocator_;
   bool is_inited_;
   storage::ObStoreRow result_row_;
-  char buffer_[sizeof(common::ObObj) * common::OB_ROW_MAX_COLUMNS_COUNT];
+  storage::ObDynamicBuffer<ObObj> buffer_;
 };
 
 }  // end namespace blocksstable

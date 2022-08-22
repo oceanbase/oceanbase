@@ -1573,6 +1573,101 @@ struct ObRowStat {
   TO_STRING_KV(K_(base_row_count), K_(inc_row_count), K_(merge_row_count), K_(result_row_count), K_(filt_del_count));
 };
 
+template <typename T, int64_t LOCAL_BUFFER_SIZE=64>
+class ObDynamicBuffer {
+public:
+  ObDynamicBuffer()
+    : data_(NULL),
+      allocator_(NULL),
+      capacity_(0),
+      is_inited_(false)
+  {}
+
+  virtual ~ObDynamicBuffer()
+  {
+    reset();
+  }
+  
+  int init(ObIAllocator *allocator)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(is_inited_)) {
+      ret = OB_INIT_TWICE;
+      STORAGE_LOG(WARN, "init twice", K(ret));
+    } else if (OB_ISNULL(allocator)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid arguments", K(ret));
+    } else {
+      allocator_ = allocator;
+      data_ = data_buf_;
+      capacity_ = LOCAL_BUFFER_SIZE;
+      is_inited_ = true;
+    }
+    return ret;
+  }
+
+  // notice that we do not call the desconstructor of T
+  void reset()
+  {
+    if (OB_NOT_NULL(data_) && data_ != data_buf_) {
+      allocator_->free(data_);
+    }
+    data_ = NULL;
+    allocator_ = NULL;
+    capacity_ = 0;
+    is_inited_ = false;
+  }
+
+  inline int reserve(int64_t capacity) {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      STORAGE_LOG(ERROR, "row buffer has not been initialized", K(ret));
+    } else if (capacity < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid arguments", K(ret), K(capacity));
+    } else if (capacity > capacity_) {
+      int64_t new_size = capacity * sizeof(T);
+      void* new_data = allocator_->alloc(new_size);
+      if (OB_ISNULL(new_data)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc new_data", K(ret));
+      } else {
+        if (data_ != data_buf_) {
+          allocator_->free(data_);
+        }
+        data_ = new (new_data) T[capacity];
+        capacity_ = capacity;
+      }
+    }
+    return ret;
+  }
+
+  inline T* get_buf() const
+  {
+    return data_;
+  }
+
+  inline T& operator[](int64_t idx)
+  {
+    OB_ASSERT(idx >= 0 && idx < capacity_);
+    return data_[idx];
+  }
+
+  inline const T& operator[](int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < capacity_);
+    return data_[idx];
+  }
+
+private:
+  T data_buf_[LOCAL_BUFFER_SIZE];
+  T* data_;
+  ObIAllocator* allocator_;
+  int64_t capacity_;
+  bool is_inited_;
+};
+
 OB_INLINE bool ObStoreRow::is_valid() const
 {
   bool bool_ret = true;

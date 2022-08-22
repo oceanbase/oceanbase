@@ -66,7 +66,7 @@ private:
   common::ObArenaAllocator allocator_;
   ObMacroBlockReader macro_reader_;
   ObColumnMap column_map_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];  // for reader to get row
+  storage::ObDynamicBuffer<ObObj> obj_buf_;
 };
 
 }  // namespace blocksstable

@@ -124,6 +124,13 @@ int ObDataStoreDesc::init(const ObTableSchema& table_schema, const int64_t data_
     } else {
       macro_store_size_ = macro_block_size_ * DEFAULT_RESERVE_PERCENT / 100;
     }
+    if (OB_FAIL(column_ids_.init(&allocator_))) {
+      STORAGE_LOG(WARN, "fail to init column_ids_, ", K(ret));
+    } else if (OB_FAIL(column_types_.init(&allocator_))) {
+      STORAGE_LOG(WARN, "fail to init column_types_, ", K(ret));
+    } else if (OB_FAIL(column_orders_.init(&allocator_))) {
+      STORAGE_LOG(WARN, "fail to init column_orders_, ", K(ret));
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(file_handle_.assign(file_handle))) {
         STORAGE_LOG(WARN, "failed to assign file handle", K(ret), K(file_handle));
@@ -199,14 +206,22 @@ int ObDataStoreDesc::init(const ObTableSchema& table_schema, const int64_t data_
       }
 
       if (OB_SUCC(ret)) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
-          if (i >= common::OB_MAX_COLUMN_NUMBER) {
-            ret = OB_SIZE_OVERFLOW;
-            STORAGE_LOG(WARN, "column type&id list overflow.", K(ret));
-          } else {
-            column_ids_[i] = column_list.at(i).col_id_;
-            column_types_[i] = column_list.at(i).col_type_;
-            column_orders_[i] = column_list.at(i).col_order_;
+        if (OB_FAIL(column_ids_.reserve(row_column_count_))) {
+          STORAGE_LOG(WARN, "fail to reserve memory for column_ids_, ", K(ret));
+        } else if (OB_FAIL(column_types_.reserve(row_column_count_))) {
+          STORAGE_LOG(WARN, "fail to reserve memory for column_types_, ", K(ret));
+        } else if (OB_FAIL(column_orders_.reserve(row_column_count_))) {
+          STORAGE_LOG(WARN, "fail to reserve memory for column_orders_, ", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
+            if (i >= row_column_count_) {
+              ret = OB_SIZE_OVERFLOW;
+              STORAGE_LOG(WARN, "column type&id list overflow.", K(ret));
+            } else {
+              column_ids_[i] = column_list.at(i).col_id_;
+              column_types_[i] = column_list.at(i).col_type_;
+              column_orders_[i] = column_list.at(i).col_order_;
+            }
           }
         }
       }
@@ -246,9 +261,9 @@ void ObDataStoreDesc::reset()
   has_lob_column_ = false;
   is_major_ = false;
   MEMSET(compressor_name_, 0, OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH);
-  MEMSET(column_ids_, 0, sizeof(column_ids_));
-  MEMSET(column_types_, 0, sizeof(column_types_));
-  MEMSET(column_orders_, 0, sizeof(column_orders_));
+  column_ids_.reset();
+  column_types_.reset();
+  column_orders_.reset();
   need_calc_column_checksum_ = false;
   need_index_tree_ = false;
   store_micro_block_column_checksum_ = false;
@@ -265,6 +280,7 @@ void ObDataStoreDesc::reset()
   major_working_cluster_version_ = 0;
   iter_complement_ = false;
   is_unique_index_ = false;
+  allocator_.reset();
 }
 
 int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
@@ -289,9 +305,26 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
   has_lob_column_ = desc.has_lob_column_;
   is_major_ = desc.is_major_;
   MEMCPY(compressor_name_, desc.compressor_name_, OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH);
-  MEMCPY(column_ids_, desc.column_ids_, sizeof(column_ids_));
-  MEMCPY(column_types_, desc.column_types_, sizeof(column_types_));
-  MEMCPY(column_orders_, desc.column_orders_, sizeof(column_orders_));
+  column_ids_.reset();
+  column_types_.reset();
+  column_orders_.reset();
+  if (OB_FAIL(column_ids_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_ids_, ", K(ret));
+  } else if (OB_FAIL(column_types_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_types_, ", K(ret));
+  } else if (OB_FAIL(column_orders_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init column_orders_, ", K(ret));
+  } else if (OB_FAIL(column_ids_.reserve(desc.row_column_count_))) {
+    STORAGE_LOG(WARN, "fail to reserve memory for column_ids_, ", K(ret));
+  } else if (OB_FAIL(column_types_.reserve(desc.row_column_count_))) {
+    STORAGE_LOG(WARN, "fail to reserve memory for column_types_, ", K(ret));
+  } else if (OB_FAIL(column_orders_.reserve(desc.row_column_count_))) {
+    STORAGE_LOG(WARN, "fail to reserve memory for column_orders_, ", K(ret));
+  } else {
+    MEMCPY(column_ids_.get_buf(), desc.column_ids_.get_buf(), sizeof(uint64_t) * desc.row_column_count_);
+    MEMCPY(column_types_.get_buf(), desc.column_types_.get_buf(), sizeof(ObObjMeta) * desc.row_column_count_);
+    MEMCPY(column_orders_.get_buf(), desc.column_orders_.get_buf(), sizeof(ObOrderType) * desc.row_column_count_);
+  }
   need_calc_column_checksum_ = desc.need_calc_column_checksum_;
   store_micro_block_column_checksum_ = desc.store_micro_block_column_checksum_;
   snapshot_version_ = desc.snapshot_version_;
@@ -928,7 +961,7 @@ int ObMacroBlock::build_macro_meta(ObFullMacroBlockMeta& full_meta)
   } else if (OB_FAIL(index_.get_last_rowkey(s_rowkey))) {
     STORAGE_LOG(WARN, "micro block index writer fail to get last rowkey", K(ret));
   } else if (OB_FAIL(row_reader_->read_compact_rowkey(
-                 spec_->column_types_, spec_->rowkey_column_count_, s_rowkey.ptr(), s_rowkey.length(), pos, row_))) {
+                 spec_->column_types_.get_buf(), spec_->rowkey_column_count_, s_rowkey.ptr(), s_rowkey.length(), pos, row_))) {
     STORAGE_LOG(WARN, "row reader fail to read row.", K(ret));
   } else {
     ObMacroBlockMetaV2& mbi = const_cast<ObMacroBlockMetaV2&>(*full_meta.meta_);

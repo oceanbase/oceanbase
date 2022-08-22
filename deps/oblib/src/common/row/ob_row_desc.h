@@ -90,7 +90,7 @@ private:
   };
 
 private:
-  static const int64_t MAX_COLUMNS_COUNT = common::OB_ROW_MAX_COLUMNS_COUNT;  // 512
+  static const int64_t MAX_COLUMNS_COUNT = common::OB_ROW_MAX_COLUMNS_COUNT;  // 4224
   static uint64_t HASH_COLLISIONS_COUNT;
   // data members
   typedef Desc* CellDescArray;

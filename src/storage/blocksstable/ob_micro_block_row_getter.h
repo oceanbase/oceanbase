@@ -65,9 +65,9 @@ private:
   common::ObArenaAllocator allocator_;
   ObColumnMap column_map_;
   storage::ObStoreRow row_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];
+  storage::ObDynamicBuffer<ObObj> obj_buf_;
   storage::ObStoreRow full_row_;
-  char full_row_obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];
+  storage::ObDynamicBuffer<ObObj> full_row_obj_buf_;
 };
 
 }  // namespace blocksstable
