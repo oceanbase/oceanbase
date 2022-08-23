@@ -1497,12 +1497,12 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObLongTextType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_COLUMN_VARCHAR_LENGTH, //column_length
+      0, //column_length
       -1, //column_precision
       -1, //column_scale
-      true, //is_nullable
+      false, //is_nullable
       false); //is_autoincrement
   }
 
