@@ -762,8 +762,8 @@ DEF_INT(clog_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "80", "[10, 100)"
     "clog disk utilization threshold before reuse clog files, should be less than clog_disk_usage_limit_percentage. "
     "Range: [10, 100)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(clog_disk_limit_size, OB_CLUSTER_PARAMETER, "0G", common::ObConfigClogDiskLimitSizeChecker,"[0G,)",
-    "maximum of clog disk size before reuse clog files, should be less than clog_disk_limit_size."
+DEF_CAP_WITH_CHECKER(log_disk_size, OB_CLUSTER_PARAMETER, "0G", common::ObConfigLogDiskSizeChecker,"[0G,)",
+    "maximum of clog disk size before reuse clog files, should be less than log_disk_size."
     "Range: [0G, +∞)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 

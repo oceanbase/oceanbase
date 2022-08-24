@@ -451,15 +451,15 @@ int ObLogWriteFilePool::calculate_free_quota(const char* path, const int64_t use
 {
   int ret = OB_SUCCESS;
   struct statvfs svfs;
-  const int64_t clog_disk_limit_size = ObServerConfig::get_instance().clog_disk_limit_size;
+  const int64_t log_disk_size = ObServerConfig::get_instance().log_disk_size;
   int64_t total_size = 0;
 
   if (OB_UNLIKELY(0 != statvfs(path, &svfs))) {
     ret = OB_IO_ERROR;
     CLOG_LOG(ERROR, "statvfs error", K(ret), K(path), K(errno), KERRMSG);
   } else{
-    if (clog_disk_limit_size != 0){
-      total_size = clog_disk_limit_size;
+    if (log_disk_size != 0){
+      total_size = log_disk_size;
     }else{
       total_size = (int64_t)svfs.f_bsize * (int64_t)svfs.f_blocks;
     }

@@ -1966,10 +1966,10 @@ int ObLogDiskManager::get_total_disk_space(int64_t& total_space) const
 int ObLogDiskManager::get_total_disk_space_(int64_t& total_space) const
 {
   int ret = OB_SUCCESS;
-  const int64_t clog_disk_limit_size = ObServerConfig::get_instance().clog_disk_limit_size;
+  const int64_t log_disk_size = ObServerConfig::get_instance().log_disk_size;
 
-  if (clog_disk_limit_size != 0){
-    total_space = clog_disk_limit_size;
+  if (log_disk_size != 0){
+    total_space = log_disk_size;
   }else{
     struct statvfs svfs;
     ret = OB_EAGAIN;
