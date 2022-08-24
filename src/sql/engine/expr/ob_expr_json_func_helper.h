@@ -22,8 +22,6 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_parse.h"
 
-using namespace oceanbase::common;
-
 namespace oceanbase
 {
 namespace sql
@@ -134,7 +132,142 @@ public:
                                         ObScale scale,
                                         const ObTimeZoneInfo *tz_info,
                                         ObIJsonBase*& j_base,
-                                        bool to_bin);
+                                        bool to_bin)
+  {
+    int ret = OB_SUCCESS;
+    void *buf = NULL;
+    ObIJsonBase *json_node = NULL;
+
+    switch (type) {
+      case ObTinyIntType: {
+        // mysql boolean type
+        buf = allocator->alloc(sizeof(ObJsonInt));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonInt *)new (buf) ObJsonInt(datum.get_int());
+        }
+        break;
+      }
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType: {
+        buf = allocator->alloc(sizeof(ObJsonInt));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonInt *)new (buf) ObJsonInt(datum.get_int());
+        }
+        break;
+      }
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type: {
+        buf = allocator->alloc(sizeof(ObJsonUint));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonInt *)new (buf) ObJsonUint(datum.get_uint64());
+        }
+        break;
+      }
+      case ObDateTimeType:
+      case ObTimestampType:
+      case ObDateType:
+      case ObTimeType: {
+        ObTime ob_time;
+        int64_t value = 0;
+        ObJsonNodeType node_type;
+        if (type == ObDateType) {
+          node_type = ObJsonNodeType::J_DATE;
+          value = datum.get_date();
+          ob_time.mode_ = DT_TYPE_DATE;
+          if (OB_FAIL(ObTimeConverter::date_to_ob_time(value, ob_time))) {}
+        } else if (type == ObTimeType) {
+          node_type = ObJsonNodeType::J_TIME;
+          value = datum.get_time();
+          ob_time.mode_ = DT_TYPE_TIME;
+          if (OB_FAIL(ObTimeConverter::time_to_ob_time(value, ob_time))) {}
+        } else if (type == ObDateTimeType) {
+          node_type = ObJsonNodeType::J_DATETIME;
+          value = datum.get_datetime();
+          ob_time.mode_ = DT_TYPE_DATETIME;
+          if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, tz_info, ob_time))) {}
+        } else {
+          node_type = ObJsonNodeType::J_TIMESTAMP;
+          value = datum.get_timestamp();
+          ob_time.mode_ = DT_TYPE_DATETIME;
+          if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(value, tz_info, ob_time))) {}
+        }
+
+        if (OB_SUCC(ret)) {
+          buf = allocator->alloc(sizeof(ObJsonDatetime));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            json_node = (ObJsonDatetime *)new (buf) ObJsonDatetime(node_type, ob_time);
+          }
+        }
+        break;
+      }
+
+      case ObFloatType:
+      case ObDoubleType:
+      case ObUFloatType:
+      case ObUDoubleType: {
+        buf = allocator->alloc(sizeof(ObJsonDouble));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonDouble *)new (buf) ObJsonDouble(datum.get_double());
+        }
+        break;
+      }
+
+      case ObUNumberType:
+      case ObNumberType: {
+        // won't waster much memory, do deep copy num
+        number::ObNumber num;
+        buf = allocator->alloc(sizeof(ObJsonDecimal));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else if (OB_FAIL(num.deep_copy_v3(datum.get_number(), *allocator))) {
+          ;
+        } else {
+          // shadow copy
+          json_node = (ObJsonDecimal *)new (buf) ObJsonDecimal(num, -1, scale);
+        }
+        break;
+      }
+      case ObHexStringType: {
+        buf = allocator->alloc(sizeof(ObJsonOpaque));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonOpaque *)new (buf) ObJsonOpaque(datum.get_string(), type);
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = json_node;
+      }
+    }
+  
+    return ret;
+  }
   /*
   try to transfrom from type which is_convertible_to_json to jsonBase
   @param[in]  datum          the input datum
@@ -153,7 +286,84 @@ public:
                                              ObCollationType cs_type,
                                              ObIJsonBase*& j_base,
                                              bool to_bin,
-                                             bool deep_copy = false);
+                                             bool deep_copy = false)
+  {
+    int ret = OB_SUCCESS;
+    void *buf = NULL;
+    ObIJsonBase *json_node = NULL;
+
+    switch (type) {
+      case ObNullType: {
+        buf = allocator->alloc(sizeof(ObJsonNull));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          json_node = (ObJsonNull *)new (buf) ObJsonNull();
+        }
+        break;
+      }
+      case ObVarcharType:
+      case ObCharType:
+      case ObTinyTextType:
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        ObString value;
+        if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
+          // should check collation first
+          LOG_WARN("Invalid collation type for input string.", K(ret));
+        } else if (deep_copy) {
+          ret = deep_copy_ob_string(*allocator, datum.get_string(), value);
+        } else {
+          value = datum.get_string();
+        }
+  
+        if (OB_SUCC(ret)) {
+          uint64_t len = value.length();
+          const char *ptr = value.ptr();
+          buf = allocator->alloc(sizeof(ObJsonString));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            json_node = (ObJsonString *)new (buf) ObJsonString(ptr, len);
+          }
+        }
+
+        break;
+      }
+      case ObJsonType: {
+        ObString value;
+        if (deep_copy) {
+          if (OB_FAIL(deep_copy_ob_string(*allocator, datum.get_string(), value))) {}
+        } else {
+          value = datum.get_string();
+        }
+        if (OB_SUCC(ret)) {
+          ObJsonInType to_type = to_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
+          if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, value, ObJsonInType::JSON_BIN, to_type, json_node))) {
+            ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+            LOG_WARN("fail to get json base", K(ret));
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = json_node;
+      }
+    }
+
+    return ret;
+  }
 
   static bool is_convertible_to_json(ObObjType &type);
   static int is_valid_for_json(ObExprResType* types_stack, uint32_t index, const char* func_name);

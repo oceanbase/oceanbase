@@ -21,6 +21,7 @@
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "ob_htable_filter_operator.h"
 #include "sql/engine/expr/ob_expr_add.h"
+
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -295,7 +296,7 @@ int ObTableService::do_put(ObTableServiceCtx &ctx, const ObTableOperation &table
     dml_param.schema_version_ = put_row_iter.get_schema_version();
 
     if (OB_FAIL(part_service_->put_rows(
-        ctx.param_.processor_->get_trans_desc(),
+        *(ctx.param_.trans_desc_),
         dml_param,
         part_key,
         put_row_iter.get_column_ids(),
@@ -432,7 +433,7 @@ int ObTableService::multi_put(ObTableServiceCtx &ctx,
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
       multi_put_iter.continue_iter();
       if (OB_FAIL(part_service_->put_rows(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           multi_put_iter.get_column_ids(),
@@ -520,7 +521,7 @@ int ObTableService::fill_scan_param(ObTableServiceCtx &ctx,
     scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
-    scan_param.trans_desc_ = &ctx.param_.processor_->get_trans_desc();
+    scan_param.trans_desc_ = ctx.param_.trans_desc_;
     scan_param.index_id_ = table_id;
     scan_param.sql_mode_ = SMO_DEFAULT;
     scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());
@@ -587,7 +588,7 @@ int ObTableService::execute_get(ObTableServiceGetCtx &ctx, const ObTableOperatio
   } else if (OB_FAIL(fill_get_result(ctx, get_row_iter.get_properties(), &get_row_iter, result))) {
     LOG_WARN("failed to send result");
   } else {
-    LOG_DEBUG("[yzfdebug] execute_get", "prop", get_row_iter.get_properties(), "table_param", *(ctx.table_param_), "scan_param", ctx.scan_param_, "trans_desc", ctx.param_.processor_->get_trans_desc());
+    LOG_DEBUG("[yzfdebug] execute_get", "prop", get_row_iter.get_properties(), "table_param", *(ctx.table_param_), "scan_param", ctx.scan_param_, "trans_desc", *(ctx.param_.trans_desc_));
   }
 
   result.set_type(ObTableOperationType::GET);
@@ -789,7 +790,7 @@ int ObTableService::execute_delete(ObTableServiceGetCtx &ctx, const ObTableOpera
     dml_param.sql_mode_ = SMO_DEFAULT;
     dml_param.schema_version_ = delete_row_iter.get_schema_version();
     if (OB_FAIL(part_service_->delete_rows(
-        ctx.param_.processor_->get_trans_desc(),
+        *(ctx.param_.trans_desc_),
         dml_param,
         part_key,
         delete_row_iter.get_delete_column_ids(),
@@ -879,7 +880,7 @@ int ObTableService::multi_delete(ObTableServiceGetCtx &ctx, const ObTableBatchOp
       delete_row_iter.continue_iter();
       // get one row
       if (OB_FAIL(part_service_->delete_rows(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           delete_row_iter.get_delete_column_ids(),
@@ -967,7 +968,7 @@ int ObTableService::execute_insert(
       if (OB_FAIL(get_rowkey_column_ids(full_column_ids, rowkey_column_cnt, rowkey_column_ids))) {
         LOG_WARN("failed to fill rowkey column ids, ", K(ret));
       } else if (OB_FAIL(part_service_->insert_row(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           full_column_ids,
@@ -984,7 +985,7 @@ int ObTableService::execute_insert(
       // directly insert
       ObSingleRowIteratorWrapper single_row_iter(row);
       if (OB_FAIL(part_service_->insert_rows(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           insert_iter.get_column_ids(),
@@ -1052,7 +1053,7 @@ int ObTableService::multi_insert(ObTableServiceCtx &ctx, const ObTableBatchOpera
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       insert_iter.continue_iter();
       if (OB_FAIL(part_service_->insert_rows(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           insert_iter.get_column_ids(),
@@ -1090,7 +1091,7 @@ int ObTableService::do_replace(
 
   // 1. try to insert
   if (OB_FAIL(part_service_->insert_row(
-      ctx.param_.processor_->get_trans_desc(),
+      *(ctx.param_.trans_desc_),
       dml_param,
       part_key,
       column_ids,
@@ -1114,7 +1115,7 @@ int ObTableService::do_replace(
       } else {
         // 3. insert the row again
         single_row_iter.reset();
-        if (OB_FAIL(part_service_->insert_rows(ctx.param_.processor_->get_trans_desc(), dml_param, part_key,
+        if (OB_FAIL(part_service_->insert_rows(*(ctx.param_.trans_desc_), dml_param, part_key,
                                                column_ids, &single_row_iter, affected_rows))) {
           if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
             ret = OB_NOT_SUPPORTED;
@@ -1190,7 +1191,7 @@ int ObTableService::do_replace_delete(
     LOG_WARN("fail to fill query scan param, ", K(ret));
   } else if (OB_FAIL(part_service_->table_scan(scan_param, scan_iter))) {
     LOG_WARN("fail to table scan, ", K(ret));
-  } else if (OB_FAIL(part_service_->delete_rows(ctx.param_.processor_->get_trans_desc(), dml_param, part_key,
+  } else if (OB_FAIL(part_service_->delete_rows(*(ctx.param_.trans_desc_), dml_param, part_key,
       column_ids, scan_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("failed to delete", K(ret), K(part_key));
@@ -1342,7 +1343,7 @@ int ObTableService::execute_update(ObTableServiceGetCtx &ctx,
     dml_param.schema_version_ = update_iter.get_schema_version();
 
     if (OB_FAIL(part_service_->update_rows(
-        ctx.param_.processor_->get_trans_desc(),
+        *(ctx.param_.trans_desc_),
         dml_param,
         part_key,
         update_iter.get_column_ids(),
@@ -1432,7 +1433,7 @@ int ObTableService::execute_increment_by_update(
     dml_param.schema_version_ = increment_row_iter.get_schema_version();
 
     if (OB_FAIL(part_service_->update_rows(
-        ctx.param_.processor_->get_trans_desc(),
+        *(ctx.param_.trans_desc_),
         dml_param,
         part_key,
         increment_row_iter.get_column_ids(),
@@ -1535,7 +1536,7 @@ int ObTableService::multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOp
       affected_rows = 0;
       update_row_iter.continue_iter();
       if (OB_FAIL(part_service_->update_rows(
-          ctx.param_.processor_->get_trans_desc(),
+          *(ctx.param_.trans_desc_),
           dml_param,
           part_key,
           update_row_iter.get_column_ids(),
@@ -1735,7 +1736,7 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_ERROR("NULL ptr", K(ret), K(table_schema));
   } else if (OB_FAIL(get_index_id_by_name(schema_guard, table_id, index_name, index_id,
                                           rowkey_columns_type, index_schema))) {
@@ -1748,7 +1749,13 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
     LOG_DEBUG("[xilin debug]padding", K(padding_num), K(key_column_cnt), K(index_name));
 
     const bool index_back = (index_id != table_id);
-    if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
+    bool is_index_supported = true;
+    if (index_back && OB_FAIL(check_index_supported(schema_guard, table_schema, index_id, is_index_supported))) {
+      LOG_WARN("fail to check index supported", K(ret), K(index_id));
+    } else if (OB_UNLIKELY(!is_index_supported)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("index type is not supported by table api", K(ret), K(table_id), K(index_id));
+    } else if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
     } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL))) {
     } else if (OB_FAIL(table_param.convert(*table_schema, ((NULL == index_schema) ? *table_schema: *index_schema),
                                            output_column_ids, index_back))) {
@@ -1862,14 +1869,9 @@ int ObTableService::fill_query_scan_ranges(ObTableServiceCtx &ctx,
   return ret;
 }
 
-int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
-                                          const ObIArray<uint64_t> &output_column_ids,
-                                          int64_t schema_version,
-                                          ObQueryFlag::ScanOrder scan_order,
-                                          uint64_t index_id,
-                                          int32_t limit,
-                                          int32_t offset,
-                                          storage::ObTableScanParam &scan_param)
+int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx, const ObIArray<uint64_t> &output_column_ids,
+    int64_t schema_version, ObQueryFlag::ScanOrder scan_order, uint64_t index_id, int32_t limit, int32_t offset,
+    storage::ObTableScanParam &scan_param, bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
@@ -1888,7 +1890,7 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
                          );
   scan_param.scan_flag_.flag_ = query_flag.flag_;
   scan_param.reserved_cell_count_ = output_column_ids.count() + 10;
-  scan_param.for_update_ = false;
+  scan_param.for_update_ = for_update;
   scan_param.column_ids_.reset();
   scan_param.pkey_ = part_key;
   scan_param.schema_version_ = schema_version;
@@ -1901,7 +1903,7 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
     scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
     scan_param.limit_param_.limit_ = limit;
     scan_param.limit_param_.offset_ = offset;
-    scan_param.trans_desc_ = &ctx.param_.processor_->get_trans_desc();
+    scan_param.trans_desc_ = &*(ctx.param_.trans_desc_);
     scan_param.index_id_ = index_id;
     scan_param.sql_mode_ = SMO_DEFAULT;
     scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());
@@ -2050,8 +2052,7 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
     }
   }
   if (OB_SUCC(ret)) {
-    if (0 != query.get_offset()
-        || -1 != query.get_limit()) {
+    if (0 != query.get_offset()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("htable scan should not set Offset and Limit", K(ret), K(query));
     } else if (ObQueryFlag::Forward != query.get_scan_order() && ObQueryFlag::Reverse != query.get_scan_order()) {
@@ -2063,8 +2064,8 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
 }
 
 int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
-                                  table::ObTableQueryResult &one_result,
-                                  table::ObTableQueryResultIterator *&query_result)
+    table::ObTableQueryResult &one_result, table::ObTableQueryResultIterator *&query_result,
+    bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
@@ -2106,9 +2107,15 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
                                             (table_id != index_id) ? padding_num : -1,
                                             ctx.scan_param_))) {
     LOG_WARN("failed to fill range", K(ret));
-  } else if (OB_FAIL(fill_query_scan_param(ctx, output_column_ids, schema_version,
-                                           query.get_scan_order(), index_id, query.get_limit(),
-                                           query.get_offset(), ctx.scan_param_))) {
+  } else if (OB_FAIL(fill_query_scan_param(ctx,
+                 output_column_ids,
+                 schema_version,
+                 query.get_scan_order(),
+                 index_id,
+                 query.get_limit(),
+                 query.get_offset(),
+                 ctx.scan_param_,
+                 for_update))) {
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(part_service_->table_scan(ctx.scan_param_, ctx.scan_result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -2120,11 +2127,258 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
       if (OB_ISNULL(p_hcolumn_desc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null p_hcolumn_desc", K(ret));
-      } else if (p_hcolumn_desc->get_time_to_live() > 0) {
-        ctx.htable_result_iterator_->set_ttl(p_hcolumn_desc->get_time_to_live());
+      } else {
+        if (p_hcolumn_desc->get_time_to_live() > 0) {
+          ctx.htable_result_iterator_->set_ttl(p_hcolumn_desc->get_time_to_live());
+        }
+        if (p_hcolumn_desc->get_max_version() > 0) {
+          ctx.htable_result_iterator_->set_max_version(p_hcolumn_desc->get_max_version());
+        }
       }
     } else {
       ctx.normal_result_iterator_->set_scan_result(ctx.scan_result_);
+    }
+  }
+  return ret;
+}
+
+/* given the
+   1. ttl and max_version
+   2. start k && cq 
+   3. records limit
+   return the end k & cq
+*/
+
+int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
+  int64_t schema_version = 0;
+  ctx.scan_result_ = NULL;
+  const uint64_t table_id = ctx.param_.table_id_;
+  uint64_t index_id = OB_INVALID_ID;
+  int64_t padding_num = 0;
+  table::ObTableQuery query;
+  ObTableTTLDeleteRowIterator ttl_row_iter;
+  
+  if (OB_FAIL(ttl_row_iter.init(ttl_operation))) {
+    LOG_WARN("fail to init ttl delete row iterator", K(ret));
+  } else if (OB_FAIL(generate_ttl_query(ttl_operation, ctx, query))) {
+    LOG_WARN("fail to generate ttl query", K(ret));
+  } else if (OB_FAIL(fill_query_table_param(table_id, query.get_select_columns(),
+                                            query.get_index_name(),
+                                            *(ctx.table_param_), output_column_ids,
+                                            ctx.columns_type_, schema_version,
+                                            index_id, padding_num,
+                                            NULL))) {
+    LOG_WARN("failed to fill param", K(ret));
+  } else if (OB_FAIL(fill_query_scan_ranges(ctx, query,
+                                            (table_id != index_id) ? padding_num : -1,
+                                            ctx.scan_param_))) {
+    LOG_WARN("failed to fill range", K(ret));
+  } else if (OB_FAIL(fill_query_scan_param(ctx, output_column_ids, schema_version,
+                                           query.get_scan_order(), index_id, query.get_limit(),
+                                           query.get_offset(), ctx.scan_param_))) {
+    LOG_WARN("failed to fill param", K(ret));
+  } else if (OB_FAIL(part_service_->table_scan(ctx.scan_param_, ctx.scan_result_))) {
+    LOG_WARN("fail to scan table", K(ret));
+  } else {
+    ttl_row_iter.set_scan_result(ctx.scan_result_);
+    int64_t affected_rows = 0;
+    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
+    // init dml param
+    storage::ObDMLBaseParam dml_param;
+    dml_param.timeout_ =  ctx.param_.timeout_ts_; // todo@dazhi: should not timeout
+    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+    dml_param.tz_info_ = NULL;
+    dml_param.sql_mode_ = SMO_DEFAULT;
+    dml_param.schema_version_ = ctx.scan_param_.schema_version_;
+    if (OB_FAIL(part_service_->delete_rows(
+        *(ctx.param_.trans_desc_),
+        dml_param,
+        part_key,
+        ctx.scan_param_.column_ids_,
+        &ttl_row_iter,
+        affected_rows))) {
+      LOG_WARN("failed to delete", K(ret), K(table_id));
+    } else {
+      LOG_DEBUG("delete rows", K(ret), K(affected_rows));
+    }
+
+    if (OB_SUCC(ret)) {
+      uint64_t iter_ttl_cnt = ttl_row_iter.ttl_cnt_;
+      uint64_t iter_max_version_cnt = ttl_row_iter.max_version_cnt_;
+      uint64_t iter_return_cnt = iter_ttl_cnt + iter_max_version_cnt;
+      if (OB_UNLIKELY(affected_rows != iter_return_cnt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected affect rows", K(ret), K(affected_rows), K(iter_return_cnt));
+      } else {
+        result.ttl_del_rows_ = iter_ttl_cnt;
+        result.max_version_del_rows_ = iter_max_version_cnt;
+      }
+    }
+    result.end_rowkey_ = ttl_row_iter.cur_rowkey_;
+    result.end_qualifier_ = ttl_row_iter.cur_qualifier_;
+    result.scan_rows_ = ttl_row_iter.scan_cnt_;
+  }
+  LOG_DEBUG("execute ttl delete", K(ret), K(result));
+  return ret;
+}
+
+int ObTableService::generate_ttl_query(const ObTableTTLOperation &ttl_operation, ObTableServiceCtx &ctx, ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(query.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
+    LOG_WARN("failed to add K", K(ret));
+  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
+    LOG_WARN("failed to add Q", K(ret));
+  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
+    LOG_WARN("failed to add T", K(ret));
+  } else {
+    ObObj *start_row_key = NULL;
+    ObObj *end_row_key = NULL;
+    if (OB_ISNULL(start_row_key = static_cast<ObObj*>(ctx.param_.allocator_->alloc(sizeof(ObObj) * 3)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else if (OB_ISNULL(end_row_key = static_cast<ObObj*>(ctx.param_.allocator_->alloc(sizeof(ObObj) * 3)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else {
+      ObNewRange range;
+      // [k, q, min] -> [max, max, max]
+      start_row_key[0].set_varbinary(ttl_operation.start_rowkey_);
+      start_row_key[1].set_varbinary(ttl_operation.start_qualifier_);
+      start_row_key[2].set_min_value();
+      end_row_key[0].set_max_value();
+      end_row_key[1].set_max_value();
+      end_row_key[2].set_max_value();
+      range.start_key_.assign(start_row_key, 3);
+      range.end_key_.assign(end_row_key, 3);
+      range.border_flag_.set_inclusive_start();
+      range.border_flag_.set_inclusive_end();
+      if (OB_FAIL(query.set_scan_order(ObQueryFlag::ScanOrder::Forward))) { // scan from new to old
+        LOG_WARN("fail to set scan order", K(ret));
+      } else if (OB_FAIL(query.add_scan_range(range))) {
+        LOG_WARN("fail to add scan range", K(ret), K(range));
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
+
+int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
+{
+  int ret = OB_SUCCESS;
+  row = NULL;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("The table api ttl delete row iterator has not been inited, ", K(ret));
+  } else {
+    if (cur_del_rows_ >= limit_del_rows_) {
+      ret = OB_ITER_END; 
+      LOG_DEBUG("finish get next row", K(ret), K(cur_del_rows_), K(limit_del_rows_));
+    } else {
+      while(OB_SUCC(scan_result_->get_next_row(row))) {
+        scan_cnt_++;
+        ObHTableCellEntity cell(row);
+        ObString cell_rowkey = cell.get_rowkey();
+        ObString cell_qualifier = cell.get_qualifier();
+        int64_t cell_ts = -cell.get_timestamp(); // obhtable timestamp is nagative in ms
+        if ((cell_rowkey != cur_rowkey_) || (cell_qualifier != cur_qualifier_)) {
+          cur_version_ = 1;
+          cur_rowkey_ = cell_rowkey;
+          cur_qualifier_ = cell_qualifier;
+        } else {
+          cur_version_++;
+        }
+        if (max_version_ > 0 && cur_version_ > max_version_) {
+          max_version_cnt_++;
+          cur_del_rows_++;
+          is_last_row_ttl_ = false;
+          break;
+        } else if (time_to_live_ms_ > 0 && (cell_ts + time_to_live_ms_ < ObHTableUtils::current_time_millis())) {
+          ttl_cnt_++;
+          cur_del_rows_++;
+          is_last_row_ttl_ = true;
+          break;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  }
+  return ret;
+}
+
+void ObTableServiceTTLCtx::destroy_scan_iterator(storage::ObPartitionService *part_service)
+{
+  if (NULL != scan_result_) {
+    if (NULL == part_service) {
+      LOG_ERROR("part_service is NULL, memory leak");
+    } else {
+      part_service->revert_scan_iter(scan_result_);
+      scan_result_ = NULL;
+    }
+  }
+}
+
+void ObTableTTLDeleteRowIterator::reset()
+{
+  is_inited_ = false;
+  scan_result_ = NULL;
+  time_to_live_ms_ = 0;
+  max_version_ = 0;
+  limit_del_rows_ = 0;
+  cur_del_rows_ = 0;
+  cur_version_ = 0;
+  cur_rowkey_.reset(); 
+  cur_qualifier_.reset();
+  max_version_cnt_ = 0;
+  ttl_cnt_ = 0;
+  is_last_row_ttl_ = false;
+}
+
+int ObTableTTLDeleteRowIterator::init(const ObTableTTLOperation &ttl_operation)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ttl_operation.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ttl operation", K(ret), K(ttl_operation));
+  } else {
+    time_to_live_ms_ = ttl_operation.time_to_live_ * 1000l;
+    max_version_ = ttl_operation.max_version_;
+    limit_del_rows_ = ttl_operation.del_row_limit_;
+    cur_rowkey_ = ttl_operation.start_rowkey_;
+    cur_qualifier_ = ttl_operation.start_qualifier_;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+// check whether index is supported in given table schema by table api
+// global index is not supported by table api. specially, global index in non-partitioned
+// table was optimized to local index, which we can support.
+int ObTableService::check_index_supported(schema::ObSchemaGetterGuard &schema_guard,
+    const schema::ObSimpleTableSchemaV2 *table_schema, uint64_t index_id, bool &is_supported)
+{
+  int ret = OB_SUCCESS;
+  is_supported = true;
+  const schema::ObSimpleTableSchemaV2 *index_schema = NULL;
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("null table schema", K(ret));
+  } else if (table_schema->is_partitioned_table()) {
+    if (OB_FAIL(schema_guard.get_table_schema(index_id, index_schema))) {
+      LOG_WARN("fail to get table schmea", K(ret), K(index_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("get null index schema", K(ret), K(index_id));
+    } else if (index_schema->is_global_index_table()) {
+      is_supported = false;
     }
   }
   return ret;

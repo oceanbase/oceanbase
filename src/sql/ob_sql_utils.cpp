@@ -1204,7 +1204,10 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type, cons
   const char* name_str = name.ptr();
   const int64_t max_user_table_name_length =
       share::is_oracle_mode() ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
-  if (0 == name_len || name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN) || OB_ISNULL(name_str)) {
+  const int64_t max_index_name_prefix_len = 30;
+  if (0 == name_len || (!is_index_table && (name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN))) ||
+      (is_index_table && (name_len > (max_user_table_name_length * OB_MAX_CHAR_LEN + max_index_name_prefix_len))) ||
+      OB_ISNULL(name_str)) {
     ret = OB_WRONG_TABLE_NAME;
     LOG_USER_ERROR(OB_WRONG_TABLE_NAME, static_cast<int32_t>(name_len), name_str);
     LOG_WARN("incorrect table name", K(name), K(ret));
@@ -1279,14 +1282,21 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
   bool last_char_is_space = false;
   const char* end = name.ptr() + name.length();
   const char* name_str = name.ptr();
-  size_t name_char_len = 0;
+  size_t name_len = 0;  // char semantics for MySQL mode, and byte semantics for Oracle mode
+  size_t byte_length = 0;
+  int is_mb_char = 0;
   while (OB_SUCCESS == ret && name_str != end) {
     last_char_is_space = ObCharset::is_space(CS_TYPE_UTF8MB4_GENERAL_CI, *name_str);
     if (ObCharset::usemb(CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      int char_len = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
-      if (char_len) {
-        name_str += char_len;
-        name_char_len++;
+      is_mb_char = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
+      if (is_mb_char) {
+        byte_length = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end - name_str, 1);
+        name_str += byte_length;
+        if (share::is_mysql_mode()) {
+          name_len++;
+        } else {
+          name_len += byte_length;
+        }
         continue;
       }
     }
@@ -1295,7 +1305,7 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
       ret = OB_WRONG_COLUMN_NAME;
     } else {
       name_str++;
-      name_char_len++;
+      name_len++;
     }
   }
 
@@ -1304,10 +1314,10 @@ int ObSQLUtils::check_column_name(const ObCollationType cs_type, ObString& name)
       ret = OB_WRONG_COLUMN_NAME;
       LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, name.length(), name.ptr());
       LOG_WARN("incorrect column name", K(name), K(ret));
-    } else if (name_char_len > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
+    } else if (name_len > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, name.length(), name.ptr());
-      LOG_WARN("column name is too long", K(name), K(ret));
+      LOG_WARN("column name is too long", K(ret), K(name), K(name_len));
     }
   }
   return ret;
@@ -1345,33 +1355,39 @@ int ObSQLUtils::check_ident_name(
   bool last_char_is_space = false;
   const char* end = name.ptr() + name.length();
   const char* name_str = name.ptr();
-  size_t name_char_len = 0;
+  size_t name_len = 0;  // char semantics for MySQL mode, and byte semantics for Oracle mode
+  size_t byte_length = 0;
+  int is_mb_char = 0;
   while (OB_SUCCESS == ret && NULL != name_str && name_str != end) {
     last_char_is_space = ObCharset::is_space(CS_TYPE_UTF8MB4_GENERAL_CI, *name_str);
     if (ObCharset::usemb(CS_TYPE_UTF8MB4_GENERAL_CI)) {
-      int char_len = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
-      if (char_len) {
-        name_str += char_len;
-        name_char_len++;
+      is_mb_char = ObCharset::is_mbchar(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end);
+      if (is_mb_char) {
+        byte_length = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, name_str, end - name_str, 1);
+        name_str += byte_length;
+        if (share::is_mysql_mode()) {
+          name_len++;
+        } else {
+          name_len += byte_length;
+        }
         continue;
       }
     }
-
     if (check_for_path_char && ('/' == *name_str || '\\' == *name_str || '~' == *name_str || '.' == *name_str)) {
       ret = OB_ERR_WRONG_IDENT_NAME;
       LOG_WARN("Incorrect database name", K(name), K(ret));
     } else {
       name_str++;
-      name_char_len++;
+      name_len++;
     }
   }
   if (OB_SUCC(ret)) {
     if (last_char_is_space) {
       ret = OB_ERR_WRONG_IDENT_NAME;
       LOG_WARN("incorrect ident name", K(name), K(ret));
-    } else if (name_char_len > static_cast<size_t>(max_ident_len)) {
+    } else if (name_len > static_cast<size_t>(max_ident_len)) {
       ret = OB_ERR_TOO_LONG_IDENT;
-      LOG_WARN("ident name is too long", K(name), K(ret));
+      LOG_WARN("ident name is too long", K(ret), K(name), K(name.length()), K(name_len));
     }
   }
   return ret;
@@ -2578,41 +2594,7 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr& local_addr,
   return ret;
 }
 
-int ObSQLUtils::has_global_index(
-    share::schema::ObSchemaGetterGuard* schema_guard, const uint64_t table_id, bool& exists)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema* index_schema = NULL;
-  uint64_t index_ids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
-  exists = false;
-  if (OB_ISNULL(schema_guard)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("null schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard->get_can_read_index_array(table_id, index_ids, index_count, false))) {
-    LOG_WARN("failed to get can read index", K(ret));
-  } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(index_count));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !exists && i < index_count; i++) {
-      if (OB_FAIL(schema_guard->get_table_schema(index_ids[i], index_schema))) {
-        LOG_WARN("failed to get index schema", K(ret));
-      } else if (OB_ISNULL(index_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null index schema", K(ret));
-      } else if (index_schema->is_global_index_table()) {
-        exists = true;
-      } else { /*do nothing*/
-      }
-    }
-  }
-  LOG_TRACE("finish to check whether table has global index", K(exists), K(table_id));
-
-  return ret;
-}
-
-int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx& expr_ctx, ObCastCtx& column_conv_ctx)
+int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &column_conv_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_ctx.my_session_)) {

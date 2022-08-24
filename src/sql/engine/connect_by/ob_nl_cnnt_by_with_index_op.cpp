@@ -31,7 +31,6 @@ ObNLConnectByWithIndexOp::ObNLConnectByWithIndexOp(ObExecContext& exec_ctx, cons
       is_match_(false),
       is_cycle_(false),
       is_inited_(false),
-      open_right_child_(false),
       need_return_(false)
 {
   state_operation_func_[CNTB_STATE_JOIN_END] = &ObNLConnectByWithIndexOp::join_end_operate;
@@ -89,7 +88,6 @@ void ObNLConnectByWithIndexOp::reset()
   root_row_ = NULL;
   cur_output_row_ = NULL;
   is_inited_ = false;
-  open_right_child_ = false;
   sys_connect_by_path_id_ = INT64_MAX;
   need_return_ = false;
 }
@@ -99,8 +97,6 @@ int ObNLConnectByWithIndexOp::inner_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOperator::inner_open())) {
     LOG_WARN("failed to open in base class", K(ret));
-  } else if (OB_FAIL(left_->open())) {
-    LOG_WARN("failed to open left child", K(ret));
   } else if (OB_FAIL(init())) {
     LOG_WARN("fail to init Connect by Ctx", K(ret));
   } else if (MY_SPEC.left_prior_exprs_.count() != MY_SPEC.right_prior_exprs_.count()) {
@@ -118,22 +114,11 @@ int ObNLConnectByWithIndexOp::inner_open()
   return ret;
 }
 
-int ObNLConnectByWithIndexOp::open_right_child()
-{
-  int ret = OB_SUCCESS;
-  if (!right_->is_opened() && OB_FAIL(right_->open())) {
-    LOG_WARN("failed to open right child", K(ret));
-  }
-  return ret;
-}
-
 int ObNLConnectByWithIndexOp::rescan()
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(open_right_child())) {
-    LOG_WARN("failed to open right child", K(ret));
-  } else if (OB_FAIL(ObOperator::rescan())) {
+  if (OB_FAIL(ObOperator::rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }
   return ret;
@@ -143,15 +128,6 @@ int ObNLConnectByWithIndexOp::inner_close()
 {
   int ret = OB_SUCCESS;
   reset();
-  int left_ret = OB_SUCCESS;
-  int right_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (left_ret = left_->close())) {
-    LOG_WARN("Close child operator failed", K(left_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  if (OB_SUCCESS != (right_ret = right_->close())) {
-    LOG_WARN("Close child operator failed", K(right_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  ret = (OB_SUCCESS == left_ret) ? right_ret : left_ret;
   return ret;
 }
 
@@ -289,11 +265,6 @@ int ObNLConnectByWithIndexOp::prepare_rescan_params()
     const ObDynamicParamSetter& rescan_param = MY_SPEC.rescan_params_.at(i);
     if (OB_FAIL(rescan_param.set_dynamic_param(eval_ctx_))) {
       LOG_WARN("fail to set dynamic param", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(open_right_child())) {
-      LOG_WARN("failed to open right child", K(ret));
     }
   }
   return ret;

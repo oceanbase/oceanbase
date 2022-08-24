@@ -555,8 +555,8 @@ private:
 
 class IterateMinPrepareVersionBeforeLogtsFunctor {
 public:
-  explicit IterateMinPrepareVersionBeforeLogtsFunctor(const int64_t log_ts)
-      : min_prepare_version_(INT64_MAX), min_logts_(log_ts)
+  explicit IterateMinPrepareVersionBeforeLogtsFunctor(const int64_t freeze_ts)
+      : min_prepare_version_(INT64_MAX), freeze_ts_(freeze_ts)
   {}
   int64_t get_min_prepare_version() const
   {
@@ -573,7 +573,7 @@ public:
       bool has_prepared = false;
       int64_t prepare_version = 0;
       ObPartTransCtx* ctx = static_cast<ObPartTransCtx*>(ctx_base);
-      if (OB_SUCCESS != (tmp_ret = ctx->get_prepare_version_before_logts(min_logts_, has_prepared, prepare_version))) {
+      if (OB_SUCCESS != (tmp_ret = ctx->get_prepare_version_before_logts(freeze_ts_, has_prepared, prepare_version))) {
         TRANS_LOG(WARN, "get prepare version if prepared failed", K(tmp_ret), K(*ctx));
       } else if (!has_prepared || prepare_version >= min_prepare_version_) {
         // do nothing
@@ -587,7 +587,7 @@ public:
 
 private:
   int64_t min_prepare_version_;
-  int64_t min_logts_;
+  int64_t freeze_ts_;
 };
 
 class IterateMinLogIdFunctor {
@@ -741,6 +741,7 @@ public:
         // If the transaction has not completed in 600 seconds, print its trace log
         part_ctx->print_trace_log();
       }
+      /* _NOTICE_: must acquire part_ctx's lock when accessing member of imprimitive type */
       if (OB_SUCCESS == tmp_ret) {
         ObPartitionArray participants_arr(
             common::ObModIds::OB_TRANS_PARTITION_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE);

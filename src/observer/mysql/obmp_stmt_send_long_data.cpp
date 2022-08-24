@@ -263,6 +263,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
     audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
     audit_record.ps_stmt_id_ = stmt_id_;
+    audit_record.tenant_id_=session.get_effective_tenant_id();
     audit_record.update_stage_stat();
     // ObSQLUtils::handle_audit_record(false, EXECUTE_PS_EXECUTE,
     //     session, ctx_);

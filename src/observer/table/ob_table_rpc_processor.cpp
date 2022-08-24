@@ -909,6 +909,39 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
   return ret;
 }
 
+// check whether the index type of given table is supported by table api or not.
+// global index is not supported by table api. specially, global index in non-partitioned
+// table was optimized to local index, which we can support.
+int ObTableApiProcessorBase::check_table_index_supported(uint64_t table_id, bool &is_supported)
+{
+  int ret = OB_SUCCESS;
+  bool exists = false;
+  is_supported = true;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
+  if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("get null table schema", K(ret), K(table_id));
+  } else if (table_schema->is_partitioned_table()) {
+    if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
+      LOG_WARN("fail to check global index", K(ret), K(table_id));
+    } else {
+      is_supported = !exists;
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_BATCH_EXECUTE> >;
@@ -1044,12 +1077,12 @@ ObHTableDeleteExecutor::ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
 {
   query_ctx_.param_table_id() = table_id;
   query_ctx_.param_partition_id() = partition_id;
-  query_ctx_.init_param(timeout_ts, processor, &alloc,
+  query_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                         false/*ignored*/, table::ObTableEntityType::ET_HKV,
                         table::ObBinlogRowImageType::MINIMAL/*ignored*/);
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
   mutations_result_.set_entity_factory(&entity_factory_);
@@ -1243,7 +1276,7 @@ ObHTablePutExecutor::ObHTablePutExecutor(common::ObArenaAllocator &alloc,
 {
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
 
@@ -1327,7 +1360,7 @@ ObHTableIncrementExecutor::ObHTableIncrementExecutor(table::ObTableOperationType
 {
   mutate_ctx_.param_table_id() = table_id;
   mutate_ctx_.param_partition_id() = partition_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+  mutate_ctx_.init_param(timeout_ts, processor->get_trans_desc(), &alloc,
                          false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
                          table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
   mutations_result_.set_entity_factory(&entity_factory_);

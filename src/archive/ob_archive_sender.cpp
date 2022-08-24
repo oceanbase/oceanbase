@@ -640,6 +640,18 @@ int ObArchiveSender::check_need_switch_piece_(const ObPGKey& pg_key, const int64
     // server_piece_id is not new enough in case of concurrent happen of switch_piece and
     // switch_leader
     need_switch_piece = false;
+  } else if (server_piece_id > pg_piece_id + 1) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(WARN,
+        "pg piece_id is too old",
+        K(pg_key),
+        K(server_incarnation),
+        K(server_round),
+        K(round),
+        K(incarnation),
+        K(server_piece_id),
+        K(pg_piece_id),
+        K(ret));
   } else {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(WARN,

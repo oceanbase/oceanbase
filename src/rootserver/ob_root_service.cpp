@@ -90,6 +90,7 @@
 #include "rootserver/backup/ob_cancel_delete_backup_scheduler.h"
 #include "rootserver/backup/ob_cancel_backup_backup_scheduler.h"
 #include "share/backup/ob_backup_backuppiece_operator.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase {
 
@@ -792,7 +793,8 @@ ObRootService::ObRootService()
       restore_point_service_(),
       backup_archive_log_(),
       backup_backupset_(),
-      backup_lease_service_()
+      backup_lease_service_(),
+      ttl_scheduler_(*this)
 {}
 
 ObRootService::~ObRootService()
@@ -946,6 +948,13 @@ int ObRootService::fake_init(ObServerConfig& config, ObConfigManager& config_mgr
       LOG_WARN("failed to init backup backupset", K(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ttl_scheduler_.init())) {
+      LOG_WARN("failed to init ttl scheduler", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     inited_ = true;
   }
@@ -1465,6 +1474,12 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(ttl_scheduler_.init())) {
+      LOG_WARN("failed to init ttl task scheduler", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     inited_ = true;
   }
 
@@ -1548,6 +1563,7 @@ void ObRootService::destroy()
     LOG_INFO("schema history recycler destroy");
   }
 
+  ttl_scheduler_.destroy();
   task_queue_.destroy();
   LOG_INFO("inner queue destroy");
   inspect_task_queue_.destroy();
@@ -1889,6 +1905,8 @@ int ObRootService::stop()
       LOG_INFO("backup archive log stop");
       backup_backupset_.stop();
       LOG_INFO("backup backupset stop");
+      ttl_scheduler_.stop();
+      LOG_INFO("ttl task scheduler stop");
     }
   }
 
@@ -1953,6 +1971,8 @@ void ObRootService::wait()
   LOG_INFO("backup archive log exit success");
   backup_backupset_.wait();
   LOG_INFO("backup backupset exit success");
+  ttl_scheduler_.wait();
+  LOG_INFO("ttl task scheduler exit success");
 
   rebalance_task_mgr_.reuse();
   ObUpdateRsListTask::clear_lock();
@@ -2833,8 +2853,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg& arg)
       LOG_WARN("failed to update baseline schema version", K(ret));
     } else if (OB_FAIL(global_proxy.get_baseline_schema_version(frozen_version, baseline_schema_version_))) {
       LOG_WARN("fail to get baseline schema version", KR(ret));
-    } else if (OB_FAIL(set_max_trx_size_config())) {
-      LOG_WARN("fail to set max trx size config", K(ret));
+    // } else if (OB_FAIL(set_max_trx_size_config())) {
+    // LOG_WARN("fail to set max trx size config", K(ret));
     } else if (OB_FAIL(set_1pc_config())) {
       LOG_WARN("fail to set one phase commit config", K(ret));
     } else if (OB_FAIL(set_enable_oracle_priv_check())) {
@@ -4167,7 +4187,7 @@ int ObRootService::logical_restore_partitions(const obrpc::ObRestorePartitionsAr
   return ret;
 }
 
-int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
+int ObRootService::create_table(const ObCreateTableArg& arg, ObCreateTableRes& res)
 {
   LOG_DEBUG("receive create table arg", K(arg));
   int ret = OB_SUCCESS;
@@ -4332,7 +4352,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
       LOG_WARN("push_back failed", K(ret));
     } else {
       RS_TRACE(generate_schema_index);
-      table_id = table_schema.get_table_id();
+      res.table_id_ = table_schema.get_table_id();
       // generate index schemas
       ObIndexBuilder index_builder(ddl_service_);
       ObTableSchema index_schema;
@@ -4465,7 +4485,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
           }
           // get child column schema.
           if (OB_SUCC(ret)) {
-            foreign_key_info.child_table_id_ = table_id;
+            foreign_key_info.child_table_id_ = res.table_id_;
             foreign_key_info.parent_table_id_ = parent_schema->get_table_id();
             for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_arg.child_columns_.count(); j++) {
               const ObString& column_name = foreign_key_arg.child_columns_.at(j);
@@ -4559,12 +4579,21 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
             K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = table_schema.get_tenant_id();
+      if (is_inner_table(res.table_id_)) {
+        tenant_id = OB_SYS_TENANT_ID;
+      }
+      if (OB_FAIL(schema_service_->get_tenant_schema_version(tenant_id, res.schema_version_))) {
+        LOG_WARN("failed to get tenant schema version", K(ret));
+      }
+    }
   }
 
   RS_TRACE(create_table_end);
   FORCE_PRINT_TRACE(THE_RS_TRACE, "[create table]");
   int64_t cost = ObTimeUtility::current_time() - begin_time;
-  ROOTSERVICE_EVENT_ADD("ddl", "create_table", K(ret), K(table_id), K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl", "create_table", K(ret), "table_id", res.table_id_, K(cost));
   return ret;
 }
 
@@ -4948,6 +4977,8 @@ int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskAr
       LOG_WARN("fail to get table schema", K(ret), K(index_tid));
     } else if (OB_ISNULL(index_schema)) {
       LOG_INFO("index schema is deleted, skip it");
+    } else if (INDEX_STATUS_UNAVAILABLE != index_schema->get_index_status()) {
+      LOG_INFO("index build is already completed, skip it", K(ret), K(index_tid));
     } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
       LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
     } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
@@ -5875,6 +5906,15 @@ int ObRootService::do_restart()
     } else {
       ObTaskController::get().allow_next_syslog();
       LOG_INFO("START_SERVICE: start global index builder succeed");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ttl_scheduler_.start())) {
+      LOG_WARN("fail to start ttl scheduler", K(ret));
+    } else {
+      ObTaskController::get().allow_next_syslog();
+      LOG_INFO("START_SERVICE: start ttl scheduler succeed");
     }
   }
 
@@ -7802,7 +7842,10 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
       } else if (OB_FAIL(rebalance_task_mgr_.add_task(task))) {
         LOG_WARN("fail to add task", K(ret), K(task));
       } else {
-        LOG_INFO("add copy local index sstable task", K(ret));
+        ROOTSERVICE_EVENT_ADD("balancer", "add_copy_sstable_task",
+                              "partition", ReplicaInfo(pkey, data_size),
+                              "source", src_member,
+                              "destination", dest_replica);
       }
     }
   }
@@ -9691,7 +9734,7 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg& arg)
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("table is physical or logical split can not split", K(ret), K(schema));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "table is in physial or logical split, ddl operation");
-  } else if (0 != schema->get_session_id() && false == schema->is_tmp_table()) {
+  } else if (schema->is_ctas_tmp_table()) {
     if (!alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)) {
       // to prevet alter table after failed to create table, the table is invisible.
       ret = OB_OP_NOT_ALLOW;
@@ -10672,6 +10715,46 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg& arg)
       LOG_WARN("failed to handle_enable_log_archive", K(ret), K(arg));
     }
   }
+  return ret;
+}
+
+int ObRootService::handle_user_ttl(const obrpc::ObTableTTLArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObTTLTaskType user_ttl_req_type = static_cast<ObTTLTaskType>(arg.cmd_code_);
+
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(TTLMGR.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get tenant ids", K(ret));
+  }
+
+  LOG_INFO("handle user ttl cmd.", K(user_ttl_req_type), K(tenant_ids.count()), K(ret));
+
+  for (size_t i = 0; i < tenant_ids.count() && OB_SUCC(ret); ++i) {
+    uint64_t tenant_id = tenant_ids.at(i);
+    if (tenant_id == OB_SYS_TENANT_ID) {
+      // do nothing
+    } else if (OB_FAIL(TTLMGR.add_ttl_task(tenant_ids.at(i), static_cast<ObTTLTaskType>(arg.cmd_code_)))) {
+      LOG_WARN("failed add ttl task", K(tenant_ids.at(i)), K(ret), K(user_ttl_req_type));
+    } else {
+      LOG_INFO("handle user ttl cmd.", K(user_ttl_req_type), K(tenant_id));
+    }
+  }
+
+  return ret;
+}
+
+int ObRootService::ttl_response(const obrpc::ObTTLResponseArg& arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t status = static_cast<int64_t>(arg.task_status_);
+  LOG_INFO("recieve ttl response begin", K(arg));
+  if (OB_FAIL(TTLMGR.process_tenant_task_rsp(arg.tenant_id_, arg.task_id_, status, arg.server_addr_))) {
+    LOG_WARN("fail to process ttl rsp", K(arg), K(ret));
+  } else {
+    LOG_INFO("success to process ttl response", K(arg), K(ret));
+  }
+  LOG_INFO("recieve ttl response end", K(ret));
   return ret;
 }
 

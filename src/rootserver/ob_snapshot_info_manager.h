@@ -39,12 +39,10 @@ public:
 
   int check_restore_point(common::ObMySQLProxy& proxy, const int64_t tenant_id, const int64_t table_id, bool& is_exist);
   int get_snapshot_count(
-      common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t& count);
+      common::ObMySQLProxy &proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t &count);
+  int set_index_building_snapshot(common::ObMySQLProxy &proxy, const int64_t index_table_id, const int64_t snapshot_ts);
 
 private:
-  int set_index_building_snapshot(
-      common::ObMySQLTransaction& trans, const int64_t index_table_id, const int64_t snapshot_ts);
-
   DISALLOW_COPY_AND_ASSIGN(ObSnapshotInfoManager);
 
 private:

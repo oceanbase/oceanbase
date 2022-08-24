@@ -2276,7 +2276,8 @@ bool ObMemtable::can_be_minor_merged() const
     can_merge = true;
   }
 
-  if (!can_merge && REACH_TIME_INTERVAL(1000 * 1000)) {
+  if (is_frozen_memtable() &&  // active memtable should not print log
+      !can_merge && REACH_TIME_INTERVAL(1000 * 1000)) {
     TRANS_LOG(WARN, "memtable cannot be minor merged", K(*this));
   }
 

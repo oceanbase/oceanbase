@@ -16,6 +16,7 @@
 #include "lib/charset/ob_dtoa.h"
 #include "common/ob_field.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include <mariadb/mysql.h>
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;

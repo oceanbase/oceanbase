@@ -2466,25 +2466,25 @@ int ObSchemaServiceSQLImpl::fetch_temp_table_schema(const ObRefreshSchemaStatus&
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    if (false == table_schema.is_tmp_table()) {
-      // do nothing...
-    } else if (OB_FAIL(sql.assign_fmt("SELECT create_host FROM %s where tenant_id = %lu and table_id = %lu",
-                   OB_ALL_TEMP_TABLE_TNAME,
-                   fill_extract_tenant_id(schema_status, tenant_id),
-                   fill_extract_schema_id(schema_status, table_schema.get_table_id())))) {
-      LOG_WARN("append sql failed", K(table_schema), K(ret));
-    } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-      LOG_WARN("execute sql failed", K(sql), K(ret));
-    } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get result.", K(table_schema), K(ret));
-    } else if (OB_FAIL(result->next())) {
-      LOG_WARN("failed to get temp table info", K(table_schema), K(ret));
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
+    if (table_schema.is_tmp_table() || table_schema.is_ctas_tmp_table()) {
+      if (OB_FAIL(sql.assign_fmt("SELECT create_host FROM %s where tenant_id = %lu and table_id = %lu",
+              OB_ALL_TEMP_TABLE_TNAME,
+              fill_extract_tenant_id(schema_status, tenant_id),
+              fill_extract_schema_id(schema_status, table_schema.get_table_id())))) {
+        LOG_WARN("append sql failed", K(table_schema), K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(sql), K(ret));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result.", K(table_schema), K(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get temp table info", K(table_schema), K(ret));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::fill_temp_table_schema(tenant_id, *result, table_schema))) {
+        LOG_WARN("fail to fill temp table schema", K(ret), K(tenant_id));
       }
-    } else if (OB_FAIL(ObSchemaRetrieveUtils::fill_temp_table_schema(tenant_id, *result, table_schema))) {
-      LOG_WARN("fail to fill temp table schema", K(ret), K(tenant_id));
     }
   }
   return ret;

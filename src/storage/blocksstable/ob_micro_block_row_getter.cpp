@@ -145,6 +145,10 @@ int ObMicroBlockRowGetter::init(const ObTableIterParam& param, ObTableAccessCont
                  projector,
                  sstable->get_multi_version_rowkey_type()))) {
     LOG_WARN("fail to init column map", K(ret));
+  } else if (OB_FAIL(obj_buf_.init(context.allocator_))) {
+    LOG_WARN("fail to init obj_buf_, ", K(ret));
+  } else if (OB_FAIL(full_row_obj_buf_.init(context.allocator_))) {
+    LOG_WARN("fail to init full_row_obj_buf_, ", K(ret));
   } else if (OB_FAIL(ObIMicroBlockRowFetcher::init(param, context, sstable))) {
     LOG_WARN("fail to init micro block row fecher, ", K(ret));
   } else {
@@ -167,72 +171,80 @@ int ObMicroBlockRowGetter::get_row(const ObStoreRowkey& rowkey, const MacroBlock
                  column_map_.rebuild(macro_meta, param_->need_build_column_map(column_map_.get_schema_version())))) {
     LOG_WARN("fail to rebuild column map", K(ret), K(macro_meta));
   } else {
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-    row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
     if (!context_->enable_put_row_cache()) {
-      if (OB_FAIL(reader_->get_row(
+      if (OB_FAIL(obj_buf_.reserve(column_map_.get_request_count()))) {
+        STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_, ", K(ret));
+      } else {
+        row_.row_val_.cells_ = obj_buf_.get_buf();
+        row_.row_val_.count_ = column_map_.get_request_count();
+        row_.capacity_ = column_map_.get_request_count();
+        if (OB_FAIL(reader_->get_row(
               context_->pkey_.get_tenant_id(), block_data, rowkey, column_map_, macro_meta, rowkey_helper, row_))) {
-        if (OB_BEYOND_THE_RANGE == ret) {
-          if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-            LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
+          if (OB_BEYOND_THE_RANGE == ret) {
+            if (OB_FAIL(get_not_exist_row(rowkey, row))) {
+              LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
+            }
+          } else {
+            LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
           }
         } else {
-          LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
-        }
-      } else {
-        // cast different type
-        if (OB_UNLIKELY(!column_map_.is_all_column_matched())) {
-          allocator_.reuse();
-          const ObColumnIndexItem* column_indexs = column_map_.get_column_indexs();
-          const int64_t request_count = column_map_.get_request_count();
-          for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-            if (!column_indexs[i].is_column_type_matched_) {
-              if (OB_FAIL(ObIRowReader::cast_obj(
-                      column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-                LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+          // cast different type
+          if (OB_UNLIKELY(!column_map_.is_all_column_matched())) {
+            allocator_.reuse();
+            const ObColumnIndexItem* column_indexs = column_map_.get_column_indexs();
+            const int64_t request_count = column_map_.get_request_count();
+            for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
+              if (!column_indexs[i].is_column_type_matched_) {
+                if (OB_FAIL(ObIRowReader::cast_obj(
+                        column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
+                  LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+                }
               }
             }
           }
-        }
 
-        if (OB_SUCC(ret)) {
-          row = &row_;
-          LOG_DEBUG("Success to get row, ", K(*row));
+          if (OB_SUCC(ret)) {
+            row = &row_;
+            LOG_DEBUG("Success to get row, ", K(*row));
+          }
         }
       }
     } else {
       // need read full row to put row cache
-      full_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(full_row_obj_buf_);
-      full_row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      full_row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-      ObRowCacheValue row_cache_value;
-      if (OB_FAIL(reader_->get_row(
-              context_->pkey_.get_tenant_id(), block_data, rowkey, macro_meta, rowkey_helper, full_row_))) {
-        if (OB_BEYOND_THE_RANGE == ret) {
-          if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-            LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
-          }
-        } else {
-          LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
-        }
+      if (OB_FAIL(full_row_obj_buf_.reserve(macro_meta.meta_->column_number_))) {
+        STORAGE_LOG(WARN, "failed to reserve memory for full_row_obj_buf, ", K(ret));
       } else {
-        LOG_DEBUG("Success to get row, ", K(ret), K(rowkey), K(full_row_));
-        if (OB_FAIL(row_cache_value.init(macro_meta, &full_row_, macro_id))) {
-          STORAGE_LOG(WARN, "fail to init row cache value", K(ret), K(macro_meta));
-        } else if (OB_FAIL(project_row(rowkey, row_cache_value, column_map_, row))) {
-          STORAGE_LOG(WARN, "fail to project cache row", K(ret), K(rowkey), K(row_cache_value));
-        } else {
-          // put row cache, ignore fail
-          ObRowCacheKey row_cache_key(param_->table_id_,
-              file_id,
-              rowkey,
-              sstable_->is_major_sstable() ? 0 : sstable_->get_snapshot_version(),
-              sstable_->get_key().table_type_);
-          if (OB_SUCCESS == OB_STORE_CACHE.get_row_cache().put_row(row_cache_key, row_cache_value)) {
-            context_->access_stat_.row_cache_put_cnt_++;
+        full_row_.row_val_.cells_ = full_row_obj_buf_.get_buf();
+        full_row_.row_val_.count_ = macro_meta.meta_->column_number_;
+        full_row_.capacity_ = macro_meta.meta_->column_number_;
+        ObRowCacheValue row_cache_value;
+        if (OB_FAIL(reader_->get_row(
+                context_->pkey_.get_tenant_id(), block_data, rowkey, macro_meta, rowkey_helper, full_row_))) {
+          if (OB_BEYOND_THE_RANGE == ret) {
+            if (OB_FAIL(get_not_exist_row(rowkey, row))) {
+              LOG_WARN("Fail to get not exist row, ", K(ret), K(rowkey));
+            }
+          } else {
+            LOG_WARN("Fail to get row, ", K(ret), K(rowkey));
           }
-          LOG_DEBUG("Success to get row, ", K(*row), K_(full_row), K(row_cache_value));
+        } else {
+          LOG_DEBUG("Success to get row, ", K(ret), K(rowkey), K(full_row_));
+          if (OB_FAIL(row_cache_value.init(macro_meta, &full_row_, macro_id))) {
+            STORAGE_LOG(WARN, "fail to init row cache value", K(ret), K(macro_meta));
+          } else if (OB_FAIL(project_row(rowkey, row_cache_value, column_map_, row))) {
+            STORAGE_LOG(WARN, "fail to project cache row", K(ret), K(rowkey), K(row_cache_value));
+          } else {
+            // put row cache, ignore fail
+            ObRowCacheKey row_cache_key(param_->table_id_,
+                file_id,
+                rowkey,
+                sstable_->is_major_sstable() ? 0 : sstable_->get_snapshot_version(),
+                sstable_->get_key().table_type_);
+            if (OB_SUCCESS == OB_STORE_CACHE.get_row_cache().put_row(row_cache_key, row_cache_value)) {
+              context_->access_stat_.row_cache_put_cnt_++;
+            }
+            LOG_DEBUG("Success to get row, ", K(*row), K_(full_row), K(row_cache_value));
+          }
         }
       }
     }
@@ -277,18 +289,22 @@ int ObMicroBlockRowGetter::get_not_exist_row(const common::ObStoreRowkey& rowkey
   } else {
     const int64_t request_cnt = column_map_.get_request_count();
     const int64_t rowkey_cnt = rowkey.get_obj_cnt();
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-    row_.row_val_.count_ = request_cnt;
+    if (OB_FAIL(obj_buf_.reserve(request_cnt))) {
+      STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_, ", K(ret));
+    } else {
+      row_.row_val_.cells_ = obj_buf_.get_buf();
+      row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
+      row_.row_val_.count_ = request_cnt;
 
-    for (int64_t i = 0; i < rowkey_cnt; i++) {
-      row_.row_val_.cells_[i] = rowkey.get_obj_ptr()[i];
-    }
-    for (int64_t i = rowkey_cnt; i < request_cnt; i++) {
-      row_.row_val_.cells_[i].set_nop_value();
-    }
+      for (int64_t i = 0; i < rowkey_cnt; i++) {
+        row_.row_val_.cells_[i] = rowkey.get_obj_ptr()[i];
+      }
+      for (int64_t i = rowkey_cnt; i < request_cnt; i++) {
+        row_.row_val_.cells_[i].set_nop_value();
+      }
 
-    row = &row_;
+      row = &row_;
+    }
   }
   return ret;
 }
@@ -319,31 +335,36 @@ int ObMicroBlockRowGetter::project_cache_row(const ObStoreRowkey& rowkey, const 
   const int64_t column_cnt = value.get_column_cnt();
   const ObColumnIndexItem* column_indexs = column_map.get_column_indexs();
   const int64_t request_count = column_map.get_request_count();
-  row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-  row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
+  if (OB_FAIL(obj_buf_.reserve(request_count))) {
+    STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_, ", K(ret));
+  } else {
+    row_.row_val_.cells_ = obj_buf_.get_buf();
+    row_.row_val_.count_ = request_count;
+    row_.capacity_ = request_count;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-    store_index = column_indexs[i].store_index_;
-    if (OB_INVALID_INDEX != store_index) {
-      if (store_index < column_cnt) {
-        row_.row_val_.cells_[i] = obj_array[store_index];
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected store index, ", K(ret), K(store_index), K(column_cnt));
-      }
-    } else {
-      row_.row_val_.cells_[i].set_nop_value();
-    }
-  }
-
-  // cast different type
-  if (OB_UNLIKELY(!column_map.is_all_column_matched())) {
-    allocator_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-      if (!column_indexs[i].is_column_type_matched_) {
-        if (OB_FAIL(
-                ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-          LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+      store_index = column_indexs[i].store_index_;
+      if (OB_INVALID_INDEX != store_index) {
+        if (store_index < column_cnt) {
+          row_.row_val_.cells_[i] = obj_array[store_index];
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected store index, ", K(ret), K(store_index), K(column_cnt));
+        }
+      } else {
+        row_.row_val_.cells_[i].set_nop_value();
+      }
+    }
+
+    // cast different type
+    if (OB_UNLIKELY(!column_map.is_all_column_matched())) {
+      allocator_.reuse();
+      for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
+        if (!column_indexs[i].is_column_type_matched_) {
+          if (OB_FAIL(
+                  ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
+            LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+          }
         }
       }
     }
@@ -374,41 +395,45 @@ int ObMicroBlockRowGetter::project_cache_sparse_row(const ObStoreRowkey& rowkey,
     const ObColumnIndexItem* column_indexs = column_map.get_column_indexs();
     const ColumnMap* col_id_map = column_map.get_cols_map();
     const int64_t request_count = column_map.get_request_count();
-    row_.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-    row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
+    if (OB_FAIL(obj_buf_.reserve(request_count))) {
+      STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_, ", K(ret));
+    } else {
+      row_.row_val_.cells_ = obj_buf_.get_buf();
+      row_.capacity_ = request_count;
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {  // set nop
-      row_.row_val_.cells_[i].set_nop_value();
-    }
-    int32_t col_pos = OB_INVALID_INDEX;
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-      if (OB_FAIL(col_id_map->get(col_id_array[i], col_pos))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("get column pos failed", K(ret), "column_id", col_id_array[i]);
-        }
-      } else if (OB_INVALID_INDEX != col_pos) {
-        if (col_pos > request_count) {
-          LOG_WARN("invalid column pos", K(ret), "column_id", col_id_array[i], K(col_pos));
-        } else {
-          row_.row_val_.cells_[col_pos] = obj_array[i];
-        }
+      for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {  // set nop
+        row_.row_val_.cells_[i].set_nop_value();
       }
-    }
-
-    // cast different type
-    if (OB_SUCC(ret)) {
-      allocator_.reuse();
-      for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
-        if (!row_.row_val_.cells_[i].is_nop_value() && !row_.row_val_.cells_[i].is_null() &&
-            column_indexs[i].request_column_type_ != row_.row_val_.cells_[i].get_meta()) {
-          if (OB_FAIL(
-                  ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
-            LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+      int32_t col_pos = OB_INVALID_INDEX;
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+        if (OB_FAIL(col_id_map->get(col_id_array[i], col_pos))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get column pos failed", K(ret), "column_id", col_id_array[i]);
+          }
+        } else if (OB_INVALID_INDEX != col_pos) {
+          if (col_pos > request_count) {
+            LOG_WARN("invalid column pos", K(ret), "column_id", col_id_array[i], K(col_pos));
+          } else {
+            row_.row_val_.cells_[col_pos] = obj_array[i];
           }
         }
-      }  // end for
+      }
+
+      // cast different type
+      if (OB_SUCC(ret)) {
+        allocator_.reuse();
+        for (int64_t i = 0; OB_SUCC(ret) && i < request_count; ++i) {
+          if (!row_.row_val_.cells_[i].is_nop_value() && !row_.row_val_.cells_[i].is_null() &&
+              column_indexs[i].request_column_type_ != row_.row_val_.cells_[i].get_meta()) {
+            if (OB_FAIL(
+                    ObIRowReader::cast_obj(column_indexs[i].request_column_type_, allocator_, row_.row_val_.cells_[i]))) {
+              LOG_WARN("Fail to cast obj, ", K(ret), K(i), K(column_indexs[i]));
+            }
+          }
+        }  // end for
+      }
     }
 
     if (OB_SUCC(ret)) {

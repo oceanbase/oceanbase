@@ -569,6 +569,7 @@ private:
   {
     trans_mgr_.inc_flushed_log_size(size);
   }
+  int check_trans_size_(const bool for_replay);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);

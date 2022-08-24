@@ -1475,7 +1475,7 @@ public:
   int64_t piece_id_;
   JobStatus status_;
   share::ObBackupDest backup_dest_;
-  int64_t max_backup_times_;  // -1 表示没有限制
+  int64_t max_backup_times_;  // -1 no limit
   int result_;
   Comment comment_;
   int64_t type_;
@@ -1599,7 +1599,7 @@ public:
   int64_t compatible_;
   int64_t cluster_version_;  // restore tenant cluster version
   ObPhysicalRestoreBackupDestList multi_restore_path_list_;
-  int64_t backup_date_;  //备份的位点，RS只允许从这个位点之后的位点恢复
+  int64_t backup_date_;  //backup base date, RS only backup data after the date
   int64_t restore_schema_version_;
 
   common::ObSArray<share::ObSimpleBackupSetPath>& get_backup_set_path_list()

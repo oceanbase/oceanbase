@@ -807,6 +807,7 @@ int64_t ObHashJoinOp::calc_partition_count(int64_t input_size, int64_t part_size
 {
   int64_t estimate_part_count = input_size / part_size + 1;
   int64_t partition_cnt = 8;
+  estimate_part_count = max(0, estimate_part_count);
   while (partition_cnt < estimate_part_count) {
     partition_cnt <<= 1;
   }
@@ -825,6 +826,7 @@ int64_t ObHashJoinOp::calc_partition_count_by_cache_aware(
   if (max_part_count < partition_cnt) {
     partition_cnt = max_part_count;
   }
+  global_mem_bound_size = max(0, global_mem_bound_size);
   while (partition_cnt * PAGE_SIZE > global_mem_bound_size) {
     partition_cnt >>= 1;
   }
@@ -854,7 +856,7 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
   const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   // default data memory size: 80%
   int64_t extra_memory_size = get_extra_memory_size();
-  int64_t memory_size = extra_memory_size + input_size;
+  int64_t memory_size = (extra_memory_size + input_size) < 0 ? input_size : (extra_memory_size + input_size);
   if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(ObSqlWorkAreaType::HASH_WORK_AREA, tenant_id, hash_area_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
   } else if (FALSE_IT(remain_data_memory_size_ = hash_area_size * 80 / 100)) {
@@ -2725,10 +2727,13 @@ int ObHashJoinOp::get_next_probe_partition()
       ret = OB_ITER_END;
     } else if (!part_histograms_[cur_full_right_partition_].empty()) {
       if (right_splitter_.is_valid()) {
-        HashJoinHistogram::HistPrefixArray* prefix_hist_count = right_splitter_.part_histogram_.prefix_hist_count2_;
-        if (OB_ISNULL(right_splitter_.part_histogram_.h2_) || OB_ISNULL(prefix_hist_count)) {
+        HashJoinHistogram::HistPrefixArray *prefix_hist_count = right_splitter_.part_histogram_.prefix_hist_count2_;
+        if (0 == right_splitter_.get_total_row_count()) {
+          ret = OB_ITER_END;
+          LOG_DEBUG("hj_part_array_ has no row in memory", K(ret));
+        } else if (OB_ISNULL(right_splitter_.part_histogram_.h2_) || OB_ISNULL(prefix_hist_count)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("h2 is null", K(ret));
+          LOG_WARN("h2 is null", K(ret), K(level1_part_count_), K(level2_part_count_), K(part_count));
         } else {
           if (cur_full_right_partition_ >= prefix_hist_count->count()) {
             ret = OB_ERR_UNEXPECTED;
@@ -2768,7 +2773,7 @@ int ObHashJoinOp::get_next_probe_partition()
         }
       }
     }
-  } while (cur_full_right_partition_ < part_count);
+  } while (OB_SUCC(ret) && cur_full_right_partition_ < part_count);
   return ret;
 }
 

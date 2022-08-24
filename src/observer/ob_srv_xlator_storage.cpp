@@ -131,4 +131,5 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObRpcValidateBackupBatchP, gctx_);
   RPC_PROCESSOR(ObRpcBackupArchiveLogBatchP, gctx_);
   RPC_PROCESSOR(ObRpcBackupBackupsetBatchP, gctx_);
+  RPC_PROCESSOR(ObFetchSstableSizeP, gctx_);
 }

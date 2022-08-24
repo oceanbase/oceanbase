@@ -304,13 +304,6 @@ int ObBLKNestedLoopJoin::join_left_func_going(ObBLKNestedLoopJoinCtx& join_ctx, 
     }
   }
 
-  // try to open the right child
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(open_right_child(join_ctx))) {
-      LOG_WARN("failed to open right child", K(ret));
-    }
-  }
-
   if (OB_SUCCESS == ret && JS_JOIN_RIGHT_JOIN == join_ctx.state_) {
     if (OB_FAIL(save_left_row(join_ctx))) {
       LOG_WARN("failed to save left row", K(ret));

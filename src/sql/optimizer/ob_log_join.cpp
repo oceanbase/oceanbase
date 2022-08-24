@@ -1654,7 +1654,10 @@ int ObLogJoin::can_use_batch_nlj(bool& use_batch_nlj)
         ts = static_cast<ObLogTableScan*>(get_child(1));
         // normal table scan on real table
         use_batch_nlj =
-            (!is_virtual_table(ts->get_ref_table_id()) && !ts->get_is_fake_cte_table() && !ts->is_for_update());
+            !is_virtual_table(ts->get_ref_table_id())
+            && !ts->get_is_fake_cte_table()
+            && !ts->is_for_update()
+            && !ts->is_sample_scan();
       } else {
         use_batch_nlj = false;
       }

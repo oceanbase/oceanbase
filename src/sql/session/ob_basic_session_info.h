@@ -1371,6 +1371,7 @@ public:
   {
     return trans_desc_.get_standalone_stmt_desc().is_valid();
   }
+  bool is_xa_trans();
 
   bool is_server_status_in_transaction() const;
 
@@ -1680,7 +1681,7 @@ protected:
       conn_ = NULL;
       mysql_cmd_ = obmysql::OB_MYSQL_COM_SLEEP;
       cur_query_start_time_ = 0;
-      cur_state_start_time_ = 0;
+      cur_state_start_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       wait_timeout_ = 0;
       interactive_timeout_ = 0;
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
@@ -1689,12 +1690,12 @@ protected:
     }
     ~MultiThreadData()
     {}
-    common::ObString user_name_;                                   // current user name
-    common::ObString host_name_;                                   // current user host name
-    common::ObString client_ip_;                                   // current user real client host name
-    common::ObString user_at_host_name_;                           // current user@host, for current_user()
-    common::ObString user_at_client_ip_;                           // current user@clientip, for user()
-    char database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH];  // default database
+    common::ObString user_name_;          // current user name
+    common::ObString host_name_;          // current user host name
+    common::ObString client_ip_;          // current user real client host name
+    common::ObString user_at_host_name_;  // current user@host, for current_user()
+    common::ObString user_at_client_ip_;  // current user@clientip, for user()
+    char database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  // default database
     common::ObAddr peer_addr_;
     common::ObAddr user_client_addr_;
     int64_t cur_query_buf_len_;

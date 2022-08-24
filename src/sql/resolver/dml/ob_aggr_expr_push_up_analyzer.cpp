@@ -234,9 +234,7 @@ int32_t ObAggrExprPushUpAnalyzer::get_final_aggr_level() const
       final_aggr_level = column_level;
     }
   }
-  if (final_aggr_level < 0) {
-    final_aggr_level = cur_aggr_level;
-  }
+  // in mysql mode if the final_aggr_level < 0, the aggr's params are const. e.g., count(const_expr);
   return final_aggr_level;
 }
 
@@ -250,7 +248,8 @@ ObSelectResolver* ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(
      * For oracle mode, if it is in having scope, it will pull subquery up to compute
      * if it is in order scope (and subquery does not appear in where scope), it will pull subquery up to compute
      */
-    if (cur_resolver->get_current_level() > final_aggr_level && NULL != cur_resolver->get_parent_namespace_resolver() &&
+    if (final_aggr_level >= 0 && cur_resolver->get_current_level() > final_aggr_level &&
+        NULL != cur_resolver->get_parent_namespace_resolver() &&
         (share::is_mysql_mode() ||
             T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope() ||
             (T_ORDER_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope() &&
@@ -271,6 +270,20 @@ ObSelectResolver* ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(
       ObSelectResolver* select_resolver = static_cast<ObSelectResolver*>(cur_resolver);
       if (select_resolver->can_produce_aggr()) {
         final_resolver = select_resolver;
+      } else if (share::is_mysql_mode() && final_aggr_level < 0) {
+        /* 
+         * in mysql, a const aggr_expr(e.g., count(const_expr)), belongs to the nearest legal level.
+         *
+         * select 1 from t1 where  (select 1 from t1 group by pk having  (select 1 from t1 where count(1)));
+         * --> count(1)'s level is 1; it belongs to select 1 from t1 group by pk having xxx;
+         *
+         * select 1 from t1 group by pk having  (select 1 from dual where (select 1 from t1 where count(1)));
+         * --> count(1)'s level is 0;
+         */
+        ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
+        if (NULL != next_resolver) {
+          final_resolver = fetch_final_aggr_resolver(next_resolver, final_aggr_level);
+        }
       }
     }
   }

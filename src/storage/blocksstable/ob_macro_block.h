@@ -51,11 +51,12 @@ struct ObDataStoreDesc {
   storage::ObSSTableMergeInfo* merge_info_;
   bool has_lob_column_;
   bool is_major_;
+  common::ObArenaAllocator allocator_;
 
   char compressor_name_[common::OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH];
-  uint64_t column_ids_[common::OB_MAX_COLUMN_NUMBER];
-  common::ObObjMeta column_types_[common::OB_MAX_COLUMN_NUMBER];
-  common::ObOrderType column_orders_[common::OB_MAX_COLUMN_NUMBER];
+  storage::ObDynamicBuffer<uint64_t> column_ids_;
+  storage::ObDynamicBuffer<ObObjMeta> column_types_;
+  storage::ObDynamicBuffer<ObOrderType> column_orders_;
   bool need_calc_column_checksum_;
   bool store_micro_block_column_checksum_;
   int64_t snapshot_version_;
@@ -75,7 +76,6 @@ struct ObDataStoreDesc {
   int64_t major_working_cluster_version_;
   bool iter_complement_;
   bool is_unique_index_;
-  common::ObArenaAllocator allocator_;
   
   ObDataStoreDesc()
   {
@@ -103,7 +103,7 @@ struct ObDataStoreDesc {
       K_(partition_id), K_(pct_free), K_(has_lob_column), K_(is_major), K_(need_calc_column_checksum),
       K_(store_micro_block_column_checksum), K_(snapshot_version), K_(need_calc_physical_checksum), K_(need_index_tree),
       K_(need_prebuild_bloomfilter), K_(bloomfilter_rowkey_prefix), KP_(rowkey_helper), "column_types",
-      common::ObArrayWrap<common::ObObjMeta>(column_types_, row_column_count_), K_(pg_key), K_(file_handle),
+      common::ObArrayWrap<common::ObObjMeta>(column_types_.get_buf(), row_column_count_), K_(pg_key), K_(file_handle),
       K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version), K_(iter_complement), K_(is_unique_index));
 
 private:

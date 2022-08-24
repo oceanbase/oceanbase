@@ -114,6 +114,7 @@ ObPGStorage::ObPGStorage()
 
 ObPGStorage::~ObPGStorage()
 {
+  FLOG_INFO("deconstruct ObPGStorage", K(this), K_(pkey));
   destroy();
 }
 
@@ -146,13 +147,13 @@ int ObPGStorage::init(const ObPartitionKey& key, ObIPartitionComponentFactory* c
     pg_memtable_mgr_.set_pkey(key);
     is_inited_ = true;
   }
-  STORAGE_LOG(INFO, "partition init", K(ret), K(key));
+  STORAGE_LOG(INFO, "pgstorage init", K(ret), K(key), K(this));
   return ret;
 }
 
 void ObPGStorage::destroy()
 {
-  FLOG_INFO("destroy pg storage", K(*this), K(lbt()));
+  FLOG_INFO("destroy pg storage", K(this), K(*this), K(lbt()));
   clear();
   if (NULL != file_handle_.get_storage_file()) {
     file_handle_.reset();
@@ -161,7 +162,7 @@ void ObPGStorage::destroy()
 
 void ObPGStorage::clear()
 {
-  FLOG_INFO("clear pg storage", K(*this), K(lbt()));
+  FLOG_INFO("clear pg storage", K(this), K(*this), K(lbt()));
 
   int tmp_ret = OB_SUCCESS;
 
@@ -2249,8 +2250,13 @@ ObReplicaType ObPGStorage::get_replica_type_() const
 int ObPGStorage::get_replica_type(common::ObReplicaType& replica_type) const
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard lock_guard(lock_);
-  replica_type = meta_->replica_type_;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "partition is not initialized", K_(pkey), K(ret));
+  } else {
+    TCRLockGuard lock_guard(lock_);
+    replica_type = meta_->replica_type_;
+  }
   return ret;
 }
 
@@ -2336,7 +2342,8 @@ int ObPGStorage::set_pg_replica_type(const ObReplicaType& replica_type, const bo
         }
       }
       switch_meta_(next_meta_ptr);
-      LOG_INFO("succeed to set replica type", K(*meta_));
+      ATOMIC_STORE(&cached_replica_type_, replica_type);
+      LOG_INFO("succeed to set replica type", K(*meta_), K(cached_replica_type_));
 
       if (need_clean_memtable) {
         pg_memtable_mgr_.clean_memtables();
@@ -6934,7 +6941,7 @@ int ObPGStorage::get_max_cleanout_log_ts(ObIArray<int64_t> &sstable_cleanout_log
       last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < log_ts_array.count(); i++) {
-      if (log_ts_array.at(i) < last_replay_log_ts) {
+      if (log_ts_array.at(i) <= last_replay_log_ts) {
         if (OB_FAIL(sstable_cleanout_log_ts.push_back(log_ts_array.at(i)))) {
           LOG_WARN("failed to push back log ts", K(ret), K(pkey_));
         }
@@ -8112,6 +8119,16 @@ int ObPGStorage::update_backup_points(
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> snapshot_versions;
   const bool is_restore_point = false;
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_CREATE_BACKUP_POINT_ERROR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_CREATE_BACKUP_POINT_ERROR", K(ret));
+    }
+  }
+#endif
+
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_points.count(); i++) {
     const int64_t snapshot_ts = backup_points.at(i);
     const int64_t schema_version = schema_versions.at(i);

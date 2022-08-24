@@ -16,6 +16,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "lib/string/ob_sql_string.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase {
 namespace share {

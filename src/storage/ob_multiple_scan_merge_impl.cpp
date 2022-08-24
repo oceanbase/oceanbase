@@ -75,6 +75,7 @@ int ObMultipleScanMergeImpl::supply_consume()
   for (int64_t i = 0; OB_SUCC(ret) && i < consume_num; ++i) {
     const int64_t iter_idx = consumer_.get_consumer_iters()[i];
     ObStoreRowIterator* iter = iters_.at(iter_idx);
+    item.iter_idx_ = iter_idx;
     if (NULL == iter) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected error", K(ret), K(iter));
@@ -88,7 +89,6 @@ int ObMultipleScanMergeImpl::supply_consume()
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "get next row return NULL row", "iter_index", iter_idx, K(ret));
     } else {
-      item.iter_idx_ = iter_idx;
       if (try_push_top_item_) {
         if (1 != consume_num) {
           ret = OB_ERR_UNEXPECTED;
@@ -104,8 +104,8 @@ int ObMultipleScanMergeImpl::supply_consume()
       // TODO: Ambiguous here, typically base_row only means row in major sstable.
       //       And iter_idx==0 doesn't necessarily mean iterator for memtable.
       0 == iter_idx ? ++row_stat_.inc_row_count_ : ++row_stat_.base_row_count_;
-      range_purger_.on_push((int)item.iter_idx_, item.iter_flag_);
     }
+    range_purger_.on_push((int)item.iter_idx_, item.iter_flag_);
   }
 
   if (OB_SUCC(ret)) {

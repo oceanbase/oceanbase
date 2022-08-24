@@ -481,6 +481,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg& other)
     if_not_exist_ = other.if_not_exist_;
     name_case_mode_ = other.name_case_mode_;
     is_restore_ = other.is_restore_;
+    restore_frozen_status_ = other.restore_frozen_status_;
   }
   return ret;
 }
@@ -495,12 +496,13 @@ DEF_TO_STRING(ObCreateTenantArg)
       K_(name_case_mode),
       K_(is_restore),
       K_(restore_pkeys),
-      K_(restore_log_pkeys));
+      K_(restore_log_pkeys),
+      K_(restore_frozen_status));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg), tenant_schema_, pool_list_, if_not_exist_, sys_var_list_,
-    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_);
+    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_, restore_frozen_status_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -820,6 +822,8 @@ bool ObCreateTableArg::is_allow_when_upgrade() const
   }
   return bret;
 }
+
+OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_);
 
 bool ObCreateTableLikeArg::is_valid() const
 {
@@ -3349,9 +3353,9 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg& other)
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
 
-OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_);
+OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
-OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_);
+OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_);
 
 OB_SERIALIZE_MEMBER(ObAdminLoadBaselineArg, tenant_ids_, sql_id_, plan_hash_value_, fixed_, enabled_);
 
@@ -4936,6 +4940,62 @@ int ObSubmitBuildIndexTaskArg::assign(const ObSubmitBuildIndexTaskArg &other)
 }
 
 OB_SERIALIZE_MEMBER((ObSubmitBuildIndexTaskArg, ObDDLArg), index_tid_);
+
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeArg, pkey_, index_id_);
+
+int ObFetchSstableSizeArg::assign(const ObFetchSstableSizeArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    pkey_ = other.pkey_;
+    index_id_ = other.index_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchSstableSizeRes, size_);
+
+int ObFetchSstableSizeRes::assign(const ObFetchSstableSizeRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    size_ = other.size_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObTableTTLArg, cmd_code_);
+ObTableTTLArg::ObTableTTLArg()
+    : cmd_code_(4)
+{}
+int ObTableTTLArg::assign(const ObTableTTLArg& other) {
+  cmd_code_ = other.cmd_code_;
+  return OB_SUCCESS;
+}
+
+
+OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_);
+ObTTLResponseArg::ObTTLResponseArg()
+    : tenant_id_(0),
+      task_id_(OB_INVALID_ID),
+      server_addr_(),
+      task_status_(15)
+{}
+
+OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_);
+OB_SERIALIZE_MEMBER(ObTTLResult, ret_code_);
+
+int ObTTLRequestArg::assign(const ObTTLRequestArg &other) {
+  int ret = OB_SUCCESS;
+
+  cmd_code_ = other.cmd_code_;
+  task_id_ = other.task_id_;
+  tenant_id_ = other.tenant_id_;
+  trigger_type_ = other.trigger_type_;
+  
+  return ret;
+}
 
 }  // end namespace obrpc
 }  // namespace oceanbase

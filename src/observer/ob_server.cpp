@@ -75,6 +75,8 @@
 #include "share/ob_bg_thread_monitor.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "lib/oblog/ob_log_compressor.h"
+#include "observer/table/ob_table_ttl_task.h"
+#include "observer/table/ob_table_ttl_manager.h"
 //#include "share/ob_ofs.h"
 
 using namespace oceanbase::lib;
@@ -361,6 +363,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_WARN("failed to init backup file lock mgr", K(ret));
   } else if (OB_FAIL(G_RES_MGR.init())) {
     LOG_WARN("failed to init resource plan", K(ret));
+  } else if (OB_FAIL(ObTTLManager::get_instance().init())) {
+    LOG_WARN("failed to init ttl manager", K(ret));
   } else {
     GDS.set_rpc_proxy(&rs_rpc_proxy_);
     LOG_INFO("ob server instance init succeed");
@@ -404,6 +408,8 @@ void ObServer::destroy()
     LOG_WARN("sql memory manager timer destroyed");
     TG_DESTROY(lib::TGDefIDs::ServerTracerTimer);
     LOG_WARN("server trace timer destroyed");
+    TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
+    LOG_WARN("ctas clean up timer destroyed");
     root_service_.destroy();
     LOG_WARN("root service destroyed");
     ob_service_.destroy();
@@ -495,6 +501,8 @@ int ObServer::start()
     LOG_ERROR("failed to start backup info", K(ret));
   } else if (OB_FAIL(ObRestoreFatalErrorReporter::get_instance().start())) {
     LOG_ERROR("failed to start ObRestoreFatalErrorReporter", K(ret));
+  } else if (OB_FAIL(ObTTLManager::get_instance().start())) {
+    LOG_ERROR("failed to start ObTTLManager", K(ret));
   } else {
     LOG_INFO("[NOTICE] server instance start succeed");
     stop_ = false;
@@ -598,6 +606,11 @@ int ObServer::stop()
   }
   LOG_WARN("distributed scheduler manager has stopped");
 
+  if (OB_NOT_NULL(dtl::ObDtl::instance())) {
+    DTL.stop();
+  }
+  LOG_INFO("sqldtl stop");
+
   LOG_INFO("begin stop GDS");
   GDS.stop();
   LOG_WARN("GDS stopped");
@@ -639,6 +652,8 @@ int ObServer::stop()
   LOG_WARN("sql memory manager timer stopped");
   TG_STOP(lib::TGDefIDs::ServerTracerTimer);
   LOG_WARN("server trace timer stopped");
+  TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
+  LOG_WARN("ctas clean up timer stopped");
   LOG_INFO("begin stop sql conn pool");
   sql_conn_pool_.stop();
   LOG_WARN("sql connection pool stopped");
@@ -744,6 +759,7 @@ int ObServer::wait()
   TG_WAIT(lib::TGDefIDs::FreezeTimer);
   TG_WAIT(lib::TGDefIDs::SqlMemTimer);
   TG_WAIT(lib::TGDefIDs::ServerTracerTimer);
+  TG_WAIT(lib::TGDefIDs::CTASCleanUpTimer);
   LOG_INFO("wait timer success");
   root_service_.wait();
   LOG_INFO("wait root service success");
@@ -921,6 +937,8 @@ int ObServer::init_config()
       LOG_ERROR("init sql memory manger timer fail", K(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerTracerTimer))) {
       LOG_WARN("fail to init server trace timer", KR(ret));
+    } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
+      LOG_ERROR("fail to init ctas clean up timer", KR(ret));
     } else if (OB_FAIL(config_mgr_.base_init())) {
       LOG_WARN("config_mgr_ base_init failed", K(ret));
     } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
@@ -2039,10 +2057,10 @@ bool ObServer::ObCTASCleanUp::operator()(sql::ObSQLSessionMgr::Key key, sql::ObS
         set_drop_flag(false);
         ATOMIC_STORE(&obs_->need_ctas_cleanup_,
             true);  // The current session is creating a table and needs to continue to check in the next schedule
-        LOG_DEBUG("current table is in status of creating", K(sess_info->get_last_active_time()));
+        LOG_INFO("current table is in status of creating", K(sess_info->get_last_active_time()));
       } else {
         (void)sess_info->unlock_query();
-        LOG_DEBUG("current table was in status of creating", K(sess_info->get_last_active_time()));
+        LOG_INFO("current table was in status of creating", K(sess_info->get_last_active_time()));
       }
     } else if (ObCTASCleanUp::TEMP_TAB_RULE == get_cleanup_type()) {  // 3, Directly connected temporary table cleanup
       if (sess_info->get_sess_create_time() < get_schema_version() + 100) {
@@ -2232,7 +2250,7 @@ int ObServer::init_refresh_active_time_task()
 int ObServer::init_ctas_clean_up_task()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ctas_clean_up_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
+  if (OB_FAIL(ctas_clean_up_task_.init(this, lib::TGDefIDs::CTASCleanUpTimer))) {
     LOG_WARN("fail to init ctas clean up task", K(ret));
   }
   return ret;
@@ -2344,12 +2362,15 @@ int ObServer::clean_up_invalid_tables()
           }
         }
         if (ctas_cleanup.get_drop_flag()) {
-          LOG_DEBUG("a table will be dropped!", K(*table_schema));
+          LOG_INFO("a table will be dropped!", K(*table_schema));
           database_schema = NULL;
           drop_table_arg.tables_.reset();
+          drop_table_arg.if_exist_ = true;
           drop_table_arg.tenant_id_ = table_schema->get_tenant_id();
+          drop_table_arg.exec_tenant_id_ = table_schema->get_tenant_id();
           drop_table_arg.table_type_ = table_schema->get_table_type();
           drop_table_arg.session_id_ = table_schema->get_session_id();
+          drop_table_arg.to_recyclebin_ = false;
           table_item.table_name_ = table_schema->get_table_name_str();
           table_item.mode_ = table_schema->get_name_case_mode();
           if (OB_FAIL(schema_guard.get_database_schema(table_schema->get_database_id(), database_schema))) {

@@ -230,10 +230,10 @@ int ObExprNullif::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
   for (int64_t i = 0; OB_SUCC(ret) && i < real_param_num; i++) {
     if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
             rt_expr.args_[i], rt_expr.args_[i + real_param_num], &rt_expr, i + real_param_num))) {
-      LOG_WARN("replace var rt expr failed", K(ret));
+      LOG_WARN("replace var rt expr failed", K(ret), K(i), K(raw_expr));
     } else if (OB_FAIL(ObStaticEngineExprCG::replace_var_rt_expr(
                    rt_expr.args_[i], rt_expr.args_[i + 2 * real_param_num], &rt_expr, i + 2 * real_param_num))) {
-      LOG_WARN("replace var rt expr failed", K(ret));
+      LOG_WARN("replace var rt_expr failed", K(ret), K(i), K(raw_expr));
     }
   }
   if (OB_FAIL(ret)) {

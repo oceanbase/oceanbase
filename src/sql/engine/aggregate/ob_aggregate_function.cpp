@@ -333,15 +333,13 @@ int ObAggregateFunction::init(const int64_t input_column_count, const ObAggrExpr
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr_ctx is valid", K_(expr_ctx.phy_plan_ctx), K_(expr_ctx.my_session), K_(expr_ctx.calc_buf));
   } else {
+    expr_ctx_ = expr_ctx;
     if (share::is_oracle_mode()) {
       group_concat_max_len_ = OB_DEFAULT_GROUP_CONCAT_MAX_LEN_FOR_ORACLE;
-    } else {
-      group_concat_max_len_ = OB_DEFAULT_GROUP_CONCAT_MAX_LEN;
-    }
-    if (OB_FAIL(expr_ctx.my_session_->get_group_concat_max_len(group_concat_max_len_))) {
+    } else if (OB_FAIL(expr_ctx.my_session_->get_group_concat_max_len(group_concat_max_len_))) {
       LOG_WARN("fail to get group concat max len", K(ret));
-    } else {
-      expr_ctx_ = expr_ctx;
+    } else if (group_concat_max_len_ >= CONCAT_STR_BUF_LEN - 1) {
+      group_concat_max_len_ = CONCAT_STR_BUF_LEN - 2;
     }
   }
   // add aggr columns
@@ -3287,7 +3285,6 @@ int ObAggregateFunction::get_json_arrayagg_result(const ObAggregateExpression *&
             LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
           } else {
             converted_obj.set_string(val_type, converted_str);
-            converted_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
             cs_type = CS_TYPE_UTF8MB4_BIN;
           }
         }
@@ -3432,7 +3429,6 @@ int ObAggregateFunction::get_json_objectagg_result(const ObAggregateExpression *
                 LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
               } else {
                 converted_obj.set_string(val_type1, converted_str);
-                converted_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
                 cs_type1 = CS_TYPE_UTF8MB4_BIN;
               }
             }

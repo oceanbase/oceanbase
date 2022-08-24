@@ -22,6 +22,7 @@
 #include "observer/ob_server.h"
 #include "lib/string/ob_strings.h"
 #include "lib/rc/ob_rc.h"
+#include "observer/table/ob_htable_filter_operator.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -55,6 +56,15 @@ void ObTableQuerySyncSession::set_result_iterator(ObNormalTableQueryResultIterat
   if (OB_NOT_NULL(result_iterator_)) {
     result_iterator_->set_query(&query_);
     result_iterator_->set_query_sync();
+  }
+}
+
+void ObTableQuerySyncSession::set_htable_result_iterator(table::ObHTableFilterOperator *query_result)
+{
+  htable_result_iterator_ = query_result;
+  if (OB_NOT_NULL(htable_result_iterator_)) {
+    htable_result_iterator_->set_query(&query_);
+    htable_result_iterator_->set_query_sync();
   }
 }
 
@@ -365,6 +375,21 @@ int ObTableQuerySyncP::get_session_id(uint64_t &real_sessid, uint64_t arg_sessid
   return ret;
 }
 
+void ObTableQuerySyncP::set_htable_compressor()
+{
+  int ret = OB_SUCCESS;
+  // hbase model, compress the result packet
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
+  if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
+                  GCONF.tableapi_transport_compress_func, compressor_type))) {
+    compressor_type = INVALID_COMPRESSOR;
+  } else if (NONE_COMPRESSOR == compressor_type) {
+    compressor_type = INVALID_COMPRESSOR;
+  }
+  this->set_result_compress_type(compressor_type);
+}
+
+
 int ObTableQuerySyncP::get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_session)
 {
   int ret = OB_SUCCESS;
@@ -402,7 +427,13 @@ int ObTableQuerySyncP::get_query_session(uint64_t sessid, ObTableQuerySyncSessio
 int ObTableQuerySyncP::query_scan_with_old_context(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  ObTableQueryResultIterator *result_iterator = query_session_->get_result_iterator();
+  ObTableQueryResultIterator *result_iterator;
+  if (arg_.query_.get_htable_filter().is_valid()) {
+    result_iterator = query_session_->get_htable_result_iterator();
+    set_htable_compressor();
+  } else {
+    result_iterator = query_session_->get_result_iterator();
+  }
   if (OB_ISNULL(result_iterator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("query result iterator null", K(ret));
@@ -430,6 +461,9 @@ int ObTableQuerySyncP::query_scan_with_new_context(
     ObTableQuerySyncSession *query_session, table::ObTableQueryResultIterator *result_iterator, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  if (arg_.query_.get_htable_filter().is_valid()) {
+    set_htable_compressor();
+  }
   ObTableQueryResult *query_result = nullptr;
   if (ObTimeUtility::current_time() > timeout) {
     ret = OB_TRANS_TIMEOUT;
@@ -445,7 +479,12 @@ int ObTableQuerySyncP::query_scan_with_new_context(
   } else if (result_iterator->has_more_result()) {
     result_.is_end_ = false;
     query_session->deep_copy_select_columns(arg_.query_);
-    query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
+    if (arg_.query_.get_htable_filter().is_valid()) {
+      query_session->set_htable_result_iterator(dynamic_cast<table::ObHTableFilterOperator *>(result_iterator));
+    } else {
+      query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
+    }
+    
   } else {
     result_.is_end_ = true;
   }
@@ -459,7 +498,7 @@ int ObTableQuerySyncP::query_scan_with_init()
   table_service_ctx_->scan_param_.is_thread_scope_ = false;
   uint64_t &table_id = table_service_ctx_->param_table_id();
   table_service_ctx_->init_param(timeout_ts_,
-      this,
+      this->get_trans_desc(),
       query_session_->get_allocator(),
       false /*ignored*/,
       arg_.entity_type_,
@@ -497,7 +536,7 @@ int ObTableQuerySyncP::query_scan_with_init()
 int ObTableQuerySyncP::query_scan_without_init()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(query_session_->get_result_iterator()) || OB_ISNULL(query_session_->get_table_service_ctx())) {
+  if (OB_ISNULL(query_session_->get_table_service_ctx())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null result iterator or table service context", K(ret));
   } else if (OB_FAIL(query_scan_with_old_context(timeout_ts_))) {

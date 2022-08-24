@@ -256,23 +256,28 @@ int ObTransformUtils::add_new_joined_table(ObTransformerCtx* ctx, ObDMLStmt& stm
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transform context is invalid", K(ret), K(ctx), K(stmt), K(left_table), K(right_table));
   } else {
-    JoinedTable* joined_table = static_cast<JoinedTable*>(ctx->allocator_->alloc(sizeof(JoinedTable)));
-    joined_table = new (joined_table) JoinedTable();
-    joined_table->type_ = TableItem::JOINED_TABLE;
-    joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
-    joined_table->joined_type_ = join_type;
-    joined_table->left_table_ = left_table;
-    joined_table->right_table_ = right_table;
-    if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
-      LOG_WARN("failed to push back join conditions", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
-      LOG_WARN("failed to add left table ids", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
-      LOG_WARN("failed to add right table ids", K(ret));
-    } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
-      LOG_WARN("failed to add joined table into stmt", K(ret));
+    JoinedTable *joined_table = static_cast<JoinedTable *>(ctx->allocator_->alloc(sizeof(JoinedTable)));
+    if (OB_ISNULL(joined_table)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
     } else {
-      new_join_table = joined_table;
+      joined_table = new (joined_table) JoinedTable();
+      joined_table->type_ = TableItem::JOINED_TABLE;
+      joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_--;
+      joined_table->joined_type_ = join_type;
+      joined_table->left_table_ = left_table;
+      joined_table->right_table_ = right_table;
+      if (OB_FAIL(joined_table->join_conditions_.assign(joined_conds))) {
+        LOG_WARN("failed to push back join conditions", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *left_table))) {
+        LOG_WARN("failed to add left table ids", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*joined_table, *right_table))) {
+        LOG_WARN("failed to add right table ids", K(ret));
+      } else if (add_table && OB_FAIL(stmt.add_joined_table(joined_table))) {
+        LOG_WARN("failed to add joined table into stmt", K(ret));
+      } else {
+        new_join_table = joined_table;
+      }
     }
   }
   return ret;
@@ -1738,7 +1743,7 @@ int ObTransformUtils::find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_e
 
 // 1. check is there null rejecting condition
 // 2. check is nullable column, and is not the right table of outer join
-int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable)
+int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope /* = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE */)
 {
   int ret = OB_SUCCESS;
   is_nullable = true;
@@ -1752,12 +1757,14 @@ int ObTransformUtils::check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool
     LOG_WARN("failed to check is not null column", K(ret));
   } else if (not_null_col) {
     is_nullable = false;
-  } else if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
-    LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
-    LOG_WARN("failed to check has null reject condition", K(ret));
-  } else if (has_null_reject) {
-    is_nullable = false;
+  } else if (nullable_scope >= ObTransformUtils::NULLABLE_SCOPE::NS_WHERE) {
+    if (OB_FAIL(stmt->get_equal_set_conditions(valid_conds, true, SCOPE_WHERE))) {
+      LOG_WARN("failed to get equal set conditions", K(ret));
+    } else if (OB_FAIL(has_null_reject_condition(valid_conds, expr, has_null_reject))) {
+      LOG_WARN("failed to check has null reject condition", K(ret));
+    } else if (has_null_reject) {
+      is_nullable = false;
+    }
   }
   return ret;
 }
@@ -4719,17 +4726,18 @@ bool ObTransformUtils::is_subarray(const ObRelIds& table_ids, const common::ObIA
   return bool_ret;
 }
 
-int ObTransformUtils::check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* source_table,
-    TableItem* target_table, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-    ObStmtMapInfo& stmt_map_info, bool& is_loseless,
-    EqualSets* input_equal_sets)  // default value NULL
+int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt, ObTransformerCtx *ctx, TableItem *source_table,
+    TableItem *target_table, ObSQLSessionInfo *session_info, ObSchemaChecker *schema_checker,
+    ObStmtMapInfo &stmt_map_info, bool is_on_null_side, bool &is_loseless,
+    EqualSets *input_equal_sets /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   bool is_contain = false;
   bool source_unique = false;
   bool target_unique = false;
-  ObSEArray<ObRawExpr*, 16> source_exprs;
-  ObSEArray<ObRawExpr*, 16> target_exprs;
+  ObSEArray<ObRawExpr *, 16> source_exprs;
+  ObSEArray<ObRawExpr *, 16> target_exprs;
+  ObSEArray<ObRawExpr *, 8> target_tab_cols;
   is_loseless = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(source_table) || OB_ISNULL(target_table) || OB_ISNULL(schema_checker)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4747,6 +4755,10 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx
                  target_exprs,
                  input_equal_sets))) {
     LOG_WARN("failed to extract lossless join columns", K(ret));
+  } else if (OB_FAIL(stmt->get_column_exprs(target_table->table_id_, target_tab_cols))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else if (is_on_null_side && !target_tab_cols.empty() && target_exprs.empty()) {
+    is_loseless = false;
   } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(
                  *stmt, source_table, source_exprs, session_info, schema_checker, source_unique))) {
     LOG_WARN("failed to check exprs unique", K(ret));
@@ -7128,7 +7140,7 @@ int ObTransformUtils::extract_column_contained_expr(
       LOG_WARN("failed to extract stmt column contained expr", K(ret));
     } else { /*do nothing*/
     }
-  } else if (!expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
+  } else if (!expr->get_relation_ids().is_empty() && !expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
         expr->get_expr_levels().num_members() == 1 && expr->get_expr_levels().has_member(stmt_level) &&
         OB_FAIL(add_var_to_array_no_dup(contain_column_exprs, expr))) {
     LOG_WARN("failed to push back expr", K(ret));

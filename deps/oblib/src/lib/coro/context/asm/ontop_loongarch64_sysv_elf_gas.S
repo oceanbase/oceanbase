@@ -38,6 +38,7 @@
  *                                                     *
  * *****************************************************/
 
+#if defined(__loongarch64)
 .file "ontop_loongarch64_sysv_elf_gas.S"
 .text
 .globl ontop_fcontext
@@ -116,3 +117,4 @@ ontop_fcontext:
 
 /* Mark that we don't need executable stack.  */
 .section .note.GNU-stack,"",%progbits
+#endif

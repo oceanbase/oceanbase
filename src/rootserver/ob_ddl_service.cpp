@@ -4551,6 +4551,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg, 
             if (OB_FAIL(ddl_operator.update_table_attribute(
                     new_table_schema, trans, operation_type, &alter_table_arg.ddl_stmt_str_))) {
               LOG_WARN("failed to update data table schema version and max used column is!", K(ret));
+            } else if (alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID) &&
+                       0 == new_table_schema.get_session_id() &&
+                       !new_table_schema.is_tmp_table() &&
+                       OB_FAIL(ddl_operator.delete_temp_table_info(trans, new_table_schema))) {
+              LOG_WARN("failed to delete temp table info", K(ret));
             }
           }
 
@@ -13967,6 +13972,7 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
         int64_t non_paxos_replica_num = 0;
         int64_t restore = REPLICA_NOT_RESTORE;
         int64_t table_id = copy.get_table_id();
+        share::ObSimpleFrozenStatus new_frozen_status = frozen_status;
         if (OB_FAIL(ret)) {
         } else if (is_restore) {  // physical restore
           create_mode = OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
@@ -13977,6 +13983,12 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
             int hash_ret = restore_partition_map.get_refactored(extract_pure_id(table_id), status);
             if (OB_SUCCESS == hash_ret) {
               restore = status;
+              // For system tables in physical restore:
+              // 1. REPLICA_RESTORE_DATA: frozen_status will be overwrite by storage, so it's unuseful.
+              // 2. REPLICA_RESTORE_ARCHIVE_DATA: frozen_version will be overwrite so it's unuseful, but
+              // frozen_timestamp should come from backup info to filter clog.
+              // 3. REPLICA_NOT_RESTORE: frozen_status should come from restore cluster.
+              new_frozen_status = arg.restore_frozen_status_;
             } else if (OB_HASH_NOT_EXIST == hash_ret) {
               // create sys table in tenant space which were not backuped in lower version.
               restore = REPLICA_NOT_RESTORE;
@@ -14008,7 +14020,7 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg &arg,
                        is_standby,
                        create_mode,
                        restore,
-                       frozen_status))) {
+                       new_frozen_status))) {
           LOG_WARN("fail to create partitions", K(ret));
         } else {
         }  // no more to do
@@ -22379,6 +22391,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
     const uint64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard, int64_t &pz_entity_count)
 {
   int ret = OB_SUCCESS;
+  int64_t table_pz_count = 0, db_pz_count = 0, tg_pz_count = 0;
   common::ObArray<const ObDatabaseSchema *> database_schemas;
   common::ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
   common::ObArray<const ObTablegroupSchema *> tablegroup_schemas;
@@ -22403,6 +22416,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        table_pz_count++;
       }
     }
     // databases
@@ -22415,6 +22429,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        db_pz_count++;
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablegroup_schemas.count(); ++i) {
@@ -22426,9 +22441,19 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         // go on next
       } else {
         ++pz_entity_count;
+        tg_pz_count++;
       }
     }
   }
+
+  LOG_INFO("get tenant primary zone entity count",
+      K(tenant_id),
+      K(pz_entity_count),
+      K(table_pz_count),
+      K(db_pz_count),
+      K(tg_pz_count),
+      KR(ret));
+
   return ret;
 }
 

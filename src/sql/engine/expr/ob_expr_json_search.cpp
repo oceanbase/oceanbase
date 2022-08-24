@@ -218,6 +218,7 @@ int ObExprJsonSearch::calc_result_typeN(ObExprResType& type,
     LOG_WARN("invalid param number", K(ret), K(param_num));
   } else {
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     
     // json doc
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, "json_search"))) {

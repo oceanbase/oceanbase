@@ -23,21 +23,14 @@ ob_lib_add_target(oblib_lib_coro_context
   coro/context/asm/jump_x86_64_sysv_elf_gas.S
   coro/context/asm/make_x86_64_sysv_elf_gas.S
   coro/context/asm/ontop_x86_64_sysv_elf_gas.S
-  coro/context/asm/make_sw_64_sysv_elf_gas.S
-  coro/context/asm/jump_sw_64_sysv_elf_gas.S
+  coro/context/asm/make_sw_64_aapcs_elf_gas.S
+  coro/context/asm/jump_sw_64_aapcs_elf_gas.S
   coro/context/asm/ontop_sw_64_aapcs_elf_gas.S
-
+  coro/context/asm/jump_loongarch64_sysv_elf_gas.S
+  coro/context/asm/make_loongarch64_sysv_elf_gas.S
+  coro/context/asm/ontop_loongarch64_sysv_elf_gas.S
 )
 disable_pch(oblib_lib_coro_context)
-
-if(${ARCHITECTURE} STREQUAL "loongarch64")
-  ob_lib_add_target(oblib_lib_coro_context_loongarch64
-    coro/context/asm/jump_loongarch64_sysv_elf_gas.S
-    coro/context/asm/make_loongarch64_sysv_elf_gas.S
-    coro/context/asm/ontop_loongarch64_sysv_elf_gas.S
-  )
-  disable_pch(oblib_lib_coro_context_loongarch64)
-endif()
 
 ob_set_subtarget(oblib_lib coro
   coro/co_base_sched.cpp

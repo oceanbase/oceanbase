@@ -1193,19 +1193,6 @@ class oceanbase(object):
         return True
 
     def __check_schema(self):
-
-        sql = """ SELECT unit.svr_ip, unit.svr_port FROM __all_resource_pool pool JOIN __all_unit unit ON (pool.resource_pool_id = unit.resource_pool_id ) WHERE pool.tenant_id = %s ; """ % (str(self.get_current_tenant()))
-        res = self.dosql(sql)
-
-        s_join = ""
-
-        for one in res.split("\n")[:-1]:
-            a = one.split("\t")
-            if s_join == "":
-                s_join = """ %s (svr_ip = '%s' and svr_port = %s ) """ % ( s_join, a[0], a[1])
-            else:
-                s_join = """ %s or (svr_ip = '%s' and svr_port = %s ) """ % ( s_join, a[0], a[1])
-
         stat_ids = "stat_id in (10000,10004,10005,10006,30007,30008,30009,"\
                 "40000,40001,40002,40003,40004,40005,40006,40007,40008,40009,40010,40011,40012,40013,"\
                 "50000,50001,50002,50003,50004,50005,50006,50007,50008,50009,50010,50011,"\
@@ -1214,11 +1201,11 @@ class oceanbase(object):
                 "190103,190303,190503,190901,190004,190404,190204,190104,190304,190504,190902"\
                 ") "
 
-        sql2 = """ select current_time(), stat.con_id, stat.svr_ip, stat.svr_port, stat.name, stat.value from gv\$sysstat stat where stat.class IN (1,4,8,16,32,4096) and con_id = %s and (%s) """  % (  str(self.get_current_tenant()) , stat_ids)
+        sql = """ select current_time(), stat.con_id, stat.svr_ip, stat.svr_port, stat.name, stat.value from gv\$sysstat stat where stat.class IN (1,4,8,16,32,4096) and con_id = %s and (%s) """  % (  str(self.get_current_tenant()) , stat_ids)
 
-        DEBUG(self.__check_schema, "oceanbase.check schema sql : ", sql2)
+        DEBUG(self.__check_schema, "oceanbase.check schema sql : ", sql)
 
-        return sql2
+        return sql
 
     def __get_cpu_usage(self):
     	#sql = """SELECT t1.tenant_id,t2.zone, t1.svr_ip,t1.svr_port , round(cpu_quota_used/t4.max_cpu, 3) cpu_usage FROM __all_tenant_resource_usage t1 JOIN  __all_server t2 ON (t1.svr_ip=t2.svr_ip and t1.svr_port=t2.svr_port) JOIN __all_resource_pool t3 ON (t1.tenant_id=t3.tenant_id) JOIN __all_unit_config t4 ON (t3.unit_config_id=t4.unit_config_id) WHERE report_time > date_sub(now(), INTERVAL 30 SECOND) AND t1.tenant_id IN (%s)  ORDER BY t1.tenant_id, t2.zone, t1.svr_ip, t1.svr_port; """    % (str(self.get_current_tenant()))
@@ -1401,6 +1388,10 @@ class oceanbase(object):
             try:
                 cur = self.__get_all_stat()
             except Exception:
+                continue
+            if str(oceanbase.get_current_tenant()) not in cur:
+                # tid has changed before result returned, ignore it.
+                prev = self.__get_all_stat()
                 continue
             try:
                 stat_new = self.__sub_stat(cur, prev)
@@ -2680,7 +2671,7 @@ class SelectionBox(Widget):
             flag = 0
             if idx == self.__index:
                 flag = curses.A_BOLD | curses.color_pair(5)
-            self.win().addstr(idx - self.__start_idx + self.__padding_top + 1, 1, line, flag)
+            self.win().addstr(idx - self.__start_idx + self.__padding_top + 1, 1, item, flag)
 
     def run(self, first_movement=None):
         self.__fm = first_movement
@@ -3510,7 +3501,7 @@ class Dooba(object):
             MessageBox(self.stdscr, "[ INFO ] save screen to %s done!" % filename).run(anykey=True)
         #what is this ?
         elif ch == ord('p'):
-            MessageBox(self.stdscr, "[TEST]What's up? Nigger! (- -)#").run()
+            MessageBox(self.stdscr, "[TEST] illegal").run()
         elif ch == ord('z'):
             items = [('check1  12344', False), ('check2 1', True), ('check3 124328432431', False)]
             CheckBox('Test check box', items, self.stdscr).run()

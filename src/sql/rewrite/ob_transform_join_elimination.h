@@ -69,7 +69,7 @@ private:
 
   /**
    * @brief eliminate_join_self_key
-   * cases that can be eliminated for self key join：
+   * cases that can be eliminated for self key join
    * basic_table or generate_table within STMT FROM ITEMS
    * basic_table or generate_table within SEMI ITEMS
    * inner join tables within SEMI ITEMS or STMT ITEMS
@@ -98,11 +98,14 @@ private:
   int eliminate_join_in_joined_table(ObDMLStmt* stmt, TableItem*& table_item, ObIArray<TableItem*>& child_candi_tables,
       ObIArray<ObRawExpr*>& trans_conditions, bool& trans_happened);
 
-  int eliminate_candi_tables(ObDMLStmt* stmt, ObIArray<ObRawExpr*>& conds, ObIArray<TableItem*>& candi_tables,
-      ObIArray<TableItem*>& child_candi_tables, bool& trans_happened);
+  int eliminate_candi_tables(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &conds, ObIArray<TableItem *> &candi_tables,
+      ObIArray<TableItem *> &child_candi_tables, bool is_from_base_table, bool &trans_happened);
 
-  int do_join_elimination_self_key(ObDMLStmt* stmt, TableItem* source_table, TableItem* target_table,
-      bool& trans_happened, EqualSets* equal_sets = NULL);
+  int check_on_null_side(ObDMLStmt *stmt, uint64_t source_table_id, uint64_t target_table_id, bool is_from_base_table,
+      bool &is_on_null_side);
+
+  int do_join_elimination_self_key(ObDMLStmt *stmt, TableItem *source_table, TableItem *target_table,
+      bool is_from_base_table, bool &trans_happened, EqualSets *equal_sets = NULL);
 
   int do_join_elimination_foreign_key(ObDMLStmt* stmt, const TableItem* child_table, const TableItem* parent_table,
       const share::schema::ObForeignKeyInfo* foreign_key_info);

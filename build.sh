@@ -112,8 +112,20 @@ function build
       xrelease)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo
         ;;
+      xrelease_no_unity)
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ENABLE_UNITY=OFF -DOB_ENABLE_PCH=OFF
+        ;;
       xdebug)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug
+        ;;
+      xdebug_no_unity)
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_ENABLE_UNITY=OFF -DOB_ENABLE_PCH=OFF
+        ;;
+      xerrsim_debug)
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_ERRSIM=ON -DOB_USE_LLD=$LLD_OPTION
+        ;;
+      xerrsim)
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ERRSIM=ON -DOB_USE_LLD=$LLD_OPTION
         ;;
       xrpm)
         do_build "$@" -DOB_BUILD_RPM=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF

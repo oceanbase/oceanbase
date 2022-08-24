@@ -1,0 +1,776 @@
+drop database if exists cte_st;
+create database cte_st;
+use cte_st;
+result_format: 4
+WITH RECURSIVE cte (n) AS
+(
+  SELECT 1
+  UNION ALL
+  SELECT n + 1 FROM cte WHERE n < 5
+)
+SELECT * FROM cte;
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT 1 AS n, CAST('abc' AS CHAR(20)) AS str
+  UNION ALL
+  SELECT n + 1, CONCAT(str, str) FROM cte WHERE n < 3
+)
+SELECT * FROM cte;
++------+--------------+
+| n    | str          |
++------+--------------+
+|    1 | abc          |
+|    2 | abcabc       |
+|    3 | abcabcabcabc |
++------+--------------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT 1 AS n, 1 AS p, -1 AS q
+  UNION ALL
+  SELECT n + 1, q * 2, p * 2 FROM cte WHERE n < 5
+)
+SELECT * FROM cte;
++------+------+------+
+| n    | p    | q    |
++------+------+------+
+|    1 |    1 |   -1 |
+|    2 |   -2 |    2 |
+|    3 |    4 |   -4 |
+|    4 |   -8 |    8 |
+|    5 |   16 |  -16 |
++------+------+------+
+
+WITH RECURSIVE fibonacci (n, fib_n, next_fib_n) AS
+(
+  SELECT 1, 0, 1
+  UNION ALL
+  SELECT n + 1, next_fib_n, fib_n + next_fib_n
+    FROM fibonacci WHERE n < 10
+)
+SELECT * FROM fibonacci;
++------+-------+------------+
+| n    | fib_n | next_fib_n |
++------+-------+------------+
+|    1 |     0 |          1 |
+|    2 |     1 |          1 |
+|    3 |     1 |          2 |
+|    4 |     2 |          3 |
+|    5 |     3 |          5 |
+|    6 |     5 |          8 |
+|    7 |     8 |         13 |
+|    8 |    13 |         21 |
+|    9 |    21 |         34 |
+|   10 |    34 |         55 |
++------+-------+------------+
+
+WITH RECURSIVE fibonacci (n, fib_n, next_fib_n) AS
+(
+  SELECT 1, 0, 1
+  UNION ALL
+  SELECT n + 1, next_fib_n, fib_n + next_fib_n
+    FROM fibonacci WHERE n < 10
+)
+SELECT fib_n FROM fibonacci WHERE n = 8;
++-------+
+| fib_n |
++-------+
+|    13 |
++-------+
+
+create table sales(date  DATE,price NUMBER(7,2));
+insert into sales values(str_to_date('2017-01-03', '%Y-%m-%d'),100);
+insert into sales values(str_to_date('2017-01-03', '%Y-%m-%d'),200);
+insert into sales values(str_to_date('2017-01-06', '%Y-%m-%d'),50);
+insert into sales values(str_to_date('2017-01-08', '%Y-%m-%d'),10);
+insert into sales values(str_to_date('2017-01-08', '%Y-%m-%d'),20);
+insert into sales values(str_to_date('2017-01-08', '%Y-%m-%d'),150);
+insert into sales values(str_to_date('2017-01-10', '%Y-%m-%d'),5);
+
+SELECT * FROM sales ORDER BY date, price;
++------------+--------+
+| date       | price  |
++------------+--------+
+| 2017-01-03 | 100.00 |
+| 2017-01-03 | 200.00 |
+| 2017-01-06 |  50.00 |
+| 2017-01-08 |  10.00 |
+| 2017-01-08 |  20.00 |
+| 2017-01-08 | 150.00 |
+| 2017-01-10 |   5.00 |
++------------+--------+
+
+SELECT date, SUM(price) AS sum_price
+       FROM sales
+       GROUP BY date
+       ORDER BY date;
++------------+-----------+
+| date       | sum_price |
++------------+-----------+
+| 2017-01-03 |    300.00 |
+| 2017-01-06 |     50.00 |
+| 2017-01-08 |    180.00 |
+| 2017-01-10 |      5.00 |
++------------+-----------+
+
+WITH RECURSIVE dates (date) AS
+(
+  SELECT MIN(date) FROM sales
+  UNION ALL
+  SELECT date + INTERVAL 1 DAY FROM dates
+  WHERE date + INTERVAL 1 DAY <= (SELECT MAX(date) FROM sales)
+)
+SELECT * FROM dates;
++------------+
+| date       |
++------------+
+| 2017-01-03 |
+| 2017-01-04 |
+| 2017-01-05 |
+| 2017-01-06 |
+| 2017-01-07 |
+| 2017-01-08 |
+| 2017-01-09 |
+| 2017-01-10 |
++------------+
+
+WITH RECURSIVE dates (date) AS
+(
+  SELECT MIN(date) FROM sales
+  UNION ALL
+  SELECT date + INTERVAL 1 DAY FROM dates
+  WHERE date + INTERVAL 1 DAY <= (SELECT MAX(date) FROM sales)
+)
+SELECT dates.date, COALESCE(SUM(price), 0) AS sum_price
+FROM dates LEFT JOIN sales ON dates.date = sales.date
+GROUP BY dates.date
+ORDER BY dates.date;
++------------+-----------+
+| date       | sum_price |
++------------+-----------+
+| 2017-01-03 |    300.00 |
+| 2017-01-04 |      0.00 |
+| 2017-01-05 |      0.00 |
+| 2017-01-06 |     50.00 |
+| 2017-01-07 |      0.00 |
+| 2017-01-08 |    180.00 |
+| 2017-01-09 |      0.00 |
+| 2017-01-10 |      5.00 |
++------------+-----------+
+
+################################################################################################
+### PART 1   SQL syntax
+################################################################################################
+WITH cte1(txt) AS (SELECT "This "),
+     cte2(txt) AS (SELECT CONCAT(cte1.txt,"is a ") FROM cte1),
+     cte3(txt) AS (SELECT "nice query" UNION
+                   SELECT "query that rocks" UNION
+                   SELECT "query"),
+     cte4(txt) AS (SELECT concat(cte2.txt, cte3.txt) FROM cte2, cte3)
+SELECT MAX(txt), MIN(txt) FROM cte4;
++----------------------------+----------------------+
+| MAX(txt)                   | MIN(txt)             |
++----------------------------+----------------------+
+| This is a query that rocks | This is a nice query |
++----------------------------+----------------------+
+
+WITH RECURSIVE my_cte AS
+(
+  SELECT 1 AS n
+  UNION ALL
+  SELECT 1+n FROM my_cte WHERE n<10
+)
+SELECT * FROM my_cte;
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
+|    7 |
+|    8 |
+|    9 |
+|   10 |
++------+
+
+CREATE TABLE numbers
+  WITH RECURSIVE my_cte(n) AS
+  (
+    SELECT 1
+    UNION ALL
+    SELECT 1+n FROM my_cte WHERE n<6
+  )
+  SELECT * FROM my_cte;
+SELECT * FROM numbers;
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
++------+
+
+INSERT INTO numbers
+WITH RECURSIVE my_cte(n) AS
+(
+  SELECT 1
+  UNION ALL
+  SELECT 1+n FROM my_cte WHERE n<6
+)
+SELECT * FROM my_cte;
+
+SELECT * FROM numbers;
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
++------+
+
+DELETE FROM numbers
+WHERE numbers.n >
+  (
+    WITH RECURSIVE my_cte(n) AS
+    (
+      SELECT 1
+      UNION ALL
+      SELECT 1+n FROM my_cte WHERE n<6
+    )
+    SELECT AVG(n)/2 FROM my_cte
+  );
+SELECT * FROM numbers;
++------+
+| n    |
++------+
+|    1 |
+|    1 |
++------+
+
+################################################################################################
+### PART 2   generating series
+################################################################################################
+WITH RECURSIVE my_cte AS
+(
+  SELECT 1 as f, 1 as next_f
+  UNION ALL
+  SELECT next_f, f+next_f FROM my_cte WHERE f < 500
+)
+SELECT * FROM my_cte;
++------+--------+
+| f    | next_f |
++------+--------+
+|    1 |      1 |
+|    1 |      2 |
+|    2 |      3 |
+|    3 |      5 |
+|    5 |      8 |
+|    8 |     13 |
+|   13 |     21 |
+|   21 |     34 |
+|   34 |     55 |
+|   55 |     89 |
+|   89 |    144 |
+|  144 |    233 |
+|  233 |    377 |
+|  377 |    610 |
+|  610 |    987 |
++------+--------+
+
+WITH RECURSIVE
+digits AS
+(
+  SELECT '0' AS d UNION ALL SELECT '1'
+),
+strings AS
+(
+  SELECT CAST('' AS CHAR(4)) AS s
+  UNION ALL
+  SELECT CONCAT(strings.s, digits.d)
+  FROM strings, digits
+  WHERE LENGTH(strings.s) < 4
+)
+SELECT * FROM strings WHERE LENGTH(s)=4;
++------+
+| s    |
++------+
+| 0000 |
+| 0001 |
+| 0010 |
+| 0011 |
+| 0100 |
+| 0101 |
+| 0110 |
+| 0111 |
+| 1000 |
+| 1001 |
+| 1010 |
+| 1011 |
+| 1100 |
+| 1101 |
+| 1110 |
+| 1111 |
++------+
+
+################################################################################################
+### PART 3  hierarchies
+################################################################################################
+CREATE TABLE category(
+        category_id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(20) NOT NULL,
+        parent INT DEFAULT NULL
+);
+
+INSERT INTO category VALUES(1,'ELECTRONICS',NULL),(2,'TELEVISIONS',1),(3,'TUBE',2),
+        (4,'LCD',2),(5,'PLASMA',2),(6,'PORTABLE ELECTRONICS',1),(7,'MP3 PLAYERS',6),(8,'FLASH',7),
+        (9,'CD PLAYERS',6),(10,'2 WAY RADIOS',6);
+
+SELECT * FROM category ORDER BY category_id;
++-------------+----------------------+--------+
+| category_id | name                 | parent |
++-------------+----------------------+--------+
+|           1 | ELECTRONICS          |   NULL |
+|           2 | TELEVISIONS          |      1 |
+|           3 | TUBE                 |      2 |
+|           4 | LCD                  |      2 |
+|           5 | PLASMA               |      2 |
+|           6 | PORTABLE ELECTRONICS |      1 |
+|           7 | MP3 PLAYERS          |      6 |
+|           8 | FLASH                |      7 |
+|           9 | CD PLAYERS           |      6 |
+|          10 | 2 WAY RADIOS         |      6 |
++-------------+----------------------+--------+
+
+WITH RECURSIVE cte AS
+(
+  # seed SELECT
+  SELECT category_id, name FROM category WHERE parent IS NULL
+  UNION ALL
+  # recursive SELECT
+  SELECT c.category_id, c.name FROM category c JOIN cte
+  ON cte.category_id=c.parent # find children
+)
+SELECT category_id, name FROM cte;
++-------------+----------------------+
+| category_id | name                 |
++-------------+----------------------+
+|           1 | ELECTRONICS          |
+|           6 | PORTABLE ELECTRONICS |
+|           2 | TELEVISIONS          |
+|          10 | 2 WAY RADIOS         |
+|           9 | CD PLAYERS           |
+|           7 | MP3 PLAYERS          |
+|           5 | PLASMA               |
+|           4 | LCD                  |
+|           3 | TUBE                 |
+|           8 | FLASH                |
++-------------+----------------------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT category_id, name, 0 AS depth FROM category WHERE parent IS NULL
+  UNION ALL
+  SELECT c.category_id, c.name, cte.depth+1 FROM category c JOIN cte ON
+    cte.category_id=c.parent
+)
+SELECT * FROM cte ORDER BY depth;
++-------------+----------------------+-------+
+| category_id | name                 | depth |
++-------------+----------------------+-------+
+|           1 | ELECTRONICS          |     0 |
+|           6 | PORTABLE ELECTRONICS |     1 |
+|           2 | TELEVISIONS          |     1 |
+|          10 | 2 WAY RADIOS         |     2 |
+|           9 | CD PLAYERS           |     2 |
+|           7 | MP3 PLAYERS          |     2 |
+|           5 | PLASMA               |     2 |
+|           4 | LCD                  |     2 |
+|           3 | TUBE                 |     2 |
+|           8 | FLASH                |     3 |
++-------------+----------------------+-------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT category_id, name, CAST(category_id AS CHAR(200)) AS path
+  FROM category WHERE parent IS NULL
+  UNION ALL
+  SELECT c.category_id, c.name, CONCAT(cte.path, ",", c.category_id)
+  FROM category c JOIN cte ON cte.category_id=c.parent
+)
+SELECT * FROM cte ORDER BY path;
++-------------+----------------------+---------+
+| category_id | name                 | path    |
++-------------+----------------------+---------+
+|           1 | ELECTRONICS          | 1       |
+|           2 | TELEVISIONS          | 1,2     |
+|           3 | TUBE                 | 1,2,3   |
+|           4 | LCD                  | 1,2,4   |
+|           5 | PLASMA               | 1,2,5   |
+|           6 | PORTABLE ELECTRONICS | 1,6     |
+|          10 | 2 WAY RADIOS         | 1,6,10  |
+|           7 | MP3 PLAYERS          | 1,6,7   |
+|           8 | FLASH                | 1,6,7,8 |
+|           9 | CD PLAYERS           | 1,6,9   |
++-------------+----------------------+---------+
+
+SELECT category_id, name FROM category
+WHERE category_id NOT IN
+  # IDs of all parents:
+  (SELECT parent FROM category WHERE parent IS NOT NULL);
++-------------+--------------+
+| category_id | name         |
++-------------+--------------+
+|           3 | TUBE         |
+|           4 | LCD          |
+|           5 | PLASMA       |
+|           8 | FLASH        |
+|           9 | CD PLAYERS   |
+|          10 | 2 WAY RADIOS |
++-------------+--------------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT name, parent FROM category WHERE name='FLASH'
+  UNION ALL
+  SELECT c.name, c.parent FROM category c JOIN cte
+  ON c.category_id=cte.parent # find parent
+)
+SELECT * FROM cte;
++----------------------+--------+
+| name                 | parent |
++----------------------+--------+
+| FLASH                |      7 |
+| MP3 PLAYERS          |      6 |
+| PORTABLE ELECTRONICS |      1 |
+| ELECTRONICS          |   NULL |
++----------------------+--------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT name, parent, 0 as depth FROM category WHERE name='FLASH'
+  UNION ALL
+  SELECT c.name, c.parent, cte.depth-1 FROM category c JOIN cte
+  ON c.category_id=cte.parent
+)
+SELECT * FROM cte ORDER BY depth;
++----------------------+--------+-------+
+| name                 | parent | depth |
++----------------------+--------+-------+
+| ELECTRONICS          |   NULL |    -3 |
+| PORTABLE ELECTRONICS |      1 |    -2 |
+| MP3 PLAYERS          |      6 |    -1 |
+| FLASH                |      7 |     0 |
++----------------------+--------+-------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT category_id, CAST(name AS CHAR(200)) AS name,
+         CAST(category_id AS CHAR(200)) AS path,
+         0 as depth
+  FROM category WHERE parent IS NULL
+  UNION ALL
+  SELECT c.category_id,
+         CONCAT(REPEAT(' ', cte.depth+1), c.name), # indentation
+         CONCAT(cte.path, ",", c.category_id),
+         cte.depth+1
+  FROM category c JOIN cte ON
+  cte.category_id=c.parent
+)
+SELECT * FROM cte ORDER BY path;
++-------------+-----------------------+---------+-------+
+| category_id | name                  | path    | depth |
++-------------+-----------------------+---------+-------+
+|           1 | ELECTRONICS           | 1       |     0 |
+|           2 |  TELEVISIONS          | 1,2     |     1 |
+|           3 |   TUBE                | 1,2,3   |     2 |
+|           4 |   LCD                 | 1,2,4   |     2 |
+|           5 |   PLASMA              | 1,2,5   |     2 |
+|           6 |  PORTABLE ELECTRONICS | 1,6     |     1 |
+|          10 |   2 WAY RADIOS        | 1,6,10  |     2 |
+|           7 |   MP3 PLAYERS         | 1,6,7   |     2 |
+|           8 |    FLASH              | 1,6,7,8 |     3 |
+|           9 |   CD PLAYERS          | 1,6,9   |     2 |
++-------------+-----------------------+---------+-------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT category_id, name,
+         CAST(category_id AS CHAR(200)) AS path,
+         0 as depth
+  FROM category WHERE name='PORTABLE ELECTRONICS' # sub-tree root
+  UNION ALL
+  SELECT c.category_id,
+         c.name,
+         CONCAT(cte.path, ",", c.category_id),
+         cte.depth+1
+  FROM category c JOIN cte
+  ON cte.category_id=c.parent
+)
+SELECT * FROM cte ORDER BY path;
++-------------+----------------------+-------+-------+
+| category_id | name                 | path  | depth |
++-------------+----------------------+-------+-------+
+|           6 | PORTABLE ELECTRONICS | 6     |     0 |
+|          10 | 2 WAY RADIOS         | 6,10  |     1 |
+|           7 | MP3 PLAYERS          | 6,7   |     1 |
+|           8 | FLASH                | 6,7,8 |     2 |
+|           9 | CD PLAYERS           | 6,9   |     1 |
++-------------+----------------------+-------+-------+
+
+WITH RECURSIVE cte AS
+(
+  SELECT category_id, name, 0 as depth
+  FROM category WHERE name='PORTABLE ELECTRONICS'
+  UNION ALL
+  SELECT c.category_id, c.name, cte.depth+1
+  FROM category c JOIN cte
+  ON cte.category_id=c.parent
+  WHERE cte.depth=0
+)
+SELECT * FROM cte;
++-------------+----------------------+-------+
+| category_id | name                 | depth |
++-------------+----------------------+-------+
+|           6 | PORTABLE ELECTRONICS |     0 |
+|          10 | 2 WAY RADIOS         |     1 |
+|           9 | CD PLAYERS           |     1 |
+|           7 | MP3 PLAYERS          |     1 |
++-------------+----------------------+-------+
+
+CREATE TABLE product(
+        category_id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(20) NOT NULL,
+        parent INT DEFAULT NULL
+);
+
+INSERT INTO product VALUES(1,'ELECTRONICS',NULL),(2,'TELEVISIONS',1),(3,'TUBE',2),
+        (4,'LCD',2),(5,'PLASMA',2),(6,'PORTABLE ELECTRONICS',1),(7,'MP3 PLAYERS',6),(8,'FLASH',7),
+        (9,'CD PLAYERS',6),(10,'2 WAY RADIOS',6);
+
+WITH RECURSIVE cte AS
+(
+  SELECT c.category_id, c.name AS cat_name, c.parent, p.name AS prod_name
+  FROM category c JOIN product p ON c.category_id=p.category_id
+  UNION ALL
+  SELECT c.category_id, c.name, c.parent, cte.prod_name
+  FROM cte JOIN category c ON c.category_id=cte.parent
+)
+SELECT cat_name, COUNT(*) AS prod_in_cat FROM cte
+GROUP BY cat_name;
++----------------------+-------------+
+| cat_name             | prod_in_cat |
++----------------------+-------------+
+| ELECTRONICS          |          10 |
+| TELEVISIONS          |           4 |
+| TUBE                 |           1 |
+| LCD                  |           1 |
+| PLASMA               |           1 |
+| PORTABLE ELECTRONICS |           5 |
+| MP3 PLAYERS          |           2 |
+| FLASH                |           1 |
+| CD PLAYERS           |           1 |
+| 2 WAY RADIOS         |           1 |
++----------------------+-------------+
+
+################################################################################################
+### PART 4  depth-first or breadth-first traversal, transitive closure, cycle avoidance
+################################################################################################
+CREATE TABLE tree (person CHAR(20), parent CHAR(20));
+INSERT INTO tree VALUES
+('Robert I', NULL),
+('Thurimbert', 'Robert I'),
+('Robert II', 'Thurimbert'),
+('Cancor', 'Thurimbert'),
+('Landrade', 'Thurimbert'),
+('Ingramm', 'Thurimbert'),
+('Robert III', 'Robert II'),
+('Chaudegrand', 'Landrade'),
+('Ermengarde', 'Ingramm');
+
+WITH RECURSIVE descendants AS
+(
+SELECT person
+FROM tree
+WHERE person='Thurimbert'
+UNION ALL
+SELECT t.person
+FROM descendants d, tree t
+WHERE t.parent=d.person
+)
+SELECT * FROM descendants;
++-------------+
+| person      |
++-------------+
+| Thurimbert  |
+| Ingramm     |
+| Landrade    |
+| Cancor      |
+| Robert II   |
+| Ermengarde  |
+| Chaudegrand |
+| Robert III  |
++-------------+
+
+WITH RECURSIVE descendants AS
+(
+SELECT person, 1 as level
+FROM tree
+WHERE person='Thurimbert'
+UNION ALL
+SELECT t.person, d.level+1
+FROM descendants d, tree t
+WHERE t.parent=d.person
+)
+SELECT * FROM descendants ORDER BY level;
++-------------+-------+
+| person      | level |
++-------------+-------+
+| Thurimbert  |     1 |
+| Ingramm     |     2 |
+| Landrade    |     2 |
+| Cancor      |     2 |
+| Robert II   |     2 |
+| Ermengarde  |     3 |
+| Chaudegrand |     3 |
+| Robert III  |     3 |
++-------------+-------+
+
+WITH RECURSIVE descendants AS
+(
+SELECT person, CAST(person AS CHAR(500)) AS path
+FROM tree
+WHERE person='Thurimbert'
+UNION ALL
+SELECT t.person, CONCAT(d.path, ',', t.person)
+FROM descendants d, tree t
+WHERE t.parent=d.person
+)
+SELECT * FROM descendants ORDER BY path;
++-------------+---------------------------------+
+| person      | path                            |
++-------------+---------------------------------+
+| Thurimbert  | Thurimbert                      |
+| Cancor      | Thurimbert,Cancor               |
+| Ingramm     | Thurimbert,Ingramm              |
+| Ermengarde  | Thurimbert,Ingramm,Ermengarde   |
+| Landrade    | Thurimbert,Landrade             |
+| Chaudegrand | Thurimbert,Landrade,Chaudegrand |
+| Robert II   | Thurimbert,Robert II            |
+| Robert III  | Thurimbert,Robert II,Robert III |
++-------------+---------------------------------+
+
+CREATE TABLE rockets
+(origin CHAR(20), destination CHAR(20), trip_time INT);
+INSERT INTO rockets VALUES
+('Earth', 'Mars', 2),
+('Mars', 'Jupiter', 3),
+('Jupiter', 'Saturn', 4);
+
+WITH RECURSIVE all_destinations AS
+(
+SELECT destination AS planet
+FROM rockets
+WHERE origin='Earth'
+UNION ALL
+SELECT r.destination
+FROM rockets r, all_destinations d
+WHERE r.origin=d.planet
+)
+SELECT * FROM all_destinations;
++---------+
+| planet  |
++---------+
+| Mars    |
+| Jupiter |
+| Saturn  |
++---------+
+
+INSERT INTO rockets VALUES ('Saturn', 'Earth', 9);
+
+WITH RECURSIVE all_destinations AS
+(
+SELECT destination AS planet
+FROM rockets
+WHERE origin='Earth'
+UNION ALL
+SELECT r.destination
+FROM rockets r, all_destinations d
+WHERE r.origin=d.planet
+)
+SELECT * FROM all_destinations;
+ERROR HY000: cycle detected while executing recursive WITH query
+
+WITH RECURSIVE all_destinations AS
+(
+SELECT destination AS planet, trip_time AS total_time,
+CAST(destination AS CHAR(500)) AS path
+FROM rockets
+WHERE origin='Earth'
+UNION ALL
+SELECT r.destination, d.total_time+r.trip_time,
+CONCAT(d.path, ',', r.destination)
+FROM rockets r, all_destinations d
+WHERE r.origin=d.planet
+AND FIND_IN_SET(r.destination, d.path)=0
+)
+SELECT * FROM all_destinations;
++---------+------------+---------------------------+
+| planet  | total_time | path                      |
++---------+------------+---------------------------+
+| Mars    |          2 | Mars                      |
+| Jupiter |          5 | Mars,Jupiter              |
+| Saturn  |          9 | Mars,Jupiter,Saturn       |
+| Earth   |         18 | Mars,Jupiter,Saturn,Earth |
++---------+------------+---------------------------+
+
+WITH RECURSIVE all_destinations AS
+(
+SELECT destination AS planet, trip_time AS total_time,
+CAST(destination AS CHAR(500)) AS path, 0 AS is_cycle
+FROM rockets
+WHERE origin='Earth'
+UNION ALL
+SELECT r.destination, d.total_time+r.trip_time,
+CONCAT(d.path, ',', r.destination),
+FIND_IN_SET(r.destination, d.path)!=0
+FROM rockets r, all_destinations d
+WHERE r.origin=d.planet
+AND is_cycle=0
+)
+SELECT * FROM all_destinations;
++---------+------------+--------------------------------+----------+
+| planet  | total_time | path                           | is_cycle |
++---------+------------+--------------------------------+----------+
+| Mars    |          2 | Mars                           |        0 |
+| Jupiter |          5 | Mars,Jupiter                   |        0 |
+| Saturn  |          9 | Mars,Jupiter,Saturn            |        0 |
+| Earth   |         18 | Mars,Jupiter,Saturn,Earth      |        0 |
+| Mars    |         20 | Mars,Jupiter,Saturn,Earth,Mars |        1 |
++---------+------------+--------------------------------+----------+
+
+drop database cte_st;

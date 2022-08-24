@@ -18,6 +18,7 @@
 #include "share/table/ob_table_rpc_struct.h"
 #include "storage/ob_dml_param.h"
 #include "share/schema/ob_table_param.h"
+#include "common/row/ob_row_iterator.h"
 namespace oceanbase
 {
 namespace table
@@ -40,6 +41,8 @@ using table::ObITableBatchOperationResult;
 using table::ObTableQuery;
 using table::ObTableQueryResult;
 using table::ObTableQuerySyncResult;
+using table::ObTableTTLOperation;
+using table::ObTableTTLOperationResult;
 class ObTableApiProcessorBase;
 class ObTableService;
 class ObTableApiRowIterator;
@@ -57,7 +60,8 @@ protected:
     uint64_t table_id_;
     uint64_t partition_id_;
     int64_t timeout_ts_;
-    ObTableApiProcessorBase *processor_;
+    transaction::ObTransDesc *trans_desc_; 
+
     common::ObArenaAllocator *allocator_;
     bool returning_affected_rows_;
     table::ObTableEntityType entity_type_;
@@ -68,7 +72,7 @@ protected:
         :table_id_(common::OB_INVALID_ID),
          partition_id_(common::OB_INVALID_ID),
          timeout_ts_(0),
-         processor_(nullptr),
+         trans_desc_(nullptr),
          allocator_(nullptr),
          returning_affected_rows_(false),
          entity_type_(table::ObTableEntityType::ET_DYNAMIC),
@@ -86,7 +90,7 @@ public:
     columns_type_.reset();
   }
   void init_param(int64_t timeout_ts,
-                  ObTableApiProcessorBase *processor,
+                  transaction::ObTransDesc &trans_desc, 
                   common::ObArenaAllocator *allocator,
                   bool returning_affected_rows,
                   table::ObTableEntityType entity_type,
@@ -95,7 +99,7 @@ public:
                   bool returning_rowkey = false)
   {
     param_.timeout_ts_ = timeout_ts;
-    param_.processor_ = processor;
+    param_.trans_desc_ = &trans_desc;
     param_.allocator_ = allocator;
     param_.returning_affected_rows_ = returning_affected_rows;
     param_.entity_type_ = entity_type;
@@ -158,6 +162,35 @@ private:
   bool is_query_sync_;
 };
 
+class ObTableTTLDeleteRowIterator : public common::ObNewRowIterator
+{
+public:
+  ObTableTTLDeleteRowIterator():
+    is_inited_(false), max_version_(0), time_to_live_ms_(0),
+    limit_del_rows_(-1), cur_del_rows_(0), cur_version_(0), cur_rowkey_(), cur_qualifier_(),
+    max_version_cnt_(0), ttl_cnt_(0), scan_cnt_(0), is_last_row_ttl_(true) {}
+  ~ObTableTTLDeleteRowIterator() {}
+  int init(const ObTableTTLOperation &ttl_operation);
+  virtual int get_next_row(ObNewRow*& row);
+  void set_scan_result(common::ObNewRowIterator *scan_result) { scan_result_ = scan_result; }
+  virtual void reset() override;
+public:
+  bool is_inited_;
+  common::ObNewRowIterator *scan_result_;
+  int32_t max_version_;
+  int64_t time_to_live_ms_; // ttl in millisecond
+  uint64_t limit_del_rows_; // maximum delete row
+  uint64_t cur_del_rows_; // current delete row
+  uint64_t cur_version_;
+  ObString cur_rowkey_; // K
+  ObString cur_qualifier_; // Q
+  uint64_t max_version_cnt_;
+  uint64_t ttl_cnt_;
+  uint64_t scan_cnt_;
+  bool is_last_row_ttl_; // false indicate row del by max version
+};
+
+
 struct ObTableServiceQueryCtx: public ObTableServiceGetCtx
 {
 public:
@@ -179,6 +212,19 @@ public:
   table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
                                                             table::ObTableQueryResult &one_result);
   void destroy_result_iterator(storage::ObPartitionService *part_service);
+};
+
+struct ObTableServiceTTLCtx : public ObTableServiceGetCtx
+{
+public:
+  ObTableServiceTTLCtx(common::ObArenaAllocator &alloc): ObTableServiceGetCtx(alloc) {}
+  void destroy_scan_iterator(storage::ObPartitionService *part_service);
+
+  void reset_ttl_ctx(storage::ObPartitionService *part_service)
+  {
+    destroy_scan_iterator(part_service);
+    ObTableServiceGetCtx::reset_get_ctx();
+  }
 };
 
 /// table service
@@ -211,9 +257,10 @@ public:
   int multi_replace(ObTableServiceCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
   int multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
 
+  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query, table::ObTableQueryResult &one_result,
+      table::ObTableQueryResultIterator *&query_result, bool for_update = false);
   int batch_execute(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
-  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
-                    table::ObTableQueryResult &one_result, table::ObTableQueryResultIterator *&query_result);
+  int execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result);
 private:
   static int cons_rowkey_infos(const share::schema::ObTableSchema &table_schema,
                                common::ObIArray<uint64_t> *column_ids,
@@ -310,8 +357,14 @@ private:
                             uint64_t index_id,
                             int32_t limit,
                             int32_t offset,
-                            storage::ObTableScanParam &scan_param);
+                            storage::ObTableScanParam &scan_param,
+                            bool for_update = false);
   int check_htable_query_args(const ObTableQuery &query);
+  int check_index_supported(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const share::schema::ObSimpleTableSchemaV2 *table_schema,
+                            uint64_t index_id,
+                            bool &is_supported);
+
 private:
   int fill_new_entity(
       bool returning_rowkey,
@@ -323,6 +376,7 @@ private:
   int execute_increment_by_update(ObTableServiceGetCtx &ctx,
                                   const ObTableOperation &table_operation,
                                   ObTableOperationResult &result);
+  int generate_ttl_query(const ObTableTTLOperation &ttl_operation, ObTableServiceCtx &ctx, ObTableQuery &query);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableService);

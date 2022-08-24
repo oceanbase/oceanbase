@@ -44,7 +44,7 @@ public:
 
   virtual OperatorOpenOrder get_operator_open_order() const override final
   {
-    return OPEN_SELF_ONLY;
+    return OPEN_SELF_FIRST;
   }
 
   int prepare_rescan_params();
@@ -97,7 +97,6 @@ private:
   int add_pseudo_column(ObExpr* pseudo_expr, ObConnectByPseudoColumn column_type);
 
   int init();
-  int open_right_child();
 
 public:
   ObConnectByOpBFSPump connect_by_pump_;
@@ -115,7 +114,6 @@ private:
   bool is_match_;  // whether there is a child, for calc connect_by_isleaf
   bool is_cycle_;  // whether part of a cycle, for calc connect_by_iscycle
   bool is_inited_;
-  bool open_right_child_;
   bool need_return_;
 };
 

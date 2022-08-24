@@ -178,9 +178,11 @@ typedef struct _PLParseInfo {
 
 #define MAX_QUESTION_MARK 128
 
-typedef struct _ObQuestionMarkCtx {
-  char* name_[MAX_QUESTION_MARK];
+typedef struct _ObQuestionMarkCtx
+{
+  char **name_;
   int count_;
+  int capacity_;
   bool by_ordinal_;
   bool by_name_;
 } ObQuestionMarkCtx;

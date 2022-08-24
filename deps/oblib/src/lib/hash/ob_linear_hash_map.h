@@ -1331,17 +1331,10 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::load_factor_ctrl_(const uint64_t se
   int err = ES_INVALID;
   // Refresh load factor in 1/LOAD_FCT_REFR_LMT odd.
 
-  /* There are bad cases. Deprecated. */
-  // It's based on seed, which is key's hash value.
-  // if (0 == (seed % LOAD_FCT_REFR_LMT)) {
-  //  load_factor_ = (double)do_cnt_() / (double)bkt_cnt_();
-  //}
-
-  /* Use counter instead. */
   UNUSED(seed);
   int64_t thread_id = get_thread_id_();
   if (cnter_.op_and_test_lmt(LOAD_FCT_REFR_LMT, thread_id)) {
-    load_factor_ = static_cast<double>(do_cnt_()) / static_cast<double>(bkt_cnt_());
+    load_factor_ = get_load_factor();
   }
 
   if (load_factor_ > load_factor_u_limit_) {
@@ -1406,32 +1399,45 @@ int ObLinearHashMap<Key, Value, MemMgrTag>::shrink_()
 {
   int ret = ES_SUCCESS;
   if (es_trylock_()) {
+    uint64_t bucket_cnt = bkt_cnt_();
+    uint64_t cnt = load_factor_ * bucket_cnt;
+    uint64_t target_bucket_cnt = cnt / load_factor_l_limit_ + 1;
     uint64_t L = 0;
     uint64_t p = 0;
     load_Lp_(L, p);
-    if (L == 0 && p == 0) {
-      ret = ES_REACH_LIMIT;
-    } else if (L == foreach_L_lmt_ && p == 0) {
-      // Give up so that for_each() has at least N*(2^foreach_L_lmt_) buckets to work with.
-      ret = ES_REACH_FOREACH_LIMIT;
-    } else {
-      uint64_t newL = (p == 0) ? (L - 1) : L;
-      uint64_t newp = (p == 0) ? ((L0_bkt_n_ << newL) - 1) : (p - 1);
-      Bucket* src_bkt = NULL;
-      Bucket* dst_bkt = NULL;
-      // Shrink.
-      load_shrink_d_seg_bkts_(newL, newp, src_bkt, dst_bkt);
-      if (ES_SUCCESS == (ret = unite_shrink_d_seg_bkts_(src_bkt, dst_bkt))) {
-        set_Lp_(newL, newp);
-        unload_shrink_d_seg_bkts_(src_bkt, dst_bkt, true);
-        // Evict empty seg.
-        if (seg_bkt_idx_((L0_bkt_n_ << newL) + newp) == 0) {
-          des_seg_(wait_evict_haz_seg_(dir_[seg_idx_((L0_bkt_n_ << newL) + newp)]));
-        }
+    uint64_t newL = L;
+    uint64_t newp = p;
+    uint64_t shrink_cnt = 0;
+    // shrink bkt_cnt / 16 bucket at most, 1 bucket at least.
+    do {
+      if (newL == 0 && newp == 0) {
+        ret = ES_REACH_LIMIT;
+        break;
+      } else if (newL == foreach_L_lmt_ && newp == 0) {
+        // Give up so that for_each() has at least N*(2^foreach_L_lmt_) buckets to work with.
+        ret = ES_REACH_FOREACH_LIMIT;
+        break;
       } else {
-        unload_shrink_d_seg_bkts_(src_bkt, dst_bkt, false);
+        newL = (newp == 0) ? (newL - 1) : newL;
+        newp = (newp == 0) ? ((L0_bkt_n_ << newL) - 1) : (newp - 1);
+        Bucket* src_bkt = nullptr;
+        Bucket* dst_bkt = nullptr;
+        // Shrink.
+        load_shrink_d_seg_bkts_(newL, newp, src_bkt, dst_bkt);
+        if (ES_SUCCESS == (ret = unite_shrink_d_seg_bkts_(src_bkt, dst_bkt))) {
+          set_Lp_(newL, newp);
+          unload_shrink_d_seg_bkts_(src_bkt, dst_bkt, true);
+          // Evict empty seg.
+          if (seg_bkt_idx_((L0_bkt_n_ << newL) + newp) == 0) {
+            des_seg_(wait_evict_haz_seg_(dir_[seg_idx_((L0_bkt_n_ << newL) + newp)]));
+          }
+        } else {
+          unload_shrink_d_seg_bkts_(src_bkt, dst_bkt, false);
+        }
+        ++shrink_cnt;
       }
-    }
+    } while (target_bucket_cnt + shrink_cnt < bucket_cnt && shrink_cnt < (bucket_cnt >> 4));
+    load_factor_ = (static_cast<double>(cnt) / static_cast<double>(bucket_cnt - shrink_cnt));
     es_unlock_();
   } else {
     ret = ES_TRYLOCK_FAILED;

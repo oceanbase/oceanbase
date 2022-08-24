@@ -60,6 +60,9 @@ private:
   int wrap_sub_select(ObInsertStmt& stmt);
   int wrap_value_vector(ObInsertStmt& stmt);
   int wrap_nullif_expr(ObSysFunRawExpr& expr);
+  int visit_query_ref_expr(ObQueryRefRawExpr &expr,
+                           const common::ObObjType dest_type,
+                           const bool is_same_need);
 
 private:
   int32_t current_level_;

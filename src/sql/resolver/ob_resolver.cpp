@@ -593,6 +593,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_CREATE_TABLEGROUP:
       case T_SHOW_TRIGGERS:
       case T_SHOW_RESTORE_PREVIEW:
+      case T_SHOW_QUERY_RESPONSE_TIME:
       case T_SHOW_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -856,6 +857,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       }
       case T_DROP_RESTORE_POINT: {
         REGISTER_STMT_RESOLVER(DropRestorePoint);
+        break;
+      }
+      case T_TABLE_TTL: {
+        REGISTER_STMT_RESOLVER(TableTTL);
         break;
       }
       default: {

@@ -406,6 +406,7 @@ TEST_F(TestObTransLog, prepare_log_init_invalid)
   const uint64_t cluster_id = 1000;
   PartitionLogInfoArray partition_log_info;
   const int64_t checkpoint = 1000;
+  const uint64_t prev_record_log_id = 0;
 
   ObString trace_id = "trance_id=xxx";
   ObElrTransInfoArray arr;
@@ -428,7 +429,8 @@ TEST_F(TestObTransLog, prepare_log_init_invalid)
       arr,
       can_elr,
       trace_id,
-      xid);
+      xid,
+      prev_record_log_id);
   EXPECT_FALSE(prepare_log.is_valid());
 
   // create an object of ObTransID
@@ -455,7 +457,8 @@ TEST_F(TestObTransLog, prepare_log_init_invalid)
       arr,
       can_elr,
       trace_id,
-      xid);
+      xid,
+      prev_record_log_id);
   EXPECT_FALSE(prepare_log1.is_valid());
 
   log_type = OB_LOG_TRANS_PREPARE;
@@ -476,7 +479,8 @@ TEST_F(TestObTransLog, prepare_log_init_invalid)
       arr,
       can_elr,
       trace_id,
-      xid);
+      xid,
+      prev_record_log_id);
   EXPECT_TRUE(prepare_log2.is_valid());
 }
 // test the serialization and deserialization of ObTransPrepareLog
@@ -493,6 +497,7 @@ TEST_F(TestObTransLog, trans_prepare_log_encode_decode)
   ObPartitionArray participants;
   PartitionLogInfoArray partition_log_info;
   const int64_t checkpoint = 1000;
+  const uint64_t prev_record_log_id = 0;
   participants.push_back(partition_key);
 
   ObRedoLogIdArray redo_log_ids;
@@ -528,7 +533,8 @@ TEST_F(TestObTransLog, trans_prepare_log_encode_decode)
       arr,
       can_elr,
       trace_id,
-      xid);
+      xid,
+      prev_record_log_id);
   EXPECT_TRUE(prepare_log.is_valid());
 
   // serialization of ObTransPrepareLog
@@ -837,6 +843,7 @@ TEST_F(TestObTransLog, sp_commit_log_init_invalid)
   EXPECT_EQ(OB_SUCCESS, redo_log_ids.push_back(2));
   EXPECT_EQ(OB_SUCCESS, redo_log_ids.push_back(3));
   const uint64_t tenant_id = 100;
+  const uint64_t prev_record_log_id = 0;
   const ObString trace_id = "trace_id=xxx";
   ObStartTransParam parms;
   parms.set_access_mode(ObTransAccessMode::READ_ONLY);
@@ -860,7 +867,8 @@ TEST_F(TestObTransLog, sp_commit_log_init_invalid)
           100,
           arr,
           can_elr,
-          trace_id));
+          trace_id,
+          prev_record_log_id));
 
   // create an object of ObTransID
   ObAddr observer(TestObTransLog::IP_TYPE, TestObTransLog::LOCAL_IP, TestObTransLog::PORT);
@@ -880,7 +888,8 @@ TEST_F(TestObTransLog, sp_commit_log_init_invalid)
           100,
           arr,
           can_elr,
-          trace_id));
+          trace_id,
+          prev_record_log_id));
 
   log_type = OB_LOG_SP_TRANS_COMMIT;
   EXPECT_EQ(OB_SUCCESS,
@@ -897,7 +906,8 @@ TEST_F(TestObTransLog, sp_commit_log_init_invalid)
           100,
           arr,
           can_elr,
-          trace_id));
+          trace_id,
+          prev_record_log_id));
 
   EXPECT_TRUE(commit_log.is_valid());
 }
@@ -923,6 +933,7 @@ TEST_F(TestObTransLog, sp_trans_commit_log_encode_decode)
   const ObString trace_id = "trace_id=xxx";
   ObElrTransInfoArray arr;
   const bool can_elr = false;
+  const uint64_t prev_record_log_id = 0;
 
   ObSpTransCommitLog commit_log;
   ASSERT_EQ(OB_SUCCESS,
@@ -939,7 +950,8 @@ TEST_F(TestObTransLog, sp_trans_commit_log_encode_decode)
           100,
           arr,
           can_elr,
-          trace_id));
+          trace_id,
+          prev_record_log_id));
   ASSERT_TRUE(commit_log.is_valid());
 
   // serialization of ObSpTransCommitLog

@@ -1374,6 +1374,7 @@ int get_sys_tenant_alter_system_priv(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
   } else if (OB_SYS_TENANT_ID != session_priv.tenant_id_ &&
+             stmt::T_FLUSH_CACHE != basic_stmt->get_stmt_type() &&
              stmt::T_ALTER_SYSTEM_SET_PARAMETER != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation", K(ret), "stmt type", basic_stmt->get_stmt_type());
@@ -2320,8 +2321,9 @@ int ObPrivilegeCheck::can_do_operation_on_db(const ObSessionPrivInfo& session_pr
         db_name.length(),
         db_name.ptr());
   } else if (0 == db_name.case_compare(OB_INFORMATION_SCHEMA_NAME) ||
-             0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME) || 0 == db_name.case_compare(OB_MYSQL_SCHEMA_NAME) ||
-             0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
+             0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME)
+             //|| 0 == db_name.case_compare(OB_MYSQL_SCHEMA_NAME)
+             || 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
     if (session_priv.tenant_id_ != OB_SYS_TENANT_ID) {
       if ((0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME)) &&
           ((0 == session_priv.user_name_.compare(OB_RESTORE_USER_NAME)) ||

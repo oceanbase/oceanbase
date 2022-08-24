@@ -193,6 +193,7 @@ private:
 
 DEF_SIMPLE_CMD_RESOLVER(ObEnableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDisableSqlThrottleResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);
 
 #undef DEF_SIMPLE_CMD_RESOLVER
 

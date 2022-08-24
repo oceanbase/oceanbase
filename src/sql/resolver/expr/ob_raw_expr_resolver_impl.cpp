@@ -2469,6 +2469,10 @@ int ObRawExprResolverImpl::process_in_or_not_in_node(const ParseNode* node, ObRa
         ObItemType expr_type = (T_OP_IN == node->type_) ? T_OP_EQ : T_OP_NE;
         in_expr->set_expr_type(expr_type);
         expr = in_expr;
+        if (T_OP_ROW != sub_expr1->get_expr_type()) {
+          ctx_.op_exprs_->push_back(in_expr);
+          LOG_DEBUG("ctx_.op_exprs_ push", K(in_expr->get_param_count()), K(*in_expr));
+        }
       }
     }
   }

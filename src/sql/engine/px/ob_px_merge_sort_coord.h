@@ -82,6 +82,9 @@ private:
 
 class ObPxMergeSortCoord : public ObPxCoord, public ObSortableTrait {
 public:
+  OB_UNIS_VERSION_V(2);
+
+public:
   class ObPxMergeSortCoordCtx;
 
 public:

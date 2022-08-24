@@ -181,6 +181,7 @@ public:
     }
     return ret;
   }
+  TO_STRING_KV(KP_(pg_mgr), K_(partitions));
 
 private:
   const ObPGMgr* pg_mgr_;

@@ -156,7 +156,7 @@ ObExecContext::ObExecContext(ObIAllocator& allocator)
       temp_ctx_(),
       gi_pruning_info_(),
       sched_info_(),
-      lob_fake_allocator_(nullptr),
+      convert_allocator_(nullptr),
       root_op_(NULL),
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
@@ -217,7 +217,7 @@ ObExecContext::ObExecContext()
       temp_ctx_(),
       gi_pruning_info_(),
       sched_info_(),
-      lob_fake_allocator_(nullptr),
+      convert_allocator_(nullptr),
       root_op_(NULL),
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
@@ -252,9 +252,9 @@ ObExecContext::~ObExecContext()
   }
   clean_resolve_ctx();
   sqc_handler_ = nullptr;
-  if (OB_LIKELY(NULL != lob_fake_allocator_)) {
-    DESTROY_CONTEXT(lob_fake_allocator_);
-    lob_fake_allocator_ = NULL;
+  if (OB_LIKELY(NULL != convert_allocator_)) {
+    DESTROY_CONTEXT(convert_allocator_);
+    convert_allocator_ = NULL;
   }
   iters_.reset();
 }
@@ -797,11 +797,11 @@ int ObExecContext::get_gi_task_map(GIPrepareTaskMap*& gi_task_map)
   return ret;
 }
 
-int ObExecContext::get_lob_fake_allocator(ObArenaAllocator*& allocator)
+int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
 {
   int ret = OB_SUCCESS;
   allocator = NULL;
-  if (OB_ISNULL(lob_fake_allocator_)) {
+  if (OB_ISNULL(convert_allocator_)) {
     if (OB_ISNULL(my_session_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("session is null", K(ret));
@@ -811,13 +811,13 @@ int ObExecContext::get_lob_fake_allocator(ObArenaAllocator*& allocator)
           .set_mem_attr(my_session_->get_effective_tenant_id(),
               common::ObModIds::OB_SQL_EXPR_CALC,
               common::ObCtxIds::DEFAULT_CTX_ID);
-      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(lob_fake_allocator_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(convert_allocator_, param))) {
         SQL_ENG_LOG(WARN, "create entity failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    allocator = &lob_fake_allocator_->get_arena_allocator();
+    allocator = &convert_allocator_->get_arena_allocator();
   }
 
   return ret;

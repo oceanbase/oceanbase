@@ -278,6 +278,9 @@ int ObConnectByPumpBFS::init(const ObConnectByWithIndex& connect_by, common::ObE
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(expr_ctx) || OB_ISNULL(expr_ctx->my_session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr_ctx or session is null", K(ret));
   } else if (OB_UNLIKELY(2 != connect_by.get_child_num())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid child num", K(ret));
@@ -289,6 +292,8 @@ int ObConnectByPumpBFS::init(const ObConnectByWithIndex& connect_by, common::ObE
   } else if (OB_FAIL(alloc_shallow_row_projector(*left_op))) {
     LOG_WARN("fail to alloc shallow row projector", K(ret));
   } else {
+    uint64_t tenant_id = expr_ctx->my_session_->get_effective_tenant_id();
+    allocator_.set_tenant_id(tenant_id);
     pump_row_desc_ = connect_by.get_pump_row_desc();
     pseudo_column_row_desc_ = connect_by.get_pseudo_column_row_desc();
     connect_by_prior_exprs_ = connect_by.get_connect_by_prior_exprs();

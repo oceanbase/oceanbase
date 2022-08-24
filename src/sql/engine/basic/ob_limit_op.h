@@ -68,7 +68,7 @@ private:
   int64_t total_cnt_;
   bool is_percent_first_;
 
-  ObChunkDatumStore::LastStoredRow<> pre_sort_columns_;
+  ObChunkDatumStore::LastStoredRow pre_sort_columns_;
 };
 
 }  // end namespace sql

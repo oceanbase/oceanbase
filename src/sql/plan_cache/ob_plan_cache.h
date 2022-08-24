@@ -197,7 +197,8 @@ public:
   int cache_evict_all_pl();
   // evict plan, adjust mem between hwm and lwm
   int cache_evict();
-  // evict plan whose merged version is expired
+  int cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql_id);
+  //evict plan whose merged version is expired
   int evict_expired_plan();
   bool is_valid()
   {

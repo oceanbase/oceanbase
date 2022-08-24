@@ -33,6 +33,8 @@ $ docker logs obstandalone | tail -1
 boot success!
 ```
 
+**WARNING:** the container will not exit while the process of observer exits.
+
 ## Connect to an OceanBase instance
 
 oceanbase-standalone image contains obclient (OceanBase Database client) and the default connection script `ob-mysql`.
@@ -87,3 +89,17 @@ oceanbase-standalone image installs the Sysbench tool by default. And the Sysben
 docker exec -it obstandalone obd test sysbench [OB_CLUSTER_NAME]
 ```
 
+## Mount Volumn
+You can use `-v /host/path:/container/path` parameter in docker `run` command to save data in host os if you want to persistence the data of a container.
+
+The docker image `oceanbase-ce` save the data to /root/ob directory default. You can not start a new docker image if you only bind the /root/ob directory, because the docker image oceanbase-ce use the [obd](https://github.com/oceanbase/obdeploy) to manage database clusters and there is no information about the database cluster after a new docker image started. So you should bind both the /root/ob and /root/.obd directory.
+
+Below is an example.
+
+```bash
+docker run -d -p 2881:2881 -v $PWD/ob:/root/ob -v $PWD/obd:/root/.obd --name oceanbase oceanbase/oceanbase-ce
+```
+
+Note that you should use your own path.
+
+You can view more information about `docker -v` at [docker volumn](https://docs.docker.com/storage/volumes/).

@@ -288,7 +288,7 @@ int ObStorageLogReader::get_next_log(
       }
     } else if (OB_FAIL(entry.check_data_integrity(log_buffer_.get_data() + log_buffer_.get_position()))) {
       ret = OB_LAST_LOG_RUINNED;  // overwrite ret on purpose
-      STORAGE_REDO_LOG(ERROR, "check_data_integrity failed", K(ret));
+      STORAGE_REDO_LOG(ERROR, "check_data_integrity failed", K(ret), K(file_id_), K(last_log_seq_), K(pos_));
     }
   }
 
@@ -485,7 +485,7 @@ int ObStorageLogReader::get_next_entry(ObLogEntry& entry)
     STORAGE_REDO_LOG(ERROR, "log entry deserialize error", K(ret));
   } else if (OB_FAIL(entry.check_header_integrity())) {
     ret = OB_LAST_LOG_RUINNED;  // overwrite ret on purpose
-    STORAGE_REDO_LOG(ERROR, "log entry check_header_integrity failed", K(ret));
+    STORAGE_REDO_LOG(ERROR, "log entry check_header_integrity failed", K(ret), K(file_id_), K(last_log_seq_), K(pos_));
   }
   return ret;
 }

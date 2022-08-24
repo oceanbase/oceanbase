@@ -32,6 +32,16 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0", "[0M,)", "size of the data file. Range: [0, +∞)",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_next, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend step. Range: [0, +∞)",
+    ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_maxsize, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend max size. Range: [0, +∞)",
+    ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_upper_bound_percentage, OB_CLUSTER_PARAMETER, "90", "[5,99]",
+    "the percentage of disk space usage upper bound to trigger datafile extend. Range: [5,99] in integer",
+    ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_lower_bound_percentage, OB_CLUSTER_PARAMETER, "10", "[5,99]",
+    "the percentage of disk space usage lower bound to trigger datafile shrink. Range: [5,99] in integer",
+    ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "90", "[5,99]",
     "the percentage of disk space used by the data files. Range: [5,99] in integer",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -518,7 +528,7 @@ DEF_TIME(get_leader_candidate_rpc_timeout, OB_CLUSTER_PARAMETER, "9s", "[2s, 180
     "the time during a get leader candidate rpc request "
     "is permitted to execute before it is terminated. Range: [2s, 180s]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.3", "the min observer version",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.5", "the min observer version",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True",
     "specifies whether DDL operation is turned on. "
@@ -1006,6 +1016,10 @@ DEF_BOOL(enable_election_group, OB_CLUSTER_PARAMETER, "True",
     "specifies whether election group is turned on. "
     "Value:  True:turned on;  False: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_trans_ctx_size_limit, OB_TENANT_PARAMETER, "True",
+    "specifies whether trans ctx size limit is turned on or not. "
+    "Value: True:turned on;  False: turned off",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // Tablet config
 DEF_CAP_WITH_CHECKER(tablet_size, OB_CLUSTER_PARAMETER, "128M", common::ObConfigTabletSizeChecker,
@@ -1270,7 +1284,7 @@ DEF_BOOL(module_test_trx_fake_commit, OB_TENANT_PARAMETER, "false", "module test
 
 DEF_CAP(sql_work_area, OB_TENANT_PARAMETER, "1G", "[10M,)", "Work area memory limitation for tenant",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_CAP(_max_trx_size, OB_CLUSTER_PARAMETER, "100G", "[1M,)",
+DEF_CAP(_max_trx_size, OB_CLUSTER_PARAMETER, "100G", "[0B,)",
     "the limit for memstore memory used per partition involved in each database transaction",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(__easy_memory_limit, OB_CLUSTER_PARAMETER, "4G", "[1G,)",
@@ -1317,7 +1331,7 @@ DEF_STR(backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_dest_option",
 DEF_STR(backup_backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_backup_dest_option",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(backup_log_archive_option, OB_CLUSTER_PARAMETER, "OPTIONAL",
+DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(backup_log_archive_option, OB_CLUSTER_PARAMETER, "OPTIONAL COMPRESSION=ENABLE",
     common::ObConfigLogArchiveOptionsChecker, "backup log archive option, support MANDATORY/OPTIONAL, COMPRESSION",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -1545,3 +1559,29 @@ DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
     "specifies whether inner sql uses px. "
     "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// ttl
+DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "[0:00:00, 24:00:00]", common::ObTTLDutyDurationChecker,
+    "ttl background task working time duration"
+    "begin_time or end_time in Range [0:00:00, 24:00:00]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]",
+    "the time to recycle ttl history. Range: [1d, 180d]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
+    "specifies whether ttl task is enbled",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// query response time
+DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
+    "Enable or disable QUERY_RESPONSE_TIME statistics collecting"
+    "The default value is False. Value: TRUE: turned on FALSE: turned off",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
+    "Flush QUERY_RESPONSE_TIME table and re-read query_response_time_range_base"
+    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
+    "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
+    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE)); 
+

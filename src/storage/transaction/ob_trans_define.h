@@ -69,10 +69,24 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
-// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
-static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+// The redo log id can use at least 128KB storage space
+static int64_t OB_MIN_REDO_LOG_SERIALIZE_SIZE = 131072;
 
-class ObTransErrsim {
+// redo_log + participants + undo_actions can use MAX_VARCHAR_LENGTH-10KB storage space
+static int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_VARCHAR_LENGTH - 10 * 1024;
+
+// The participants and undo actions share the last storage space
+static int64_t OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
+
+struct UnuseUndoSerializeSize {
+  UnuseUndoSerializeSize()
+  {
+    UNUSED(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE);
+  }
+};
+
+class ObTransErrsim
+{
 public:
   static inline bool is_memory_errsim()
   {
@@ -1672,6 +1686,7 @@ public:
   int merge_participants_pla();
   int merge_participants(const common::ObPartitionArray& participants);
   int merge_participants_pla(const common::ObPartitionLeaderArray& participant_pla);
+  int check_participants_size();
   const common::ObPartitionArray& get_participants() const
   {
     return participants_;
@@ -3536,6 +3551,7 @@ public:
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
     clear_log_base_ts_ = 0;
+    prev_checkpoint_id_ = 0;
   }
   void destroy()
   {
@@ -3547,7 +3563,7 @@ public:
       K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),
       K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),
       K_(stmt_info), K_(min_log_ts), K_(min_log_id), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
-      K_(prepare_log_timestamp));
+      K_(prepare_log_timestamp), K_(prev_checkpoint_id));
   ObTransTableStatusInfo trans_table_info_;
   common::ObPartitionKey partition_;
   ObStartTransParam trans_param_;
@@ -3582,6 +3598,7 @@ public:
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
   int64_t clear_log_base_ts_;
+  uint64_t prev_checkpoint_id_;
 };
 
 struct CtxInfo final {

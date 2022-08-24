@@ -3159,6 +3159,9 @@ int ObScheTransCtx::xa_one_phase_end_trans(const bool is_rollback)
         ret = OB_TRANS_XA_RETRY;
       }
     }
+  } else if (!is_rollback && trans_desc_->need_rollback()) {
+    ret = OB_TRANS_NEED_ROLLBACK;
+    TRANS_LOG(WARN, "transaction need rollback", K(ret), K(*this));
   } else {
     if (OB_FAIL(xa_one_phase_end_trans_(is_rollback))) {
       TRANS_LOG(WARN, "xa one phase end trans failed", K(ret), K(is_rollback), K(*this));
@@ -3377,6 +3380,9 @@ int ObScheTransCtx::xa_sync_status_response(const ObTransDesc& trans_desc, const
     tmp_trans_desc_->set_stmt_min_sql_no(trans_desc.get_stmt_min_sql_no());
     sql_no_ = trans_desc.get_sql_no();
     tmp_trans_desc_->get_trans_param() = trans_desc.get_trans_param();
+    if (trans_desc.need_rollback()) {
+      tmp_trans_desc_->set_need_rollback();
+    }
     if (OB_FAIL(tmp_trans_desc_->merge_participants(trans_desc.get_participants()))) {
       TRANS_LOG(WARN, "merge participants failed", K(ret));
     } else if (OB_FAIL(tmp_trans_desc_->merge_participants_pla(trans_desc.get_participants_pla()))) {
@@ -3500,6 +3506,7 @@ int ObScheTransCtx::save_trans_desc_(const ObTransDesc& trans_desc)
     void* ptr = NULL;
     if (OB_UNLIKELY(NULL == (ptr = ob_malloc(sizeof(ObTransDesc), "ObScheTransCtx")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "fail to alloc memory", K(ret), K(*this));
     } else {
       trans_desc_ = new (ptr) ObTransDesc;
     }

@@ -63,7 +63,12 @@ int ObTenantMetaMemoryMgr::try_update_tenant_info(const uint64_t tenant_id, cons
     int64_t memory_percentage = 0;
     // tenant_schema does not need to check full schema
     if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      if (OB_TENANT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("tenant is not exist, skip this task", K(tenant_id), K(schema_version));
+      } else {
+        LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      }
     } else if (OB_FAIL(
                    schema_guard.get_tenant_meta_reserved_memory_percentage(tenant_id, allocator, memory_percentage))) {
       if (OB_ENTRY_NOT_EXIST == ret) {

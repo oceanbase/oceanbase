@@ -53,6 +53,7 @@ int ObExprJsonMergePreserve::calc_result_typeN(ObExprResType& type,
   UNUSED(type_ctx);
   INIT_SUCC(ret);
   type.set_json();
+  type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   bool is_result_null = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_result_null && i < param_num; i++) {
     if (types_stack[0].get_type() == ObNullType) {

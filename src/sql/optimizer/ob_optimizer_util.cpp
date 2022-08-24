@@ -1998,7 +1998,80 @@ int ObOptimizerUtil::get_subquery_id(const ObDMLStmt* upper_stmt, const ObSelect
   return ret;
 }
 
-int ObOptimizerUtil::is_table_on_null_side(const ObDMLStmt* stmt, uint64_t table_id, bool& is_on_null_side)
+/**
+ * @brief
+ *  given source and target table id, try to find its lowest common joined table
+ *  then check if the source table is on the null side of the joined table
+ * @param stmt
+ * @param source_table_id
+ * @param target_table_id
+ * @param is_on_null_side
+ * @return int
+ */
+int ObOptimizerUtil::is_table_on_null_side_of_parent(
+    const ObDMLStmt *stmt, uint64_t source_table_id, uint64_t target_table_id, bool &is_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  is_on_null_side = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("upper_stmt is null", K(ret));
+  } else {
+    JoinedTable *common_joined_table = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && OB_ISNULL(common_joined_table) && i < stmt->get_joined_tables().count(); ++i) {
+      JoinedTable *joined_table = stmt->get_joined_tables().at(i);
+      bool is_source_in_joined_table = false;
+      if (OB_ISNULL(joined_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(
+                     find_common_joined_table(joined_table, source_table_id, target_table_id, common_joined_table))) {
+        LOG_WARN("failed to find target joined table", K(ret));
+      } else if (common_joined_table != NULL &&
+                 OB_FAIL(is_table_on_null_side_recursively(
+                     common_joined_table, source_table_id, is_source_in_joined_table, is_on_null_side))) {
+        LOG_WARN("Check for generated table on null side recursively fails", K(is_on_null_side), K(i), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::find_common_joined_table(
+    JoinedTable *joined_table, uint64_t source_table_id, uint64_t target_table_id, JoinedTable *&target_joined_table)
+{
+  int ret = OB_SUCCESS;
+  TableItem *left_table = NULL;
+  TableItem *right_table = NULL;
+  if (OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(left_table = joined_table->left_table_) || OB_ISNULL(right_table = joined_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(left_table), K(right_table));
+  } else if (is_contain(joined_table->single_table_ids_, source_table_id) &&
+             is_contain(joined_table->single_table_ids_, target_table_id)) {
+    target_joined_table = joined_table;
+    JoinedTable *left_common_table = NULL;
+    JoinedTable *right_common_table = NULL;
+    if (left_table->is_joined_table() &&
+        OB_FAIL(find_common_joined_table(
+            static_cast<JoinedTable *>(left_table), source_table_id, target_table_id, left_common_table))) {
+      LOG_WARN("failed to find left common joined table", K(ret));
+    } else if (left_common_table != NULL) {
+      target_joined_table = left_common_table;
+    } else if (right_table->is_joined_table() &&
+               OB_FAIL(find_common_joined_table(
+                   static_cast<JoinedTable *>(right_table), source_table_id, target_table_id, right_common_table))) {
+      LOG_WARN("failed to find right common joined table", K(ret));
+    } else if (right_common_table != NULL) {
+      target_joined_table = right_common_table;
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::is_table_on_null_side(const ObDMLStmt *stmt, uint64_t table_id, bool &is_on_null_side)
 {
   int ret = OB_SUCCESS;
   is_on_null_side = false;
@@ -4761,6 +4834,17 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr* expr, bool& is_los
           ObAccuracy lossless_acc = column_type.get_accuracy();
           if (dst_acc.get_scale() >= 0 &&
               dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) {
+            is_lossless = true;
+          }
+        }
+      } else if (ObBitTC == column_tc) {
+        if (ObNumberTC == dst_tc) {
+          const double log10_2 = 0.30103;
+          ObAccuracy lossless_acc = column_type.get_accuracy();
+          if (dst_acc.get_scale() >= 0 &&
+              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() * log10_2) {
+            // log10(2) = 0.30102999566398114; log10(2^n) = n*log10(2);
+            // cast(b'111' as decimal(1,0)) is lossless
             is_lossless = true;
           }
         }

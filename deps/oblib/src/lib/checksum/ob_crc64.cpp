@@ -2848,6 +2848,7 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char* buf, int64_t len)
   uint32_t b = 0;
   uint32_t c = 0;
   uint32_t d = 0;
+
   uint32_t vendor_info[4];
   __asm__("mov $0x0, %eax\n\t");
   __asm__("cpuid\n\t");

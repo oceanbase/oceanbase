@@ -380,6 +380,8 @@ int ObRestoreScheduler::fill_create_tenant_arg(const ObPhysicalRestoreJob &job, 
     arg.tenant_schema_.set_compatibility_mode(mode);
     arg.if_not_exist_ = false;
     arg.is_restore_ = true;
+    arg.restore_frozen_status_.frozen_version_ = job.restore_data_version_;
+    arg.restore_frozen_status_.frozen_timestamp_ = job.frozen_snapshot_version_;
     if (OB_FAIL(assign_pool_list(job.pool_list_, arg.pool_list_))) {
       LOG_WARN("fail to get pool list", K(ret), K(job));
     }
@@ -2372,18 +2374,13 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
         if (OB_FAIL(ret)) {
         } else if (!table->get_primary_zone().empty()) {
           int tmp_ret = OB_SUCCESS;
-          ObArray<share::ObZoneReplicaAttrSet> locality;
-          const ObString &locality_str = table->get_locality_str();
           ObSimpleTableSchemaV2 new_table;
+          const ObString &locality_str = table->get_locality_str();
           if (OB_FAIL(new_table.assign(*table))) {
             LOG_WARN("fail to assign new table", K(ret), KPC(table));
           } else if (OB_SUCCESS !=
                      (tmp_ret = ddl_service_->check_create_table_replica_options(new_table, schema_guard))) {
             LOG_WARN("locality not match", K(tmp_ret), K(table_id), K(locality_str));
-          } else if (OB_SUCCESS != (tmp_ret = table->get_zone_replica_attr_array(locality))) {
-            LOG_WARN("fail to get locality array", K(tmp_ret), K(table_id), K(locality_str));
-          } else if (OB_SUCCESS != (tmp_ret = check_locality_valid(locality))) {
-            LOG_WARN("locality not supported", K(tmp_ret), K(table_id), K(locality_str));
           }
           if (OB_SUCCESS != tmp_ret) {
             LOG_INFO("backup primary_zone not match, just reset", K(tmp_ret), K(table_id), K(locality_str));
@@ -2397,6 +2394,9 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
         if (OB_FAIL(ret)) {
         } else if (!table->get_locality_str().empty()) {
           int tmp_ret = OB_SUCCESS;
+          ObArray<share::ObZoneReplicaAttrSet> locality;
+          const ObString &locality_str = table->get_locality_str();
+
           if (OB_SUCCESS !=
               (tmp_ret = ddl_service_->check_table_locality_with_tenant(schema_guard, *tenant_schema, *table))) {
             LOG_INFO("backup locality not match, just reset",
@@ -2405,6 +2405,13 @@ int ObRestoreScheduler::convert_table_options(const uint64_t tenant_id)
                 table->get_table_id(),
                 "locality",
                 table->get_locality_str().ptr());
+          } else if (OB_SUCCESS != (tmp_ret = table->get_zone_replica_attr_array(locality))) {
+            LOG_WARN("fail to get locality array", K(tmp_ret), K(table_id), K(locality_str));
+          } else if (OB_SUCCESS != (tmp_ret = check_locality_valid(locality))) {
+            LOG_WARN("locality not supported", K(tmp_ret), K(table_id), K(locality_str));
+          }
+
+          if (OB_SUCCESS != tmp_ret) {
             arg.type_ = ObRestoreModifySchemaArg::RESET_TABLE_LOCALITY;
             if (OB_FAIL(rpc_proxy_->timeout(DEFAULT_TIMEOUT).modify_schema_in_restore(arg))) {
               LOG_WARN("fail to modify table's locality", K(ret), K(arg));

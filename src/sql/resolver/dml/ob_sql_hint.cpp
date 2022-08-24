@@ -1209,6 +1209,9 @@ int ObStmtHint::print_rewrite_hints_for_outline(planText& plan_text, const char*
     for (int64_t idx = 0; OB_SUCC(ret) && idx < qb_names.count(); ++idx) {
       ObString qb_name = qb_names.at(idx);
       if (OUTLINE_DATA == outline_type && OB_FAIL(query_ctx->get_stmt_org_name(qb_name, origin_name))) {
+        // for invalid qb name, reset ret
+        // select /*+use_concat(@sel$5)*/ * from t1;
+        ret = OB_SUCCESS;
       } else if (USED_HINT == outline_type && FALSE_IT(origin_name = qb_name)) {
       } else if (!is_oneline && OB_FAIL(BUF_PRINTF("\n"))) {
       } else if (OB_FAIL(BUF_PRINTF(get_outline_indent(is_oneline)))) {

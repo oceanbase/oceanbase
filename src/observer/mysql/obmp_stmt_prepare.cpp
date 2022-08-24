@@ -471,6 +471,7 @@ int ObMPStmtPrepare::do_process(
     audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
     audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
     audit_record.ps_stmt_id_ = result.get_statement_id();
+    audit_record.tenant_id_ = session.get_effective_tenant_id();
     audit_record.update_stage_stat();
     bool need_retry = (THIS_THWORKER.need_retry() || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
     ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, result.get_exec_context());

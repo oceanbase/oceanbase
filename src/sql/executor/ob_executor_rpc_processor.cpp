@@ -308,6 +308,7 @@ int ObDistExecuteBaseP::execute_dist_plan(ObTask& task, ObTaskCompleteEvent& tas
 
           audit_record.exec_timestamp_ = exec_timestamp;
           audit_record.exec_record_ = exec_record;
+          audit_record.tenant_id_=session->get_effective_tenant_id();
 
           audit_record.update_stage_stat();
 
@@ -1323,6 +1324,7 @@ int ObMiniTaskBaseP::execute_mini_plan(ObMiniTask& task, ObMiniTaskResult& resul
 
         audit_record.exec_timestamp_ = exec_timestamp;
         audit_record.exec_record_ = exec_record;
+        audit_record.tenant_id_=session->get_effective_tenant_id();
 
         audit_record.update_stage_stat();
 

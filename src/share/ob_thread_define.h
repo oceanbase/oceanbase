@@ -141,4 +141,7 @@ TG_DEF(TblCliSqlPool, TblCliSqlPool, "", TG_STATIC, TIMER)
 TG_DEF(QueryExecCtxGC, QueryExecCtxGC, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(DtlDfc, DtlDfc, "", TG_STATIC, TIMER)
 TG_DEF(DDLRetryGhostIndex, DDLRetryGhostIndex, "", TG_STATIC, TIMER)
+TG_DEF(StoreFileAutoExtend, StoreFileAutoExtend, "", TG_STATIC, TIMER)
+TG_DEF(TTLScheduler, TTLScheduler, "", TG_STATIC, TIMER)
+TG_DEF(CTASCleanUpTimer, CTASCleanUpTimer, "", TG_STATIC, TIMER)
 #endif

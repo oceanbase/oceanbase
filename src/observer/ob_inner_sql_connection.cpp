@@ -368,9 +368,10 @@ int ObInnerSQLConnection::process_retry(
                                     (OB_NOT_MASTER == last_ret || OB_PARTITION_NOT_EXIST == last_ret);
   ObQueryRetryInfo& retry_info = inner_session_.get_retry_info_for_update();
   const bool non_blocking_refresh = false;
-  bool repeatable_stmt = (ObStmt::is_dml_stmt(result_set.get_stmt_type()) ||
-                          ObStmt::is_ddl_stmt(result_set.get_stmt_type(), result_set.has_global_variable()) ||
-                          ObStmt::is_dcl_stmt(result_set.get_stmt_type()));
+  bool repeatable_stmt =
+      (ObStmt::is_dml_stmt(result_set.get_stmt_type()) ||
+          ObStmt::is_ddl_stmt(result_set.get_stmt_type(), result_set.has_global_variable()) ||
+          ObStmt::is_dcl_stmt(result_set.get_stmt_type()) || ObStmt::is_execute_stmt(result_set.get_stmt_type()));
   int64_t now = ObTimeUtility::current_time();
   if (now >= abs_timeout_us) {
     ret = OB_TIMEOUT;
@@ -612,6 +613,7 @@ int ObInnerSQLConnection::process_record(ObInnerSQLResult& res, sql::ObSQLSessio
     table_row_count_list = &(plan_ctx->get_table_row_count_list());
   }
 
+  audit_record.tenant_id_ = session.get_effective_tenant_id();
   audit_record.update_stage_stat();
 
   // update v$sql statistics

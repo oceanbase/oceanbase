@@ -22,6 +22,8 @@
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "share/backup/ob_backup_path.h"
 #include <algorithm>
+#include "lib/container/ob_array.h"
+#include "lib/container/ob_array_iterator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

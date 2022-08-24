@@ -1728,7 +1728,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObMaxType,       /* ObJsonType */
+    ObNumberType,       /* ObJsonType */
   },
   /*SetType*/
   {
@@ -1779,7 +1779,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObVarcharType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObMaxType,       /* ObJsonType */
+    ObNumberType,       /* ObJsonType */
   },
   /*EnumInnerType*/
   {
@@ -1830,7 +1830,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObVarcharType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObMaxType,       /* ObJsonType */
+    ObNumberType,       /* ObJsonType */
   },
   /*SetInnerType*/
   {
@@ -1881,7 +1881,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObVarcharType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObMaxType,       /* ObJsonType */
+    ObNumberType,       /* ObJsonType */
   },
   /*ObTimestampTZType*/
   {
@@ -2479,10 +2479,10 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObJsonType,       /*MediumTextType*/
     ObJsonType,        /*LongTextType*/
     ObJsonType,      /*BitType*/
-    ObMaxType,     /* EnumType  */
-    ObMaxType,     /* SetType  */
-    ObMaxType,     /* EnumInnerType  */
-    ObMaxType,     /* SetInnerType  */
+    ObNumberType,     /* EnumType  */
+    ObNumberType,     /* SetType  */
+    ObNumberType,     /* EnumInnerType  */
+    ObNumberType,     /* SetInnerType  */
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
     ObTimestampNanoType,  /* ObTimestampNanoType */

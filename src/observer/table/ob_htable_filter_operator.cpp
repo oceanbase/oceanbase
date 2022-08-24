@@ -19,8 +19,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
 
+// format: {"HColumnDescriptor": {"TimeToLive": 3600, "MaxVersions": 3}}
 int ObHColumnDescriptor::from_string(const common::ObString &str)
 {
+  reset();
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   json::Parser json_parser;
@@ -30,7 +32,7 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
   } else if (OB_FAIL(json_parser.init(&allocator))) {
     LOG_WARN("failed to init json parser", K(ret));
   } else if (OB_FAIL(json_parser.parse(str.ptr(), str.length(), ast))) {
-    LOG_WARN("failed to parse", K(ret), K(str));
+    LOG_DEBUG("failed to parse", K(ret), K(str));
     ret = OB_SUCCESS;
   } else if (NULL != ast
              && ast->get_type() == json::JT_OBJECT
@@ -46,6 +48,11 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
               if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
                 time_to_live_ = static_cast<int32_t>(ttl_val->get_number());
               }
+            } else if (elem->name_.case_compare("MaxVersions") == 0) {
+              json::Value *max_version_val = elem->value_;
+              if (NULL != max_version_val && max_version_val->get_type() == json::JT_NUMBER) {
+                max_version_ = static_cast<int32_t>(max_version_val->get_number());
+              }
             }
           }  // end foreach
         }
@@ -53,6 +60,12 @@ int ObHColumnDescriptor::from_string(const common::ObString &str)
     }
   }
   return ret;
+}
+
+void ObHColumnDescriptor::reset()
+{
+  time_to_live_ = 0;   
+  max_version_ = 0;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -83,6 +96,20 @@ void ObHTableColumnTracker::set_ttl(int32_t ttl_value)
     LOG_DEBUG("[yzfdebug] set ttl", K(ttl_value), K(now), K_(oldest_stamp));
     NG_TRACE_EXT(t, OB_ID(arg1), ttl_value, OB_ID(arg2), oldest_stamp_);
   }
+}
+
+void ObHTableColumnTracker::set_max_version(int32_t max_version)
+{
+  if (max_version > 0) {
+    max_versions_ = max_version;
+    LOG_DEBUG("set max_version", K(max_version));
+    NG_TRACE_EXT(version, OB_ID(arg1), max_version);
+  }
+}
+
+int32_t ObHTableColumnTracker::get_max_version()
+{
+  return max_versions_;
 }
 
 bool ObHTableColumnTracker::is_done(int64_t timestamp) const
@@ -624,6 +651,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
      max_result_size_(query.get_max_result_size()),
      batch_size_(query.get_batch()),
      time_to_live_(0),
+     max_version_(0),
      curr_cell_(),
      allocator_(ObModIds::TABLE_PROC),
      column_tracker_(NULL),
@@ -749,8 +777,14 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
     }
     if (OB_FAIL(column_tracker_->init(htable_filter_, scan_order_))) {
       LOG_WARN("failed to init column tracker", K(ret));
-    } else if (time_to_live_ > 0) {
-      column_tracker_->set_ttl(time_to_live_);
+    } else {
+      if (time_to_live_ > 0) {
+        column_tracker_->set_ttl(time_to_live_);
+      }
+      if (max_version_ > 0) {
+        int32_t real_max_version = std::min(column_tracker_->get_max_version(), max_version_);
+        column_tracker_->set_max_version(real_max_version);
+      }
     }
   }
   if (OB_SUCC(ret) && NULL == matcher_) {
@@ -1025,17 +1059,23 @@ void ObHTableRowIterator::set_ttl(int32_t ttl_value)
   time_to_live_ = ttl_value;
 }
 
+void ObHTableRowIterator::set_max_version(int32_t max_version)
+{
+  max_version_ = max_version;
+}
+
 ////////////////////////////////////////////////////////////////
 ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
                                                table::ObTableQueryResult &one_result)
-    :query_(query),
+    :query_(&query),
     row_iterator_(query),
-    one_result_(one_result),
+    one_result_(&one_result),
     hfilter_(NULL),
     batch_size_(query.get_batch()),
     max_result_size_(std::min(query.get_max_result_size(),
                               static_cast<int64_t>(common::OB_MAX_PACKET_BUFFER_LENGTH-1024))),
-    is_first_result_(true)
+    is_first_result_(true),
+    is_query_sync_(false)
 {
 }
 
@@ -1043,26 +1083,28 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
 int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
-  if (is_first_result_) {
-    is_first_result_ = false;
-    if (0 != one_result_.get_property_count()) {
+  if (is_first_result_ || is_query_sync_) {
+    if (0 != one_result_->get_property_count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("property should be empty", K(ret));
     }
-    const ObIArray<ObString> &select_columns = query_.get_select_columns();
+    const ObIArray<ObString> &select_columns = query_->get_select_columns();
     const int64_t N = select_columns.count();
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
     {
-      if (OB_FAIL(one_result_.add_property_name(select_columns.at(i)))) {
+      if (OB_FAIL(one_result_->add_property_name(select_columns.at(i)))) {
         LOG_WARN("failed to copy name", K(ret));
       }
     } // end for
+    if (is_first_result_) {
+      is_first_result_ = false;
+    }
   } else {
-    one_result_.reset_except_property();
+    one_result_->reset_except_property();
   }
   if (OB_SUCC(ret)) {
     bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
-    next_result = &one_result_;
+    next_result = one_result_;
     ObTableQueryResult *htable_row = nullptr;
     // ObNewRow first_entity;
     // ObObj first_entity_cells[4];
@@ -1117,14 +1159,15 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
       }
       /* @todo check batch limit and size limit */
       // We have got one hbase row, store it to this batch
-      if (OB_FAIL(one_result_.add_all_row(*htable_row))) {
+      if (OB_FAIL(one_result_->add_all_row(*htable_row))) {
         LOG_WARN("failed to add cells to row", K(ret));
       }
       if (NULL != hfilter_) {
         hfilter_->reset();
       }
       if (OB_SUCC(ret)) {
-        if (one_result_.reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
+        if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
+          LOG_DEBUG("htable reach_batch_size_or_result_size", K(batch_size_), K(max_result_size_));
           break;
         }
       }
@@ -1134,17 +1177,17 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
     }
   }
   if (OB_ITER_END == ret
-      && one_result_.get_row_count() > 0) {
+      && one_result_->get_row_count() > 0) {
     ret = OB_SUCCESS;
   }
-  LOG_DEBUG("[yzfdebug] get_next_result", K(ret), "row_count", one_result_.get_row_count());
+  LOG_DEBUG("htable get_next_result", K(ret), "row_count", one_result_->get_row_count());
   return ret;
 }
 
 int ObHTableFilterOperator::parse_filter_string(common::ObArenaAllocator* allocator)
 {
   int ret = OB_SUCCESS;
-  const ObString &hfilter_string = query_.get_htable_filter().get_filter();
+  const ObString &hfilter_string = query_->get_htable_filter().get_filter();
   if (hfilter_string.empty()) {
     hfilter_ = NULL;
   } else if (NULL == allocator) {

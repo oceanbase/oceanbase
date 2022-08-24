@@ -2927,6 +2927,7 @@ int ObTransformPreProcess::generate_parent_level_aggr_stmt(ObSelectStmt*& select
     LOG_WARN("select stmt is null", K(ret));
   } else {
     select_stmt->get_table_items().reset();
+    select_stmt->get_joined_tables().reset();
     select_stmt->get_from_items().reset();
     select_stmt->get_having_exprs().reset();
     select_stmt->get_order_items().reset();

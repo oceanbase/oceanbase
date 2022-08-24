@@ -469,14 +469,21 @@ int ObMicroBlockRowScanner::init(const ObTableIterParam& param, ObTableAccessCon
                  projector,
                  storage::ObMultiVersionRowkeyHelpper::MVRC_NONE /*multi version col type*/))) {
     STORAGE_LOG(WARN, "Fail to init col map, ", K(ret));
+  } else if (OB_FAIL(obj_buf_.init(context.allocator_))) {
+    STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
   } else {
-    for (int64_t i = 0; i < ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT; ++i) {
-      ObStoreRow& row = rows_[i];
-      row.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_) + i * OB_ROW_MAX_COLUMNS_COUNT;
-      row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
+    const int64_t request_count = column_map_.get_request_count();
+    if (OB_FAIL(obj_buf_.reserve(request_count * ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
+    } else {
+      for (int64_t i = 0; i < ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT; ++i) {
+        ObStoreRow& row = rows_[i];
+        row.row_val_.cells_ = obj_buf_.get_buf() + i * request_count;
+        row.row_val_.count_ = request_count;
+        row.capacity_ = request_count;
+      }
+      is_inited_ = true;
     }
-    is_inited_ = true;
   }
   return ret;
 }
@@ -515,7 +522,8 @@ int ObMicroBlockRowScanner::inner_get_next_row(const ObStoreRow*& row)
     }
   } else {
     ObStoreRow& dest_row = rows_[0];
-    dest_row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
+    const int64_t request_count = column_map_.get_request_count();
+    dest_row.row_val_.count_ = request_count;
     if (OB_FAIL(reader_->get_row(current_, dest_row))) {
       STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret), K(macro_id_));
     } else {
@@ -570,8 +578,10 @@ int ObMicroBlockRowScanner::inner_get_next_rows(const storage::ObStoreRow*& rows
 void ObMicroBlockRowScanner::reset()
 {
   ObIMicroBlockRowScanner::reset();
+  obj_buf_.reset();
 }
 
+/*****************           ObMultiVersionMicroBlockRowScanner        ********************/
 int ObMultiVersionMicroBlockRowScanner::init(
     const ObTableIterParam& param, ObTableAccessContext& context, const ObSSTable* sstable)
 {
@@ -605,6 +615,8 @@ int ObMultiVersionMicroBlockRowScanner::init(
       STORAGE_LOG(WARN, "failed to alloc row", K(ret), K(cell_cnt_));
     } else if (OB_FAIL(nop_pos_.init(*context.allocator_, cell_cnt_))) {
       STORAGE_LOG(WARN, "failed to init nop_pos", K(ret), K(cell_cnt_));
+    } else if (OB_FAIL(tmp_row_obj_buf_.init(context.allocator_))) {
+      STORAGE_LOG(WARN, "failed to init tmp_row_obj_buf_, ", K(ret));
     } else {
       const int64_t extra_multi_version_col_cnt =
           ObMultiVersionRowkeyHelpper::get_multi_version_rowkey_cnt(sstable->get_multi_version_rowkey_type());
@@ -622,7 +634,6 @@ int ObMultiVersionMicroBlockRowScanner::init(
   return ret;
 }
 
-/*****************           ObMultiVersionMicroBlockRowScanner        ********************/
 int ObMultiVersionMicroBlockRowScanner::open(const MacroBlockId& macro_id, const ObFullMacroBlockMeta& macro_meta,
     const ObMicroBlockData& block_data, const bool is_left_border, const bool is_right_border)
 {
@@ -674,6 +685,7 @@ void ObMultiVersionMicroBlockRowScanner::reset()
 {
   inner_reset();
   ObIMicroBlockRowScanner::reset();
+  tmp_row_obj_buf_.reset();
 }
 
 void ObMultiVersionMicroBlockRowScanner::rescan()
@@ -921,9 +933,14 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_directly(
     if (is_row_empty(cur_micro_row_)) {
       row = &cur_micro_row_;
     } else {
-      tmp_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(tmp_row_obj_buf_);
-      tmp_row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      row = &tmp_row_;
+      const int64_t request_count = column_map_.get_request_count();
+      if (OB_FAIL(tmp_row_obj_buf_.reserve(request_count))) {
+        STORAGE_LOG(WARN, "fail to reserve memory for tmp_row_obj_buf_, ", K(ret));
+      } else {
+        tmp_row_.row_val_.cells_ = tmp_row_obj_buf_.get_buf();
+        tmp_row_.row_val_.count_ = request_count;
+        row = &tmp_row_;
+      }
     }
     if (OB_FAIL(reader_->get_row(current_, *row))) {
       STORAGE_LOG(WARN, "micro block reader fail to get block_row", K(ret), K(current_), K_(macro_id));
@@ -1048,10 +1065,15 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
         if (is_row_empty(cur_micro_row_)) {
           row = &cur_micro_row_;
         } else {
-          tmp_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(tmp_row_obj_buf_);
-          tmp_row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-          tmp_row_.trans_id_ptr_ = flag.is_uncommitted_row() ? &trans_id_ : NULL;
-          row = &tmp_row_;
+          const int64_t request_count = column_map_.get_request_count();
+          if (OB_FAIL(tmp_row_obj_buf_.reserve(request_count))) {
+            STORAGE_LOG(WARN, "fail to reserve memory for tmp_row_obj_buf_, ", K(ret));
+          } else {
+            tmp_row_.row_val_.cells_ = tmp_row_obj_buf_.get_buf();
+            tmp_row_.row_val_.count_ = request_count;
+            tmp_row_.trans_id_ptr_ = flag.is_uncommitted_row() ? &trans_id_ : NULL;
+            row = &tmp_row_;
+          }
         }
         if (OB_FAIL(reader_->get_row(current_, *row))) {
           STORAGE_LOG(WARN, "micro block reader fail to get block_row", K(ret), K(current_), K_(macro_id));
@@ -1384,6 +1406,10 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::init(
       STORAGE_LOG(WARN, "Fail to init col map", K(ret), KPC_(param), K(multi_version_rowkey_type));
     } else if (OB_FAIL(init_row_queue(out_cols.count()))) {
       STORAGE_LOG(WARN, "Fail to init row queue", K(ret), K(out_cols.count()));
+    } else if (OB_FAIL(obj_buf_.init(context.allocator_))) {
+      STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
+    } else if (OB_FAIL(col_id_buf_.init(context.allocator_))) {
+      STORAGE_LOG(WARN, "fail to init col_id_buf_, ", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -1416,11 +1442,18 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::open(const MacroBlockId& macro
     } else if (OB_FAIL(set_base_scan_param(is_left_border, is_right_border))) {
       STORAGE_LOG(WARN, "failed to set base scan param", K(ret), K(is_left_border), K(is_right_border), K(macro_id));
     } else {
-      row_.row_val_.cells_ = obj_buf_;
-      row_.column_ids_ = col_id_buf_;
-      row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-      row_.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-      STORAGE_LOG(DEBUG, "set read out type", K(ret), K(context_->read_out_type_));
+      const int64_t request_count = column_map_.get_request_count();
+      if (OB_FAIL(obj_buf_.reserve(request_count))) {
+        STORAGE_LOG(WARN, "failed to reserve memory for obj_buf_", K(ret));
+      } else if (OB_FAIL(col_id_buf_.reserve(request_count))) {
+        STORAGE_LOG(WARN, "failed to reserve memory for col_id_buf_", K(ret));
+      } else {
+        row_.row_val_.cells_ = obj_buf_.get_buf();
+        row_.column_ids_ = col_id_buf_.get_buf();
+        row_.row_val_.count_ = request_count;
+        row_.capacity_ = request_count;
+        STORAGE_LOG(DEBUG, "set read out type", K(ret), K(context_->read_out_type_));
+      }
     }
   }
   return ret;
@@ -1522,6 +1555,8 @@ void ObMultiVersionMicroBlockMinorMergeRowScanner::reset()
   row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
   clear_scan_status();
   ObIMicroBlockRowScanner::reset();
+  obj_buf_.reset();
+  col_id_buf_.reset();
 }
 
 void ObMultiVersionMicroBlockMinorMergeRowScanner::clear_scan_status()

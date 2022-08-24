@@ -74,11 +74,8 @@ int ObExprJsonExtract::calc_result_typeN(ObExprResType& type,
     }
 
     if (OB_SUCC(ret)) {
-      if (is_null_result) {
-        type.set_null();
-      } else {
-        type.set_json();
-      }
+      type.set_json();
+      type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     }
   }
   return ret;

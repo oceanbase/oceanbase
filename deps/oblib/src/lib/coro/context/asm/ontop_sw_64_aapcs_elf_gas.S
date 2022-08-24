@@ -70,13 +70,13 @@ ontop_fcontext:
 
     # pass transfer_t as first arg in context function,such as f1,f2,f3
     # $16 == FCTX, $17 == DATA
-    mov $20,$16   #$16 $17 $18 as first and second arg  
+    mov $20,$16   #$16 $17 $18 as first and second arg
     mov $18,$17
-   
- 
+
+
     # skip pc
     mov $19, $27
-     
+
 
     # restore stack from GP + FPU
     addl  $sp, 0x98, $sp

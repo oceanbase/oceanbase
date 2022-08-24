@@ -174,7 +174,6 @@ private:
       common::ObISQLClient& sql_client, const ObTableSchema& table_schema, const int64_t new_schema_version);
   int delete_table_part_info(const ObTableSchema& table_schema, const int64_t new_schema_version,
       common::ObISQLClient& sql_client, bool is_delay_delete);
-  int delete_from_all_temp_table(common::ObISQLClient& sql_client, const uint64_t tenant_id, const uint64_t table_id);
   int add_columns(common::ObISQLClient& sql_client, const ObTableSchema& table);
   int add_columns_for_core(common::ObISQLClient& sql_client, const ObTableSchema& table);
   int add_columns_for_not_core(common::ObISQLClient& sql_client, const ObTableSchema& table);
@@ -226,6 +225,7 @@ private:
 public:
   int log_operation_wrapper(ObSchemaOperation& opt, common::ObISQLClient& sql_client);
   int insert_temp_table_info(common::ObISQLClient& trans, const ObTableSchema& table_schema);
+  int delete_from_all_temp_table(common::ObISQLClient& sql_client, const uint64_t tenant_id, const uint64_t table_id);
 
 private:
   int exec_update(common::ObISQLClient& sql_client, const uint64_t table_id, const char* table_name,

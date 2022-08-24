@@ -4804,6 +4804,64 @@ all_tenant_backup_backup_log_archive_status_def = dict(
 )
 def_table_schema(**all_tenant_backup_backup_log_archive_status_def)
 
+all_kv_ttl_task_def = dict(
+  table_name = '__all_kv_ttl_task',
+  table_id = '410',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('partition_id', 'int')
+  ],
+  in_tenant_space = True, 
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+  columns_with_tenant_id = [],
+)
+
+all_kv_ttl_task_history_def = dict(
+  table_name = '__all_kv_ttl_task_history',
+  table_id = '411',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('partition_id', 'int')
+  ],
+  in_tenant_space = True, 
+  is_cluster_private = True,
+  is_backup_private = True,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+  columns_with_tenant_id = [],
+)
+def_table_schema(**all_kv_ttl_task_def)
+def_table_schema(**all_kv_ttl_task_history_def)
+
 # sys index schema def, only for compatible
 
 def_sys_index_table(
@@ -4879,10 +4937,10 @@ def_table_schema(
 
   normal_columns = [
   ('type', 'varchar:COLUMN_TYPE_LENGTH'),
-  ('collation', 'varchar:MAX_COLLATION_LENGTH'),
+  ('collation', 'varchar:MAX_COLLATION_LENGTH', 'true'),
   ('null', 'varchar:COLUMN_NULLABLE_LENGTH'),
   ('key', 'varchar:COLUMN_KEY_LENGTH'),
-  ('default', 'varchar:COLUMN_DEFAULT_LENGTH'),
+  ('default', 'varchar:COLUMN_DEFAULT_LENGTH', 'true'),
   ('extra', 'varchar:COLUMN_EXTRA_LENGTH'),
   ('privileges', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH'),
   ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
@@ -5593,7 +5651,8 @@ def_table_schema(
       ('cpu_max_assigned', 'double'),
       ('mem_capacity', 'int'),
       ('mem_max_assigned', 'int'),
-      ('ssl_key_expired_time', 'int')
+      ('ssl_key_expired_time', 'int'),
+      ('disk_actual', 'int')
   ],
 )
 
@@ -7832,7 +7891,6 @@ def_table_schema(
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
-
 
 ################################################################
 ################################################################
@@ -10156,6 +10214,36 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_global_transaction',
   keywords = all_def_keywords['__all_tenant_global_transaction']))
 
+def_table_schema(
+  tablegroup_id='OB_INVALID_ID',
+  table_name='__all_virtual_query_response_time',
+  table_id='12325',
+  table_type='VIRTUAL_TABLE',
+  gm_columns=[],
+  rowkey_columns=[
+  ],
+  normal_columns=[
+    ('tenant_id', 'int', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int'),
+    ('response_time', 'bigint:14', 'false', '0'),
+    ('count',  'bigint:14', 'false', '0'),
+    ('total',  'bigint:14', 'false', '0')
+  ],
+  partition_columns=['svr_ip', 'svr_port'],
+)
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12326',
+  real_tenant_id=True,
+  table_name = '__all_virtual_kv_ttl_task',
+  keywords = all_def_keywords['__all_kv_ttl_task']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12327',
+  real_tenant_id=True,
+  table_name = '__all_virtual_kv_ttl_task_history',
+  keywords = all_def_keywords['__all_kv_ttl_task_history']))
 
 ################################################################################
 # Oracle Virtual Table(15000,20000]
@@ -14558,6 +14646,189 @@ def_table_schema(
     FROM DUAL
     WHERE 1 = 0
 """.replace("\n", " "),
+)
+
+def_table_schema(
+  table_name      = 'DBA_OB_KV_TTL_TASKS',
+  table_id        = '21300',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_kv_ttl_task a left outer JOIN oceanbase.__all_table_v2 b on
+          a.table_id = ((a.tenant_id << 40) | b.table_id)    
+""".replace("\n", " ")
+)
+
+
+def_table_schema(
+  table_name      = 'DBA_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21301',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_kv_ttl_task_history a left outer JOIN oceanbase.__all_table_v2 b on
+          a.table_id = ((a.tenant_id << 40) | b.table_id)    
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  database_id='OB_INFORMATION_SCHEMA_ID',
+  table_name='QUERY_RESPONSE_TIME',
+  table_id='21306',
+  table_type='SYSTEM_VIEW',
+  gm_columns=[],
+  rowkey_columns=[],
+  in_tenant_space=True,
+  view_definition="""select response_time as RESPONSE_TIME,
+                   count as COUNT,
+                   total as TOTAL
+                   from oceanbase.__all_virtual_query_response_time
+                   where is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) and
+                   tenant_id = effective_tenant_id()
+""".replace("\n", " "),
+  normal_columns=[],
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_KV_TTL_TASKS',
+  table_id        = '21307',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  table_name      = 'CDB_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21308',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.partition_id as PARTITION_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC" 
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED" 
+        when 1 then "RUNNING" 
+        when 2 then "PENDING" 
+        when 3 then "CANCELED" 
+        when 4 then "FINISHED" 
+        when 5 then "MOVED" 
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
 )
 
 ################################################################################

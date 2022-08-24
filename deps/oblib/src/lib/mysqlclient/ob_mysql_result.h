@@ -686,7 +686,34 @@
           }                                                                                               \
           ret = (class_obj).set_##column_name(dest_obj);                                                  \
         }                                                                                                 \
-      } else {                                                                                            \
+      } else if (ob_is_json(data_type) && share::is_mysql_mode())                                         \
+      { /* MySQL json does not support default value except null, */                                      \
+        /* need this defensive to compatible a bug in old version */                                      \
+        ObObj def_obj;                                                                                    \
+        ObObj default_value;                                                                              \
+        default_value.set_type(data_type);                                                                \
+        ObArenaAllocator allocator(ObModIds::OB_SCHEMA);                                                  \
+        ObObj dest_obj;                                                                                   \
+        ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, column.get_collation_type());                       \
+        if (OB_FAIL(default_value.build_not_strict_default_value())) {                                    \
+          SQL_LOG(WARN, "failed to build not strict default json value", K(ret));                         \
+        } else {                                                                                          \
+          def_obj.set_json_value(data_type,                                                               \
+                                 default_value.get_string().ptr(),                                        \
+                                 default_value.get_string().length());                                    \
+          if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj)))                      \
+          {                                                                                               \
+            SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type);   \
+          }                                                                                               \
+          else                                                                                            \
+          {                                                                                               \
+            dest_obj.set_lob_inrow();                                                                     \
+            dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                        \
+            ret = (class_obj).set_##column_name(dest_obj);                                                \
+          }                                                                                               \
+        }                                                                                                 \
+      }                                                                                                   \
+       else {                                                                                             \
         ObObj def_obj;                                                                                    \
         def_obj.set_varchar(str_value);                                                                   \
         ObArenaAllocator allocator(ObModIds::OB_SCHEMA);                                                  \
@@ -699,14 +726,7 @@
         } else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj))) {               \
           SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type);     \
         } else {                                                                                          \
-          if (ob_is_json(data_type)) {                                                                    \
-            dest_obj.set_lob_inrow();                                                                     \
-            dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                        \
-          }                                                                                               \
-          else                                                                                            \
-          {                                                                                               \
-            dest_obj.set_scale(column.get_data_scale());                                                  \
-          }                                                                                               \
+          dest_obj.set_scale(column.get_data_scale());                                                    \
           ret = (class_obj).set_##column_name(dest_obj);                                                  \
         }                                                                                                 \
       }                                                                                                   \

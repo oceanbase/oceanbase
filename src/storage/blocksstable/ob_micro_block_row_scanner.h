@@ -132,7 +132,7 @@ protected:
 
 protected:
   storage::ObStoreRow rows_[ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT];
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(ObObj) * ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT];
+  storage::ObDynamicBuffer<ObObj> obj_buf_;
 };
 
 /*
@@ -227,7 +227,7 @@ private:
   // TRUE: meet Last Flag of current rowkey
   bool is_last_multi_version_row_;
   storage::ObStoreRow tmp_row_;
-  char tmp_row_obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(ObObj)];
+  storage::ObDynamicBuffer<ObObj> tmp_row_obj_buf_;
   int64_t trans_version_col_idx_;
   int64_t sql_sequence_col_idx_;
   int64_t cell_cnt_;
@@ -318,8 +318,8 @@ private:
   ObFixedBitSet<OB_ALL_MAX_COLUMN_ID>* bit_set_[RNPI_MAX];
   storage::ObObjDeepCopy obj_copy_;
   storage::ObStoreRow row_;
-  ObObj obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT];
-  uint16_t col_id_buf_[common::OB_ROW_MAX_COLUMNS_COUNT];
+  storage::ObDynamicBuffer<ObObj> obj_buf_;
+  storage::ObDynamicBuffer<uint16_t> col_id_buf_;
   bool is_last_multi_version_row_;
   bool is_row_queue_ready_;
   bool add_sql_sequence_col_flag_;  // old-version sstable should add sql_sequence col

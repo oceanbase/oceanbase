@@ -150,12 +150,12 @@ int ObTmpPageCache::prefetch(
     callback.offset_ = info.offset_;
     callback.buf_size_ = info.size_;
     callback.allocator_ = &allocator_;
-    void* buf = allocator_.alloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, 255>));
+    void* buf = allocator_.alloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>));
     if (NULL == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc a buf", K(ret), K(info));
     } else {
-      callback.page_io_infos_ = new (buf) common::ObSEArray<ObTmpPageIOInfo, 255>();
+      callback.page_io_infos_ = new (buf) common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>();
       callback.page_io_infos_->assign(page_io_infos);
       if (OB_FAIL(read_io(info, callback, mb_handle))) {
         if (mb_handle.get_io_handle().is_empty()) {
@@ -614,7 +614,6 @@ ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager()
     : write_handles_(),
       t_mblk_map_(),
       dir_to_blk_map_(),
-      mblk_page_nums_(OB_FILE_SYSTEM.get_macro_block_size() / ObTmpMacroBlock::get_default_page_size() - 1),
       free_page_nums_(0),
       blk_nums_threshold_(0),
       block_cache_(NULL),
@@ -739,7 +738,7 @@ int ObTmpTenantMemBlockManager::free_macro_block(const int64_t block_id)
   } else if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
     STORAGE_LOG(WARN, "fail to erase tmp macro block", K(ret));
   } else {
-    free_page_nums_ -= mblk_page_nums_;
+    free_page_nums_ -= ObTmpFilePageBuddy::MAX_PAGE_NUMS;
   }
   return ret;
 }
@@ -796,9 +795,9 @@ int ObTmpTenantMemBlockManager::free_extent(const int64_t free_page_nums, const 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
-  } else if (free_page_nums < 0 || free_page_nums > mblk_page_nums_ || NULL == t_mblk) {
+  } else if (free_page_nums < 0 || free_page_nums > ObTmpFilePageBuddy::MAX_PAGE_NUMS || NULL == t_mblk) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(free_page_nums), K(*t_mblk));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(free_page_nums), KPC(t_mblk));
   } else if (OB_FAIL(refresh_dir_to_blk_map(t_mblk->get_dir_id(), t_mblk))) {
     STORAGE_LOG(WARN, "fail to refresh dir_to_blk_map", K(ret), K(*t_mblk));
   } else {
@@ -834,7 +833,8 @@ int ObTmpTenantMemBlockManager::get_macro_block(const int64_t dir_id, const uint
       if (OB_UNLIKELY(t_mblk_map_.size() == 0)) {
         // nothing to do.
       } else if (get_tenant_mem_block_num() <= count ||
-                 blk_nums_threshold_ > (free_page_nums_ * 1.0) / (t_mblk_map_.size() * mblk_page_nums_)) {
+                 blk_nums_threshold_ >
+                     (free_page_nums_ * 1.0) / (t_mblk_map_.size() * ObTmpFilePageBuddy::MAX_PAGE_NUMS)) {
         int64_t wash_nums = 1;
         if (OB_FAIL(wash(tenant_id, std::max(wash_nums, count - get_tenant_mem_block_num() + 1), free_blocks))) {
           STORAGE_LOG(WARN, "cannot wash a tmp macro block", K(ret), K(dir_id), K(tenant_id));
@@ -906,7 +906,7 @@ int ObTmpTenantMemBlockManager::add_macro_block(const uint64_t tenant_id, ObTmpM
   } else if (OB_FAIL(t_mblk_map_.set_refactored(t_mblk->get_block_id(), t_mblk))) {
     STORAGE_LOG(WARN, "fail to set tmp macro block map", K(ret), K(t_mblk));
   } else {
-    free_page_nums_ += mblk_page_nums_;
+    free_page_nums_ += ObTmpFilePageBuddy::MAX_PAGE_NUMS;
   }
   return ret;
 }
@@ -983,7 +983,7 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
         info.tenant_id_ = tenant_id;
         info.io_desc_ = wash_block->get_io_desc();
         info.buf_ = wash_block->get_buffer();
-        info.size_ = mblk_page_nums_ * ObTmpMacroBlock::get_default_page_size();
+        info.size_ = ObTmpFilePageBuddy::MAX_PAGE_NUMS * ObTmpMacroBlock::get_default_page_size();
         ObMacroBlockHandle& mb_handle = wash_block->get_macro_block_handle();
         ObTmpBlockCacheKey key(wash_block->get_block_id(), tenant_id);
         mb_handle.set_file(file_handle_.get_storage_file());

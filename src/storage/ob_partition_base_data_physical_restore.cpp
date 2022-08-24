@@ -753,7 +753,11 @@ int ObPhyRestoreMetaIndexStore::init_one_file(
     ObBackupMetaIndex meta_index;
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
-      if (OB_FAIL(buffer_reader.get(common_header))) {
+
+      if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+        FLOG_INFO("backup data has incomplete data, skip it", K(buffer_reader.remain()), K(path), K(storage_info));
+        break;
+      } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "read meta index common header fail", K(ret));
       } else if (OB_ISNULL(common_header)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1115,7 +1119,7 @@ int ObPhyRestoreMacroIndexStore::init_one_file(
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
       if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
-        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(buffer_reader.remain()));
+        FLOG_INFO("backup data has incomplete data, skip it", K(buffer_reader.remain()), K(path), K(storage_info));
         break;
       } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "read macro index common header fail", K(ret));

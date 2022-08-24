@@ -2676,6 +2676,9 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *&plan, int &get_p
   NG_TRACE(cache_get_plan_begin);
   ObPlanCache *plan_cache = NULL;
   ObSQLSessionInfo *session = pc_ctx.sql_ctx_.session_info_;
+  if (pc_ctx.sql_ctx_.is_remote_sql_) {
+        pc_ctx.fp_result_.pc_key_.key_id_ = 0;
+  }
   if (OB_ISNULL(session) || OB_ISNULL(plan_cache = session->get_plan_cache())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid plan cache", K(ret), K(session), K(plan_cache));
@@ -2684,6 +2687,10 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *&plan, int &get_p
         OB_ERR_PROXY_REROUTE == ret || OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
       /*do nothing*/
     } else if (!pc_ctx.is_ps_mode_ && OB_PC_LOCK_CONFLICT == ret && !session->is_inner()) {
+      if (pc_ctx.sql_ctx_.is_remote_sql_) {
+        get_plan_err = ret;
+        ret = OB_SUCCESS;
+      }
     } else {
       get_plan_err = ret;
       ret = OB_SUCCESS;
@@ -2960,6 +2967,9 @@ int ObSql::pc_add_plan(
     LOG_WARN("Failed copy field to pplan", K(ret));
   } else {
     phy_plan->set_outline_state(outline_state);
+    if (pc_ctx.sql_ctx_.is_remote_sql_) {
+        pc_ctx.fp_result_.pc_key_.key_id_ = 0;
+      }
     if (pc_ctx.is_ps_mode_) {
       // remote SQL enters the plan for the second time, and saves raw_sql as pc_key in the plan cache.
       // then use the ps interface to directly use the parameterized sql as the key to check the plan cache,

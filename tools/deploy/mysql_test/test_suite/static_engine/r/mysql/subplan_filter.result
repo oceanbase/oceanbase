@@ -1,0 +1,667 @@
+result_format: 4
+
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+create table t2 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t1 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t2 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (3, 3, null, 'a');
+
+
+
+set @@ob_enable_plan_cache = 0;
+set ob_enable_transformation = off;
+select (1, 1) = (1, 0);
++-----------------+
+| (1, 1) = (1, 0) |
++-----------------+
+|               0 |
++-----------------+
+select (1, 1) = (1, 1);
++-----------------+
+| (1, 1) = (1, 1) |
++-----------------+
+|               1 |
++-----------------+
+
+select 1 <=> 1;
++---------+
+| 1 <=> 1 |
++---------+
+|       1 |
++---------+
+select 1 <=> 0;
++---------+
+| 1 <=> 0 |
++---------+
+|       0 |
++---------+
+select 1 <=> null;
++------------+
+| 1 <=> null |
++------------+
+|          0 |
++------------+
+select null <=> 1;
++------------+
+| null <=> 1 |
++------------+
+|          0 |
++------------+
+select null <=> null;
++---------------+
+| null <=> null |
++---------------+
+|             1 |
++---------------+
+
+select (1, 1) <=> (1, 1);
++-------------------+
+| (1, 1) <=> (1, 1) |
++-------------------+
+|                 1 |
++-------------------+
+select (1, null) <=> (1, 1);
++----------------------+
+| (1, null) <=> (1, 1) |
++----------------------+
+|                    0 |
++----------------------+
+select (1, null) <=> (1, null);
++-------------------------+
+| (1, null) <=> (1, null) |
++-------------------------+
+|                       1 |
++-------------------------+
+select (1, null) <=> (null, null);
++----------------------------+
+| (1, null) <=> (null, null) |
++----------------------------+
+|                          0 |
++----------------------------+
+select (null, null) <=> (null, null);
++-------------------------------+
+| (null, null) <=> (null, null) |
++-------------------------------+
+|                             1 |
++-------------------------------+
+
+select (select c1, c2 from t1 where c1 = 1) = (1, 1) from t2 where c1 = 1;
++-----------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (1, 1) |
++-----------------------------------------------+
+|                                             1 |
++-----------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) = (c2, c1) from t2 where c1 = 1;
++-------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (c2, c1) |
++-------------------------------------------------+
+|                                               1 |
++-------------------------------------------------+
+
+select (select c1 from t1 where c1 = 1) + 1 from t2 where c1 = 1;
++--------------------------------------+
+| (select c1 from t1 where c1 = 1) + 1 |
++--------------------------------------+
+|                                    2 |
++--------------------------------------+
+select (select c1 from t1 where 1 = 0) + 1 from t2 where c1 = 1;
++-------------------------------------+
+| (select c1 from t1 where 1 = 0) + 1 |
++-------------------------------------+
+|                                NULL |
++-------------------------------------+
+
+select c2 in (select c2 from t2) from t1;
++---------------------------+
+| c2 in (select c2 from t2) |
++---------------------------+
+|                         1 |
+|                         1 |
+|                         1 |
++---------------------------+
+select c2 = any(select c2 from t2) from t1;
++-----------------------------+
+| c2 = any(select c2 from t2) |
++-----------------------------+
+|                           1 |
+|                           1 |
+|                           1 |
++-----------------------------+
+select c2 != any(select c2 from t2) from t1;
++------------------------------+
+| c2 != any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 < any(select c2 from t2) from t1;
++-----------------------------+
+| c2 < any(select c2 from t2) |
++-----------------------------+
+|                           1 |
+|                           1 |
+|                           0 |
++-----------------------------+
+select c2 <= any(select c2 from t2) from t1;
++------------------------------+
+| c2 <= any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 > any(select c2 from t2) from t1;
++-----------------------------+
+| c2 > any(select c2 from t2) |
++-----------------------------+
+|                           0 |
+|                           1 |
+|                           1 |
++-----------------------------+
+select c2 >= any(select c2 from t2) from t1;
++------------------------------+
+| c2 >= any(select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+select c2 <=> any(select c2 from t2) from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '(select c2 from t2) from t1' at line 1
+select exists (select * from t2), not exists (select * from t2) from t1;
++---------------------------+-------------------------------+
+| exists (select * from t2) | not exists (select * from t2) |
++---------------------------+-------------------------------+
+|                         1 |                             0 |
+|                         1 |                             0 |
+|                         1 |                             0 |
++---------------------------+-------------------------------+
+select exists (select * from t2 where 1 = 0), not exists (select * from t2 where 1 = 0) from t1;
++---------------------------------------+-------------------------------------------+
+| exists (select * from t2 where 1 = 0) | not exists (select * from t2 where 1 = 0) |
++---------------------------------------+-------------------------------------------+
+|                                     0 |                                         1 |
+|                                     0 |                                         1 |
+|                                     0 |                                         1 |
++---------------------------------------+-------------------------------------------+
+
+select c2 = all (select c2 from t2) from t1;
++------------------------------+
+| c2 = all (select c2 from t2) |
++------------------------------+
+|                            0 |
+|                            0 |
+|                            0 |
++------------------------------+
+select c2 = any (select c2 from t2) from t1;
++------------------------------+
+| c2 = any (select c2 from t2) |
++------------------------------+
+|                            1 |
+|                            1 |
+|                            1 |
++------------------------------+
+
+select c2 = all (select c3 from t2) from t1;
++------------------------------+
+| c2 = all (select c3 from t2) |
++------------------------------+
+|                         NULL |
+|                            0 |
+|                            0 |
++------------------------------+
+select c2 = any (select c3 from t2) from t1;
++------------------------------+
+| c2 = any (select c3 from t2) |
++------------------------------+
+|                            1 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+
+select c3 = all (select c2 from t2) from t1;
++------------------------------+
+| c3 = all (select c2 from t2) |
++------------------------------+
+|                            0 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+select c3 = any (select c2 from t2) from t1;
++------------------------------+
+| c3 = any (select c2 from t2) |
++------------------------------+
+|                            1 |
+|                         NULL |
+|                         NULL |
++------------------------------+
+
+select c3 <=> (select c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+
+select (c1, c3) = all (select c1, c2 from t2) from t1;
++----------------------------------------+
+| (c1, c3) = all (select c1, c2 from t2) |
++----------------------------------------+
+|                                      0 |
+|                                      0 |
+|                                      0 |
++----------------------------------------+
+select (c1, c3) = any (select c1, c2 from t2) from t1;
++----------------------------------------+
+| (c1, c3) = any (select c1, c2 from t2) |
++----------------------------------------+
+|                                      1 |
+|                                   NULL |
+|                                   NULL |
++----------------------------------------+
+select (c1, c3) <=> (select c1, c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+
+select exists (select 1);
++-------------------+
+| exists (select 1) |
++-------------------+
+|                 1 |
++-------------------+
+select not exists (select 1);
++-----------------------+
+| not exists (select 1) |
++-----------------------+
+|                     0 |
++-----------------------+
+select 1 from dual where exists (select c1 from t2);
++---+
+| 1 |
++---+
+| 1 |
++---+
+select 1 from dual where not exists (select c1 from t2);
++---+
+| 1 |
++---+
++---+
+select * from t1 where exists (select * from t2 where c1 < 0);
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
++----+------+------+------+
+select * from t1 where exists (select * from t2 where c1 > 0);
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
+|  2 |    2 | NULL | a    |
+|  3 |    3 | NULL | a    |
++----+------+------+------+
+
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1) |
++-----------------------------------------------------------------------------+
+|                                                                           1 |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0);
++-----------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0) |
++-----------------------------------------------------------------------------+
+|                                                                        NULL |
++-----------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1) |
++-------------------------------------------------------------------------------+
+|                                                                             1 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1) |
++-------------------------------------------------------------------------------+
+|                                                                             0 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0) |
++-------------------------------------------------------------------------------+
+|                                                                             0 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0);
++-------------------------------------------------------------------------------+
+| (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0) |
++-------------------------------------------------------------------------------+
+|                                                                             1 |
++-------------------------------------------------------------------------------+
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 = 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+
+explain_protocol: 2
+EXPLAIN select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |128 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+|3 | TABLE SCAN   |t2  |3        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0)) + ?], [t1.c2 = ANY(subquery(2))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_([2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+  3 - output([cast(t2.c3, DECIMAL(11, 0))]), filter(nil), 
+      access([t2.c3]), partitions(p0)
+
+select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
++---------------------------------------+---------------------------+
+| c1 + (select c2 from t2 where c1 = 2) | c2 in (select c3 from t2) |
++---------------------------------------+---------------------------+
+|                                     3 |                         1 |
+|                                     4 |                      NULL |
+|                                     5 |                      NULL |
++---------------------------------------+---------------------------+
+EXPLAIN select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |146 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0)) + subquery(1)]), filter(nil), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= ?]), 
+      access([t2.c3], [t2.c2]), partitions(p0)
+
+select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
++-----------------------------------------------------------+
+| c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) |
++-----------------------------------------------------------+
+|                                                         2 |
+|                                                      NULL |
+|                                                      NULL |
++-----------------------------------------------------------+
+EXPLAIN select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |146 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([cast(t1.c1, DECIMAL(11, 0)) + subquery(1) < ?]), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3], [t1.c4]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3], [t1.c4]), partitions(p0)
+  2 - output([t2.c2]), filter([cast(t2.c3, DECIMAL(11, 0)) <= ?]), 
+      access([t2.c3], [t2.c2]), partitions(p0)
+
+select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
++----+------+------+------+
+
+EXPLAIN select (select c1, c2 from t2 where c1 = 1) = (c2, c1) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |90  |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([subquery(1) = (t1.c2, cast(t1.c1, DECIMAL(11, 0)))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (select c1, c2 from t2 where c1 = 1) = (c2, c1) from t1;
++-------------------------------------------------+
+| (select c1, c2 from t2 where c1 = 1) = (c2, c1) |
++-------------------------------------------------+
+|                                               1 |
+|                                               0 |
+|                                               0 |
++-------------------------------------------------+
+EXPLAIN select (select c1, c2 from t2 where c1 = 1) = (c1, c2) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |90  |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([subquery(1) = (t1.c1, t1.c2)]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (select c1, c2 from t2 where c1 = 1) = (c1, c2) from t1;
++-------------------------------------------------+
+| (select c1, c2 from t2 where c1 = 1) = (c1, c2) |
++-------------------------------------------------+
+|                                               1 |
+|                                               0 |
+|                                               0 |
++-------------------------------------------------+
+EXPLAIN select (c2, c1) <= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |90  |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([(t1.c2, cast(t1.c1, DECIMAL(11, 0))) <= subquery(1)]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (c2, c1) <= (select c1, c2 from t2 where c1 = 1) from t1;
++--------------------------------------------------+
+| (c2, c1) <= (select c1, c2 from t2 where c1 = 1) |
++--------------------------------------------------+
+|                                                1 |
+|                                                0 |
+|                                                0 |
++--------------------------------------------------+
+EXPLAIN select (c1, c2) <= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |90  |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([(t1.c1, t1.c2) <= subquery(1)]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (c1, c2) <= (select c1, c2 from t2 where c1 = 1) from t1;
++--------------------------------------------------+
+| (c1, c2) <= (select c1, c2 from t2 where c1 = 1) |
++--------------------------------------------------+
+|                                                1 |
+|                                                0 |
+|                                                0 |
++--------------------------------------------------+
+EXPLAIN select (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |141 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+|3 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1) >= subquery(2)]), init_plan_idxs_(nil)
+  1 - output([1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([t2.c2], [cast(t2.c1, DECIMAL(11, 0))]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+  3 - output([cast(t2.c1, DECIMAL(11, 0))], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
++------------------------------------------------------------------------------+
+| (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) |
++------------------------------------------------------------------------------+
+|                                                                            1 |
+|                                                                            1 |
+|                                                                            1 |
++------------------------------------------------------------------------------+
+EXPLAIN select (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |141 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |52  |
+|3 | TABLE GET    |t2  |1        |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1) >= subquery(2)]), init_plan_idxs_(nil)
+  1 - output([1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([t2.c1], [cast(t2.c1, DECIMAL(11, 0))]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  3 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+select (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
++------------------------------------------------------------------------------+
+| (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) |
++------------------------------------------------------------------------------+
+|                                                                            1 |
+|                                                                            1 |
+|                                                                            1 |
++------------------------------------------------------------------------------+
+
+EXPLAIN select c2 > (select c1 from t2 where c3 is not null) from t1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |3        |74  |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE SCAN   |t2  |3        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c2 > ?]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([cast(subquery(1), DECIMAL(11, 0))]), init_plan_idxs_(nil)
+  1 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter([(T_OP_IS_NOT, t2.c3, NULL, 0)]), 
+      access([t2.c3], [t2.c1]), partitions(p0)
+
+select c2 > (select c1 from t2 where c3 is not null) from t1;
++-----------------------------------------------+
+| c2 > (select c1 from t2 where c3 is not null) |
++-----------------------------------------------+
+|                                             0 |
+|                                             1 |
+|                                             1 |
++-----------------------------------------------+
+EXPLAIN select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |145 |
+|1 | TABLE SCAN   |t1  |3        |37  |
+|2 | TABLE GET    |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4]), filter([t1.c2 + cast(subquery(1), DECIMAL(11, 0)) < ?]), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3], [t1.c4]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3], [t1.c4]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
++----+------+------+------+
+| c1 | c2   | c3   | c4   |
++----+------+------+------+
+|  1 |    1 |    1 | a    |
+|  2 |    2 | NULL | a    |
+|  3 |    3 | NULL | a    |
++----+------+------+------+
+
+set ob_enable_transformation = on;

@@ -132,6 +132,55 @@ int ObTableQueryAndMutateP::get_partition_ids(uint64_t table_id, ObIArray<int64_
   return ret;
 }
 
+int ObTableQueryAndMutateP::rewrite_htable_query_if_need(const ObTableOperation &mutaion, ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
+    const ObHTableFilter &htable_filter = query.get_htable_filter();
+    if (htable_filter.is_valid()) {
+      const ObIArray<common::ObNewRange> &key_ranges = query.get_scan_ranges();
+      if (key_ranges.count() != 1) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("the count of key range of increment query must be 1", K(ret));
+      } else {
+        const ObIArray<ObString> &columns = htable_filter.get_columns();
+        if (columns.count() < 1 && ObTableOperationType::DEL != mutaion.type()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("must specified at least one column qualifier except delete", K(ret));
+        } else if (columns.count() == 1) {  // from tableapi java client's view, all ops are based on cq
+          const ObObj *start_key_ptr = key_ranges.at(0).start_key_.get_obj_ptr();
+          int64_t start_key_cnt = key_ranges.at(0).start_key_.length();
+          const ObObj *end_key_ptr = key_ranges.at(0).end_key_.get_obj_ptr();
+          int64_t end_key_cnt = key_ranges.at(0).end_key_.length();
+          if (start_key_cnt < 2 || end_key_cnt < 2) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("the rowkey must be longer than 2", K(ret), K(start_key_cnt), K(end_key_cnt));
+          } else {
+            ObObj htable_filter_cq;
+            htable_filter_cq.set_varbinary(columns.at(0));
+            ObObj &start_key_cq = const_cast<ObObj &>(start_key_ptr[1]);
+            ObObj &end_key_cq = const_cast<ObObj &>(end_key_ptr[1]);
+            if (OB_FAIL(ob_write_obj(allocator_, htable_filter_cq, start_key_cq))) {
+              LOG_WARN("fail to deep copy obobj", K(ret));
+            } else if (OB_FAIL(ob_write_obj(allocator_, htable_filter_cq, end_key_cq))) {
+              LOG_WARN("fail to deep copy obobj", K(ret));
+            } else {
+              if (ObTableOperationType::DEL != mutaion.type()) {  // checkAnddelete delete all version
+                query.set_limit(1);                               // only lock one row
+              }
+            }
+          }
+        } else {
+        }  // we have to scan additional rows to get result with multi-column
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("htable query and mutate must have a valid htable filter", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableQueryAndMutateP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -142,7 +191,7 @@ int ObTableQueryAndMutateP::try_process()
     rpc_timeout = rpc_pkt_->get_timeout();
   }
   uint64_t &table_id = query_ctx_.param_table_id();
-  query_ctx_.init_param(get_timeout_ts(), this, &allocator_,
+  query_ctx_.init_param(get_timeout_ts(), this->get_trans_desc(), &allocator_,
                         false/*ignored*/,
                         arg_.entity_type_,
                         table::ObBinlogRowImageType::MINIMAL/*ignored*/);
@@ -151,8 +200,17 @@ int ObTableQueryAndMutateP::try_process()
   ObTableQueryResultIterator *result_iterator = nullptr;
   int32_t result_count = 0;
   int64_t affected_rows = 0;
+  const ObTableOperation &mutation = mutations.at(0);
+  bool is_index_supported = true;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+    LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  } else if (OB_UNLIKELY(!is_index_supported)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index type is not supported by table api", K(ret));
+  } else if (OB_FAIL(rewrite_htable_query_if_need(mutation, const_cast<ObTableQuery &>(query)))) {
+    LOG_WARN("fail to rewrite query", K(ret));
   } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
     LOG_WARN("failed to get part id", K(ret));
   } else if (1 != part_ids.count()) {
@@ -162,10 +220,10 @@ int ObTableQueryAndMutateP::try_process()
   } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, table_id, part_ids,
                                  get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_query(query_ctx_, query,
-                                                   one_result_, result_iterator))) {
+  } else if (OB_FAIL(table_service_->execute_query(
+                 query_ctx_, query, one_result_, result_iterator, true /* for update */))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to execute query", K(ret), K(table_id));
+      LOG_WARN("failed to execute query", K(ret), K(table_id), K(arg_.entity_type_));
     }
   } else {
     // one_result references to result_
@@ -175,8 +233,7 @@ int ObTableQueryAndMutateP::try_process()
     if (OB_ITER_END == ret || OB_SUCC(ret)) {
       ret = OB_SUCCESS;
       one_result = &one_result_;  // empty result is OK for APPEND and INCREMENT
-      const ObTableOperation &mutation = mutations.at(0);
-      switch(mutation.type()) {
+      switch (mutation.type()) {
         case ObTableOperationType::DEL:  // checkAndDelete
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
           if (one_result->get_row_count() > 0) {  // not empty result means check passed
@@ -205,11 +262,14 @@ int ObTableQueryAndMutateP::try_process()
                                              table_service_,
                                              part_service_);
             ret = put_executor.htable_put(mutations, put_rows);
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("put with empty check result is not supported currently", K(ret));
           }
           break;
         case ObTableOperationType::INCREMENT:         // Increment
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
-          {                                           // one_result->get_row_count() >= 0
+          if (one_result->get_row_count() > 0) {  // not empty result means check passed
             affected_rows = 1;
             ObHTableIncrementExecutor inc_executor(ObTableOperationType::INCREMENT,
                                                    allocator_,
@@ -224,13 +284,15 @@ int ObTableQueryAndMutateP::try_process()
             if (arg_.query_and_mutate_.return_affected_entity()) {
               results = &result_.affected_entity_;
             }
-            ret = inc_executor.htable_increment(*one_result, mutations,
-                                                put_cells, results);
+            ret = inc_executor.htable_increment(*one_result, mutations, put_cells, results);
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("increment with empty check result is not supported currently", K(ret));
           }
           break;
         case ObTableOperationType::APPEND:             // Append
           stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_APPEND;
-          {                                            // one_result->get_row_count() >= 0
+          if (one_result->get_row_count() > 0) {  // not empty result means check passed
             affected_rows = 1;
             ObHTableIncrementExecutor apd_executor(ObTableOperationType::APPEND,
                                                    allocator_,
@@ -245,8 +307,10 @@ int ObTableQueryAndMutateP::try_process()
             if (arg_.query_and_mutate_.return_affected_entity()) {
               results = &result_.affected_entity_;
             }
-            ret = apd_executor.htable_increment(*one_result, mutations,
-                                                put_cells, results);
+            ret = apd_executor.htable_increment(*one_result, mutations, put_cells, results);
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("append with empty check result is not supported currently", K(ret));
           }
           break;
         default:

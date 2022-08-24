@@ -84,7 +84,7 @@ public:
   bool has_encounter_fatal_error(const int64_t incarnation, const int64_t archive_round);
   int set_archive_start(const int64_t incarnation, const int64_t archive_round, const int64_t piece_id,
       const int64_t piece_create_date, const bool is_oss, const share::ObTenantLogArchiveStatus::COMPATIBLE compatible);
-  void set_archive_force_stop(const int64_t incarnation, const int64_t archive_round);
+  int set_archive_force_stop(const int64_t incarnation, const int64_t archive_round, const int64_t piece_id);
   int update_cur_piece_info(const int64_t incarnation, const int64_t archive_round, const int64_t new_piece_id,
       const int64_t new_piece_create_date);
   void get_archive_round_info(int64_t& incarnation, int64_t& archive_round, int64_t& cur_piece_id,

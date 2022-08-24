@@ -704,6 +704,7 @@ OB_INLINE int ObMPQuery::do_process(
     }
     // some statistics must be recorded for plan stat
     // even though sql audit disabled
+    audit_record.tenant_id_=session.get_effective_tenant_id();
     update_audit_info(total_wait_desc, audit_record);
     // Tetry:
     // 1. rs.open fail
@@ -982,6 +983,7 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly)
     case stmt::T_SHOW_PRIVILEGES:
     case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_GRANTS:
+    case stmt::T_SHOW_QUERY_RESPONSE_TIME:
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_USE_DATABASE:
     case stmt::T_START_TRANS:

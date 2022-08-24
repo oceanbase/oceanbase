@@ -63,7 +63,7 @@ public:
   RPC_S(PRD modify_system_variable, obrpc::OB_MODIFY_SYSVAR, (ObModifySysVarArg));
   RPC_S(PRD create_database, obrpc::OB_CREATE_DATABASE, (ObCreateDatabaseArg), UInt64);
   RPC_S(PRD create_tablegroup, obrpc::OB_CREATE_TABLEGROUP, (ObCreateTablegroupArg), UInt64);
-  RPC_S(PRD create_table, obrpc::OB_CREATE_TABLE, (ObCreateTableArg), UInt64);
+  RPC_S(PRD create_table, obrpc::OB_CREATE_TABLE, (ObCreateTableArg), ObCreateTableRes);
   RPC_S(PRD alter_table, obrpc::OB_ALTER_TABLE, (ObAlterTableArg), ObAlterTableRes);
   RPC_S(PRD alter_database, obrpc::OB_ALTER_DATABASE, (ObAlterDatabaseArg));
   RPC_S(PRD drop_database, obrpc::OB_DROP_DATABASE, (ObDropDatabaseArg), UInt64);
@@ -289,6 +289,9 @@ public:
   RPC_S(PRD create_restore_point, obrpc::OB_CREATE_RESTORE_POINT, (ObCreateRestorePointArg));
   RPC_S(PRD drop_restore_point, obrpc::OB_DROP_RESTORE_POINT, (ObDropRestorePointArg));
 
+  // table api
+  RPC_S(PRD table_ttl, obrpc::OB_TABLE_TTL, (ObTableTTLArg));
+  RPC_S(PRD ttl_response, obrpc::OB_TTL_RESPONSE, (ObTTLResponseArg));
 public:
   void set_rs_mgr(share::ObRsMgr& rs_mgr)
   {

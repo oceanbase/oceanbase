@@ -1085,6 +1085,9 @@ int ObMergeSortReceive::create_op_ctx(ObExecContext& exec_ctx, ObAsyncReceiveCtx
   } else if (OB_ISNULL(receive_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to create merge sort receive ctx", K(ret));
+  } else if (sort_columns_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sort_column could not be empty", K(ret));
   } else {
     receive_ctx->row_comparer_.init(sort_columns_, receive_ctx->child_rows_);
     op_ctx = receive_ctx;

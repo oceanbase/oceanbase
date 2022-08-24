@@ -1229,9 +1229,7 @@ int TenantBalanceStat::fill_partition_entity(const uint64_t schema_id, const SCH
   } else if (OB_FAIL(build_readonly_at_all_info(schema_id, schema))) {
     RS_LOG(WARN, "fail to build readonly at all info", K(ret), K(schema_id));
   } else {
-    bool can_do_rereplicate =
-        !schema.is_global_index_table() || (schema.is_global_index_table() && schema.can_read_index()) ||
-        (schema.is_global_index_table() && schema.is_mock_global_index_invalid() && !schema.can_read_index());
+    bool can_do_rereplicate = !schema.is_global_index_table() || schema.can_rereplicate_global_index_table();
     share::ObPartitionInfo info;
     int64_t partition_idx = OB_INVALID_INDEX;
     bool check_dropped_partition = true;

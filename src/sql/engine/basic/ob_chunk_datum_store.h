@@ -34,36 +34,6 @@ class ObChunkDatumStore {
   OB_UNIS_VERSION_V(1);
 
 public:
-  static inline int row_copy_size(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size)
-  {
-    int ret = OB_SUCCESS;
-    common::ObDatum* datum = nullptr;
-    size = DATUM_SIZE * exprs.count();
-    for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(exprs.at(i)->eval(ctx, datum))) {
-        SQL_ENG_LOG(WARN, "failed to eval expr datum", KPC(exprs.at(i)), K(ret));
-      } else {
-        size += datum->len_;
-      }
-    }
-    return ret;
-  }
-  static inline int64_t row_copy_size(common::ObDatum** datums, const int64_t cnt)
-  {
-    int64_t size = DATUM_SIZE * cnt;
-    for (int64_t i = 0; i < cnt; ++i) {
-      size += datums[i]->len_;
-    }
-    return size;
-  }
-  static inline int64_t row_copy_size(common::ObDatum* datums, const int64_t cnt)
-  {
-    int64_t size = DATUM_SIZE * cnt;
-    for (int64_t i = 0; i < cnt; ++i) {
-      size += datums[i].len_;
-    }
-    return size;
-  }
   /*
    * StoredRow memory layout
    * N Datum + extend_size(can be 0) + real data
@@ -75,16 +45,22 @@ public:
   struct StoredRow {
     StoredRow() : cnt_(0), row_size_(0)
     {}
-    int copy_datums(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, char* buf, const int64_t size,
-        const int64_t row_size, const uint32_t row_extend_size);
-    int copy_datums(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& row_size, char* buf,
-        const int64_t max_buf_size, const uint32_t row_extend_size);
-    int copy_datums(common::ObDatum** datums, const int64_t cnt, char* buf, const int64_t size, const int64_t row_size,
-        const uint32_t row_extend_size);
-    int copy_datums(common::ObDatum* datums, const int64_t cnt, char* buf, const int64_t size, const int64_t row_size,
-        const uint32_t row_extend_size);
     int to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const;
     int to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t count) const;
+    // Build a stored row by exprs.
+    // @param [out] sr, result stored row
+    // @param epxrs,
+    // @param ctx
+    // @param buf
+    // @param buf_len, use Block::row_store_size() to detect the needed buffer size.
+    // @param extra_size, extra store size
+    // @param unswizzling
+    // @return OB_SUCCESS or OB_BUF_NOT_ENOUGH if buf not enough
+    static int build(StoredRow *&sr, const ObExprPtrIArray &exprs, ObEvalCtx &ctx, char *buf, const int64_t buf_len,
+        const uint32_t extra_size = 0);
+    static int build(StoredRow *&sr, const ObExprPtrIArray &exprs, ObEvalCtx &ctx, common::ObIAllocator &alloc,
+        const uint32_t extra_size = 0);
+
 
     inline common::ObDatum* cells()
     {
@@ -117,7 +93,6 @@ public:
    * 2) Provide reuse mode, memory can be reused
    * 3) Provide conversion from StoredRow to ObIArray<ObExpr*>
    */
-  template <typename T = ObChunkDatumStore::StoredRow>
   class LastStoredRow {
   public:
     LastStoredRow(ObIAllocator& alloc)
@@ -138,13 +113,13 @@ public:
       char* buf = NULL;
       int64_t row_size = 0;
       int64_t buffer_len = 0;
-      T* new_row = NULL;
+      StoredRow* new_row = NULL;
       if (0 == exprs.count()) {
         // no column. scenario like distinct 1
       } else if (OB_FAIL(ObChunkDatumStore::row_copy_size(exprs, ctx, row_size))) {
         SQL_ENG_LOG(WARN, "failed to calc copy size", K(ret));
       } else {
-        int64_t head_size = sizeof(T);
+        int64_t head_size = sizeof(StoredRow);
         reuse = OB_ISNULL(store_row_) ? false : reuse && (max_size_ >= row_size + head_size + extra_size);
         if (reuse && OB_NOT_NULL(store_row_)) {
           // switch buffer for write
@@ -163,24 +138,21 @@ public:
           } else if (OB_ISNULL(buf2 = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
-          } else if (OB_ISNULL(pre_alloc_row1_ = new (buf1) T())) {
+          } else if (OB_ISNULL(pre_alloc_row1_ = new (buf1) StoredRow())) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
-          } else if (OB_ISNULL(pre_alloc_row2_ = new (buf2) T())) {
+          } else if (OB_ISNULL(pre_alloc_row2_ = new (buf2) StoredRow())) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
           } else {
             buf = buf1;
-            new_row = pre_alloc_row1_;
           }
         }
         if (OB_SUCC(ret)) {
-          int64_t pos = head_size;
-          if (OB_FAIL(new_row->copy_datums(exprs, ctx, buf + pos, buffer_len - head_size, row_size, extra_size))) {
-            SQL_ENG_LOG(WARN, "failed to deep copy row", K(ret), K(buffer_len), K(row_size));
+          if (OB_FAIL(StoredRow::build(store_row_, exprs, ctx, buf, buffer_len, extra_size))) {
+            SQL_ENG_LOG(WARN, "failed to build stored row", K(ret), K(buffer_len), K(row_size));
           } else {
             max_size_ = buffer_len;
-            store_row_ = new_row;
           }
         }
       }
@@ -192,9 +164,9 @@ public:
       bool reuse = reuse_;
       char* buf = NULL;
       int64_t buffer_len = 0;
-      T* new_row = NULL;
+      StoredRow* new_row = NULL;
       int64_t row_size = row.row_size_;
-      int64_t head_size = sizeof(T);
+      int64_t head_size = sizeof(StoredRow);
       reuse = OB_ISNULL(store_row_) ? false : reuse && (max_size_ >= row_size + head_size + extra_size);
       if (reuse && OB_NOT_NULL(store_row_)) {
         buf = reinterpret_cast<char*>(store_row_);
@@ -205,20 +177,15 @@ public:
         if (OB_ISNULL(buf = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
-        } else if (OB_ISNULL(new_row = new (buf) T())) {
+        } else if (OB_ISNULL(new_row = new (buf) StoredRow())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
         int64_t pos = head_size;
-        if (OB_FAIL(new_row->copy_datums(const_cast<common::ObDatum*>(row.cells()),
-                row.cnt_,
-                buf + pos,
-                buffer_len - head_size,
-                row_size,
-                extra_size))) {
-          SQL_ENG_LOG(WARN, "failed to deep copy row", K(ret), K(buffer_len), K(row_size));
+        if (OB_FAIL(new_row->assign(&row))) {
+          SQL_ENG_LOG(WARN, "stored row assign failed", K(ret));
         } else {
           max_size_ = buffer_len;
           store_row_ = new_row;
@@ -226,7 +193,7 @@ public:
       }
       return ret;
     }
-    void set_store_row(T* in_store_row)
+    void set_store_row(StoredRow* in_store_row)
     {
       store_row_ = in_store_row;
     }
@@ -237,18 +204,17 @@ public:
     }
 
     TO_STRING_KV(K_(max_size), K_(reuse), KPC_(store_row));
-    T* store_row_;
+    StoredRow* store_row_;
     ObIAllocator& alloc_;
     int64_t max_size_;
     bool reuse_;
 
   private:
     // To avoid writing memory overwrite, alloc 2 row for alternate writing
-    T* pre_alloc_row1_;
-    T* pre_alloc_row2_;
+    StoredRow* pre_alloc_row1_;
+    StoredRow* pre_alloc_row2_;
   };
 
-  template <typename T = ObChunkDatumStore::StoredRow>
   class ShadowStoredRow {
   public:
     ShadowStoredRow() : alloc_(nullptr), store_row_(nullptr), saved_(false)
@@ -261,7 +227,7 @@ public:
     int init(common::ObIAllocator& allocator, int64_t datum_cnt)
     {
       int ret = OB_SUCCESS;
-      int64_t buffer_len = datum_cnt * sizeof(ObDatum) + sizeof(T);
+      int64_t buffer_len = datum_cnt * sizeof(ObDatum) + sizeof(StoredRow);
       char* buf = nullptr;
       if (NULL != alloc_) {
         ret = common::OB_INIT_TWICE;
@@ -271,9 +237,9 @@ public:
         SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
       } else {
         alloc_ = &allocator;
-        store_row_ = new (buf) T();
+        store_row_ = new (buf) StoredRow();
         store_row_->cnt_ = datum_cnt;
-        store_row_->row_size_ = datum_cnt * sizeof(ObDatum);
+        store_row_->row_size_ = datum_cnt * sizeof(ObDatum) + sizeof(StoredRow);
         saved_ = false;
       }
       return ret;
@@ -322,7 +288,7 @@ public:
       saved_ = false;
     }
 
-    T* get_store_row() const
+    StoredRow* get_store_row() const
     {
       return store_row_;
     }
@@ -330,7 +296,7 @@ public:
 
   private:
     common::ObIAllocator* alloc_;
-    T* store_row_;
+    StoredRow* store_row_;
     bool saved_;
   };
 
@@ -341,14 +307,14 @@ public:
     Block() : magic_(0), blk_size_(0), rows_(0)
     {}
 
-    static int inline min_buf_size(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size)
+    static int inline min_buf_size(const common::ObIArray<ObExpr*>& exprs, int64_t row_extend_size, ObEvalCtx& ctx, int64_t& size)
     {
       int ret = OB_SUCCESS;
       size = 0;
       if (OB_FAIL(row_store_size(exprs, ctx, size))) {
         SQL_ENG_LOG(WARN, "failed to calc store row size", K(ret));
       } else {
-        size += BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer);
+        size += BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer) + row_extend_size;
       }
       return ret;
     }
@@ -370,17 +336,9 @@ public:
     }
 
     // following interface for ObDatum only,unused for now
-    static int64_t inline min_buf_size(common::ObDatum** datums, const int64_t cnt)
-    {
-      return BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer) + row_store_size(datums, cnt);
-    }
     static int64_t inline min_buf_size(common::ObDatum* datums, const int64_t cnt)
     {
       return BlockBuffer::HEAD_SIZE + sizeof(BlockBuffer) + row_store_size(datums, cnt);
-    }
-    static int64_t inline row_store_size(common::ObDatum** datums, const int64_t cnt, uint32_t row_extend_size = 0)
-    {
-      return ROW_HEAD_SIZE + row_extend_size + ObChunkDatumStore::row_copy_size(datums, cnt);
     }
     static int64_t inline row_store_size(common::ObDatum* datums, const int64_t cnt, uint32_t row_extend_size = 0)
     {
@@ -970,6 +928,30 @@ private:
       callback_->free(size);
   }
 
+  static inline int row_copy_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx, int64_t &size)
+  {
+    int ret = OB_SUCCESS;
+    common::ObDatum *datum = nullptr;
+    size = DATUM_SIZE * exprs.count();
+    for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(exprs.at(i)->eval(ctx, datum))) {
+        SQL_ENG_LOG(WARN, "failed to eval expr datum", KPC(exprs.at(i)), K(ret));
+      } else {
+        size += datum->len_;
+      }
+    }
+    return ret;
+  }
+
+  static inline int64_t row_copy_size(common::ObDatum *datums, const int64_t cnt)
+  {
+    int64_t size = DATUM_SIZE * cnt;
+    for (int64_t i = 0; i < cnt; ++i) {
+      size += datums[i].len_;
+    }
+    return size;
+  }
+
 private:
   bool inited_;
   uint64_t tenant_id_;
@@ -1011,6 +993,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObChunkDatumStore);
 };
 
+typedef ObChunkDatumStore::StoredRow ObStoredDatumRow;
+
 inline int ObChunkDatumStore::BlockBuffer::advance(int64_t size)
 {
   int ret = common::OB_SUCCESS;
@@ -1026,7 +1010,6 @@ inline int ObChunkDatumStore::BlockBuffer::advance(int64_t size)
   }
   return ret;
 }
-
 }  // end namespace sql
 }  // end namespace oceanbase
 

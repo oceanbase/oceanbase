@@ -52,10 +52,10 @@ public:
   ObIndexTransStatusReporter();
   virtual ~ObIndexTransStatusReporter();
   static int report_wait_trans_status(const uint64_t index_table_id, const int svr_type, const int64_t partition_id,
-      const ObIndexTransStatus& status, common::ObMySQLProxy& mysql_proxy);
+      const ObIndexTransStatus &status, common::ObISQLClient &mysql_client);
   static int get_wait_trans_status(const uint64_t index_table_id, const int svr_type, const int64_t partition_id,
-      common::ObMySQLProxy& sql_proxy, ObIndexTransStatus& status);
-  static int delete_wait_trans_status(const uint64_t index_table_id, common::ObMySQLProxy& mysql_proxy);
+      common::ObMySQLProxy &sql_proxy, ObIndexTransStatus &status);
+  static int delete_wait_trans_status(const uint64_t index_table_id, common::ObISQLClient &mysql_client);
 };
 
 }  // end namespace share

@@ -108,7 +108,7 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
 
       // 2. Scan table_schema_array
       // After scanning database_schema_array, continue to scan filter_table_schema_array
-      if (database_schema_array_.count() == i) {
+      if (OB_SUCC(ret) && database_schema_array_.count() == i) {
         is_filter_table_schema = true;
         if (OB_FAIL(iterate_table_schema_array(is_filter_table_schema, -1))) {
           SERVER_LOG(WARN, "fail to iterate all table schema. ", K(ret));
@@ -307,7 +307,8 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
       is_filter_db_ = true;
       ObString database_name = start_key_obj_ptr[0].get_varchar();
       const ObDatabaseSchema *filter_database_schema = NULL;
-      if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_name, filter_database_schema))) {
+      if (database_name.empty()) {
+      } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_name, filter_database_schema))) {
         SERVER_LOG(WARN, "fail to get database schema", K(ret), K(tenant_id_), K(database_name));
       } else if (NULL == filter_database_schema) {
       } else if (start_key_obj_ptr[1].is_varchar_or_char() && end_key_obj_ptr[1].is_varchar_or_char() &&
@@ -343,13 +344,20 @@ int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta &obj_meta, const ObAc
   if (OB_FAIL(ob_sql_type_str(
           obj_meta, accuracy, type_info, default_length_semantics, column_type_str_, column_type_str_len_, pos))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
-      if (OB_UNLIKELY(
-              NULL == (column_type_str_ = static_cast<char *>(allocator_->realloc(
-                           column_type_str_, OB_MAX_SYS_PARAM_NAME_LENGTH, OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
+      void *tmp_ptr = NULL;
+      if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
+                                   data_type_str_, OB_MAX_SYS_PARAM_NAME_LENGTH, OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(data_type_str_ = static_cast<char *>(tmp_ptr))) {
+      } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(column_type_str_,
+                                          OB_MAX_SYS_PARAM_NAME_LENGTH,
+                                          OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
       } else {
         pos = 0;
+        column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(
             obj_meta, accuracy, type_info, default_length_semantics, column_type_str_, column_type_str_len_, pos);

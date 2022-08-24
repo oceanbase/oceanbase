@@ -169,6 +169,11 @@ void ObBackupDataClean::run3()
     }
 
     set_inner_error(ret);
+    if (OB_SUCCESS != inner_error_) {
+      if (OB_FAIL(update_sys_clean_info())) {
+        LOG_WARN("failed to update sys clean info", K(ret), K(inner_error_));
+      }
+    }
     cleanup_prepared_infos();
 
     if (OB_FAIL(idle())) {
@@ -179,6 +184,22 @@ void ObBackupDataClean::run3()
   }
   FLOG_INFO("[BACKUP_CLEAN]ObBackupDataClean stop");
   is_working_ = false;
+}
+
+int ObBackupDataClean::update_sys_clean_info()
+{
+  int ret = OB_SUCCESS;
+  ObBackupCleanInfo sys_clean_info;
+  if (OB_FAIL(get_backup_clean_info(OB_SYS_TENANT_ID, sys_clean_info))) {
+    LOG_WARN("failed to get sys clean info", K(ret), K(sys_clean_info));
+  } else if (ObBackupCleanInfoStatus::DOING != sys_clean_info.status_) {
+    // do nothing
+  } else if (FALSE_IT(sys_clean_info.result_ = inner_error_)) {
+  } else if (OB_FAIL(
+                 ObTenantBackupCleanInfoOperator::update_clean_info(OB_SYS_TENANT_ID, sys_clean_info, *sql_proxy_))) {
+    LOG_WARN("failed to update sys clean info result", K(ret), K(sys_clean_info));
+  }
+  return ret;
 }
 
 int ObBackupDataClean::get_need_clean_tenants(ObIArray<ObBackupDataCleanTenant> &clean_tenants)
@@ -1275,6 +1296,7 @@ int ObBackupDataClean::add_sys_tenant_obsolete_backup_sets(const share::ObBackup
   } else if (OB_FAIL(get_cluster_max_succeed_backup_set(copy_id, cluster_max_backup_set_id))) {
     LOG_WARN("failed to get cluster max succeed backup set", K(ret), K(clean_info));
   } else {
+    // Traverse in reverse order by backup_set_id
     for (int64_t i = task_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       is_continue = false;
       const ObTenantBackupTaskInfo &task_info = task_infos.at(i);
@@ -1305,6 +1327,7 @@ int ObBackupDataClean::add_sys_tenant_obsolete_backup_sets(const share::ObBackup
 
       if (OB_FAIL(ret)) {
       } else if (need_add_backup_set) {
+        // successful and not obsolete backup sets need to added, because of the touch feature
         if (OB_FAIL(reverse_task_infos.push_back(task_info))) {
           LOG_WARN("failed to push task info into array", K(ret), K(task_info));
         } else if (OB_FAIL(reverse_backup_set_ids.push_back(backup_set_id))) {
@@ -1476,34 +1499,23 @@ int ObBackupDataClean::add_obsolete_backup_set_with_order(const share::ObBackupC
         K(reverse_backup_set_ids));
   } else {
     bool is_deleted_set_contine = true;
-    bool is_set_clog_clean_point = false;
     ObBackupSetId new_backup_set_id;
     ObBackupDestOpt backup_dest_option;
+    // Traverse in order of backup_set_id, reset clog_data_clean_point to ensure sequential deletion
     for (int64_t i = reverse_task_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       backup_dest_option.reset();
       const ObTenantBackupTaskInfo &task_info = reverse_task_infos.at(i);
       const ObBackupSetId &backup_set_id = reverse_backup_set_ids.at(i);
       new_backup_set_id = backup_set_id;
       if (!is_deleted_set_contine) {
-        if (clean_info.is_delete_obsolete_backup_backup()) {
+        if (task_info.is_result_succeed()) {
           new_backup_set_id.clean_mode_ = ObBackupDataCleanMode::TOUCH;
-          if (task_info.is_result_succeed() && !is_set_clog_clean_point) {
-            clog_data_clean_point = task_info;
-            is_set_clog_clean_point = true;
-          }
-        } else if (task_info.is_result_succeed()) {
-          new_backup_set_id.clean_mode_ = ObBackupDataCleanMode::TOUCH;
-          if (!is_set_clog_clean_point) {
-            clog_data_clean_point = task_info;
-            is_set_clog_clean_point = true;
-          }
-        } else {
-          // do nothing
         }
       } else if (ObBackupDataCleanMode::CLEAN == backup_set_id.clean_mode_) {
         // do nothing
       } else {
         is_deleted_set_contine = false;
+        clog_data_clean_point = task_info;
       }
 
       if (OB_FAIL(get_backup_dest_option(task_info.backup_dest_, backup_dest_option))) {

@@ -40,6 +40,16 @@ else()
     -Wno-psabi -Wno-sign-compare -Wno-unused-variable ${ARCH_COMPILE_OPTIONS}
     $<$<COMPILE_LANGUAGE:C>:-Wno-old-style-declaration>
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-literal-suffix -Wno-invalid-offsetof>)
+
+  if(${ARCHITECTURE} STREQUAL "sw_64")
+    target_compile_options(oblib_base_base
+      INTERFACE
+      -Wno-type-limits -Wno-implicit-fallthrough -Wno-deprecated-declarations
+      -Wno-nonnull-compare -Wno-tautological-compare -Wno-extra -Wno-parentheses
+      -Wno-memset-elt-size -Wno-comment -Wno-int-in-bool-context -Wno-unused-but-set-parameter
+      -Wno-ignored-qualifiers -Wno-unused-but-set-variable -Wno-unused-value -Wno-format-truncation
+      $<$<COMPILE_LANGUAGE:CXX>:-Wno-class-memaccess -Wno-aligned-new>)
+    endif()
 endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)

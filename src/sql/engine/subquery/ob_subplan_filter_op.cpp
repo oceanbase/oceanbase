@@ -470,7 +470,7 @@ int ObSubPlanFilterOp::handle_update_set()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("too many subplan unexpected", K(ret), K(subplan_iters_.count()));
   } else {
-    ObChunkDatumStore::LastStoredRow<> row_val(update_set_mem_->get_arena_allocator());
+    ObChunkDatumStore::LastStoredRow row_val(update_set_mem_->get_arena_allocator());
     Iterator* iter = subplan_iters_.at(0);
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;

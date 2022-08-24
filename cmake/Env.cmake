@@ -1,3 +1,7 @@
+include(CMakeFindBinUtils)
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+message(STATUS "DETECT BUILD ARCH: " ${ARCHITECTURE})
+
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
@@ -24,6 +28,16 @@ set(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
 
 set(LD_OPT "-Wl,--build-id=uuid")
 set(BUILD_OPT "${DEBUG_PREFIX}")
+
+if(${ARCHITECTURE} STREQUAL "sw_64")
+  set(OB_USE_CLANG OFF)
+  set(OB_USE_LLVM_LIBTOOLS OFF)
+  set(OBJCOPY_BIN "${DEVTOOLS_DIR}/swgcc830_native_tools/usr/bin/objcopy")
+  set(LD_BIN "${DEVTOOLS_DIR}/swgcc830_native_tools/usr/bin/ld")
+  set(OB_CC "${DEVTOOLS_DIR}/swgcc830_native_tools/usr/bin/gcc")
+  set(OB_CXX "${DEVTOOLS_DIR}/swgcc830_native_tools/usr/bin/g++")
+  set(BUILD_OPT "${BUILD_OPT} --sysroot=${DEVTOOLS_DIR}/swgcc830_native_tools/")
+endif()
 
 if (OB_USE_LLVM_LIBTOOLS)
   # use llvm-ar llvm-ranlib llvm-objcopy ld.lld...
@@ -79,13 +93,19 @@ if (OB_USE_CLANG)
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT}")
 
-else() # not clang, use gcc52
-  find_program(OB_CC gcc
-    PATHS "${DEVTOOLS_DIR}/bin"
-    NO_DEFAULT_PATH)
-  find_program(OB_CXX g++
-    PATHS "${DEVTOOLS_DIR}/bin"
-    NO_DEFAULT_PATH)
+else() # not clang, use gcc (such as gcc52 in x86_64)
+
+  if(NOT DEFINED OB_CC)
+    find_program(OB_CC gcc
+      PATHS "${DEVTOOLS_DIR}/bin"
+      NO_DEFAULT_PATH)
+  endif()
+
+  if(NOT DEFINED OB_CXX)
+    find_program(OB_CC g++
+      PATHS "${DEVTOOLS_DIR}/bin"
+      NO_DEFAULT_PATH)
+  endif()
 
   set(BUILD_OPT "${BUILD_OPT} -fdiagnostics-color")
   set(LD_OPT "${LD_OPT} -z noexecstack")
@@ -109,19 +129,19 @@ else()
   message(FATAL_ERROR "COMPILER NOT FOUND")
 endif()
 
-include(CMakeFindBinUtils)
-EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
-message(STATUS "DETECT BUILD ARCH: " ${ARCHITECTURE})
 if(${ARCHITECTURE} STREQUAL "x86_64")
     set(MTUNE_CFLAGS "-mtune=core2")
     set(ARCH_LDFLAGS "")
 elseif(${ARCHITECTURE} STREQUAL "aarch64")
     set(MARCH_CFLAGS "-march=armv8-a+crc" )
     set(MTUNE_CFLAGS "-mtune=generic" )
-    set(ARCH_LDFLAGS "-latomic")
+    set(ARCH_LDFLAGS "-l:libatomic.a")
 elseif(${ARCHITECTURE} STREQUAL "loongarch64")
-    set(MARCH_CFLAGS "-march=la464" )
-    set(MTUNE_CFLAGS "-mabi=lp64d" )
+    set(MARCH_CFLAGS "-march=la464" "-mcmodel=large")
+    set(MTUNE_CFLAGS "-mabi=lp64d")
+    set(ARCH_LDFLAGS "-latomic")
+elseif(${ARCHITECTURE} STREQUAL "sw_64")
+    set(ARCH_LDFLAGS "-latomic -llzma")
 else()
     message(FATAL_ERROR "UNSUPPORT BUILD ARCH: ${ARCHITECTURE}")
 endif()

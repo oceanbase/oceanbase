@@ -16,6 +16,7 @@
 #include "share/redolog/ob_log_store_factory.h"
 #include "storage/blocksstable/slog/ob_storage_log_reader.h"
 #include "storage/ob_file_system_router.h"
+#include "storage/ob_partition_log.h"
 
 namespace oceanbase {
 using namespace common;
@@ -450,7 +451,7 @@ int ObStorageLogReplayer::replay_after_ckpt(
                  replay_start_cursor.log_id_ > 0 ? replay_start_cursor.log_id_ - 1 : 0))) {
     LOG_WARN("Fail to init log_reader, ", K(ret));
   } else {
-    LogCommand cmd = common::OB_LOG_UNKNOWN;
+    LogCommand cmd = common::LogCommand::OB_LOG_UNKNOWN;
     uint64_t entry_seq = 0;
     ObBaseStorageLogHeader log_header;
     char* log_data = NULL;
@@ -463,6 +464,8 @@ int ObStorageLogReplayer::replay_after_ckpt(
     ObLogCursor curr_cursor;
     int64_t replay_cost[OB_REDO_LOG_MAX] = {0};
     int64_t replay_cnt[OB_REDO_LOG_MAX] = {0};
+    int64_t partition_replay_cost[ObPartitionRedoLogSubcmd::REDO_LOG_MAX] = {0};
+    int64_t partition_replay_cnt[ObPartitionRedoLogSubcmd::REDO_LOG_MAX] = {0};
     int64_t replay_start_time = 0;
 
     while (OB_SUCC(ret) && OB_SUCC(slog_reader.read_log(cmd, entry_seq, log_data, data_len))) {
@@ -525,8 +528,19 @@ int ObStorageLogReplayer::replay_after_ckpt(
                   K(log_buffer.capacity()),
                   K(data_len));
             }
-            replay_cost[main_type] += ObTimeUtility::current_time() - replay_start_time;
+            static const int64_t REPLAY_COST_THRESHOLD_US = 10 * 1000;  // 10ms
+            const int64_t gap = ObTimeUtility::current_time() - replay_start_time;
+            replay_cost[main_type] += gap;
             replay_cnt[main_type]++;
+            if (ObRedoLogMainType::OB_REDO_LOG_PARTITION == main_type) {
+              partition_replay_cost[sub_type] += gap;
+              partition_replay_cnt[sub_type]++;
+            }
+
+            if (gap > REPLAY_COST_THRESHOLD_US) {
+              LOG_INFO(
+                  "replaying slog costs too much time", K(ret), K(gap), K(main_type), K(sub_type), K(replay_param));
+            }
           }
         }  // while log_buffer.read_log
 
@@ -564,6 +578,20 @@ int ObStorageLogReplayer::replay_after_ckpt(
         replay_cnt[OB_REDO_LOG_TENANT_FILE],
         "tenant file log cost",
         replay_cost[OB_REDO_LOG_TENANT_FILE]);
+    for (int i = 0; i < ObPartitionRedoLogSubcmd::REDO_LOG_MAX; ++i) {
+      if (partition_replay_cnt[i] != 0) {
+        double avg_cost = partition_replay_cost[i] * 1.0 / partition_replay_cnt[i];
+        FLOG_INFO("print partition replay cost and cnt",
+            "sub type",
+            static_cast<ObPartitionRedoLogSubcmd>(i),
+            "total cost",
+            partition_replay_cost[i],
+            "total cnt",
+            partition_replay_cnt[i],
+            "avg cost per log",
+            avg_cost);
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {

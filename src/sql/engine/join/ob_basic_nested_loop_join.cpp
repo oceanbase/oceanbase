@@ -90,13 +90,6 @@ int ObBasicNestedLoopJoin::prepare_rescan_params(ObBasicNestedLoopJoinCtx& join_
     }
   }
 
-  // try to open the right child
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(open_right_child(join_ctx))) {
-      LOG_WARN("failed to open right child", K(ret));
-    }
-  }
-
   return ret;
 }
 
@@ -123,99 +116,26 @@ int ObBasicNestedLoopJoin::get_next_left_row(ObJoinCtx& join_ctx) const
   return OB_SUCCESS != ret ? ret : ObJoin::get_next_left_row(join_ctx);
 }
 
-int ObBasicNestedLoopJoin::open_right_child(ObBasicNestedLoopJoinCtx& join_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ObPhyOperator* child_ptr = nullptr;
-  ObPhyOperatorCtx* child_op_ctx = nullptr;
-  if (join_ctx.open_right_child()) {
-    // do nothing
-  } else if (OB_ISNULL(child_ptr = get_child(SECOND_CHILD))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get right child", K(ret));
-  } else if (OB_NOT_NULL(
-                 child_op_ctx = GET_PHY_OPERATOR_CTX(ObPhyOperatorCtx, join_ctx.exec_ctx_, child_ptr->get_id()))) {
-    // the drain stage will open this operator, and no record in join_ctx.
-    join_ctx.set_open_right_child();
-  } else if (OB_FAIL(open_child(join_ctx.exec_ctx_, SECOND_CHILD))) {
-    LOG_WARN("fail to open right child", K(ret));
-    join_ctx.set_open_right_child();
-  } else {
-    join_ctx.set_open_right_child();
-  }
-  return ret;
-}
-
-int ObBasicNestedLoopJoin::open_left_child(ObExecContext& ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(open_child(ctx, FIRST_CHILD))) {
-    LOG_WARN("fail to open left child", K(ret));
-  }
-  return ret;
-}
-
-int ObBasicNestedLoopJoin::inner_open(ObExecContext& ctx) const
+int ObBasicNestedLoopJoin::inner_open(ObExecContext &ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObJoin::inner_open(ctx))) {
     LOG_WARN("failed to inner open join", K(ret));
-  } else if (OB_FAIL(open_left_child(ctx))) {
-    LOG_WARN("failed to open left child", K(ret));
   }
   return ret;
 }
 
 int ObBasicNestedLoopJoin::inner_close(ObExecContext& ctx) const
 {
+  UNUSED(ctx);
   int ret = OB_SUCCESS;
-  int child_ret = OB_SUCCESS;
-  // first call close of all children
-  ObPhyOperator* child_ptr = NULL;
-  for (int32_t i = 0; i < get_child_num(); ++i) {
-    if (OB_ISNULL(child_ptr = get_child(i))) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("failed to get child",
-          K(i),
-          K(child_ptr),
-          K(get_child_num()),
-          K(ret),
-          "op_type",
-          ob_phy_operator_type_str(get_type()));
-    } else {
-      int tmp_ret = child_ptr->close(ctx);
-      if (OB_SUCCESS != tmp_ret) {
-        child_ret = tmp_ret;
-        LOG_WARN("Close child operator failed", K(child_ret), "op_type", ob_phy_operator_type_str(get_type()));
-      }
-    }
-  }
-
-  // no matter what, must call operatoris close function, then close this operator
-  ObPhyOperatorCtx* op_ctx = NULL;
-  if (OB_ISNULL(op_ctx = GET_PHY_OPERATOR_CTX(ObPhyOperatorCtx, ctx, get_id()))) {
-    LOG_DEBUG("get_phy_operator_ctx failed", K(ret), K_(id), "op_type", ob_phy_operator_type_str(get_type()));
-  } else {
-    // op_ctx->op_monitor_info_.set_value(CLOSE_TIME, common::ObTimeUtility::current_time());
-  }
-
-  if (OB_SUCC(ret)) {
-    // Can only preserve one error code
-    ret = child_ret;
-  }
   return ret;
 }
 
 int ObBasicNestedLoopJoin::rescan(ObExecContext& ctx) const
 {
   int ret = OB_SUCCESS;
-  ObBasicNestedLoopJoinCtx* join_ctx = NULL;
-  if (OB_ISNULL(join_ctx = GET_PHY_OPERATOR_CTX(ObBasicNestedLoopJoinCtx, ctx, get_id()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get join ctx", K(ret));
-  } else if (OB_FAIL(open_right_child(*join_ctx))) {
-    LOG_WARN("failed to open right child", K(ret));
-  } else if (OB_FAIL(ObJoin::rescan(ctx))) {
+  if (OB_FAIL(ObJoin::rescan(ctx))) {
     LOG_WARN("failed to call parent rescan", K(ret));
   } else {
   }

@@ -126,6 +126,7 @@ DEF_SIMPLE_EXECUTOR(ObBackupSetEncryption);
 DEF_SIMPLE_EXECUTOR(ObBackupSetDecryption);
 DEF_SIMPLE_EXECUTOR(ObAddRestoreSource);
 DEF_SIMPLE_EXECUTOR(ObClearRestoreSource);
+DEF_SIMPLE_EXECUTOR(ObTableTTL);
 
 class ObCancelTaskExecutor {
 public:

@@ -44,7 +44,7 @@ int ObExprQuote::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
     }
   } else {
     type.set_varchar();
-    type.set_length(type1.get_length());
+    type.set_length(2 * type1.get_length() + 2);
     if OB_FAIL (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type())) {
       LOG_WARN("aggregate charset for res failed", K(ret));
     } else {
@@ -78,7 +78,13 @@ int ObExprQuote::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_c
     ObString str = obj.get_string();
     ObString res_str;
     if (OB_FAIL(calc(res_str, str, obj.get_collation_type(), expr_ctx.calc_buf_))) {
-      LOG_WARN("calc quote expr failed", K(ret), K(str));
+      result.set_null();
+      // ret = OB_ERR_INCORRECT_STRING_VALUE means input string is not invalid, then output NULL.
+      if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("calc quote expr failed", K(ret), K(str));
+      }
     } else {
       result.set_varchar(res_str);
       result.set_collation(result_type_);
@@ -180,7 +186,13 @@ int ObExprQuote::calc_quote_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& re
     ObString res_str;
     ObExprStrResAlloc res_alloc(expr, ctx);
     if (OB_FAIL(calc(res_str, str, expr.datum_meta_.cs_type_, &res_alloc))) {
-      LOG_WARN("calc quote expr failed", K(ret), K(str));
+      res_datum.set_null();
+      // ret = OB_ERR_INCORRECT_STRING_VALUE means input string is not invalid, then output NULL.
+      if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("calc quote expr failed", K(ret), K(str));
+      }
     } else {
       res_datum.set_string(res_str);
     }

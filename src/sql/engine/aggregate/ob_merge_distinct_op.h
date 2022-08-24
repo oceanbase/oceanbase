@@ -50,7 +50,7 @@ public:
   };
 
 private:
-  typedef ObChunkDatumStore::LastStoredRow<ObChunkDatumStore::StoredRow> LastStoreRow;
+  typedef ObChunkDatumStore::LastStoredRow LastStoreRow;
   bool first_got_row_;
   common::ObArenaAllocator alloc_;
   LastStoreRow last_row_;

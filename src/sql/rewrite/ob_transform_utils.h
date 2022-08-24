@@ -242,7 +242,7 @@ public:
 
   static int find_not_null_expr(ObDMLStmt& stmt, ObRawExpr*& not_null_expr, bool& is_valid);
 
-  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable);
+  static int check_expr_nullable(ObDMLStmt* stmt, ObRawExpr* expr, bool& is_nullable, int nullable_scope = ObTransformUtils::NULLABLE_SCOPE::NS_WHERE);
 
   static int check_is_not_null_column(const ObDMLStmt* stmt, const ObRawExpr* expr, bool& col_not_null);
 
@@ -548,9 +548,10 @@ public:
 
   static bool is_subarray(const ObRelIds& table_ids, const common::ObIArray<ObRelIds>& other);
 
-  static int check_loseless_join(ObDMLStmt* stmt, ObTransformerCtx* ctx, TableItem* source_table,
-      TableItem* target_table, ObSQLSessionInfo* session_info, ObSchemaChecker* schema_checker,
-      ObStmtMapInfo& stmt_map_info, bool& is_loseless, EqualSets* input_equal_sets = NULL);
+
+  static int check_loseless_join(ObDMLStmt *stmt, ObTransformerCtx *ctx, TableItem *source_table,
+      TableItem *target_table, ObSQLSessionInfo *session_info, ObSchemaChecker *schema_checker,
+      ObStmtMapInfo &stmt_map_info, bool is_on_null_side, bool &is_loseless, EqualSets *input_equal_sets = NULL);
 
   static int check_relations_containment(ObDMLStmt* stmt, const common::ObIArray<TableItem*>& source_rels,
       const common::ObIArray<TableItem*>& target_rels, common::ObIArray<ObStmtMapInfo>& stmt_map_infos,

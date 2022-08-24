@@ -129,7 +129,7 @@ int count_child(ParseNode* root, void* malloc_pool, int* count)
     do {
       ParseNode *tree = NULL;
       if (NULL == stack_top || NULL == (tree = (ParseNode *)stack_top->val_)) {
-        ret = OB_PARSER_ERR_NO_MEMORY;
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid null argument\n");
       } else {
         stack_top = stack_top->next_;
@@ -142,7 +142,7 @@ int count_child(ParseNode* root, void* malloc_pool, int* count)
         // do nothing
       } else {
         if (NULL == tree->children_) {
-          ret = OB_PARSER_ERR_NO_MEMORY;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(stderr, "ERROR invalid null children\n");
         }
         ParserLinkNode* tmp_node = NULL;
@@ -171,7 +171,7 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
   int ret = 0;
   ParserLinkNode* stack_top = NULL;
   if (OB_UNLIKELY(NULL == node || NULL == index)) {
-    ret = OB_PARSER_ERR_NO_MEMORY;
+    ret = OB_PARSER_ERR_UNEXPECTED;
     (void)fprintf(stderr, "ERROR node%p or index:%p is NULL\n", node, index);
   } else if (NULL == source_tree) {
     // do nothing
@@ -184,7 +184,7 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
     do {
       ParseNode *tree = NULL;
       if (NULL == stack_top || NULL == (tree = (ParseNode *)stack_top->val_)) {
-        ret = OB_PARSER_ERR_NO_MEMORY;
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid null argument\n");
       } else {
         // pop stack
@@ -194,11 +194,11 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
         // do nothing
       } else if (T_LINK_NODE != tree->type_) {
         if (OB_UNLIKELY(*index < 0 || *index >= node->num_child_)) {
-          ret = OB_PARSER_ERR_NO_MEMORY;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(
               stderr, "ERROR invalid index: %d, num_child:%d\n tree: %d", *index, node->num_child_, tree->type_);
         } else if (NULL == node->children_) {
-          ret = OB_PARSER_ERR_NO_MEMORY;
+          ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(stderr, "ERROR invalid null children pointer\n");
         } else {
           node->children_[*index] = tree;
@@ -207,7 +207,7 @@ int merge_child(ParseNode* node, void* malloc_pool, ParseNode* source_tree, int*
       } else if (tree->num_child_ <= 0) {
         // do nothing
       } else if (NULL == tree->children_) {
-        ret = OB_PARSER_ERR_NO_MEMORY;
+        ret = OB_PARSER_ERR_UNEXPECTED;
         (void)fprintf(stderr, "ERROR invalid children pointer\n");
       } else {
         ParserLinkNode* tmp_node = NULL;
@@ -567,19 +567,41 @@ int64_t get_question_mark(ObQuestionMarkCtx* ctx, void* malloc_pool, const char*
   if (OB_UNLIKELY(NULL == ctx || NULL == name)) {
     (void)fprintf(stderr, "ERROR question mark ctx or name is NULL\n");
   } else {
-    bool valid_name = true;
-    for (int64_t i = 0; valid_name && -1 == idx && i < ctx->count_; ++i) {
-      if (NULL == ctx->name_[i]) {
-        (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
-        valid_name = false;
-      } else if (0 == STRCASECMP(ctx->name_[i], name)) {
-        idx = i;
-      }
+    if (NULL == ctx->name_ && 0 == ctx->capacity_) {
+      ctx->capacity_ = MAX_QUESTION_MARK;
+      // the errocde will be ignored here. TO BE FIXED.
+      ctx->name_ = (char **)parse_malloc(sizeof(char*) * MAX_QUESTION_MARK, malloc_pool);
     }
-    if (-1 == idx && valid_name) {
-      int64_t len = 0;
-      ctx->name_[ctx->count_] = parse_strdup(name, malloc_pool, &len);
-      idx = ctx->count_++;
+    if (ctx->name_ != NULL) {
+      bool valid_name = true;
+      for (int64_t i = 0; valid_name && -1 == idx && i < ctx->count_; ++i) {
+        if (NULL == ctx->name_[i]) {
+          (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
+          valid_name = false;
+        } else if (0 == STRCASECMP(ctx->name_[i], name)) {
+          idx = i;
+        }
+      }
+      if (-1 == idx && valid_name) {
+        if (ctx->count_ >= ctx->capacity_) {
+          void *buf = parse_malloc(sizeof(char*) * (ctx->capacity_ * 2), malloc_pool);
+          if (OB_UNLIKELY(NULL == buf)) {
+            ctx->name_ = NULL;
+            (void)printf("ERROR malloc memory failed\n");
+          } else {
+            MEMCPY(buf, ctx->name_, sizeof(char*) * ctx->capacity_);
+            ctx->capacity_ *= 2;
+            ctx->name_ = (char **)buf;
+          }
+        }
+        if (ctx->name_ != NULL) {
+          int64_t len = 0;
+          ctx->name_[ctx->count_] = parse_strdup(name, malloc_pool, &len);
+          idx = ctx->count_++;
+        }
+      }
+    } else {
+      (void)fprintf(stderr, "ERROR question mark name buffer is null\n");
     }
   }
   return idx;

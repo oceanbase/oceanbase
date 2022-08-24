@@ -1,15 +1,23 @@
-FROM oceanbase/centos7:latest
+FROM centos:centos7
+
+ARG VERSION
+
 RUN yum-config-manager --add-repo https://mirrors.aliyun.com/oceanbase/OceanBase.repo && \
-    yum install -y ob-deploy obclient ob-sysbench wget libaio && \
-    mkdir /root/pkg && \
-    cd /root/pkg && \
-    wget https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/oceanbase-ce-3.1.2-10000392021123010.el7.x86_64.rpm -q && \
-    wget https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/oceanbase-ce-libs-3.1.2-10000392021123010.el7.x86_64.rpm -q && \
+    yum install -y ob-deploy obclient ob-sysbench libaio && \
     rm -rf /usr/obd/mirror/remote/* && \
-    obd mirror clone *.rpm && \
-    obd mirror list local && \
-    rm -rf /root/base /root/pkg && \
+    rm -rf /u01/mysql /u01/obclient/bin/mysqld* /u01/obclient/bin/aria* /u01/obclient/bin/maria* && \
     yum clean all
+
+RUN mkdir /root/pkg && \
+    cd /root/pkg && \
+    yum install --downloadonly --downloaddir=. oceanbase-ce-${VERSION}.el7 oceanbase-ce-libs-${VERSION}.el7 obagent && \
+    rm -rf /usr/obd/mirror/remote/* && \
+    obd mirror clone /root/pkg/*.rpm && obd mirror list local && \
+    rm -rf /root/pkg/* && \
+    yum clean all
+
 COPY boot /root/boot/
 ENV PATH /root/boot:$PATH
+
+WORKDIR /root
 CMD _boot

@@ -620,6 +620,7 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     }
     case stmt::T_CHANGE_TENANT: {
       DEFINE_EXECUTE_CMD(ObChangeTenantStmt, ObChangeTenantExecutor);
+      sql_text = ObString::make_empty_string();  // do not record
       break;
     }
     case stmt::T_CREATE_FUNC: {
@@ -757,6 +758,10 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     }
     case stmt::T_CLEAR_RESTORE_SOURCE: {
       DEFINE_EXECUTE_CMD(ObClearRestoreSourceStmt, ObClearRestoreSourceExecutor);
+      break;
+    }
+    case stmt::T_TABLE_TTL: {
+      DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
       break;
     }
     case stmt::T_CS_DISKMAINTAIN:

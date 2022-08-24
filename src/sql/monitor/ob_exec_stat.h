@@ -56,6 +56,7 @@ EVENT_INFO(FUSE_ROW_CACHE_MISS, fuse_row_cache_miss)
 #include "lib/net/ob_addr.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "observer/virtual_table/ob_information_query_response_time.h"
 namespace oceanbase {
 namespace sql {
 struct ObExecRecord {

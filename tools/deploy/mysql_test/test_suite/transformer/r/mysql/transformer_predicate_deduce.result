@@ -1,0 +1,3570 @@
+result_format: 4
+explain_protocol: 2
+DROP DATABASE IF EXISTS DB_PREDICATE_DEDUCE;
+CREATE DATABASE DB_PREDICATE_DEDUCE;
+USE DB_PREDICATE_DEDUCE;
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int , c2 int, c3 int, c4 int);
+create table t3(c1 bigint, c2 varchar(64), c3 datetime);
+create table is_t1(c1 int);
+create table is_t2(c1 int, c2 int);
+create table is_t3(c1 bigint, c2 varchar(64), c3 datetime);
+
+insert/*trace*/into t3 values(20101010000000, '020101010000000', '2010-10-10 00:00:00');
+insert/*trace*/into t1 values(NULL, NULL);
+insert/*trace*/into t2 values(NULL, NULL, NULL, NULL);
+
+= basic test =
+
+== basic compare: case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = 2], [a.c2 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set c1 = c2 + 1  where a.c1 = a.c2 and a.c1 = 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |38  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = 2], [a.c2 = 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set c1 = c2 + 1  where a.c1 = a.c2 and a.c1 = 2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 = 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |38  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2], [a.c2 = 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 = 2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = 2], [a.c2 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
+rollback;
+
+
+== basic compare: case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 > 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 > 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 > 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 > 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 > 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [a.c1 > 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 > 2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 > 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 > 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 > 2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 > 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
+rollback;
+
+
+== basic compare: case 3
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 >= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 >= 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 >= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 >= 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [a.c1 >= 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 >= 2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 >= 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 >= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+rollback;
+
+
+== basic compare: case 4
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 < 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 < 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 < 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 < 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 < 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [a.c2 < 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 < 2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 < 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 < 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 < 2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 < 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
+rollback;
+
+
+== basic compare: case 5
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 <= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 <= 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 <= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 <= 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [a.c2 <= 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 <= 2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 <= 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 <= 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+rollback;
+
+
+== basic compare: case 6
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 like '2%';
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 like '2%';
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 like '2%';
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\')]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+rollback;
+
+
+== basic compare: case 7
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 between 2 and 3;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 between 2 and 3;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+rollback;
+
+
+== basic compare: case 7
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 in (2, 3);
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 IN (2, 3)], [a.c2 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+rollback;
+
+************************** deduce on function *******************************
+
+== deduce on function: case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = round(cast(a.c2, BIGINT(-1, 0)))], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+EXPLAIN delete from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+EXPLAIN insert into is_t2 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c2, BIGINT(-1, 0))) = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+rollback;
+
+
+== deduce on function: case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = a.c2], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = a.c2 and round(a.c1) = 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = a.c2 and round(a.c1) = 1;
+EXPLAIN delete from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+EXPLAIN insert into is_t2 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [a.c2 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+rollback;
+
+***************************** subquery *********************************
+
+== subquery:case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |36  |
+|2 | TABLE SCAN   |b   |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_EXISTS, subquery(1))]), 
+      exec_params_([a.c1 = 1]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter([b.c1 = 1]), startup_filter([?]), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+=========================================================
+|ID|OPERATOR                       |NAME |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|1 | TABLE SCAN                    |a    |1        |37  |
+|2 | MATERIAL                      |     |1        |37  |
+|3 |  SUBPLAN SCAN                 |VIEW1|1        |37  |
+|4 |   TABLE SCAN                  |b    |1        |37  |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |UPDATE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+EXPLAIN delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |DELETE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+EXPLAIN insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+===========================================================
+|ID|OPERATOR                         |NAME |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |INSERT                           |     |1        |74  |
+|1 | SUBPLAN SCAN                    |VIEW1|1        |74  |
+|2 |  NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|3 |   TABLE SCAN                    |a    |1        |37  |
+|4 |   MATERIAL                      |     |1        |37  |
+|5 |    SUBPLAN SCAN                 |VIEW2|1        |37  |
+|6 |     TABLE SCAN                  |b    |1        |37  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access(nil)
+  6 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+rollback;
+
+
+== subquery:case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |37  |
+|2 | TABLE SCAN   |b   |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_EXISTS, subquery(1))]), 
+      exec_params_([a.c1]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter([? = b.c1]), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+=========================================================
+|ID|OPERATOR                       |NAME |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|1 | TABLE SCAN                    |a    |1        |37  |
+|2 | MATERIAL                      |     |1        |37  |
+|3 |  SUBPLAN SCAN                 |VIEW1|1        |37  |
+|4 |   TABLE SCAN                  |b    |1        |37  |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |UPDATE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+EXPLAIN delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |DELETE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+EXPLAIN insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+===========================================================
+|ID|OPERATOR                         |NAME |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |INSERT                           |     |1        |74  |
+|1 | SUBPLAN SCAN                    |VIEW1|1        |74  |
+|2 |  NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|3 |   TABLE SCAN                    |a    |1        |37  |
+|4 |   MATERIAL                      |     |1        |37  |
+|5 |    SUBPLAN SCAN                 |VIEW2|1        |37  |
+|6 |     TABLE SCAN                  |b    |1        |37  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access(nil)
+  6 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+rollback;
+
+
+== subquery:case 3
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |36  |
+|2 | TABLE SCAN   |b   |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+Query Plan
+=========================================================
+|ID|OPERATOR                       |NAME |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|1 | TABLE SCAN                    |a    |1        |37  |
+|2 | MATERIAL                      |     |1        |37  |
+|3 |  SUBPLAN SCAN                 |VIEW1|1        |37  |
+|4 |   TABLE SCAN                  |b    |1        |37  |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 in (select c1 from t2 b where b.c1 = 2);
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |UPDATE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 in (select c1 from t2 b where b.c1 = 2);
+EXPLAIN delete from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |DELETE                          |     |1        |75  |
+|1 | NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+Query Plan
+===========================================================
+|ID|OPERATOR                         |NAME |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |INSERT                           |     |1        |74  |
+|1 | SUBPLAN SCAN                    |VIEW1|1        |74  |
+|2 |  NESTED-LOOP SEMI JOIN CARTESIAN|     |1        |74  |
+|3 |   TABLE SCAN                    |a    |1        |37  |
+|4 |   MATERIAL                      |     |1        |37  |
+|5 |    SUBPLAN SCAN                 |VIEW2|1        |37  |
+|6 |     TABLE SCAN                  |b    |1        |37  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access(nil)
+  6 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+rollback;
+
+***************************** type check *******************************
+
+== type check: case 1
+EXPLAIN select /*+no_rewrite*/* from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, DATETIME(-1, -1)) = ?]), 
+      access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+
+select /*+no_rewrite*/* from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
++----------------+-----------------+---------------------+
+| c1             | c2              | c3                  |
++----------------+-----------------+---------------------+
+| 20101010000000 | 020101010000000 | 2010-10-10 00:00:00 |
++----------------+-----------------+---------------------+
+EXPLAIN select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, DATETIME(-1, -1)) = ?]), 
+      access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+
+select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
++----------------+-----------------+---------------------+
+| c1             | c2              | c3                  |
++----------------+-----------------+---------------------+
+| 20101010000000 | 020101010000000 | 2010-10-10 00:00:00 |
++----------------+-----------------+---------------------+
+start transaction;
+EXPLAIN update t3 set c1 = 1  where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|t3  |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t3: ({t3: (t3.__pk_increment, t3.c1, t3.c2, t3.c3)})}]),
+      update([t3.c1=?])
+  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3], [?]), filter([cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))], [cast(t3.c1, DATETIME(-1, -1)) = ?]), 
+      access([t3.c1], [t3.__pk_increment], [t3.c2], [t3.c3]), partitions(p0)
+
+update t3 set c1 = 1  where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+rollback;
+
+****************************** remove redundant predicates *************
+
+== remove redundant predicates: case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c1 = a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 = a.c2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 = a.c2;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+rollback;
+
+
+== remove redundant predicates: case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [a.c2 = a.c1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c2 = a.c1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c2 = a.c1;
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+rollback;
+
+
+== remove redundant predicates: case 3
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2], [a.c1 >= a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c1 >= a.c2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c1 >= a.c2;
+EXPLAIN delete from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+rollback;
+
+
+== remove redundant predicates: case 4
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2], [a.c2 <= a.c1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c2 <= a.c1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c2 <= a.c1;
+EXPLAIN delete from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 >= a.c2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+rollback;
+
+
+== remove redundant predicates: case 5
+EXPLAIN select /*+no_rewrite*/* from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)], [(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+EXPLAIN delete from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+EXPLAIN insert into is_t2 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([(T_OP_BTW, cast(a.c1, DECIMAL(11, 0)), ?, ?)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+rollback;
+
+
+== remove redundant predicates: case 6
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)], [a.c1 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 in (2, 3) and a.c1 in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |38  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 IN (2, 3)]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 in (2, 3) and a.c1 in (2, 3);
+EXPLAIN delete from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |38  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 IN (2, 3)]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+rollback;
+
+
+== remove redundant predicates: case 7
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+EXPLAIN delete from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+rollback;
+
+************************* can not deduce ******************
+
+== can not deduce: case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not like '2%';
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not like '2%';
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT, (T_OP_LIKE, cast(a.c1, VARCHAR(1048576)), '2%', '\\'))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+rollback;
+
+
+== can not deduce: case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|a   |1        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter([a.c1 = a.c2], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not in (2, 3);
+EXPLAIN delete from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |37  |
+|1 | TABLE SCAN|a   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+
+delete from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+Query Plan
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |1        |37  |
+|1 | SUBPLAN SCAN|VIEW1|1        |37  |
+|2 |  TABLE SCAN |a    |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter([a.c1 = a.c2], [(T_OP_NOT_IN, a.c1, (2, 3))]), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+rollback;
+
+************************* 不能推导 anti semi join ***************
+
+== 不能推导 anti semi join:case 1
+EXPLAIN select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |36  |
+|2 | TABLE SCAN   |b   |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), 
+      exec_params_([a.c1 = 1]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter([b.c1 = 1]), startup_filter([?]), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
++------+------+
+EXPLAIN select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+===============================================
+|ID|OPERATOR             |NAME |EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|     |0        |74  |
+|1 | TABLE SCAN          |a    |1        |36  |
+|2 | MATERIAL            |     |1        |37  |
+|3 |  SUBPLAN SCAN       |VIEW1|1        |37  |
+|4 |   TABLE SCAN        |b    |1        |37  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = 1]), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+================================================
+|ID|OPERATOR              |NAME |EST. ROWS|COST|
+------------------------------------------------
+|0 |UPDATE                |     |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN|     |0        |74  |
+|2 |  TABLE SCAN          |a    |1        |36  |
+|3 |  MATERIAL            |     |1        |37  |
+|4 |   SUBPLAN SCAN       |VIEW1|1        |37  |
+|5 |    TABLE SCAN        |b    |1        |37  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds([a.c1 = 1]), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter(nil), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+EXPLAIN delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+================================================
+|ID|OPERATOR              |NAME |EST. ROWS|COST|
+------------------------------------------------
+|0 |DELETE                |     |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN|     |0        |74  |
+|2 |  TABLE SCAN          |a    |1        |36  |
+|3 |  MATERIAL            |     |1        |37  |
+|4 |   SUBPLAN SCAN       |VIEW1|1        |37  |
+|5 |    TABLE SCAN        |b    |1        |37  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = 1]), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+EXPLAIN insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+Query Plan
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |INSERT                 |     |0        |74  |
+|1 | SUBPLAN SCAN          |VIEW1|0        |74  |
+|2 |  NESTED-LOOP ANTI JOIN|     |0        |74  |
+|3 |   TABLE SCAN          |a    |1        |36  |
+|4 |   MATERIAL            |     |1        |37  |
+|5 |    SUBPLAN SCAN       |VIEW2|1        |37  |
+|6 |     TABLE SCAN        |b    |1        |37  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = 1]), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access(nil)
+  6 - output([1]), filter([b.c1 = 1]), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+rollback;
+
+
+== 能推导 anti semi join:case 2
+EXPLAIN select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |37  |
+|2 | TABLE SCAN   |b   |1        |37  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), 
+      exec_params_([a.c1]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter([? = b.c1]), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+=========================================================
+|ID|OPERATOR                       |NAME |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN CARTESIAN|     |0        |74  |
+|1 | TABLE SCAN                    |a    |1        |37  |
+|2 | MATERIAL                      |     |1        |37  |
+|3 |  SUBPLAN SCAN                 |VIEW1|1        |37  |
+|4 |   TABLE SCAN                  |b    |1        |37  |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |UPDATE                          |     |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN CARTESIAN|     |0        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+EXPLAIN delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+==========================================================
+|ID|OPERATOR                        |NAME |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |DELETE                          |     |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN CARTESIAN|     |0        |74  |
+|2 |  TABLE SCAN                    |a    |1        |37  |
+|3 |  MATERIAL                      |     |1        |37  |
+|4 |   SUBPLAN SCAN                 |VIEW1|1        |37  |
+|5 |    TABLE SCAN                  |b    |1        |37  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access(nil)
+  5 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+EXPLAIN insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+Query Plan
+===========================================================
+|ID|OPERATOR                         |NAME |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |INSERT                           |     |0        |74  |
+|1 | SUBPLAN SCAN                    |VIEW1|0        |74  |
+|2 |  NESTED-LOOP ANTI JOIN CARTESIAN|     |0        |74  |
+|3 |   TABLE SCAN                    |a    |1        |37  |
+|4 |   MATERIAL                      |     |1        |37  |
+|5 |    SUBPLAN SCAN                 |VIEW2|1        |37  |
+|6 |     TABLE SCAN                  |b    |1        |37  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter([a.c1 = 2]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access(nil)
+  6 - output([1]), filter([b.c1 = 2]), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+rollback;
+
+
+== 不能推导 anti semi join:case 3
+EXPLAIN select /*+no_rewrite*/* from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+Query Plan
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |1        |73  |
+|1 | TABLE SCAN   |a   |1        |37  |
+|2 | TABLE SCAN   |b   |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter([a.c1 != ALL(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0)
+
+select /*+no_rewrite*/* from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+EXPLAIN select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+Query Plan
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |0        |74  |
+|1 | TABLE SCAN          |a   |1        |37  |
+|2 | MATERIAL            |    |1        |37  |
+|3 |  TABLE SCAN         |b   |1        |36  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = b.c1 OR (T_OP_IS, b.c1, NULL, 0)]), nl_params_(nil)
+  1 - output([a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1]), filter(nil)
+  3 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0)
+
+select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+start transaction;
+EXPLAIN update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |UPDATE                |    |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN|    |0        |74  |
+|2 |  TABLE SCAN          |a   |1        |37  |
+|3 |  MATERIAL            |    |1        |37  |
+|4 |   TABLE SCAN         |b   |1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}]),
+      update([a.c1=column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))])
+  1 - output([a.__pk_increment], [a.c1], [a.c2], [column_conv(INT,PS:(11,0),NULL,cast(a.c2 + 1, INT(-1, 0)))]), filter(nil), 
+      conds([a.c1 = b.c1 OR (T_OP_IS, b.c1, NULL, 0)]), nl_params_(nil)
+  2 - output([a.c1], [a.c2], [a.__pk_increment]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2], [a.__pk_increment]), partitions(p0)
+  3 - output([b.c1]), filter(nil)
+  4 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0)
+
+update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+EXPLAIN delete from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |DELETE                |    |0        |74  |
+|1 | NESTED-LOOP ANTI JOIN|    |0        |74  |
+|2 |  TABLE SCAN          |a   |1        |37  |
+|3 |  MATERIAL            |    |1        |37  |
+|4 |   TABLE SCAN         |b   |1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (a.__pk_increment, a.c1, a.c2)})}])
+  1 - output([a.__pk_increment], [a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = b.c1 OR (T_OP_IS, b.c1, NULL, 0)]), nl_params_(nil)
+  2 - output([a.__pk_increment], [a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.__pk_increment], [a.c1], [a.c2]), partitions(p0)
+  3 - output([b.c1]), filter(nil)
+  4 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0)
+
+delete from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+EXPLAIN insert into is_t2 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+Query Plan
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |INSERT                 |     |0        |74  |
+|1 | SUBPLAN SCAN          |VIEW1|0        |74  |
+|2 |  NESTED-LOOP ANTI JOIN|     |0        |74  |
+|3 |   TABLE SCAN          |a    |1        |37  |
+|4 |   MATERIAL            |     |1        |37  |
+|5 |    TABLE SCAN         |b    |1        |36  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)]), filter(nil), 
+      columns([{is_t2: ({is_t2: (is_t2.__pk_increment, is_t2.c1, is_t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      conds([a.c1 = b.c1 OR (T_OP_IS, b.c1, NULL, 0)]), nl_params_(nil)
+  3 - output([a.c1], [a.c2]), filter([a.c1 = 1]), 
+      access([a.c1], [a.c2]), partitions(p0)
+  4 - output([b.c1]), filter(nil)
+  5 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0)
+
+insert into is_t2 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+rollback;
+
+************************* 不能推导 anti semi join ***************
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS_NOT, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS_NOT, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS_NOT, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS_NOT, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |0        |73  |
+|1 | TABLE SCAN|b   |0        |37  |
+|2 | TABLE SCAN|a   |1        |36  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |0        |73  |
+|1 | TABLE SCAN|b   |0        |37  |
+|2 | TABLE SCAN|a   |1        |36  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([(T_OP_IS, b.c1, NULL, 0)]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |0        |73  |
+|1 | TABLE SCAN|b   |0        |37  |
+|2 | TABLE SCAN|a   |1        |36  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |0        |73  |
+|1 | TABLE SCAN|b   |0        |37  |
+|2 | TABLE SCAN|a   |1        |36  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+  2 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+
+EXPLAIN select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 <=> b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |75  |
+|1 | TABLE SCAN|a   |1        |36  |
+|2 | TABLE SCAN|b   |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), 
+      equal_conds([a.c1 <=> b.c1]), other_conds(nil)
+  1 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2]), partitions(p0)
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> 1]), 
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+
+select * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
++------+------+------+------+------+------+
+| c1   | c2   | c1   | c2   | c3   | c4   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+
+####### outer join 谓词推导测试 #######
+drop table if exists tt1, tt2, tt3;
+create table tt1 (c1 int primary key, c2 varchar(10));
+create table tt2 (c1 int primary key, c2 varchar(10));
+create table tt3 (c1 int primary key, c2 varchar(10));
+
+## tt1 left join tt2
+EXPLAIN select /*+use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |MERGE OUTER JOIN|    |1        |105 |
+|1 | TABLE GET      |tt1 |1        |52  |
+|2 | TABLE GET      |tt2 |1        |52  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  2 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+
+select /*+use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
++----+------+----+------+
+| c1 | c2   | c1 | c2   |
++----+------+----+------+
+|  1 | a1   | NULL | NULL |
++----+------+----+------+
+EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |MERGE OUTER JOIN|    |1        |90  |
+|1 | TABLE GET      |tt1 |1        |52  |
+|2 | TABLE SCAN     |tt2 |2        |37  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  2 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+
+select /*+no_rewrite, use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
++----+------+----+------+
+| c1 | c2   | c1 | c2   |
++----+------+----+------+
+|  1 | a1   | NULL | NULL |
++----+------+----+------+
+
+## tt1 left join tt2 left join tt3
+EXPLAIN select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE OUTER JOIN |    |1        |158 |
+|1 | MERGE OUTER JOIN|    |1        |105 |
+|2 |  TABLE GET      |tt1 |1        |52  |
+|3 |  TABLE GET      |tt2 |1        |52  |
+|4 | TABLE GET       |tt3 |1        |52  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt3.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  2 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  3 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+  4 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
+|  1 | a1   | NULL | NULL | NULL | NULL |
++----+------+----+------+----+------+
+EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE OUTER JOIN |    |1        |127 |
+|1 | MERGE OUTER JOIN|    |1        |90  |
+|2 |  TABLE GET      |tt1 |1        |52  |
+|3 |  TABLE SCAN     |tt2 |2        |37  |
+|4 | TABLE SCAN      |tt3 |2        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt3.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  2 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  3 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+  4 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
+|  1 | a1   | NULL | NULL | NULL | NULL |
++----+------+----+------+----+------+
+
+## tt1 left join tt2 left join tt3
+EXPLAIN select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE OUTER JOIN |    |1        |142 |
+|1 | TABLE GET       |tt1 |1        |52  |
+|2 | MERGE OUTER JOIN|    |1        |90  |
+|3 |  TABLE GET      |tt2 |1        |52  |
+|4 |  TABLE SCAN     |tt3 |2        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  2 - output([tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      equal_conds([tt2.c1 = tt3.c1]), other_conds(nil)
+  3 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+  4 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
+|  1 | a1   | NULL | NULL | NULL | NULL |
++----+------+----+------+----+------+
+EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE OUTER JOIN |    |1        |127 |
+|1 | MERGE OUTER JOIN|    |1        |90  |
+|2 |  TABLE GET      |tt1 |1        |52  |
+|3 |  TABLE SCAN     |tt2 |2        |37  |
+|4 | TABLE SCAN      |tt3 |2        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      equal_conds([tt2.c1 = tt3.c1]), other_conds(nil)
+  1 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  2 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  3 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+  4 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
+|  1 | a1   | NULL | NULL | NULL | NULL |
++----+------+----+------+----+------+
+
+## tt3 left join (tt1 left join tt2)
+EXPLAIN select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+===================================================
+|ID|OPERATOR                  |NAME|EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|    |1        |158 |
+|1 | TABLE GET                |tt3 |1        |52  |
+|2 | MERGE OUTER JOIN         |    |1        |105 |
+|3 |  TABLE GET               |tt1 |1        |52  |
+|4 |  TABLE GET               |tt2 |1        |52  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+  2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  3 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  4 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
++----+------+----+------+----+------+
+EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE OUTER JOIN |    |1        |113 |
+|1 | TABLE SCAN      |tt3 |2        |37  |
+|2 | MERGE OUTER JOIN|    |3        |75  |
+|3 |  TABLE SCAN     |tt1 |3        |37  |
+|4 |  TABLE SCAN     |tt2 |2        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter([tt1.c1 = 1]), 
+      equal_conds([tt1.c1 = tt3.c1]), other_conds(nil)
+  1 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+  2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  3 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  4 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
++----+------+----+------+----+------+
+
+## tt3 left join (tt1 left join tt2)
+EXPLAIN select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |    |1        |158 |
+|1 | TABLE GET                 |tt2 |1        |52  |
+|2 | NESTED-LOOP JOIN CARTESIAN|    |1        |105 |
+|3 |  TABLE GET                |tt3 |1        |52  |
+|4 |  TABLE GET                |tt1 |1        |52  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+  2 - output([tt1.c1], [tt1.c2], [tt3.c1], [tt3.c2]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+  4 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
++----+------+----+------+----+------+
+EXPLAIN select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |HASH OUTER JOIN  |    |1        |116 |
+|1 | TABLE SCAN      |tt3 |2        |37  |
+|2 | MERGE OUTER JOIN|    |3        |75  |
+|3 |  TABLE SCAN     |tt1 |3        |37  |
+|4 |  TABLE SCAN     |tt2 |2        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2], [tt3.c1], [tt3.c2]), filter([tt1.c1 = 1]), 
+      equal_conds([tt2.c1 = tt3.c1]), other_conds(nil)
+  1 - output([tt3.c1], [tt3.c2]), filter(nil), 
+      access([tt3.c1], [tt3.c2]), partitions(p0)
+  2 - output([tt1.c1], [tt1.c2], [tt2.c1], [tt2.c2]), filter(nil), 
+      equal_conds([tt1.c1 = tt2.c1]), other_conds(nil)
+  3 - output([tt1.c1], [tt1.c2]), filter(nil), 
+      access([tt1.c1], [tt1.c2]), partitions(p0)
+  4 - output([tt2.c1], [tt2.c2]), filter(nil), 
+      access([tt2.c1], [tt2.c2]), partitions(p0)
+
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
++----+------+----+------+----+------+
+| c1 | c2   | c1 | c2   | c1 | c2   |
++----+------+----+------+----+------+
++----+------+----+------+----+------+
+
+## online case
+drop table if exists cghldinf, puzdjypf, pujydypf;
+CREATE TABLE `cghldinf` (
+    `HLDGDDM` char(10) NOT NULL,
+    `HLDZXWH` char(5)  NOT NULL,
+    `HLDTGDM` decimal(9, 0) NOT NULL,
+    `HLDKMLB` char(2) NOT NULL,
+    PRIMARY KEY (`HLDTGDM`, `HLDGDDM`),
+    KEY `HLDINDEX` (`HLDKMLB`) LOCAL
+    ) partition by key (hldgddm) partitions 13;
+
+CREATE TABLE `puzdjypf` (
+    `PZJZQZH` char(20) NOT NULL,
+    `PZJZDJYDY` char(6) NOT NULL,
+    `PZJSXRQ` decimal(8,0) NOT NULL,
+    PRIMARY KEY (`PZJZQZH`)
+    ) partition by key (pzjzqzh) partitions 13;
+
+CREATE TABLE `pujydypf` (
+    `PJYSCDM` char(2) NOT NULL,
+    `PJYJYDY` char(6) NOT NULL,
+    `PJYJYDYLB` char(3) NOT NULL,
+    `PJYQSBH` char(8) NOT NULL
+    ) partition by key (pjyjydy) partitions 2;
+
+EXPLAIN select /*+use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |PX COORDINATOR               |            |1        |128 |
+|1 | EXCHANGE OUT DISTR          |:EX10001    |1        |128 |
+|2 |  NESTED-LOOP OUTER JOIN     |            |1        |128 |
+|3 |   EXCHANGE IN DISTR         |            |1        |91  |
+|4 |    EXCHANGE OUT DISTR (PKEY)|:EX10000    |1        |91  |
+|5 |     MERGE OUTER JOIN        |            |1        |91  |
+|6 |      TABLE SCAN             |t1(HLDINDEX)|1        |38  |
+|7 |      TABLE GET              |t2          |1        |52  |
+|8 |   PX PARTITION ITERATOR     |            |1        |37  |
+|9 |    TABLE SCAN               |t3          |1        |37  |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil)
+  1 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), dop=1
+  2 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), 
+      conds(nil), nl_params_([t2.PZJZDJYDY])
+  3 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [PARTITION_ID]), filter(nil)
+  4 - (#keys=1, [t2.PZJZDJYDY]), output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [PARTITION_ID]), filter(nil), is_single, dop=1
+  5 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), 
+      equal_conds([t2.PZJZQZH = t1.HLDGDDM]), other_conds(nil)
+  6 - output([t1.HLDGDDM]), filter([t1.HLDGDDM = 'A100013208']), 
+      access([t1.HLDGDDM]), partitions(p5)
+  7 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), 
+      access([t2.PZJZQZH], [t2.PZJZDJYDY]), partitions(p5)
+  8 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter(nil)
+  9 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter([t3.PJYSCDM = '01']), 
+      access([t3.PJYJYDY], [t3.PJYSCDM]), partitions(p[0-1])
+
+select /*+use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
++------------+------------+-----------+---------+---------+
+| hldgddm    | pzjzqzh    | pzjzdjydy | pjyjydy | pjyscdm |
++------------+------------+-----------+---------+---------+
+| A100013208 | A100013208 | 20605     | NULL    | NULL    |
+| A100013208 | A100013208 | 20605     | NULL    | NULL    |
++------------+------------+-----------+---------+---------+
+EXPLAIN select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
+Query Plan
+======================================================================
+|ID|OPERATOR                         |NAME        |EST. ROWS|COST    |
+----------------------------------------------------------------------
+|0 |PX COORDINATOR                   |            |1        |14594060|
+|1 | EXCHANGE OUT DISTR              |:EX10002    |1        |14594060|
+|2 |  NESTED-LOOP OUTER JOIN         |            |1        |14594060|
+|3 |   EXCHANGE IN DISTR             |            |1        |14594023|
+|4 |    EXCHANGE OUT DISTR (PKEY)    |:EX10001    |1        |14594023|
+|5 |     MATERIAL                    |            |1        |14594023|
+|6 |      MERGE OUTER JOIN           |            |1        |14594022|
+|7 |       EXCHANGE IN DISTR         |            |1        |38      |
+|8 |        EXCHANGE OUT DISTR (PKEY)|:EX10000    |1        |38      |
+|9 |         TABLE SCAN              |t1(HLDINDEX)|1        |38      |
+|10|       SORT                      |            |1300000  |14414555|
+|11|        PX PARTITION ITERATOR    |            |1300000  |804067  |
+|12|         TABLE SCAN              |t2          |1300000  |804067  |
+|13|   PX PARTITION ITERATOR         |            |1        |37      |
+|14|    TABLE SCAN                   |t3          |1        |37      |
+======================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil)
+  1 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), dop=1
+  2 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [t3.PJYJYDY], [t3.PJYSCDM]), filter(nil), 
+      conds(nil), nl_params_([t2.PZJZDJYDY])
+  3 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [PARTITION_ID]), filter(nil)
+  4 - (#keys=1, [t2.PZJZDJYDY]), output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY], [PARTITION_ID]), filter(nil), dop=1
+  5 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil)
+  6 - output([t1.HLDGDDM], [t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), 
+      equal_conds([t2.PZJZQZH = t1.HLDGDDM]), other_conds(nil)
+  7 - output([t1.HLDGDDM]), filter(nil)
+  8 - (#keys=1, [t1.HLDGDDM]), output([t1.HLDGDDM]), filter(nil), is_single, dop=1
+  9 - output([t1.HLDGDDM]), filter([t1.HLDGDDM = 'A100013208']), 
+      access([t1.HLDGDDM]), partitions(p5)
+  10 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), sort_keys([t2.PZJZQZH, ASC]), local merge sort
+  11 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil)
+  12 - output([t2.PZJZQZH], [t2.PZJZDJYDY]), filter(nil), 
+      access([t2.PZJZQZH], [t2.PZJZDJYDY]), partitions(p[0-12])
+  13 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter(nil)
+  14 - output([t3.PJYJYDY], [t3.PJYSCDM]), filter([t3.PJYSCDM = '01']), 
+      access([t3.PJYJYDY], [t3.PJYSCDM]), partitions(p[0-1])
+
+select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
++------------+------------+-----------+---------+---------+
+| hldgddm    | pzjzqzh    | pzjzdjydy | pjyjydy | pjyscdm |
++------------+------------+-----------+---------+---------+
+| A100013208 | A100013208 | 20605     | NULL    | NULL    |
+| A100013208 | A100013208 | 20605     | NULL    | NULL    |
++------------+------------+-----------+---------+---------+
+
+drop table if exists t1, t2;
+create table t1 (c1 int, c2 int, primary key(c1));
+create table t2 (c1 int, c2 int, primary key(c2));
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |SCALAR GROUP BY  |    |1        |4476|
+|1 | NESTED-LOOP JOIN|    |3        |4475|
+|2 |  TABLE SCAN     |A   |3        |4383|
+|3 |  TABLE GET      |B   |1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      conds(nil), nl_params_([A.c1]), batch_join=true
+  2 - output([A.c1]), filter([A.c1 = A.c2], [A.c2 < 5631105]), 
+      access([A.c1], [A.c2]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([A.c1]), range[5630905 ; 5631105), 
+      range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
+  3 - output([1]), filter(nil), 
+      access([B.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([B.c2]), range(MIN ; MAX), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905], [? = B.c2])
+
+
+drop table t1, t2;
+create table t1 (c1 int, c2 int, index (c1));
+create table t2 (c1 int, c2 int, index (c2));
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+Query Plan
+============================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST |
+--------------------------------------------
+|0 |SCALAR GROUP BY  |     |1        |31312|
+|1 | NESTED-LOOP JOIN|     |123      |31289|
+|2 |  TABLE SCAN     |A(c1)|3        |31096|
+|3 |  TABLE SCAN     |B(c2)|50       |45   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      conds(nil), nl_params_([A.c1]), batch_join=true
+  2 - output([A.c1]), filter([A.c1 = A.c2], [A.c2 < 5631105]), 
+      access([A.c1], [A.c2]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[false,false], 
+      range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
+      range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
+  3 - output([1]), filter(nil), 
+      access([B.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([B.c2], [B.__pk_increment]), range(MIN ; MAX), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905], [? = B.c2])
+
+
+drop table t1, t2;
+create table t1 (c1 int, c2 int) partition by hash(c1) partitions 4;
+create table t2 (c1 int, c2 int) partition by hash(c2) partitions 4;
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+Query Plan
+=======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY          |        |1        |21331|
+|1 | PX COORDINATOR          |        |1        |20956|
+|2 |  EXCHANGE OUT DISTR     |:EX10000|1        |20956|
+|3 |   MERGE GROUP BY        |        |1        |20956|
+|4 |    PX PARTITION ITERATOR|        |1961     |20582|
+|5 |     NESTED-LOOP JOIN    |        |1961     |20582|
+|6 |      TABLE SCAN         |A       |10       |17866|
+|7 |      TABLE SCAN         |B       |198      |144  |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter(nil)
+  2 - output([T_FUN_COUNT(*)]), filter(nil), dop=1
+  3 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  4 - output([1]), filter(nil), 
+      partition wise, force partition granule, asc.
+  5 - output([1]), filter(nil), 
+      conds(nil), nl_params_([A.c1]), batch_join=true
+  6 - output([A.c1]), filter([A.c1 = A.c2], [A.c2 < 5631105]), 
+      access([A.c1], [A.c2]), partitions(p[0-3]), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
+      range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
+  7 - output([1]), filter(nil), 
+      access([B.c2]), partitions(p[0-3]), 
+      is_index_back=false, 
+      range_key([B.c2], [B.__pk_increment]), range(MIN ; MAX), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905], [? = B.c2])
+
+
+
+drop table if exists t1, t2, t3;
+drop table if exists tt1, tt2, tt3;
+drop table if exists cghldinf, puzdjypf, pujydypf;
+USE DB_PREDICATE_DEDUCE;
+drop database DB_PREDICATE_DEDUCE;

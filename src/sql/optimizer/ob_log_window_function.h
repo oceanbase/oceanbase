@@ -46,7 +46,7 @@ public:
   virtual int allocate_granule_pre(AllocGIContext& ctx) override;
   int get_win_partition_intersect_exprs(ObIArray<ObWinFunRawExpr*>& win_exprs, ObIArray<ObRawExpr*>& win_part_exprs);
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  bool is_parallel()
+  bool is_parallel() const
   {
     return is_parallel_;
   }

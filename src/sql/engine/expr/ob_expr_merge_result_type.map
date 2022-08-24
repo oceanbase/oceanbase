@@ -1707,7 +1707,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNCharType,      /*ObEnumType=>ObNCharType       */
         ObMaxType,        /*ObEnumType=>URowID*/
         ObMaxType,        /*ObEnumType=>ObLobType*/
-        ObMaxType,        /*ObEnumType=>ObJsonType*/
+        ObVarcharType,    /*ObEnumType=>ObJsonType*/
     },
     /*ObSetType*/
     {
@@ -1758,7 +1758,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNCharType,      /*ObSetType=>ObNCharType       */
         ObMaxType,        /*ObSetType=>URowID*/
         ObMaxType,        /*ObSetType=>ObLobType*/
-        ObMaxType,        /*ObSetType=>ObJsonType*/
+        ObVarcharType,    /*ObSetType=>ObJsonType*/
     },
     /*ObEnumInnerType*/
     {
@@ -1809,7 +1809,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNCharType,      /*ObEnumInnerType=>ObNCharType       */
         ObMaxType,        /*ObEnumInnerType=>URowID*/
         ObMaxType,        /*ObEnumInnerType=>ObLobType*/
-        ObMaxType,        /*ObEnumInnerType=>ObJsonType*/
+        ObVarcharType,    /*ObEnumInnerType=>ObJsonType*/
     },
     /*ObSetInnerType*/
     {
@@ -1860,7 +1860,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNCharType,      /*ObSetInnerType=>ObNCharType       */
         ObMaxType,        /*ObSetInnerType=>URowID*/
         ObMaxType,        /*ObSetInnerType=>ObLobType*/
-        ObMaxType,        /*ObSetInnerType=>ObJsonType*/
+        ObVarcharType,    /*ObSetInnerType=>ObJsonType*/
     },
     /*ObTimestampTZType*/
     {
@@ -2458,10 +2458,10 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,     /* ObJsonType=>ObMediumTextType  */
         ObJsonType,     /* ObJsonType=>ObLongTextType  */
         ObJsonType,     /* ObJsonType=>ObBitType  */
-        ObMaxType,     /* ObJsonType=>ObEnumType  */
-        ObMaxType,     /* ObJsonType=>ObSetType  */
-        ObMaxType,     /* ObJsonType=>ObEnumInnerType  */
-        ObMaxType,     /* ObJsonType=>ObSetInnerType  */
+        ObVarcharType,  /* ObJsonType=>ObEnumType  */
+        ObVarcharType,  /* ObJsonType=>ObSetType  */
+        ObVarcharType,  /* ObJsonType=>ObEnumInnerType  */
+        ObVarcharType,  /* ObJsonType=>ObSetInnerType  */
         ObMaxType,     /* ObJsonType=>ObTimestampTZType  */
         ObMaxType,     /* ObJsonType=>ObTimestampLTZType  */
         ObMaxType,     /* ObJsonType=>ObTimestampNanoType  */

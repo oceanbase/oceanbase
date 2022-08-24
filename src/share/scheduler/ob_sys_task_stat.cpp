@@ -60,6 +60,9 @@ const char* sys_task_type_to_str(const ObSysTaskType& type)
     case BACKUP_ARCHIVELOG_TASK:
       str = "backup archivelog task";
       break;
+    case TABLE_API_TTL_TASK:
+      str = "table api ttl task";
+      break;
     default:
       str = "invalid task type";
   }

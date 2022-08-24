@@ -79,7 +79,7 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
   if (OB_UNLIKELY(NULL == session_info_ || NULL == params_.allocator_ || NULL == schema_checker_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("data member is not init", K(ret), K(session_info_), K(params_.allocator_), K(schema_checker_));
-  } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_GRANTS) &&
+  } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_QUERY_RESPONSE_TIME) &&
              (parse_tree.type_ != T_SHOW_TRIGGERS)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
@@ -1103,6 +1103,21 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         }
         break;
       }
+      case T_SHOW_QUERY_RESPONSE_TIME: {
+        if (is_oracle_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support show engines in oracle mode", K(ret));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_QUERY_RESPONSE_TIME;
+          GEN_SQL_STEP_1(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME);
+          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_QUERY_RESPONSE_TIME, 
+              OB_SYS_DATABASE_NAME, OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME, real_tenant_id);
+        }
+        break;
+      }
       case T_SHOW_RECYCLEBIN: {
         if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
           ret = OB_ERR_UNEXPECTED;
@@ -2066,6 +2081,9 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE, NULL, "SELECT title AS `Title`, key_value AS 
 DEFINE_SHOW_CLAUSE_SET(SHOW_ENGINES, NULL, "SELECT * FROM %s.%s ", NULL, NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES, NULL, "SELECT * FROM %s.%s ", "SELECT * FROM %s.%s ", NULL);
+
+DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, NULL, 
+    "SELECT response_time as RESPONSE_TIME, count as COUNT, total as TOTAL FROM %s.%s where tenant_id = %lu", NULL, NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLLATION, NULL,
     "SELECT collation AS `Collation`, charset AS `Charset`, id AS `Id`, is_default AS `Default`, is_compiled AS "

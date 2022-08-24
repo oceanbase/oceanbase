@@ -8,8 +8,8 @@ oceanbase-ce:
     rpc_port: @OB_RPC_PORT@ # default: 2882
     zone: zone1
     cluster_id: 1
-    memory_limit: 8G
-    system_memory: 4G
+    memory_limit: 6G
+    system_memory: 3G
     stack_size: 512K
     cpu_count: 16
     cache_wash_threshold: 1G

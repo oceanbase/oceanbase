@@ -1,0 +1,84 @@
+# owner: dachuan.sdc
+# owner group: sql2
+# tags: optimizer
+
+--disable_warnings
+drop database if exists cte_st;
+--enable_warnings
+create database cte_st;
+use cte_st;
+
+--echo ## bugfix: https://work.aone.alibaba-inc.com/issue/37502128
+--result_format 4
+--error 1146
+with cte1(c1, c2) as
+  (select 1, '0' from dual
+   union all select 2, '1' from dual
+  ),
+cte2(c1, c2) as
+  (select '0', 1 from dual
+   union all select cte1.c2, cte1.c1 from cte2, cte1 where 10 = cte2.c1)
+select * from cte2;
+
+--error 1146
+WITH my_cte AS (SELECT 1 AS n UNION ALL SELECT 1+n FROM my_cte WHERE n<10 ) SELECT * FROM my_cte;
+
+WITH recursive my_cte AS (SELECT 1 AS n UNION ALL SELECT 1+n FROM my_cte WHERE n<10 ) SELECT * FROM my_cte;
+--error 3574
+WITH recursive my_cte AS (SELECT 1+n FROM my_cte WHERE n<10 UNION ALL SELECT 1 AS n) SELECT * FROM my_cte;
+--error 1146
+WITH my_cte AS (SELECT 1+n FROM my_cte WHERE n<10 UNION ALL SELECT 1 AS n) SELECT * FROM my_cte;
+
+
+
+--echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37501730
+create table t1(deptno number, loc varchar(100));
+CREATE TABLE t2(EMPNO DECIMAL(4) UNIQUE,ENAME VARCHAR(10) NOT NULL,JOB VARCHAR(9),MGR DECIMAL(4),HIREDATE DATE,SAL DECIMAL(7,2),COMM DECIMAL(7,2),DEPTNO INT);
+--error 1066
+WITH
+temp AS (SELECT e.deptno,e.loc FROM t1 e WHERE e.loc IN ('New York','ChiCaGo') ORDER BY e.deptno),
+temp AS (SELECT p.deptno,p.job FROM t2 p WHERE p.job NOT IN ('CLERK','ANALYST') ORDER BY p.deptno)
+SELECT e.deptno,e.loc,p.job FROM temp e,temp p WHERE e.deptno = p.deptno ORDER BY 1,2,3;
+
+
+--echo ##bugfix: https://work.aone.alibaba-inc.com/issue/37715234
+CREATE TABLE employees (
+  id         INT PRIMARY KEY NOT NULL,
+  name       VARCHAR(100) NOT NULL,
+  manager_id INT NULL,
+  INDEX (manager_id)
+);
+INSERT INTO employees VALUES(333, 'Yasmina', NULL);
+INSERT INTO employees VALUES(198, 'John', 333);
+INSERT INTO employees VALUES(692, 'Tarek', 333);
+INSERT INTO employees VALUES(29, 'Pedro', 198);
+INSERT INTO employees VALUES(4610, 'Sarah', 29);
+INSERT INTO employees VALUES(72, 'Pierre', 29);
+INSERT INTO employees VALUES(123, 'Adil', 692);
+
+## result not correct. https://aone.alibaba-inc.com/task/35657687
+WITH RECURSIVE employee_paths (id, name, path) AS
+(
+  SELECT id, name, 1
+    FROM employees
+    WHERE manager_id IS NULL
+  UNION ALL
+  SELECT e.id, e.name, CONCAT(ep.path, ',', e.id)
+    FROM employee_paths ep JOIN employees e
+      ON ep.id = e.manager_id
+)
+SELECT * FROM employee_paths ORDER BY name;
+
+
+WITH RECURSIVE employee_paths (id, name, path) AS
+(
+  SELECT id, name, CAST(id AS CHAR(200))
+    FROM employees
+    WHERE manager_id IS NULL
+  UNION ALL
+  SELECT e.id, e.name, CONCAT(ep.path, ',', e.id)
+    FROM employee_paths AS ep JOIN employees AS e
+      ON ep.id = e.manager_id
+)
+SELECT * FROM employee_paths ORDER BY name;
+drop database cte_st;

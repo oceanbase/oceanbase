@@ -35,8 +35,9 @@ ob_set_subtarget(ob_share config
 )
 
 ob_set_subtarget(ob_share table
-  table/ob_table.cpp		
-  table/ob_table_rpc_struct.cpp		
+  table/ob_table.cpp
+  table/ob_table_rpc_struct.cpp
+  table/ob_ttl_util.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

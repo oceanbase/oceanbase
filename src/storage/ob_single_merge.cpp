@@ -189,9 +189,8 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
           if (OB_FAIL(tables.at(i, table))) {
             STORAGE_LOG(WARN, "fail to get ith table", K(ret));
           } else {
-            if (table->get_base_version() < row_cache_snapshot_version &&
-                row_cache_snapshot_version <= table->get_upper_trans_version() &&
-                (!table->is_multi_version_minor_sstable() || sstable_end_log_ts <= table->get_end_log_ts())) {
+            if (table->get_base_version() < row_cache_snapshot_version
+                && row_cache_snapshot_version <= table->get_upper_trans_version()) {
               if (table->get_multi_version_start() >= row_cache_snapshot_version) {
                 // do not use fuse row cache
                 handle_.reset();
@@ -202,6 +201,12 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
               }
               break;
             }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (found_row_cache && end_table_idx == 0) {
+            handle_.reset();
+            found_row_cache = false;
           }
         }
       }

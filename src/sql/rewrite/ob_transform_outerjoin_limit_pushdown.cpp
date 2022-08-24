@@ -452,7 +452,7 @@ int ObTransformOuterJoinLimitPushDown::do_transform(OjLimitPushDownHelper& helpe
                                         helper.view_table_,
                                         helper.extracted_conditions_,
                                         helper.saved_order_items_,
-                                        !helper.need_create_view_,
+                                        helper.need_rename_,
                                         helper.is_limit_only_))) {
     LOG_WARN("failed to push down view table", K(ret));
   } else { /* do nothing */

@@ -45,6 +45,7 @@ enum ObStorageLogType {
   OB_LOG_MUTATOR_WITH_STATE = 0x600,
   OB_LOG_MUTATOR_ABORT = 0x800,
   OB_LOG_TRANS_PRE_COMMIT = 0x1000,
+  OB_LOG_TRANS_RECORD = 0x2000,
 
   OB_LOG_TRANS_AGGRE = 9999,
   OB_LOG_TRANS_MAX = 10000,
@@ -218,6 +219,9 @@ public:
       case OB_PARTITION_SCHEMA_VERSION_CHANGE_LOG:
         log_type_str = "OB_PARTITION_SCHEMA_VERSION_CHANGE_LOG";
         break;
+      case OB_LOG_TRANS_RECORD:
+        log_type_str = "TRANS_RECORD";
+        break;
       default:
         log_type_str = "INVALID_LOG_TYPE";
         break;
@@ -237,7 +241,7 @@ public:
             OB_LOG_TRANS_CLEAR == log_type || OB_LOG_SP_TRANS_REDO == log_type || OB_LOG_SP_TRANS_COMMIT == log_type ||
             OB_LOG_SP_ELR_TRANS_COMMIT == log_type || OB_LOG_SP_TRANS_ABORT == log_type ||
             OB_LOG_TRANS_STATE == log_type || OB_LOG_MUTATOR == log_type || OB_LOG_MUTATOR_WITH_STATE == log_type ||
-            OB_LOG_MUTATOR_ABORT == log_type || OB_LOG_TRANS_AGGRE == log_type);
+            OB_LOG_MUTATOR_ABORT == log_type || OB_LOG_TRANS_AGGRE == log_type || OB_LOG_TRANS_RECORD == log_type);
   }
   static bool is_trans_abort_log(const int64_t log_type)
   {

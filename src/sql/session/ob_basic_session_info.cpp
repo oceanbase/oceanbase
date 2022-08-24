@@ -641,7 +641,7 @@ int ObBasicSessionInfo::set_default_database(
     const ObString& database_name, const ObCollationType coll_type /*= CS_TYPE_INVALID */)
 {
   int ret = OB_SUCCESS;
-  if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH) {
+  if (database_name.length() > OB_MAX_DATABASE_NAME_LENGTH * OB_MAX_CHAR_LEN) {
     ret = OB_INVALID_ARGUMENT_FOR_LENGTH;
     LOG_WARN("invalid length for database_name", K(database_name), K(ret));
   } else {
@@ -3787,13 +3787,15 @@ int ObBasicSessionInfo::get_foreign_key_checks(int64_t& foreign_key_checks) cons
 
 int ObBasicSessionInfo::get_capture_plan_baseline(bool& v) const
 {
-  v = sys_vars_cache_.get_optimizer_capture_sql_plan_baselines();
+  // v = sys_vars_cache_.get_optimizer_capture_sql_plan_baselines();
+  v = false;
   return OB_SUCCESS;
 }
 
 int ObBasicSessionInfo::get_use_plan_baseline(bool& v) const
 {
-  v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
+  // v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
+  v = false;
   return OB_SUCCESS;
 }
 
@@ -4631,6 +4633,15 @@ int ObExecEnv::store(ObBasicSessionInfo& session)
     }
   }
   return ret;
+}
+
+bool ObBasicSessionInfo::is_xa_trans()
+{
+  int bool_ret = false;
+  if (trans_desc_.is_valid() && trans_desc_.is_xa_local_trans()) {
+    bool_ret = true;
+  }
+  return bool_ret;
 }
 
 }  // end of namespace sql

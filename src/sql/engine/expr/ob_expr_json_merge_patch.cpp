@@ -44,6 +44,7 @@ int ObExprJsonMergePatch::calc_result_typeN(ObExprResType& type,
   INIT_SUCC(ret);
 
   type.set_json();
+  type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, i, N_JSON_MERGE_PRESERVE))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[i].get_type()));

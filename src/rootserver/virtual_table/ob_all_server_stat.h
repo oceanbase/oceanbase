@@ -74,6 +74,10 @@ private:
     {
       return server_load_.status_.resource_info_.disk_total_;
     }
+    inline int64_t get_disk_actual() const
+    {
+      return server_load_.status_.resource_info_.disk_actual_;
+    }
     inline double get_cpu_assigned() const
     {
       return server_load_.sum_load_.min_cpu_;

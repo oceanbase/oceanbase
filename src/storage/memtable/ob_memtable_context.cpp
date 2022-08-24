@@ -258,6 +258,8 @@ int ObMemtableCtx::set_host_(ObMemtable* host, const bool for_replay)
     ret = OB_ERR_UNEXPECTED;
   } else if (false == for_replay && true == trans_mgr_.is_for_replay()) {
     ret = OB_NOT_MASTER;
+  } else if (!ctx_->is_can_elr() && OB_FAIL(check_trans_size_(for_replay))) {
+    // do nothing
   } else if (host == get_active_mt()) {
     // do nothing
   } else if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
@@ -1737,6 +1739,20 @@ void ObMemtableCtx::dec_pending_elr_count()
     memtable_for_elr_->dec_pending_elr_count();
     memtable_for_elr_ = NULL;
   }
+}
+
+int ObMemtableCtx::check_trans_size_(const bool for_replay)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_trx_size = GCONF._max_trx_size;
+  if (!for_replay && !is_can_elr()) {
+    if (max_trx_size > 0 && trans_mem_total_size_ > max_trx_size) {
+      ret = OB_TRANS_OUT_OF_THRESHOLD;
+      TRANS_LOG(WARN, "current transaction partition data size great to threshold", K(*this),
+                K(ret), K_(trans_mem_total_size), "max_trx_size_threshold", max_trx_size);
+    }
+  }
+  return ret;
 }
 
 }  // namespace memtable

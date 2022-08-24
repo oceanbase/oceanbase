@@ -663,7 +663,7 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
       int64_t ser_len = serialization::encoded_length_vi64(sub_obj->length());
       int64_t pos = result.length() + sizeof(uint8_t);
       ObJBVerType vertype = get_string_vertype();
-      if (result_.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t))) {
+      if (OB_FAIL(result_.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t)))) {
         LOG_WARN("failed to serialize type for str json obj", K(ret), K(ser_len));
       } else if (OB_FAIL(result.reserve(ser_len))) {
         LOG_WARN("failed to reserver serialize size for str json obj", K(ret), K(ser_len));
@@ -746,7 +746,7 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
       uint64_t obj_size = sub_obj->size();
       uint16_t field_type = static_cast<uint16_t>(sub_obj->field_type());
       ObJBVerType vertype = get_opaque_vertype();
-      if (result_.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t))) {
+      if (OB_FAIL(result_.append(reinterpret_cast<const char*>(&vertype), sizeof(uint8_t)))) {
         LOG_WARN("failed to serialize type for str json obj", K(ret), K(vertype));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&field_type), sizeof(uint16_t)))) {
         LOG_WARN("failed to append opaque json obj type", K(ret));
@@ -983,7 +983,7 @@ int ObJsonBin::deserialize_json_value(const char *data,
       int64_t pos = 0;
       if (OB_FAIL(serialization::decode_i16(data, length, pos, &prec))) {
         LOG_WARN("fail to deserialize decimal precision.", K(ret), K(length));
-      } else if (serialization::decode_i16(data, length, pos, &scale)) {
+      } else if (OB_FAIL(serialization::decode_i16(data, length, pos, &scale))) {
         LOG_WARN("fail to deserialize decimal scale.", K(ret), K(length), K(prec));
       } else if (OB_FAIL(num.deserialize(data, length, pos))) {
         LOG_WARN("fail to deserialize number.", K(ret), K(length));
@@ -1606,7 +1606,7 @@ int ObJsonBin::raw_binary(ObString &buf, ObIAllocator *allocator) const
           if (bytes_ * OB_JSON_BIN_REBUILD_THRESHOLD < append_len || OB_JSON_TYPE_IS_INLINE(type_)) {
             // free space over 30% or inline type, do rebuild
             ObJsonBuffer& jbuf = *result;
-            if (OB_FAIL(rebuild_json_value(curr_.ptr() + pos_, curr_.length() - pos_, type, type, uint_val_, jbuf))) {
+            if (OB_FAIL(rebuild_json_value(curr_.ptr() + pos_, curr_.length() - pos_, type_, type, uint_val_, jbuf))) {
               LOG_WARN("failed to rebuild inline value", K(ret));
             }
           } else {
@@ -3760,7 +3760,7 @@ int ObJsonBin::rebuild_json_value(const char *data,
       break;
     }
     case ObJsonNodeType::J_BOOLEAN: {
-      if (!is_src_inlined) {
+      if (!is_dst_inlined) {
         if (OB_FAIL(serialize_json_integer(inline_data, result))) {
           LOG_WARN("failed to rebuild serialize boolean.", K(ret), K(inline_data));
         }
@@ -4325,7 +4325,7 @@ int ObJsonVar::read_var(const char *data, uint8_t type, int64_t *var)
 uint64_t ObJsonVar::var_int2uint(int64_t var)
 {
   ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(ObJsonVar::get_var_type(var));
-  uint64 val = 0;
+  uint64_t val = 0;
   switch (size) {
     case JBLS_UINT8: {
       val = static_cast<uint64_t>(static_cast<int8_t>(var));

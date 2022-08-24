@@ -25,6 +25,7 @@
 #include "rpc/frame/ob_req_processor.h"
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_th_worker.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -122,8 +123,15 @@ int ObWorkerProcessor::process(rpc::ObRequest& req)
   // int64_t st = ::oceanbase::common::ObTimeUtility::current_time();
   // PROFILE_LOG(DEBUG, HANDLE_PACKET_START_TIME PCODE, st, packet->get_pcode());
   // go!
-  if (OB_FAIL(process_one(req, process_ret))) {
-    LOG_WARN("process request fail", K(ret));
+  try {
+    in_try_stmt = true;
+    if (OB_FAIL(process_one(req, process_ret))) {
+      LOG_WARN("process request fail", K(ret));
+    }
+    in_try_stmt = false;
+  } catch (OB_BASE_EXCEPTION &except) {
+    _LOG_ERROR("Exception caught!!! errno = %d, exception info = %s", except.get_errno(), except.what());
+    in_try_stmt = false;
   }
 
   // cleanup

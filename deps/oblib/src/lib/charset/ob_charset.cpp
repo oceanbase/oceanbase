@@ -15,6 +15,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
+#include "math.h"
 
 namespace oceanbase {
 namespace common {
@@ -1135,7 +1136,7 @@ int ObCharset::mb_wc(ObCollationType collation_type, const ObString& mb, int32_t
           reinterpret_cast<const unsigned char*>(mb.ptr() + mb.length()),
           &res_wc);
       if (tmp <= 0) {
-        ret = OB_ERROR;
+        ret = OB_ERR_INCORRECT_STRING_VALUE;
       } else {
         ret = OB_SUCCESS;
         wc = static_cast<int32_t>(res_wc);
@@ -1163,7 +1164,7 @@ int ObCharset::mb_wc(
       int tmp = cs->cset->mb_wc(
           reinterpret_cast<const unsigned char*>(mb), reinterpret_cast<const unsigned char*>(mb + mb_size), &res_wc);
       if (tmp <= 0) {
-        ret = OB_ERROR;
+        ret = OB_ERR_INCORRECT_STRING_VALUE;
       } else {
         ret = OB_SUCCESS;
         wc = static_cast<int32_t>(res_wc);
@@ -1282,7 +1283,7 @@ int ObCharset::wc_mb(ObCollationType collation_type, int32_t wc, char* buff, int
       int tmp = cs->cset->wc_mb(
           wc, reinterpret_cast<unsigned char*>(buff), reinterpret_cast<unsigned char*>(buff + buff_len));
       if (tmp <= 0) {
-        ret = OB_ERROR;
+        ret = OB_ERR_INCORRECT_STRING_VALUE;
       } else {
         ret = OB_SUCCESS;
         length = tmp;

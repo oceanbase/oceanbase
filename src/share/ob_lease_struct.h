@@ -78,6 +78,7 @@ public:
   double report_cpu_max_assigned_;
   int64_t report_mem_assigned_;
   int64_t report_mem_max_assigned_;
+  int64_t disk_actual_; // actual disk use if datafile_maxsize set
 
   ObServerResourceInfo();
   void reset();
@@ -86,7 +87,8 @@ public:
   bool operator!=(const ObServerResourceInfo& other) const;
 
   TO_STRING_KV(K_(cpu), K_(mem_in_use), K_(mem_total), K_(disk_in_use), K_(disk_total), K_(partition_cnt),
-      K_(report_cpu_assigned), K_(report_cpu_max_assigned), K_(report_mem_assigned), K_(report_mem_max_assigned));
+      K_(report_cpu_assigned), K_(report_cpu_max_assigned), K_(report_mem_assigned), K_(report_mem_max_assigned), K_(disk_actual));
+  int assign(const ObServerResourceInfo& other);
 };
 
 struct ObLeaseRequest {

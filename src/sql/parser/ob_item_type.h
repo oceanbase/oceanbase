@@ -967,6 +967,7 @@ typedef enum ObItemType
   T_SHOW_CREATE_TABLEGROUP,
   T_SHOW_RESTORE_PREVIEW,
   T_SHOW_GRANTS,
+  T_SHOW_QUERY_RESPONSE_TIME,
 
   T_SHOW_LIMIT,
   T_CREATE_USER,
@@ -1105,6 +1106,7 @@ typedef enum ObItemType
   T_ALTER_DATABASE,
   T_USE_DATABASE,
   T_DATABASE_OPTION_LIST,
+  T_DATABASE_LIST,
   T_CREATE_TENANT,
   T_DROP_TENANT,
   T_MODIFY_TENANT,
@@ -1761,6 +1763,7 @@ typedef enum ObItemType
   T_CLEAR_RESTORE_SOURCE,
 
   T_PREVIEW,
+  T_TABLE_TTL,
   T_MAX  // Attention: add a new type before T_MAX
 } ObItemType;
 

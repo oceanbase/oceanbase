@@ -526,7 +526,8 @@ public:
         if_not_exist_(false),
         sys_var_list_(),
         name_case_mode_(common::OB_NAME_CASE_INVALID),
-        is_restore_(false)
+        is_restore_(false),
+        restore_frozen_status_()
   {}
   virtual ~ObCreateTenantArg(){};
   bool is_valid() const;
@@ -544,6 +545,7 @@ public:
                                                         // is_restore = REPLICA_RESTORE_DATA
   common::ObSArray<ObPartitionKey> restore_log_pkeys_;  // For physical restore, partitions that should be created with
                                                         // is_restore = REPLICA_RESTORE_ARCHIVE_DATA
+  share::ObSimpleFrozenStatus restore_frozen_status_;
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg {
@@ -1012,6 +1014,23 @@ public:
   bool is_inner_;
   share::schema::ObErrorInfo error_info_;
   // New members of ObCreateTableArg need to pay attention to the implementation of is_allow_when_upgrade
+};
+
+struct ObCreateTableRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCreateTableRes() : table_id_(OB_INVALID_ID), schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObCreateTableRes &other)
+  {
+    table_id_ = other.table_id_;
+    schema_version_ = other.schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(table_id), K_(schema_version));
+  uint64_t table_id_;
+  int64_t schema_version_;
 };
 
 struct ObCreateTableLikeArg : public ObDDLArg {
@@ -4720,22 +4739,25 @@ struct ObAdminFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObAdminFlushCacheArg() : cache_type_(CACHE_TYPE_INVALID)
-  {}
-  virtual ~ObAdminFlushCacheArg()
-  {}
+  ObAdminFlushCacheArg() :
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false)
+  {
+  }
+  virtual ~ObAdminFlushCacheArg() {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  int push_tenant(uint64_t tenant_id)
-  {
-    return tenant_ids_.push_back(tenant_id);
-  }
-  TO_STRING_KV(K_(tenant_ids), K_(cache_type));
+  int push_tenant(uint64_t tenant_id) { return tenant_ids_.push_back(tenant_id); }
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K_(tenant_ids), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   common::ObSEArray<uint64_t, 8> tenant_ids_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObAdminMigrateUnitArg {
@@ -5456,19 +5478,26 @@ struct ObFlushCacheArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObFlushCacheArg() : is_all_tenant_(false), tenant_id_(common::OB_INVALID_TENANT_ID), cache_type_(CACHE_TYPE_INVALID)
-  {}
+   ObFlushCacheArg() :
+    is_all_tenant_(false),
+    tenant_id_(common::OB_INVALID_TENANT_ID),
+    cache_type_(CACHE_TYPE_INVALID),
+    is_fine_grained_(false){};
   virtual ~ObFlushCacheArg()
   {}
   bool is_valid() const
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type));
+  int push_database(uint64_t db_id) { return db_ids_.push_back(db_id); }
+  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type), K_(db_ids), K_(sql_id), K_(is_fine_grained));
 
   bool is_all_tenant_;
   uint64_t tenant_id_;
   ObCacheType cache_type_;
+  common::ObSEArray<uint64_t, 8> db_ids_;
+  common::ObString sql_id_;
+  bool is_fine_grained_;
 };
 
 struct ObGetAllSchemaArg {
@@ -7618,6 +7647,15 @@ public:
   common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
 };
 
+struct ObTableTTLArg {
+  OB_UNIS_VERSION(1);
+public:
+  ObTableTTLArg();
+  int assign(const ObTableTTLArg& other);
+  TO_STRING_KV(K_(cmd_code));
+  int64_t cmd_code_;
+};
+
 struct ObBackupManageArg {
   OB_UNIS_VERSION(1);
 
@@ -8333,6 +8371,108 @@ private:
 public:
   uint64_t index_tid_;
 };
+
+struct ObFetchSstableSizeArg final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeArg() : pkey_(), index_id_(-1)
+  {}
+  ~ObFetchSstableSizeArg()
+  {}
+  bool is_valid() const
+  {
+    return pkey_.is_valid() && index_id_ > 0;
+  }
+  int assign(const ObFetchSstableSizeArg &other);
+  TO_STRING_KV(K_(pkey), K_(index_id));
+
+public:
+  common::ObPartitionKey pkey_;
+  int64_t index_id_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeArg);
+};
+
+struct ObFetchSstableSizeRes final {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObFetchSstableSizeRes() : size_(0)
+  {}
+  ~ObFetchSstableSizeRes()
+  {}
+  int assign(const ObFetchSstableSizeRes &other);
+  TO_STRING_KV(K_(size));
+
+public:
+  int64_t size_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFetchSstableSizeRes);
+};
+
+struct ObTTLRequestArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TTLRequestType {
+    TTL_TRIGGER_TYPE = 0,
+    TTL_SUSPEND_TYPE = 1,
+    TTL_RESUME_TYPE = 2,
+    TTL_CANCEL_TYPE = 3,
+    TTL_MOVE_TYPE = 4,
+    TTL_INVALID_TYPE = 5 
+  };
+  
+  ObTTLRequestArg()
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObTTLRequestArg() = default;
+  bool is_valid() const { 
+    return cmd_code_ != -1 && OB_INVALID_ID != task_id_ && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID; 
+  }
+  int assign(const ObTTLRequestArg &other);
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+public:
+  int32_t cmd_code_; // enum TTLCmdType
+  int32_t trigger_type_; // system or user 
+  int64_t task_id_;  // task id 
+  uint64_t tenant_id_; // tenand_id array
+};
+
+struct ObTTLResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTTLResult()
+    : ret_code_(-1)
+  {}
+  ~ObTTLResult() = default;
+  bool is_valid() const { return OB_INVALID_ID != ret_code_; }
+  int assign(const ObTTLResult &other) { 
+    ret_code_ = other.ret_code_;
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(ret_code));
+public:
+  int32_t ret_code_; // SUCCESS or error code
+};
+
+struct ObTTLResponseArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObTTLResponseArg();
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(server_addr), K_(task_status));
+public:
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObAddr server_addr_;
+  uint8_t task_status_;
+};
+
 
 }  // end namespace obrpc
 }  // end namespace oceanbase

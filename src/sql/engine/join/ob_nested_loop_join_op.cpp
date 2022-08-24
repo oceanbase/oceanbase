@@ -51,10 +51,6 @@ int ObNestedLoopJoinOp::inner_open()
     LOG_WARN("nlp_op child is null", KP(left_), KP(right_), K(ret));
   } else if (OB_FAIL(ObBasicNestedLoopJoinOp::inner_open())) {
     LOG_WARN("failed to open in base class", K(ret));
-  } else if (MY_SPEC.use_group_) {
-    if (OB_FAIL(open_right_child())) {
-      LOG_WARN("failed to open right child", K(ret));
-    }
   }
   return ret;
 }

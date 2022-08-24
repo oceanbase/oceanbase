@@ -672,6 +672,8 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
     }
     if (OB_SUCC(ret) && is_end) {
       // report wait trans status
+      ObMySQLTransaction trans;
+      common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
       const int64_t partition_id = -1;
       int64_t frozen_timestamp = 0;
       ObIndexTransStatus report_status;
@@ -681,12 +683,15 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
       report_status.schema_version_ = index_schema->get_schema_version();
       if (OB_FAIL(ddl_service_->get_zone_mgr().get_frozen_info(report_status.frozen_version_, frozen_timestamp))) {
         LOG_WARN("fail to get frozen info", K(ret));
+      } else if (OB_FAIL(trans.start(&proxy))) {
+        LOG_WARN("fail to start trans", K(ret));
       } else if (OB_FAIL(acquire_snapshot(report_status.snapshot_version_,
                      index_schema->get_data_table_id(),
-                     report_status.schema_version_))) {
+                     report_status.schema_version_,
+                     trans))) {
         if (OB_SNAPSHOT_DISCARDED == ret) {
           STORAGE_LOG(WARN, "snapshot discard", K(ret), K(index_id_));
-          if (OB_FAIL(ObIndexTransStatusReporter::delete_wait_trans_status(index_id_, ddl_service_->get_sql_proxy()))) {
+          if (OB_FAIL(ObIndexTransStatusReporter::delete_wait_trans_status(index_id_, trans))) {
             LOG_WARN("fail to delete wait trans status", K(ret));
           } else {
             report_status.snapshot_version_ = 0;
@@ -694,7 +699,7 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
                     ObIndexTransStatusReporter::ROOT_SERVICE,
                     partition_id,
                     report_status,
-                    ddl_service_->get_sql_proxy()))) {
+                    trans))) {
               LOG_WARN("fail to report wait trans status", K(ret));
             }
           }
@@ -705,9 +710,19 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
                      ObIndexTransStatusReporter::ROOT_SERVICE,
                      partition_id,
                      report_status,
-                     ddl_service_->get_sql_proxy()))) {
+                     trans))) {
         is_end = false;
         LOG_WARN("fail to report wait trans status", K(ret));
+      }
+      if (trans.is_started()) {
+        bool is_commit = (ret == OB_SUCCESS);
+        int tmp_ret = trans.end(is_commit);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("fail to end trans", K(ret), K(tmp_ret), K(is_commit));
+          if (OB_SUCC(ret)) {
+            ret = tmp_ret;
+          }
+        }
       }
     }
   }
@@ -899,8 +914,8 @@ int ObRSBuildIndexTask::calc_snapshot_version(const int64_t max_commit_version, 
   return ret;
 }
 
-int ObRSBuildIndexTask::acquire_snapshot(
-    const int64_t snapshot_version, const int64_t data_table_id, const int64_t schema_version)
+int ObRSBuildIndexTask::acquire_snapshot(const int64_t snapshot_version, const int64_t data_table_id,
+    const int64_t schema_version, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -916,22 +931,15 @@ int ObRSBuildIndexTask::acquire_snapshot(
     info.schema_version_ = schema_version;
     info.tenant_id_ = extract_tenant_id(index_id_);
     info.table_id_ = data_table_id;
-    ObMySQLTransaction trans;
-    common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
-    if (OB_FAIL(trans.start(&proxy))) {
-      LOG_WARN("fail to start trans", K(ret));
+    common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
+    if (!info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(info));
+    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().set_index_building_snapshot(
+                   proxy, info.table_id_, info.snapshot_ts_))) {
+      LOG_WARN("fail to set index building snapshot", KR(ret), K(info));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot_for_building_index(trans, info, index_id_))) {
       LOG_WARN("fail to acquire snapshot", K(ret), K(index_id_), K(data_table_id), K(info));
-    }
-    if (trans.is_started()) {
-      bool is_commit = (ret == OB_SUCCESS);
-      int tmp_ret = trans.end(is_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to end trans", K(ret), K(is_commit));
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
-      }
     }
   }
   return ret;

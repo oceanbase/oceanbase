@@ -125,7 +125,8 @@ int ObPxTaskProcess::process()
 {
   int ret = OB_SUCCESS;
 
-  process_timestamp_ = ObTimeUtility::current_time();
+  enqueue_timestamp_ = ObTimeUtility::current_time();
+  process_timestamp_ = enqueue_timestamp_;
 
   ObExecRecord exec_record;
   ObExecTimestamp exec_timestamp;
@@ -154,8 +155,7 @@ int ObPxTaskProcess::process()
       if (enable_sql_audit) {
         exec_record.record_start();
       }
-      exec_start_timestamp_ = ObTimeUtility::current_time();
-      set_enqueue_timestamp(exec_start_timestamp_);
+      exec_start_timestamp_ = enqueue_timestamp_;
       arg_.sqc_task_ptr_->task_monitor_info_.record_exec_time_begin();
     }
 
@@ -206,6 +206,7 @@ int ObPxTaskProcess::process()
         audit_record.exec_record_ = exec_record;
 
         // Accumulated time of update phase
+        audit_record.tenant_id_=session->get_effective_tenant_id();
         audit_record.update_stage_stat();
 
         ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session, *arg_.exec_ctx_);

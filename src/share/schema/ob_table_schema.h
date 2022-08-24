@@ -419,6 +419,8 @@ public:
       const common::ObRegion& region, bool& readonly_at_all) const;
   int check_has_all_server_readonly_replica(share::schema::ObSchemaGetterGuard& guard, bool& has) const;
   int check_is_all_server_readonly_replica(share::schema::ObSchemaGetterGuard& guard, bool& is) const;
+  virtual int check_has_own_not_f_replica(bool &has_not_f_replica) const override;
+
   void reset_locality_options();
 
   void reset_primary_zone_options();
@@ -563,6 +565,10 @@ public:
   {
     return TMP_TABLE == table_type_ || TMP_TABLE_ORA_SESS == table_type_ || TMP_TABLE_ORA_TRX == table_type_;
   }
+  inline bool is_ctas_tmp_table() const
+  {
+    return 0 != session_id_ && !is_tmp_table();
+  }
   inline bool is_mysql_tmp_table() const
   {
     return TMP_TABLE == table_type_;
@@ -638,6 +644,13 @@ public:
   inline static bool can_read_index(ObIndexStatus index_status, const bool is_dropped_schema)
   {
     return INDEX_STATUS_AVAILABLE == index_status && !is_dropped_schema;
+  }
+  inline bool can_rereplicate_global_index_table() const
+  {
+    // 1. index which can rereplicate
+    // 2. is mocked invalid for standby cluster
+    return is_global_index_table() && !is_dropped_schema() &&
+           (can_rereplicate_index_status(index_status_) || is_mock_global_index_invalid());
   }
   inline bool is_final_invalid_index() const;
   inline void set_index_status(const ObIndexStatus index_status)

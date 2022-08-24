@@ -29,21 +29,16 @@ RLOCAL(bool, in_try_stmt);
 void right_to_die_or_duty_to_live()
 {
   const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-  BACKTRACE(
-      ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
-#ifdef FATAL_ERROR_HANG
   while (true) {
-    sleep(120);
-  }
-#else
-  if (in_try_stmt) {
-    throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
-  } else {
-    while (true) {
-      sleep(5);
+    BACKTRACE(
+        ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
+#ifndef FATAL_ERROR_HANG
+    if (in_try_stmt) {
+      throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
     }
-  }
 #endif
+    sleep(60);
+  }
 }
 
 }  // namespace common

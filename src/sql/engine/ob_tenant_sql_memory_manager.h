@@ -83,8 +83,9 @@ public:
 
   OB_INLINE void set_basic_info(int64_t row_count, int64_t input_size, int64_t bucket_size)
   {
+    const int64_t DEFAULT_INPUT_SIZE = 2 * 1024 * 1024;
     row_count_ = row_count;
-    input_size_ = input_size;
+    input_size_ = (input_size < 0) ? DEFAULT_INPUT_SIZE : input_size;
     bucket_size_ = bucket_size;
   }
 

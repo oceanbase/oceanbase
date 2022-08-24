@@ -30,6 +30,7 @@
 #include "sql/plan_cache/ob_plan_cache_callback.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/session/ob_basic_session_info.h"
+#include "observer/mysql/ob_query_response_time.h"
 
 namespace oceanbase {
 using namespace oceanbase::share::schema;
@@ -197,6 +198,9 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
             "receive_ts",
             audit_record.exec_timestamp_.receive_ts_);
       }
+
+      // query response time
+      observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
 
       // push into queue
       if (OB_SUCC(ret)) {

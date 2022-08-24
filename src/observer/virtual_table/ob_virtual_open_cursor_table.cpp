@@ -349,7 +349,7 @@ int ObVirtualOpenCursorTable::fill_cells_impl(const SessionInfo& sess_info, cons
           break;
         }
         case LAST_SQL_ACTIVE_TIME: {
-          cells[i].set_datetime(plan->stat_.last_active_time_);
+          cells[i].set_timestamp(plan->stat_.last_active_time_);
           break;
         }
         case SQL_EXEC_ID: {

@@ -209,6 +209,13 @@ private:
   common::ObIOHandle io_handle_;
 };
 
+class ObStoreFileAutoExtendTask : public common::ObTimerTask {
+public:
+  ObStoreFileAutoExtendTask();
+  virtual ~ObStoreFileAutoExtendTask();
+  virtual void runTimerTask();
+};
+
 class ObStoreFileGCTask : public common::ObTimerTask {
 public:
   ObStoreFileGCTask();
@@ -348,61 +355,64 @@ public:
   int get_macro_block_info(const int64_t block_index, ObMacroBlockInfo& macro_block_info);
   int report_bad_block(const MacroBlockId& macro_block_id, const int64_t error_type, const char* error_msg);
   int get_bad_block_infos(common::ObArray<ObBadBlockInfo>& bad_block_infos);
-  OB_INLINE const char* get_store_file_path()
-  {
-    return sstable_dir_;
-  }
-  OB_INLINE int64_t get_free_macro_block_count() const
-  {
-    return free_block_cnt_;
-  }
+  OB_INLINE const char* get_store_file_path() { return sstable_dir_; }
+  OB_INLINE int64_t get_free_macro_block_count() const { return free_block_cnt_; }
+  
   int add_disk(
       const common::ObString& diskgroup_name, const common::ObString& disk_path, const common::ObString& alias_name);
   int drop_disk(const common::ObString& diskgroup_name, const common::ObString& alias_name);
   int is_free_block(const int64_t block_index, bool& is_free);
   int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage);
-  int validate_datafile_size(const char* config_data_file_size);
+  int validate_datafile_param(const ObString& name, const char* config_data_file_param);
+  int refresh_block_meta();
 
 private:
   friend class ObStoreFileGCTask;
   friend class ObFileSystemInspectBadBlockTask;
   friend class ObAllMacroIdIterator;
+  friend class ObStoreFileAutoExtendTask;
   ObStoreFile();
   virtual ~ObStoreFile();
-  int alloc_block(ObMacroBlockHandle& macro_handle);
+  int  alloc_block(ObMacroBlockHandle& macro_handle);
+  int  mark_macro_blocks();
+  int  calc_auto_extend_size(int64_t &actual_extend_size);
+  bool check_auto_extend_param();
+  int  extend_file_size_task();
+  int  auto_extend_file_size();
   void free_block(const uint32_t block_idx, bool& is_freed);
-  int mark_macro_blocks();
   void mark_and_sweep();
+  void ssblock_check_and_extend();
   OB_INLINE bool is_valid(const MacroBlockId macro_id);
   OB_INLINE void bitmap_set(const int64_t block_idx);
   OB_INLINE bool bitmap_test(const int64_t block_idx);
   bool is_bad_block(const MacroBlockId& macro_block_id);
   int read_checkpoint_and_replay_log(bool& is_replay_old);
-  void disable_mark_sweep()
-  {
-    ATOMIC_SET(&is_mark_sweep_enabled_, false);
-  }
-  void enable_mark_sweep()
-  {
-    ATOMIC_SET(&is_mark_sweep_enabled_, true);
-  }
-  bool is_mark_sweep_enabled()
-  {
-    return ATOMIC_LOAD(&is_mark_sweep_enabled_);
-  }
+
+  void disable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, false);}
+  void enable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, true);}
+  bool is_mark_sweep_enabled() { return ATOMIC_LOAD(&is_mark_sweep_enabled_);}
+
+  void finish_doing_disk_extend() { ATOMIC_SET(&is_doing_disk_extend_, false);}
+  void start_doing_disk_extend() { ATOMIC_SET(&is_doing_disk_extend_, true);}
+  bool is_doing_disk_extend() { return ATOMIC_LOAD(&is_doing_disk_extend_);}
+  int64_t get_macro_bitmap_array_cnt(const int64_t macro_block_cnt) { return macro_block_cnt / 64 + 1; }
+
   int wait_mark_sweep_finish();
   void set_mark_sweep_doing();
   void set_mark_sweep_done();
+
   int alloc_memory(const int64_t total_macro_block_cnt, uint32_t*& free_block_array, uint64_t*& macro_block_bitmap,
       ObSegmentArray<ObMacroBlockInfo>& macro_block_info_array);
-  int64_t get_macro_bitmap_array_cnt(const int64_t macro_block_cnt)
-  {
-    return macro_block_cnt / 64 + 1;
-  }
 
 private:
-  static const int64_t RECYCLE_DELAY_US = 5 * 1000 * 1000;  // 5s
-  static const int64_t INSPECT_DELAY_US = 1 * 1000 * 1000;  // 1s
+  static const int64_t RECYCLE_DELAY_US     = 5 * 1000 * 1000;  // 5s
+  static const int64_t INSPECT_DELAY_US     = 1 * 1000 * 1000;  // 1s
+  static const int64_t AUTOEXTEND_DELAY_US  = 1 * 1000 * 1000;  // 1s
+  static const int64_t DATAFILE_NEXT_MIN    = 1 * 1024 * 1024 * 1024; // 1G
+  static const int64_t FREE_BLOCK_LEFT_PERCENTAGE = 5;
+  static const int64_t AUTO_EXTEND_LEAST_FREE_BLOCK_CNT = 512; // 1G 
+  static const int64_t MARK_BLOCK_INFO_TIMEOUT = RECYCLE_DELAY_US;
+
   bool is_inited_;
   bool is_opened_;
   char sstable_dir_[common::OB_MAX_FILE_NAME_LENGTH];
@@ -419,6 +429,7 @@ private:
   int64_t cur_meta_array_pos_;
   common::ObArray<MacroBlockId> meta_block_ids_[2];
   ObStoreFileGCTask gc_task_;
+  ObStoreFileAutoExtendTask ssblock_auto_extend_task_;
   ObFileSystemInspectBadBlockTask inspect_bad_block_task_;
   char* print_buffer_;
   int64_t print_buffer_size_;
@@ -431,9 +442,12 @@ private:
   ObStoreFileSystem* store_file_system_;
   bool is_mark_sweep_enabled_;
   bool is_doing_mark_sweep_;
+  bool is_doing_disk_extend_;
   ObThreadCond cond_;  // for mark sweep
   bool is_fs_support_punch_hole_;
   int block_file_fd_;
+  lib::ObMutex alloc_lock_;
+  lib::ObMutex resize_file_lock_;
 };
 
 OB_INLINE bool ObStoreFile::is_valid(const MacroBlockId macro_id)

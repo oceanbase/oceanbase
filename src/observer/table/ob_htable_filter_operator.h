@@ -30,14 +30,19 @@ class ObHColumnDescriptor final
 {
 public:
   ObHColumnDescriptor()
-      :time_to_live_(0)
+      :time_to_live_(0),
+       max_version_(0) 
   {}
+  void reset();
   int from_string(const common::ObString &str);
 
   void set_time_to_live(int32_t v) { time_to_live_ = v; }
   int32_t get_time_to_live() const { return time_to_live_; }
+  void set_max_version(int32_t v) { max_version_ = v; }
+  int32_t get_max_version() const { return max_version_; }
 private:
   int32_t time_to_live_; // Time-to-live of cell contents, in seconds.
+  int32_t max_version_;
 };
 
 enum class ObHTableMatchCode
@@ -82,6 +87,8 @@ public:
   // Give the tracker a chance to declare it's done based on only the timestamp.
   bool is_done(int64_t timestamp) const;
   void set_ttl(int32_t ttl_value);
+  void set_max_version(int32_t max_version);
+  int32_t get_max_version();
 protected:
   int32_t max_versions_;  // default: 1
   int32_t min_versions_;  // default: 0
@@ -190,6 +197,7 @@ public:
   bool has_more_result() const { return has_more_cells_; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
+  void set_max_version(int32_t max_version);
   int add_same_kq_to_res(ObIArray<common::ObNewRow> &same_kq_cells, ObTableQueryResult *&out_result);
   ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
 private:
@@ -207,7 +215,8 @@ private:
   int32_t offset_per_row_per_cf_;
   int64_t max_result_size_;
   int32_t batch_size_;
-  int32_t time_to_live_; // Time-to-live of cell contents, in seconds.
+  int32_t time_to_live_; // Column family level time-to-live, in seconds.
+  int32_t max_version_; // Column family max_version
 
   table::ObTableQueryResult one_hbase_row_;
   ObHTableCellEntity curr_cell_;
@@ -235,17 +244,29 @@ public:
   virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
   void set_scan_result(common::ObNewRowIterator *scan_result) { row_iterator_.set_scan_result(scan_result); }
   void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
+  void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
   // parse the filter string
   int parse_filter_string(common::ObArenaAllocator* allocator);
+
+public:
+  // query async
+  virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
+  void set_query(const ObTableQuery *query) {query_ = query;}
+  void set_query_sync() { is_query_sync_ = true ; }
+
 private:
-  const ObTableQuery &query_;
+  const ObTableQuery *query_;
   ObHTableRowIterator row_iterator_;
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
   int32_t batch_size_;
   int64_t max_result_size_;
+
+private:
+  // query async
   bool is_first_result_;
+  bool is_query_sync_;
 };
 
 } // end namespace table

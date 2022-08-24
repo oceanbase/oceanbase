@@ -95,6 +95,8 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr& expr)
       }
     }
   } else {
+    // for enumset query ref `is_set`, need warp enum_to_str/set_to_str expr at
+    // `ObRawExprWrapEnumSet::visit_query_ref_expr`
     expr.set_data_type(ObIntType);
   }
   return ret;
@@ -1062,6 +1064,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected NULL", K(param_expr), K(my_session_), K(ret));
         } else {
+          result_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObLobType]);
           result_type.set_collation_type(my_session_->get_nls_collation());
           result_type.set_calc_collation_type(my_session_->get_nls_collation());
           result_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -1071,6 +1074,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
       }
       case T_FUN_JSON_ARRAYAGG: {
         result_type.set_json();
+        result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
         expr.set_result_type(result_type);
         break;
       }
@@ -1092,6 +1096,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
             need_add_cast = true;
           }
           result_type.set_json();
+          result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
           expr.set_result_type(result_type);
         }
         break;

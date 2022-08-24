@@ -22,8 +22,8 @@ namespace sql {
 OB_SERIALIZE_MEMBER(
     (ObBasicNestedLoopJoinSpec, ObJoinSpec), rescan_params_, gi_partition_id_expr_, enable_gi_partition_pruning_);
 
-ObBasicNestedLoopJoinOp::ObBasicNestedLoopJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-    : ObJoinOp(exec_ctx, spec, input), open_right_child_(false)
+ObBasicNestedLoopJoinOp::ObBasicNestedLoopJoinOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObJoinOp(exec_ctx, spec, input)
 {}
 
 int ObBasicNestedLoopJoinOp::inner_open()
@@ -32,53 +32,23 @@ int ObBasicNestedLoopJoinOp::inner_open()
   int64_t left_output_cnt = spec_.get_left()->output_.count();
   if (OB_FAIL(ObJoinOp::inner_open())) {
     LOG_WARN("failed to inner open join", K(ret));
-  } else if (OB_FAIL(left_->open())) {
-    LOG_WARN("failed to open left child", K(ret));
   }
-
   return ret;
 }
 
 int ObBasicNestedLoopJoinOp::rescan()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(open_right_child())) {
-    LOG_WARN("failed to open right child", K(ret));
-  } else if (OB_FAIL(ObJoinOp::rescan())) {
+  if (OB_FAIL(ObJoinOp::rescan())) {
     LOG_WARN("failed to call parent rescan", K(ret));
   }
 
   return ret;
 }
 
-int ObBasicNestedLoopJoinOp::open_right_child()
-{
-  int ret = OB_SUCCESS;
-  if (!right_->is_opened() && OB_FAIL(right_->open())) {
-    LOG_WARN("failed to open right child", K(ret));
-  }
-  return ret;
-}
-
 int ObBasicNestedLoopJoinOp::inner_close()
 {
   int ret = OB_SUCCESS;
-  int left_ret = OB_SUCCESS;
-  int right_ret = OB_SUCCESS;
-  if (OB_ISNULL(left_)) {
-    left_ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K(left_), K(ret));
-  } else if (OB_SUCCESS != (left_ret = left_->close())) {
-    LOG_WARN("Close child operator failed", K(left_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  if (OB_ISNULL(right_)) {
-    right_ret = OB_NOT_INIT;
-    LOG_WARN("invalid argument", K(right_), K(ret));
-  } else if (OB_SUCCESS != (right_ret = right_->close())) {
-    LOG_WARN("Close child operator failed", K(right_ret), "op_type", ob_phy_operator_type_str(get_spec().type_));
-  }
-  ret = (OB_SUCCESS == left_ret) ? right_ret : left_ret;
-
   return ret;
 }
 
@@ -103,6 +73,7 @@ int ObBasicNestedLoopJoinOp::get_next_left_row()
 int ObBasicNestedLoopJoinOp::prepare_rescan_params(bool is_group)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_group);
   int64_t param_cnt = get_spec().rescan_params_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
     const ObDynamicParamSetter& rescan_param = get_spec().rescan_params_.at(i);
@@ -118,12 +89,6 @@ int ObBasicNestedLoopJoinOp::prepare_rescan_params(bool is_group)
     } else {
       int64_t part_id = datum->get_int();
       ctx_.get_gi_pruning_info().set_part_id(part_id);
-    }
-  }
-
-  if (OB_SUCC(ret) && !is_group) {
-    if (OB_FAIL(open_right_child())) {
-      LOG_WARN("failed to open right child", K(ret));
     }
   }
 

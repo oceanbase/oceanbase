@@ -2500,6 +2500,10 @@ int ObTransService::end_stmt(bool is_rollback, bool is_incomplete, const ObParti
     }
   }
 
+  if (OB_SUCC(ret) && OB_FAIL(trans_desc.check_participants_size())) {
+    trans_desc.set_need_rollback();
+    TRANS_LOG(WARN, "check participants size failed.", KR(ret));
+  }
   REC_TRACE_EXT(tlog, end_stmt, Y(ret));
   if (OB_FAIL(ret)) {
     trans_desc.set_need_print_trace_log();
@@ -4778,6 +4782,43 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
             }
             (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
           }
+        }
+      }
+    }
+    if (OB_SUCCESS == ret && ((log_type & OB_LOG_TRANS_RECORD) != 0)) {
+      ObTransRecordLogHelper helper;
+      ObTransRecordLog log(helper);
+      if (OB_FAIL(log.deserialize(logbuf, size, pos))) {
+        TRANS_LOG(WARN, "log deserialize error", KR(ret), K(partition));
+      } else if (real_tenant_id != log.get_tenant_id()
+          && OB_FAIL(log.replace_tenant_id(real_tenant_id))) {
+        TRANS_LOG(WARN, "replace_tenant_id failed", K(ret), K(partition));
+      } else {
+        const ObTransID &trans_id = log.get_trans_id();
+        bool alloc = false;
+        bool light_mgr_ret = true;
+        if (!light_trans_ctx_mgr_.get_trans_ctx(partition, trans_id, ctx)) {
+          light_mgr_ret = false;
+          if (OB_FAIL(part_trans_ctx_mgr_.get_trans_ctx(partition,
+                                                        trans_id,
+                                                        for_replay,
+                                                        is_readonly,
+                                                        is_bounded_staleness_read,
+                                                        need_completed_dirty_txn,
+                                                        alloc,
+                                                        ctx))) {
+            TRANS_LOG(WARN, "get transaction context error",
+                KR(ret), K(partition), K(trans_id), K(alloc));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          part_ctx = static_cast<ObPartTransCtx *>(ctx);
+          if (OB_FAIL(part_ctx->replay_record_log(log, timestamp, log_id))) {
+            TRANS_LOG(WARN, "replay record log error", KR(ret), K(log), K(timestamp), K(log_id));
+          }
+        }
+        if (!light_mgr_ret) {
+          (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
         }
       }
     }
@@ -7740,7 +7781,7 @@ int ObTransService::get_min_uncommit_prepare_version(const ObPartitionKey& parti
  * get minimum prepare version of transaction whose commit version greate than lg_ts
  * */
 int ObTransService::get_min_prepare_version(
-    const ObPartitionKey& partition, const int64_t log_ts, int64_t& min_prepare_version)
+    const ObPartitionKey &partition, const int64_t freeze_ts, int64_t &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -7753,13 +7794,13 @@ int ObTransService::get_min_prepare_version(
   } else if (!partition.is_valid()) {
     TRANS_LOG(WARN, "invalid argument", K(partition));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(part_trans_ctx_mgr_.get_min_prepare_version(partition, log_ts, min_prepare_version))) {
-    TRANS_LOG(WARN, "ObPartTransCtxMgr get min prepare version error", KR(ret), K(partition), K(log_ts));
+  } else if (OB_FAIL(part_trans_ctx_mgr_.get_min_prepare_version(partition, freeze_ts, min_prepare_version))) {
+    TRANS_LOG(WARN, "ObPartTransCtxMgr get min prepare version error", KR(ret), K(partition), K(freeze_ts));
   } else if (min_prepare_version <= 0) {
     TRANS_LOG(ERROR, "invalid min prepare version, unexpected error", K(partition), K(min_prepare_version));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    TRANS_LOG(DEBUG, "get min prepare version success", K(partition), K(log_ts), K(min_prepare_version));
+    TRANS_LOG(DEBUG, "get min prepare version success", K(partition), K(freeze_ts), K(min_prepare_version));
   }
 
   return ret;

@@ -57,113 +57,6 @@ void point2pointer(T*& dst_pointer, B* dst_base, T* src_pointer, const B* src_ba
   dst_pointer = reinterpret_cast<T*>(reinterpret_cast<char*>(dst_base) + reinterpret_cast<intptr_t>(src_pointer) -
                                      reinterpret_cast<const char*>(src_base));
 }
-
-}  // namespace chunk_datum_store
-
-int ObChunkDatumStore::StoredRow::copy_datums(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, char* buf,
-    const int64_t size, const int64_t row_size, const uint32_t row_extend_size)
-{
-  int ret = OB_SUCCESS;
-  if (payload_ != buf || size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(payload_), KP(buf), K(size));
-  } else {
-    cnt_ = static_cast<uint32_t>(exprs.count());
-    int64_t pos = sizeof(ObDatum) * cnt_ + row_extend_size;
-    row_size_ = static_cast<int32_t>(row_size);
-    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
-      ObDatum& in_datum = static_cast<ObDatum&>(exprs.at(i)->locate_expr_datum(ctx));
-      ObDatum* datum = new (&cells()[i]) ObDatum();
-      if (OB_FAIL(datum->deep_copy(in_datum, buf, size, pos))) {
-        LOG_WARN("failed to copy datum", K(ret), K(i), K(pos), K(size), K(row_size), K(in_datum), K(*datum));
-      } else {
-        LOG_DEBUG("succ to copy_datums", K(cnt_), K(i), K(size), K(row_size), K(in_datum), K(*datum));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::StoredRow::copy_datums(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& row_size,
-    char* buf, const int64_t max_buf_size, const uint32_t row_extend_size)
-{
-  int ret = OB_SUCCESS;
-  if (max_buf_size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(payload_), KP(buf), K(max_buf_size));
-  } else {
-    cnt_ = static_cast<uint32_t>(exprs.count());
-    int64_t pos = sizeof(ObDatum) * cnt_ + row_extend_size + sizeof(StoredRow);
-    ObDatum* datums = cells();
-    if (pos > max_buf_size) {
-      ret = OB_BUF_NOT_ENOUGH;
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
-        ObDatum* in_datum = nullptr;
-        ObDatum* datum = (ObDatum*)datums;
-        if (OB_FAIL(exprs.at(i)->eval(ctx, in_datum))) {
-          LOG_WARN("failed to eval datum", K(ret));
-        } else if (OB_FAIL(datum->deep_copy(*in_datum, buf, max_buf_size, pos))) {
-          if (OB_BUF_NOT_ENOUGH != ret) {
-            LOG_WARN("failed to copy datum", K(ret), K(i), K(pos), K(max_buf_size), KP(in_datum), K(*datum));
-          }
-        } else {
-          LOG_DEBUG("succ to copy_datums", K(cnt_), K(i), K(max_buf_size), KP(in_datum), K(*datum));
-        }
-        ++datums;
-      }
-      row_size_ = static_cast<int32_t>(pos);
-      row_size = row_size_;
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::StoredRow::copy_datums(common::ObDatum** datums, const int64_t cnt, char* buf,
-    const int64_t size, const int64_t row_size, const uint32_t row_extend_size)
-{
-  int ret = OB_SUCCESS;
-  if (payload_ != buf || size < 0 || nullptr == datums) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(payload_), KP(buf), K(size), K(datums));
-  } else {
-    cnt_ = static_cast<uint32_t>(cnt);
-    int64_t pos = sizeof(ObDatum) * cnt_ + row_extend_size;
-    row_size_ = static_cast<int32_t>(row_size);
-    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
-      if (nullptr == datums[i]) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), KP(payload_), KP(buf), K(size), K(datums));
-      } else {
-        ObDatum* datum = new (&cells()[i]) ObDatum();
-        if (OB_FAIL(datum->deep_copy(*datums[i], buf, size, pos))) {
-          LOG_WARN(
-              "failed to copy datum", K(ret), K(i), K(pos), K(size), K(row_size), K(*datums[i]), K(datums[i]->len_));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::StoredRow::copy_datums(common::ObDatum* datums, const int64_t cnt, char* buf, const int64_t size,
-    const int64_t row_size, const uint32_t row_extend_size)
-{
-  int ret = OB_SUCCESS;
-  if (payload_ != buf || size < 0 || nullptr == datums) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(payload_), KP(buf), K(size), K(datums));
-  } else {
-    cnt_ = static_cast<uint32_t>(cnt);
-    row_size_ = static_cast<int32_t>(row_size);
-    MEMCPY(buf, static_cast<const void*>(datums), size);
-    int64_t pos = sizeof(ObDatum) * cnt_ + row_extend_size;
-    for (int64_t i = 0; i < cnt_; ++i) {
-      cells()[i].ptr_ = buf + pos;
-      pos += cells()[i].len_;
-    }
-  }
-  return ret;
 }
 
 int ObChunkDatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx) const
@@ -230,6 +123,54 @@ void ObChunkDatumStore::StoredRow::swizzling(char* base /*= NULL*/)
   }
 }
 
+int ObChunkDatumStore::StoredRow::build(StoredRow *&sr, const ObExprPtrIArray &exprs, ObEvalCtx &ctx, char *buf,
+    const int64_t buf_len, const uint32_t extra_size /* = 0 */)
+{
+  int ret = OB_SUCCESS;
+  sr = reinterpret_cast<StoredRow *>(buf);
+  int64_t pos = sizeof(*sr) + sizeof(ObDatum) * exprs.count() + extra_size;
+  if (pos > buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else {
+    sr->cnt_ = exprs.count();
+    ObDatum *datums = sr->cells();
+    for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); i++) {
+      ObExpr *expr = exprs.at(i);
+      ObDatum *in_datum = NULL;
+      if (OB_UNLIKELY(NULL == expr)) {
+        // Set datum to NULL for NULL expr
+        datums[i].set_null();
+      } else if (OB_FAIL(expr->eval(ctx, in_datum))) {
+        LOG_WARN("expression evaluate failed", K(ret));
+      } else {
+        ret = datums[i].deep_copy(*in_datum, buf, buf_len, pos);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      sr->row_size_ = static_cast<int32_t>(pos);
+    }
+  }
+
+  return ret;
+}
+
+int ObChunkDatumStore::StoredRow::build(StoredRow *&sr, const ObExprPtrIArray &exprs, ObEvalCtx &ctx,
+    common::ObIAllocator &alloc, const uint32_t extra_size /* = 0 */)
+{
+  int ret = OB_SUCCESS;
+  int64_t size = 0;
+  char *buf = NULL;
+  if (OB_FAIL(Block::row_store_size(exprs, ctx, size, extra_size))) {
+    LOG_WARN("get row store size failed", K(ret));
+  } else if (NULL == (buf = static_cast<char *>(alloc.alloc(size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(size));
+  } else if (OB_FAIL(build(sr, exprs, ctx, buf, size, extra_size))) {
+    LOG_WARN("build stored row failed", K(ret));
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, const int64_t row_size,
     uint32_t row_extend_size, StoredRow** stored_row)
 {
@@ -242,18 +183,15 @@ int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*>& exprs, Ob
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("buffer not enough", K(row_size), "remain", buf->remain());
   } else {
-    StoredRow* sr = (StoredRow*)buf->head();
-    if (OB_FAIL(sr->copy_datums(
-            exprs, ctx, buf->head() + ROW_HEAD_SIZE, row_size - ROW_HEAD_SIZE, row_size, row_extend_size))) {
-      LOG_WARN("copy row failed", K(ret), K(row_size));
+    StoredRow *sr = NULL;
+    if (OB_FAIL(StoredRow::build(sr, exprs, ctx, buf->head(), row_size, row_extend_size))) {
+      LOG_WARN("build stored row failed", K(ret));
+    } else if (OB_FAIL(buf->advance(row_size))) {
+      LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
     } else {
-      if (OB_FAIL(buf->advance(row_size))) {
-        LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
-      } else {
-        rows_++;
-        if (NULL != stored_row) {
-          *stored_row = sr;
-        }
+      rows_++;
+      if (NULL != stored_row) {
+        *stored_row = sr;
       }
     }
   }
@@ -268,25 +206,17 @@ int ObChunkDatumStore::Block::append_row(const common::ObIArray<ObExpr*>& exprs,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf));
   } else {
-    int64_t max_size = buf->remain();
-    if (ROW_HEAD_SIZE > max_size) {
-      ret = OB_BUF_NOT_ENOUGH;
+    StoredRow *sr = NULL;
+    if (OB_FAIL(StoredRow::build(sr, exprs, *ctx, buf->head(), buf->remain(), row_extend_size))) {
+      if (OB_BUF_NOT_ENOUGH != ret) {
+        LOG_WARN("build stored row failed", K(ret));
+      }
+    } else if (OB_FAIL(buf->advance(sr->row_size_))) {
+      LOG_WARN("buffer advance failed", K(ret));
     } else {
-      StoredRow* sr = (StoredRow*)buf->head();
-      int64_t row_size = 0;
-      if (OB_FAIL(sr->copy_datums(exprs, *ctx, row_size, buf->head(), max_size, row_extend_size))) {
-        if (OB_BUF_NOT_ENOUGH != ret) {
-          LOG_WARN("copy row failed", K(ret), K(max_size));
-        }
-      } else {
-        if (OB_FAIL(buf->advance(row_size))) {
-          LOG_WARN("fill buffer head failed", K(ret), K(buf));
-        } else {
-          ++rows_;
-          if (NULL != stored_row) {
-            *stored_row = sr;
-          }
-        }
+      ++rows_;
+      if (NULL != stored_row) {
+        *stored_row = sr;
       }
     }
   }
@@ -576,6 +506,7 @@ bool ObChunkDatumStore::shrink_block(int64_t size)
             K(item->get_buffer()->mem_size()),
             K(size));
       }
+      dumped_row_cnt_ += item->rows();
       freed_size += item->get_buffer()->mem_size();
       LOG_DEBUG("RowStore shrink dump and free", K(size), K(freed_size), K(item->get_buffer()->mem_size()), K(item));
       free_block(item);
@@ -900,7 +831,7 @@ int ObChunkDatumStore::add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx
     if (NULL == cur_blk_) {
       int64_t min_buf_size = 0;
       Block* new_blk = nullptr;
-      if (OB_FAIL(Block::min_buf_size(exprs, *ctx, min_buf_size))) {
+      if (OB_FAIL(Block::min_buf_size(exprs, row_extend_size_, *ctx, min_buf_size))) {
       } else if (OB_FAIL(alloc_block_buffer(new_blk, min_buf_size, false))) {
         LOG_WARN("alloc block failed", K(ret));
       } else {
@@ -913,7 +844,7 @@ int ObChunkDatumStore::add_row(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx
       if (OB_FAIL(cur_blk_->append_row(exprs, ctx, cur_blk_buffer_, row_extend_size_, stored_row))) {
         if (OB_BUF_NOT_ENOUGH == ret) {
           int64_t min_buf_size = 0;
-          if (OB_FAIL(Block::min_buf_size(exprs, *ctx, min_buf_size))) {
+          if (OB_FAIL(Block::min_buf_size(exprs, row_extend_size_, *ctx, min_buf_size))) {
           } else if (OB_FAIL(switch_block(min_buf_size))) {
             if (OB_EXCEED_MEM_LIMIT != ret) {
               LOG_WARN("switch block failed", K(ret));

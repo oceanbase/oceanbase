@@ -200,7 +200,7 @@ int ObPartSqlHelper::iterate_all_part(const bool only_history, const bool deal_w
 
         if (OB_SUCC(ret)) {
           const int64_t deleted = is_deleted() ? 1 : 0;
-          if (dml.add_column("is_deleted", deleted)) {
+          if (OB_FAIL(dml.add_column("is_deleted", deleted))) {
             LOG_WARN("add column failed", K(ret));
           } else if (0 == count) {
             if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_PART_HISTORY_TNAME, part_history_sql))) {
@@ -329,7 +329,7 @@ int ObPartSqlHelper::iterate_all_sub_part_for_template(const bool only_history)
 
           if (OB_SUCC(ret)) {
             const int64_t deleted = is_deleted() ? 1 : 0;
-            if (dml.add_column("is_deleted", deleted)) {
+            if (OB_FAIL(dml.add_column("is_deleted", deleted))) {
               LOG_WARN("add column failed", K(ret));
             } else if (0 == count) {
               if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_SUB_PART_HISTORY_TNAME, part_history_sql))) {
@@ -567,7 +567,7 @@ int ObPartSqlHelper::iterate_all_def_sub_part(const bool only_history)
 
         if (OB_SUCC(ret)) {
           const int64_t deleted = is_deleted() ? 1 : 0;
-          if (dml.add_column("is_deleted", deleted)) {
+          if (OB_FAIL(dml.add_column("is_deleted", deleted))) {
             LOG_WARN("add column failed", K(ret));
           } else if (0 == count) {
             if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_DEF_SUB_PART_HISTORY_TNAME, part_history_sql))) {
@@ -2040,7 +2040,6 @@ int ObDropIncPartHelper::drop_partition_info_for_nontemplate()
     if (OB_SUCC(ret) && inc_sub_part_num > 0) {
       int64_t affected_rows = 0;
       if (OB_FAIL(sql_client_.write(exec_tenant_id, sub_part_history_sql.ptr(), affected_rows))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("execute sql failed", K(ret), K(sub_part_history_sql));
       } else if (affected_rows != inc_sub_part_num) {
         ret = OB_ERR_UNEXPECTED;

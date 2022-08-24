@@ -78,6 +78,9 @@ int ObExpandAggregateUtils::expand_aggr_expr(ObDMLStmt* stmt, ObTransformerCtx* 
         LOG_WARN("get unexpected error", K(ret), K(replace_expr), K(aggr_expr->get_expr_type()));
       } else if (OB_FAIL(replace_expr->formalize(ctx->session_info_))) {
         LOG_WARN("failed to formalize", K(ret));
+      } else if (aggr_expr->get_result_type() != replace_expr->get_result_type() &&
+                 OB_FAIL(add_cast_expr(ctx, replace_expr, aggr_expr->get_result_type(), replace_expr))) {
+        LOG_WARN("failed to add cast expr", K(ret));
       } else if (OB_FAIL(replace_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(replace_exprs.push_back(replace_expr))) {
@@ -150,6 +153,9 @@ int ObExpandAggregateUtils::expand_window_aggr_expr(ObDMLStmt* stmt, ObTransform
         LOG_WARN("get unexpected error", K(ret), K(replace_expr), K(win_expr->get_agg_expr()->get_expr_type()));
       } else if (OB_FAIL(replace_expr->formalize(ctx->session_info_))) {
         LOG_WARN("failed to formalize", K(ret));
+      } else if (win_expr->get_agg_expr()->get_result_type() != replace_expr->get_result_type() &&
+                 OB_FAIL(add_cast_expr(ctx, replace_expr, win_expr->get_agg_expr()->get_result_type(), replace_expr))) {
+        LOG_WARN("failed to add cast expr", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::process_window_complex_agg_expr(
                      *ctx->expr_factory_, replace_expr->get_expr_type(), win_expr, replace_expr, &new_win_exprs))) {
         LOG_WARN("failed to process window complex agg expr", K(ret));
@@ -1769,7 +1775,7 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObTransformerCtx* ctx, ObAgg
 }
 
 int ObExpandAggregateUtils::add_cast_expr(
-    ObTransformerCtx* ctx, ObRawExpr* expr, ObExprResType& dst_type, ObRawExpr*& new_expr)
+    ObTransformerCtx* ctx, ObRawExpr* expr, const ObExprResType& dst_type, ObRawExpr*& new_expr)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr* cast_expr = NULL;

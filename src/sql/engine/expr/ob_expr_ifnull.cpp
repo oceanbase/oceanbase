@@ -40,7 +40,7 @@ int ObExprIfNull::calc_result_type2(
     LOG_WARN("session is NULL", K(ret));
   } else if (OB_FAIL(ObExprPromotionUtil::get_nvl_type(type, type1, type2))) {
     LOG_WARN("failed to get nvl type", K(ret));
-  } else if (ob_is_string_type(type.get_type())) {
+  } else if (ob_is_string_type(type.get_type()) || ob_is_json_tc(type.get_type())) {
     ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
     ObCollationType res_cs_type = CS_TYPE_INVALID;
     if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(),

@@ -1799,7 +1799,7 @@ int ObDDLResolver::resolve_column_name(common::ObString& col_name, ParseNode* no
     col_name.assign_ptr(node->str_value_, node->str_len_);
     int32_t name_length = col_name.length();
     const char* name_ptr = col_name.ptr();
-    if (name_length > OB_MAX_COLUMN_NAME_LENGTH) {
+    if (name_length > OB_MAX_COLUMN_NAME_LENGTH * OB_MAX_CHAR_LEN) {
       ret = OB_ERR_TOO_LONG_IDENT;
       _SQL_RESV_LOG(
           WARN, "identifier name '%.*s' is too long, ret=%d", static_cast<int32_t>(name_length), name_ptr, ret);

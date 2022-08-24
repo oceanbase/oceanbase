@@ -72,7 +72,7 @@ int ObExprCharLength::eval_char_length(const ObExpr& expr, ObEvalCtx& ctx, ObDat
   ObObjTypeClass in_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
   if (!ob_is_castable_type_class(in_tc)) {
     res.set_null();
-  } else if (expr.eval_param_value(ctx, arg)) {
+  } else if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();

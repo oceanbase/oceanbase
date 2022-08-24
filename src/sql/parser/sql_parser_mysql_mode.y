@@ -260,7 +260,7 @@ END_P SET_VAR DELIMITER
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK PRIMARY_ROOTSERVICE_LIST
         PRIMARY_CLUSTER_ID PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS
 
-        QUARTER QUERY QUEUE_TIME QUICK
+        QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
         REBUILD RECOVER RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
@@ -285,7 +285,7 @@ END_P SET_VAR DELIMITER
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
-        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TIMES
+        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TIMES  TTL
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP
@@ -307,7 +307,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
 %type <node> opt_force
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
-%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor
+%type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
@@ -3634,6 +3634,24 @@ database_option
 }
 ;
 
+databases_expr:
+DATABASES opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DATABASE_LIST, 1, $3);
+};
+
+opt_databases:
+databases_expr
+{
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
+
 charset_key:
 CHARSET
 {
@@ -4518,6 +4536,10 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
 {
+  if (T_FLOAT != $1[0] && NULL != $2 && -1 == $2->int16_values_[1]) {
+    yyerror(&@2, result, "double type not support double(M) syntax\n");
+    YYERROR;
+  }
   malloc_terminal_node($$, result->malloc_pool_, ($3[0] || $4[0]) ? $1[0] + (T_UFLOAT - T_FLOAT) : $1[0]);
   if (NULL != $2) {
     $$->int16_values_[0] = $2->int16_values_[0];
@@ -4738,6 +4760,14 @@ opt_float_precision:
 | '(' INTNUM ')'
 {
   malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
+  $$->int16_values_[0] = $2->value_;
+  $$->int16_values_[1] = -1;
+}
+| '(' DECIMAL_VAL ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
+  int err_no = 0;
+  $2->value_ = ob_strntoll($2->str_value_, $2->str_len_, 10, NULL, &err_no);
   $$->int16_values_[0] = $2->value_;
   $$->int16_values_[1] = -1;
 }
@@ -9549,8 +9579,9 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
   value->str_value_ = parse_strndup("SYS", strlen("SYS") + 1, result->malloc_pool_);
   if (NULL == value->str_value_)
   {
-  yyerror(NULL, result, "No more space for mallocing string\n");
-  YYABORT;
+    ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT;
   }
   value->str_len_ = strlen("SYS");
   malloc_non_terminal_node(sub_where, result->malloc_pool_, T_OP_NE, 2, column, value);
@@ -9618,6 +9649,10 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
 | SHOW PRIVILEGES
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SHOW_PRIVILEGES);
+}
+| SHOW QUERY_RESPONSE_TIME
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SHOW_QUERY_RESPONSE_TIME);
 }
 | SHOW RECYCLEBIN
 {
@@ -11445,14 +11480,16 @@ ALTER SYSTEM BOOTSTRAP server_info_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BOOTSTRAP, 3, server_list, NULL, NULL);
 }
 |
-ALTER SYSTEM FLUSH cache_type CACHE opt_tenant_list flush_scope
+ALTER SYSTEM FLUSH cache_type CACHE opt_sql_id opt_databases opt_tenant_list flush_scope
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 3, $4, $6, $7);
+  // system tenant use only.
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 5, $4, $6, $7, $8, $9);
 }
 |
+// this just is a Syntactic sugar, only used to be compatible to plan cache's Grammar
 ALTER SYSTEM FLUSH SQL cache_type opt_tenant_list flush_scope
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 3, $5, $6, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 5, $5, NULL, NULL, $6, $7);
 }
 |
 ALTER SYSTEM FLUSH KVCACHE opt_tenant_name opt_cache_name
@@ -11847,6 +11884,38 @@ ALTER SYSTEM RESUME BACKUP
   value->value_ = 0;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
+}
+|
+ALTER SYSTEM TRIGGER TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM SUSPEND TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM RESUME TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
+}
+|
+ALTER SYSTEM CANCEL TTL
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 1, type);
 }
 |
 ALTER SYSTEM DELETE EXPIRED BACKUP opt_copy_id
@@ -14046,6 +14115,7 @@ ACCOUNT
 |       P_CHUNK
 |       QUARTER
 |       QUERY %prec KILL_EXPR
+|       QUERY_RESPONSE_TIME
 |       QUEUE_TIME
 |       QUICK
 |       RANK
@@ -14224,6 +14294,7 @@ ACCOUNT
 |       TRIGGERS
 |       TRIM
 |       TRUNCATE
+|       TTL
 |       TYPE
 |       TYPES
 |       TABLEGROUP_ID

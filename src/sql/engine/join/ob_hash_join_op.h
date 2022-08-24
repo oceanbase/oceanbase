@@ -554,9 +554,10 @@ private:
   {
     int64_t row_count = profile_.get_row_count();
     int64_t bucket_cnt = profile_.get_bucket_size();
+    const int64_t DEFAULT_EXTRA_SIZE = 2 * 1024 * 1024;
     int64_t extra_memory_size = bucket_cnt * (sizeof(HashTableCell*) + sizeof(uint8_t));
     extra_memory_size += (row_count * sizeof(HashTableCell));
-    return extra_memory_size;
+    return extra_memory_size < 0 ? DEFAULT_EXTRA_SIZE : extra_memory_size;
   }
   void clean_nest_loop_chunk()
   {
@@ -689,7 +690,7 @@ private:
   bool postprocessed_left_;
   bool has_fill_right_row_;
   bool has_fill_left_row_;
-  ObChunkDatumStore::ShadowStoredRow<ObHashJoinStoredJoinRow> right_last_row_;
+  ObChunkDatumStore::ShadowStoredRow right_last_row_;
   bool need_return_;
   bool iter_end_;
   bool opt_cache_aware_;

@@ -34,7 +34,7 @@ int ObSnapshotInfoManager::init(const ObAddr& self_addr)
 }
 
 int ObSnapshotInfoManager::set_index_building_snapshot(
-    common::ObMySQLTransaction& trans, const int64_t index_table_id, const int64_t snapshot_ts)
+    common::ObMySQLProxy &proxy, const int64_t index_table_id, const int64_t snapshot_ts)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -49,7 +49,7 @@ int ObSnapshotInfoManager::set_index_building_snapshot(
                  ObSchemaUtils::get_extract_schema_id(tenant_id, index_table_id),
                  ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
     LOG_WARN("fail to update index building snapshot", KR(ret), K(index_table_id), K(snapshot_ts));
-  } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to write sql", KR(ret), K(sql));
   } else if (1 != affected_rows && 0 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
@@ -66,8 +66,6 @@ int ObSnapshotInfoManager::acquire_snapshot_for_building_index(
   if (!snapshot.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot));
-  } else if (OB_FAIL(set_index_building_snapshot(trans, index_table_id, snapshot.snapshot_ts_))) {
-    LOG_WARN("fail to set index building snapshot", KR(ret), K(snapshot));
   } else if (OB_FAIL(snapshot_proxy.add_snapshot(trans, snapshot))) {
     LOG_WARN("fail to add snapshot", K(ret));
   }

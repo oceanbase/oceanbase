@@ -70,7 +70,7 @@ bool ObSearchMethodOp::ObCycleHash::operator==(const ObCycleHash& other) const
 int ObSearchMethodOp::add_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx)
 {
   int ret = OB_SUCCESS;
-  ObChunkDatumStore::LastStoredRow<> last_row(allocator_);
+  ObChunkDatumStore::LastStoredRow last_row(allocator_);
   if (input_rows_.empty() && 0 == input_rows_.get_capacity() && OB_FAIL(input_rows_.reserve(INIT_ROW_COUNT))) {
     LOG_WARN("Failed to pre allocate array", K(ret));
   } else if (OB_UNLIKELY(exprs.empty())) {

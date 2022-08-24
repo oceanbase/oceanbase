@@ -350,7 +350,8 @@ int ObCodeGeneratorImpl::set_other_properties(const ObLogPlan& log_plan, ObPhysi
       bool has_dep_table = false;
       for (int64_t i = 0; OB_SUCC(ret) && !exist && i < dependency_table->count(); i++) {
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
-          if (OB_FAIL(ObSQLUtils::has_global_index(schema_guard, dependency_table->at(i).object_id_, exist))) {
+          uint64_t tenant_id = extract_tenant_id(dependency_table->at(i).object_id_);
+          if (OB_FAIL(schema_guard->check_global_index_exist(tenant_id, dependency_table->at(i).object_id_, exist))) {
             LOG_WARN("fail to judge global index", K(ret));
           }
           has_dep_table = true;
@@ -3414,7 +3415,6 @@ int ObCodeGeneratorImpl::convert_distinct(ObLogDistinct& op, const PhyOpsDesc& c
     } else if (FALSE_IT((input_row_desc = child_ops.at(0).second,
                    input_projector = child_ops.at(0).first->get_projector(),
                    input_projector_size = child_ops.at(0).first->get_projector_size()))) {
-      ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(create_phy_op_desc(phy_op_type, distinct_op, out_row_desc, out_ops, op.get_op_id()))) {
       LOG_WARN("failed to create phy op and desc", K(ret));
     } else if (OB_FAIL(copy_row_desc(*input_row_desc, *out_row_desc))) {
@@ -5143,7 +5143,8 @@ int ObCodeGeneratorImpl::convert_multi_table_insert_up_info(
         }
       }
     }
-    if (OB_SUCC(ret) && !index_dml_info.assignments_.empty()) {
+    if (OB_SUCC(ret)) {
+      // must generate insert and delete subplan for all data_table and global index_table, for multi_insert_up
       // delete subplan will be produced by update operation of insert_up
       // so if assignments is empty, it indicates no need to generate delete subplan
       OZ(convert_delete_subplan(op, index_dml_info, update_row_desc, subplans.at(ObMultiTableInsertUp::DELETE_OP)));
@@ -9170,16 +9171,17 @@ int ObCodeGeneratorImpl::get_cell_idx(
   if (OB_ISNULL(raw_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret));
-  } else if (!raw_expr->has_flag(IS_COLUMNLIZED)) {
-    if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
-      skip = true;
-    } else {
+  } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
+    skip = true;
+    LOG_TRACE("skip const expr", K(*raw_expr), K(cell_idx));
+  }
+  if (OB_SUCC(ret) && !skip) {
+    if (!raw_expr->has_flag(IS_COLUMNLIZED)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("param expr should have be columnlized", K(*raw_expr));
+    } else if (OB_FAIL(idx_provider.get_idx(raw_expr, cell_idx))) {
+      LOG_ERROR("partition by expr should have be columnlized", K(ret), K(*raw_expr));
     }
-  } else if (OB_FAIL(idx_provider.get_idx(raw_expr, cell_idx))) {
-    LOG_ERROR("partition by expr should have be columnlized", K(ret), K(*raw_expr));
-  } else { /* do nothing. */
   }
   return ret;
 }

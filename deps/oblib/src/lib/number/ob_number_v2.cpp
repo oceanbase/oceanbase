@@ -363,7 +363,8 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
         nth += i_nth;
       }
       warning = OB_INVALID_NUMERIC;
-    } else if (0 == valid_len) {
+    } else if (0 == valid_len || 0 == i_nth) {
+      // `i_nth = 0` means all digits are zero.
       /* ignore e's value; only do the check*/
       cur = str[++i];
       if ('-' == cur || '+' == cur) {
@@ -401,8 +402,11 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
         if (e_cnt < 4) {
           e_value = e_neg ? (e_value * 10 - (cur - '0')) : (e_value * 10 + cur - '0');
         }
-        cur = str[++i];
         e_cnt++;
+        if (++i >= length) {
+          break;
+        }
+        cur = str[i];
       }
 
       LOG_DEBUG("ObNumber from sci E", K(warning), K(e_neg), K(e_cnt), K(e_value), K(valid_len), K(i));
@@ -498,7 +502,15 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
       }
     }
     if (OB_SUCC(ret) || !is_oracle_mode()) {
-      LOG_DEBUG("Number from sci last ", K(cur), K(i), K(str + i), K(length), K(valid_len), K(ret), K(warning));
+      LOG_DEBUG("Number from sci last ",
+          K(cur),
+          K(i),
+          "str",
+          ObString(length, str),
+          K(length),
+          K(valid_len),
+          K(ret),
+          K(warning));
       while (cur == ' ' && i < length - 1) {
         cur = str[++i];
       }
@@ -524,8 +536,9 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
             K(e_neg),
             K(e_value),
             K(valid_len),
-            K(i));
-        if (as_zero || 0 == valid_len) {
+            K(i),
+            K(i_nth));
+        if (as_zero || 0 == valid_len || 0 == i_nth) {
           full_str[0] = '0';
           nth = 1;
           set_zero();
@@ -3196,7 +3209,7 @@ int ObNumber::format_v2(char* buf, const int64_t buf_len, int64_t& pos, int16_t 
     LOG_WARN("argument is invalid", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_UNLIKELY((buf_len - pos) < max_need_size)) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size is overflow", K(buf_len), K(pos), K(max_need_size), KPC(this), K(scale), K(ret));
+    LOG_TRACE("size is overflow", K(buf_len), K(pos), K(max_need_size), KPC(this), K(scale), K(ret));
   } else if (OB_FAIL(format_int64(buf, pos, scale, is_finish))) {
     LOG_ERROR("format_int64 failed", KPC(this), K(ret));
   } else if (is_finish) {

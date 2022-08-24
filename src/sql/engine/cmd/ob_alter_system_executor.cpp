@@ -84,13 +84,34 @@ int ObFlushCacheExecutor::execute(ObExecContext& ctx, ObFlushCacheStmt& stmt)
   int ret = OB_SUCCESS;
   if (!stmt.is_global_) {  // flush local
     int64_t tenant_num = stmt.flush_cache_arg_.tenant_ids_.count();
+    int64_t db_num = stmt.flush_cache_arg_.db_ids_.count();
+    common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
       case CACHE_TYPE_PLAN: {
         if (OB_ISNULL(ctx.get_plan_cache_manager())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("plan cache manager is null");
-        } else if (0 == tenant_num) {
-          ret = ctx.get_plan_cache_manager()->flush_all_plan_cache();
+        } else if (stmt.flush_cache_arg_.is_fine_grained_) {
+          // purge in sql_id level, aka. fine-grained plan evict
+          // we assume tenant_list must not be empty and this will be checked in resolve phase
+          if (0 == tenant_num) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tenant_list in fine-grained plan evict", K(tenant_num));
+          } else {
+            for (int64_t i = 0; i < tenant_num; i++) { // ignore ret
+              int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
+              if (db_num == 0) { // not specified db_name, evcit all dbs
+                ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(t_id, OB_INVALID_ID, sql_id);
+              } else { // evict db by db
+                for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                  ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(
+                                    t_id, stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+                }
+              }
+            }
+          }
+        } else if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
+          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_plan_cache();
         } else {
           for (int64_t i = 0; i < tenant_num; ++i) {  // ignore ret
             ret = ctx.get_plan_cache_manager()->flush_plan_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
@@ -1867,6 +1888,31 @@ int ObClearRestoreSourceExecutor::execute(ObExecContext& ctx, ObClearRestoreSour
     }
   }
   UNUSED(stmt);
+  return ret;
+}
+
+int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx* task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common_rpc_proxy is null", K(ret));
+  } else {
+    FLOG_INFO("ObTableTTLExecutor::execute", K(stmt), K(ctx));
+    ObTableTTLArg arg;
+    arg.cmd_code_ = static_cast<int64_t>(stmt.get_type());
+    if (OB_FAIL(common_rpc_proxy->table_ttl(arg))) {
+      LOG_WARN("handle table ttl failed", K(arg), K(ret));
+    }
+  }
   return ret;
 }
 

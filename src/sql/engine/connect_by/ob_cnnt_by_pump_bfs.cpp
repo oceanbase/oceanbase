@@ -260,7 +260,12 @@ int ObConnectByOpBFSPump::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(eval_ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
   } else {
+    uint64_t tenant_id = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
+    allocator_.set_tenant_id(tenant_id);
     connect_by_ = &connect_by_op;
     connect_by_prior_exprs_ = &connect_by.connect_by_prior_exprs_;
     left_prior_exprs_ = &connect_by.left_prior_exprs_;

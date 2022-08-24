@@ -861,6 +861,7 @@ int64_t ObHashJoin::auto_calc_partition_count(int64_t input_size, int64_t min_ne
   if (input_size > min_need_size) {
     // one pass
     int64_t need_part_cnt = min_need_size / ObChunkRowStore::BLOCK_SIZE;
+    need_part_cnt = max(0, need_part_cnt);
     while (partition_cnt < need_part_cnt) {
       partition_cnt <<= 1;
     }
@@ -868,6 +869,7 @@ int64_t ObHashJoin::auto_calc_partition_count(int64_t input_size, int64_t min_ne
     // all in memory, use the least memory
     int64_t max_chunk_size = input_size / ObChunkRowStore::BLOCK_SIZE;
     int64_t square_partition_cnt = partition_cnt * partition_cnt;
+    max_chunk_size = max(0, max_chunk_size);
     while (square_partition_cnt < max_chunk_size) {
       partition_cnt <<= 1;
       square_partition_cnt = partition_cnt * partition_cnt;
@@ -884,6 +886,7 @@ int64_t ObHashJoin::calc_partition_count(int64_t input_size, int64_t part_size, 
 {
   int64_t estimate_part_count = input_size / part_size + 1;
   int64_t partition_cnt = 8;
+  estimate_part_count = max(0, estimate_part_count);
   while (partition_cnt < estimate_part_count) {
     partition_cnt <<= 1;
   }

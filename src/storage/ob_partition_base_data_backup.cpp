@@ -1975,6 +1975,23 @@ int ObBackupFileAppender::sync_upload()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret) && ObBackupFileType::BACKUP_META_INDEX == file_type_) {
+      ret = E(EventTable::EN_BACKUP_COMMON_HEADER_NOT_COMPLETED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("prepare uplaod incomplete header", K(ret), KPC(common_header_));
+        const int64_t head_length = sizeof(ObBackupCommonHeader);
+        if (0 == head_length / 2 || data_buffer_.length() < head_length) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(storage_appender_.pwrite(data_buffer_.data(), head_length / 2, file_offset_))) {
+          STORAGE_LOG(WARN, "storage_writer writer fail", K(ret), K(storage_appender_));
+        } else {
+          ret = OB_IO_ERROR;
+        }
+      }
+    }
+#endif
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && ObBackupFileType::BACKUP_META_INDEX == file_type_) {
       ret = E(EventTable::EN_BACKUP_META_INDEX_BUFFER_NOT_COMPLETED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         LOG_INFO("errsim file type", K(file_type_), K(data_buffer_.length()));
@@ -2956,7 +2973,7 @@ int ObBackupPhysicalPGCtx::fetch_retry_points(const ObString& path, const ObStri
       common_header = NULL;
       int64_t end_pos = 0;
       if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
-        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(buffer_reader.remain()));
+        FLOG_INFO("backup data has incomplete data, skip it", K(buffer_reader.remain()), K(path), K(storage_info));
         break;
       } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "read macro index common header fail", K(ret));

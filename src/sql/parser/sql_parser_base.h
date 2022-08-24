@@ -377,7 +377,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
     char* dest = NULL;                                 \
     size_t len = end - begin - 1;                      \
     dest = parse_strndup(begin + 1, len, malloc_pool); \
-    check_value(dest);                                 \
+    check_malloc(dest);                                \
     node->str_value_ = dest;                           \
     node->str_len_ = len;                              \
     check_value(yylval);                               \
@@ -396,13 +396,13 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
     }                                                                   \
   } while (0);
 
-#define check_malloc(val_ptr, nbyte)                                                    \
-  do {                                                                                  \
-    if (OB_UNLIKELY(NULL == val_ptr)) {                                                 \
-      ((ParseResult*)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;                  \
-      yyerror(yylloc, yyextra, "No more space for malloc(size: %ld)\n", (size_t)nbyte); \
-      return ERROR;                                                                     \
-    }                                                                                   \
+#define check_malloc(val_ptr)                                           \
+  do {                                                                  \
+    if (OB_UNLIKELY(NULL == val_ptr)) {                                 \
+      ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY; \
+      yyerror(yylloc, yyextra, "No more space for malloc\n");           \
+      return ERROR;                                                     \
+    }                                                                   \
   } while (0);
 
 #define check_identifier_convert_result(errno)                    \
@@ -424,7 +424,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
     } else {                                              \
       ParseResult* p = (ParseResult*)yyextra;             \
       dst = parse_strndup(src, src_len, p->malloc_pool_); \
-      check_value(dst);                                   \
+      check_malloc(dst);                                  \
     }                                                     \
   } while (0);
 
@@ -434,7 +434,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
     char** tmp_literal = &(p->tmp_literal_);                                                    \
     if (NULL == *tmp_literal) {                                                                 \
       *tmp_literal = (char*)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);               \
-      check_value(*tmp_literal);                                                                \
+      check_malloc(*tmp_literal);                                                                \
     }                                                                                           \
     if (str_node->str_value_ != NULL) {                                                         \
       memmove(((ParseResult*)yyextra)->tmp_literal_, str_node->str_value_, str_node->str_len_); \
@@ -452,7 +452,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
       char** tmp_literal = &(p->tmp_literal_);                                      \
       if (NULL == *tmp_literal) {                                                   \
         *tmp_literal = (char*)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_); \
-        check_value(*tmp_literal);                                                  \
+        check_malloc(*tmp_literal);                                                  \
       }                                                                             \
       memmove(*tmp_literal + str_node->str_len_, yytext, yyleng);                   \
       str_node->str_len_ += yyleng;                                                 \
@@ -466,7 +466,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
       char* tmp_literal = p->tmp_literal_;                                                        \
       tmp_literal[yylval->node->str_len_] = '\0';                                                 \
       str_node->str_value_ = parse_strndup(tmp_literal, str_node->str_len_ + 1, p->malloc_pool_); \
-      check_value(str_node->str_value_);                                                          \
+      check_malloc(str_node->str_value_);                                                         \
     }                                                                                             \
   } while (0);
 
@@ -509,8 +509,8 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
       }                                                                                           \
       p->no_param_sql_[p->no_param_sql_len_] = '\0';                                              \
       size_t alloc_len = sizeof(ParamList);                                                       \
-      ParamList* param = (ParamList*)parse_malloc(alloc_len, p->malloc_pool_);                    \
-      check_malloc(param, alloc_len);                                                             \
+      ParamList *param = (ParamList *)parse_malloc(alloc_len, p->malloc_pool_);                   \
+      check_malloc(param);                                                                        \
       check_value(yylval);                                                                        \
       check_value(yylval->node);                                                                  \
       yylval->node->pos_ = p->no_param_sql_len_ - 1;                                              \
@@ -546,9 +546,9 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
       yylval->node = node;                                                                                       \
       yylval->node->raw_text_ =                                                                                  \
           parse_strdup(yytext, ((ParseResult*)yyextra)->malloc_pool_, &(yylval->node->text_len_));               \
-      check_value(yylval->node->raw_text_);                                                                      \
+      check_malloc(yylval->node->raw_text_);                                                                      \
       node->str_value_ = parse_strdup((char*)str_val, ((ParseResult*)yyextra)->malloc_pool_, &(node->str_len_)); \
-      check_value(node->str_value_);                                                                             \
+      check_malloc(node->str_value_);                                                                             \
       node->value_ = strtoll(node->str_value_, NULL, 10);                                                        \
       STORE_PARAM_NODE()                                                                                         \
     } else {                                                                                                     \
@@ -656,6 +656,7 @@ extern ParseNode* new_node(void* malloc_pool, ObItemType type, int num);
     if ('-' == param_node->str_value_[0]) {                                                               \
       char* copied_str = parse_strndup(param_node->str_value_, param_node->str_len_, malloc_pool);        \
       if (OB_ISNULL(copied_str)) {                                                                        \
+        ((ParseResult *)yyextra)->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;                                 \
         yyerror(NULL, yyextra, "No more space for mallocing");                                            \
         return ERROR;                                                                                     \
       } else {                                                                                            \
@@ -738,5 +739,18 @@ extern int setup_token_pos_info_and_dup_string(ParseNode* node, ParseResult* p, 
 #ifdef SQL_PARSER_COMPILATION
 int add_comment_list(ParseResult* p, const TokenPosInfo* info);
 #endif
+
+// avoid '\0' in the middle of a str.
+#define CHECK_STR_LEN_MATCH(src_str, str_len)                                    \
+  do {                                                                           \
+    if (OB_UNLIKELY(src_str == NULL)) {                                          \
+    } else {                                                                     \
+      for (int64_t i = 0; i < str_len; i++) {                                    \
+        if (OB_UNLIKELY(src_str[i] == '\0')) {                                   \
+          yyerror(yylloc, yyextra, "mismatch strlen, may cased by '\0' in str"); \
+        }                                                                        \
+      }                                                                          \
+    }                                                                            \
+  } while (0);
 
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */

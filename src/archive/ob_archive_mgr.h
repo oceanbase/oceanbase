@@ -174,6 +174,8 @@ private:
   int check_and_set_start_archive_ts_(
       const int64_t incarnation, const int64_t round, const bool is_oss, int64_t& start_ts);
   bool check_ob_ready_();
+  int extract_cur_piece_info_(
+      const share::ObNonFrozenBackupPieceInfo &non_piece_info, int64_t &rs_piece_id, int64_t &rs_piece_create_ts) const;
 
 private:
   bool inited_;

@@ -59,7 +59,11 @@ public:
   virtual int abort();
   bool is_disk_warning() const;
   // Thread safe
-  virtual int get_active_cursor(common::ObLogCursor& log_cursor) override;
+  virtual int get_active_cursor(common::ObLogCursor &log_cursor) override;
+  int64_t get_max_file_size() const
+  {
+    return log_writer_.get_file_size();
+  }
 
   void remove_useless_log_file(const int64_t end_file_id);
   // parse log to stream

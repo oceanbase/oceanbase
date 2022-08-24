@@ -300,7 +300,7 @@ ObLink* ObLockWaitMgr::check_timeout()
       } else {
         // do nothing
       }
-      if (need_check_session) {
+      if (need_check_session && iter->sessid_ != 0) { // when lock wait in dag worker, session is not exist
         sql::ObSQLSessionInfo* session_info = NULL;
         int ret = OB_SUCCESS;
         int tmp_ret = OB_SUCCESS;

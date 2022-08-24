@@ -2321,6 +2321,7 @@ int ObDMLStmt::check_and_convert_leading_hint(const ObSQLSessionInfo& session_in
     ObIArray<uint64_t>& leading_ids = hint.join_order_ids_;
     const ObIArray<ObTableInHint>& tables = hint.join_order_;
     uint64_t table_id = OB_INVALID_ID;
+    leading_ids.reuse();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < tables.count(); ++idx) {
       const ObTableInHint& table = tables.at(idx);
       if (OB_FAIL(get_table_id(session_info, table.qb_name_, table.db_name_, table.table_name_, table_id))) {

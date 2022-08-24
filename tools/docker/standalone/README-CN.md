@@ -33,6 +33,8 @@ $ docker logs obstandalone | tail -1
 boot success!
 ```
 
+**WARNING:** 如果observer进程出现异常退出，容器不会自动退出。
+
 ## 连接 OceanBase 实例
 
 oceanbase-standalone 镜像安装了 OceanBase 数据库客户端 obclient，并提供了默认连接脚本 ob-mysql。
@@ -70,6 +72,7 @@ mysql>
 变量名称 | 默认值 | 描述
 ------- | ----- | ---
 MINI_MODE | false | OceanBase 数据库实例是否采用mini模式部署，该模式仅供研究、学习和评估使用，不适用于生产环境或性能测试场景。
+EXIT_WHILE_ERROR | true | OceanBase 如果启动失败，是否退出容器。比如初次run镜像失败，或start容器失败，可以将此参数设置为false,那么OB启动失败，也可以进入容器，查看OceanBase的运行日志，然后进行排查。
 OB_HOME_PATH | /root/ob | OceanBase 数据库实例的部署路径。
 OB_DATA_DIR | empty | OceanBase 数据库使用的数据存储路径。默认在部署路径下的 `store` 目录
 OB_REDO_DIR | empty | OceanBase 数据库使用的clog，ilog，slog路径。默认与数据存储路径一致。
@@ -82,9 +85,20 @@ OB_TENANT_NAME | test | OceanBase 数据库实例默认初始化的用户租户�
 
 ## 运行 Sysbench 脚本
 
-oceanbase-standalone 镜像默认安装了 Sysbench 工具，并进行了简单配置。您可以依次执行以下命令，使用默认配置运行 Sysbench 脚本。
+oceanbase-ce 镜像默认安装了 Sysbench 工具，并进行了简单配置。您可以依次执行以下命令，使用默认配置运行 Sysbench 脚本。
 
 ```bash
 docker exec -it obstandalone obd test sysbench [OB_CLUSTER_NAME]
 ```
 
+## 磁盘挂载
+如果想要将容器中的数据持久化保存下来，通常的做法是在`run` docker镜像时，使用 `-v /host/path:/container/path` 的方式将数据保存在宿主机上。
+oceanbase-ce镜像的数据库数据默认保存在/root/ob目录下。但是仅仅映射/root/ob目录，会导致新的镜像无法启动，因为oceanbase-ce镜像是使用[obd](https://github.com/oceanbase/obdeploy) 来管理集群的，新的镜像启动时，没有oceanbase的集群信息，所以需要同时挂载/root/ob和/root/.obd目录。
+挂载目录运行示例：
+
+```bash
+docker run -d -p 2881:2881 -v $PWD/ob:/root/ob -v $PWD/obd:/root/.obd --name oceanbase oceanbase/oceanbase-ce
+```
+
+注意需要按照实际情况调整自己的目录。
+docker -v 参数的详细说明可以参考 [docker volumn](https://docs.docker.com/storage/volumes/)

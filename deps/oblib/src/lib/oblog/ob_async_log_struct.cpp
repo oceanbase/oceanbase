@@ -13,7 +13,6 @@
 #include "ob_async_log_struct.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
 
-using namespace obutil;
 namespace oceanbase {
 namespace common {
 ObPLogItem::ObPLogItem()

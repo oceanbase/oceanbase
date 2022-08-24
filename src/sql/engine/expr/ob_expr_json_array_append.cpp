@@ -50,6 +50,7 @@ int ObExprJsonArrayAppend::calc_result_typeN(ObExprResType& type,
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, name.length(), name.ptr());
   } else {
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
 
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_ARRAY_APPEND))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));

@@ -247,6 +247,8 @@ enum ObIndexStatus {
   INDEX_STATUS_MAX = 8,
 };
 
+bool can_rereplicate_index_status(const ObIndexStatus &idst);
+
 enum ObPartitionStatus {
   PARTITION_STATUS_INVALID = -1,
   PARTITION_STATUS_ACTIVE = 0,
@@ -2645,6 +2647,7 @@ public:
   virtual const common::ObString &get_previous_locality_str() const = 0;
   virtual int get_paxos_replica_num(share::schema::ObSchemaGetterGuard &schema_guard, int64_t &num) const = 0;
   virtual share::ObDuplicateScope get_duplicate_scope() const = 0;
+  virtual int check_has_own_not_f_replica(bool &has_not_f_replica) const = 0;
   virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) = 0;
   virtual void set_duplicate_scope(const int64_t duplicate_scope) = 0;
   inline virtual int64_t get_part_func_expr_num() const
@@ -3267,6 +3270,11 @@ public:
   {
     return true;
   }
+  inline bool can_rereplicate_global_index_table() const
+  {
+    return true;
+  }
+  virtual int check_has_own_not_f_replica(bool &has_not_f_replica) const override;
 
   DECLARE_VIRTUAL_TO_STRING;
 

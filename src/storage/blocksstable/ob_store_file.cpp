@@ -338,6 +338,23 @@ int ObMacroBlockHandleV1::set_macro_block_id(const MacroBlockId& macro_block_id)
   return ret;
 }
 
+
+/**
+ * ---------------------------------------------------------ObStoreFileAutoExtendTask-----------------------------------------------------------
+ */
+ObStoreFileAutoExtendTask::ObStoreFileAutoExtendTask()
+{}
+
+ObStoreFileAutoExtendTask::~ObStoreFileAutoExtendTask()
+{}
+
+// TODO Before mini merge adjustment, create PG, which will be cored here
+void ObStoreFileAutoExtendTask::runTimerTask()
+{
+   OB_STORE_FILE.ssblock_check_and_extend();
+}
+
+
 /**
  * ---------------------------------------------------------ObStoreFileGCTask-----------------------------------------------------------
  */
@@ -398,6 +415,7 @@ ObStoreFile::ObStoreFile()
       meta_array_lock_(),
       cur_meta_array_pos_(0),
       gc_task_(),
+      ssblock_auto_extend_task_(),
       inspect_bad_block_task_(),
       print_buffer_(NULL),
       print_buffer_size_(ObLogger::MAX_LOG_SIZE - 100),
@@ -408,9 +426,12 @@ ObStoreFile::ObStoreFile()
       store_file_system_(NULL),
       is_mark_sweep_enabled_(false),
       is_doing_mark_sweep_(false),
+      is_doing_disk_extend_(false),
       cond_(),
       is_fs_support_punch_hole_(true),
-      block_file_fd_(OB_INVALID_FD)
+      block_file_fd_(OB_INVALID_FD),
+      alloc_lock_(),
+      resize_file_lock_()
 {
   MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
 }
@@ -522,6 +543,10 @@ int ObStoreFile::open(const bool is_physical_flashback)
         STORAGE_LOG(WARN, "Fail to schedule gc task, ", K(ret));
       } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::StoreFileGC, inspect_bad_block_task_, INSPECT_DELAY_US, true))) {
         STORAGE_LOG(WARN, "Fail to schedule bad_block_inspect task, ", K(ret));
+      } else if (OB_FAIL(TG_START(lib::TGDefIDs::StoreFileAutoExtend))){
+        STORAGE_LOG(WARN, "Fail to start StoreFileAutoExtend timer", K(ret));
+      } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::StoreFileAutoExtend, ssblock_auto_extend_task_, AUTOEXTEND_DELAY_US, true))) {
+        STORAGE_LOG(WARN, "Fail to schedule StoreFileAutoExtend task", K(ret));
       } else {
         is_opened_ = true;
         if (is_replay_old) {
@@ -555,6 +580,9 @@ void ObStoreFile::destroy()
   inspect_bad_block_task_.destroy();
   TG_STOP(lib::TGDefIDs::StoreFileGC);
   TG_WAIT(lib::TGDefIDs::StoreFileGC);
+  TG_STOP(lib::TGDefIDs::StoreFileAutoExtend);
+  TG_WAIT(lib::TGDefIDs::StoreFileAutoExtend);
+
   SLOGGER.destroy();
 
   lib::ObMutexGuard bad_block_guard(bad_block_lock_);
@@ -584,6 +612,7 @@ void ObStoreFile::destroy()
   is_opened_ = false;
   is_mark_sweep_enabled_ = false;
   is_doing_mark_sweep_ = false;
+  is_doing_disk_extend_ = false;
   cond_.destroy();
   is_fs_support_punch_hole_ = true;
   block_file_fd_ = OB_INVALID_FD;
@@ -592,6 +621,7 @@ void ObStoreFile::destroy()
 void ObStoreFile::stop()
 {
   TG_STOP(lib::TGDefIDs::StoreFileGC);
+  TG_STOP(lib::TGDefIDs::StoreFileAutoExtend);
   is_opened_ = false;
   STORAGE_LOG(INFO, "the store file gc task stopped");
 }
@@ -599,6 +629,7 @@ void ObStoreFile::stop()
 void ObStoreFile::wait()
 {
   TG_WAIT(lib::TGDefIDs::StoreFileGC);
+  TG_WAIT(lib::TGDefIDs::StoreFileAutoExtend);
   STORAGE_LOG(INFO, "the store file finish wait");
 }
 
@@ -800,15 +831,33 @@ int ObStoreFile::check_disk_full(const int64_t required_size) const
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(required_size));
   } else {
+    int64_t calc_total_block_cnt = store_file_system_->get_total_macro_block_count();;
+    int64_t calc_free_block_cnt = free_block_cnt_;
+
+    // if auto disk extend is active, calc total block and free block cnt
+    int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
+    if (cur_total_data_file_size > 0 && 
+        cur_total_data_file_size < GCONF.datafile_maxsize) { // if auto extend mode is on
+      int64_t cur_total_block_cnt = store_file_system_->get_total_macro_block_count();
+      calc_total_block_cnt = 
+        store_file_system_->get_total_macro_block_max_count();
+      calc_free_block_cnt = 
+        calc_total_block_cnt - cur_total_block_cnt + free_block_cnt_;
+    } 
     const int64_t required_count = required_size / store_file_system_->get_macro_block_size();
-    const int64_t free_count = free_block_cnt_ - required_count;
-    const int64_t used_percent = 100 - 100 * free_count / store_file_system_->get_total_macro_block_count();
+    const int64_t free_count = calc_free_block_cnt - required_count;
+    const int64_t used_percent = 100 - 100 * free_count / calc_total_block_cnt;
     if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT &&
         used_percent >= GCONF.data_disk_usage_limit_percentage) {
       ret = OB_CS_OUTOF_DISK_SPACE;
       if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
-        STORAGE_LOG(
-            ERROR, "disk is almost full", K(ret), K(required_size), K(required_count), K(free_count), K(used_percent));
+        STORAGE_LOG(ERROR, "disk is almost full", 
+              K(ret), K(required_size), 
+              K(required_count), 
+              K(free_count), 
+              K(used_percent),
+              K(calc_free_block_cnt),
+              K(calc_total_block_cnt));
       }
     }
   }
@@ -950,6 +999,37 @@ int ObStoreFile::is_free_block(const int64_t block_index, bool& is_free)
   return ret;
 }
 
+int ObStoreFile::auto_extend_file_size() 
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(free_block_cnt_ > 0)) {
+  } else if (OB_FAIL(extend_file_size_task())) {
+    if (ret != OB_NOT_READY_TO_EXTEND_FILE) {
+      LOG_WARN("Fail to extend file size", K(ret));
+    }
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::StoreFileGC, gc_task_, 0, false))) { 
+    LOG_WARN("Fail to schedule gc task to mark and sweep", K(ret));
+  } else {
+    int64_t begin_time = ObTimeUtility::current_time();
+    while (OB_SUCC(ret)) {
+      // check free blocks after gc_task get started.
+      // so if we cannot get free_block_cnt > 0 after extend_file_size_task,
+      // we should do retry until free_block_cnt refresh already or timeout after 5s
+      // to return failed. 
+      if (free_block_cnt_ > 0) {
+        break;
+      }
+      if (ObTimeUtility::current_time() - begin_time > MARK_BLOCK_INFO_TIMEOUT) {
+        LOG_WARN("Timeout loop of waitting and getting free blocks", 
+          K(free_block_cnt_));
+        ret = OB_MARK_BLOCK_INFO_TIMEOUT;
+      }
+      usleep(50 * 1000); // 50ms
+    }
+  }
+  return ret;
+}
+
 int ObStoreFile::alloc_block(ObMacroBlockHandle& macro_handle)
 {
   int ret = OB_SUCCESS;
@@ -957,16 +1037,21 @@ int ObStoreFile::alloc_block(ObMacroBlockHandle& macro_handle)
   macro_handle.reuse();
   const int64_t MAX_ALLOC_BLOCK_TRY_COUNT = 10;
 
-  lib::ObMutexGuard guard(block_lock_);
-  if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
-    ret = OB_CS_OUTOF_DISK_SPACE;
-    STORAGE_LOG(ERROR,
-        "Fail to alloc block, ",
+  lib::ObMutexGuard guard(alloc_lock_); // lock free_block_cnt--
+  if (OB_ISNULL(store_file_system_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Fail to alloc block, null pointer", K(ret));
+  } else if (OB_LIKELY(free_block_cnt_ > 0)) {
+    // do nothing
+  } else if (OB_FAIL(auto_extend_file_size())) {
+    int64_t total_block_cnt = store_file_system_->get_total_macro_block_count();
+    STORAGE_LOG(ERROR,"Fail to alloc block, ", 
         K(ret),
         K(free_block_cnt_),
-        "total_count",
-        store_file_system_->get_total_macro_block_count());
-  } else {
+        K(total_block_cnt));
+  } 
+  if (OB_SUCC(ret)) {
+    lib::ObMutexGuard guard(block_lock_); // lock block
     bool is_alloc_succ = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_alloc_succ && i < MAX_ALLOC_BLOCK_TRY_COUNT && free_block_cnt_ > 0; ++i) {
       block_idx = free_block_array_[free_block_pop_pos_];
@@ -983,21 +1068,10 @@ int ObStoreFile::alloc_block(ObMacroBlockHandle& macro_handle)
         }
       }
     }
-
-    if (OB_SUCC(ret)) {
-      if (is_alloc_succ) {
-      } else if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
-        ret = OB_CS_OUTOF_DISK_SPACE;
-        STORAGE_LOG(ERROR,
-            "Fail to alloc block, ",
-            K(ret),
-            K(free_block_cnt_),
-            "total_count",
-            store_file_system_->get_total_macro_block_count());
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Fail to alloc block", K(ret));
-      }
+    if (is_alloc_succ) {
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Fail to alloc block", K(ret));
     }
   }
   return ret;
@@ -1068,11 +1142,9 @@ int ObStoreFile::mark_macro_blocks()
   } else {
     // mark init
     MEMSET(macro_block_bitmap_, 0, (store_file_system_->get_total_macro_block_count() / 64 + 1) * sizeof(uint64_t));
-
     for (int64_t i = 0; i < ObStoreFileSystem::RESERVED_MACRO_BLOCK_INDEX && is_mark_sweep_enabled(); ++i) {
       bitmap_set(i);
     }
-
     // mark data block
     ObMacroBlockCommonHeader::MacroBlockType macro_type;
     used_macro_cnt_[ObMacroBlockCommonHeader::SSTableData] = 0;
@@ -1097,7 +1169,6 @@ int ObStoreFile::mark_macro_blocks()
         STORAGE_LOG(ERROR, "Fail to iter data macro block ids, ", K(ret));
       }
     }
-
     // mark meta block
     if (OB_SUCC(ret)) {
       lib::ObMutexGuard guard(meta_array_lock_);
@@ -1107,6 +1178,153 @@ int ObStoreFile::mark_macro_blocks()
     }
   }
   return ret;
+}
+
+bool ObStoreFile::check_auto_extend_param() 
+{
+  bool is_start_extend  = false;
+  if (OB_ISNULL(store_file_system_)) {
+  } else {
+    int64_t datafile_maxsize = GCONF.datafile_maxsize;
+    int64_t datafile_size = GCONF.datafile_size;
+    int64_t datafile_next = GCONF.datafile_next;
+    if (OB_UNLIKELY(datafile_maxsize <= 0) ||
+        OB_UNLIKELY(datafile_next <= 0) ||
+        OB_UNLIKELY(datafile_size <= 0)) {
+      LOG_DEBUG("Do not extend file size, datafile param not set", 
+        K(datafile_maxsize), 
+        K(datafile_next), 
+        K(datafile_size));
+    } else if (datafile_maxsize <= datafile_size) {
+      LOG_DEBUG("Do not extend file size, maxsize is smaller than datafile size", 
+        K(datafile_maxsize), 
+        K(datafile_size));
+    } else {
+      int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
+      if (datafile_maxsize - cur_total_data_file_size <= 0) {
+        LOG_DEBUG("Do not extend file size, ssblock file reach maxsize limit", 
+          K(datafile_maxsize), 
+          K(cur_total_data_file_size));
+      } else {
+        is_start_extend = true;
+      }
+    }
+  }
+  return is_start_extend;
+}
+
+int ObStoreFile::calc_auto_extend_size(int64_t &actual_extend_size) 
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+    ret = OB_ERR_NULL_VALUE;
+  } else {
+    int64_t datafile_maxsize = GCONF.datafile_maxsize;
+    int64_t datafile_next = GCONF.datafile_next;
+    int64_t cur_total_data_file_size = store_file_system_->get_total_data_size();
+    // attention: max_extend_file maybe less than zero in the following situations:
+    // 1. alter datafile_size as A, alter datafile_maxsize as B, and A < B
+    // 2. auto extend to size to C ( A < C < B )
+    // 3. alter datafile_maxsize as D ( A < D < C )
+    int64_t max_extend_file = datafile_maxsize - cur_total_data_file_size; 
+    // calc actual_extend_size, following the rules:
+    // 1. if datafile_next less than 1G, actual_extend_size equal to min(1G, datafile_maxsize * 10%)
+    // 2. if datafile_next large than 1G, actual_extend_size equal to min(datafile_next, max_extend_file)
+    if (datafile_next < DATAFILE_NEXT_MIN) {
+      int64_t min_extend_size = datafile_maxsize * 10 / 100;
+      actual_extend_size = 
+        min_extend_size < DATAFILE_NEXT_MIN ? min_extend_size : DATAFILE_NEXT_MIN;
+      if (actual_extend_size > max_extend_file) { // take the smaller
+        actual_extend_size = max_extend_file;
+      }
+    } else {
+      actual_extend_size = 
+        datafile_next < max_extend_file ? datafile_next : max_extend_file;
+    }
+    if (actual_extend_size <= 0) {
+      ret = OB_CS_OUTOF_DISK_SPACE;
+      LOG_WARN("No more disk space to extend, is full now", K(ret),
+        K(datafile_maxsize),
+        K(cur_total_data_file_size)); 
+    }
+  }
+  return ret;
+}
+
+// should lock before using to protect free_block_cnt_ opt
+int ObStoreFile::extend_file_size_task()
+{
+  lib::ObMutexGuard guard(resize_file_lock_); // lock resize file opt
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+  } else if (!check_auto_extend_param()) {
+    ret = OB_NOT_READY_TO_EXTEND_FILE;
+    LOG_DEBUG("Check auto extend over, no need to start ssbfile auto extend", 
+      K(ret));
+  } else {
+    disable_mark_sweep(); // lock and wait mark_and_sweep block option done
+    if (OB_FAIL(wait_mark_sweep_finish())) {
+      LOG_WARN("Extend file size fail, wait mark and sweep finish fail", 
+        K(ret));
+    } else {
+      lib::ObMutexGuard guard(block_lock_); // lock block info update opt
+      int64_t total_block_cnt = store_file_system_->get_total_macro_block_count();
+      int64_t free_block_cnt_to_extend = 
+        total_block_cnt - total_block_cnt * GCONF._datafile_usage_upper_bound_percentage / 100;
+      // here we can see auto extend disk premise: 
+      // 1. free_block_cnt ratio is less than one percentage (default 10%)
+      // 2. free_block_cnt is less than one value (512 = 1G)
+      if (free_block_cnt_to_extend < free_block_cnt_ && 
+          (free_block_cnt_ > AUTO_EXTEND_LEAST_FREE_BLOCK_CNT)) {
+        LOG_DEBUG("Do not extend file, not reach extend trigger.", 
+          K(free_block_cnt_to_extend), 
+          K(free_block_cnt_), 
+          K(total_block_cnt));
+      } else {
+        LOG_DEBUG("Start to do auto ssblock file extend.");
+        int64_t actual_extend_size = 0;
+        if (is_doing_disk_extend()) { // is_doing_disk_extend == true means there have not finish extend task yet, 
+                                      // here DO NOT resize_file again!!!
+          LOG_INFO("Do extend file, there has doing extend job, only need to mark free block.", 
+            K(free_block_cnt_), 
+            "total blocks",
+            store_file_system_->get_total_macro_block_count());
+        } else if (OB_FAIL(calc_auto_extend_size(actual_extend_size))) {
+          LOG_DEBUG("calc auto extend size error, maybe ssblock file has reach its maxsize", 
+            K(ret)); 
+        } else if (OB_FAIL(store_file_system_->resize_file(0, 0, actual_extend_size))) {
+          LOG_WARN("Extend file size fail, maybe disk is out of space already", 
+            K(actual_extend_size));
+        } else if (OB_FAIL(refresh_block_meta())){
+          LOG_WARN("Extend file size fail, fresh block meta error", K(ret));
+        } else {
+          start_doing_disk_extend(); // set doing disk extend enable to skip auto extend check until mark_and_sweep done
+          LOG_INFO("Extend file success, will mark and sweep blocks later", 
+            K(actual_extend_size), 
+            K(store_file_system_->get_total_data_size()));
+        }
+      }
+    }
+    enable_mark_sweep(); // enable mark 
+  }
+  return ret;
+}
+
+void ObStoreFile::ssblock_check_and_extend()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_file_system_)) {
+  } else if (is_doing_disk_extend()){ // avoid doing double extend task
+    LOG_WARN("Extend file is doing now, skip this round.");
+  } else {
+    if (OB_FAIL(extend_file_size_task())) {
+      if (ret != OB_NOT_READY_TO_EXTEND_FILE) {
+        LOG_WARN("Fail to extend file size", K(ret));
+      }
+    } else {
+      LOG_DEBUG("Success to extend file size");
+    }
+  }
 }
 
 void ObStoreFile::mark_and_sweep()
@@ -1168,11 +1386,21 @@ void ObStoreFile::mark_and_sweep()
         }
       }
     }
+    // time 
     end_time = ObTimeUtility::current_time();
     sweep_cost_time_ = end_time - begin_time;
-
+    // print buf
     hold_macro_cnt_ = hold_cnt;
     print_buffer_[print_pos] = '\0';
+
+    // finish doing entire mark and sweep process
+    // is_mark_sweep_enabled==true means mark and sweep process is not being broken yet
+    if (is_mark_sweep_enabled()) { 
+      if (is_doing_disk_extend()) {
+        finish_doing_disk_extend();
+        STORAGE_LOG(INFO, "finish doing mark_and_sweep without suspend ");
+      }
+    }
     STORAGE_LOG(INFO, "mark_and_sweep free blocks.", K(print_buffer_), K(free_cnt), K(hold_cnt));
     set_mark_sweep_done();
   }
@@ -1278,97 +1506,122 @@ void ObStoreFile::set_mark_sweep_done()
   cond_.broadcast();
 }
 
-int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage)
+// should lock and then use
+int ObStoreFile::refresh_block_meta() 
 {
   int ret = OB_SUCCESS;
-  disable_mark_sweep();
   if (OB_ISNULL(store_file_system_)) {
-    // do nothing
-  } else if (OB_FAIL(wait_mark_sweep_finish())) {
-    LOG_WARN("fail to wait mark and sweep finish", K(ret));
+    LOG_DEBUG("Do resize file fail, store_file_system_ is null pointer");
   } else {
-    lib::ObMutexGuard guard(block_lock_);
-    if (OB_FAIL(store_file_system_->resize_file(new_data_file_size, new_data_file_disk_percentage))) {
-      LOG_WARN("fail to resize file", K(ret));
-    } else {
-      const int64_t new_total_file_size =
-          lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
-      const int64_t new_macro_block_cnt = new_total_file_size / store_file_system_->get_macro_block_size();
-      const int64_t origin_macro_block_cnt = store_file_system_->get_total_macro_block_count();
-      if (new_macro_block_cnt > origin_macro_block_cnt) {
-        uint32_t* new_free_block_array = nullptr;
-        uint64_t* new_macro_block_bitmap = nullptr;
-        ObServerSuperBlock super_block = store_file_system_->get_server_super_block();
-        super_block.content_.total_file_size_ = new_total_file_size;
-        super_block.content_.total_macro_block_count_ = new_macro_block_cnt;
-        super_block.content_.modify_timestamp_ = ObTimeUtility::current_time();
-        ObStorageFile* file = OB_FILE_SYSTEM.get_server_root_handle().get_storage_file();
-        if (OB_ISNULL(file)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, file must not be null", K(ret));
-        } else if (OB_FAIL(alloc_memory(
-                       new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
-          LOG_WARN("fail to alloc memory", K(ret), K(new_macro_block_cnt));
-        } else if (OB_FAIL(file->write_super_block(super_block))) {
-          LOG_WARN("fail to write super block", K(ret));
+    const int64_t new_total_file_size =
+      lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
+    const int64_t new_macro_block_cnt = new_total_file_size / store_file_system_->get_macro_block_size();
+    const int64_t origin_macro_block_cnt = store_file_system_->get_total_macro_block_count();
+    if (new_macro_block_cnt > origin_macro_block_cnt) {
+      uint32_t* new_free_block_array = nullptr;
+      uint64_t* new_macro_block_bitmap = nullptr;
+      ObServerSuperBlock super_block = store_file_system_->get_server_super_block();
+      super_block.content_.total_file_size_ = new_total_file_size;
+      super_block.content_.total_macro_block_count_ = new_macro_block_cnt;
+      super_block.content_.modify_timestamp_ = ObTimeUtility::current_time();
+      ObStorageFile* file = OB_FILE_SYSTEM.get_server_root_handle().get_storage_file();
+      if (OB_ISNULL(file)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, file must not be null", K(ret));
+      } else if (OB_FAIL(alloc_memory(
+                      new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
+        LOG_WARN("fail to alloc memory", K(ret), K(new_macro_block_cnt));
+      } else if (OB_FAIL(file->write_super_block(super_block))) {
+        LOG_WARN("fail to write super block", K(ret));
+      } else {
+        // copy free block info to new_free_block_array
+        if (free_block_pop_pos_ > free_block_push_pos_) {
+          MEMCPY(new_free_block_array,
+              free_block_array_ + free_block_pop_pos_,
+              (origin_macro_block_cnt - free_block_pop_pos_) * sizeof(uint32_t));
+          MEMCPY(new_free_block_array + origin_macro_block_cnt - free_block_pop_pos_,
+              free_block_array_,
+              free_block_push_pos_ * sizeof(uint32_t));
+        } else if (free_block_pop_pos_ < free_block_push_pos_) {
+          MEMCPY(new_free_block_array,
+              free_block_array_ + free_block_pop_pos_,
+              (free_block_push_pos_ - free_block_pop_pos_) * sizeof(uint32_t));
         } else {
-          // copy free block info to new_free_block_array
-          if (free_block_pop_pos_ > free_block_push_pos_) {
-            MEMCPY(new_free_block_array,
-                free_block_array_ + free_block_pop_pos_,
-                (origin_macro_block_cnt - free_block_pop_pos_) * sizeof(uint32_t));
-            MEMCPY(new_free_block_array + origin_macro_block_cnt - free_block_pop_pos_,
-                free_block_array_,
-                free_block_push_pos_ * sizeof(uint32_t));
-          } else if (free_block_pop_pos_ < free_block_push_pos_) {
-            MEMCPY(new_free_block_array,
-                free_block_array_ + free_block_pop_pos_,
-                (free_block_push_pos_ - free_block_pop_pos_) * sizeof(uint32_t));
-          } else {
-            MEMCPY(new_free_block_array, free_block_array_, free_block_cnt_ * sizeof(uint32_t));
-          }
-          free_block_pop_pos_ = 0;
-          free_block_push_pos_ = free_block_cnt_;
-          MEMCPY(new_macro_block_bitmap,
-              macro_block_bitmap_,
-              get_macro_bitmap_array_cnt(origin_macro_block_cnt) * sizeof(uint64_t));
-          allocator_.free(free_block_array_);
-          allocator_.free(macro_block_bitmap_);
-          free_block_array_ = new_free_block_array;
-          macro_block_bitmap_ = new_macro_block_bitmap;
-          LOG_INFO("succeed to resize file", K(new_data_file_size));
+          MEMCPY(new_free_block_array, free_block_array_, free_block_cnt_ * sizeof(uint32_t));
         }
-        if (OB_FAIL(ret)) {
-          allocator_.free(new_free_block_array);
-          allocator_.free(new_macro_block_bitmap);
-        }
+        free_block_pop_pos_ = 0;
+        free_block_push_pos_ = free_block_cnt_;
+        MEMCPY(new_macro_block_bitmap,
+            macro_block_bitmap_,
+            get_macro_bitmap_array_cnt(origin_macro_block_cnt) * sizeof(uint64_t));
+        allocator_.free(free_block_array_);
+        allocator_.free(macro_block_bitmap_);
+        free_block_array_ = new_free_block_array;
+        macro_block_bitmap_ = new_macro_block_bitmap;
+      }
+      if (OB_FAIL(ret)) {
+        allocator_.free(new_free_block_array);
+        allocator_.free(new_macro_block_bitmap);
       }
     }
   }
-  enable_mark_sweep();
   return ret;
 }
 
-int ObStoreFile::validate_datafile_size(const char* config_data_file_size)
+int ObStoreFile::resize_file(
+    const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(store_file_system_)) {
+    LOG_DEBUG("Do resize file fail, store_file_system_ is null pointer");
+  } else {
+    lib::ObMutexGuard guard(resize_file_lock_);
+    disable_mark_sweep();
+    if (OB_FAIL(wait_mark_sweep_finish())) {
+      LOG_WARN("fail to wait mark and sweep finish", K(ret));
+    } else {
+      lib::ObMutexGuard guard(block_lock_);
+      if (OB_FAIL(store_file_system_->resize_file(new_data_file_size, new_data_file_disk_percentage))) {
+        LOG_WARN("fail to resize file", K(ret));
+      } else if (OB_FAIL(refresh_block_meta())) {
+        LOG_WARN("fail to refresh block meta", K(ret));
+      } else {
+        start_doing_disk_extend();
+        LOG_INFO("succeed to resize file");
+      }
+    }
+    enable_mark_sweep();
+  }
+  return ret;
+}
+
+int ObStoreFile::validate_datafile_param(const ObString& name, const char* config_data_file_param)
+{
+  int ret = OB_SUCCESS;
+  bool valid = false;
+  if (OB_ISNULL(store_file_system_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The OB store file instance is not exist", K(ret));
-  } else {
+  } 
+  if (OB_SUCC(ret)) {
     bool valid = false;
-    int64_t new_data_file_size = ObConfigCapacityParser::get(config_data_file_size, valid);
-    if(!valid){
-      ret = OB_ERR_PARSE_SQL;
-      LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be parsed");
-    } else {
-      const int64_t original_file_size = store_file_system_->get_total_data_size();
-      if (new_data_file_size < original_file_size) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("datafile_size is smaller than the original configuration", K(ret));
-        LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile_size can not be smaller than the original configuration");
+    int64_t new_data_file_param;
+    if (0 == name.case_compare("datafile_size")) {
+      new_data_file_param = ObConfigCapacityParser::get(config_data_file_param, valid);
+      if(!valid){
+        ret = OB_ERR_PARSE_SQL;
+        LOG_USER_ERROR(OB_INVALID_CONFIG, "datafile size can not be parsed");
+      } else {
+        const int64_t original_file_size = store_file_system_->get_total_data_size();
+        if (new_data_file_param < original_file_size) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("datafile_size is smaller than the original configuration", 
+            K(ret), K(new_data_file_param), K(original_file_size));
+          LOG_USER_ERROR(OB_INVALID_CONFIG, 
+            "datafile_size can not be smaller than the original configuration");
+        }
       }
-    }  
+    }
   }
   return ret;
 }

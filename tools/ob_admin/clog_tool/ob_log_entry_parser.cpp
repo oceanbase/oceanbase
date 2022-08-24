@@ -815,7 +815,23 @@ int ObLogEntryParserImpl::dump_trans_redo_log(const char* data, int64_t len, con
   return ret;
 }
 
-int ObLogEntryParserImpl::dump_trans_prepare_log(const char* data, int64_t len)
+int ObLogEntryParserImpl::dump_trans_record_log(const char *data, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  ObTransRecordLogHelper helper;
+  ObTransRecordLog log(helper);
+  int64_t pos = 0;
+
+  if (OB_FAIL(log.deserialize(data, len, pos))) {
+    CLOG_LOG(WARN, "failed to deserialize log", K(ret));
+  } else {
+    fprintf(stdout, " %s|||", to_cstring(log));
+  }
+
+  return ret;
+}
+
+int ObLogEntryParserImpl::dump_trans_prepare_log(const char *data, int64_t len)
 {
   int ret = OB_SUCCESS;
   ObTransPrepareLogHelper helper;
@@ -2198,6 +2214,12 @@ int ObLogEntryParserImpl::dump_trans_log(const ObStorageLogType log_type, const 
     case OB_LOG_SP_TRANS_REDO: {
       if (OB_FAIL(dump_sp_trans_redo_log(buf + pos, buf_len - pos, real_tenant_id))) {
         CLOG_LOG(ERROR, "dump_sp_trans_redo_log fail", K(ret), K(buf), K(pos), K(buf_len));
+      }
+      break;
+    }
+    case OB_LOG_TRANS_RECORD : {
+      if (OB_FAIL(dump_trans_record_log(buf + pos, buf_len - pos))) {
+        CLOG_LOG(ERROR, "dump_trans_record_log fail", K(ret), K(buf), K(pos), K(buf_len));
       }
       break;
     }

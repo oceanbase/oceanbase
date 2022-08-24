@@ -470,7 +470,7 @@ int ObTableSqlService::drop_inc_part_info(ObISQLClient& sql_client, const ObTabl
         ObAddIncPartHelper add_part_helper(
             table_schema_ptr, inc_table_schema_ptr, new_schema_version, sql_client, is_tablegroup_def);
         if (OB_FAIL(ret)) {
-        } else if (add_part_helper.add_partition_info(true)) {
+        } else if (OB_FAIL(add_part_helper.add_partition_info(true))) {
           LOG_WARN("drop increment partition info failed",
               K(ret),
               K(table_schema),
@@ -825,8 +825,8 @@ int ObTableSqlService::drop_table(const ObTableSchema& table_schema, const int64
     }
   }
 
-  // delete from __all_temp_table if it is a temporary table
-  if (OB_SUCC(ret) && table_schema.is_tmp_table()) {
+  // delete from __all_temp_table if it is a temporary table or ctas temporary table
+  if (OB_SUCC(ret) && (table_schema.is_ctas_tmp_table() || table_schema.is_tmp_table())) {
     if (OB_FAIL(delete_from_all_temp_table(sql_client, table_schema.get_tenant_id(), table_id))) {
       LOG_WARN("delete from all temp table failed", K(ret));
     }
@@ -1540,7 +1540,8 @@ int ObTableSqlService::supplement_for_core_table(
     }
   }
   const char* supplement_tbl_name = NULL;
-  if (is_all_table) {
+  if (OB_FAIL(ret)) {
+  } else if (is_all_table) {
     if (OB_FAIL(ObSchemaUtils::get_all_table_name(OB_SYS_TENANT_ID, supplement_tbl_name))) {
       LOG_WARN("fail to get all table name", K(ret));
     }
@@ -4073,7 +4074,7 @@ int ObTableSqlService::batch_update_partition_option(common::ObISQLClient& clien
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(gen_table_dml(exec_tenant_id, copy_schema, dml))) {
           LOG_WARN("fail to gen table dml", K(ret));
-        } else if (dml.add_column("is_deleted", false)) {
+        } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
           LOG_WARN("fail to add column", K(ret));
         } else if (0 == i) {
           const char* table_name = NULL;
@@ -4340,21 +4341,21 @@ int ObTableSqlService::insert_temp_table_info(ObISQLClient& sql_client, const Ob
   const uint64_t table_id = table_schema.get_table_id();
   int64_t affected_rows = 0;
   ObSqlString insert_sql_string;
-  if (false == table_schema.is_tmp_table()) {
-    // do nothing...
-  } else if (OB_SUCCESS != (ret = insert_sql_string.append_fmt(
-                                "INSERT INTO %s (TENANT_ID, TABLE_ID, CREATE_HOST) values(%lu, %lu, \"%.*s\")",
-                                OB_ALL_TEMP_TABLE_TNAME,
-                                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-                                table_schema.get_create_host_str().length(),
-                                table_schema.get_create_host_str().ptr()))) {
-    LOG_WARN("sql string append format string failed, ", K(ret));
-  } else if (OB_FAIL(sql_client.write(exec_tenant_id, insert_sql_string.ptr(), affected_rows))) {
-    LOG_WARN("execute sql failed,  ", "sql", insert_sql_string.ptr(), K(ret));
-  } else if (1 != affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows expect to 1, ", K(affected_rows), K(ret));
+  if (table_schema.is_ctas_tmp_table() || table_schema.is_tmp_table()) {
+    if (OB_SUCCESS != (ret = insert_sql_string.append_fmt(
+                           "INSERT INTO %s (TENANT_ID, TABLE_ID, CREATE_HOST) values(%lu, %lu, \"%.*s\")",
+                           OB_ALL_TEMP_TABLE_TNAME,
+                           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
+                           table_schema.get_create_host_str().length(),
+                           table_schema.get_create_host_str().ptr()))) {
+      LOG_WARN("sql string append format string failed, ", K(ret));
+    } else if (OB_FAIL(sql_client.write(exec_tenant_id, insert_sql_string.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed,  ", "sql", insert_sql_string.ptr(), K(ret));
+    } else if (1 != affected_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows expect to 1, ", K(affected_rows), K(ret));
+    }
   }
   return ret;
 }

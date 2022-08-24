@@ -1,0 +1,105 @@
+# owner: dachuan.sdc
+# owner group: sql2
+# description: to_days, time_to_usec, usec_to_time, str_to_day
+
+--result_format 4
+--disable_abort_on_error
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+set @@ob_enable_plan_cache = 0;
+--echo // sleep 2
+--sleep 2
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+create table t1(col_int int, col_decimal decimal, col_varchar varchar(100),
+                col_date date, col_datetime datetime, col_timestamp timestamp,
+                col_null int);
+insert into t1 values(123, 123.123, 'invalid char', '2020-01-01 12:12:12', '0000-00-00 00:00:00.000', '2020-01-01 12:12:12.1234', null);
+insert into t1 values(123, 123.123, '2020-01-01', '2019-01-01', '0000-00-00', '2020-01-01', null);
+
+--echo // to check type
+create table t2 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+insert into t2 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+insert into t2 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+
+--echo // sleep 2
+--sleep 2
+select col_int, to_days(col_int) from t1;
+select col_decimal, to_days(col_decimal) from t1;
+select col_varchar, to_days(col_varchar) from t1;
+select col_date, to_days(col_date) from t1;
+select col_datetime, to_days(col_datetime) from t1;
+select col_timestamp, to_days(col_timestamp) from t1;
+select to_days(col_null) from t1;
+
+select col_int, time_to_usec(col_int) from t1;
+select col_decimal, time_to_usec(col_decimal) from t1;
+select col_varchar, time_to_usec(col_varchar) from t1;
+select col_date, time_to_usec(col_date) from t1;
+select col_datetime, time_to_usec(col_datetime) from t1;
+select col_timestamp, time_to_usec(col_timestamp) from t1;
+select time_to_usec(col_null) from t1;
+
+select col_int, usec_to_time(col_int) from t1;
+select col_decimal, usec_to_time(col_decimal) from t1;
+select col_varchar, usec_to_time(col_varchar) from t1;
+select col_date, usec_to_time(col_date) from t1;
+select col_datetime, usec_to_time(col_datetime) from t1;
+select col_timestamp, usec_to_time(col_timestamp) from t1;
+select usec_to_time(col_null) from t1;
+
+select str_to_date(null, null);
+select str_to_date('2019-01-01 10:10:10', null);
+select str_to_date(null, '%Y-%c-%d %T');
+select str_to_date('2019-01-01 10:10:10', '%Y-%c-%d %T');
+select str_to_date('invalid char', '%Y-%c-%d %T');
+select str_to_date('2019-01-01 10:10:10', 'invalid char');
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select to_days(c$left), time_to_usec(c$left), usec_to_time(c$left) from t2;
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select str_to_date(c$left, c$right) from t2;
+    inc $right;
+  }
+  inc $left;
+}
+
+drop table t1;
+--sleep 2

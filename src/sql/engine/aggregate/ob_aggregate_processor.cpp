@@ -394,7 +394,7 @@ int64_t ObAggregateProcessor::ExtraResult::to_string(char* buf, const int64_t bu
   return pos;
 }
 
-int ObAggrInfo::eval_aggr(ObChunkDatumStore::ShadowStoredRow<>& curr_row_results, ObEvalCtx& ctx) const
+int ObAggrInfo::eval_aggr(ObChunkDatumStore::ShadowStoredRow& curr_row_results, ObEvalCtx& ctx) const
 {
   int ret = OB_SUCCESS;
   if (param_exprs_.empty() && T_FUN_COUNT == get_expr_type()) {
@@ -1384,13 +1384,13 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             LOG_WARN("fail to add row", K(ret));
           } else {
             if (aggr_fun == T_FUN_JSON_ARRAYAGG || aggr_fun == T_FUN_JSON_OBJECTAGG) {
-              int64_t len = param_exprs->count();
+              int64_t len = aggr_info.param_exprs_.count();
               if (OB_FAIL(extra->reserve_bool_mark_count(len))) {
                 LOG_WARN("reserve_bool_mark_count failed", K(ret), K(len));
               }
               for (int64_t i = 0; OB_SUCC(ret) && i < len; i++) {
                 ObExpr *tmp = NULL;
-                if (OB_FAIL(param_exprs->at(i, tmp))){
+                if (OB_FAIL(aggr_info.param_exprs_.at(i, tmp))){
                   LOG_WARN("fail to get param_exprs[i]", K(ret));
                 } else {
                   bool is_bool = (tmp->is_boolean_ == 1);
@@ -1908,7 +1908,7 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
         const ObChunkDatumStore::StoredRow* storted_row = NULL;
         int64_t rank_num = 0;
         bool need_check_order_equal = T_FUN_GROUP_DENSE_RANK == aggr_fun;
-        ObChunkDatumStore::LastStoredRow<> prev_row(aggr_alloc_);
+        ObChunkDatumStore::LastStoredRow prev_row(aggr_alloc_);
         int64_t total_sort_row_cnt = extra->get_row_count();
         bool is_first = true;
         while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
@@ -2044,7 +2044,7 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
         const int64_t total_row_count = extra->get_row_count();
         char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
         ObDataBuffer allocator(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
-        ObChunkDatumStore::LastStoredRow<> prev_row(aggr_alloc_);
+        ObChunkDatumStore::LastStoredRow prev_row(aggr_alloc_);
         number::ObNumber factor;
         bool need_linear_inter = false;
         int64_t not_null_start_loc = 0;
@@ -2163,7 +2163,7 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
           LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
         } else {
           const ObChunkDatumStore::StoredRow* storted_row = NULL;
-          ObChunkDatumStore::LastStoredRow<> first_row(aggr_alloc_);
+          ObChunkDatumStore::LastStoredRow first_row(aggr_alloc_);
           bool is_first = true;
           while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
             bool is_equal = false;
@@ -2925,7 +2925,7 @@ int ObAggregateProcessor::compare_calc(const ObDatum& left_value, const ObDatum&
   return ret;
 }
 
-int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRow<>& prev_row,
+int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRow& prev_row,
     const ObChunkDatumStore::StoredRow& cur_row, const ObAggrInfo& aggr_info, bool& is_equal)
 {
   int ret = OB_SUCCESS;
@@ -3190,7 +3190,7 @@ int ObAggregateProcessor::get_wm_concat_result(
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
     ObString sep_str = ObCharsetUtils::get_const_str(aggr_info.expr_->datum_meta_.cs_type_, ',');
-    ObChunkDatumStore::LastStoredRow<> first_row(aggr_alloc_);
+    ObChunkDatumStore::LastStoredRow first_row(aggr_alloc_);
     const ObChunkDatumStore::StoredRow* storted_row = NULL;
     bool is_first = true;
     bool need_continue = true;
@@ -3340,7 +3340,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
             ObString origin_str = converted_datum.get_string();
             ObString converted_str;
             if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str, 
-                                                            CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+                                                             CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
               LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
             } else {
               converted_datum.set_string(converted_str);
@@ -3445,6 +3445,9 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
               K(tmp_obj[0].get_type()), K(tmp_obj[0].get_collation_type()));
           ret = OB_ERR_INVALID_JSON_CHARSET;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
+        } else if (NULL == tmp_obj[0].get_string_ptr()) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("unexpected null result", K(ret), K(tmp_obj[0]));
         } else {
           ObObjType val_type0 = tmp_obj[0].get_type();
           ObCollationType cs_type0 = tmp_obj[0].get_collation_type();

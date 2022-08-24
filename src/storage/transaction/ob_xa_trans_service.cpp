@@ -904,6 +904,9 @@ int ObTransService::local_xa_prepare(const ObXATransID& xid, const int64_t stmt_
     if (!trans_desc->is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "invalid trans dessc", K(ret), K(xid), K(trans_desc));
+    } else if (trans_desc->need_rollback()) {
+      ret = OB_TRANS_NEED_ROLLBACK;
+      TRANS_LOG(WARN, "transaction need rollback", K(ret), K(xid), K(trans_desc));
     } else if (OB_FAIL(trans_desc->set_sche_ctx(sche_ctx))) {
       TRANS_LOG(WARN, "set trans_desc failed", K(ret), K(xid), K(trans_desc));
       // TODO, refer to the remote xa prepare to handle the case that ctx does not exist

@@ -466,6 +466,11 @@ int ObRawExpr::postorder_replace(ObRawExprVisitor& visitor)
   return ret;
 }
 
+bool ObRawExpr::is_json_expr() const
+{
+  return (T_FUN_SYS_JSON_OBJECT <= get_expr_type() && get_expr_type() <= T_FUN_JSON_OBJECTAGG) ? true : false;
+}
+
 ////////////////////////////////////////////////////////////////
 ObRawExpr*& ObTerminalRawExpr::get_param_expr(int64_t index)
 {
@@ -3574,6 +3579,42 @@ int ObWindow::assign(const ObWindow& other)
       LOG_WARN("failed to assign order items", K(ret));
     } else if (OB_FAIL(ObFrame::assign(other))) {
       LOG_WARN("failed to assign frame", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObWindow::remove_const_params()
+{
+  int ret = OB_SUCCESS;
+  int64_t cnt_part_expr = 0;
+  int64_t cnt_order_item = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_exprs_.count(); ++i) {
+    if (OB_ISNULL(partition_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (partition_exprs_.at(i)->has_const_or_const_expr_flag()) {
+      /*do nothing */
+    } else {
+      partition_exprs_.at(cnt_part_expr++) = partition_exprs_.at(i);
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (order_items_.at(i).expr_->has_const_or_const_expr_flag()) {
+      /*do nothing */
+    } else {
+      order_items_.at(cnt_order_item++) = order_items_.at(i);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    while (partition_exprs_.count() > cnt_part_expr) {
+      partition_exprs_.pop_back();
+    }
+    while (order_items_.count() > cnt_order_item) {
+      order_items_.pop_back();
     }
   }
   return ret;

@@ -36,6 +36,7 @@
 #include "election/ob_election.h"
 #include "ob_trans_split_adapter.h"
 #include "ob_trans_coord_ctx.h"
+#include "observer/omt//ob_tenant_config_mgr.h"
 
 namespace oceanbase {
 
@@ -175,8 +176,9 @@ int ObPartTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, co
     }
     is_listener_ = false;
     listener_handler_ = NULL;
-    ctx_serialize_size_ = undo_status_.get_serialize_size() + partition_log_info_arr_.get_serialize_size() +
-                          prev_redo_log_ids_.get_serialize_size();
+    redo_log_id_serialize_size_ = prev_redo_log_ids_.get_serialize_size();
+    participants_serialize_size_ = partition_log_info_arr_.get_serialize_size();
+    undo_serialize_size_ = undo_status_.get_serialize_size();
   }
   if (OB_FAIL(ret)) {
     if (NULL != redo_sync_task_) {
@@ -390,7 +392,10 @@ void ObPartTransCtx::reset()
   last_redo_log_mutator_size_ = 0;
   has_write_or_replay_mutator_redo_log_ = false;
   is_in_redo_with_prepare_ = false;
-  ctx_serialize_size_ = 0;
+  redo_log_id_serialize_size_ = 0;
+  participants_serialize_size_ = 0;
+  undo_serialize_size_ = 0;
+  prev_checkpoint_id_ = 0;
 }
 
 int ObPartTransCtx::construct_context(const ObTransMsg& msg)
@@ -1646,6 +1651,12 @@ bool ObPartTransCtx::not_need_write_next_log_(const int64_t log_type)
   return is_dup_table_trans_ && is_prepare_leader_revoke_ && ObStorageLogTypeChecker::is_trans_redo_log(log_type);
 }
 
+void ObPartTransCtx::reset_prev_redo_log_ids()
+{
+  prev_redo_log_ids_.reset();
+  redo_log_id_serialize_size_ = 0;
+}
+
 // when submit log success
 int ObPartTransCtx::on_sync_log_success(
     const int64_t log_type, const int64_t log_id, const int64_t timestamp, const bool batch_committed)
@@ -1674,6 +1685,23 @@ int ObPartTransCtx::on_sync_log_success(
     dec_submit_log_count_();
     update_durable_log_id_ts_(log_type, log_id, timestamp);
 
+    if ((log_type & OB_LOG_TRANS_RECORD) != 0) {
+      reset_prev_redo_log_ids();
+      prev_checkpoint_id_ = log_id;
+      TRANS_LOG(INFO, "succeed to update prev_checkpoint_id ||| ", K(hash()), K(get_partition()), K(prev_checkpoint_id_));
+      // decide and then submit the next log
+      if (need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else {
+        ObStorageLogType next_log_type = ObStorageLogType::OB_LOG_UNKNOWN;
+        if (OB_FAIL(decide_and_submit_next_log_(next_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
+        }
+      }
+    }
+
     if ((log_type & OB_LOG_SP_TRANS_REDO) != 0) {
       has_write_or_replay_mutator_redo_log_ = true;
       ++redo_log_no_;
@@ -1681,10 +1709,14 @@ int ObPartTransCtx::on_sync_log_success(
         // The log is completed, we need verify the txn checksum
         need_checksum_ = true;
       }
-      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
         TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
-      } else if (!not_need_write_next_log_(log_type) &&
-                 OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
+      } else if (!not_need_write_next_log_(log_type)
+                 && OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
         TRANS_LOG(WARN, "submit sp trans commit log task error", KR(ret), "context", *this);
       } else {
         // do nothing
@@ -1774,8 +1806,12 @@ int ObPartTransCtx::on_sync_log_success(
       // need submit redo_prepare log when log_type equal OB_LOG_TRANS_REDO
       if (OB_LOG_TRANS_REDO == log_type) {
         // record the redo log id
-        if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+        if (!is_xa_last_empty_redo_log_() && OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
+        } else if (cluster_version_after_3100_() && need_record_log()) {
+          if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+            TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+          }
         } else if (not_need_write_next_log_(log_type)) {
           // No need to write log for dup table in order to prevent the leader
           // revoke from getting stuck
@@ -1914,53 +1950,20 @@ int ObPartTransCtx::on_sync_log_success(
         need_checksum_ = true;
       }
       start_us = ObTimeUtility::fast_current_time();
-      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
+      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
         TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if ((OB_LOG_TRANS_STATE & log_type) != 0) {
         // do nothing
+      } else if (cluster_version_after_3100_() && need_record_log()) {
+        if (OB_FAIL(submit_log_task_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+          TRANS_LOG(WARN, "submit trans record log task error", KR(ret), "context", *this);
+        }
       } else if (batch_commit_trans_) {
         // do nothing
+      } else if (OB_FAIL(decide_and_submit_next_log_(submit_log_type, has_redo_log, has_pending_cb))) {
+          TRANS_LOG(ERROR, "decide and submit next log failed", KR(ret), "context", *this);
       } else {
-        if (OB_FAIL(decide_log_type_for_mutating_(submit_log_type))) {
-          TRANS_LOG(ERROR, "decide log type for mutating fail", KR(ret), "context", *this);
-        } else if (OB_LOG_MUTATOR == submit_log_type && 0 != GCONF._private_buffer_size &&
-                   !mt_ctx_.pending_log_size_too_large() && !has_pending_cb) {
-          // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
-          // logging if all follows are true
-          // 1. _private_redo_buffer is closed
-          // 2. _private_redo_buffer is opened while pending log size is too small for continuing logging
-          // 3. there exists pending callbacks for minor merge
-        } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == submit_log_type || OB_LOG_TRANS_REDO == submit_log_type) &&
-                   OB_FAIL(alloc_local_trans_version_(submit_log_type))) {
-          if (OB_EAGAIN != ret) {
-            TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this, K(submit_log_type));
-          } else {
-            ret = OB_SUCCESS;
-            if (submit_log_count_ > 0) {
-              TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this, K(submit_log_type));
-              need_print_trace_log_ = true;
-            }
-            inc_submit_log_pending_count_();
-            inc_submit_log_count_();
-          }
-        } else if (OB_FAIL(submit_log_task_(submit_log_type, has_redo_log))) {
-          TRANS_LOG(WARN,
-              "submit log task error",
-              KR(ret),
-              "context",
-              *this,
-              K(submit_log_type),
-              K(is_sp_trans_()),
-              K(is_mini_sp_trans_()));
-        } else {
-          TRANS_LOG(DEBUG,
-              "submit log task success",
-              "context",
-              *this,
-              K(submit_log_type),
-              K(submit_log_type),
-              K(has_redo_log));
-        }
+        // do nothing
       }
       if (OB_FAIL(ret)) {
         // Mark the txn need to rollback, and rely on the timer task of
@@ -2148,8 +2151,8 @@ int ObPartTransCtx::compensate_prepare_no_log_()
     } else {
       log_type = OB_LOG_TRANS_PREPARE;
       if (!stc_.is_valid()) {
-        // maybe crashed and recovered from trans status table, stc is not set.
-        // under such condition, stc is set to current time
+        // maybe crashed and recovered from trans status table, stc is not set.		
+        // under such condition, stc is set to current time		
         stc_ = MonotonicTs::current_time();
       }
       if (OB_FAIL(alloc_local_trans_version_(log_type))) {
@@ -3796,8 +3799,47 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
   return ret;
 }
 
-int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64_t timestamp, const uint64_t log_id,
-    const bool batch_committed, const int64_t checkpoint)
+int ObPartTransCtx::replay_record_log(const ObTransRecordLog &log,
+    const int64_t timestamp, const uint64_t log_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::fast_current_time();
+  CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
+  TRANS_LOG(INFO, "before replaying record log: ", K(log_id), K(prev_redo_log_ids_), K(prev_checkpoint_id_));
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!for_replay_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(!log.is_valid()) || OB_UNLIKELY(timestamp < 0)) {
+    TRANS_LOG(WARN, "invalid argument", K(log), K(timestamp), K(log_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_TRANS_RECORD, timestamp))) {
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log));
+    ret = OB_TRANS_INVALID_STATE;
+    need_print_trace_log_ = true;
+  } else if (OB_UNLIKELY(is_hazardous_ctx_)) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(ERROR, "current ctx status is hazardous", K(ret), K(*this));
+  } else {
+    submit_log_count_ = 0;
+    update_durable_log_id_ts_(OB_LOG_TRANS_RECORD, log_id, timestamp);
+    reset_prev_redo_log_ids();
+    prev_checkpoint_id_ = log_id;
+    TRANS_LOG(INFO, "replay record log success", K(prev_redo_log_ids_), K(prev_checkpoint_id_), "context", *this);
+    REC_TRANS_TRACE_EXT(tlog_, replay_record, OB_ID(ret), ret, OB_ID(used), ObTimeUtility::fast_current_time() - start,
+        OB_ID(id), log_id, OB_ID(t), timestamp, OB_ID(uref), get_uref());
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog &log,
+    const int64_t timestamp, const uint64_t log_id, const bool batch_committed,
+    const int64_t checkpoint)
 {
   UNUSED(checkpoint);
   int ret = OB_SUCCESS;
@@ -3950,7 +3992,6 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
         end_log_ts_ = timestamp;
       }
     }
-    TRANS_LOG(DEBUG, "replay prepare log success", "context", *this, K(log));
   }
   REC_TRANS_TRACE_EXT(tlog_,
       replay_prepare,
@@ -4803,7 +4844,41 @@ bool ObPartTransCtx::has_logged_() const
   return (mutator_log_no_ > 0 || has_trans_state_log_ || redo_log_no_ > 0);
 }
 
-int ObPartTransCtx::reserve_log_header_(char* buf, const int64_t size, int64_t& pos)
+bool ObPartTransCtx::need_record_log() const
+{
+  // There are three variables can be very large : participants array, redo log array and undo
+  // actions array. In order to avoiding the serialize size of ObPartTransCtx is too large, which
+  // may larger than 1MB, we have to limit the size of these three variables.  We set the
+  // following principles:
+  //
+  // 1. The redo_log can use at least 128KB
+  // 2. All the three variables can use 1014KB(MAX_VARCHAR_LENGTH-10KB)
+  //
+  // In this function, we sum the serialize size of these three fileds to decide if this transaction
+  // need write record log. So this function return true implicates the serialize size of these
+  // three variables is larger than 1014KB and we need write record log to make sure the trans state
+  // table can be dumped successfully.
+  bool bool_ret = false;
+  int64_t participants_serialize_size = participants_.get_serialize_size();
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
+  int total_size = participants_serialize_size + undo_serialize_size + redo_log_id_serialize_size;
+  if (total_size > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    bool_ret = true;
+    TRANS_LOG(INFO,
+        "need flush record log.",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(total_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        KPC(this));
+  }
+
+  return bool_ret;
+}
+
+int ObPartTransCtx::reserve_log_header_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -4875,7 +4950,7 @@ int ObPartTransCtx::fill_redo_log_(char* buf, const int64_t size, int64_t& pos, 
         ret = mt_ctx_.fill_redo_log(mutator.get_data(), available_capacity, mutator.get_position());
         timeguard.click();
         if (OB_SUCCESS == ret) {
-          log.set_last();
+            log.set_last();
           has_gen_last_redo_log_ = true;
         }
         // For XA txn, if the partition has no mutator, we also need append a
@@ -4955,7 +5030,8 @@ int ObPartTransCtx::fill_prepare_log_(char* buf, const int64_t size, int64_t& po
           guard.get_elr_trans_arr(),
           can_elr_,
           trace_info_.get_app_trace_info(),
-          xid_);
+          xid_,
+          prev_checkpoint_id_);
       if (OB_UNLIKELY(!log.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid prepare log", K(ret), K(log));
@@ -5009,7 +5085,38 @@ int ObPartTransCtx::fill_commit_log_(char* buf, const int64_t size, int64_t& pos
   return ret;
 }
 
-int ObPartTransCtx::fill_pre_commit_log_(char* buf, const int64_t size, int64_t& pos)
+int ObPartTransCtx::fill_record_log_(char *buf, const int64_t size, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_pos = pos;
+  int64_t prev_log_ids_count = (int64_t)prev_redo_log_ids_.count();
+
+  // Create a ObTransRecordLog and pass the log_id of prev checkpoint to it
+  ObTransRecordLog log(OB_LOG_TRANS_RECORD, self_, trans_id_, cluster_id_, prev_checkpoint_id_);
+  TRANS_LOG(INFO, "succeed to create record log", K(trans_id_), K(prev_checkpoint_id_), K(log.get_prev_record_log_id()));
+  #ifdef ERRSIM
+  // Error injection test, used for changing prev_log_ids_count for test
+  int tmp_ret = E(EventTable::EN_LOG_IDS_COUNT_ERROR) OB_SUCCESS;
+  if (tmp_ret != OB_SUCCESS) {
+    prev_log_ids_count = 2;
+    TRANS_LOG(INFO, "set_prev_log_ids_count: ", K(prev_log_ids_count));
+  }
+  #endif
+  // Add current all log_ids to the record log
+  for (int i = 0; i < prev_log_ids_count; ++i) {
+    log.add_log_id(prev_redo_log_ids_.at(i));
+  }
+
+  if (OB_FAIL(log.serialize(buf, size, tmp_pos))) {
+    TRANS_LOG(WARN, "serialize commit log error", K(ret), K(log));
+  } else {
+    pos = tmp_pos;
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::fill_pre_commit_log_(char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -5379,7 +5486,8 @@ int ObPartTransCtx::fill_sp_commit_log_(const int target_log_type, char* buf, co
                    checkpoint,
                    guard.get_elr_trans_arr(),
                    can_elr_,
-                   trace_info_.get_app_trace_info()))) {
+                   trace_info_.get_app_trace_info(),
+                   prev_checkpoint_id_))) {
       TRANS_LOG(WARN,
           "init commit log error",
           KR(ret),
@@ -6363,6 +6471,10 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
         }
         case OB_LOG_TRANS_COMMIT: {
           ret = fill_commit_log_(buf, size, pos);
+          break;
+        }
+        case OB_LOG_TRANS_RECORD: {
+          ret = fill_record_log_(buf, size, pos);
           break;
         }
         case OB_LOG_TRANS_PREPARE_WITH_COMMIT: {
@@ -8274,7 +8386,24 @@ int ObPartTransCtx::handle_2pc_abort_request_(const ObTransMsg& msg)
   return handle_2pc_abort_request_raw_(msg.get_msg_type(), msg.get_status());
 }
 
-int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t msg_type)
+#ifdef ERRSIM
+#define INJECT_2PC_PREPARE_RETRY_ERRSIM                                                                              \
+  do {                                                                                                               \
+    int64_t participants_serialize_size = participants_.get_serialize_size();                                        \
+    if (participants_serialize_size > 4096 && OB_FAIL(E(EventTable::EN_HANDLE_PREPARE_MESSAGE_EAGAIN) OB_SUCCESS)) { \
+      ret = OB_EAGAIN;                                                                                               \
+      TRANS_LOG(INFO,                                                                                                \
+          "ERRSIM Inject OB_EAGAIN error when handle 2pc prepare request",                                           \
+          KR(ret),                                                                                                   \
+          K(participants_serialize_size));                                                                           \
+    }                                                                                                                \
+  } while (false);
+#else
+#define INJECT_2PC_PREPARE_RETRY_ERRSIM
+#endif
+
+int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase &msg,
+                                       const int64_t msg_type)
 {
   int ret = OB_SUCCESS;
 
@@ -8385,6 +8514,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
         // do nothing
       }
     }
+    INJECT_2PC_PREPARE_RETRY_ERRSIM
   } else {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "unexpected msg", K(ret), K(msg_type), K(*this));
@@ -9315,9 +9445,9 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool& is_prepared, int64_t& 
 }
 
 /*
- * return prepare logtimestamp if the prepare_logtimestamp smaller than log_ts, but end_log_ts bigger
+ * return prepare logtimestamp if the prepare_logtimestamp smaller than freeze_ts, but end_log_ts bigger
  * */
-int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool& has_prepared, int64_t& prepare_version)
+int ObPartTransCtx::get_prepare_version_before_logts(const int64_t freeze_ts, bool& has_prepared, int64_t& prepare_version)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_US = 100;
@@ -9326,15 +9456,14 @@ int ObPartTransCtx::get_prepare_version_before_logts(const int64_t log_ts, bool&
   int64_t cur_prepare_version = ObTransVersion::INVALID_TRANS_VERSION;
 
   has_prepared = false;
-  while (max_durable_log_ts_ <= log_ts && OB_INVALID_TIMESTAMP == end_log_ts_) {
-    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      STORAGE_LOG(WARN, "wait log durable cost too long", "time", ObTimeUtility::current_time() - begin_time);
-    }
-    usleep(SLEEP_US);
+  if (!is_xa_local_trans() || (is_xa_local_trans() && is_xa_trans_prepared_)) {
+    // cur_prepare_version is the redo log timestamp before prepare.
+    state_.get_state_and_version(cur_state, cur_prepare_version);
   }
-  state_.get_state_and_version(cur_state, cur_prepare_version);
-  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version && !in_xa_prepare_state_ /* always true */ &&
-      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ && prepare_log_timestamp_ <= log_ts && end_log_ts_ > log_ts) {
+  if (ObTransVersion::INVALID_TRANS_VERSION != cur_prepare_version &&  // xa really prepared, normal trans has redo log
+      OB_INVALID_TIMESTAMP != prepare_log_timestamp_ &&                // trans really prepared
+      prepare_log_timestamp_ <= freeze_ts &&                           // prepare before freeze ts
+      end_log_ts_ > freeze_ts) {                                       // trans end after freeze ts
     has_prepared = true;
     prepare_version = prepare_log_timestamp_;
   }
@@ -10471,6 +10600,8 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     prepare_log_id_ = ctx_info.prepare_log_id_;
     prepare_log_timestamp_ = ctx_info.prepare_log_timestamp_;
     clear_log_base_ts_ = ctx_info.clear_log_base_ts_;
+    // for record log
+    prev_checkpoint_id_ = ctx_info.prev_checkpoint_id_;
 
     (void)mark_dirty_trans();
 
@@ -10552,6 +10683,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.prepare_log_id_ = prepare_log_id_;
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
     info.clear_log_base_ts_ = clear_log_base_ts_;
+    info.prev_checkpoint_id_ = prev_checkpoint_id_;
     TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
   }
 
@@ -10739,7 +10871,7 @@ int ObPartTransCtx::mark_frozen_data(
   return ret;
 }
 
-int ObPartTransCtx::submit_log_for_split(bool& log_finished)
+int ObPartTransCtx::submit_log_for_split(bool &log_finished)
 {
   int ret = OB_SUCCESS;
   bool has_redo_log = false;
@@ -11355,7 +11487,7 @@ int ObPartTransCtx::check_if_terminated_in_given_log_range(
 
 // See comments in submit_log_impl to understand the log submission state
 // machine
-int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
+int ObPartTransCtx::decide_log_type_for_mutator_and_record_(ObStorageLogType& log_type)
 {
   int ret = OB_SUCCESS;
   if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::LOGGING_NOT_FINISH) {
@@ -11383,6 +11515,50 @@ int ObPartTransCtx::decide_log_type_for_mutating_(ObStorageLogType& log_type)
   } else {
     log_type = OB_LOG_MUTATOR;
   }
+  return ret;
+}
+
+int ObPartTransCtx::decide_and_submit_next_log_(storage::ObStorageLogType& log_type, 
+                                                bool &has_redo_log,
+                                                bool has_pending_cb)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(decide_log_type_for_mutator_and_record_(log_type))) {
+    TRANS_LOG(ERROR, "decide log type for mutator and record fail", KR(ret), "context", *this);
+  } else if (OB_LOG_MUTATOR == log_type &&
+             0 != GCONF._private_buffer_size &&
+             !mt_ctx_.pending_log_size_too_large() &&
+             !has_pending_cb) {
+  // If the log is decided as OB_LOG_MUTATOR, we neednot continue to
+  // logging if all the followings are true
+  // 1. _private_redo_buffer is opened 
+  // 2. pending log size is too small for continuing logging
+  // 3. there are not pending callbacks for minor merge
+  } else if ((OB_LOG_TRANS_REDO_WITH_PREPARE == log_type
+              || OB_LOG_TRANS_REDO == log_type)
+              && OB_FAIL(alloc_local_trans_version_(log_type))) {
+    if (OB_EAGAIN != ret) {
+      TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this,
+                K(log_type));
+    } else {
+      ret = OB_SUCCESS;
+      if (submit_log_count_ > 0) {
+        TRANS_LOG(ERROR, "unexpected submit log count or pending count", "context", *this,
+                  K(log_type));
+        need_print_trace_log_ = true;
+      }
+      inc_submit_log_pending_count_();
+      inc_submit_log_count_();
+    }
+  } else if (OB_FAIL(submit_log_task_(log_type, has_redo_log))) {
+    TRANS_LOG(WARN, "submit log task error", KR(ret), "context", *this,
+              K(log_type), K(is_sp_trans_()), K(is_mini_sp_trans_()));
+  } else {
+    TRANS_LOG(DEBUG, "submit log task success", "context", *this,
+              K(log_type), K(log_type), K(has_redo_log));
+  }
+
   return ret;
 }
 
@@ -11527,6 +11703,10 @@ bool ObPartTransCtx::is_trans_valid_for_replay_(const ObStorageLogType log_type,
       }
     } else if (log_type == OB_LOG_START_MEMBERSHIP_STORAGE) {
       // needn't check
+    } else if (log_type == OB_LOG_TRANS_RECORD) {
+      if (Ob2PCState::INIT != state) {
+        ret = false;
+      }
     } else {
       ret = false;
       TRANS_LOG(ERROR, "unknown log type", K(log_type), K(*this));
@@ -11992,7 +12172,13 @@ int64_t ObPartTransCtx::get_part_trans_action() const
 
   if (ObPartTransAction::UNKNOWN == action) {
     if (stmt_info_.get_sql_no() > 0) {
-      action = stmt_info_.is_task_match() ? ObPartTransAction::END_TASK : ObPartTransAction::START_TASK;
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(lock_.try_lock())) {
+        TRANS_LOG(INFO, "lock fail to get part_trans_action", K(ret), K_(trans_id), K_(self), KP(this));
+      } else {
+        action = stmt_info_.is_task_match() ? ObPartTransAction::END_TASK : ObPartTransAction::START_TASK;
+        lock_.unlock();
+      }
     }
   }
 
@@ -12014,56 +12200,248 @@ void ObPartTransCtx::DEBUG_SYNC_slow_txn_during_2pc_prepare_phase_for_physical_b
   }
 }
 
-int ObPartTransCtx::calc_serialize_size_and_set_redo_log_(const int64_t log_id)
-{
-  int ret = OB_SUCCESS;
-  if ((ctx_serialize_size_ += serialization::encoded_length_vi64(log_id)) > OB_MAX_TRANS_SERIALIZE_SIZE) {
-    ret = OB_SIZE_OVERFLOW;
-    TRANS_LOG(WARN, "size overflow when set redo log.", KR(ret), K(ctx_serialize_size_), K(log_id));
-  } else if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
-    ctx_serialize_size_ -= serialization::encoded_length_vi64(log_id);
-    TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
-  } else {
-    // push back redo log success
-  }
-  return ret;
-}
-
 int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionArray &participants)
 {
   int ret = OB_SUCCESS;
-  if ((ctx_serialize_size_ += participants.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
-    set_status_(OB_TRANS_NEED_ROLLBACK);
-    ret = OB_SIZE_OVERFLOW;
-    TRANS_LOG(WARN,
-        "size overflow when set participants.",
-        KR(ret),
-        K(ctx_serialize_size_),
-        K(participants.get_serialize_size()));
-  } else if (OB_FAIL(set_participants_(participants))) {
-    ctx_serialize_size_ -= participants.get_serialize_size();
-    TRANS_LOG(WARN, "set participants error", KR(ret), K(participants));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  bool enable_trans_ctx_size_limit = false;
+  if (tenant_config.is_valid()) {
+    enable_trans_ctx_size_limit = tenant_config->_enable_trans_ctx_size_limit;
   }
+
+  if (enable_trans_ctx_size_limit) {
+    if (OB_FAIL(do_calc_and_set_participants_(participants))) {
+      TRANS_LOG(WARN,
+          "do calc and set participants failed. set tenant config _enable_trans_ctx_size_limit=false may be able to "
+          "handle this.",
+          KR(ret), K(enable_trans_ctx_size_limit));
+    }
+  } else if (OB_FAIL(set_participants_(participants))) {
+    TRANS_LOG(WARN, "set participants failed.", KR(ret), K(enable_trans_ctx_size_limit));
+  }
+
   return ret;
 }
 
+#ifdef ERRSIM
+#define INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM                                                       \
+  do {                                                                                                \
+    if (OB_FAIL(E(EventTable::EN_PARTICIPANTS_SIZE_OVERFLOW) OB_SUCCESS)) {                           \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 1500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;                                                           \
+    } else if (OB_FAIL(E(EventTable::EN_PART_PLUS_UNDO_OVERFLOW) OB_SUCCESS)) {                       \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 7500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 500;                                                           \
+    } else if (participants_serialize_size > 4096 &&                                                  \
+               OB_FAIL(E(EventTable::EN_HANDLE_PREPARE_MESSAGE_EAGAIN) OB_SUCCESS)) {                 \
+      TRANS_LOG(INFO, "ERRSIM set participants once", KR(ret), K(participants_serialize_size));       \
+    }                                                                                                 \
+                                                                                                      \
+    OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE; \
+                                                                                                      \
+    TRANS_LOG(INFO,                                                                                   \
+        "ERRSIM modify trans ctx serialize size ",                                                    \
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),                                                               \
+        K(OB_MIN_REDO_LOG_SERIALIZE_SIZE),                                                            \
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE));                                                        \
+                                                                                                      \
+    ret = OB_SUCCESS;                                                                                 \
+  } while (false);
+#else
+#define INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM
+#endif
+
+/*
+ * There are three kinds of cases when set participants. We calculate serialize size and do
+ * something to avoid dumping trans state table fail.
+ *
+ *          ┌─────────────────────────────────────────────────┐
+ * CASE 1 : │                   participants                  │
+ *          └─────────────────────────────────────────────────┘
+ *
+ *          │          OB_MAX_TRANS_SERIALIZE_SIZE       │
+ *          └────────────────────────────────────────────┘
+ * Participants are too large. This situation should be handled by upper layer
+ *
+ *          ┌────────────────────────────┬────────────────────┐
+ * CASE 2 : │         participants       │     undo status    │
+ *          └────────────────────────────┴────────────────────┘
+ *
+ *          │          OB_MAX_TRANS_SERIALIZE_SIZE       │
+ *          └────────────────────────────────────────────┘
+ * Participants plus undo status are too large. Trans state table can not be dumped by flushing
+ * record log.Rollback it without returning error code because the follower cannot response to the
+ * leader if return error code here.
+ *
+ *          ┌─────────────────┬───────────────┬────────────────┐
+ * CASE 3 : │   participants  │  undo status  │    redo log    │
+ *          └─────────────────┴───────────────┴────────────────┘
+ *
+ *          │          OB_MAX_TRANS_SERIALIZE_SIZE       │
+ *          └────────────────────────────────────────────┘
+ * Flush record log can make trans state table be successfully dumped.
+ */
+int ObPartTransCtx::do_calc_and_set_participants_(const ObPartitionArray &participants)
+{
+  int ret = OB_SUCCESS;
+  int64_t participants_serialize_size = participants_.get_serialize_size() + participants.get_serialize_size();
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
+  bool has_redo_log = false;
+  bool need_submit_record_log = false;
+
+  INJECT_CALC_AND_SET_PARTICIPANTS_ERRSIM
+
+  if (OB_UNLIKELY(participants_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    // case 1
+    ret = OB_ERR_UNEXPECTED;
+    int64_t participants_count = participants.count();
+    TRANS_LOG(ERROR,
+        "participants is unexpected too large.",
+        KR(ret),
+        K(participants_count),
+        K(participants_serialize_size),
+        KPC(this));
+  } else if (OB_UNLIKELY(participants_serialize_size + undo_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    // case 2
+    TRANS_LOG(WARN,
+        "transaction is too large. flush record log can not handle it",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        K(trans_id_),
+        KPC(this));
+    set_status_(OB_TRANS_NEED_ROLLBACK);
+
+    // Reset undo status to make trans state table can be dumped.
+    undo_status_.reset();
+    undo_serialize_size = 0;
+  } else {
+    // normal case, set participants directly
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(participants_serialize_size + undo_serialize_size + redo_log_id_serialize_size >
+                                  OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    // case 3
+    need_submit_record_log = true;
+    int64_t total_size = participants_serialize_size + redo_log_id_serialize_size + undo_serialize_size;
+    TRANS_LOG(INFO,
+        "flush record log to reserve space for participants",
+        K(participants_serialize_size),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(total_size),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),
+        KPC(this));
+  }
+
+  if (OB_FAIL(ret)) {
+    // participants is too large, this function can not handle it
+  } else if (OB_UNLIKELY(need_submit_record_log) && OB_FAIL(submit_log_async_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+    TRANS_LOG(WARN, "submit record log failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(set_participants_(participants))) {
+    TRANS_LOG(WARN, "set participants error", KR(ret), KPC(this), K(participants));
+  }
+
+  return ret;
+}
+
+#ifdef ERRSIM
+#define INJECT_CALC_AND_SET_UNDO_ERRSIM                                                               \
+  do {                                                                                                \
+    if (OB_FAIL(E(EventTable::EN_UNDO_ACTIONS_SIZE_OVERFLOW) OB_SUCCESS)) {                           \
+      OB_MAX_TRANS_SERIALIZE_SIZE = 7500;                                                             \
+      OB_MIN_REDO_LOG_SERIALIZE_SIZE = 4900;                                                          \
+    }                                                                                                 \
+                                                                                                      \
+    OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE; \
+                                                                                                      \
+    TRANS_LOG(INFO,                                                                                   \
+        "ERRSIM modify trans ctx serialize size ",                                                    \
+        K(OB_MAX_TRANS_SERIALIZE_SIZE),                                                               \
+        K(OB_MIN_REDO_LOG_SERIALIZE_SIZE),                                                            \
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE));                                                        \
+                                                                                                      \
+    ret = OB_SUCCESS;                                                                                 \
+  } while (false);
+#else
+#define INJECT_CALC_AND_SET_UNDO_ERRSIM
+#endif
+
+/*
+ * There are two cases when set undo status. We calculate serialize size and do something to avoid
+ * dumping trans state table fail.
+ *
+ * We increase undo_serialize_size_ every time we set undo. But if the undo_serialize_size is too
+ * large and the transaction need rollback, we update this variable to get a real size.
+ *
+ *          ┌────────────────────────────────────────┐
+ * CASE 4 : │              undo status               │
+ *          └────────────────────────────────────────┘
+ *
+ *          │ OB_MAX_UNDO_ACTION_SERIALIZE_SIZE  │
+ *          └────────────────────────────────────┘
+ *
+ *          │          OB_MAX_TRANS_SERIALIZE_SIZE       │
+ *          └────────────────────────────────────────────┘
+ * Undo status are too large, rollback this transaction.
+ *
+ *          ┌───────────────────────────┬───────────────────────┐
+ * CASE 5 : │         undo status       │        redo log       │
+ *          └───────────────────────────┴───────────────────────┘
+ *
+ *          │ OB_MAX_UNDO_ACTION_SERIALIZE_SIZE  │
+ *          └────────────────────────────────────┘
+ *
+ *          │          OB_MAX_TRANS_SERIALIZE_SIZE       │
+ *          └────────────────────────────────────────────┘
+ * Flush record log can make trans state table be successfully dumped.
+ */
 int ObPartTransCtx::calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from)
 {
   int ret = OB_SUCCESS;
   ObUndoAction undo_action(undo_to, undo_from);
-  if ((ctx_serialize_size_ += undo_action.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+  int64_t undo_serialize_size = undo_status_.get_serialize_size();
+  int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
+  bool has_redo_log = false;
+  bool updated_size = false;
+
+  INJECT_CALC_AND_SET_UNDO_ERRSIM
+
+  if (undo_serialize_size > OB_MAX_UNDO_ACTION_SERIALIZE_SIZE) {
+    // case 4
     set_status_(OB_TRANS_NEED_ROLLBACK);
     ret = OB_SIZE_OVERFLOW;
     TRANS_LOG(WARN,
         "size overflow when set undo action",
         KR(ret),
-        K(ctx_serialize_size_),
-        K(ctx_serialize_size_),
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
+        K(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE),
+        KPC(this));
+  } else if (OB_UNLIKELY(undo_serialize_size + redo_log_id_serialize_size > OB_MAX_TRANS_SERIALIZE_SIZE)) {
+    // case 5
+    TRANS_LOG(INFO,
+        "flush record log to reserve space for undo",
+        K(undo_serialize_size),
+        K(redo_log_id_serialize_size),
         K(OB_MAX_TRANS_SERIALIZE_SIZE));
-  } else if (OB_FAIL(undo_status_.undo(undo_to, undo_from))) {
-    ctx_serialize_size_ -= undo_action.get_serialize_size();
-    TRANS_LOG(WARN, "record rollback action failed", K(ret), K(undo_to), K(undo_from));
+    if (OB_FAIL(submit_log_async_(OB_LOG_TRANS_RECORD, has_redo_log))) {
+      TRANS_LOG(WARN,
+          "submit record log failed",
+          KR(ret),
+          K(undo_serialize_size),
+          K(redo_log_id_serialize_size),
+          K(OB_MAX_TRANS_SERIALIZE_SIZE),
+          KPC(this));
+    }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(undo_status_.undo(undo_to, undo_from))) {
+    TRANS_LOG(WARN, "record rollback action failed", KR(ret), K(undo_action), KPC(this));
+  }
+
   return ret;
 }
 

@@ -235,6 +235,7 @@ OB_STMT_TYPE_DEF(T_BACKUP_BACKUPSET, get_sys_tenant_alter_system_priv, 228)
 OB_STMT_TYPE_DEF(T_BACKUP_ARCHIVELOG, get_sys_tenant_alter_system_priv, 229)
 OB_STMT_TYPE_DEF(T_ALTER_TRIGGER, no_priv_needed, 230)
 OB_STMT_TYPE_DEF(T_ALTER_USER_PRIMARY_ZONE, get_create_user_privs, 231)
+OB_STMT_TYPE_DEF(T_SHOW_QUERY_RESPONSE_TIME, err_stmt_type_priv, 232)
 
 OB_STMT_TYPE_DEF(T_ENABLE_SQL_THROTTLE, no_priv_needed, 250)
 OB_STMT_TYPE_DEF(T_DISABLE_SQL_THROTTLE, no_priv_needed, 251)
@@ -253,6 +254,7 @@ OB_STMT_TYPE_DEF(T_ADD_RESTORE_SOURCE, get_sys_tenant_alter_system_priv, 262)
 OB_STMT_TYPE_DEF(T_CLEAR_RESTORE_SOURCE, get_sys_tenant_alter_system_priv, 263)
 OB_STMT_TYPE_DEF(T_SHOW_RESTORE_PREVIEW, err_stmt_type_priv, 264)
 OB_STMT_TYPE_DEF(T_DISCONNECT_CLUSTER, get_sys_tenant_super_priv, 270)
+OB_STMT_TYPE_DEF(T_TABLE_TTL, get_sys_tenant_alter_system_priv, 271)
 OB_STMT_TYPE_DEF(T_MAX, err_stmt_type_priv, 500)
 #endif
 

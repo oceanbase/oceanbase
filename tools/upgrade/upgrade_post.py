@@ -6279,7 +6279,7 @@
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #####========******####======== actions begin ========####******========####
-#  run_upgrade_job(conn, cur, "3.1.3")
+#  run_upgrade_job(conn, cur, "3.1.5")
 #  return
 #####========******####========= actions end =========####******========####
 #
@@ -7298,6 +7298,7 @@
 #sys_var_dict["session_track_schema"] = {"id": 81, "name": "session_track_schema", "value": "1", "data_type": 5, "info": "specifies whether return schema change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_system_variables"] = {"id": 82, "name": "session_track_system_variables", "value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection", "data_type": 22, "info": "specifies whether return system variables change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_state_change"] = {"id": 83, "name": "session_track_state_change", "value": "0", "data_type": 5, "info": "specifies whether return session state change info in ok packet", "flags": 4099}
+#sys_var_dict["default_storage_engine"] = {"id": 93, "name": "default_storage_engine", "value": "OceanBase", "data_type": 22, "info": "The default storage engine of OceanBase", "flags": 4099}
 #sys_var_dict["ob_default_replica_num"] = {"id": 10000, "name": "ob_default_replica_num", "value": "1", "data_type": 5, "info": "The default replica number of table per zone if not specified when creating table.", "flags": 3}
 #sys_var_dict["ob_interm_result_mem_limit"] = {"id": 10001, "name": "ob_interm_result_mem_limit", "value": "2147483648", "data_type": 5, "info": "Indicate how many bytes the interm result manager can alloc most for this tenant", "flags": 131}
 #sys_var_dict["ob_proxy_partition_hit"] = {"id": 10002, "name": "ob_proxy_partition_hit", "value": "1", "data_type": 5, "info": "Indicate whether sql stmt hit right partition, readonly to user, modify by ob", "flags": 22}
@@ -8013,6 +8014,11 @@
 #  if (len(results) != 0) :
 #    raise MyError("Duplicate index name exist in mysql tenant")
 #
+## 31. check the _max_trx_size
+#def check_max_trx_size_config(query_cur, cur):
+#  set_parameter(cur, '_max_trx_size', '100G')
+#  logging.info('set _max_trx_size to default value 100G')
+#
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
 #  try:
@@ -8047,6 +8053,7 @@
 #      check_sys_table_leader(query_cur)
 #      check_and_modify_px_query(query_cur, cur)
 #      check_duplicate_index_name_in_mysql(query_cur, cur)
+#      check_max_trx_size_config(query_cur, cur)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -8569,7 +8576,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_post_checker.log'
-#  new_version = '3.1.3'
+#  new_version = '3.1.5'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):

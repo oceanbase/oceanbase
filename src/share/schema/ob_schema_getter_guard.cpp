@@ -7218,6 +7218,41 @@ int ObSchemaGetterGuard::get_timestamp_service_type(const uint64_t tenant_id, in
   return ret;
 }
 
+// check whether the given table has global index or not
+int ObSchemaGetterGuard::check_global_index_exist(const uint64_t tenant_id, const uint64_t table_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  const ObTableSchema *table_schema = NULL;
+  if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", K(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("get null table schema", K(ret), K(table_id));
+  } else {
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    const ObTableSchema *index_schema = NULL;
+    if (OB_FAIL(table_schema->get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !exist && i < simple_index_infos.count(); ++i) {
+      if (OB_FAIL(get_table_schema(simple_index_infos.at(i).table_id_, index_schema))) {
+        LOG_WARN("fail to get index schema", K(ret), K(simple_index_infos.at(i)));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("index schema should not be null", K(ret));
+      } else if (index_schema->can_read_index() && index_schema->is_index_visible() &&
+                  index_schema->is_global_index_table()) {
+        exist = true;
+      } else { /* do nothing */ }
+    }
+  }
+
+  return ret;
+}
+
 }  // end of namespace schema
 }  // end of namespace share
 }  // end of namespace oceanbase

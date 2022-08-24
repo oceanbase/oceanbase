@@ -326,6 +326,33 @@ private:
   ObTableOperationType::Type operation_type_;
 };
 
+class ObTableTTLOperation
+{
+public:
+  ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, int32_t max_version,
+                      int32_t time_to_live, uint64_t del_row_limit, ObString start_rowkey, 
+                      ObString start_qualifier):
+                      tenant_id_(tenant_id), table_id_(table_id), max_version_(max_version),
+                      time_to_live_(time_to_live), del_row_limit_(del_row_limit),
+                      start_rowkey_(start_rowkey), start_qualifier_(start_qualifier) {}
+
+  ~ObTableTTLOperation() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != table_id_ &&
+           (max_version_ > 0 || time_to_live_ > 0) && del_row_limit_ > 0;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(max_version),  K_(time_to_live), K_(del_row_limit), K_(start_rowkey), K_(start_qualifier));
+public:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  int32_t max_version_;
+  int32_t time_to_live_;
+  uint64_t del_row_limit_;
+  ObString start_rowkey_;
+  ObString start_qualifier_;
+};
+
 /// common result for ObTable
 class ObTableResult
 {
@@ -811,6 +838,32 @@ public:
 public:
   bool     is_end_;
   uint64_t  query_session_id_; // from server gen
+};
+
+class ObTableTTLOperationResult
+{
+public:
+  ObTableTTLOperationResult()
+    : ttl_del_rows_(0),
+      max_version_del_rows_(0),
+      scan_rows_(0),
+      end_rowkey_(),
+      end_qualifier_()
+    {}
+  ~ObTableTTLOperationResult() {}
+  uint64_t get_ttl_del_row() { return ttl_del_rows_; }
+  uint64_t get_max_version_del_row() { return max_version_del_rows_; }
+  uint64_t get_del_row() { return ttl_del_rows_ + max_version_del_rows_; }
+  uint64_t get_scan_row() { return scan_rows_; }
+  ObString get_end_rowkey() { return end_rowkey_; }
+  ObString get_end_qualifier() { return end_qualifier_; }
+  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(end_rowkey), K_(end_qualifier));
+public:
+  uint64_t ttl_del_rows_;
+  uint64_t max_version_del_rows_;
+  uint64_t scan_rows_;
+  ObString end_rowkey_;
+  ObString end_qualifier_;
 };
 
 

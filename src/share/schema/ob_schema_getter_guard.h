@@ -542,6 +542,7 @@ public:
 
   int get_sys_priv_with_tenant_id(const uint64_t tenant_id, common::ObIArray<const ObSysPriv*>& sys_privs);
   int get_sys_priv_with_grantee_id(const uint64_t tenant_id, const uint64_t grantee_id, ObSysPriv*& sys_priv);
+  int check_global_index_exist(const uint64_t tenant_id, const uint64_t table_id, bool &exist);
 
 public:
   // for optimize

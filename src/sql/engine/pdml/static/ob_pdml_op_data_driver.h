@@ -132,7 +132,7 @@ private:
   DriverState state_;  // Driver current state
 
   ObEvalCtx* eval_ctx_;
-  ObChunkDatumStore::LastStoredRow<> last_row_;
+  ObChunkDatumStore::LastStoredRow last_row_;
   int64_t last_row_part_id_;
   const ObExprPtrIArray* last_row_expr_;
   int64_t op_id_;

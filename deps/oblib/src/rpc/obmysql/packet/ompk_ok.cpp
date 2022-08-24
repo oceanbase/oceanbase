@@ -48,8 +48,11 @@ int OMPKOK::set_message(const ObString& message)
 void OMPKOK::set_state_changed(const bool state_changed)
 {
   state_changed_ = state_changed;
-  // is ok? mybe overwrite
-  server_status_.status_flags_.OB_SERVER_SESSION_STATE_CHANGED = 1;
+  // If the CLIENT_SESSION_TRACK capability is not enabled
+  // the Server should not set the SERVER_SESSION_STATE_CHANGED Flag
+  if (capability_.cap_flags_.OB_CLIENT_SESSION_TRACK) {
+    server_status_.status_flags_.OB_SERVER_SESSION_STATE_CHANGED = 1;
+  }
 }
 
 void OMPKOK::set_changed_schema(const common::ObString& schema)

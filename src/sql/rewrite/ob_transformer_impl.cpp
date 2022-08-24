@@ -313,7 +313,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt* stmt, uint64_t& need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     // TODO::unpivot open
-    if (func.contain_unpivot_query_) {
+    if (func.contain_unpivot_query_ || func.contain_enum_set_values_) {
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_sequence_) {
@@ -344,6 +344,14 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt* stmt, StmtFunc& func)
     func.contain_sequence_ = func.contain_sequence_ || stmt->has_sequence();
     func.contain_for_update_ = func.contain_for_update_ || has_for_update;
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !func.contain_enum_set_values_ && i < stmt->get_column_items().count(); ++i) {
+    const ColumnItem &col = stmt->get_column_items().at(i);
+    if (OB_ISNULL(col.get_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (ob_is_enumset_tc(col.get_expr()->get_data_type())) {
+      func.contain_enum_set_values_ = true;
+    }
   }
   if (OB_SUCC(ret) &&
       (stmt->is_delete_stmt() || stmt->is_update_stmt() || stmt->is_merge_stmt() || stmt->is_insert_stmt())) {

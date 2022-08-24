@@ -75,6 +75,9 @@ function get_os_release() {
       arch)
         compat_centos8 && return
         ;;
+      rocky)
+        version_ge "8.0" && compat_centos8 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
@@ -86,6 +89,12 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+    esac
+  elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
+    case "$ID" in
+      UOS)
+	version_ge "20" && OS_RELEASE=20 && return
+      ;;
     esac
   fi
   not_supported && return 1 

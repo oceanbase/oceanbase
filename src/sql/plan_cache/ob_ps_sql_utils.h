@@ -51,7 +51,7 @@ int ObPsSqlUtils::alloc_new_var(common::ObIAllocator& allocator, const T& t, T*&
     const int64_t size = cv_size + sizeof(common::ObDataBuffer);
     char* buf = static_cast<char*>(allocator.alloc(size));
     if (OB_ISNULL(buf)) {
-      ret = common::OB_INVALID_ARGUMENT;
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
       SQL_PC_LOG(WARN, "failed to alloc memory");
     } else {
       data_buf = new (buf + sizeof(T)) common::ObDataBuffer(

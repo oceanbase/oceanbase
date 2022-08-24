@@ -996,7 +996,16 @@ int ObFlushCacheP::process()
       } else if (NULL == (pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid argument", K(pcm), K(ret));
-      } else if (arg_.is_all_tenant_) {  // flush all tenant cache
+      } else if (arg_.is_fine_grained_) { // fine-grained plan cache evict
+        if (arg_.db_ids_.count() == 0) {
+          uint64_t db_id = OB_INVALID_ID;
+          ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, db_id, arg_.sql_id_);
+        } else {
+          for (uint64_t i=0; OB_SUCC(ret) && i<arg_.db_ids_.count(); i++) {
+            ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, arg_.db_ids_.at(i), arg_.sql_id_);
+          }
+        }
+      } else if (arg_.is_all_tenant_) { //flush all tenant cache
         ret = pcm->flush_all_plan_cache();
       } else {  // flush appointed tenant cache
         ret = pcm->flush_plan_cache(arg_.tenant_id_);
@@ -1979,6 +1988,50 @@ int ObKillPartTransCtxP::process()
     LOG_WARN("gctx partition service is null");
   } else if (OB_FAIL(gctx_.par_ser_->get_trans_service()->kill_part_trans_ctx(arg_.partition_key_, arg_.trans_id_))) {
     LOG_WARN("failed to kill part trans ctx", K(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObFetchSstableSizeP::process()
+{
+  int ret = OB_SUCCESS;
+  ObPartitionStorage *storage = NULL;
+  ObTableHandle sstable_handle;
+  ObIPartitionGroupGuard guard;
+  ObPGPartitionGuard pg_partition_guard;
+  ObSSTable *sstable = nullptr;
+  if (OB_FAIL(gctx_.par_ser_->get_partition(arg_.pkey_, guard))
+      || NULL == guard.get_partition_group()) {
+    LOG_WARN("get_partition_storage fail", "pkey", arg_);
+    ret = OB_ENTRY_NOT_EXIST;
+  } else if (OB_FAIL(guard.get_partition_group()->get_pg_partition(arg_.pkey_, pg_partition_guard))) {
+    LOG_WARN("get pg partition fail", K(ret), "pkey", arg_.pkey_);
+  } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage *>
+                                 (pg_partition_guard.get_pg_partition()->get_storage()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get_partition_storage fail", "pkey", arg_.pkey_);
+  } else if (OB_FAIL(storage->get_partition_store().get_last_major_sstable(arg_.index_id_, sstable_handle))) {
+    LOG_WARN("fail to get index major sstable handle", K(ret), K_(arg));
+  } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
+    LOG_WARN("fail to get index major sstable handle", K(ret), K_(arg));
+  } else if (OB_ISNULL(sstable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index sstable is null", K(ret), K_(arg));
+  } else {
+    const blocksstable::ObSSTableMeta &sstable_meta = sstable->get_meta();
+    result_.size_ = sstable_meta.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size();
+  }
+  return ret;
+}
+
+int ObRpcTTLRequestP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->ttl_request(arg_, result_);
   }
   return ret;
 }

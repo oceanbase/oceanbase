@@ -99,8 +99,11 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest& lease_request)
     lease_request.resource_info_.report_mem_max_assigned_ = cpu_mem_assigned.max_memory_;
     lease_request.resource_info_.mem_in_use_ = 0;
     lease_request.resource_info_.mem_total_ = GCONF.get_server_memory_avail();
-    lease_request.resource_info_.disk_total_ =
-        OB_FILE_SYSTEM.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size();
+    lease_request.resource_info_.disk_actual_ = 
+      OB_FILE_SYSTEM.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size();
+    lease_request.resource_info_.disk_total_ = 
+      OB_FILE_SYSTEM.get_total_macro_block_max_count() * OB_FILE_SYSTEM.get_macro_block_size();
+        // OB_FILE_SYSTEM.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size(); // for auto extend disk size
     lease_request.resource_info_.disk_in_use_ =
         OB_FILE_SYSTEM.get_used_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size();
     lease_request.resource_info_.partition_cnt_ = partition_cnt;

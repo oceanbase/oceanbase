@@ -265,7 +265,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema& table_schema, const ObCo
             CS_TYPE_BINARY != column_schema.get_collation_type()) {
           cur_row_.cells_[cell_idx].set_varchar(ObCharset::collation_name(column_schema.get_collation_type()));
         } else {
-          cur_row_.cells_[cell_idx].set_varchar(ObString("NULL"));
+          cur_row_.cells_[cell_idx].set_null();
         }
         cur_row_.cells_[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -329,8 +329,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema& table_schema, const ObCo
             cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
           }
         } else if (def_obj.is_null()) {
-          // NOTICE: default value is NULL need print string "NULL"
-          cur_row_.cells_[cell_idx].set_varchar("NULL");
+          cur_row_.cells_[cell_idx].set_null();
         } else if (def_obj.is_bit()) {
           if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
             LOG_WARN("fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));
@@ -543,6 +542,10 @@ int ObTableColumns::deduce_column_attributes(
       if (OB_FAIL(set_null_and_default_according_binary_expr(select_stmt, expr, nullable, has_default))) {
         LOG_WARN("fail to get null and default for binary expr", K(ret));
       }
+    } else if (expr->is_json_expr() ||
+               (T_FUN_SYS_CAST == expr->get_expr_type() && ob_is_json(expr->get_result_type().get_type()))) {
+      nullable = true;
+      has_default = false;
     } else {
       // ObOpRawExpr, ObCaseOpRawExpr, ObAggFunRawExpr
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {

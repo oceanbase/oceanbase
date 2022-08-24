@@ -194,6 +194,7 @@ const char *ObIDag::ObIDagPriorityStr[ObIDag::DAG_PRIO_MAX] = {
     "DAG_PRIO_CREATE_INDEX",
     "DAG_PRIO_SSTABLE_SPLIT",
     "DAG_PRIO_VALIDATE",
+    "DAG_PRIO_TTL",
 };
 
 const char *ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
@@ -205,6 +206,7 @@ const char *ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
     "DAG_ULT_CREATE_INDEX",
     "DAG_ULT_SPLIT",
     "DAG_ULT_BACKUP",
+    "DAG_ULT_TTL",
 };
 
 const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {
@@ -228,6 +230,7 @@ const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {
     "DAG_TYPE_VALIDATE"
     "DAG_TYPE_BACKUP_BACKUPSET"
     "DAG_TYPE_BACKUP_ARCHIVELOG",
+    "DAG_TYPE_TTL",
 };
 
 const char *ObIDag::ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {
@@ -249,6 +252,9 @@ const char *ObIDag::ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {
     "OTHER",
     "OTHER",
     "OTHER",
+    "BACKUP",
+    "BACKUP",
+    "TABLE_API",
 };
 
 ObIDag::ObIDag(ObIDagType type, ObIDagPriority priority)
@@ -1511,6 +1517,9 @@ int ObDagScheduler::sys_task_start(ObIDag* dag)
         break;
       case ObIDag::DAG_TYPE_BACKUP_ARCHIVELOG:
         sys_task_status.task_type_ = BACKUP_ARCHIVELOG_TASK;
+        break;
+      case ObIDag::DAG_TYPE_TTL:
+        sys_task_status.task_type_ = TABLE_API_TTL_TASK;
         break;
       default:
         COMMON_LOG(ERROR, "sys task type error", K(ret), K(dag->get_type()));

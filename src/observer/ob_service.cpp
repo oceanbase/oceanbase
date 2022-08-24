@@ -58,6 +58,7 @@
 #include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
 #include "share/ob_alive_server_tracer.h"
+#include "table/ob_table_ttl_manager.h"
 
 namespace oceanbase {
 
@@ -3753,6 +3754,27 @@ int ObService::broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, ob
   LOG_DEBUG("receive broadcast locations", KR(ret), K(arg));
   return ret;
 }
+
+int ObService::ttl_request(const obrpc::ObTTLRequestArg &arg, obrpc::ObTTLResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service do not init", KR(ret), K(arg));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(ObTTLManager::get_instance().proc_rs_cmd(arg.tenant_id_, arg.task_id_,
+                      TRIGGER_TYPE::USER_TRIGGER == arg.trigger_type_,
+                      static_cast<ObTTLRequestArg::TTLRequestType>(arg.cmd_code_)))) {
+    LOG_WARN("fail to process rs command", K(ret), K(arg));
+  }
+
+  result.ret_code_ = ret;
+  LOG_INFO("send ttl task response to RS", K(ret), K(arg), K(result));
+  return ret;
+}
+
 
 }  // end namespace observer
 }  // end namespace oceanbase

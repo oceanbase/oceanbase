@@ -104,7 +104,7 @@ static int timestamp2otimestamp(const ObObj& src, ObObj& dst, ObIAllocator&)
   return OB_SUCCESS;
 }
 
-ObAgentVirtualTable::ObAgentVirtualTable() : general_tenant_id_(OB_INVALID_TENANT_ID)
+ObAgentVirtualTable::ObAgentVirtualTable() : general_tenant_id_(OB_INVALID_TENANT_ID), only_sys_data_(false)
 {}
 
 ObAgentVirtualTable::~ObAgentVirtualTable()

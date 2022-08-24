@@ -4,7 +4,7 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.3
+  VERSION 3.1.5
   DESCRIPTION "OceanBase distributed database system"
   HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
@@ -15,6 +15,12 @@ ob_define(ENABLE_FATAL_ERROR_HANG OFF)
 if(ENABLE_DEBUG_LOG)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_DEBUG_LOG")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_DEBUG_LOG")
+endif()
+
+if(OB_ERRSIM)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DERRSIM")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DERRSIM")
+  set(OB_TRANS_ERRSIM ON)
 endif()
 
 if(WITH_OSS)

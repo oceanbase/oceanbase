@@ -399,8 +399,17 @@ int ObDfcServer::init()
   return ret;
 }
 
+void ObDfcServer::stop()
+{
+  TG_STOP(lib::TGDefIDs::DtlDfc);
+  LOG_INFO("DtlDfc timer stopped");
+}
+
 void ObDfcServer::destroy()
-{}
+{
+  TG_DESTROY(lib::TGDefIDs::DtlDfc);
+  LOG_INFO("DtlDfc timer destroy");
+}
 
 void ObDfcServer::runTimerTask()
 {

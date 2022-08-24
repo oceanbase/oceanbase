@@ -502,6 +502,8 @@ public:
       const obrpc::ObAlterTablegroupArg& arg);
   virtual int insert_temp_table_info(
       common::ObMySQLTransaction& trans, const share::schema::ObTableSchema& table_schema);
+  virtual int delete_temp_table_info(
+      common::ObMySQLTransaction& trans, const share::schema::ObTableSchema& table_schema);
   int check_is_delay_delete(const int64_t tenant_id, bool& is_delay_delete);
   template <typename T>
   int construct_new_name_for_recyclebin(const T& schema, common::ObSqlString& new_table_name);

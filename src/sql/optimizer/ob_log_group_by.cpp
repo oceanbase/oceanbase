@@ -27,6 +27,7 @@
 #include "ob_raw_expr_push_down_aggr_expr.h"
 #include "ob_select_log_plan.h"
 #include "common/ob_smart_call.h"
+#include "ob_log_window_function.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -277,15 +278,15 @@ int ObLogGroupBy::allocate_groupby_below(const ObIArray<ObRawExpr*>& distinct_ex
       // 2. distint expr is pushed down, such as count(distinct c1)
       //    a partition should not be processed by two px tasks, other the distinct result
       //    will be mis-estimated
-      bool find_exchange = false;
+      bool child_can_pullup_gi = true;
       if (OB_ISNULL(child = child_group_by->get_child(first_child))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(child), K(ret));
       } else if (OB_FAIL(child_group_by->get_sharding_info().copy_with_part_keys(child->get_sharding_info()))) {
         LOG_WARN("failed to copy sharding info", K(ret));
-      } else if (OB_FAIL(child_has_exchange(child, find_exchange))) {
+      } else if (OB_FAIL(check_can_pullup_gi(child, child_can_pullup_gi))) {
         LOG_WARN("fail to find tsc recursive");
-      } else if (!find_exchange) {
+      } else if (child_can_pullup_gi) {
         child_group_by->set_is_partition_wise(true);
         child_group_by->set_is_block_gi_allowed(!should_push_distinct);
       } else { /*do nothing*/
@@ -306,7 +307,27 @@ int ObLogGroupBy::allocate_groupby_below(const ObIArray<ObRawExpr*>& distinct_ex
   return ret;
 }
 
-int ObLogGroupBy::get_group_rollup_exprs(common::ObIArray<ObRawExpr*>& group_rollup_exprs) const
+// child has allocate exchange or parallel window function, can not pullup gi
+int ObLogGroupBy::check_can_pullup_gi(const ObLogicalOperator *op, bool &can_pullup)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || !can_pullup) {
+    /*do nothing*/
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type() ||
+             (log_op_def::LOG_WINDOW_FUNCTION == op->get_type() &&
+                 static_cast<const ObLogWindowFunction *>(op)->is_parallel())) {
+    can_pullup = false;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && can_pullup && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_can_pullup_gi(op->get_child(i), can_pullup)))) {
+        LOG_WARN("fail to find tsc recursive", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogGroupBy::get_group_rollup_exprs(common::ObIArray<ObRawExpr *> &group_rollup_exprs) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(append(group_rollup_exprs, group_exprs_))) {
@@ -1148,6 +1169,25 @@ int ObLogGroupBy::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
     LOG_WARN("failed to fill link stmt groupby strs", K(ret), K(group_exprs_));
   } else if (OB_FAIL(link_stmt->fill_having_strs(filter_exprs_))) {
     LOG_WARN("failed to fill link stmt having strs", K(ret), K(filter_exprs_));
+  }
+  return ret;
+}
+
+int ObLogGroupBy::compute_const_exprs()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(my_plan_) || OB_UNLIKELY(get_num_of_child() < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is invalid", K(ret), K(get_num_of_child()), K(my_plan_));
+  } else if (OB_ISNULL(child = get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret), K(child));
+  } else if (!has_rollup() && OB_FAIL(append(get_output_const_exprs(), child->get_output_const_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(get_filter_exprs(), get_output_const_exprs()))) {
+    LOG_WARN("failed to compute const conditionexprs", K(ret));
+  } else { /*do nothing*/
   }
   return ret;
 }

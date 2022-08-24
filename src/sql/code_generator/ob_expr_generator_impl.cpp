@@ -119,7 +119,7 @@ int ObExprGeneratorImpl::generate_infix_expr(ObRawExpr& raw_expr)
     sql_expr_->start_gen_infix_exr();
     auto& exprs = sql_expr_->get_infix_expr().get_exprs();
     if (OB_FAIL(raw_expr.do_visit(*this))) {
-      LOG_WARN("expr visit failed", K(ret));
+      LOG_WARN("expr visit failed", K(ret), K(raw_expr));
     } else if (exprs.count() > 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should add one expr per visit", K(ret), K(raw_expr));
@@ -597,7 +597,9 @@ inline int ObExprGeneratorImpl::visit_regex_expr(ObOpRawExpr& expr, ObExprRegexp
     } else {
       // The value && pattern are const, it is calculated in pre_calculate
       regexp_op->set_value_is_const(value_expr->has_flag(IS_CONST) || value_expr->has_flag(IS_CONST_EXPR));
-      regexp_op->set_pattern_is_const(pattern_expr->has_flag(IS_CONST) || pattern_expr->has_flag(IS_CONST_EXPR));
+      if (!pattern_expr->has_flag(CNT_EXEC_PARAM)) {
+        regexp_op->set_pattern_is_const(pattern_expr->has_flag(IS_CONST) || pattern_expr->has_flag(IS_CONST_EXPR));
+      }
     }
   }
   return ret;
@@ -1299,6 +1301,7 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr& expr)
 {
   int ret = OB_SUCCESS;
   ObPostExprItem item;
+  bool need_calc = true;
   item.set_accuracy(expr.get_accuracy());
   if (OB_ISNULL(sql_expr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1306,14 +1309,26 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr& expr)
   } else if (expr.has_flag(IS_COLUMNLIZED)) {
     int64_t idx = OB_INVALID_INDEX;
     if (OB_FAIL(column_idx_provider_.get_idx(&expr, idx))) {
-      LOG_WARN("get index failed", K(ret));
+      // if an expr has been marked with IS_COLUMNLIZED but get invalid idx,
+      // then it most likely be a const shared expr and need to calculate again
+      if (ret == OB_ENTRY_NOT_EXIST && idx == OB_INVALID_INDEX &&
+          (expr.has_flag(IS_CONST) || expr.has_flag(IS_CONST_EXPR))) {
+        ret = OB_SUCCESS;
+        expr.clear_flag(IS_COLUMNLIZED);
+        LOG_TRACE("need to recalculate const expr", K(expr));
+      } else if (ret != OB_ENTRY_NOT_EXIST) {
+        LOG_WARN("get index failed", K(ret), K(expr), K(idx));
+      }
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
     } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
+    } else {
+      need_calc = false;
     }
-  } else {
-    ObExprOperator* op = NULL;
+  }
+  if (OB_SUCC(ret) && need_calc) {
+    ObExprOperator *op = NULL;
     if (OB_FAIL(factory_.alloc(expr.get_expr_type(), op))) {
       LOG_WARN("fail to alloc expr_op", K(ret));
     } else if (OB_UNLIKELY(NULL == op)) {
@@ -1423,13 +1438,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
         } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
         } else {
-          if (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()) {
-            aggr_expr->set_real_param_col_count(expr.get_real_param_count());
-            aggr_expr->set_all_param_col_count(expr.get_param_count());  
-          } else {
-            aggr_expr->set_real_param_col_count(1);
-            aggr_expr->set_all_param_col_count(1);  
-          }
+          aggr_expr->set_real_param_col_count(expr.get_real_param_count());
+          aggr_expr->set_all_param_col_count(expr.get_param_count());
           if (OB_SUCCESS == ret &&
               (T_FUN_GROUP_CONCAT == expr.get_expr_type() || T_FUN_GROUP_RANK == expr.get_expr_type() ||
                   T_FUN_GROUP_DENSE_RANK == expr.get_expr_type() || T_FUN_GROUP_PERCENT_RANK == expr.get_expr_type() ||
