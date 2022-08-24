@@ -438,7 +438,7 @@ for RHEL4 support (GCC 3 doesn't support this instruction) */
 #error arch unsupported
 #endif /* defined(__GNUC__) && defined(__x86_64__) */
 
-inline static uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
+uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
 {
   uint64_t crc = uCRC64;
 
@@ -2833,13 +2833,12 @@ uint64_t fast_crc64_sse42_manually(uint64_t crc, const char* buf, int64_t len)
 }
 
 //If the CPU is intel, ISA-L library for CRC can be used
-inline static uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
+uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
 {
-  uint64_t crc = uCRC64;
-  if (NULL != buf && cb > 0) {
-    crc = crc32_iscsi((unsigned char*)(buf), cb, uCRC64);
+  if (buf == NULL || cb <= 0){
+    return uCRC64;
   }
-  return crc;
+  return crc32_iscsi((unsigned char*)(buf), cb, uCRC64);
 }
 
 uint64_t crc64_sse42_dispatch(uint64_t crc, const char* buf, int64_t len)
