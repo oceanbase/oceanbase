@@ -85,11 +85,9 @@ private:
   ObMySQLProxy* sql_proxy_;
   ObSystemConfig system_config_;
   ObServerConfig& server_config_;
-  int64_t newest_version_;
   int64_t current_version_;
   char dump_path_[OB_MAX_FILE_NAME_LENGTH];
   ObReloadConfig& reload_config_func_;
-  obutil::Mutex mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigManager);
 };
 
@@ -101,10 +99,8 @@ inline ObConfigManager::ObConfigManager(ObServerConfig& server_config, ObReloadC
       sql_proxy_(NULL),
       system_config_(),
       server_config_(server_config),
-      newest_version_(1),
       current_version_(1),
-      reload_config_func_(reload_config),
-      mutex_()
+      reload_config_func_(reload_config)
 {
   dump_path_[0] = '\0';
 }
@@ -112,11 +108,6 @@ inline ObConfigManager::ObConfigManager(ObServerConfig& server_config, ObReloadC
 inline int64_t ObConfigManager::get_current_version() const
 {
   return current_version_;
-}
-
-inline const int64_t& ObConfigManager::get_version() const
-{
-  return newest_version_;
 }
 
 inline ObServerConfig& ObConfigManager::get_config(void)

@@ -405,8 +405,7 @@ public:
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
       K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
       K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
-      K_(status), K_(is_xa_trans_prepared), K_(redo_log_id_serialize_size), K_(participants_serialize_size),
-      K_(undo_serialize_size));
+      K_(status), K_(is_xa_trans_prepared));
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -615,8 +614,8 @@ private:
   bool is_xa_last_empty_redo_log_() const;
   int fake_kill_(const int64_t terminate_log_ts);
   int kill_v2_(const int64_t terminate_log_ts);
-  int calc_serialize_size_and_set_redo_log_(const int64_t log_id);
   int calc_serialize_size_and_set_participants_(const ObPartitionArray &participants);
+  int do_calc_and_set_participants_(const ObPartitionArray &participants);
   int calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from);
 
 private:

@@ -1384,13 +1384,13 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             LOG_WARN("fail to add row", K(ret));
           } else {
             if (aggr_fun == T_FUN_JSON_ARRAYAGG || aggr_fun == T_FUN_JSON_OBJECTAGG) {
-              int64_t len = param_exprs->count();
+              int64_t len = aggr_info.param_exprs_.count();
               if (OB_FAIL(extra->reserve_bool_mark_count(len))) {
                 LOG_WARN("reserve_bool_mark_count failed", K(ret), K(len));
               }
               for (int64_t i = 0; OB_SUCC(ret) && i < len; i++) {
                 ObExpr *tmp = NULL;
-                if (OB_FAIL(param_exprs->at(i, tmp))){
+                if (OB_FAIL(aggr_info.param_exprs_.at(i, tmp))){
                   LOG_WARN("fail to get param_exprs[i]", K(ret));
                 } else {
                   bool is_bool = (tmp->is_boolean_ == 1);
@@ -3340,7 +3340,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
             ObString origin_str = converted_datum.get_string();
             ObString converted_str;
             if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str, 
-                                                            CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+                                                             CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
               LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
             } else {
               converted_datum.set_string(converted_str);
@@ -3445,6 +3445,9 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
               K(tmp_obj[0].get_type()), K(tmp_obj[0].get_collation_type()));
           ret = OB_ERR_INVALID_JSON_CHARSET;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
+        } else if (NULL == tmp_obj[0].get_string_ptr()) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("unexpected null result", K(ret), K(tmp_obj[0]));
         } else {
           ObObjType val_type0 = tmp_obj[0].get_type();
           ObCollationType cs_type0 = tmp_obj[0].get_collation_type();

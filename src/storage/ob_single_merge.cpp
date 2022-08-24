@@ -203,6 +203,12 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
             }
           }
         }
+        if (OB_SUCC(ret)) {
+          if (found_row_cache && end_table_idx == 0) {
+            handle_.reset();
+            found_row_cache = false;
+          }
+        }
       }
     }
 

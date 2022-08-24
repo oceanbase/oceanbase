@@ -1074,6 +1074,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
       }
       case T_FUN_JSON_ARRAYAGG: {
         result_type.set_json();
+        result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
         expr.set_result_type(result_type);
         break;
       }
@@ -1095,6 +1096,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
             need_add_cast = true;
           }
           result_type.set_json();
+          result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
           expr.set_result_type(result_type);
         }
         break;

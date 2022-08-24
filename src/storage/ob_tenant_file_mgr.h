@@ -21,7 +21,6 @@
 
 namespace oceanbase {
 namespace storage {
-
 class ObTenantFileMgr final {
 public:
   ObTenantFileMgr();
@@ -64,11 +63,9 @@ public:
 
 private:
   static const int64_t TENANT_MAX_FILE_CNT = 1000;
-  static const int64_t TENANT_MIN_FILE_CNT = 10;
   typedef common::hash::ObHashMap<ObTenantFileKey, ObTenantFileValue*> TENANT_FILE_MAP;
   int create_new_tenant_file(const bool write_slog, const bool create_sys_table, const int64_t file_cnt);
-  int choose_tenant_file(const bool is_sys_table, const bool need_create_file, TENANT_FILE_MAP& tenant_file_map,
-      ObTenantFileValue*& value);
+  int choose_tenant_file(const bool need_create_file, TENANT_FILE_MAP& tenant_file_map, ObTenantFileValue*& value);
   int alloc_exist_file(const ObTenantFileInfo& tenant_file_info, const bool write_slog, const bool open_file,
       const bool is_owner, const bool from_svr_ckpt);
   int write_update_slog(const ObTenantFileKey& tenant_key, const bool in_slog_trans,
@@ -77,7 +74,6 @@ private:
   int write_update_file_info_slog(const ObTenantFileKey& file_key, const ObTenantFileSuperBlock& super_block);
   int update_tenant_file_super_block_in_map(
       const ObTenantFileKey& tenant_key, const ObTenantFileSuperBlock& tenant_file_super_block);
-  int generate_unique_file_id(int64_t& file_id);
   int update_tenant_file_meta_blocks_impl(
       const ObTenantFileKey& file_key, const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list);
 

@@ -91,8 +91,9 @@ public:
   {
     return size_;
   }
-  int prepare_read(char* read_buf, ObTmpFile* file);
-  int prepare_write(char* write_buf, const int64_t write_size, ObTmpFile* file);
+  int prepare_read(const int64_t read_size, const int64_t read_offset, const common::ObIODesc &io_flag, char *read_buf,
+      ObTmpFile *file);
+  int prepare_write(char *write_buf, const int64_t write_size, ObTmpFile *file);
   OB_INLINE void add_data_size(const int64_t size)
   {
     size_ += size;
@@ -100,6 +101,14 @@ public:
   OB_INLINE void sub_data_size(const int64_t size)
   {
     size_ -= size;
+  }
+  OB_INLINE void set_update_offset_in_file()
+  {
+    update_offset_in_file_ = true;
+  }
+  OB_INLINE void set_last_read_offset(const int64_t last_read_offset)
+  {
+    last_read_offset_ = last_read_offset;
   }
   int wait(const int64_t timeout_ms);
   void reset();
@@ -116,7 +125,16 @@ public:
   {
     return block_cache_handles_;
   }
-  TO_STRING_KV(KP_(buf), K_(size), K_(is_read));
+  OB_INLINE int64_t get_last_read_offset() const
+  {
+    return last_read_offset_;
+  }
+
+  TO_STRING_KV(KP_(buf), K_(size), K_(is_read), K_(has_wait), K_(expect_read_size), K_(last_read_offset), K_(io_flag),
+      K_(update_offset_in_file));
+
+private:
+  int do_wait(const int64_t timeout_ms);
 
 private:
   ObTmpFile* tmp_file_;
@@ -127,6 +145,10 @@ private:
   int64_t size_;  // has read or to write size.
   bool is_read_;
   bool has_wait_;
+  int64_t expect_read_size_;
+  int64_t last_read_offset_;  // only for more than 8MB read.
+  common::ObIODesc io_flag_;
+  bool update_offset_in_file_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
@@ -280,15 +302,21 @@ public:
   int clear();
   int64_t get_dir_id() const;
   uint64_t get_tenant_id() const;
-  int64_t get_fd();
+  int64_t get_fd() const;
   int sync(const int64_t timeout_ms);
   int deep_copy(char* buf, const int64_t buf_len, ObTmpFile*& value) const;
   inline int64_t get_deep_copy_size() const;
+  void get_file_size(int64_t &file_size);
+  // only for ObTmpFileIOHandle, once more than READ_SIZE_PER_BATCH read.
+  int once_aio_read_batch(
+      const ObTmpFileIOInfo &io_info, const bool need_update_offset, int64_t &offset, ObTmpFileIOHandle &handle);
+
   TO_STRING_KV(K_(file_meta), K_(is_big), K_(tenant_id), K_(is_inited));
 
 private:
-  int write_file_extent(const ObTmpFileIOInfo& io_info, ObTmpFileExtent* file_extent, int64_t& size, char*& buf);
-  int aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& offset, ObTmpFileIOHandle& handle);
+  int write_file_extent(const ObTmpFileIOInfo &io_info, ObTmpFileExtent *file_extent, int64_t &size, char *&buf);
+  int aio_read_without_lock(const ObTmpFileIOInfo &io_info, int64_t &offset, ObTmpFileIOHandle &handle);
+  int once_aio_read_batch_without_lock(const ObTmpFileIOInfo &io_info, int64_t &offset, ObTmpFileIOHandle &handle);
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
   int64_t find_first_extent(const int64_t offset);
@@ -299,6 +327,7 @@ private:
   //      SMALL_FILE_MAX_THRESHOLD < BIG_FILE_PREALLOC_EXTENT_SIZE < block size
   static const int64_t SMALL_FILE_MAX_THRESHOLD = 4;
   static const int64_t BIG_FILE_PREALLOC_EXTENT_SIZE = 8;
+  static const int64_t READ_SIZE_PER_BATCH = 8 * 1024 * 1024;  // 8MB
 
   ObTmpFileMeta file_meta_;
   bool is_big_;

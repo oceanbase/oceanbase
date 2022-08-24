@@ -1147,6 +1147,18 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "default_storage_engine": {
+    "id": 93,
+    "name": "default_storage_engine",
+    "value": "OceanBase",
+    "data_type": "varchar",
+    "info": "The default storage engine of OceanBase",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "400",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "ob_interm_result_mem_limit": {
     "id": 10001,
     "name": "ob_interm_result_mem_limit",

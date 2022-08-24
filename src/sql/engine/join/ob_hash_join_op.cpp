@@ -2727,10 +2727,13 @@ int ObHashJoinOp::get_next_probe_partition()
       ret = OB_ITER_END;
     } else if (!part_histograms_[cur_full_right_partition_].empty()) {
       if (right_splitter_.is_valid()) {
-        HashJoinHistogram::HistPrefixArray* prefix_hist_count = right_splitter_.part_histogram_.prefix_hist_count2_;
-        if (OB_ISNULL(right_splitter_.part_histogram_.h2_) || OB_ISNULL(prefix_hist_count)) {
+        HashJoinHistogram::HistPrefixArray *prefix_hist_count = right_splitter_.part_histogram_.prefix_hist_count2_;
+        if (0 == right_splitter_.get_total_row_count()) {
+          ret = OB_ITER_END;
+          LOG_DEBUG("hj_part_array_ has no row in memory", K(ret));
+        } else if (OB_ISNULL(right_splitter_.part_histogram_.h2_) || OB_ISNULL(prefix_hist_count)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("h2 is null", K(ret));
+          LOG_WARN("h2 is null", K(ret), K(level1_part_count_), K(level2_part_count_), K(part_count));
         } else {
           if (cur_full_right_partition_ >= prefix_hist_count->count()) {
             ret = OB_ERR_UNEXPECTED;
@@ -2770,7 +2773,7 @@ int ObHashJoinOp::get_next_probe_partition()
         }
       }
     }
-  } while (cur_full_right_partition_ < part_count);
+  } while (OB_SUCC(ret) && cur_full_right_partition_ < part_count);
   return ret;
 }
 

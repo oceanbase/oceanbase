@@ -169,6 +169,11 @@ int ObArchiveEntryIterator::next_entry(clog::ObLogEntry& entry, bool& is_accum_c
               // retry is normal
               ARCHIVE_LOG(TRACE, "buffer not enough or need retry", KR(ret), K(file_id_), K(cur_offset_));
             }
+            if (OB_EAGAIN == ret) {
+              // overwrite OB_EAGAIN when encrypt meta has not been ready
+              sleep(1);  // sleep 1s to control cpu load
+              ret = OB_SUCCESS;
+            }
           }
         } else {
           done = true;

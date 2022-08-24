@@ -1049,7 +1049,9 @@ int ObTableMgr::check_tenant_sstable_exist(const uint64_t tenant_id, bool& is_ex
       ret = OB_ERR_SYS;
       LOG_ERROR("node must not null", K(ret), KP(table));
     } else if (!table->is_sstable()) {
-      // do nothing
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 1 minute
+        LOG_INFO("tenant sstable exist", "table_key", table->get_key());
+      }
     } else if (table->get_partition_key().get_tenant_id() == tenant_id) {
       is_exist = true;
       break;

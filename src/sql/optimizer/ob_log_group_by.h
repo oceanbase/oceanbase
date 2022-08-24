@@ -95,6 +95,7 @@ public:
   int allocate_groupby_below(const ObIArray<ObRawExpr*>& distinct_exprs, const bool can_push,
       ObLogicalOperator*& exchange_point,
       common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& group_push_down_replaced_exprs);
+  int check_can_pullup_gi(const ObLogicalOperator *op, bool &can_pullup);
   int should_push_down_group_by(AllocExchContext& ctx, ObIArray<ObRawExpr*>& distinct_exprs, bool& should_push_groupby,
       bool& should_push_distinct);
   virtual uint64_t hash(uint64_t seed) const override;
@@ -108,6 +109,7 @@ public:
   }
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
+  virtual int compute_const_exprs() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
   double get_distinct_card() const

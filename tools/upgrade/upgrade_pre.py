@@ -1115,123 +1115,6 @@
 ##这两行之间的这些action，如果不写在这两行之间的话会导致清空不掉相应的action。
 #
 #####========******####======== actions begin ========####******========####
-#class EachTenantDDLActionPostCreateAllKvTTLTasks(BaseEachTenantDDLAction):
-#  @staticmethod
-#  def get_seq_num():
-#    return 0
-#  def dump_before_do_action(self):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task'""".format(self.get_all_table_name()))
-#  def check_before_do_action(self):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task'""".format(self.get_all_table_name()))
-#    if len(results) > 0:
-#      raise MyError('__all_kv_ttl_task already created')
-#  def dump_before_do_each_tenant_action(self, tenant_id):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#  def skip_pre_check(self):
-#    return True
-#  def skip_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    return (1 == len(results))
-#  def check_before_do_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    if len(results) > 0:
-#      raise MyError('tenant_id:{0} has already create table __all_kv_ttl_task'.format(tenant_id))
-#  @staticmethod
-#  def get_each_tenant_action_ddl(tenant_id):
-#    pure_table_id = 410
-#    table_id = (tenant_id << 40) | pure_table_id
-#    return """CREATE TABLE `__all_kv_ttl_task` (
-#              `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
-#              `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-#              `tenant_id` bigint(20) NOT NULL,
-#              `task_id` bigint(20) NOT NULL,
-#              `table_id` bigint(20) NOT NULL,
-#              `partition_id` bigint(20) NOT NULL,
-#              `task_start_time` bigint(20) NOT NULL,
-#              `task_update_time` bigint(20) NOT NULL,
-#              `trigger_type` bigint(20) NOT NULL,
-#              `status` bigint(20) NOT NULL,
-#              `ttl_del_cnt` bigint(20) NOT NULL,
-#              `max_version_del_cnt` bigint(20) NOT NULL,
-#              `scan_cnt` bigint(20) NOT NULL,
-#              `row_key` varbinary(2048) NOT NULL,
-#              `ret_code` varchar(512) NOT NULL,
-#              PRIMARY KEY (`tenant_id`, `task_id`, `table_id`, `partition_id`)
-#            ) TABLE_ID={0} DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' """.format(table_id)
-#  @staticmethod
-#  def get_each_tenant_rollback_sql(tenant_id):
-#    return """select 1"""
-#  def dump_after_do_each_tenant_action(self, tenant_id):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#  def check_after_do_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    if len(results) != 1:
-#      raise MyError('tenant_id:{0} create table __all_kv_ttl_task failed'.format(tenant_id))
-#  def dump_after_do_action(self):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task'""".format(self.get_all_table_name()))
-#  def check_after_do_action(self):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task'""".format(self.get_all_table_name()))
-#    if len(results) != len(self.get_tenant_id_list()):
-#      raise MyError('there should be {0} rows in {1} whose table_name is __all_kv_ttl_task, but there has {2} rows like that'.format(len(self.get_tenant_id_list()), self.get_all_table_name(), len(results)))  
-#
-#class EachTenantDDLActionPostCreateAllKvTTLTaskHistory(BaseEachTenantDDLAction):
-#  @staticmethod
-#  def get_seq_num():
-#    return 1
-#  def dump_before_do_action(self):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history'""".format(self.get_all_table_name()))
-#  def skip_pre_check(self):
-#    return True
-#  def skip_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    return (1 == len(results))
-#  def check_before_do_action(self):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history'""".format(self.get_all_table_name()))
-#    if len(results) > 0:
-#      raise MyError('__all_kv_ttl_task_history already created')
-#  def dump_before_do_each_tenant_action(self, tenant_id):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#  def check_before_do_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    if len(results) > 0:
-#      raise MyError('tenant_id:{0} has already create table __all_kv_ttl_task_history'.format(tenant_id))
-#  @staticmethod
-#  def get_each_tenant_action_ddl(tenant_id):
-#    pure_table_id = 411
-#    table_id = (tenant_id << 40) | pure_table_id
-#    return """CREATE TABLE `__all_kv_ttl_task_history` (
-#              `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
-#              `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-#              `tenant_id` bigint(20) NOT NULL,
-#              `task_id` bigint(20) NOT NULL,
-#              `table_id` bigint(20) NOT NULL,
-#              `partition_id` bigint(20) NOT NULL,
-#              `task_start_time` bigint(20) NOT NULL,
-#              `task_update_time` bigint(20) NOT NULL,
-#              `trigger_type` bigint(20) NOT NULL,
-#              `status` bigint(20) NOT NULL,
-#              `ttl_del_cnt` bigint(20) NOT NULL,
-#              `max_version_del_cnt` bigint(20) NOT NULL,
-#              `scan_cnt` bigint(20) NOT NULL,
-#              `row_key` varbinary(2048) NOT NULL,
-#              `ret_code` varchar(512) NOT NULL,
-#              PRIMARY KEY (`tenant_id`, `task_id`, `table_id`, `partition_id`)
-#            ) TABLE_ID={0} DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' """.format(table_id)
-#  @staticmethod
-#  def get_each_tenant_rollback_sql(tenant_id):
-#    return """select 1"""
-#  def dump_after_do_each_tenant_action(self, tenant_id):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#  def check_after_do_each_tenant_action(self, tenant_id):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history' and tenant_id = {1}""".format(self.get_all_table_name(), tenant_id))
-#    if len(results) != 1:
-#      raise MyError('tenant_id:{0} create table __all_kv_ttl_task_history failed'.format(tenant_id))
-#  def dump_after_do_action(self):
-#    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history'""".format(self.get_all_table_name()))
-#  def check_after_do_action(self):
-#    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from {0} where table_name = '__all_kv_ttl_task_history'""".format(self.get_all_table_name()))
-#    if len(results) != len(self.get_tenant_id_list()):
-#      raise MyError('there should be {0} rows in {1} whose table_name is __all_kv_ttl_task_history, but there has {2} rows like that'.format(len(self.get_tenant_id_list()), self.get_all_table_name(), len(results)))    
 #####========******####========= actions end =========####******========####
 #
 #def do_each_tenant_ddl_actions(cur, tenant_id_list):
@@ -6396,7 +6279,7 @@
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #####========******####======== actions begin ========####******========####
-#  run_upgrade_job(conn, cur, "3.1.4")
+#  run_upgrade_job(conn, cur, "3.1.5")
 #  return
 #####========******####========= actions end =========####******========####
 #
@@ -7415,6 +7298,7 @@
 #sys_var_dict["session_track_schema"] = {"id": 81, "name": "session_track_schema", "value": "1", "data_type": 5, "info": "specifies whether return schema change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_system_variables"] = {"id": 82, "name": "session_track_system_variables", "value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection", "data_type": 22, "info": "specifies whether return system variables change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_state_change"] = {"id": 83, "name": "session_track_state_change", "value": "0", "data_type": 5, "info": "specifies whether return session state change info in ok packet", "flags": 4099}
+#sys_var_dict["default_storage_engine"] = {"id": 93, "name": "default_storage_engine", "value": "OceanBase", "data_type": 22, "info": "The default storage engine of OceanBase", "flags": 4099}
 #sys_var_dict["ob_default_replica_num"] = {"id": 10000, "name": "ob_default_replica_num", "value": "1", "data_type": 5, "info": "The default replica number of table per zone if not specified when creating table.", "flags": 3}
 #sys_var_dict["ob_interm_result_mem_limit"] = {"id": 10001, "name": "ob_interm_result_mem_limit", "value": "2147483648", "data_type": 5, "info": "Indicate how many bytes the interm result manager can alloc most for this tenant", "flags": 131}
 #sys_var_dict["ob_proxy_partition_hit"] = {"id": 10002, "name": "ob_proxy_partition_hit", "value": "1", "data_type": 5, "info": "Indicate whether sql stmt hit right partition, readonly to user, modify by ob", "flags": 22}
@@ -8132,18 +8016,8 @@
 #
 ## 31. check the _max_trx_size
 #def check_max_trx_size_config(query_cur, cur):
-#  (desc, results) = query_cur.exec_query(
-#      """
-#      select distinct(value) from __all_sys_parameter where name like '_max_trx_size'
-#      """)
-#  if len(results) != 1:
-#    raise MyError("failed to get config of _max_trx_size")
-#
-#  if results[0][0] == '100M':
-#    set_parameter(cur, '_max_trx_size', '100G')
-#    logging.info('set _max_trx_size to default value 100G')
-#  else:
-#    logging.info('leave _max_trx_size untouch ' + str(results[0][0]))
+#  set_parameter(cur, '_max_trx_size', '100G')
+#  logging.info('set _max_trx_size to default value 100G')
 #
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
@@ -8702,7 +8576,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_post_checker.log'
-#  new_version = '3.1.4'
+#  new_version = '3.1.5'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):

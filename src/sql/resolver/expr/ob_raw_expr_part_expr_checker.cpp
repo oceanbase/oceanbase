@@ -155,9 +155,19 @@ int ObRawExprPartExprChecker::visit(ObColumnRefRawExpr& expr)
 
 int ObRawExprPartExprChecker::visit(ObOpRawExpr& expr)
 {
+  
   int ret = OB_SUCCESS;
-  if (OB_FAIL(default_check_args(expr))) {
-    LOG_WARN("default_check_args failed", K(ret));
+  switch (expr.get_expr_type()) {
+    case T_OP_REGEXP: {
+      ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
+      LOG_WARN("invalid partition function", K(ret), "item_type", expr.get_expr_type());
+      break;
+    }
+    default: {
+      if (OB_FAIL(default_check_args(expr))) {
+        LOG_WARN("default_check_args failed", K(ret));
+      }
+    }
   }
   return ret;
 }

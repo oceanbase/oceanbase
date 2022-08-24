@@ -470,7 +470,7 @@ int ObTableSqlService::drop_inc_part_info(ObISQLClient& sql_client, const ObTabl
         ObAddIncPartHelper add_part_helper(
             table_schema_ptr, inc_table_schema_ptr, new_schema_version, sql_client, is_tablegroup_def);
         if (OB_FAIL(ret)) {
-        } else if (add_part_helper.add_partition_info(true)) {
+        } else if (OB_FAIL(add_part_helper.add_partition_info(true))) {
           LOG_WARN("drop increment partition info failed",
               K(ret),
               K(table_schema),
@@ -1540,7 +1540,8 @@ int ObTableSqlService::supplement_for_core_table(
     }
   }
   const char* supplement_tbl_name = NULL;
-  if (is_all_table) {
+  if (OB_FAIL(ret)) {
+  } else if (is_all_table) {
     if (OB_FAIL(ObSchemaUtils::get_all_table_name(OB_SYS_TENANT_ID, supplement_tbl_name))) {
       LOG_WARN("fail to get all table name", K(ret));
     }
@@ -4073,7 +4074,7 @@ int ObTableSqlService::batch_update_partition_option(common::ObISQLClient& clien
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(gen_table_dml(exec_tenant_id, copy_schema, dml))) {
           LOG_WARN("fail to gen table dml", K(ret));
-        } else if (dml.add_column("is_deleted", false)) {
+        } else if (OB_FAIL(dml.add_column("is_deleted", false))) {
           LOG_WARN("fail to add column", K(ret));
         } else if (0 == i) {
           const char* table_name = NULL;

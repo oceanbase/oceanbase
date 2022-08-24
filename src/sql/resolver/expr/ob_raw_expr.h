@@ -1508,6 +1508,7 @@ public:
   {
     is_deterministic_ = is_deterministic;
   }
+  bool is_json_expr() const;
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_level), K_(expr_levels), K_(enum_set_values), K_(is_explicited_reference), K_(ref_count),
       K_(is_for_generated_column), K_(extra), K_(is_calculated));

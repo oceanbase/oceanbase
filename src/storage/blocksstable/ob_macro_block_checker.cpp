@@ -28,6 +28,7 @@ void ObSSTableMacroBlockChecker::destroy()
 {
   flat_reader_.reset();
   column_map_.reset();
+  obj_buf_.reset();
   allocator_.reset();
 }
 
@@ -396,18 +397,23 @@ int ObSSTableMacroBlockChecker::check_micro_data(
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret), KP(micro_buf), K(micro_buf_size), K(meta));
   } else if (OB_FAIL(build_column_map(meta))) {
     STORAGE_LOG(WARN, "fail to build column map", K(ret));
+  } else if (OB_FAIL(obj_buf_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
   } else {
     ObIMicroBlockReader* reader = NULL;
     ObRowStoreType read_out_type = MAX_ROW_STORE;
     ObColumnMap* column_map_ptr = nullptr;
+    int64_t request_count = 0;
     if (FLAT_ROW_STORE == meta.meta_->row_store_type_) {
       reader = static_cast<ObIMicroBlockReader*>(&flat_reader_);
       read_out_type = FLAT_ROW_STORE;
       column_map_ptr = &column_map_;
+      request_count = column_map_.get_request_count();
     } else if (SPARSE_ROW_STORE == meta.meta_->row_store_type_) {
       reader = static_cast<ObIMicroBlockReader*>(&sparse_reader_);
       read_out_type = SPARSE_ROW_STORE;  // write row type is sparse row
       column_map_ptr = nullptr;          // make reader read full sparse row
+      request_count = meta.meta_->column_number_;
     } else {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "Unexpeceted row store type", K(ret), K(meta.meta_->row_store_type_));
@@ -418,21 +424,25 @@ int ObSSTableMacroBlockChecker::check_micro_data(
         STORAGE_LOG(WARN, "fail to init micro block reader ", K(ret), K(block_data), K(meta));
       } else {
         ObStoreRow row;
-        for (int64_t iter = reader->begin(); OB_SUCC(ret) && iter != reader->end(); ++iter) {
-          row.row_val_.cells_ = reinterpret_cast<ObObj*>(obj_buf_);
-          row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
-          row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
-          if (OB_FAIL(reader->get_row(iter, row))) {
-            STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter), K(meta));
-          } else if (row.row_val_.count_ != meta.meta_->column_number_) {
-            ret = OB_INVALID_DATA;
-            STORAGE_LOG(WARN, "column number not match", K(ret));
-          } else {
-            for (int64_t i = 0; i < meta.meta_->column_number_; ++i) {
-              if (meta.meta_->column_checksum_method_ == CCM_TYPE_AND_VALUE) {
-                checksum[i] += row.row_val_.cells_[i].checksum(0);
-              } else if (meta.meta_->column_checksum_method_ == CCM_VALUE_ONLY) {
-                checksum[i] += row.row_val_.cells_[i].checksum_v2(0);
+        if (OB_FAIL(obj_buf_.reserve(request_count))) {
+          STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
+        } else {
+          for (int64_t iter = reader->begin(); OB_SUCC(ret) && iter != reader->end(); ++iter) {
+            row.row_val_.cells_ = obj_buf_.get_buf();
+            row.row_val_.count_ = request_count;
+            row.capacity_ = request_count;
+            if (OB_FAIL(reader->get_row(iter, row))) {
+              STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter), K(meta));
+            } else if (row.row_val_.count_ != meta.meta_->column_number_) {
+              ret = OB_INVALID_DATA;
+              STORAGE_LOG(WARN, "column number not match", K(ret));
+            } else {
+              for (int64_t i = 0; i < meta.meta_->column_number_; ++i) {
+                if (meta.meta_->column_checksum_method_ == CCM_TYPE_AND_VALUE) {
+                  checksum[i] += row.row_val_.cells_[i].checksum(0);
+                } else if (meta.meta_->column_checksum_method_ == CCM_VALUE_ONLY) {
+                  checksum[i] += row.row_val_.cells_[i].checksum_v2(0);
+                }
               }
             }
           }

@@ -22,6 +22,8 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 
+constexpr double EPSILON = 0.000000001;
+
 ObExprMod::ObExprMod(ObIAllocator& alloc)
     : ObArithExprOperator(alloc, T_OP_MOD, N_MOD, 2, NOT_ROW_DIMENSION, ObExprResultTypeUtil::get_mod_result_type,
           ObExprResultTypeUtil::get_mod_calc_type, mod_funcs_)
@@ -400,7 +402,7 @@ int ObExprMod::mod_double(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   } else {
     const double left_d = left->get_double();
     const double right_d = right->get_double();
-    if (fabs(right_d) == 0.0) {
+    if (fabs(right_d) < EPSILON) {
       if (lib::is_oracle_mode()) {
         datum.set_double(left_d);
       } else {

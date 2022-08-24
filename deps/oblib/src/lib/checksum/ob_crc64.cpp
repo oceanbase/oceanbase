@@ -278,6 +278,7 @@ static const uint64_t s_crc64_table[] =
  * @returns Intermediate CRC64 value.
  * @param   uCRC64  Current CRC64 intermediate value.
  * @param   pv      The data block to process.
+
  * @param   cb      The size of the data block in bytes.
  */
 uint64_t ob_crc64_optimized(uint64_t uCRC64, const void* pv, int64_t cb)
@@ -2836,6 +2837,7 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char* buf, int64_t len)
   uint32_t b = 0;
   uint32_t c = 0;
   uint32_t d = 0;
+
   asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
   if ((c & (1 << 20)) != 0) {
     ob_crc64_sse42_func = &crc64_sse42;
@@ -2844,6 +2846,7 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char* buf, int64_t len)
     ob_crc64_sse42_func = &fast_crc64_sse42_manually;
     _OB_LOG(INFO, "Use manual crc32 table lookup for crc64 calculate");
   }
+
 #elif defined(__aarch64__)
 #if 1
   ob_crc64_sse42_func = &crc64_sse42;

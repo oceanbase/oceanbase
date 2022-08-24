@@ -276,6 +276,7 @@ DEF_TO_STRING(ObLobLocator)
 const char* ObObj::MIN_OBJECT_VALUE_STR = "__OB__MIN__";
 const char* ObObj::MAX_OBJECT_VALUE_STR = "__OB__MAX__";
 const char* ObObj::NOP_VALUE_STR = "__OB__NOP__";
+const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null 
 
 OB_SERIALIZE_MEMBER(ObDataType, meta_, accuracy_, is_zero_fill_);
 OB_SERIALIZE_MEMBER(ObEnumSetInnerValue, numberic_value_, string_value_);
@@ -458,11 +459,13 @@ int ObObj::build_not_strict_default_value()
     case ObTinyTextType:
     case ObTextType:
     case ObMediumTextType:
-    case ObLongTextType: 
-    case ObJsonType: {
+    case ObLongTextType: {
       ObString null_str;
       set_string(data_type, null_str);
       meta_.set_lob_inrow();
+    } break;
+    case ObJsonType: {
+      set_json_value(data_type, OB_JSON_NULL, 2);
     } break;
     case ObBitType:
       set_bit(0);

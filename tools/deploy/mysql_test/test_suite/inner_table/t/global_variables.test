@@ -1,0 +1,24 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : nijia.nj
+#owner group : sql2
+#description : test information_schema.global_variables
+
+use information_schema;
+
+#basic
+let $old_global_increment = query_get_value(select variable_value from global_variables where variable_name = 'auto_increment_increment', variable_value, 1);
+let $old_session_increment = query_get_value(select variable_value from session_variables where variable_name = 'auto_increment_increment', variable_value, 1);
+select variable_value from global_variables where variable_name = 'auto_increment_increment';
+set @@session.auto_increment_increment = 10;
+select variable_value from global_variables where variable_name = 'auto_increment_increment';
+set @@session.auto_increment_increment = 5;
+select variable_value from session_variables where variable_name = 'auto_increment_increment';
+eval set @@global.auto_increment_increment = $old_global_increment;
+eval set @@session.auto_increment_increment = $old_session_increment;
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view  global_variables;
+desc global_variables;

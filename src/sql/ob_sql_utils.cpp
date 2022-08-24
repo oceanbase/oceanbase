@@ -2594,41 +2594,7 @@ int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr& local_addr,
   return ret;
 }
 
-int ObSQLUtils::has_global_index(
-    share::schema::ObSchemaGetterGuard* schema_guard, const uint64_t table_id, bool& exists)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema* index_schema = NULL;
-  uint64_t index_ids[OB_MAX_INDEX_PER_TABLE + 1];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
-  exists = false;
-  if (OB_ISNULL(schema_guard)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("null schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard->get_can_read_index_array(table_id, index_ids, index_count, false))) {
-    LOG_WARN("failed to get can read index", K(ret));
-  } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(index_count));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !exists && i < index_count; i++) {
-      if (OB_FAIL(schema_guard->get_table_schema(index_ids[i], index_schema))) {
-        LOG_WARN("failed to get index schema", K(ret));
-      } else if (OB_ISNULL(index_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null index schema", K(ret));
-      } else if (index_schema->is_global_index_table()) {
-        exists = true;
-      } else { /*do nothing*/
-      }
-    }
-  }
-  LOG_TRACE("finish to check whether table has global index", K(exists), K(table_id));
-
-  return ret;
-}
-
-int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx& expr_ctx, ObCastCtx& column_conv_ctx)
+int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &column_conv_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_ctx.my_session_)) {

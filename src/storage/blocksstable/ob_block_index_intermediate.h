@@ -103,7 +103,7 @@ private:
   storage::ObStoreRow intermediate_row_;  // rowkey_, buf_
   common::ObArenaAllocator allocator_;
   ObFlatRowReader row_reader_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(ObObj)];
+  storage::ObDynamicBuffer<ObObj> obj_buf_;
   int64_t rowkey_column_count_;
   bool is_inited_;
 };

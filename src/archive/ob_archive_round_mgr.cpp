@@ -18,6 +18,7 @@
 namespace oceanbase {
 namespace archive {
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 
 ObArchiveRoundMgr::ObArchiveRoundMgr()
     : add_pg_finish_(false),
@@ -25,7 +26,7 @@ ObArchiveRoundMgr::ObArchiveRoundMgr()
       started_pg_count_(0),
       incarnation_(-1),
       current_archive_round_(-1),
-      cur_piece_id_(0),
+      cur_piece_id_(OB_BACKUP_INVALID_PIECE_ID),
       cur_piece_create_date_(OB_INVALID_TIMESTAMP),
       compatible_(false),
       is_oss_(false),
@@ -55,7 +56,7 @@ void ObArchiveRoundMgr::destroy()
   started_pg_count_ = 0;
   incarnation_ = -1;
   current_archive_round_ = -1;
-  cur_piece_id_ = 0;
+  cur_piece_id_ = OB_BACKUP_INVALID_PIECE_ID;
   cur_piece_create_date_ = OB_INVALID_TIMESTAMP;
   compatible_ = false;
   is_oss_ = false;
@@ -160,17 +161,22 @@ int ObArchiveRoundMgr::set_archive_start(const int64_t incarnation, const int64_
   return ret;
 }
 
-void ObArchiveRoundMgr::set_archive_force_stop(const int64_t incarnation, const int64_t archive_round)
+int ObArchiveRoundMgr::set_archive_force_stop(
+    const int64_t incarnation, const int64_t archive_round, const int64_t piece_id)
 {
+  int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
 
-  if (OB_UNLIKELY(0 >= incarnation || 0 > archive_round)) {
-    ARCHIVE_LOG(WARN, "invalid arguments", K(incarnation), K(archive_round));
+  if (OB_UNLIKELY(0 >= incarnation || 0 > archive_round || piece_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid arguments", K(incarnation), K(archive_round), K(piece_id), K(ret));
   } else {
     incarnation_ = incarnation;
     current_archive_round_ = archive_round;
+    cur_piece_id_ = piece_id;
     log_archive_status_ = LOG_ARCHIVE_STOPPED;
   }
+  return ret;
 }
 
 int ObArchiveRoundMgr::update_cur_piece_info(const int64_t incarnation, const int64_t archive_round,
@@ -179,7 +185,7 @@ int ObArchiveRoundMgr::update_cur_piece_info(const int64_t incarnation, const in
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
   if (OB_UNLIKELY(incarnation != incarnation_ || current_archive_round_ != archive_round || 0 == cur_piece_id_ ||
-                  new_piece_id != cur_piece_id_ + 1)) {
+                  new_piece_id <= cur_piece_id_)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(WARN,
         "invalid arguments",

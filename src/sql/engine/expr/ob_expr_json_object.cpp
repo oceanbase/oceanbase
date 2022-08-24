@@ -45,6 +45,7 @@ int ObExprJsonObject::calc_result_typeN(ObExprResType& type,
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, name.length(), name.ptr());
   } else {
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i += 2) {
       if ((types_stack[i].get_type() == ObNullType)) {
         ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;

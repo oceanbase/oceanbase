@@ -1,0 +1,6 @@
+/mysqltest
+/mysqltest.down
+/ob1mysql.sh
+bquery/*
+obclient
+obclient.down

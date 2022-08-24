@@ -896,10 +896,11 @@ static OB_INLINE int common_string_number(
     }
   }
 
+  const ObCastMode cast_mode = expr.extra_;
   if (CAST_FAIL(ret)) {
-    LOG_WARN("string_number failed", K(ret));
+    LOG_WARN("string_number failed", K(ret), K(in_type), K(out_type), K(cast_mode), K(in_str));
   } else if (ObUNumberType == out_type && CAST_FAIL(numeric_negative_check(nmb))) {
-    LOG_WARN("numeric_negative_check failed", K(ret));
+    LOG_WARN("numeric_negative_check failed", K(ret), K(in_type), K(cast_mode), K(in_str));
   }
   return ret;
 }
@@ -2214,7 +2215,8 @@ static int common_string_json(const ObExpr &expr,
       if (is_need_charset_convert == false) {
         j_text.assign_ptr(in_str.ptr(), in_str.length());
       }
-      bool is_enumset_to_str = (expr.args_[0]->type_ == T_FUN_SET_TO_STR);
+      bool is_enumset_to_str = ((expr.args_[0]->type_ == T_FUN_SET_TO_STR)
+                                || (expr.args_[0]->type_ == T_FUN_ENUM_TO_STR));
       ObIJsonBase *j_base = NULL;
       ObJsonOpaque j_opaque(j_text, in_type);
       ObJsonString j_string(j_text.ptr(), j_text.length());
@@ -3476,7 +3478,8 @@ CAST_FUNC_NAME(year, int)
   {
     uint8_t in_val = child_res->get_uint8();
     int64_t out_val = 0;
-    if (OB_FAIL(common_year_int(expr, ObIntType, in_val, out_val))) {
+    ObObjType out_type = expr.datum_meta_.type_;
+    if (OB_FAIL(common_year_int(expr, out_type, in_val, out_val))) {
       LOG_WARN("common_year_int failed", K(ret));
     } else {
       res_datum.set_int(out_val);
@@ -3496,7 +3499,7 @@ CAST_FUNC_NAME(year, uint)
       LOG_WARN("year_to_int failed", K(ret));
     } else {
       out_val = static_cast<uint64_t>(val_int);
-      if (out_type < ObSmallIntType && CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
+      if (out_type < ObUSmallIntType && CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
         LOG_WARN("uint_range_check failed", K(ret));
       } else {
         res_datum.set_uint(out_val);

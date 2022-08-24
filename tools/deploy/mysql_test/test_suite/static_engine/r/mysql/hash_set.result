@@ -1,0 +1,430 @@
+drop tenant dump_tenant force;
+drop resource pool new_pool1;
+drop resource unit new_box1;
+set global parallel_max_servers=10;
+set global parallel_servers_target=10;
+alter system set _sort_area_size='2M';
+alter system set _hash_area_size='4M';
+drop table t11_set;
+drop table t22_set;
+drop table t111_var;
+drop table t333_var;
+create table t11_set(c1 int,c2 int);
+create table t22_set(c1 int,c2 int);
+insert into t11_set values(null,null);
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+insert into t11_set values(12,12);
+insert into t11_set values(12,12);
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+insert into t22_set select * from t11_set;
+create table t111_var(c0 bigint primary key,c1 varchar(4000), c2 varchar(4000), c3 varchar(4000), c4 varchar(4000), c5 varchar(4000),c6 varchar(4000), c7 longtext);
+insert into t111_var values(1,repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('a',4000));
+insert into t111_var select c0+1,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+1000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+1000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+commit;
+create table t333_var(c0 bigint ,c1 varchar(4000), c2 varchar(4000), c3 varchar(4000), c4 varchar(4000), c5 varchar(4000),c6 varchar(4000), c7 longtext);
+insert into t333_var values(1,repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('a',4000));
+insert into t333_var select c0+1,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+1000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+1000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var values(null,null,null,null,null,null,null,null);
+commit;
+result_format: 4
+explain_protocol: 1
+EXPLAIN BASIC select c1,c2 from t11_set union select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+Query Plan
+================================
+|ID|OPERATOR           |NAME   |
+--------------------------------
+|0 |HASH UNION DISTINCT|       |
+|1 | TABLE SCAN        |t11_set|
+|2 | TABLE SCAN        |t22_set|
+================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 > 5], [t22_set.c1 != 12]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 > 5 and c1 != 12;
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
+|    1 |    1 |
+|    5 |    5 |
+|   12 |   12 |
+|   22 |   22 |
+|   26 |   26 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+Query Plan
+=====================================
+|ID|OPERATOR                |NAME   |
+-------------------------------------
+|0 |MERGE INTERSECT DISTINCT|       |
+|1 | SORT                   |       |
+|2 |  TABLE SCAN            |t11_set|
+|3 | SORT                   |       |
+|4 |  TABLE SCAN            |t22_set|
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])], [INTERSECT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), sort_keys([t11_set.c1, ASC], [t11_set.c2, ASC])
+  2 - output([t11_set.c1], [t11_set.c2]), filter([t11_set.c1 > 5], [t11_set.c1 != 12]), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  3 - output([t22_set.c1], [t22_set.c2]), filter(nil), sort_keys([t22_set.c1, ASC], [t22_set.c2, ASC])
+  4 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 > 5], [t22_set.c1 != 12]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 > 5 and c1 != 12;
++------+------+
+| c1   | c2   |
++------+------+
+|   22 |   22 |
+|   26 |   26 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+Query Plan
+=================================
+|ID|OPERATOR            |NAME   |
+---------------------------------
+|0 |HASH EXCEPT DISTINCT|       |
+|1 | TABLE SCAN         |t11_set|
+|2 | TABLE SCAN         |t22_set|
+=================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])], [EXCEPT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 > 5], [t22_set.c1 != 12]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 > 5 and c1 != 12;
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
+|    1 |    1 |
+|    5 |    5 |
+|   12 |   12 |
++------+------+
+
+EXPLAIN BASIC select c1,c2 from t11_set where c1 > 5 and c1 != 12 union select c1,c2 from t22_set;
+Query Plan
+================================
+|ID|OPERATOR           |NAME   |
+--------------------------------
+|0 |HASH UNION DISTINCT|       |
+|1 | TABLE SCAN        |t11_set|
+|2 | TABLE SCAN        |t22_set|
+================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter([t11_set.c1 > 5], [t11_set.c1 != 12]), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter(nil), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 union select c1,c2 from t22_set;
++------+------+
+| c1   | c2   |
++------+------+
+|   22 |   22 |
+|   26 |   26 |
+| NULL | NULL |
+|    1 |    1 |
+|    5 |    5 |
+|   12 |   12 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set where c1 > 5 and c1 != 12 intersect select c1,c2 from t22_set;
+Query Plan
+=====================================
+|ID|OPERATOR                |NAME   |
+-------------------------------------
+|0 |MERGE INTERSECT DISTINCT|       |
+|1 | SORT                   |       |
+|2 |  TABLE SCAN            |t11_set|
+|3 | SORT                   |       |
+|4 |  TABLE SCAN            |t22_set|
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])], [INTERSECT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), sort_keys([t11_set.c1, ASC], [t11_set.c2, ASC])
+  2 - output([t11_set.c1], [t11_set.c2]), filter([t11_set.c1 > 5], [t11_set.c1 != 12]), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  3 - output([t22_set.c1], [t22_set.c2]), filter(nil), sort_keys([t22_set.c1, ASC], [t22_set.c2, ASC])
+  4 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 > 5], [t22_set.c1 != 12]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 intersect select c1,c2 from t22_set;
++------+------+
+| c1   | c2   |
++------+------+
+|   22 |   22 |
+|   26 |   26 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set where c1 > 5 and c1 != 12 minus select c1,c2 from t22_set;
+Query Plan
+==================================
+|ID|OPERATOR             |NAME   |
+----------------------------------
+|0 |MERGE EXCEPT DISTINCT|       |
+|1 | SORT                |       |
+|2 |  TABLE SCAN         |t11_set|
+|3 | SORT                |       |
+|4 |  TABLE SCAN         |t22_set|
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])], [EXCEPT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), sort_keys([t11_set.c1, ASC], [t11_set.c2, ASC])
+  2 - output([t11_set.c1], [t11_set.c2]), filter([t11_set.c1 > 5], [t11_set.c1 != 12]), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  3 - output([t22_set.c1], [t22_set.c2]), filter(nil), sort_keys([t22_set.c1, ASC], [t22_set.c2, ASC])
+  4 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 > 5], [t22_set.c1 != 12]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 minus select c1,c2 from t22_set;
++------+------+
+| c1   | c2   |
++------+------+
++------+------+
+
+EXPLAIN BASIC select c1,c2 from t11_set union select c1,c2 from t22_set where c1 <22;
+Query Plan
+================================
+|ID|OPERATOR           |NAME   |
+--------------------------------
+|0 |HASH UNION DISTINCT|       |
+|1 | TABLE SCAN        |t11_set|
+|2 | TABLE SCAN        |t22_set|
+================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 < 22]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 <22;
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
+|    1 |    1 |
+|    5 |    5 |
+|   12 |   12 |
+|   22 |   22 |
+|   26 |   26 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 <22;
+Query Plan
+====================================
+|ID|OPERATOR               |NAME   |
+------------------------------------
+|0 |HASH INTERSECT DISTINCT|       |
+|1 | TABLE SCAN            |t11_set|
+|2 | TABLE SCAN            |t22_set|
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])], [INTERSECT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter([t11_set.c1 < 22]), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 < 22]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 <22;
++------+------+
+| c1   | c2   |
++------+------+
+|    1 |    1 |
+|    5 |    5 |
+|   12 |   12 |
++------+------+
+EXPLAIN BASIC select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 <22;
+Query Plan
+=================================
+|ID|OPERATOR            |NAME   |
+---------------------------------
+|0 |HASH EXCEPT DISTINCT|       |
+|1 | TABLE SCAN         |t11_set|
+|2 | TABLE SCAN         |t22_set|
+=================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])], [EXCEPT([2])]), filter(nil)
+  1 - output([t11_set.c1], [t11_set.c2]), filter(nil), 
+      access([t11_set.c1], [t11_set.c2]), partitions(p0)
+  2 - output([t22_set.c1], [t22_set.c2]), filter([t22_set.c1 < 22]), 
+      access([t22_set.c1], [t22_set.c2]), partitions(p0)
+
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 <22;
++------+------+
+| c1   | c2   |
++------+------+
+| NULL | NULL |
+|   22 |   22 |
+|   26 |   26 |
++------+------+
+
+## dump
+set ob_query_timeout=30000000;
+EXPLAIN BASIC select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a union select * from t333_var b) order by c1 limit 1;
+Query Plan
+================================
+|ID|OPERATOR              |NAME|
+--------------------------------
+|0 |LIMIT                 |    |
+|1 | SCALAR GROUP BY      |    |
+|2 |  SUBPLAN SCAN        |    |
+|3 |   HASH UNION DISTINCT|    |
+|4 |    TABLE SCAN        |a   |
+|5 |    TABLE SCAN        |b   |
+================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)])
+  2 - output([.c0], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7], [length(.c1)]), filter(nil), 
+      access([.c0], [.c1], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil)
+  4 - output([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), filter(nil), 
+      access([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), partitions(p0)
+  5 - output([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), filter(nil), 
+      access([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), partitions(p0)
+
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a union select * from t333_var b) order by c1 limit 1;
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+| sum(c0)     | sum(length(c1)) | count(c2) | count(c3) | count(c4) | count(c5) | count(c6) | count(c7) |
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+| 28444444928 |         1024000 |       512 |       512 |       512 |       512 |       512 |       512 |
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+
+EXPLAIN BASIC select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a intersect select * from t333_var b) order by c1 limit 1;
+Query Plan
+====================================
+|ID|OPERATOR                  |NAME|
+------------------------------------
+|0 |LIMIT                     |    |
+|1 | SCALAR GROUP BY          |    |
+|2 |  SUBPLAN SCAN            |    |
+|3 |   HASH INTERSECT DISTINCT|    |
+|4 |    TABLE SCAN            |b   |
+|5 |    TABLE SCAN            |a   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)])
+  2 - output([.c0], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7], [length(.c1)]), filter(nil), 
+      access([.c0], [.c1], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7])
+  3 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])], [INTERSECT([4])], [INTERSECT([5])], [INTERSECT([6])], [INTERSECT([7])], [INTERSECT([8])]), filter(nil)
+  4 - output([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), filter(nil), 
+      access([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), partitions(p0)
+  5 - output([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), filter(nil), 
+      access([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), partitions(p0)
+
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a intersect select * from t333_var b) order by c1 limit 1;
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+| sum(c0)     | sum(length(c1)) | count(c2) | count(c3) | count(c4) | count(c5) | count(c6) | count(c7) |
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+| 28444444928 |         1024000 |       512 |       512 |       512 |       512 |       512 |       512 |
++-------------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+
+EXPLAIN BASIC select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a minus select * from t333_var b) order by c1 limit 1;
+Query Plan
+=================================
+|ID|OPERATOR               |NAME|
+---------------------------------
+|0 |LIMIT                  |    |
+|1 | SCALAR GROUP BY       |    |
+|2 |  SUBPLAN SCAN         |    |
+|3 |   HASH EXCEPT DISTINCT|    |
+|4 |    TABLE SCAN         |a   |
+|5 |    TABLE SCAN         |b   |
+=================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)], [T_FUN_COUNT(.c7)])
+  2 - output([.c0], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7], [length(.c1)]), filter(nil), 
+      access([.c0], [.c1], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7])
+  3 - output([EXCEPT([1])], [EXCEPT([2])], [EXCEPT([3])], [EXCEPT([4])], [EXCEPT([5])], [EXCEPT([6])], [EXCEPT([7])], [EXCEPT([8])]), filter(nil)
+  4 - output([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), filter(nil), 
+      access([a.c0], [a.c1], [a.c2], [a.c3], [a.c4], [a.c5], [a.c6], [a.c7]), partitions(p0)
+  5 - output([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), filter(nil), 
+      access([b.c0], [b.c1], [b.c2], [b.c3], [b.c4], [b.c5], [b.c6], [b.c7]), partitions(p0)
+
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a minus select * from t333_var b) order by c1 limit 1;
++---------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+| sum(c0) | sum(length(c1)) | count(c2) | count(c3) | count(c4) | count(c5) | count(c6) | count(c7) |
++---------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+|    NULL |            NULL |         0 |         0 |         0 |         0 |         0 |         0 |
++---------+-----------------+-----------+-----------+-----------+-----------+-----------+-----------+
+
+explain_protocol: 0
+select operation_type,
+  case when sum(optimal_executions)>0 then 1 else 0 end pass1,
+  case when sum(onepass_executions)>0 then 1 else 0 end pass2,
+  case when sum(multipasses_executions)>0 then 1 else 0 end pass3
+from oceanbase.gv$sql_workarea where con_id =xxx group by operation_type order by 1,2,3,4;
++--------------------+-------+-------+-------+
+| operation_type     | pass1 | pass2 | pass3 |
++--------------------+-------+-------+-------+
+| PHY_HASH_EXCEPT    |     0 |     1 |     0 |
+| PHY_HASH_INTERSECT |     0 |     1 |     0 |
+| PHY_HASH_UNION     |     0 |     1 |     0 |
++--------------------+-------+-------+-------+
+
+drop tenant dump_tenant force;
+drop resource pool new_pool1;
+drop resource unit new_box1;

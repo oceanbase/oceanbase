@@ -1,0 +1,93 @@
+result_format: 4
+alter system flush plan cache global;
+
+set ob_enable_plan_cache = 0;
+select char_length(1234);
++-------------------+
+| char_length(1234) |
++-------------------+
+|                 4 |
++-------------------+
+select char_length(1);
++----------------+
+| char_length(1) |
++----------------+
+|              1 |
++----------------+
+select char_length(null);
++-------------------+
+| char_length(null) |
++-------------------+
+|              NULL |
++-------------------+
+select char_length('');
++-----------------+
+| char_length('') |
++-----------------+
+|               0 |
++-----------------+
+select char_length('a');
++------------------+
+| char_length('a') |
++------------------+
+|                1 |
++------------------+
+select char_length(' a ');
++--------------------+
+| char_length(' a ') |
++--------------------+
+|                  3 |
++--------------------+
+select char_length(' a b');
++---------------------+
+| char_length(' a b') |
++---------------------+
+|                   4 |
++---------------------+
+
+drop table if exists t1;
+create table t1 (c1 int, c2 char(10), c3 varchar(10), c4 timestamp, c5 decimal);
+insert into t1 values(1, 'a ', 'a ', '2010-01-01 11:11:11', 10.1);
+select char_length(c1) from t1;
++-----------------+
+| char_length(c1) |
++-----------------+
+|               1 |
++-----------------+
+select char_length(c2) from t1;
++-----------------+
+| char_length(c2) |
++-----------------+
+|               1 |
++-----------------+
+select char_length(c3) from t1;
++-----------------+
+| char_length(c3) |
++-----------------+
+|               2 |
++-----------------+
+select char_length(c4) from t1;
++-----------------+
+| char_length(c4) |
++-----------------+
+|              19 |
++-----------------+
+select char_length(c5) from t1;
++-----------------+
+| char_length(c5) |
++-----------------+
+|               2 |
++-----------------+
+
+
+drop table if exists t1;
+create table t1 (a int);
+insert into t1 values (1), (2);
+select CHAR_LENGTH(
+  case when 62 <= (
+        select a from t1
+  ) then '1' else '22' end);
+ERROR 21000: Subquery returns more than 1 row
+
+drop table t1;
+

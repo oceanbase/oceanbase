@@ -542,6 +542,10 @@ int ObTableColumns::deduce_column_attributes(
       if (OB_FAIL(set_null_and_default_according_binary_expr(select_stmt, expr, nullable, has_default))) {
         LOG_WARN("fail to get null and default for binary expr", K(ret));
       }
+    } else if (expr->is_json_expr() ||
+               (T_FUN_SYS_CAST == expr->get_expr_type() && ob_is_json(expr->get_result_type().get_type()))) {
+      nullable = true;
+      has_default = false;
     } else {
       // ObOpRawExpr, ObCaseOpRawExpr, ObAggFunRawExpr
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {

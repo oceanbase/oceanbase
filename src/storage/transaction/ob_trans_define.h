@@ -76,10 +76,17 @@ static int64_t OB_MIN_REDO_LOG_SERIALIZE_SIZE = 131072;
 static int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_VARCHAR_LENGTH - 10 * 1024;
 
 // The participants and undo actions share the last storage space
-static int64_t OB_MAX_UNDO_ACTION_SERIALIZE_SIZE
-  = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
+static int64_t OB_MAX_UNDO_ACTION_SERIALIZE_SIZE = OB_MAX_TRANS_SERIALIZE_SIZE - OB_MIN_REDO_LOG_SERIALIZE_SIZE;
 
-class ObTransErrsim {
+struct UnuseUndoSerializeSize {
+  UnuseUndoSerializeSize()
+  {
+    UNUSED(OB_MAX_UNDO_ACTION_SERIALIZE_SIZE);
+  }
+};
+
+class ObTransErrsim
+{
 public:
   static inline bool is_memory_errsim()
   {

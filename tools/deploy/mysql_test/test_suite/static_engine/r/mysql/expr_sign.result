@@ -1,0 +1,1702 @@
+result_format: 4
+explain_protocol: 0
+
+set @@ob_enable_plan_cache = 0;
+
+drop table if exists t1, t2;
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+
+create table t2(
+  a1 char(3) primary key,
+  a2 int,
+  a3 char(3),
+  a4 float,
+  a5 datetime
+);
+insert into t2 values('AME',0,'SEA',0.100,date'1942-02-19');
+insert into t2 values('HBR',1,'SEA',0.085,date'1948-03-05');
+insert into t2 values('BOT',-2,'SEA',-0.085,date'1951-11-29');
+insert into t2 values('BMC',3,'SEA',-0.085,date'1958-09-08');
+insert into t2 values('TWU',+0,'LAX',-0.080,date'1969-10-05');
+insert into t2 values('BDL',-0,'DEN',-0.080,date'1960-11-27');
+insert into t2 values('DTX',1,'NYC',0.080,date'1961-05-04');
+insert into t2 values('PLS',-1,'WDC',-0.075,date'1949-01-02');
+insert into t2 values('ZAJ',2,'CHI',-0.075,date'1960-06-15');
+insert into t2 values('VVV',-2,'MON',0.075,date'1959-06-28');
+insert into t2 values('GTM',3,'DAL',-0.070,date'1977-09-23');
+insert into t2 values('SSJ',null,'CHI',null,date'1974-03-19');
+insert into t2 values('KKK',-3,'ATL',null,null);
+insert into t2 values('XXX',null,'MIN',null,null);
+insert into t2 values('WWW',1,'LED',null,null);
+insert into t2 values('GG3',-3,'DD3',-0.051,date'1974-03-19');
+insert into t2 values('GG2',-3,'DD2',0.052,date'1974-03-19');
+insert into t2 values('GG1',3,'DD1',0.053,date'1974-03-19');
+
+explain_protocol: 2
+EXPLAIN select sign(null) from dual;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select sign(null) from dual;
++------------+
+| sign(null) |
++------------+
+|       NULL |
++------------+
+
+EXPLAIN select c1, sign(c1) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [sign(t1.c1)]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+select c1, sign(c1) from t1;
++------+----------+
+| c1   | sign(c1) |
++------+----------+
+|    1 |        1 |
+|   -1 |       -1 |
++------+----------+
+EXPLAIN select c2, sign(c2) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c2], [sign(t1.c2)]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+
+select c2, sign(c2) from t1;
++------+----------+
+| c2   | sign(c2) |
++------+----------+
+|    2 |        1 |
+|    2 |        1 |
++------+----------+
+EXPLAIN select c3, sign(c3) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c3], [sign(t1.c3)]), filter(nil), 
+      access([t1.c3]), partitions(p0)
+
+select c3, sign(c3) from t1;
++------+----------+
+| c3   | sign(c3) |
++------+----------+
+|    1 |        1 |
+|   -1 |       -1 |
++------+----------+
+EXPLAIN select c4, sign(c4) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c4], [sign(t1.c4)]), filter(nil), 
+      access([t1.c4]), partitions(p0)
+
+select c4, sign(c4) from t1;
++------+----------+
+| c4   | sign(c4) |
++------+----------+
+|    2 |        1 |
+|    2 |        1 |
++------+----------+
+EXPLAIN select c5, sign(c5) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c5], [sign(t1.c5)]), filter(nil), 
+      access([t1.c5]), partitions(p0)
+
+select c5, sign(c5) from t1;
++------+----------+
+| c5   | sign(c5) |
++------+----------+
+|    1 |        1 |
+|   -1 |       -1 |
++------+----------+
+EXPLAIN select c6, sign(c6) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c6], [sign(t1.c6)]), filter(nil), 
+      access([t1.c6]), partitions(p0)
+
+select c6, sign(c6) from t1;
++------+----------+
+| c6   | sign(c6) |
++------+----------+
+|    2 |        1 |
+|    2 |        1 |
++------+----------+
+EXPLAIN select c7, sign(c7) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c7], [sign(t1.c7)]), filter(nil), 
+      access([t1.c7]), partitions(p0)
+
+select c7, sign(c7) from t1;
++------+----------+
+| c7   | sign(c7) |
++------+----------+
+|    1 |        1 |
+|   -1 |       -1 |
++------+----------+
+EXPLAIN select c8, sign(c8) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c8], [sign(t1.c8)]), filter(nil), 
+      access([t1.c8]), partitions(p0)
+
+select c8, sign(c8) from t1;
++------+----------+
+| c8   | sign(c8) |
++------+----------+
+|    2 |        1 |
+|    2 |        1 |
++------+----------+
+EXPLAIN select c9, sign(c9) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c9], [sign(t1.c9)]), filter(nil), 
+      access([t1.c9]), partitions(p0)
+
+select c9, sign(c9) from t1;
++------+----------+
+| c9   | sign(c9) |
++------+----------+
+|    1 |        1 |
+|   -1 |       -1 |
++------+----------+
+EXPLAIN select c10, sign(c10) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c10], [sign(t1.c10)]), filter(nil), 
+      access([t1.c10]), partitions(p0)
+
+select c10, sign(c10) from t1;
++------+-----------+
+| c10  | sign(c10) |
++------+-----------+
+|    2 |         1 |
+|    2 |         1 |
++------+-----------+
+EXPLAIN select c11, sign(c11) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c11], [sign(t1.c11)]), filter(nil), 
+      access([t1.c11]), partitions(p0)
+
+select c11, sign(c11) from t1;
++------+-----------+
+| c11  | sign(c11) |
++------+-----------+
+|    1 |         1 |
+|   -1 |        -1 |
++------+-----------+
+EXPLAIN select c12, sign(c12) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c12], [sign(t1.c12)]), filter(nil), 
+      access([t1.c12]), partitions(p0)
+
+select c12, sign(c12) from t1;
++------+-----------+
+| c12  | sign(c12) |
++------+-----------+
+|    2 |         1 |
+|    2 |         1 |
++------+-----------+
+EXPLAIN select c13, sign(c13) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c13], [sign(t1.c13)]), filter(nil), 
+      access([t1.c13]), partitions(p0)
+
+select c13, sign(c13) from t1;
++------+-----------+
+| c13  | sign(c13) |
++------+-----------+
+|  3.5 |         1 |
+| -3.5 |        -1 |
++------+-----------+
+EXPLAIN select c14, sign(c14) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c14], [sign(t1.c14)]), filter(nil), 
+      access([t1.c14]), partitions(p0)
+
+select c14, sign(c14) from t1;
++------+-----------+
+| c14  | sign(c14) |
++------+-----------+
+|  4.5 |         1 |
+|  4.5 |         1 |
++------+-----------+
+EXPLAIN select c15, sign(c15) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c15], [sign(t1.c15)]), filter(nil), 
+      access([t1.c15]), partitions(p0)
+
+select c15, sign(c15) from t1;
++------+-----------+
+| c15  | sign(c15) |
++------+-----------+
+|  5.5 |         1 |
+| -5.5 |        -1 |
++------+-----------+
+EXPLAIN select c16, sign(c16) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c16], [sign(t1.c16)]), filter(nil), 
+      access([t1.c16]), partitions(p0)
+
+select c16, sign(c16) from t1;
++------+-----------+
+| c16  | sign(c16) |
++------+-----------+
+|  6.5 |         1 |
+|  6.5 |         1 |
++------+-----------+
+EXPLAIN select c17, sign(c17) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c17], [sign(t1.c17)]), filter(nil), 
+      access([t1.c17]), partitions(p0)
+
+select c17, sign(c17) from t1;
++------+-----------+
+| c17  | sign(c17) |
++------+-----------+
+|    8 |         1 |
+|   -8 |        -1 |
++------+-----------+
+EXPLAIN select c18, sign(c18) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c18], [sign(t1.c18)]), filter(nil), 
+      access([t1.c18]), partitions(p0)
+
+select c18, sign(c18) from t1;
++------+-----------+
+| c18  | sign(c18) |
++------+-----------+
+|    9 |         1 |
+|    9 |         1 |
++------+-----------+
+EXPLAIN select c19, sign(c19) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c19], [sign(cast(t1.c19, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t1.c19]), partitions(p0)
+
+select c19, sign(c19) from t1;
++---------------------+-----------+
+| c19                 | sign(c19) |
++---------------------+-----------+
+| 2019-12-01 12:00:00 |         1 |
+| 2019-12-01 12:00:00 |         1 |
++---------------------+-----------+
+EXPLAIN select c20, sign(c20) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c20], [sign(cast(t1.c20, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t1.c20]), partitions(p0)
+
+select c20, sign(c20) from t1;
++---------------------+-----------+
+| c20                 | sign(c20) |
++---------------------+-----------+
+| 2019-12-03 06:00:00 |         1 |
+| 2019-12-03 06:00:00 |         1 |
++---------------------+-----------+
+EXPLAIN select c21, sign(c21) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c21], [sign(cast(t1.c21, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t1.c21]), partitions(p0)
+
+select c21, sign(c21) from t1;
++------+-----------+
+| c21  | sign(c21) |
++------+-----------+
+| 9.5  |         1 |
+| -9.5 |        -1 |
++------+-----------+
+EXPLAIN select c22, sign(c22) from t1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c22], [sign(cast(t1.c22, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t1.c22]), partitions(p0)
+
+select c22, sign(c22) from t1;
++------+-----------+
+| c22  | sign(c22) |
++------+-----------+
+| 10.5 |         1 |
+| 10.5 |         1 |
++------+-----------+
+
+EXPLAIN select sign(a1) from t2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |39  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(t2.a1, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a1]), partitions(p0)
+
+select sign(a1) from t2;
++----------+
+| sign(a1) |
++----------+
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
++----------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'AME'
+Warning	1292	Truncated incorrect DOUBLE value: 'BDL'
+Warning	1292	Truncated incorrect DOUBLE value: 'BMC'
+Warning	1292	Truncated incorrect DOUBLE value: 'BOT'
+Warning	1292	Truncated incorrect DOUBLE value: 'DTX'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG1'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG2'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG3'
+Warning	1292	Truncated incorrect DOUBLE value: 'GTM'
+Warning	1292	Truncated incorrect DOUBLE value: 'HBR'
+Warning	1292	Truncated incorrect DOUBLE value: 'KKK'
+Warning	1292	Truncated incorrect DOUBLE value: 'PLS'
+Warning	1292	Truncated incorrect DOUBLE value: 'SSJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'TWU'
+Warning	1292	Truncated incorrect DOUBLE value: 'VVV'
+Warning	1292	Truncated incorrect DOUBLE value: 'WWW'
+Warning	1292	Truncated incorrect DOUBLE value: 'XXX'
+Warning	1292	Truncated incorrect DOUBLE value: 'ZAJ'
+EXPLAIN select sign(a3) from t2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(t2.a3, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a3]), partitions(p0)
+
+select sign(a3) from t2;
++----------+
+| sign(a3) |
++----------+
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
+|        0 |
++----------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'DEN'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'NYC'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD1'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD2'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD3'
+Warning	1292	Truncated incorrect DOUBLE value: 'DAL'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'ATL'
+Warning	1292	Truncated incorrect DOUBLE value: 'WDC'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+Warning	1292	Truncated incorrect DOUBLE value: 'LAX'
+Warning	1292	Truncated incorrect DOUBLE value: 'MON'
+Warning	1292	Truncated incorrect DOUBLE value: 'LED'
+Warning	1292	Truncated incorrect DOUBLE value: 'MIN'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+EXPLAIN select sign(a1),a2 from t2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(t2.a1, DOUBLE(-1, -1)))], [t2.a2]), filter(nil), 
+      access([t2.a1], [t2.a2]), partitions(p0)
+
+select sign(a1),a2 from t2;
++----------+------+
+| sign(a1) | a2   |
++----------+------+
+|        0 |    0 |
+|        0 |    0 |
+|        0 |    3 |
+|        0 |   -2 |
+|        0 |    1 |
+|        0 |    3 |
+|        0 |   -3 |
+|        0 |   -3 |
+|        0 |    3 |
+|        0 |    1 |
+|        0 |   -3 |
+|        0 |   -1 |
+|        0 | NULL |
+|        0 |    0 |
+|        0 |   -2 |
+|        0 |    1 |
+|        0 | NULL |
+|        0 |    2 |
++----------+------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'AME'
+Warning	1292	Truncated incorrect DOUBLE value: 'BDL'
+Warning	1292	Truncated incorrect DOUBLE value: 'BMC'
+Warning	1292	Truncated incorrect DOUBLE value: 'BOT'
+Warning	1292	Truncated incorrect DOUBLE value: 'DTX'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG1'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG2'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG3'
+Warning	1292	Truncated incorrect DOUBLE value: 'GTM'
+Warning	1292	Truncated incorrect DOUBLE value: 'HBR'
+Warning	1292	Truncated incorrect DOUBLE value: 'KKK'
+Warning	1292	Truncated incorrect DOUBLE value: 'PLS'
+Warning	1292	Truncated incorrect DOUBLE value: 'SSJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'TWU'
+Warning	1292	Truncated incorrect DOUBLE value: 'VVV'
+Warning	1292	Truncated incorrect DOUBLE value: 'WWW'
+Warning	1292	Truncated incorrect DOUBLE value: 'XXX'
+Warning	1292	Truncated incorrect DOUBLE value: 'ZAJ'
+EXPLAIN select sign(a2) from t2 where sign(a4) >= 0;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |6        |41  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(t2.a2)]), filter([sign(t2.a4) >= 0]), 
+      access([t2.a4], [t2.a2]), partitions(p0)
+
+select sign(a2) from t2 where sign(a4) >= 0;
++----------+
+| sign(a2) |
++----------+
+|        0 |
+|        1 |
+|        1 |
+|       -1 |
+|        1 |
+|       -1 |
++----------+
+EXPLAIN select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |44  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(t2.a4)]), filter([t2.a2 < 2], [sign(t2.a2) <= 0]), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2;
++----------+
+| sign(a4) |
++----------+
+|        1 |
+|       -1 |
+|       -1 |
+|        1 |
+|       -1 |
+|     NULL |
+|       -1 |
+|       -1 |
+|        1 |
++----------+
+EXPLAIN select * from t2 group by sign(a2);
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |18       |60  |
+|1 | TABLE SCAN  |t2  |18       |41  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), 
+      group([sign(t2.a2)]), agg_func(nil)
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a2)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 group by sign(a2);
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| AME |    0 | SEA  |    0.1 | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select * from t2 order by sign(a4) ;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |SORT       |    |18       |73  |
+|1 | TABLE SCAN|t2  |18       |41  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), sort_keys([sign(t2.a4), ASC])
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a4)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 order by sign(a4) ;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| XXX | NULL | MIN  |   NULL | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| KKK |   -3 | ATL  |   NULL | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| GG3 |   -3 | DD3  | -0.051 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| HBR |    1 | SEA  |  0.085 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| DTX |    1 | NYC  |   0.08 | timestamp           |
+| VVV |   -2 | MON  |  0.075 | timestamp           |
+| AME |    0 | SEA  |    0.1 | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select * from t2 order by sign(a4) , a4 ;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |SORT       |    |18       |73  |
+|1 | TABLE SCAN|t2  |18       |41  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), sort_keys([sign(t2.a4), ASC], [t2.a4, ASC])
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a4)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 order by sign(a4) , a4 ;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| XXX | NULL | MIN  |   NULL | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| KKK |   -3 | ATL  |   NULL | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| GG3 |   -3 | DD3  | -0.051 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| VVV |   -2 | MON  |  0.075 | timestamp           |
+| DTX |    1 | NYC  |   0.08 | timestamp           |
+| HBR |    1 | SEA  |  0.085 | timestamp           |
+| AME |    0 | SEA  |    0.1 | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select * from t2 order by sign(a4) , a1 ;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |SORT       |    |18       |73  |
+|1 | TABLE SCAN|t2  |18       |41  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), sort_keys([sign(t2.a4), ASC], [t2.a1, ASC])
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a4)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 order by sign(a4) , a1 ;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| KKK |   -3 | ATL  |   NULL | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
+| XXX | NULL | MIN  |   NULL | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| GG3 |   -3 | DD3  | -0.051 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
+| AME |    0 | SEA  |    0.1 | timestamp           |
+| DTX |    1 | NYC  |   0.08 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
+| HBR |    1 | SEA  |  0.085 | timestamp           |
+| VVV |   -2 | MON  |  0.075 | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0;
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |1        |61  |
+|1 | TABLE SCAN  |t2  |18       |40  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t2.a2, BIGINT(-1, 0)))], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))]), filter([T_FUN_SUM(sign(t2.a4)) > ?]), 
+      group([abs(cast(t2.a2, BIGINT(-1, 0)))]), agg_func([T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))], [T_FUN_SUM(sign(t2.a4))])
+  1 - output([t2.a2], [abs(cast(t2.a2, BIGINT(-1, 0)))], [cast(t2.a4, DOUBLE(-1, -1))], [sign(t2.a4)]), filter(nil), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0;
++---------+---------------------+
+| abs(a2) | sum(a4)             |
++---------+---------------------+
+|       1 | 0.08999999612569809 |
++---------+---------------------+
+EXPLAIN select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) );
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |44  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter([t2.a2 = ?]), 
+      access([t2.a2], [t2.a1], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) );
++-----+------+------+-------+---------------------+
+| a1  | a2   | a3   | a4    | a5                  |
++-----+------+------+-------+---------------------+
+| DTX |    1 | NYC  |  0.08 | timestamp           |
+| HBR |    1 | SEA  | 0.085 | timestamp           |
+| WWW |    1 | LED  |  NULL | timestamp           |
++-----+------+------+-------+---------------------+
+EXPLAIN select sign( sum(a2) ) , sign( sum(a4) ) from t2;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |44  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_SUM(t2.a2))], [sign(T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1))))]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t2.a2)], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))])
+  1 - output([t2.a2], [cast(t2.a4, DOUBLE(-1, -1))]), filter(nil), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select sign( sum(a2) ) , sign( sum(a4) ) from t2;
++-----------------+-----------------+
+| sign( sum(a2) ) | sign( sum(a4) ) |
++-----------------+-----------------+
+|               0 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign( avg(a2) ) , sign( avg(a4) ) from t2;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |46  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_SUM(t2.a2) / cast(T_FUN_COUNT(t2.a2), DECIMAL(20, 0)))], [sign(T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t2.a4, DOUBLE(-1, -1))), DOUBLE(-1, -1)))]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t2.a2)], [T_FUN_COUNT(t2.a2)], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t2.a4, DOUBLE(-1, -1)))])
+  1 - output([t2.a2], [cast(t2.a4, DOUBLE(-1, -1))]), filter(nil), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select sign( avg(a2) ) , sign( avg(a4) ) from t2;
++-----------------+-----------------+
+| sign( avg(a2) ) | sign( avg(a4) ) |
++-----------------+-----------------+
+|               0 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign( max(a2) ) , sign( min(a4) ) from t2;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |44  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_MAX(t2.a2))], [sign(T_FUN_MIN(t2.a4))]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t2.a2)], [T_FUN_MIN(t2.a4)])
+  1 - output([t2.a2], [t2.a4]), filter(nil), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select sign( max(a2) ) , sign( min(a4) ) from t2;
++-----------------+-----------------+
+| sign( max(a2) ) | sign( min(a4) ) |
++-----------------+-----------------+
+|               1 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign(count(*)) from t2;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |43  |
+|1 | TABLE SCAN    |t2  |18       |39  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_COUNT(*))]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      access([t2.a1]), partitions(p0)
+
+select sign(count(*)) from t2;
++----------------+
+| sign(count(*)) |
++----------------+
+|              1 |
++----------------+
+EXPLAIN select * from t2 where sign( length(a1) ) = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |42  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter([sign(length(cast(t2.a1, VARCHAR(1048576)))) = 1]), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 where sign( length(a1) ) = 1;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| AME |    0 | SEA  |    0.1 | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| DTX |    1 | NYC  |   0.08 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
+| GG3 |   -3 | DD3  | -0.051 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| HBR |    1 | SEA  |  0.085 | timestamp           |
+| KKK |   -3 | ATL  |   NULL | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| VVV |   -2 | MON  |  0.075 | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
+| XXX | NULL | MIN  |   NULL | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(cast(t2.a1, CHAR(1024)), DOUBLE(-1, -1)))], [sign(cast(cast(t2.a3, CHAR(1024)), DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a1], [t2.a3]), partitions(p0)
+
+select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2;
++--------------------------------+--------------------------------+
+| sign( cast(a1 as char(1024)) ) | sign( cast(a3 as char(1024)) ) |
++--------------------------------+--------------------------------+
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
++--------------------------------+--------------------------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'AME'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'BDL'
+Warning	1292	Truncated incorrect DOUBLE value: 'DEN'
+Warning	1292	Truncated incorrect DOUBLE value: 'BMC'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'BOT'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'DTX'
+Warning	1292	Truncated incorrect DOUBLE value: 'NYC'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG1'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD1'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG2'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD2'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG3'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD3'
+Warning	1292	Truncated incorrect DOUBLE value: 'GTM'
+Warning	1292	Truncated incorrect DOUBLE value: 'DAL'
+Warning	1292	Truncated incorrect DOUBLE value: 'HBR'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'KKK'
+Warning	1292	Truncated incorrect DOUBLE value: 'ATL'
+Warning	1292	Truncated incorrect DOUBLE value: 'PLS'
+Warning	1292	Truncated incorrect DOUBLE value: 'WDC'
+Warning	1292	Truncated incorrect DOUBLE value: 'SSJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+Warning	1292	Truncated incorrect DOUBLE value: 'TWU'
+Warning	1292	Truncated incorrect DOUBLE value: 'LAX'
+Warning	1292	Truncated incorrect DOUBLE value: 'VVV'
+Warning	1292	Truncated incorrect DOUBLE value: 'MON'
+Warning	1292	Truncated incorrect DOUBLE value: 'WWW'
+Warning	1292	Truncated incorrect DOUBLE value: 'LED'
+Warning	1292	Truncated incorrect DOUBLE value: 'XXX'
+Warning	1292	Truncated incorrect DOUBLE value: 'MIN'
+Warning	1292	Truncated incorrect DOUBLE value: 'ZAJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+EXPLAIN select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(cast(t2.a2, CHAR(1024)), DOUBLE(-1, -1)))], [sign(cast(cast(t2.a4, CHAR(1024)), DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a2], [t2.a4]), partitions(p0)
+
+select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2;
++--------------------------------+--------------------------------+
+| sign( cast(a2 as char(1024)) ) | sign( cast(a4 as char(1024)) ) |
++--------------------------------+--------------------------------+
+|                              0 |                              1 |
+|                              0 |                             -1 |
+|                              1 |                             -1 |
+|                             -1 |                             -1 |
+|                              1 |                              1 |
+|                              1 |                              1 |
+|                             -1 |                              1 |
+|                             -1 |                             -1 |
+|                              1 |                             -1 |
+|                              1 |                              1 |
+|                             -1 |                           NULL |
+|                             -1 |                             -1 |
+|                           NULL |                           NULL |
+|                              0 |                             -1 |
+|                             -1 |                              1 |
+|                              1 |                           NULL |
+|                           NULL |                           NULL |
+|                              1 |                             -1 |
++--------------------------------+--------------------------------+
+EXPLAIN select * from t2 as t21 join t2 as t22 on sign(t21.a2) = sign(t22.a4);
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |2        |123 |
+|1 | TABLE SCAN|t21 |18       |41  |
+|2 | TABLE SCAN|t22 |18       |41  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t21.a1], [t21.a2], [t21.a3], [t21.a4], [t21.a5], [t22.a1], [t22.a2], [t22.a3], [t22.a4], [t22.a5]), filter(nil), 
+      equal_conds([sign(t21.a2) = sign(t22.a4)]), other_conds(nil)
+  1 - output([t21.a2], [t21.a1], [t21.a3], [t21.a4], [t21.a5], [sign(t21.a2)]), filter(nil), 
+      access([t21.a2], [t21.a1], [t21.a3], [t21.a4], [t21.a5]), partitions(p0)
+  2 - output([t22.a4], [t22.a1], [t22.a2], [t22.a3], [t22.a5], [sign(t22.a4)]), filter(nil), 
+      access([t22.a4], [t22.a1], [t22.a2], [t22.a3], [t22.a5]), partitions(p0)
+
+select * from t2 as t21 join t2 as t22 on sign(t21.a2) = sign(t22.a4);
++-----+------+------+--------+---------------------+-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  | a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+-----+------+------+--------+---------------------+
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 | ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
++-----+------+------+--------+---------------------+-----+------+------+--------+---------------------+
+EXPLAIN select tmp.a1 , sign(tmp.a2) , tmp.a3 , sign(tmp.a4) from t2 as tmp;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|tmp |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tmp.a1], [sign(tmp.a2)], [tmp.a3], [sign(tmp.a4)]), filter(nil), 
+      access([tmp.a1], [tmp.a2], [tmp.a3], [tmp.a4]), partitions(p0)
+
+select tmp.a1 , sign(tmp.a2) , tmp.a3 , sign(tmp.a4) from t2 as tmp;
++-----+--------------+------+--------------+
+| a1  | sign(tmp.a2) | a3   | sign(tmp.a4) |
++-----+--------------+------+--------------+
+| AME |            0 | SEA  |            1 |
+| BDL |            0 | DEN  |           -1 |
+| BMC |            1 | SEA  |           -1 |
+| BOT |           -1 | SEA  |           -1 |
+| DTX |            1 | NYC  |            1 |
+| GG1 |            1 | DD1  |            1 |
+| GG2 |           -1 | DD2  |            1 |
+| GG3 |           -1 | DD3  |           -1 |
+| GTM |            1 | DAL  |           -1 |
+| HBR |            1 | SEA  |            1 |
+| KKK |           -1 | ATL  |         NULL |
+| PLS |           -1 | WDC  |           -1 |
+| SSJ |         NULL | CHI  |         NULL |
+| TWU |            0 | LAX  |           -1 |
+| VVV |           -1 | MON  |            1 |
+| WWW |            1 | LED  |         NULL |
+| XXX |         NULL | MIN  |         NULL |
+| ZAJ |            1 | CHI  |           -1 |
++-----+--------------+------+--------------+
+
+## select for update
+EXPLAIN select sign(a2) from t2 where sign(a4) >= 0 for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |6        |41  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(t2.a2)]), filter([sign(t2.a4) >= 0]), 
+      access([t2.a1], [t2.a4], [t2.a2]), partitions(p0)
+
+select sign(a2) from t2 where sign(a4) >= 0 for update;
++----------+
+| sign(a2) |
++----------+
+|        0 |
+|        1 |
+|        1 |
+|       -1 |
+|        1 |
+|       -1 |
++----------+
+EXPLAIN select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2 for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |44  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(t2.a4)]), filter([t2.a2 < 2], [sign(t2.a2) <= 0]), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2 for update;
++----------+
+| sign(a4) |
++----------+
+|        1 |
+|       -1 |
+|       -1 |
+|        1 |
+|       -1 |
+|     NULL |
+|       -1 |
+|       -1 |
+|        1 |
++----------+
+EXPLAIN select * from t2 group by sign(a2) for update;
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |18       |60  |
+|1 | TABLE SCAN  |t2  |18       |41  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), 
+      group([sign(t2.a2)]), agg_func(nil)
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a2)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 group by sign(a2) for update;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| SSJ | NULL | CHI  |   NULL | 1974-03-19 00:00:00 |
++-----+------+------+--------+---------------------+
+EXPLAIN select * from t2 order by sign(a4) for update;
+Query Plan
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |SORT       |    |18       |73  |
+|1 | TABLE SCAN|t2  |18       |41  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter(nil), sort_keys([sign(t2.a4), ASC])
+  1 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5], [sign(t2.a4)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 order by sign(a4) for update;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| XXX | NULL | MIN  |   NULL | NULL                |
+| WWW |    1 | LED  |   NULL | NULL                |
+| SSJ | NULL | CHI  |   NULL | 1974-03-19 00:00:00 |
+| KKK |   -3 | ATL  |   NULL | NULL                |
+| BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
+| VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
++-----+------+------+--------+---------------------+
+EXPLAIN select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0 for update;
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |1        |61  |
+|1 | TABLE SCAN  |t2  |18       |40  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t2.a2, BIGINT(-1, 0)))], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))]), filter([T_FUN_SUM(sign(t2.a4)) > ?]), 
+      group([abs(cast(t2.a2, BIGINT(-1, 0)))]), agg_func([T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))], [T_FUN_SUM(sign(t2.a4))])
+  1 - output([t2.a2], [abs(cast(t2.a2, BIGINT(-1, 0)))], [cast(t2.a4, DOUBLE(-1, -1))], [sign(t2.a4)]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0 for update;
++---------+---------------------+
+| abs(a2) | sum(a4)             |
++---------+---------------------+
+|       1 | 0.08999999612569809 |
++---------+---------------------+
+EXPLAIN select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) ) for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |44  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter([t2.a2 = ?]), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) ) for update;
++-----+------+------+-------+---------------------+
+| a1  | a2   | a3   | a4    | a5                  |
++-----+------+------+-------+---------------------+
+| DTX |    1 | NYC  |  0.08 | timestamp           |
+| HBR |    1 | SEA  | 0.085 | timestamp           |
+| WWW |    1 | LED  |  NULL | timestamp           |
++-----+------+------+-------+---------------------+
+EXPLAIN select sign( sum(a2) ) , sign( sum(a4) ) from t2 for update;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |44  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_SUM(t2.a2))], [sign(T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1))))]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t2.a2)], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))])
+  1 - output([t2.a2], [cast(t2.a4, DOUBLE(-1, -1))]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select sign( sum(a2) ) , sign( sum(a4) ) from t2 for update;
++-----------------+-----------------+
+| sign( sum(a2) ) | sign( sum(a4) ) |
++-----------------+-----------------+
+|               0 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign( avg(a2) ) , sign( avg(a4) ) from t2 for update;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |46  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_SUM(t2.a2) / cast(T_FUN_COUNT(t2.a2), DECIMAL(20, 0)))], [sign(T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t2.a4, DOUBLE(-1, -1))), DOUBLE(-1, -1)))]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t2.a2)], [T_FUN_COUNT(t2.a2)], [T_FUN_SUM(cast(t2.a4, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t2.a4, DOUBLE(-1, -1)))])
+  1 - output([t2.a2], [cast(t2.a4, DOUBLE(-1, -1))]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select sign( avg(a2) ) , sign( avg(a4) ) from t2 for update;
++-----------------+-----------------+
+| sign( avg(a2) ) | sign( avg(a4) ) |
++-----------------+-----------------+
+|               0 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign( max(a2) ) , sign( min(a4) ) from t2 for update;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |44  |
+|1 | TABLE SCAN    |t2  |18       |40  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_MAX(t2.a2))], [sign(T_FUN_MIN(t2.a4))]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t2.a2)], [T_FUN_MIN(t2.a4)])
+  1 - output([t2.a2], [t2.a4]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select sign( max(a2) ) , sign( min(a4) ) from t2 for update;
++-----------------+-----------------+
+| sign( max(a2) ) | sign( min(a4) ) |
++-----------------+-----------------+
+|               1 |              -1 |
++-----------------+-----------------+
+EXPLAIN select sign(count(*)) from t2 for update;
+Query Plan
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |43  |
+|1 | TABLE SCAN    |t2  |18       |39  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(T_FUN_COUNT(*))]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      access([t2.a1]), partitions(p0)
+
+select sign(count(*)) from t2 for update;
++----------------+
+| sign(count(*)) |
++----------------+
+|              1 |
++----------------+
+EXPLAIN select * from t2 where sign( length(a1) ) = 1 for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |1        |42  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), filter([sign(length(cast(t2.a1, VARCHAR(1048576)))) = 1]), 
+      access([t2.a1], [t2.a2], [t2.a3], [t2.a4], [t2.a5]), partitions(p0)
+
+select * from t2 where sign( length(a1) ) = 1 for update;
++-----+------+------+--------+---------------------+
+| a1  | a2   | a3   | a4     | a5                  |
++-----+------+------+--------+---------------------+
+| AME |    0 | SEA  |    0.1 | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| BMC |    3 | SEA  | -0.085 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| DTX |    1 | NYC  |   0.08 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
+| GG3 |   -3 | DD3  | -0.051 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| HBR |    1 | SEA  |  0.085 | timestamp           |
+| KKK |   -3 | ATL  |   NULL | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| VVV |   -2 | MON  |  0.075 | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
+| XXX | NULL | MIN  |   NULL | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
++-----+------+------+--------+---------------------+
+EXPLAIN select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2 for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(cast(t2.a1, CHAR(1024)), DOUBLE(-1, -1)))], [sign(cast(cast(t2.a3, CHAR(1024)), DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a1], [t2.a3]), partitions(p0)
+
+select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2 for update;
++--------------------------------+--------------------------------+
+| sign( cast(a1 as char(1024)) ) | sign( cast(a3 as char(1024)) ) |
++--------------------------------+--------------------------------+
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
+|                              0 |                              0 |
++--------------------------------+--------------------------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'AME'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'BDL'
+Warning	1292	Truncated incorrect DOUBLE value: 'DEN'
+Warning	1292	Truncated incorrect DOUBLE value: 'BMC'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'BOT'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'DTX'
+Warning	1292	Truncated incorrect DOUBLE value: 'NYC'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG1'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD1'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG2'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD2'
+Warning	1292	Truncated incorrect DOUBLE value: 'GG3'
+Warning	1292	Truncated incorrect DOUBLE value: 'DD3'
+Warning	1292	Truncated incorrect DOUBLE value: 'GTM'
+Warning	1292	Truncated incorrect DOUBLE value: 'DAL'
+Warning	1292	Truncated incorrect DOUBLE value: 'HBR'
+Warning	1292	Truncated incorrect DOUBLE value: 'SEA'
+Warning	1292	Truncated incorrect DOUBLE value: 'KKK'
+Warning	1292	Truncated incorrect DOUBLE value: 'ATL'
+Warning	1292	Truncated incorrect DOUBLE value: 'PLS'
+Warning	1292	Truncated incorrect DOUBLE value: 'WDC'
+Warning	1292	Truncated incorrect DOUBLE value: 'SSJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+Warning	1292	Truncated incorrect DOUBLE value: 'TWU'
+Warning	1292	Truncated incorrect DOUBLE value: 'LAX'
+Warning	1292	Truncated incorrect DOUBLE value: 'VVV'
+Warning	1292	Truncated incorrect DOUBLE value: 'MON'
+Warning	1292	Truncated incorrect DOUBLE value: 'WWW'
+Warning	1292	Truncated incorrect DOUBLE value: 'LED'
+Warning	1292	Truncated incorrect DOUBLE value: 'XXX'
+Warning	1292	Truncated incorrect DOUBLE value: 'MIN'
+Warning	1292	Truncated incorrect DOUBLE value: 'ZAJ'
+Warning	1292	Truncated incorrect DOUBLE value: 'CHI'
+EXPLAIN select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 for update;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |18       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([sign(cast(cast(t2.a2, CHAR(1024)), DOUBLE(-1, -1)))], [sign(cast(cast(t2.a4, CHAR(1024)), DOUBLE(-1, -1)))]), filter(nil), 
+      access([t2.a1], [t2.a2], [t2.a4]), partitions(p0)
+
+select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 for update;
++--------------------------------+--------------------------------+
+| sign( cast(a2 as char(1024)) ) | sign( cast(a4 as char(1024)) ) |
++--------------------------------+--------------------------------+
+|                              0 |                              1 |
+|                              0 |                             -1 |
+|                              1 |                             -1 |
+|                             -1 |                             -1 |
+|                              1 |                              1 |
+|                              1 |                              1 |
+|                             -1 |                              1 |
+|                             -1 |                             -1 |
+|                              1 |                             -1 |
+|                              1 |                              1 |
+|                             -1 |                           NULL |
+|                             -1 |                             -1 |
+|                           NULL |                           NULL |
+|                              0 |                             -1 |
+|                             -1 |                              1 |
+|                              1 |                           NULL |
+|                           NULL |                           NULL |
+|                              1 |                             -1 |
++--------------------------------+--------------------------------+
+

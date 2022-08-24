@@ -132,14 +132,14 @@ private:
   int frozen_old_piece_(const bool force_stop, const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece,
       const uint64_t tenant_id, const int64_t server_tenant_max_ts, int64_t& max_ts);
   int frozen_sys_old_piece_(
-      const bool force_stop, const int64_t max_ts, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece);
-  int update_tenant_log_archive_backup_process_(const share::ObLogArchiveBackupInfo& sys_info,
-      const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece,
-      const share::ObServerTenantLogArchiveStatus& tenant_status);
-  int update_active_piece_checkpoint_ts_(const share::ObLogArchiveBackupInfo& sys_info,
-      const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, share::ObBackupPieceInfo& sys_piece_info);
-  int update_active_piece_checkpoint_ts_(const share::ObBackupPieceInfoKey& piece_key, const int64_t checkpoint_ts);
-  int update_sys_active_piece_checkpoint_ts_(const int64_t checkpoint_ts, share::ObBackupPieceInfo& sys_piece_info);
+      const bool force_stop, const int64_t max_ts, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece);
+  int update_sys_log_archive_backup_process_(const share::ObLogArchiveBackupInfo &cur_info,
+      share::ObLogArchiveBackupInfo &new_info, const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece);
+  int update_tenant_log_archive_backup_process_(const share::ObLogArchiveBackupInfo &sys_info,
+      const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece,
+      const share::ObServerTenantLogArchiveStatus &tenant_status);
+  int update_active_piece_checkpoint_ts_(const share::ObBackupPieceInfoKey &piece_key, const int64_t checkpoint_ts);
+  int update_sys_active_piece_checkpoint_ts_(const int64_t checkpoint_ts, share::ObBackupPieceInfo &sys_piece_info);
 
   // for ObLogArchiveStatus::STOPPING status
   int stop_log_archive_backup_(const bool force_stop, share::ObLogArchiveBackupInfo& cur_sys_info,

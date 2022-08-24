@@ -597,7 +597,9 @@ inline int ObExprGeneratorImpl::visit_regex_expr(ObOpRawExpr& expr, ObExprRegexp
     } else {
       // The value && pattern are const, it is calculated in pre_calculate
       regexp_op->set_value_is_const(value_expr->has_flag(IS_CONST) || value_expr->has_flag(IS_CONST_EXPR));
-      regexp_op->set_pattern_is_const(pattern_expr->has_flag(IS_CONST) || pattern_expr->has_flag(IS_CONST_EXPR));
+      if (!pattern_expr->has_flag(CNT_EXEC_PARAM)) {
+        regexp_op->set_pattern_is_const(pattern_expr->has_flag(IS_CONST) || pattern_expr->has_flag(IS_CONST_EXPR));
+      }
     }
   }
   return ret;

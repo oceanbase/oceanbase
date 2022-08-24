@@ -1749,7 +1749,13 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
     LOG_DEBUG("[xilin debug]padding", K(padding_num), K(key_column_cnt), K(index_name));
 
     const bool index_back = (index_id != table_id);
-    if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
+    bool is_index_supported = true;
+    if (index_back && OB_FAIL(check_index_supported(schema_guard, table_schema, index_id, is_index_supported))) {
+      LOG_WARN("fail to check index supported", K(ret), K(index_id));
+    } else if (OB_UNLIKELY(!is_index_supported)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("index type is not supported by table api", K(ret), K(table_id), K(index_id));
+    } else if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
     } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL))) {
     } else if (OB_FAIL(table_param.convert(*table_schema, ((NULL == index_schema) ? *table_schema: *index_schema),
                                            output_column_ids, index_back))) {
@@ -2348,6 +2354,32 @@ int ObTableTTLDeleteRowIterator::init(const ObTableTTLOperation &ttl_operation)
     cur_rowkey_ = ttl_operation.start_rowkey_;
     cur_qualifier_ = ttl_operation.start_qualifier_;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+// check whether index is supported in given table schema by table api
+// global index is not supported by table api. specially, global index in non-partitioned
+// table was optimized to local index, which we can support.
+int ObTableService::check_index_supported(schema::ObSchemaGetterGuard &schema_guard,
+    const schema::ObSimpleTableSchemaV2 *table_schema, uint64_t index_id, bool &is_supported)
+{
+  int ret = OB_SUCCESS;
+  is_supported = true;
+  const schema::ObSimpleTableSchemaV2 *index_schema = NULL;
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("null table schema", K(ret));
+  } else if (table_schema->is_partitioned_table()) {
+    if (OB_FAIL(schema_guard.get_table_schema(index_id, index_schema))) {
+      LOG_WARN("fail to get table schmea", K(ret), K(index_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("get null index schema", K(ret), K(index_id));
+    } else if (index_schema->is_global_index_table()) {
+      is_supported = false;
+    }
   }
   return ret;
 }

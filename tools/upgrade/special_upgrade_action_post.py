@@ -17,7 +17,7 @@ def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
 #因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 ####========******####======== actions begin ========####******========####
-  run_upgrade_job(conn, cur, "3.1.4")
+  run_upgrade_job(conn, cur, "3.1.5")
   return
 ####========******####========= actions end =========####******========####
 

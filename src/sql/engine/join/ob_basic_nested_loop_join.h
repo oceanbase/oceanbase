@@ -29,7 +29,7 @@ protected:
     friend class ObBasicNestedLoopJoin;
 
   public:
-    ObBasicNestedLoopJoinCtx(ObExecContext& ctx) : ObJoinCtx(ctx), open_right_child_(false)
+    ObBasicNestedLoopJoinCtx(ObExecContext &ctx) : ObJoinCtx(ctx)
     {}
     virtual ~ObBasicNestedLoopJoinCtx()
     {}
@@ -38,18 +38,9 @@ protected:
     {
       ObJoinCtx::destroy();
     }
-    bool open_right_child()
-    {
-      return open_right_child_;
-    }
-    void set_open_right_child()
-    {
-      open_right_child_ = true;
-    }
 
   protected:
     common::ObExprCtx expr_ctx_;
-    bool open_right_child_;
   };
   struct RescanParam {
     OB_UNIS_VERSION_V(1);
@@ -104,15 +95,11 @@ protected:
   virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
-    return OPEN_SELF_ONLY;
+    return OPEN_SELF_FIRST;
   }
-  virtual int inner_open(ObExecContext& ctx) const override;
-  virtual int inner_close(ObExecContext& exec_ctx) const override;
-  virtual int rescan(ObExecContext& exec_ctx) const override;
-  // open left child
-  int open_left_child(ObExecContext& ctx) const;
-  // open right child
-  int open_right_child(ObBasicNestedLoopJoinCtx& join_ctx) const;
+  virtual int inner_open(ObExecContext &ctx) const override;
+  virtual int inner_close(ObExecContext &exec_ctx) const override;
+  virtual int rescan(ObExecContext &exec_ctx) const override;
 
 protected:
   common::ObFixedArray<RescanParam, common::ObIAllocator> rescan_params_;  // @todo a better name

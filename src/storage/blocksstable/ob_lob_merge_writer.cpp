@@ -30,6 +30,7 @@ ObLobMergeWriter::ObLobMergeWriter()
       data_store_desc_(NULL),
       macro_start_seq_(-1),
       use_old_macro_block_count_(0),
+      allocator_("LobMergeWriter"),
       is_inited_(false)
 {}
 
@@ -39,12 +40,14 @@ ObLobMergeWriter::~ObLobMergeWriter()
 void ObLobMergeWriter::reset()
 {
   orig_lob_macro_blocks_.reset();
+  buffer_.reset();
   block_write_ctx_.reset();
   lob_writer_.reset();
   data_store_desc_ = NULL;
   macro_start_seq_ = -1;
   use_old_macro_block_count_ = 0;
   result_row_.reset();
+  allocator_.reset();
   is_inited_ = false;
 }
 
@@ -79,6 +82,8 @@ int ObLobMergeWriter::init(const ObMacroDataSeq& macro_start_seq, const ObDataSt
     } else if (!block_write_ctx_.file_handle_.is_valid() &&
                OB_FAIL(block_write_ctx_.file_handle_.assign(data_store_desc.file_handle_))) {
       STORAGE_LOG(WARN, "Failed to assign file handle", K(ret));
+    } else if (OB_FAIL(buffer_.init(&allocator_))) {
+      STORAGE_LOG(WARN, "Failed to init buffer_, ", K(ret));
     } else {
       macro_start_seq_ = lob_data_seq.get_data_seq();
       use_old_macro_block_count_ = 0;
@@ -410,10 +415,14 @@ int ObLobMergeWriter::write_lob_obj(
 int ObLobMergeWriter::copy_row_(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
-  result_row_ = row;
-  result_row_.row_val_.cells_ = reinterpret_cast<ObObj*>(buffer_);
-  result_row_.row_val_.count_ = row.row_val_.count_;
-  MEMCPY(buffer_, row.row_val_.cells_, sizeof(ObObj) * row.row_val_.count_);
+  if OB_FAIL(buffer_.reserve(row.row_val_.count_)) {
+    STORAGE_LOG(WARN, "fail to reserve memory for buffer_, ", K(ret));
+  } else {
+    result_row_ = row;
+    result_row_.row_val_.cells_ = buffer_.get_buf();
+    result_row_.row_val_.count_ = row.row_val_.count_;
+    MEMCPY(buffer_.get_buf(), row.row_val_.cells_, sizeof(ObObj) * row.row_val_.count_);
+  }
   return ret;
 }
 

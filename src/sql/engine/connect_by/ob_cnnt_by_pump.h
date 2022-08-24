@@ -16,6 +16,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_fixed_array.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 namespace sql {
@@ -47,6 +48,10 @@ private:
     {
       --alloc_cnt_;
       allocator_.free(ptr);
+    }
+    void set_tenant_id(int64_t tenant_id)
+    {
+      allocator_.set_tenant_id(tenant_id);
     }
 
   private:

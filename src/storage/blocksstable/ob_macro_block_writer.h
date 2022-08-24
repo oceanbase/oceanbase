@@ -206,10 +206,9 @@ private:
   ObColumnMap column_map_;
   ObColumnMap index_column_map_;
   blocksstable::ObMacroBlockReader macro_reader_;
-  char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];          // for reader to get row
-  char checker_obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(common::ObObj)];  // for calc or varify checksum, can
-                                                                                    // NOT use same buf of data row
-  ObMicroBlockReader check_flat_reader_;
+  void* obj_buf_;          // for reader to get row
+  void* checker_obj_buf_;  // for calc or varify checksum, can not use same buf of data row
+  ObMicroBlockReader check_flat_reader_; 
   ObSparseMicroBlockReader check_sparse_reader_;
   common::ObArray<uint32_t> micro_rowkey_hashs_;
   storage::ObSSTableRowkeyHelper* rowkey_helper_;

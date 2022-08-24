@@ -112,47 +112,64 @@ int ObTableApiExecuteP::process()
 int ObTableApiExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
+  uint64_t table_id = arg_.table_id_;
+  bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
-  switch (table_operation.type()) {
-    case ObTableOperationType::INSERT:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT;
-      ret = process_insert();
-      break;
-    case ObTableOperationType::GET:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
-      ret = process_get();
-      break;
-    case ObTableOperationType::DEL:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_DELETE;
-      ret = process_del();
-      break;
-    case ObTableOperationType::UPDATE:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_UPDATE;
-      ret = process_update();
-      break;
-    case ObTableOperationType::INSERT_OR_UPDATE:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
-      ret = process_insert_or_update();
-      break;
-    case ObTableOperationType::REPLACE:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
-      ret = process_replace();
-      break;
-    case ObTableOperationType::INCREMENT:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
-      ret = process_increment();
-      break;
-    case ObTableOperationType::APPEND:
-      stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
-      // for both increment and append
-      ret = process_increment();
-      break;
-    default:
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid table operation type", K(ret), K(table_operation));
-      break;
+  if (ObTableOperationType::GET != table_operation.type()) {
+    if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+      LOG_WARN("failed to get table id", K(ret));
+    } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+      LOG_WARN("fail to check index supported", K(ret), K(table_id));
+    }
   }
-  audit_row_count_ = 1;
+  
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_UNLIKELY(!is_index_supported)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index type is not supported by table api", K(ret));
+  } else {
+    switch (table_operation.type()) {
+      case ObTableOperationType::INSERT:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT;
+        ret = process_insert();
+        break;
+      case ObTableOperationType::GET:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
+        ret = process_get();
+        break;
+      case ObTableOperationType::DEL:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_DELETE;
+        ret = process_del();
+        break;
+      case ObTableOperationType::UPDATE:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_UPDATE;
+        ret = process_update();
+        break;
+      case ObTableOperationType::INSERT_OR_UPDATE:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
+        ret = process_insert_or_update();
+        break;
+      case ObTableOperationType::REPLACE:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
+        ret = process_replace();
+        break;
+      case ObTableOperationType::INCREMENT:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
+        ret = process_increment();
+        break;
+      case ObTableOperationType::APPEND:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
+        // for both increment and append
+        ret = process_increment();
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid table operation type", K(ret), K(table_operation));
+        break;
+    }
+    audit_row_count_ = 1;
+  }
 
 #ifndef NDEBUG
   // debug mode

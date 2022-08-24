@@ -21,6 +21,7 @@
 #include "sql/engine/sort/ob_base_sort.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/ob_phy_operator.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 namespace sql {
@@ -61,6 +62,10 @@ private:
     {
       --alloc_cnt_;
       allocator_.free(ptr);
+    }
+    void set_tenant_id(int64_t tenant_id)
+    {
+      allocator_.set_tenant_id(tenant_id);
     }
 
   private:

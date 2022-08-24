@@ -466,6 +466,11 @@ int ObRawExpr::postorder_replace(ObRawExprVisitor& visitor)
   return ret;
 }
 
+bool ObRawExpr::is_json_expr() const
+{
+  return (T_FUN_SYS_JSON_OBJECT <= get_expr_type() && get_expr_type() <= T_FUN_JSON_OBJECTAGG) ? true : false;
+}
+
 ////////////////////////////////////////////////////////////////
 ObRawExpr*& ObTerminalRawExpr::get_param_expr(int64_t index)
 {

@@ -574,7 +574,8 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
     if (OB_SUCC(ret)) {
       if (is_bool) {
         ret = ObObjCaster::bool_to_json(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);
-      } else if (OB_UNLIKELY(item_type_obj1 == T_FUN_SET_TO_STR)) {
+      } else if (OB_UNLIKELY(item_type_obj1 == T_FUN_SET_TO_STR)
+                 || OB_UNLIKELY(item_type_obj1 == T_FUN_ENUM_TO_STR)) {
         ret = ObObjCaster::enumset_to_json(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);
       } else {
         ret = ObObjCaster::to_type(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);

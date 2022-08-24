@@ -63,6 +63,7 @@ void ObBlockIntermediateBuilder::reset()
 {
   intermediate_row_.reset();
   header_.reset();
+  obj_buf_.reset();
   allocator_.reset();
   rowkey_column_count_ = 0;
   is_inited_ = false;
@@ -80,14 +81,20 @@ int ObBlockIntermediateBuilder::init(const int64_t rowkey_column_count)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObBlockIntermediateBuilder init twice", K(ret));
+  } else if (OB_FAIL(obj_buf_.init(&allocator_))) {
+    STORAGE_LOG(WARN, "fail to init obj_buf_, ", K(ret));
   } else {
     rowkey_column_count_ = rowkey_column_count;
-    intermediate_row_.flag_ = common::ObActionFlag::OP_ROW_EXIST;
-    intermediate_row_.row_val_.cells_ = new (obj_buf_) ObObj[rowkey_column_count_ + 1];
-    intermediate_row_.row_val_.count_ = rowkey_column_count_ + 1;
-    intermediate_row_.row_val_.projector_ = nullptr;
-    intermediate_row_.row_val_.projector_size_ = 0;
-    is_inited_ = true;
+    if (OB_FAIL(obj_buf_.reserve(rowkey_column_count_ + 1))) {
+      STORAGE_LOG(WARN, "fail to reserve memory for obj_buf_, ", K(ret));
+    } else {
+      intermediate_row_.flag_ = common::ObActionFlag::OP_ROW_EXIST;
+      intermediate_row_.row_val_.cells_ = obj_buf_.get_buf();
+      intermediate_row_.row_val_.count_ = rowkey_column_count_ + 1;
+      intermediate_row_.row_val_.projector_ = nullptr;
+      intermediate_row_.row_val_.projector_size_ = 0;
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -146,7 +153,7 @@ int ObBlockIntermediateBuilder::set_rowkey(const ObDataStoreDesc& desc, const Ob
         K(rowkey_column_count_),
         K(desc),
         K(ret));
-  } else if (OB_FAIL(row_reader_.read_compact_rowkey(desc.column_types_,
+  } else if (OB_FAIL(row_reader_.read_compact_rowkey(desc.column_types_.get_buf(),
                  desc.rowkey_column_count_,
                  s_rowkey.ptr(),
                  s_rowkey.length(),

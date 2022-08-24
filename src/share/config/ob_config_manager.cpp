@@ -321,8 +321,6 @@ int ObConfigManager::update_local(int64_t expected_version)
             system_config_.get_version(),
             "current_version",
             current_version_,
-            "newest_version",
-            newest_version_,
             "expected_version",
             expected_version);
       } else {
@@ -370,26 +368,16 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat /* = 
   } else if (version < current_version_) {
     LOG_WARN("Local config is newer than rs, weird", K_(current_version), K(version));
   } else if (version > current_version_) {
-    mutex_.lock();
-    if (version > newest_version_) {
-      // local:current_version_, newest:newest_version, got:version
-      LOG_INFO("Got new config version", K_(current_version), K_(newest_version), K(version));
-      newest_version_ = version;  // for rootserver hb to others
-      update_task_.update_local_ = true;
-      schedule_task = true;
-    } else if (version < newest_version_) {
-      // In order to prevent the new version from being
-      // overwritten by the old version, take the latest value here
-      version = newest_version_;
-    }
-    mutex_.unlock();
+    // local:current_version_, got:version
+    LOG_INFO("Got new config version", K_(current_version), K(version));
+    update_task_.update_local_ = true;
+    schedule_task = true;
   }
 
   if (schedule_task) {
     bool schedule = true;
     if (!inited_) {
       // if got a config version before manager init, ignore this version
-      newest_version_ = current_version_;
       schedule = false;
       ret = OB_NOT_INIT;
       LOG_WARN("Couldn't update config because timer is NULL", K(ret));
@@ -409,7 +397,7 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat /* = 
       int tmp_ret = TG_TASK_EXIST(lib::TGDefIDs::CONFIG_MGR, update_task_, task_exist);
       if (task_exist) {
         TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
-        LOG_INFO("Cancel pending update task", K(tmp_ret), K_(current_version), K_(newest_version), K(version));
+        LOG_INFO("Cancel pending update task", K(tmp_ret), K_(current_version), K(version));
       }
     }
 
@@ -441,7 +429,7 @@ void ObConfigManager::UpdateTask::runTimerTask()
     THIS_WORKER.set_timeout_ts(INT64_MAX);
     if (config_mgr_->current_version_ == version) {
       ret = OB_ALREADY_DONE;
-    } else if (config_mgr_->newest_version_ > version) {
+    } else if (config_mgr_->current_version_ > version) {
       ret = OB_CANCELED;
     } else if (update_local_) {
       config_mgr_->current_version_ = version;
@@ -469,8 +457,6 @@ void ObConfigManager::UpdateTask::runTimerTask()
             old_current_version,
             "current_version",
             config_mgr_->current_version_,
-            "newest_version",
-            config_mgr_->newest_version_,
             "expected_version",
             version);
       }

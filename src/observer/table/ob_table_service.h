@@ -360,6 +360,11 @@ private:
                             storage::ObTableScanParam &scan_param,
                             bool for_update = false);
   int check_htable_query_args(const ObTableQuery &query);
+  int check_index_supported(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const share::schema::ObSimpleTableSchemaV2 *table_schema,
+                            uint64_t index_id,
+                            bool &is_supported);
+
 private:
   int fill_new_entity(
       bool returning_rowkey,

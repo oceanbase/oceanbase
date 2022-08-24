@@ -201,10 +201,16 @@ int ObTableQueryAndMutateP::try_process()
   int32_t result_count = 0;
   int64_t affected_rows = 0;
   const ObTableOperation &mutation = mutations.at(0);
-  if (OB_FAIL(rewrite_htable_query_if_need(mutation, const_cast<ObTableQuery &>(query)))) {
-    LOG_WARN("fail to rewrite query", K(ret));
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+  bool is_index_supported = true;
+  if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+    LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  } else if (OB_UNLIKELY(!is_index_supported)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index type is not supported by table api", K(ret));
+  } else if (OB_FAIL(rewrite_htable_query_if_need(mutation, const_cast<ObTableQuery &>(query)))) {
+    LOG_WARN("fail to rewrite query", K(ret));
   } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
     LOG_WARN("failed to get part id", K(ret));
   } else if (1 != part_ids.count()) {

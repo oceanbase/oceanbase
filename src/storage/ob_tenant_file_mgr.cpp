@@ -63,7 +63,7 @@ int ObTenantFileMgr::alloc_file(const bool is_sys_table, ObStorageFileHandle& fi
     LOG_WARN("ObTenantFileMgr has not been inited", K(ret));
   } else {
     ObTenantFileValue* value = nullptr;
-    if (OB_FAIL(choose_tenant_file(is_sys_table, true /*need create new file*/, tenant_file_map_, value))) {
+    if (OB_FAIL(choose_tenant_file(true /*need create new file*/, tenant_file_map_, value))) {
       LOG_WARN("fail to choose tenant file", K(ret));
     }
 
@@ -72,8 +72,7 @@ int ObTenantFileMgr::alloc_file(const bool is_sys_table, ObStorageFileHandle& fi
       const int64_t create_file_cnt = 1L;
       if (OB_FAIL(create_new_tenant_file(write_slog, is_sys_table, create_file_cnt))) {
         LOG_WARN("fail to create new files", K(ret));
-      } else if (OB_FAIL(choose_tenant_file(
-                     is_sys_table, false /*do not need create new file*/, tenant_file_map_, value))) {
+      } else if (OB_FAIL(choose_tenant_file(false /*do not need create new file*/, tenant_file_map_, value))) {
         LOG_WARN("fail to choose tenant file", K(ret));
       } else if (nullptr == value) {
         ret = OB_ERR_UNEXPECTED;
@@ -186,24 +185,23 @@ int ObTenantFileMgr::alloc_exist_file(const ObTenantFileInfo& file_info, const b
 }
 
 int ObTenantFileMgr::choose_tenant_file(
-    const bool is_sys_table, const bool need_create_file, TENANT_FILE_MAP& tenant_file_map, ObTenantFileValue*& value)
+    const bool need_create_file, TENANT_FILE_MAP& tenant_file_map, ObTenantFileValue*& value)
 {
   int ret = OB_SUCCESS;
   value = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantFileMgr has not been inited", K(ret));
-  } else if (!is_sys_table && tenant_file_map.size() < TENANT_MIN_FILE_CNT && need_create_file) {
+  } else if (0 == tenant_file_map.size() && need_create_file) {
     // alloc one more file
   } else {
     for (TENANT_FILE_MAP::const_iterator iter = tenant_file_map.begin(); OB_SUCC(ret) && iter != tenant_file_map.end();
          ++iter) {
       ObTenantFileValue* tmp_value = iter->second;
-      if (tmp_value->file_info_.tenant_file_super_block_.is_sys_table_file_ != is_sys_table) {
-        // do nothing
-      } else if ((tmp_value->file_info_.get_pg_cnt() < ObTenantFileValue::MAX_REF_CNT_PER_FILE || is_sys_table) &&
-                 TENANT_FILE_NORMAL == tmp_value->file_info_.tenant_file_super_block_.status_ &&
-                 tmp_value->storage_file_.file_->get_mark_and_sweep_status()) {
+      if (OB_UNLIKELY(!tmp_value->is_owner_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file value is not owner", K(ret), K(*tmp_value));
+      } else if (TENANT_FILE_NORMAL == tmp_value->file_info_.tenant_file_super_block_.status_) {
         if (nullptr == value) {
           value = iter->second;
         } else {
@@ -212,13 +210,6 @@ int ObTenantFileMgr::choose_tenant_file(
       }
     }
   }
-  return ret;
-}
-
-int ObTenantFileMgr::generate_unique_file_id(int64_t& file_id)
-{
-  int ret = OB_SUCCESS;
-  file_id = ObTimeUtility::current_time();
   return ret;
 }
 
@@ -244,10 +235,8 @@ int ObTenantFileMgr::create_new_tenant_file(const bool write_slog, const bool cr
     for (int64_t i = 0; OB_SUCC(ret) && i < file_cnt; ++i) {
       void* buf = nullptr;
       ObTenantFileValue* value = nullptr;
-      int64_t file_id = -1;
-      if (OB_FAIL(generate_unique_file_id(file_id))) {
-        LOG_WARN("fail to generate unique file id", K(file_id));
-      } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObTenantFileValue)))) {
+      const int64_t file_id = ObTimeUtility::current_time();
+      if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObTenantFileValue)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory for tenant file value", K(ret));
       } else {

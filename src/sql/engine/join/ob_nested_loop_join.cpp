@@ -92,9 +92,6 @@ int ObNestedLoopJoin::inner_open(ObExecContext& exec_ctx) const
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL right table scan", K(ret));
     } else if (FALSE_IT(right_table_scan->set_batch_scan_flag(true))) {
-      // never reach
-    } else if (OB_FAIL(open_right_child(*join_ctx))) {
-      LOG_WARN("failed to open right child", K(ret));
     }
   }
   return ret;
@@ -591,8 +588,6 @@ int ObNestedLoopJoin::bij_fill_left_rows(ObExecContext& exec_ctx) const
   } else if (PHY_TABLE_SCAN != right_op_->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("right op is not TABLE_SCAN type, plan is incorrect", K(ret), K(right_op_->get_type()));
-  } else if (OB_FAIL(open_right_child(*join_ctx))) {
-    LOG_WARN("failed to open right child", K(ret));
   } else {
     ObTableScan* right_table_scan = static_cast<ObTableScan*>(right_op_);
     if (OB_FAIL(right_table_scan->batch_rescan_init(exec_ctx))) {

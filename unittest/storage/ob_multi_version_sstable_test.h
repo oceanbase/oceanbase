@@ -402,6 +402,12 @@ void ObMultiVersionSSTableTest::prepare_data_store_desc(
   desc_.schema_version_ = SCHEMA_VERSION;
   desc_.snapshot_version_ = DATA_VERSION;
   strcpy(desc_.compressor_name_, compressor_name);
+  desc_.column_ids_.init(&allocator_);
+  desc_.column_types_.init(&allocator_);
+  desc_.column_orders_.init(&allocator_);
+  desc_.column_ids_.reserve(column_cnt_);
+  desc_.column_types_.reserve(column_cnt_);
+  desc_.column_orders_.reserve(column_cnt_);
   for (int i = 0; i < column_cnt_; i++) {
     desc_.column_ids_[i] = i + OB_APP_MIN_COLUMN_ID;
     desc_.column_types_[i] = data_iter_[0].get_column_type()[i];

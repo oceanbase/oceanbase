@@ -97,6 +97,7 @@ int ObTransformJoinElimination::eliminate_join_self_foreign_key(ObDMLStmt *stmt,
     LOG_WARN("eliminate join in joined table failed", K(ret));
   } else {
     trans_happened = from_happedend | joined_happedend;
+    LOG_TRACE("succ to do self foreign key elimination", K(from_happedend), K(joined_happedend));
   }
   return ret;
 }
@@ -115,23 +116,27 @@ int ObTransformJoinElimination::eliminate_join_in_from_base_table(ObDMLStmt* stm
     LOG_WARN("failed to get equal set conditions", K(ret));
   } else if (OB_FAIL(extract_candi_table(stmt, stmt->get_from_items(), candi_tables, child_candi_tables))) {
     LOG_WARN("failed to extract candi tables", K(ret));
-  } else if (OB_FAIL(eliminate_candi_tables(stmt, conds, candi_tables, child_candi_tables, trans_happened))) {
+  } else if (OB_FAIL(eliminate_candi_tables(stmt, conds, candi_tables, child_candi_tables, true, trans_happened))) {
     LOG_WARN("failed to eliminate candi tables", K(ret));
   }
   return ret;
 }
 
-int ObTransformJoinElimination::do_join_elimination_self_key(ObDMLStmt* stmt, TableItem* source_table,
-    TableItem* target_table, bool& trans_happened,
-    EqualSets* equal_sets)  // default value NULL
+
+int ObTransformJoinElimination::do_join_elimination_self_key(ObDMLStmt *stmt, TableItem *source_table,
+    TableItem *target_table, bool is_from_base_table, bool &trans_happened, EqualSets *equal_sets /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
   ObStmtMapInfo stmt_map_info;
   bool can_be_eliminated = false;
+  bool is_on_null_side = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(source_table) || OB_ISNULL(target_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ctx_), K(ret));
+  } else if (OB_FAIL(check_on_null_side(
+                 stmt, source_table->table_id_, target_table->table_id_, is_from_base_table, is_on_null_side))) {
+    LOG_WARN("failed to check table on null side", K(ret));
   } else if (OB_FAIL(ObTransformUtils::check_loseless_join(stmt,
                  ctx_,
                  source_table,
@@ -139,6 +144,7 @@ int ObTransformJoinElimination::do_join_elimination_self_key(ObDMLStmt* stmt, Ta
                  ctx_->session_info_,
                  ctx_->schema_checker_,
                  stmt_map_info,
+                 is_on_null_side,
                  can_be_eliminated,
                  equal_sets))) {
     LOG_WARN("failed to check whether transformation is possible", K(ret));
@@ -157,8 +163,29 @@ int ObTransformJoinElimination::do_join_elimination_self_key(ObDMLStmt* stmt, Ta
   return ret;
 }
 
-int ObTransformJoinElimination::do_join_elimination_foreign_key(ObDMLStmt* stmt, const TableItem* child_table,
-    const TableItem* parent_table, const ObForeignKeyInfo* foreign_key_info)
+int ObTransformJoinElimination::check_on_null_side(
+    ObDMLStmt *stmt, uint64_t source_table_id, uint64_t target_table_id, bool is_from_base_table, bool &is_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  is_on_null_side = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (is_from_base_table) {
+    if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, source_table_id, is_on_null_side))) {
+      LOG_WARN("failed to check table is on null side", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side_of_parent(
+            stmt, source_table_id, target_table_id, is_on_null_side))) {
+      LOG_WARN("failed to check table is on null side", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformJoinElimination::do_join_elimination_foreign_key(ObDMLStmt *stmt, const TableItem *child_table,
+    const TableItem *parent_table, const ObForeignKeyInfo *foreign_key_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -1706,7 +1733,8 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt* stmt, 
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(eliminate_candi_tables(stmt, inner_join_conds, other_tables, child_candi_tables, is_happened))) {
+    } else if (OB_FAIL(eliminate_candi_tables(
+                   stmt, inner_join_conds, other_tables, child_candi_tables, false, is_happened))) {
       LOG_WARN("failed to eliminate candi tables", K(ret));
     } else if (OB_FAIL(append(outer_join_tables, other_tables))) {
       LOG_WARN("failed to append tables", K(ret));
@@ -1724,8 +1752,9 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt* stmt, 
   return ret;
 }
 
-int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray<ObRawExpr*>& conds,
-    ObIArray<TableItem*>& candi_tables, ObIArray<TableItem*>& child_candi_tables, bool& trans_happened)
+int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &conds,
+    ObIArray<TableItem *> &candi_tables, ObIArray<TableItem *> &child_candi_tables, bool is_from_base_table,
+    bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -1751,7 +1780,7 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
           } else if (!is_valid) {
             // do nothing
           } else if (OB_FAIL(do_join_elimination_self_key(
-                         stmt, candi_tables.at(i), candi_tables.at(j), is_happened, equal_sets))) {
+                         stmt, candi_tables.at(i), candi_tables.at(j), is_from_base_table, is_happened, equal_sets))) {
             LOG_WARN("failed to eliminate self key join in base table", K(ret));
           } else if (!is_happened) {
             /*do nothing*/
@@ -1768,8 +1797,12 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
             LOG_WARN("check table can be eliminated failed", K(ret));
           } else if (!is_valid) {
             // do nothing
-          } else if (OB_FAIL(do_join_elimination_self_key(
-                         stmt, child_candi_tables.at(j), candi_tables.at(i), is_happened, equal_sets))) {
+          } else if (OB_FAIL(do_join_elimination_self_key(stmt,
+                         child_candi_tables.at(j),
+                         candi_tables.at(i),
+                         is_from_base_table,
+                         is_happened,
+                         equal_sets))) {
             LOG_WARN("failed to do join elimination erlf key", K(ret));
           } else if (!is_happened) {
             /*do nothing*/

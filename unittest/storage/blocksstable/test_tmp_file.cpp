@@ -585,11 +585,20 @@ TEST_F(TestTmpFile, test_big_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info.buf_ = read_buf;
 
+  io_info.size_ = write_size;
+  ret = ObTmpFileManager::get_instance().aio_read(io_info, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(handle.size_ < handle.expect_read_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.wait(timeout_ms));
+  ASSERT_EQ(write_size, handle.get_data_size());
+  int cmp = memcmp(handle.get_buffer(), write_buf, handle.get_data_size());
+  ASSERT_EQ(0, cmp);
+
   io_info.size_ = macro_block_size;
   ret = ObTmpFileManager::get_instance().pread(io_info, 100, timeout_ms, handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(macro_block_size, handle.get_data_size());
-  int cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
   ASSERT_EQ(0, cmp);
 
   io_info.size_ = write_size;
@@ -1068,7 +1077,7 @@ TEST_F(TestTmpFile, test_write_less_than_macro_block_size)
   ASSERT_EQ(0, cmp);
 
   ret = ObTmpFileManager::get_instance().pread(io_info, 20, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(256 - 20, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + 20, 256 - 20);
   ASSERT_EQ(0, cmp);
@@ -1157,7 +1166,7 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
 
   io_info.size_ = macro_block_size;
   ret = ObTmpFileManager::get_instance().pread(io_info, 400, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(macro_block_size + 256 - 400, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + 400, macro_block_size + 256 - 400);
   ASSERT_EQ(0, cmp);
@@ -1178,7 +1187,7 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
 
   io_info.size_ = 200;
   ret = ObTmpFileManager::get_instance().pread(io_info, macro_block_size + 100, timeout_ms, handle);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_ITER_END, ret);
   ASSERT_EQ(156, handle.get_data_size());
   cmp = memcmp(handle.get_buffer(), write_buf + macro_block_size + 100, handle.get_data_size());
   ASSERT_EQ(0, cmp);
@@ -1593,12 +1602,15 @@ TEST_F(TestTmpFile, test_page_buddy)
   int32_t page_nums = 64;
   int32_t alloced_page_nums = 64;
   int32_t start_page_id = -1;
+  ASSERT_EQ(true, page_buddy_1.is_empty());
   ret = page_buddy_1.alloc(page_nums, start_page_id, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_1.is_empty());
 
   int32_t start_page_id_2 = -1;
   ret = page_buddy_1.alloc(page_nums, start_page_id_2, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_1.is_empty());
 
   page_buddy_1.free(start_page_id + 63, page_nums - 63);
   page_buddy_1.free(start_page_id_2 + 1, page_nums - 1);
@@ -1611,11 +1623,14 @@ TEST_F(TestTmpFile, test_page_buddy)
 
   ObTmpFilePageBuddy page_buddy_2;
   ret = page_buddy_2.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, page_buddy_2.is_empty());
   start_page_id = 0;
   ret = page_buddy_2.alloc_all_pages();
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, page_buddy_2.is_empty());
 
-  int32_t free_nums = 511 - 129;
+  int32_t free_nums = 252 - 129;
   page_buddy_2.free(start_page_id + 129, free_nums);
   free_nums = 127;
   page_buddy_2.free(start_page_id + 2, free_nums);
@@ -1636,6 +1651,20 @@ TEST_F(TestTmpFile, test_page_buddy)
     ASSERT_EQ(true, page_buddy_3.is_empty());
     STORAGE_LOG(INFO, "page buddy", K(page_buddy_3));
   }
+
+  ObTmpFilePageBuddy page_buddy_4;
+  ret = page_buddy_4.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, page_buddy_4.is_empty());
+
+  page_nums = 2;
+  alloced_page_nums = -1;
+  start_page_id = -1;
+  ASSERT_EQ(true, page_buddy_4.is_empty());
+  ret = page_buddy_4.alloc(page_nums, start_page_id, alloced_page_nums);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(alloced_page_nums, page_nums);
+  ASSERT_EQ(false, page_buddy_4.is_empty());
 }
 
 }  // end namespace unittest
