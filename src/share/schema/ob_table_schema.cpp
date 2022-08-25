@@ -3267,7 +3267,7 @@ int ObTableSchema::add_col_to_id_hash_array(ObColumnSchemaV2* column)
     LOG_WARN("The column is NULL", K(ret));
   } else {
     if (NULL == id_hash_array_) {
-      id_hash_array_mem_size = get_id_hash_array_mem_size(common::OB_MAX_COLUMN_NUMBER);
+      id_hash_array_mem_size = get_id_hash_array_mem_size(0);
       if (NULL == (buf = static_cast<char*>(alloc(id_hash_array_mem_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("Fail to allocate memory for id_hash_array, ", K(id_hash_array_mem_size));
@@ -3370,7 +3370,7 @@ int ObTableSchema::add_col_to_name_hash_array(ObColumnSchemaV2* column)
     CompatModeGuard g(compat_mode);
     ObColumnSchemaHashWrapper column_name_key(column->get_column_name_str());
     if (NULL == name_hash_array_) {
-      name_hash_array_mem_size = get_name_hash_array_mem_size(common::OB_MAX_COLUMN_NUMBER);
+      name_hash_array_mem_size = get_name_hash_array_mem_size(0);
       if (NULL == (buf = static_cast<char*>(alloc(name_hash_array_mem_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("Fail to allocate memory, ", K(name_hash_array_mem_size), K(ret));
