@@ -729,7 +729,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt, ObSqlCtx &context, ObResultSe
         stmt_info->set_is_expired();
         ps_sql_key.set_db_id(stmt_info->get_db_id());
         ps_sql_key.set_ps_sql(stmt_info->get_ps_sql());
-        if (OB_FAIL(ps_cache->erase_stmt_item(ps_sql_key))) {
+        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, ps_sql_key))) {
           LOG_WARN("fail to erase stmt item", K(ret), K(*stmt_info));
         }
         need_do_real_prepare = true;

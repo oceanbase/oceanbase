@@ -152,6 +152,31 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtItemDerefAtomicOp);
 };
 
+class ObPsStmtItemEraseAtomicOp {
+  typedef common::hash::HashMapPair<ObPsSqlKey, ObPsStmtItem *> PsStmtIdKV;
+
+public:
+  ObPsStmtItemEraseAtomicOp(ObPsStmtId id) : stmt_id_(id), ret_(common::OB_SUCCESS), need_erase_(false)
+  {}
+  virtual ~ObPsStmtItemEraseAtomicOp()
+  {}
+  void operator()(const PsStmtIdKV &entry);
+  int get_ret() const
+  {
+    return ret_;
+  }
+  bool need_erase() const
+  {
+    return need_erase_;
+  }
+
+private:
+  ObPsStmtId stmt_id_;
+  int ret_;
+  bool need_erase_;
+  DISALLOW_COPY_AND_ASSIGN(ObPsStmtItemEraseAtomicOp);
+};
+
 class ObPsStmtInfoRefAtomicOp {
   typedef common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo*> PsStmtInfoKV;
 

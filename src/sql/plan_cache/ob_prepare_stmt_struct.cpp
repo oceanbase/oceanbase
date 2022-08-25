@@ -61,12 +61,19 @@ ObPsStmtItem::ObPsStmtItem()
       db_id_(OB_INVALID_ID),
       ps_sql_(),
       stmt_id_(OB_INVALID_STMT_ID),
+      is_expired_evicted_(false),
       allocator_(NULL),
       external_allocator_(NULL)
 {}
 
 ObPsStmtItem::ObPsStmtItem(const ObPsStmtId ps_stmt_id)
-    : ref_count_(1), db_id_(OB_INVALID_ID), ps_sql_(), stmt_id_(ps_stmt_id), allocator_(NULL), external_allocator_(NULL)
+    : ref_count_(1),
+      db_id_(OB_INVALID_ID),
+      ps_sql_(),
+      stmt_id_(ps_stmt_id),
+      is_expired_evicted_(false),
+      allocator_(NULL),
+      external_allocator_(NULL)
 {}
 
 ObPsStmtItem::ObPsStmtItem(ObIAllocator* inner_allocator, ObIAllocator* external_allocator)
@@ -74,6 +81,7 @@ ObPsStmtItem::ObPsStmtItem(ObIAllocator* inner_allocator, ObIAllocator* external
       db_id_(OB_INVALID_ID),
       ps_sql_(),
       stmt_id_(OB_INVALID_STMT_ID),
+      is_expired_evicted_(false),
       allocator_(inner_allocator),
       external_allocator_(external_allocator)
 {}
@@ -102,6 +110,7 @@ ObPsStmtItem& ObPsStmtItem::operator=(const ObPsStmtItem& other)
     db_id_ = other.get_db_id();
     ps_sql_ = other.get_ps_sql();
     stmt_id_ = other.get_ps_stmt_id();
+    is_expired_evicted_ = other.is_expired_evicted_;
   }
   return *this;
 }
