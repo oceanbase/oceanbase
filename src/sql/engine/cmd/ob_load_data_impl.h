@@ -924,6 +924,7 @@ public:
 
   ObLoadDataImpl()
       :  // arguments
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_LOAD_DATA_IMPL),
         part_level_(share::schema::PARTITION_LEVEL_ZERO),
         part_num_(0),
         initial_step_(FIND_LINE_START),

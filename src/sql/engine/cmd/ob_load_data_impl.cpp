@@ -2666,6 +2666,7 @@ ObShuffleTaskHandle::ObShuffleTaskHandle(
     ObInsertValueGenerator& main_generator, ObPartIdCalculator& main_calculator, ObDataFragMgr& main_datafrag_mgr)
     : exec_ctx(GCTX.session_mgr_),
       data_buffer(NULL),
+      schema_guard(share::schema::ObSchemaMgrItem::MOD_SHUFFLE_TASK_HANDLE),
       generator(main_generator),
       calculator(main_calculator),
       datafrag_mgr(main_datafrag_mgr)

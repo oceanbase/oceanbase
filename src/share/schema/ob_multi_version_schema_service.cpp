@@ -1735,7 +1735,7 @@ int ObMultiVersionSchemaService::add_schema_mgr_info(ObSchemaGetterGuard& schema
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("tenant schema is not readable now", K(ret), K(tenant_id), K(snapshot_version), K(schema_status));
   } else {
-    ObSchemaMgrHandle handle;
+    ObSchemaMgrHandle handle(schema_guard.mod_);
     ObSchemaMgrInfo schema_mgr_info(tenant_id, snapshot_version, schema_mgr, handle, schema_status);
     int64_t count = schema_guard.schema_mgr_infos_.count();
     // Guaranteed to be monotonically increasing when inserted

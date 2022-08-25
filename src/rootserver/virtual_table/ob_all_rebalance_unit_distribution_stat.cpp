@@ -21,7 +21,7 @@ using namespace oceanbase::share::schema;
 ObAllRebalanceUnitDistributionStat::ObAllRebalanceUnitDistributionStat(ObUnitManager& unit_mgr,
     ObILeaderCoordinator& leader_coordinator, ObServerManager& server_mgr, ObZoneManager& zone_mgr)
     : server_balance_plan_(unit_mgr, leader_coordinator, server_mgr, zone_mgr),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       svr_ip_buf_(),
       unit_info_(),
       inited_(false)

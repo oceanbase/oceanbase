@@ -36,7 +36,7 @@ ObTableApiRowIterator::ObTableApiRowIterator()
   : part_service_(NULL),
     schema_service_(NULL),
     ctx_(NULL),
-    schema_guard_(),
+    schema_guard_(share::schema::ObSchemaMgrItem::MOD_TABLE_API_ROW_ITER),
     table_schema_(NULL),
     table_id_(0),
     tenant_id_(0),

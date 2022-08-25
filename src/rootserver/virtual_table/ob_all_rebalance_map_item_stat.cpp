@@ -36,7 +36,7 @@ ObAllRebalanceMapItemStat::ObAllRebalanceMapItemStat()
       cur_map_size_(-1),
       cur_zone_idx_(-1),
       cur_item_idx_(-1),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       table_schema_(NULL),
       columns_()
 {}

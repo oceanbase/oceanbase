@@ -91,6 +91,26 @@ ObSchemaGetterGuard::ObSchemaGetterGuard()
       local_allocator_(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY),
       schema_mgr_infos_(DEFAULT_TENANT_NUM, ModulePageAllocator(local_allocator_)),
       schema_objs_(DEFAULT_RESERVE_SIZE, ModulePageAllocator(local_allocator_)),
+      mod_(ObSchemaMgrItem::MOD_STACK),
+      schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
+      is_standby_cluster_(false),
+      is_inited_(false)
+{}
+
+ObSchemaGetterGuard::ObSchemaGetterGuard(const ObSchemaMgrItem::Mod mod)
+    : schema_service_(NULL),
+      snapshot_version_(OB_INVALID_VERSION),
+      session_id_(0),
+      mgr_(NULL),
+      mock_allocator_(ObModIds::OB_MOCK_SCHEMA),
+      mock_gts_schema_(nullptr),
+      mock_simple_gts_schema_(nullptr),
+      schema_helper_(mock_allocator_),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      local_allocator_(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY),
+      schema_mgr_infos_(DEFAULT_TENANT_NUM, ModulePageAllocator(local_allocator_)),
+      schema_objs_(DEFAULT_RESERVE_SIZE, ModulePageAllocator(local_allocator_)),
+      mod_(mod),
       schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
       is_standby_cluster_(false),
       is_inited_(false)
@@ -139,6 +159,8 @@ int ObSchemaGetterGuard::reset()
   }
   schema_mgr_infos_.reset();
   local_allocator_.reuse();
+
+  // mod_ should not be reset
 
   is_inited_ = false;
   return ret;

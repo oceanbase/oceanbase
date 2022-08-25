@@ -1834,7 +1834,7 @@ ObUniqueCheckingDag::ObUniqueCheckingDag()
       part_service_(NULL),
       pkey_(),
       schema_service_(NULL),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_UNIQ_CHECK),
       index_schema_(NULL),
       data_table_schema_(NULL),
       callback_(NULL),

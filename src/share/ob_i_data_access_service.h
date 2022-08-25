@@ -301,7 +301,8 @@ public:
   share::schema::ObSchemaGetterGuard& get_schema_guard()
   {
     if (OB_UNLIKELY(NULL == schema_guard_)) {
-      schema_guard_ = new (schema_guard_buf_) share::schema::ObSchemaGetterGuard;
+      schema_guard_ = new (schema_guard_buf_)
+          share::schema::ObSchemaGetterGuard(share::schema::ObSchemaMgrItem::MOD_VTABLE_SCAN_PARAM);
     }
     return *schema_guard_;
   }

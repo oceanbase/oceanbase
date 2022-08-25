@@ -46,6 +46,7 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo& session)
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
       sql_ctx_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_INNER_SQL_RESULT),
       opened_(false),
       session_(session),
       result_set_(nullptr),

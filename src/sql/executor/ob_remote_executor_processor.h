@@ -27,6 +27,7 @@ public:
         exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
         vt_iter_factory_(*gctx_.vt_iter_creator_),
         sql_ctx_(),
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_REMOTE_EXE),
         trans_state_(),
         exec_errcode_(common::OB_SUCCESS),
         process_timestamp_(0),

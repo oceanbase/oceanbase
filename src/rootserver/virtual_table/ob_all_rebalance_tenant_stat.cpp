@@ -31,7 +31,7 @@ ObAllRebalanceTenantStat::ObAllRebalanceTenantStat()
       all_tenants_(),
       cur_tenant_idx_(-1),
       cur_zone_idx_(-1),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       table_schema_(NULL),
       columns_()
 {}
