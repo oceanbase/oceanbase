@@ -98,13 +98,14 @@ public:
   {}
 
   // find param that should no be paramalize
-  int find_special_paramalize(const ParseNode& parse_node, int64_t& question_mark_count,
-      common::ObIArray<int64_t>& no_check_type_offsets, common::ObIArray<int64_t>& not_param_offsets);
+  int find_special_paramalize(const ParseNode &parse_node, int64_t &question_mark_count,
+      common::ObIArray<int64_t> &no_check_type_offsets, common::ObBitSet<> &need_check_type_offsets,
+      common::ObIArray<int64_t> &not_param_offsets);
 
 private:
   static const int64_t INSERT_VALUE_VECTOR_CHILD_LEVEL = 1;
-  int traverse(TraverseContext& ctx, common::ObIArray<int64_t>& no_check_type_offsets,
-      common::ObIArray<int64_t>& not_param_offsets);
+  int traverse(TraverseContext &ctx, common::ObIArray<int64_t> &no_check_type_offsets,
+      common::ObBitSet<> &need_check_type_offsets, common::ObIArray<int64_t> &not_param_offsets);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSqlParamHelper);

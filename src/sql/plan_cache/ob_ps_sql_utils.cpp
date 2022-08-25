@@ -35,8 +35,8 @@ int ObPsSqlUtils::deep_copy_str(common::ObIAllocator& allocator, const common::O
   return ret;
 }
 
-int ObPsSqlParamHelper::find_special_paramalize(const ParseNode& parse_node, int64_t& question_mark_count,
-    ObIArray<int64_t>& no_check_type_offsets, ObIArray<int64_t>& not_param_offsets)
+int ObPsSqlParamHelper::find_special_paramalize(const ParseNode &parse_node, int64_t &question_mark_count,
+    ObIArray<int64_t> &no_check_type_offsets, ObBitSet<> &need_check_type_offsets, ObIArray<int64_t> &not_param_offsets)
 {
   int ret = OB_SUCCESS;
   TraverseContext ctx;
@@ -44,7 +44,7 @@ int ObPsSqlParamHelper::find_special_paramalize(const ParseNode& parse_node, int
   question_mark_count = 0;
 
   SQL_PC_LOG(DEBUG, "traverse syntax tree for ps mode", "result_tree", SJ(ObParserResultPrintWrapper(parse_node)));
-  if (OB_FAIL(traverse(ctx, no_check_type_offsets, not_param_offsets))) {
+  if (OB_FAIL(traverse(ctx, no_check_type_offsets, need_check_type_offsets, not_param_offsets))) {
     LOG_WARN("traverse node failed", K(ret));
   } else {
     question_mark_count = ctx.question_marks_.num_members();
@@ -58,8 +58,10 @@ int ObPsSqlParamHelper::find_special_paramalize(const ParseNode& parse_node, int
 //  return bret;
 //}
 
-int ObPsSqlParamHelper::traverse(
-    TraverseContext& ctx, ObIArray<int64_t>& no_check_type_offsets, ObIArray<int64_t>& not_param_offsets)
+// TODO: 这里目前比较受限，只能判断是否对整个表达式的子节点是否not param
+// 应该按照ObSqlParameterization::mark_tree()的方式来做
+int ObPsSqlParamHelper::traverse(TraverseContext &ctx, ObIArray<int64_t> &no_check_type_offsets,
+    ObBitSet<> &need_check_type_offsets, ObIArray<int64_t> &not_param_offsets)
 {
   int ret = OB_SUCCESS;
   bool is_overflow = false;
@@ -87,12 +89,17 @@ int ObPsSqlParamHelper::traverse(
           LOG_INFO("pushback offset success", K(ctx));
         }
       }
-      if (OB_SUCC(ret) && INSERT_VALUE_VECTOR_CHILD_LEVEL == ctx.insert_vector_level_) {
+      if (OB_FAIL(ret)) {
+      } else if (INSERT_VALUE_VECTOR_CHILD_LEVEL == ctx.insert_vector_level_) {
         // insert values (?, ?), ? do not need check type
         if (OB_FAIL(no_check_type_offsets.push_back(parent.value_))) {
           LOG_WARN("failed to push back element", K(ret));
         } else {
           LOG_DEBUG("pushback offset success", K(ret), K(parent.value_));
+        }
+      } else {
+        if (OB_FAIL(need_check_type_offsets.add_member(parent.value_))) {
+          LOG_WARN("failed to add member", K(parent.value_));
         }
       }
       if (OB_SUCC(ret)) {
@@ -124,7 +131,7 @@ int ObPsSqlParamHelper::traverse(
           ctx.is_child_not_param_ = true;
         }
         ctx.node_ = parent.children_[i];
-        if (OB_FAIL(traverse(ctx, no_check_type_offsets, not_param_offsets))) {
+        if (OB_FAIL(traverse(ctx, no_check_type_offsets, need_check_type_offsets, not_param_offsets))) {
           LOG_WARN("visit child node failed", K(i));
         }
       }
