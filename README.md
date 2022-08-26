@@ -17,6 +17,9 @@ OceanBase Database is a native distributed relational database. It is developed 
    - Advanced SQL engine with CBO optimizer, distributed execution scheduler and global index
    - Fast data loading through parallel DML, and with only 50% storage cost under compression
    - Broke world record with 15.26 million QphH in TPC-H 30TB benchmark in 2021
+   
+   
+   
 - Multi-tenant
    - Create multiple tenants (instances) in one OceanBase cluster with isolated resource and access
    - Multidimensional and transparently scale up/out for each tenant, and scaling up takes effect immediately
