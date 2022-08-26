@@ -426,7 +426,7 @@ int ObLogWriteFilePool::update_free_quota(const char* path, const int64_t percen
   } else if (OB_FAIL(get_total_used_size(used_size))) {
     ret = OB_IO_ERROR;  
     COMMON_LOG(ERROR, "get_total_used_size fail", K(ret));
-  } else if(OB_FAIL(calculate_free_quota(path, used_size, percent, limit_percent))){
+  } else if (OB_FAIL(calculate_free_quota(path, used_size, percent, limit_percent))){
     ret = OB_IO_ERROR;
     CLOG_LOG(ERROR, "calculate free quota error", K(ret), K(path), K(errno), KERRMSG);
   } 
@@ -457,10 +457,10 @@ int ObLogWriteFilePool::calculate_free_quota(const char* path, const int64_t use
   if (OB_UNLIKELY(0 != statvfs(path, &svfs))) {
     ret = OB_IO_ERROR;
     CLOG_LOG(ERROR, "statvfs error", K(ret), K(path), K(errno), KERRMSG);
-  } else{
-    if (log_disk_size != 0){
+  } else {
+    if (log_disk_size != 0) {
       total_size = log_disk_size;
-    }else{
+    } else {
       total_size = (int64_t)svfs.f_bsize * (int64_t)svfs.f_blocks;
     }
     

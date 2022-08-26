@@ -492,7 +492,9 @@ bool ObConfigLogDiskSizeChecker::check(const ObConfigItem& t) const
       const int64_t total_disk_size = (int64_t)svfs.f_bsize * (int64_t)svfs.f_blocks;
       is_valid = (log_disk_size <= total_disk_size);
       if (!is_valid) {
-        OB_LOG(ERROR,"log_disk_size is greater than total disk size.", K(log_disk_size), K(total_disk_size));
+        OB_LOG(ERROR,"log_disk_size is greater than total disk size.", 
+          K(log_disk_size), 
+          K(total_disk_size));
       }
     }
   }

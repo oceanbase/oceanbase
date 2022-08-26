@@ -33,4 +33,3 @@ config:
   enable_merge_by_turn: 'FALSE'
   syslog_io_bandwidth_limit: '10G'
   enable_async_syslog: 'FALSE'
-  log_disk_size: '30G'
