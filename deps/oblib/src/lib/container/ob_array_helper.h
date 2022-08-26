@@ -29,7 +29,7 @@ public:
       : ObIArray<T>(base_address, index), capacity_(capacity)
   {}
 
-  ObArrayHelper() : capacity_(0)
+  ObArrayHelper() : ObIArray<T>(), capacity_(0)
   {}
 
   void init(int64_t capacity, T* base_address, int64_t index = 0)

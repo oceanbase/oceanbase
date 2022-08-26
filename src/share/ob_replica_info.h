@@ -248,7 +248,6 @@ struct SchemaZoneReplicaAttrSet {
   {}
   virtual ~SchemaZoneReplicaAttrSet()
   {}
-
   int64_t get_convert_size() const;
   int64_t get_full_replica_num() const
   {

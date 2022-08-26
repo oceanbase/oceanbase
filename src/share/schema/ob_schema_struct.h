@@ -55,6 +55,14 @@ namespace share {
 namespace schema {
 typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObWrapperAllocator, false>
     ParamStore;
+#define ARRAY_NEW_CONSTRUCT(TYPE, ARRAY)                        \
+  for (int64_t i = 0; i < ARRAY.count() && OB_SUCC(ret); ++i) { \
+    TYPE *this_set = &ARRAY.at(i);                              \
+    if (nullptr == (this_set = new (this_set) TYPE())) {        \
+      ret = OB_ERR_UNEXPECTED;                                  \
+      LOG_WARN("placement new return nullptr", K(ret));         \
+    }                                                           \
+  }                                                             
 class ObSchemaGetterGuard;
 class ObSimpleTableSchemaV2;
 class ObTableSchema;

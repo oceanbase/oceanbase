@@ -1034,18 +1034,15 @@ int ObSimpleTableSchemaV2::set_zone_replica_attr_array(const common::ObIArray<Sc
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc failed", K(ret), K(alloc_size));
   } else {
-    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet*>(buf), src.count());
+    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
+    // call construct func in advance to avoid core status
+    ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-      const SchemaZoneReplicaAttrSet& src_replica_attr_set = src.at(i);
-      SchemaZoneReplicaAttrSet* this_schema_set = &zone_replica_attr_array_.at(i);
-      if (nullptr == (this_schema_set = new (this_schema_set) SchemaZoneReplicaAttrSet())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("placement new return nullptr", K(ret));
-      } else if (OB_FAIL(set_specific_replica_attr_array(
-                     static_cast<SchemaReplicaAttrArray&>(
-                         this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                     src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-        LOG_WARN("fail to set specific replica attr array", K(ret));
+      const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
+      SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
+      if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
       } else if (OB_FAIL(set_specific_replica_attr_array(
                      static_cast<SchemaReplicaAttrArray&>(
                          this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
@@ -1078,17 +1075,15 @@ int ObSimpleTableSchemaV2::set_zone_replica_attr_array(const common::ObIArray<sh
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc failed", K(ret), K(alloc_size));
   } else {
-    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet*>(buf), src.count());
+    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
+    // call construct func in advance to avoid core status
+    ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-      const share::ObZoneReplicaAttrSet& src_replica_attr_set = src.at(i);
-      SchemaZoneReplicaAttrSet* this_schema_set = &zone_replica_attr_array_.at(i);
-      if (nullptr == (this_schema_set = new (this_schema_set) SchemaZoneReplicaAttrSet())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("placement new return nullptr", K(ret));
-      } else if (OB_FAIL(set_specific_replica_attr_array(
-                     static_cast<SchemaReplicaAttrArray&>(
-                         this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                     src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
+      const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
+      SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
+      if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
       } else if (OB_FAIL(set_specific_replica_attr_array(
                      static_cast<SchemaReplicaAttrArray&>(
