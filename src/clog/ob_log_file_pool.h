@@ -86,6 +86,8 @@ protected:
   int create_new_file(const int dest_dir_fd, const int dest_file_id, const char* dest_file, int& fd);
   int create_tmp_file(const file_id_t file_id, char* fname, const int64_t size, int& fd, int& dir_fd);
   int update_free_quota(const char* dir, const int64_t percent, const int64_t limit_percent);
+  int init_free_quota(const char* dir, const int64_t percent, const int64_t limit_percent);
+  int calculate_free_quota(const char* dir, const int64_t used_size, const int64_t percent, const int64_t limit_percent);
   void remove_overquota_file();
   int init_raw_file(const int fd, const int64_t start_pos, const int64_t size);
   int get_recyclable_file(file_id_t& file_id);
