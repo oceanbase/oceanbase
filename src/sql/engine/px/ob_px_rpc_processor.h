@@ -67,7 +67,6 @@ private:
   sql::ObPhysicalPlan phy_plan_;
   common::ObArenaAllocator des_allocator_;
   // observer::ObVirtualTableIteratorFactory vt_iter_factory_;
-  // share::schema::ObSchemaGetterGuard schema_guard_;
 };
 
 class ObInitFastSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc::OB_PX_FAST_INIT_SQC>> {

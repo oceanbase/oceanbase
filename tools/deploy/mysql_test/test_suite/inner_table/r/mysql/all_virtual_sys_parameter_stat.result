@@ -151,6 +151,7 @@ location_refresh_thread_count
 log_archive_batch_buffer_limit
 log_archive_checkpoint_interval
 log_archive_concurrency
+log_disk_size
 log_restore_concurrency
 major_compact_trigger
 major_freeze_duty_time

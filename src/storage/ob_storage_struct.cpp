@@ -896,8 +896,8 @@ ObRecoveryPointSchemaFilter::ObRecoveryPointSchemaFilter()
       tenant_id_(OB_INVALID_ID),
       tenant_recovery_point_schema_version_(OB_INVALID_VERSION),
       tenant_current_schema_version_(OB_INVALID_VERSION),
-      recovery_point_schema_guard_(),
-      current_schema_guard_(),
+      recovery_point_schema_guard_(share::schema::ObSchemaMgrItem::MOD_RECOVER_POINT),
+      current_schema_guard_(share::schema::ObSchemaMgrItem::MOD_RECOVER_POINT),
       is_schema_version_same_(false)
 {}
 

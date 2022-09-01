@@ -196,7 +196,7 @@ int ObExprMod::mod_float(ObObj& res, const ObObj& left, const ObObj& right, ObIA
   } else if (OB_UNLIKELY(left.get_type_class() != right.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid types", K(ret), K(left), K(right));
-  } else if (fabsf(right.get_float()) == 0.0) {
+  } else if (fabsf(right.get_float()) < EPSILON) {
     res.set_float(left.get_float());
   } else {
     res.set_float(fmodf(left.get_float(), right.get_float()));

@@ -56,7 +56,19 @@ void ObPsStmtItemDerefAtomicOp::operator()(const PsStmtIdKV& entry)
   }
 }
 
-void ObPsStmtInfoRefAtomicOp::operator()(const PsStmtInfoKV& entry)
+void ObPsStmtItemEraseAtomicOp::operator()(const PsStmtIdKV &entry)
+{
+  if (OB_ISNULL(entry.second)) {
+    ret_ = OB_HASH_NOT_EXIST;
+    LOG_WARN("entry not exist", K_(ret));
+  } else if (entry.second->get_ps_stmt_id() == stmt_id_) {
+    if (ATOMIC_BCAS(entry.second->get_is_expired_evicted_ptr(), false, true)) {
+      need_erase_ = true;
+    }
+  }
+}
+
+void ObPsStmtInfoRefAtomicOp::operator()(const PsStmtInfoKV &entry)
 {
   if (NULL != entry.second) {
     if (entry.second->check_erase_inc_ref_count()) {

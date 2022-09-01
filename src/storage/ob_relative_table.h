@@ -111,6 +111,7 @@ public:
         index_tables_(),
         index_tables_buf_count_(0),
         allocator_(allocator),
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
         table_param_(NULL),
         use_table_param_(false)
   {}

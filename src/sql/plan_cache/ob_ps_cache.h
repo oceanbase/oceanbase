@@ -109,9 +109,9 @@ public:
     return stmt_info_map_.size();
   }
 
-  int get_all_stmt_id(common::ObIArray<ObPsStmtId>* id_array);
-  int check_schema_version(ObSchemaGetterGuard& schema_guard, ObPsStmtInfo& stmt_info, bool& is_expired);
-  int erase_stmt_item(ObPsSqlKey& ps_key);
+  int get_all_stmt_id(common::ObIArray<ObPsStmtId> *id_array);
+  int check_schema_version(ObSchemaGetterGuard &schema_guard, ObPsStmtInfo &stmt_info, bool &is_expired);
+  int erase_stmt_item(ObPsStmtId stmt_id, ObPsSqlKey &ps_key);
 
 private:
   int inner_cache_evict(bool is_evict_all);

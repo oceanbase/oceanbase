@@ -112,6 +112,7 @@ public:
           output_row_count_(-1),
           iter_end_(false),
           partition_id_(OB_INVALID_INDEX),
+          schema_guard_(share::schema::ObSchemaMgrItem::MOD_TABLE_SCAN),
           iterated_rows_(0),
           is_partition_list_empty_(false),
           got_feedback_(false),

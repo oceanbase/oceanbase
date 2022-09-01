@@ -171,6 +171,7 @@ public:
   };
 
   ObSchemaGetterGuard();
+  explicit ObSchemaGetterGuard(const ObSchemaMgrItem::Mod mod);
   virtual ~ObSchemaGetterGuard();
   int reset();
   void dump();
@@ -659,6 +660,7 @@ private:
   // for new lazy logic
   SchemaObjs schema_objs_;
 
+  ObSchemaMgrItem::Mod mod_;
   SchemaGuardType schema_guard_type_;
   bool is_standby_cluster_;
   bool is_inited_;

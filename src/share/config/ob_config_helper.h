@@ -417,6 +417,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObConfigLogDiskSizeChecker : public ObConfigChecker {
+public:
+  ObConfigLogDiskSizeChecker()
+  {}
+  virtual ~ObConfigLogDiskSizeChecker(){};
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigLogDiskSizeChecker);
+};
+
 // config item container
 class ObConfigStringKey {
 public:

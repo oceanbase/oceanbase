@@ -125,6 +125,7 @@ struct ObSessionStat final {
 class ObTenantCachedSchemaGuardInfo {
 public:
   ObTenantCachedSchemaGuardInfo()
+    : schema_guard_(share::schema::ObSchemaMgrItem::MOD_CACHED_GUARD)
   {
     reset();
   }

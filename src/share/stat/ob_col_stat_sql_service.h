@@ -35,7 +35,7 @@ struct ObStatConverterInfo {
         real_table_id_(common::OB_INVALID_ID),
         tenant_id_col_id_(UINT64_MAX),
         vt_result_converter_(),
-        schema_guard_()
+        schema_guard_(share::schema::ObSchemaMgrItem::MOD_STAT_CONV_INFO)
   {}
 
   ObArray<bool> output_column_with_tenant_ids_;

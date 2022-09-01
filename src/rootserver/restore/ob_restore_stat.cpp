@@ -65,7 +65,7 @@ ObPhysicalRestoreStat::ObPhysicalRestoreStat(share::schema::ObMultiVersionSchema
       statistic_(),
       only_sys_(only_sys),
       sql_proxy_(sql_proxy),
-      guard_(),
+      guard_(share::schema::ObSchemaMgrItem::MOD_PHY_RES_STAT),
       schema_service_(schema_service),
       pt_operator_(pt_operator),
       stop_(stop)

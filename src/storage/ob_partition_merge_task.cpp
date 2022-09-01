@@ -560,7 +560,7 @@ ObSSTableMergeCtx::ObSSTableMergeCtx()
       index_stats_(),
       schema_version_(0),
       table_schema_(NULL),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_SSTABLE_MERGE_CTX),
       bf_rowkey_prefix_(0),
       is_full_merge_(false),
       stat_sampling_ratio_(0),
