@@ -1472,7 +1472,7 @@ int ObDDLOperator::alter_table_drop_aux_column(ObSchemaService& schema_service, 
             }
           }
           if (normal_column_count <= 1) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_ERR_ALTER_PRIMARY_KEY_COLUMN;
             LOG_WARN("normal_column_count is error", K(ret), K(normal_column_count));
           } else {
             ObTableSchema tmp_aux_table_schema;

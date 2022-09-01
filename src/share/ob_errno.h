@@ -1244,6 +1244,7 @@ constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_ALTER_PRIMARY_KEY_COLUMN = -12345;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -1783,6 +1784,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PARSE_JOIN_INFO__USER_ERROR_MSG "Wrong join info"
 #define OB_ERR_ALTER_INDEX_COLUMN__USER_ERROR_MSG "Cannot alter index column"
 #define OB_ERR_MODIFY_INDEX_TABLE__USER_ERROR_MSG "Cannot modify index table"
+#define OB_ERR_ALTER_PRIMARY_KEY_COLUMN__USER_ERROR_MSG "Cannot alter primary key column"
 #define OB_ERR_INDEX_UNAVAILABLE__USER_ERROR_MSG "Index unavailable"
 #define OB_ERR_NOP_VALUE__USER_ERROR_MSG "NOP cannot be used here"
 #define OB_ERR_PS_TOO_MANY_PARAM__USER_ERROR_MSG "Prepared statement contains too many placeholders"
