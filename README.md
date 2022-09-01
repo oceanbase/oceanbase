@@ -9,7 +9,7 @@ OceanBase is a distributed relational SQL database built from scratch by Ant Gro
    - Partition-level leader distribution and transparent data shuffling
    - Convert distributed transactions across multi-node into local transactions via "table group" technology
    - Highly concurrent updates on hot row through early lock release (ELR)
-   - Nearly unlimited connections in one instance through multiple threads and coroutines on scalable nodes
+   - Nearly unlimited connections in one instance on scalable nodes through decoupled session & thread
    - Prevent silent data corruption (SDC) through multidimensional data consistency checksum
    - No.1 in TPC-C benchmark with 707 million tpmC
 - Operational OLAP
