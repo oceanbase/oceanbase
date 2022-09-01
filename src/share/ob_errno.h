@@ -1784,7 +1784,7 @@ constexpr int OB_ERR_ALTER_PRIMARY_KEY_COLUMN = -12345;
 #define OB_ERR_PARSE_JOIN_INFO__USER_ERROR_MSG "Wrong join info"
 #define OB_ERR_ALTER_INDEX_COLUMN__USER_ERROR_MSG "Cannot alter index column"
 #define OB_ERR_MODIFY_INDEX_TABLE__USER_ERROR_MSG "Cannot modify index table"
-#define OB_ERR_ALTER_PRIMARY_KEY_COLUMN__USER_ERROR_MSG "Cannot alter primary key column"
+#define OB_ERR_ALTER_PRIMARY_KEY_COLUMN__USER_ERROR_MSG "Cannot drop primary key column"
 #define OB_ERR_INDEX_UNAVAILABLE__USER_ERROR_MSG "Index unavailable"
 #define OB_ERR_NOP_VALUE__USER_ERROR_MSG "NOP cannot be used here"
 #define OB_ERR_PS_TOO_MANY_PARAM__USER_ERROR_MSG "Prepared statement contains too many placeholders"
