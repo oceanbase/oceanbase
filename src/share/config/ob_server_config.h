@@ -52,6 +52,7 @@ const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const ENABLE_ONE_PHASE_COMMIT = "enable_one_phase_commit";
 const char* const CLOG_DISK_USAGE_LIMIT_PERCENTAGE = "clog_disk_usage_limit_percentage";
 const char* const CLOG_DISK_UTILIZATION_THRESHOLD = "clog_disk_utilization_threshold";
+const char* const LOG_DISK_SIZE = "log_disk_size";
 const char *const CLUSTER_ID = "cluster_id";
 const char *const CLUSTER_NAME = "cluster";
 

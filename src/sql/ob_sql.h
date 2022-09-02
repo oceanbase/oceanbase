@@ -191,7 +191,9 @@ public:
 
   static int construct_not_paramalize(
       const ObIArray<int64_t>& offsets, const ParamStore& param_store, ObPlanCacheCtx& plan_ctx);
-  static int construct_no_check_type_params(const ObIArray<int64_t>& offsets, ParamStore& param_store);
+  static int construct_no_check_type_params(const ObIArray<int64_t>& offsets,
+                                            const ObBitSet<> &need_check_type_offsets,
+                                            ParamStore& param_store);
   static int construct_ps_param(const ParamStore& params, ObPlanCacheCtx& phy_ctx);
 
   storage::ObPartitionService* get_partition_service() const

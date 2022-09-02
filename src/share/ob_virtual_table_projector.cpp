@@ -75,7 +75,12 @@ int ObVirtualTableProjector::check_column_exist(
 }
 ////////////////////////////////////////////////////////////////
 ObSimpleVirtualTableIterator::ObSimpleVirtualTableIterator(uint64_t tenant_id, uint64_t table_id)
-    : tenant_id_(tenant_id), table_id_(table_id), schema_service_(NULL), table_schema_(NULL)
+    : tenant_id_(tenant_id),
+      table_id_(table_id),
+      columns_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
+      schema_service_(NULL),
+      table_schema_(NULL)
 {}
 
 int ObSimpleVirtualTableIterator::init(share::schema::ObMultiVersionSchemaService* schema_service)

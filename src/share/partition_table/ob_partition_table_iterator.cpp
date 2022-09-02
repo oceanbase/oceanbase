@@ -363,6 +363,7 @@ ObTenantPartitionIterator::ObTenantPartitionIterator()
     : inited_(false),
       pt_operator_(NULL),
       schema_service_(NULL),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_TENANT_PT_ITER),
       partition_entity_iterator_(),
       allocator_(ObModIds::OB_RS_PARTITION_TABLE_TEMP),
       filters_(),

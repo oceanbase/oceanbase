@@ -121,19 +121,24 @@ public:
   {
     return external_allocator_;
   }
+  bool *get_is_expired_evicted_ptr()
+  {
+    return &is_expired_evicted_;
+  }
 
-  TO_STRING_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id));
+  TO_STRING_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id), K_(is_expired_evicted));
 
 private:
   volatile int64_t ref_count_;
   uint64_t db_id_;
   common::ObString ps_sql_;
   ObPsStmtId stmt_id_;
+  bool is_expired_evicted_;
   // ObDataBuffer is used to use the internal memory of ObPsStmtItem.
   // The memory essentially comes from inner_allocator_ in ObPsPlancache
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
   // Point to inner_allocator_ in ObPsPlancache, used to release the memory of the entire ObPsStmtItem
-  common::ObIAllocator* external_allocator_;
+  common::ObIAllocator *external_allocator_;
 };
 
 struct ObPsSqlMeta {

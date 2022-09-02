@@ -24,7 +24,10 @@ namespace oceanbase {
 namespace observer {
 
 ObAllVirtualProxyBaseIterator::ObAllVirtualProxyBaseIterator()
-    : ObVirtualTableIterator(), schema_service_(NULL), full_schema_guard_(), calc_buf_(NULL)
+    : ObVirtualTableIterator(),
+      schema_service_(NULL),
+      full_schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
+      calc_buf_(NULL)
 {}
 
 ObAllVirtualProxyBaseIterator::~ObAllVirtualProxyBaseIterator()

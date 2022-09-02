@@ -729,7 +729,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt, ObSqlCtx &context, ObResultSe
         stmt_info->set_is_expired();
         ps_sql_key.set_db_id(stmt_info->get_db_id());
         ps_sql_key.set_ps_sql(stmt_info->get_ps_sql());
-        if (OB_FAIL(ps_cache->erase_stmt_item(ps_sql_key))) {
+        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, ps_sql_key))) {
           LOG_WARN("fail to erase stmt item", K(ret), K(*stmt_info));
         }
         need_do_real_prepare = true;
@@ -808,7 +808,8 @@ int ObSql::construct_not_paramalize(
   return ret;
 }
 
-int ObSql::construct_no_check_type_params(const ObIArray<int64_t> &offsets, ParamStore &params_store)
+int ObSql::construct_no_check_type_params(
+    const ObIArray<int64_t> &offsets, const ObBitSet<> &need_check_type_offsets, ParamStore &params_store)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < offsets.count(); i++) {
@@ -816,6 +817,8 @@ int ObSql::construct_no_check_type_params(const ObIArray<int64_t> &offsets, Para
     if (offset < 0 || offset >= params_store.count()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid offset", K(ret), K(offset), K(params_store.count()));
+    } else if (need_check_type_offsets.has_member(offset)) {
+      // do nothing
     } else if (!params_store.at(offset).is_ext()) {  // extend type need to be checked
       params_store.at(offset).set_need_to_check_type(false);
     } else {
@@ -3255,6 +3258,7 @@ int ObSql::handle_parser(const ObString &sql, ObExecContext &exec_ctx, ObPlanCac
     int64_t question_mark_count = 0;
     ObArray<int64_t> not_param_offsets;
     ObArray<int64_t> no_check_type_offsets;
+    ObBitSet<> need_check_type_param_offsets;
     ObIAllocator &allocator = pc_ctx.allocator_;
     ObSQLSessionInfo &session = *(pc_ctx.sql_ctx_.session_info_);
     ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
@@ -3263,12 +3267,16 @@ int ObSql::handle_parser(const ObString &sql, ObExecContext &exec_ctx, ObPlanCac
     } else if (OB_ISNULL(parse_result.result_tree_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("result_tree should not be null", K(ret), K(sql));
-    } else if (OB_FAIL(helper.find_special_paramalize(
-                   *parse_result.result_tree_, question_mark_count, no_check_type_offsets, not_param_offsets))) {
+    } else if (OB_FAIL(helper.find_special_paramalize(*parse_result.result_tree_,
+                   question_mark_count,
+                   no_check_type_offsets,
+                   need_check_type_param_offsets,
+                   not_param_offsets))) {
       LOG_WARN("invalid argument", K(ret), KP(parse_result.result_tree_));
     } else if (OB_FAIL(construct_not_paramalize(not_param_offsets, pctx->get_param_store(), pc_ctx))) {
       LOG_WARN("construct not paramalize failed", K(ret));
-    } else if (OB_FAIL(construct_no_check_type_params(no_check_type_offsets, pctx->get_param_store_for_update()))) {
+    } else if (OB_FAIL(construct_no_check_type_params(
+                   no_check_type_offsets, need_check_type_param_offsets, pctx->get_param_store_for_update()))) {
       LOG_WARN("construct no check type params failed", K(ret));
     } else {
       parse_result.question_mark_ctx_.count_ = static_cast<int>(question_mark_count);

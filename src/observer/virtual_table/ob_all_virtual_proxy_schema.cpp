@@ -53,7 +53,7 @@ ObAllVirtualProxySchema::ObAllVirtualProxySchema()
       routine_databases_(),
       routine_names_(),
       schema_service_(NULL),
-      full_schema_guard_(),
+      full_schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       complex_table_type_(CT_DEFAULT),
       force_sql_refresh_(false)
 {

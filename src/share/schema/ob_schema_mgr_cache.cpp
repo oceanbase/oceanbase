@@ -25,7 +25,11 @@ using namespace common;
 namespace share {
 namespace schema {
 
-ObSchemaMgrHandle::ObSchemaMgrHandle() : schema_mgr_item_(NULL), ref_timestamp_(0)
+ObSchemaMgrHandle::ObSchemaMgrHandle() : schema_mgr_item_(NULL), ref_timestamp_(0), mod_(ObSchemaMgrItem::MOD_STACK)
+{}
+
+ObSchemaMgrHandle::ObSchemaMgrHandle(const ObSchemaMgrItem::Mod mod)
+    : schema_mgr_item_(NULL), ref_timestamp_(0), mod_(mod)
 {}
 
 ObSchemaMgrHandle::~ObSchemaMgrHandle()
@@ -43,8 +47,10 @@ ObSchemaMgrHandle& ObSchemaMgrHandle::operator=(const ObSchemaMgrHandle& other)
   if (this != &other) {
     reset();
     schema_mgr_item_ = other.schema_mgr_item_;
+    mod_ = other.mod_;
     if (NULL != schema_mgr_item_) {
       (void)ATOMIC_FAA(&schema_mgr_item_->ref_cnt_, 1);
+      (void)ATOMIC_FAA(&schema_mgr_item_->mod_ref_cnt_[mod_], 1);
     }
   }
   return *this;
@@ -55,6 +61,7 @@ void ObSchemaMgrHandle::reset()
   revert();
   schema_mgr_item_ = NULL;
   ref_timestamp_ = 0;
+  // mod_ should not be reset
 }
 
 bool ObSchemaMgrHandle::is_valid()
@@ -63,12 +70,12 @@ bool ObSchemaMgrHandle::is_valid()
   if (NULL != schema_mgr_item_) {
     ref_cnt = ATOMIC_LOAD(&schema_mgr_item_->ref_cnt_);
   }
-  return NULL != schema_mgr_item_ && ref_cnt > 0;
+  return NULL != schema_mgr_item_ && ref_cnt > 0 && mod_ >= 0 && mod_ < ObSchemaMgrItem::MOD_MAX;
 }
 
 void ObSchemaMgrHandle::dump() const
 {
-  LOG_INFO("schema mgr item ptr", K(schema_mgr_item_), K(ref_timestamp_));
+  LOG_INFO("schema mgr item ptr", K(schema_mgr_item_), K(ref_timestamp_), K_(mod));
 }
 
 inline void ObSchemaMgrHandle::revert()
@@ -89,6 +96,7 @@ inline void ObSchemaMgrHandle::revert()
           K(lbt()));
     }
     (void)ATOMIC_FAA(&schema_mgr_item_->ref_cnt_, -1);
+    (void)ATOMIC_FAA(&schema_mgr_item_->mod_ref_cnt_[mod_], -1);
   }
 }
 
@@ -126,6 +134,7 @@ int ObSchemaMgrCache::init(int64_t init_cached_num, Mode mode)
         ObSchemaMgrItem& schema_mgr_item = schema_mgr_items_[i];
         schema_mgr_item.schema_mgr_ = NULL;
         schema_mgr_item.ref_cnt_ = 0;
+        MEMSET(schema_mgr_item.mod_ref_cnt_, 0, ObSchemaMgrItem::MOD_MAX);
       }
     }
   }
@@ -214,6 +223,7 @@ int ObSchemaMgrCache::get(const int64_t schema_version, const ObSchemaMgr*& sche
       ret = OB_ENTRY_NOT_EXIST;
     } else {
       (void)ATOMIC_FAA(&dst_item->ref_cnt_, 1);
+      (void)ATOMIC_FAA(&dst_item->mod_ref_cnt_[handle.mod_], 1);
       schema_mgr = dst_item->schema_mgr_;
       handle.schema_mgr_item_ = dst_item;
       handle.ref_timestamp_ = ObClockGenerator::getClock();
@@ -259,6 +269,7 @@ int ObSchemaMgrCache::get_nearest(
     if (OB_SUCC(ret)) {
       dst_item = &schema_mgr_items_[nearest_pos];
       (void)ATOMIC_FAA(&dst_item->ref_cnt_, 1);
+      (void)ATOMIC_FAA(&dst_item->mod_ref_cnt_[handle.mod_], 1);
       schema_mgr = dst_item->schema_mgr_;
       handle.schema_mgr_item_ = dst_item;
       handle.ref_timestamp_ = ObTimeUtility::current_time();
@@ -374,7 +385,9 @@ int ObSchemaMgrCache::put(ObSchemaMgr* schema_mgr, ObSchemaMgr*& eli_schema_mgr,
               K(schema_version),
               K(schema_mgr),
               "ref_cnt",
-              schema_mgr_item.ref_cnt_);
+              schema_mgr_item.ref_cnt_,
+              "mod_ref_cnt",
+              ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_, ObSchemaMgrItem::MOD_MAX));
         }
       }
     } else {
@@ -386,8 +399,12 @@ int ObSchemaMgrCache::put(ObSchemaMgr* schema_mgr, ObSchemaMgr*& eli_schema_mgr,
           K(target_pos),
           K(common::lbt()));
       (void)ATOMIC_STORE(&dst_item->ref_cnt_, 0);
+      for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
+        (void)ATOMIC_STORE(&dst_item->mod_ref_cnt_[i], 0);
+      }
       if (NULL != handle) {
         (void)ATOMIC_FAA(&dst_item->ref_cnt_, 1);
+        (void)ATOMIC_FAA(&dst_item->mod_ref_cnt_[handle->mod_], 1);
         handle->schema_mgr_item_ = dst_item;
       }
       if (OB_NOT_NULL(eli_schema_mgr)) {
@@ -429,6 +446,9 @@ int ObSchemaMgrCache::try_gc_tenant_schema_mgr(ObSchemaMgr*& eli_schema_mgr)
         eli_schema_mgr = tmp_schema_mgr;
         schema_mgr_item.schema_mgr_ = NULL;
         (void)ATOMIC_STORE(&schema_mgr_item.ref_cnt_, 0);
+        for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
+          (void)ATOMIC_STORE(&schema_mgr_item.mod_ref_cnt_[i], 0);
+        }
         is_stop = true;
       }
     }
@@ -469,6 +489,9 @@ int ObSchemaMgrCache::try_elimiante_schema_mgr(ObSchemaMgr*& eli_schema_mgr)
         eli_schema_mgr = tmp_schema_mgr;
         schema_mgr_item.schema_mgr_ = NULL;
         (void)ATOMIC_STORE(&schema_mgr_item.ref_cnt_, 0);
+        for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
+          (void)ATOMIC_STORE(&schema_mgr_item.mod_ref_cnt_[i], 0);
+        }
         found = true;
       }
     }
@@ -518,7 +541,9 @@ void ObSchemaMgrCache::dump() const
             K(schema_count),
             K(schema_size),
             "ref_cnt",
-            schema_mgr_item.ref_cnt_);
+            schema_mgr_item.ref_cnt_,
+            "mod_ref_cnt",
+            ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_, ObSchemaMgrItem::MOD_MAX));
       }
     }
     LOG_INFO("[SCHEMA_STATISTICS] dump schema_mgr_cache", K(ret), K(total_count), K(total_size));

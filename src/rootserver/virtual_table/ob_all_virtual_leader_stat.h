@@ -25,7 +25,7 @@ namespace rootserver {
 class ObAllVirtualLeaderStat : public common::ObVirtualTableProjector {
 public:
   ObAllVirtualLeaderStat()
-      : schema_guard_(),
+      : schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
         all_tenants_(),
         cur_tenant_idx_(-1),
         columns_(),

@@ -21,7 +21,7 @@ using namespace oceanbase::share::schema;
 ObAllRebalanceUnitMigrateStat::ObAllRebalanceUnitMigrateStat(ObUnitManager& unit_mgr,
     ObILeaderCoordinator& leader_coordinator, ObServerManager& server_mgr, ObZoneManager& zone_mgr)
     : server_balance_plan_(unit_mgr, leader_coordinator, server_mgr, zone_mgr),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       src_ip_buf_(),
       dst_ip_buf_(),
       task_(),

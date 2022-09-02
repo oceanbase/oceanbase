@@ -762,6 +762,10 @@ DEF_INT(clog_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "80", "[10, 100)"
     "clog disk utilization threshold before reuse clog files, should be less than clog_disk_usage_limit_percentage. "
     "Range: [10, 100)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP_WITH_CHECKER(log_disk_size, OB_CLUSTER_PARAMETER, "0G", common::ObConfigLogDiskSizeChecker,"[0G,)",
+    "maximum of clog disk size before reuse clog files, should be less than log_disk_size."
+    "Range: [0G, +∞)",
+    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
 DEF_TIME(election_blacklist_interval, OB_CLUSTER_PARAMETER, "1800s", "[0s, 24h]",
     "If leader_revoke, this replica cannot be elected to leader in election_blacklist_interval"

@@ -46,7 +46,7 @@ ObPxTaskProcess::ObPxTaskProcess(const observer::ObGlobalContext& gctx, ObPxRpcI
     : gctx_(gctx),
       arg_(arg),
       sql_ctx_(),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_PX_TASK_PROCESSS),
       vt_iter_factory_(*gctx.vt_iter_creator_),
       enqueue_timestamp_(0),
       process_timestamp_(0),

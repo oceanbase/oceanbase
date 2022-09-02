@@ -867,6 +867,11 @@ int ObServer::init_config()
 
   config_.syslog_level.set_value(OB_LOGGER.get_level_str());
 
+  if (opts_.data_dir_ && strlen(opts_.data_dir_) > 0) {
+    config_.data_dir.set_value(opts_.data_dir_);
+    config_.data_dir.set_version(start_time_);
+  }
+
   if (opts_.optstr_ && strlen(opts_.optstr_) > 0) {
     if (OB_FAIL(config_.add_extra_config(opts_.optstr_, start_time_))) {
       LOG_ERROR("invalid config from cmdline options", K(opts_.optstr_), K(ret));
@@ -886,11 +891,6 @@ int ObServer::init_config()
   if (config_.cluster_id.get_value() >= 0) {
     obrpc::ObRpcNetHandler::CLUSTER_ID = config_.cluster_id.get_value();
     LOG_INFO("set CLUSTER_ID for rpc", "cluster_id", config_.cluster_id.get_value());
-  }
-
-  if (opts_.data_dir_ && strlen(opts_.data_dir_) > 0) {
-    config_.data_dir.set_value(opts_.data_dir_);
-    config_.data_dir.set_version(start_time_);
   }
 
   // The command line is specified, subject to the command line

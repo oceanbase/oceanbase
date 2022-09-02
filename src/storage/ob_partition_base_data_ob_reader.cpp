@@ -1299,6 +1299,7 @@ ObLogicRowProducer::ObLogicRowProducer()
       guard_(),
       allocator_(ObNewModIds::OB_PARTITION_MIGRATE),
       storage_(NULL),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_LOGIC_ROW),
       table_schema_(NULL),
       memtable_(NULL),
       arg_(),
@@ -2474,7 +2475,7 @@ ObTailoredRowIterator::ObTailoredRowIterator()
       is_inited_(false),
       row_iter_(),
       allocator_(),
-      schema_guard_(),
+      schema_guard_(share::schema::ObSchemaMgrItem::MOD_TAILORED_ROW_ITER),
       table_schema_(NULL),
       snapshot_version_(0)
 {}

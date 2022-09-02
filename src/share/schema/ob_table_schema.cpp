@@ -1034,18 +1034,15 @@ int ObSimpleTableSchemaV2::set_zone_replica_attr_array(const common::ObIArray<Sc
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc failed", K(ret), K(alloc_size));
   } else {
-    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet*>(buf), src.count());
+    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
+    // call construct func in advance to avoid core status
+    ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-      const SchemaZoneReplicaAttrSet& src_replica_attr_set = src.at(i);
-      SchemaZoneReplicaAttrSet* this_schema_set = &zone_replica_attr_array_.at(i);
-      if (nullptr == (this_schema_set = new (this_schema_set) SchemaZoneReplicaAttrSet())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("placement new return nullptr", K(ret));
-      } else if (OB_FAIL(set_specific_replica_attr_array(
-                     static_cast<SchemaReplicaAttrArray&>(
-                         this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                     src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-        LOG_WARN("fail to set specific replica attr array", K(ret));
+      const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
+      SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
+      if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
       } else if (OB_FAIL(set_specific_replica_attr_array(
                      static_cast<SchemaReplicaAttrArray&>(
                          this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
@@ -1078,17 +1075,15 @@ int ObSimpleTableSchemaV2::set_zone_replica_attr_array(const common::ObIArray<sh
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc failed", K(ret), K(alloc_size));
   } else {
-    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet*>(buf), src.count());
+    zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
+    // call construct func in advance to avoid core status
+    ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
     for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-      const share::ObZoneReplicaAttrSet& src_replica_attr_set = src.at(i);
-      SchemaZoneReplicaAttrSet* this_schema_set = &zone_replica_attr_array_.at(i);
-      if (nullptr == (this_schema_set = new (this_schema_set) SchemaZoneReplicaAttrSet())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("placement new return nullptr", K(ret));
-      } else if (OB_FAIL(set_specific_replica_attr_array(
-                     static_cast<SchemaReplicaAttrArray&>(
-                         this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                     src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
+      const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
+      SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
+      if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
       } else if (OB_FAIL(set_specific_replica_attr_array(
                      static_cast<SchemaReplicaAttrArray&>(
@@ -3267,7 +3262,7 @@ int ObTableSchema::add_col_to_id_hash_array(ObColumnSchemaV2* column)
     LOG_WARN("The column is NULL", K(ret));
   } else {
     if (NULL == id_hash_array_) {
-      id_hash_array_mem_size = get_id_hash_array_mem_size(common::OB_MAX_COLUMN_NUMBER);
+      id_hash_array_mem_size = get_id_hash_array_mem_size(0);
       if (NULL == (buf = static_cast<char*>(alloc(id_hash_array_mem_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("Fail to allocate memory for id_hash_array, ", K(id_hash_array_mem_size));
@@ -3370,7 +3365,7 @@ int ObTableSchema::add_col_to_name_hash_array(ObColumnSchemaV2* column)
     CompatModeGuard g(compat_mode);
     ObColumnSchemaHashWrapper column_name_key(column->get_column_name_str());
     if (NULL == name_hash_array_) {
-      name_hash_array_mem_size = get_name_hash_array_mem_size(common::OB_MAX_COLUMN_NUMBER);
+      name_hash_array_mem_size = get_name_hash_array_mem_size(0);
       if (NULL == (buf = static_cast<char*>(alloc(name_hash_array_mem_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("Fail to allocate memory, ", K(name_hash_array_mem_size), K(ret));

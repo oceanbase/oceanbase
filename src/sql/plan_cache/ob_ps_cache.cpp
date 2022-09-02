@@ -127,7 +127,7 @@ int ObPsCache::deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item /*=false*
     ps_sql_key.set_ps_sql(ps_info->get_ps_sql());
     int tmp_ret = OB_SUCCESS;
     if (erase_item) {  // dec cached ref
-      if (OB_FAIL(erase_stmt_item(ps_sql_key))) {
+      if (OB_FAIL(erase_stmt_item(stmt_id, ps_sql_key))) {
         LOG_WARN("fail to erase stmt", K(ret));
       }
     } else {  // dec session ref
@@ -420,21 +420,48 @@ int ObPsCache::get_or_add_stmt_info(const ObResultSet& result, int64_t param_cnt
 }
 
 // may parallel execute by multi_thread
-int ObPsCache::erase_stmt_item(ObPsSqlKey& ps_key)
+int ObPsCache::erase_stmt_item(ObPsStmtId stmt_id, ObPsSqlKey &ps_key)
 {
   int ret = OB_SUCCESS;
-  ObPsStmtItem* ps_item = NULL;
-  if (OB_FAIL(stmt_id_map_.erase_refactored(ps_key, &ps_item))) {
+  ObPsStmtItem *ps_item = NULL;
+  /*
+   *              Thread A                                            Thread B
+   *     Get stmt_item successfully                           Get stmt_item successfully
+   *
+   *      Check stmt_info expired
+   *                                                            Check stmt_info expired
+   *
+   *  Delete stmt_item by key(db_id, ps_sql)
+   *
+   *
+   *
+   * Add stmt_item with (db_id, ps_sql) as key
+   *
+   *                                                        Delete stmt_item by key(db_id, ps_sql)
+   *                                               The item added in the previous step of thread A is deleted
+   *
+   *
+   */
+  ObPsStmtItemEraseAtomicOp op(stmt_id);
+  if (OB_FAIL(stmt_id_map_.read_atomic(ps_key, op))) {
     if (OB_HASH_NOT_EXIST == ret) {
       LOG_INFO("erased by others", K(ret), K(ps_key));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("fail to erase stmt info", K(ps_key), K(ret));
+      LOG_WARN("failed to get ps stmt item", K(ps_key), K(ret));
     }
-  } else {
-    ps_item->dec_ref_count_check_erase();
+  } else if (op.need_erase()) {
+    if (OB_FAIL(stmt_id_map_.erase_refactored(ps_key, &ps_item))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        LOG_INFO("erased by others", K(ret), K(ps_key));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to erase stmt info", K(ps_key), K(ret));
+      }
+    } else {
+      ps_item->dec_ref_count_check_erase();
+    }
   }
-
   return ret;
 }
 

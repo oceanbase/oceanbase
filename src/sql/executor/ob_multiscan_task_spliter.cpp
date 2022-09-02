@@ -251,7 +251,7 @@ bool ObDistributedTaskSpliter::ObSliceComparer::operator()(const ObSliceEvent* s
 }
 
 ObDistributedTaskSpliter::ObDistributedTaskSpliter()
-    : schema_guard_(),
+    : schema_guard_(share::schema::ObSchemaMgrItem::MOD_DIS_TASK_SPLITER),
       table_locations_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
       part_shuffle_keys_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
       part_idxs_(ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE),
