@@ -1336,7 +1336,13 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx& ctx)
   } else {
     const ParseNode* param_node = ctx.raw_params_.at(idx)->node_;
     int64_t tmp_len = std::min(ctx.buf_len_ - ctx.param_info_.name_len_, param_node->raw_sql_offset_ - ctx.expr_pos_);
-    if (tmp_len > 0) {
+    // In the case of select _binary 'abc';, special processing is required, because the value of
+    // org_expr_name_ is the same as that of raw param in this scenario.
+    // So it is judged here that if org_expr_name_ is the same as param_node->str_value_ value
+    // there is no need to copy it. paramed_field_name_ should be replaced with '?'
+    if (0 == ctx.org_expr_name_.case_compare(ObString(param_node->str_len_, param_node->str_value_))) {
+      // do nothing
+    } else if (tmp_len > 0) {
       int32_t len = static_cast<int64_t>(tmp_len);
       MEMCPY(ctx.param_info_.paramed_field_name_ + ctx.param_info_.name_len_,
           ctx.org_expr_name_.ptr() + ctx.expr_pos_ - ctx.expr_start_pos_,
