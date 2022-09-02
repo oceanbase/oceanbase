@@ -104,15 +104,18 @@ int ObTenantFileSuperBlockCheckpointWriter::write_checkpoint(blocksstable::ObSto
       ObTenantFileCheckpointEntry file_checkpoint_entry;
       if (OB_FAIL(file_checkpoint_map.get_refactored(file_info.tenant_key_, file_checkpoint_entry))) {
         if (OB_HASH_NOT_EXIST == ret) {
-          // in case any deleted tenant file info is leaked, check schema for sure
+          ret = OB_SUCCESS;
+          int tmp_ret = OB_SUCCESS;
+          // in case any deleted tenant file info is leaked, try check schema for sure
           share::schema::ObSchemaGetterGuard schema_guard;
-          if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_schema_guard(schema_guard))) {
-            LOG_ERROR("fail to get schema guard", K(ret));
-          } else if (OB_FAIL(schema_guard.check_formal_guard())) {
-            LOG_WARN("fail to check formal schema guard", K(ret));
-          } else if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(
-                         file_info.tenant_key_.tenant_id_, tenant_has_been_dropped))) {
-            LOG_ERROR("fail to check if tenant has been dropped", K(ret), K(file_info));
+          if (OB_SUCCESS !=
+              (tmp_ret = share::schema::ObMultiVersionSchemaService::get_instance().get_schema_guard(schema_guard))) {
+            LOG_WARN("fail to get schema guard", K(tmp_ret), K(file_info));
+          } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_formal_guard())) {
+            LOG_WARN("fail to check formal schema guard", K(tmp_ret), K(file_info));
+          } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_if_tenant_has_been_dropped(
+                                        file_info.tenant_key_.tenant_id_, tenant_has_been_dropped))) {
+            LOG_WARN("fail to check if tenant has been dropped", K(tmp_ret), K(file_info));
           }
         } else {
           LOG_WARN("fail to get from file checkpoint map", K(ret));
