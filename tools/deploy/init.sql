@@ -27,16 +27,11 @@ alter tenant mysql set variables recyclebin = 'on';
 alter tenant mysql set variables ob_enable_truncate_flashback = 'on';
 
 select count(*) from oceanbase.__all_server group by zone limit 1 into @num;
-set @sql_text = concat('alter resource pool pool1', ' unit_num = ', @num);
-prepare stmt from @sql_text;
-execute stmt;
-deallocate prepare stmt;
 set @sql_text = concat('alter resource pool pool2', ' unit_num = ', @num);
 prepare stmt from @sql_text;
 execute stmt;
 deallocate prepare stmt;
 
 select primary_zone from oceanbase.__all_tenant where tenant_id = 1 into @zone_name;
-alter tenant oracle primary_zone = @zone_name;
 alter tenant mysql primary_zone = @zone_name;
 
