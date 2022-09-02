@@ -903,7 +903,7 @@ int ObResultSet::close(int &client_ret)
   } else if (OB_NOT_NULL(physical_plan_)) {
     //Because of the async close result we need set the partition_hit flag
     //to the call back param, than close the result.
-    //But the das framwork set the patition_hit after result is closed.
+    //But the das framwork set the partition_hit after result is closed.
     //So we need to set the partition info at here.
     if (is_end_trans_async()) {
       ObCurTraceId::TraceId *cur_trace_id = NULL;
@@ -1448,7 +1448,7 @@ int ObResultSet::copy_field_columns(const ObPhysicalPlan &plan)
     } else if (OB_FAIL(field_columns_.push_back(field))) {
       LOG_WARN("push back field column failed", K(ret));
     } else {
-      LOG_DEBUG("succs to copy field", K(field));
+      LOG_DEBUG("success to copy field", K(field));
     }
   }
   return ret;
@@ -1820,8 +1820,8 @@ int ObRemoteResultSet::copy_field_columns(
     LOG_WARN("failed to reserve field column array", K(ret), K(N));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-    const ObField &ofield = src_field_columns.at(i);
-    if (OB_FAIL(field.deep_copy(ofield, &get_mem_pool()))) {
+    const ObField &obfield = src_field_columns.at(i);
+    if (OB_FAIL(field.deep_copy(obfield, &get_mem_pool()))) {
       LOG_WARN("deep copy field failed", K(ret));
     } else if (OB_FAIL(field_columns_.push_back(field))) {
       LOG_WARN("push back field column failed", K(ret));
@@ -1843,7 +1843,7 @@ int ObRemoteResultSet::setup_next_scanner()
   } else {
     ObInnerSQLTransmitResult *transmit_result= NULL;
 
-    if (!first_response_received_) { /* has not gotten the first scanner responsed */
+    if (!first_response_received_) { /* has not gotten the first scanner response */
       if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("transmit_result is NULL", K(ret));
@@ -1852,7 +1852,7 @@ int ObRemoteResultSet::setup_next_scanner()
       } else {
         scanner_ = &transmit_result->get_scanner();
         scanner_iter_ = scanner_->begin();
-        first_response_received_ = true; /* has gotten the first scanner responsed already */
+        first_response_received_ = true; /* has gotten the first scanner response already */
         found_rows_ += scanner_->get_found_rows();
         stmt_type_ = transmit_result->get_stmt_type();
         const common::ObSArray<common::ObField> &src_field_columns =
