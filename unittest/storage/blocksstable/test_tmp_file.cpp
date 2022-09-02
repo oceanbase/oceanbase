@@ -622,9 +622,9 @@ TEST_F(TestTmpFile, test_big_file)
 
   STORAGE_LOG(INFO, "test_big_file");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -653,9 +653,9 @@ TEST_F(TestTmpFile, test_multi_small_file_single_thread_read_write)
 
   STORAGE_LOG(INFO, "test_multi_small_file_single_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -682,9 +682,9 @@ TEST_F(TestTmpFile, test_multi_small_file_multi_thread_read_write)
 
   STORAGE_LOG(INFO, "test_multi_small_file_multi_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -755,9 +755,9 @@ TEST_F(TestTmpFile, test_inner_read_offset_and_seek)
 
   STORAGE_LOG(INFO, "test_inner_read_offset_and_seek");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -786,9 +786,9 @@ TEST_F(TestTmpFile, test_single_file_single_thread_read_write)
 
   STORAGE_LOG(INFO, "test_single_file_single_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -863,9 +863,9 @@ TEST_F(TestTmpFile, test_aio_read_and_write)
 
   STORAGE_LOG(INFO, "test_aio_read_and_write");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -902,9 +902,9 @@ TEST_F(TestTmpFile, test_100_small_files)
   }
 
   STORAGE_LOG(INFO, "test_1000_small_files");
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -936,9 +936,9 @@ TEST_F(TestTmpFile, test_single_file_multi_thread_read_write)
 
   STORAGE_LOG(INFO, "test_single_file_multi_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -965,9 +965,9 @@ TEST_F(TestTmpFile, test_multi_file_single_thread_read_write)
 
   STORAGE_LOG(INFO, "test_multi_file_single_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -994,9 +994,9 @@ TEST_F(TestTmpFile, test_multi_file_multi_thread_read_write)
 
   STORAGE_LOG(INFO, "test_multi_file_multi_thread_read_write");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1023,9 +1023,9 @@ TEST_F(TestTmpFile, test_write_not_macro_size)
 
   STORAGE_LOG(INFO, "test_write_not_macro_size");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1101,9 +1101,9 @@ TEST_F(TestTmpFile, test_write_less_than_macro_block_size)
 
   STORAGE_LOG(INFO, "test_write_less_than_macro_block_size");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1197,9 +1197,9 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
 
   STORAGE_LOG(INFO, "test_write_more_than_one_macro_block");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1275,13 +1275,13 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   cmp = memcmp(handle2.get_buffer(), write_buf, macro_block_size + 256);
   ASSERT_EQ(0, cmp);
 
-  ObTmpTenantFileStore *store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObTmpFileManager::get_instance().remove(fd_1);
   ObTmpFileManager::get_instance().remove(fd_2);
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
 }
 
 /*TEST_F(TestTmpFile, test_iter_end)
@@ -1373,9 +1373,9 @@ TEST_F(TestTmpFile, test_single_dir_multi_file)
 
   STORAGE_LOG(INFO, "test_single_dir_multi_file");
   STORAGE_LOG(INFO, "io time", K(io_time));
-  ObTmpTenantFileStore* store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1481,9 +1481,9 @@ TEST_F(TestTmpFile, test_handle_double_wait)
 
   STORAGE_LOG(INFO, "test_handle_double_wait");
   STORAGE_LOG(INFO, "io time", K(write_time), K(read_time));
-  ObTmpTenantFileStore *store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
@@ -1578,10 +1578,10 @@ TEST_F(TestTmpFile, test_sql_workload)
 
 
   STORAGE_LOG(INFO, "test_sql_workload");
-  STORAGE_LOG(INFO, "io time", K((write_size * cnt) / (1024*1024*1024)), K(write_time), K(read_time));
-  ObTmpTenantFileStore *store = NULL;
-  OB_TMP_FILE_STORE.get_store(1, store);
-  store->print_block_usage();
+  STORAGE_LOG(INFO, "io time", K((write_size * cnt) / (1024 * 1024 * 1024)), K(write_time), K(read_time));
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  store_handle.get_tenant_store()->print_block_usage();
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
   ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);

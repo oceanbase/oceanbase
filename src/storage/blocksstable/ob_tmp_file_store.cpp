@@ -715,12 +715,31 @@ int64_t ObTmpTenantMacroBlockManager::get_next_blk_id()
 }
 
 ObTmpTenantFileStore::ObTmpTenantFileStore()
-    : tmp_block_manager_(), page_cache_(NULL), tmp_mem_block_manager_(), file_handle_(), allocator_(), is_inited_(false)
+    : tmp_block_manager_(), page_cache_(NULL), tmp_mem_block_manager_(), file_handle_(), allocator_(), is_inited_(false), ref_cnt_(0)
 {}
 
 ObTmpTenantFileStore::~ObTmpTenantFileStore()
 {
   destroy();
+}
+
+void ObTmpTenantFileStore::inc_ref()
+{
+  ATOMIC_INC(&ref_cnt_);
+}
+
+void ObTmpTenantFileStore::dec_ref()
+{
+  int ret = OB_SUCCESS;
+  const int64_t tmp_ref = ATOMIC_SAF(&ref_cnt_, 1);
+  if (tmp_ref < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "bug: ref_cnt < 0", K(ret), K(tmp_ref), K(lbt()));
+    ob_abort();
+  } else if (0 == tmp_ref) {
+    this->~ObTmpTenantFileStore();
+    allocator_.free(this);
+  }
 }
 
 int ObTmpTenantFileStore::init(const uint64_t tenant_id, const ObStorageFileHandle& file_handle)
@@ -1184,6 +1203,48 @@ int ObTmpTenantFileStore::get_disk_macro_block_list(common::ObIArray<MacroBlockI
   return ret;
 }
 
+ObTmpTenantFileStoreHandle::ObTmpTenantFileStoreHandle() : tenant_store_()
+{}
+
+ObTmpTenantFileStoreHandle::~ObTmpTenantFileStoreHandle()
+{
+  reset();
+}
+void ObTmpTenantFileStoreHandle::set_tenant_store(ObTmpTenantFileStore *tenant_store)
+{
+  if (OB_NOT_NULL(tenant_store)) {
+    reset();
+    tenant_store->inc_ref();  // ref for handle
+    tenant_store_ = tenant_store;
+  }
+}
+
+ObTmpTenantFileStoreHandle &ObTmpTenantFileStoreHandle::operator=(const ObTmpTenantFileStoreHandle &other)
+{
+  if (&other != this) {
+    set_tenant_store(other.tenant_store_);
+  }
+  return *this;
+}
+
+bool ObTmpTenantFileStoreHandle::is_empty() const
+{
+  return NULL == tenant_store_;
+}
+
+bool ObTmpTenantFileStoreHandle::is_valid() const
+{
+  return NULL != tenant_store_;
+}
+
+void ObTmpTenantFileStoreHandle::reset()
+{
+  if (OB_NOT_NULL(tenant_store_)) {
+    tenant_store_->dec_ref();  // ref for handle
+    tenant_store_ = NULL;
+  }
+}
+
 ObTmpFileStore& ObTmpFileStore::get_instance()
 {
   static ObTmpFileStore instance;
@@ -1226,10 +1287,10 @@ int ObTmpFileStore::init(const ObStorageFileHandle& file_handle)
 int ObTmpFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, const int64_t size, ObTmpFileExtent& extent)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(OB_TMP_FILE_STORE.get_store(tenant_id, store))) {
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
-  } else if (OB_FAIL(store->alloc(dir_id, tenant_id, size, extent))) {
+  } else if (OB_FAIL(store_handle.get_tenant_store()->alloc(dir_id, tenant_id, size, extent))) {
     STORAGE_LOG(WARN, "fail to allocate extents", K(ret), K(tenant_id), K(dir_id), K(size), K(extent));
   }
   return ret;
@@ -1238,10 +1299,10 @@ int ObTmpFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, const 
 int ObTmpFileStore::read(const uint64_t tenant_id, ObTmpBlockIOInfo& io_info, ObTmpFileIOHandle& handle)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(get_store(tenant_id, store))) {
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id), K(tenant_id), K(io_info), K(handle));
-  } else if (OB_FAIL(store->read(io_info, handle))) {
+  } else if (OB_FAIL(store_handle.get_tenant_store()->read(io_info, handle))) {
     STORAGE_LOG(WARN, "fail to read the extent", K(ret), K(tenant_id), K(io_info), K(handle));
   }
   return ret;
@@ -1250,10 +1311,10 @@ int ObTmpFileStore::read(const uint64_t tenant_id, ObTmpBlockIOInfo& io_info, Ob
 int ObTmpFileStore::write(const uint64_t tenant_id, const ObTmpBlockIOInfo& io_info)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(get_store(tenant_id, store))) {
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id), K(io_info));
-  } else if (OB_FAIL(store->write(io_info))) {
+  } else if (OB_FAIL(store_handle.get_tenant_store()->write(io_info))) {
     STORAGE_LOG(WARN, "fail to write the extent", K(ret), K(tenant_id), K(io_info));
   }
   return ret;
@@ -1262,10 +1323,10 @@ int ObTmpFileStore::write(const uint64_t tenant_id, const ObTmpBlockIOInfo& io_i
 int ObTmpFileStore::free(const uint64_t tenant_id, ObTmpFileExtent* extent)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(get_store(tenant_id, store))) {
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id), K(*extent));
-  } else if (OB_FAIL(store->free(extent))) {
+  } else if (OB_FAIL(store_handle.get_tenant_store()->free(extent))) {
     STORAGE_LOG(WARN, "fail to free extents", K(ret), K(tenant_id), K(*extent));
   }
   return ret;
@@ -1275,10 +1336,10 @@ int ObTmpFileStore::free(
     const uint64_t tenant_id, const int64_t block_id, const int32_t start_page_id, const int32_t page_nums)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(get_store(tenant_id, store))) {
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
-  } else if (OB_FAIL(store->free(block_id, start_page_id, page_nums))) {
+  } else if (OB_FAIL(store_handle.get_tenant_store()->free(block_id, start_page_id, page_nums))) {
     STORAGE_LOG(WARN, "fail to free", K(ret), K(tenant_id), K(block_id), K(start_page_id), K(page_nums));
   }
   return ret;
@@ -1287,19 +1348,12 @@ int ObTmpFileStore::free(
 int ObTmpFileStore::free_tenant_file_store(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObTmpTenantFileStore* store = NULL;
-  if (OB_FAIL(tenant_file_stores_.erase_refactored(tenant_id, &store))) {
+  if (OB_FAIL(tenant_file_stores_.erase_refactored(tenant_id))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
     } else {
       STORAGE_LOG(WARN, "fail to erase tmp tenant file store", K(ret), K(tenant_id));
     }
-  } else if (OB_ISNULL(store)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected error, store is null", K(ret));
-  } else {
-    store->~ObTmpTenantFileStore();
-    allocator_.free(store);
   }
   return ret;
 }
@@ -1315,7 +1369,7 @@ int ObTmpFileStore::get_macro_block_list(common::ObIArray<MacroBlockId>& macro_i
     TenantFileStoreMap::iterator iter;
     ObTmpTenantFileStore* tmp = NULL;
     for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end(); ++iter) {
-      if (OB_ISNULL(tmp = iter->second)) {
+      if (OB_ISNULL(tmp = iter->second.get_tenant_store())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
       } else if (OB_FAIL(tmp->get_disk_macro_block_list(macro_id_list))) {
@@ -1340,7 +1394,7 @@ int ObTmpFileStore::get_macro_block_list(ObIArray<TenantTmpBlockCntPair>& tmp_bl
     for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end(); ++iter) {
       TenantTmpBlockCntPair pair;
       macro_id_list.reset();
-      if (OB_ISNULL(tmp = iter->second)) {
+      if (OB_ISNULL(tmp = iter->second.get_tenant_store())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
       } else if (OB_FAIL(tmp->get_disk_macro_block_list(macro_id_list))) {
@@ -1371,9 +1425,8 @@ int ObTmpFileStore::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
     tenant_ids.reset();
     TenantFileStoreMap::iterator iter;
     SpinRLockGuard guard(lock_);
-    for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end();
-        ++iter) {
-      if (OB_ISNULL(iter->second)) {
+    for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end(); ++iter) {
+      if (OB_ISNULL(iter->second.get_tenant_store())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
       } else if (OB_FAIL(tenant_ids.push_back(iter->first))) {
@@ -1384,17 +1437,19 @@ int ObTmpFileStore::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
   return ret;
 }
 
-int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStore *&store)
+int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHandle &handle)
 {
   int ret = OB_SUCCESS;
   void* buf = NULL;
+  handle.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
   } else {
     SpinWLockGuard guard(lock_);
-    if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, store))) {
+    if (OB_FAIL(tenant_file_stores_.get_refactored(tenant_id, handle))) {
       if (OB_HASH_NOT_EXIST == ret) {
+        ObTmpTenantFileStore *store = NULL;
         if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTmpTenantFileStore)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "fail to alloc a buf", K(ret), K(tenant_id));
@@ -1406,7 +1461,8 @@ int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStore *&s
           allocator_.free(store);
           store = NULL;
           STORAGE_LOG(WARN, "fail to init ObTmpTenantFileStore", K(ret), K(tenant_id));
-        } else if (OB_FAIL(tenant_file_stores_.set_refactored(tenant_id, store))) {
+        } else if (FALSE_IT(handle.set_tenant_store(store))) {
+        } else if (OB_FAIL(tenant_file_stores_.set_refactored(tenant_id, handle))) {
           STORAGE_LOG(WARN, "fail to set tenant_file_stores_", K(ret), K(tenant_id));
         }
       } else {
@@ -1421,13 +1477,6 @@ void ObTmpFileStore::destroy()
 {
   ObTmpPageCache::get_instance().destroy();
   TenantFileStoreMap::iterator iter;
-  ObTmpTenantFileStore* tmp = NULL;
-  for (iter = tenant_file_stores_.begin(); iter != tenant_file_stores_.end(); ++iter) {
-    if (OB_NOT_NULL(tmp = iter->second)) {
-      tmp->~ObTmpTenantFileStore();
-      allocator_.free(tmp);
-    }
-  }
   tenant_file_stores_.destroy();
   file_handle_.reset();
   allocator_.destroy();
