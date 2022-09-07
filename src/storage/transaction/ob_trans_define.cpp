@@ -1075,6 +1075,18 @@ void ObTransDesc::consistency_wait()
 
 void ObTransDesc::reset()
 {
+  if (OB_NOT_NULL(sche_ctx_)) {
+    need_print_trace_log_ = true;
+    if (EXECUTE_COUNT_PER_SEC(64)) {
+      TRANS_LOG(WARN, "reset trans desc without release sche ctx", K(*this), KP(sche_ctx_), "lbt", lbt());
+    }
+  }
+  if (OB_NOT_NULL(part_ctx_)) {
+    need_print_trace_log_ = true;
+    if (EXECUTE_COUNT_PER_SEC(64)) {
+      TRANS_LOG(WARN, "reset trans desc without release part ctx", K(*this), KP(part_ctx_), "lbt", lbt());
+    }
+  }
   if (need_print_trace_log_) {
     FORCE_PRINT_TRACE(&tlog_, "[trans error] ");
   }
