@@ -219,7 +219,7 @@ int ObExprDiv::div_float(ObObj& res, const ObObj& left, const ObObj& right, ObIA
   } else if (OB_UNLIKELY(left.get_type_class() != right.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid types", K(ret), K(left), K(right));
-  } else if (fabsf(right.get_float()) == 0.0) {
+  } else if (fabsf(right.get_float()) < EPSILON) {
     ret = OB_ERR_DIVISOR_IS_ZERO;
     LOG_WARN("division by zero not allowed now", K(res), K(left), K(right));
   } else {
@@ -246,7 +246,7 @@ int ObExprDiv::div_double(ObObj& res, const ObObj& left, const ObObj& right, ObI
   if (OB_UNLIKELY(left.get_type_class() != right.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid types", K(ret), K(left), K(right));
-  } else if (fabs(right.get_double()) == 0.0) {
+  } else if (fabs(right.get_double()) < EPSILON) {
     if (is_oracle_mode()) {
       ret = OB_ERR_DIVISOR_IS_ZERO;
       LOG_WARN("division by zero not allowed now", K(res), K(left), K(right));
@@ -278,7 +278,7 @@ int ObExprDiv::div_double_no_overflow(ObObj& res, const ObObj& left, const ObObj
   if (OB_UNLIKELY(left.get_type_class() != right.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid types", K(ret), K(left), K(right));
-  } else if (lib::is_mysql_mode() && (fabs(right.get_double()) == 0.0)) {
+  } else if (lib::is_mysql_mode() && (fabs(right.get_double()) < EPSILON)) {
     res.set_null();
   } else {
     res.set_double(left.get_double() / right.get_double());
@@ -440,7 +440,7 @@ int ObExprDiv::div_double(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   } else {
     const double left_d = left->get_double();
     const double right_d = right->get_double();
-    if (is_mysql_mode() && (fabs(right_d) == 0.0)) {
+    if (is_mysql_mode() && (fabs(right_d) < EPSILON)) {
       datum.set_null();
     } else {
       const double result_d = left_d / right_d;
@@ -643,7 +643,7 @@ int ObExprDiv::div_float(ObDatum& result, const ObDatum& left, const ObDatum& ri
   UNUSED(ctx);
   const float left_f = left.get_float();
   const float right_f = right.get_float();
-  if (fabsf(right_f) == 0.0) {
+  if (fabsf(right_f) < EPSILON) {
     ret = OB_ERR_DIVISOR_IS_ZERO;
     LOG_WARN("division by zero not allowed now", K(ret), K(right_f));
   } else {
