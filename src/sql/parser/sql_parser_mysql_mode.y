@@ -4519,21 +4519,25 @@ DATETIME
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATETIME;
+  $$->is_hidden_const_ = 1;
 }
 | TIMESTAMP
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATETIME;
+  $$->is_hidden_const_ = 1;
 }
 | DATE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATE;
+  $$->is_hidden_const_ = 1;
 }
 | TIME
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_TIME;
+  $$->is_hidden_const_ = 1;
 }
 ;
 
