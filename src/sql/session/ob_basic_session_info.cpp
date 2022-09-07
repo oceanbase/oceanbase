@@ -115,6 +115,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       thread_id_(0),
       is_password_expired_(false)
 {
+  thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
   log_id_level_map_.reset_level();
   CHAR_CARRAY_INIT(tenant_);
