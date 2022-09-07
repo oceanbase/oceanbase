@@ -1056,7 +1056,7 @@ int ObSelectLogPlan::generate_raw_plan()
   } else if (0 == select_stmt->get_from_item_size()) {
     ret = generate_plan_expr_values();
   } else if (OB_FAIL(SMART_CALL(generate_plan_for_plain_select()))) {
-    LOG_WARN("failed to generate plan for plin select.", K(ret));
+    LOG_WARN("failed to generate plan for plain select.", K(ret));
   } else { /*do nothing.*/
   }
   return ret;
