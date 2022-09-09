@@ -14368,6 +14368,7 @@ ACCOUNT
 |       UP
 |       TIMES
 |       BACKED
+|       PS       
 ;
 
 unreserved_keyword_special:
