@@ -1109,7 +1109,7 @@ int ObDagScheduler::add_dag(ObIDag* dag, const bool emergency)
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", KP(dag));
+    COMMON_LOG(WARN, "invalid argument", KP(dag));
   } else if (OB_UNLIKELY(!dag->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), K(*dag));
@@ -1914,7 +1914,7 @@ int ObDagScheduler::check_dag_exist(const ObIDag* dag, bool& exist)
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", KP(dag));
+    COMMON_LOG(WARN, "invalid argument", KP(dag));
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
     ObIDag* stored_dag = nullptr;
@@ -1944,7 +1944,7 @@ int ObDagScheduler::cancel_dag(const ObIDag* dag)
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arugment", KP(dag));
+    COMMON_LOG(WARN, "invalid argument", KP(dag));
   } else {
     {
       ObThreadCondGuard guard(scheduler_sync_);

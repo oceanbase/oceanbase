@@ -85,7 +85,7 @@ int ObTransVersionMgr::update_publish_version(const int64_t publish_version)
   int ret = OB_SUCCESS;
 
   if (!ObTransVersion::is_valid(publish_version)) {
-    TRANS_LOG(WARN, "invalid arugment", K(publish_version));
+    TRANS_LOG(WARN, "invalid argument", K(publish_version));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(update_local_trans_version_(publish_version))) {
     TRANS_LOG(WARN, "update local transaction version error", KR(ret), K(publish_version));

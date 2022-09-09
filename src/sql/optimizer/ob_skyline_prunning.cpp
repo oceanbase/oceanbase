@@ -184,7 +184,7 @@ int KeyPrefixComp::operator()(const uint64_t* left, const bool* left_const, cons
   int ret = OB_SUCCESS;
   if (left_cnt < 0 || right_cnt < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arugment", K(ret), K(left_cnt), K(right_cnt), K(ret));
+    LOG_WARN("invalid argument", K(ret), K(left_cnt), K(right_cnt), K(ret));
   } else if (0 == left_cnt && 0 == right_cnt) {
     status_ = ObSkylineDim::EQUAL;
   } else if (left_cnt == 0 || right_cnt == 0) {

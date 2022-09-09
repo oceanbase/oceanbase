@@ -26,7 +26,7 @@ int ObStdJsonConvertor::init(const char* json, char* buf, const int64_t buf_size
   int ret = OB_SUCCESS;
   if (OB_ISNULL(json) || OB_ISNULL(buf) || OB_UNLIKELY(0 == buf_size)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arugment", K(json), K(buf), K(buf_size));
+    LOG_WARN("invalid argument", K(json), K(buf), K(buf_size));
   } else {
     json_ = json;
     buf_ = buf;
