@@ -646,7 +646,7 @@ int ObVirtualRpcProtocolProcessor::decode_raw_net_rpc_packet(
   ObRpcProxy::PCodeGuard pcode_guard(OB_RPC_STREAM_TEST_DECODE_RAW_PCODE);
   if (OB_ISNULL(ms) || OB_UNLIKELY(preceding_data_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arugment", KP(ms), K(preceding_data_len), K(ret));
+    LOG_ERROR("invalid argument", KP(ms), K(preceding_data_len), K(ret));
   } else if (OB_ISNULL(ms->input) || OB_ISNULL(ms->pool)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", "input", ms->input, "pool", ms->pool, K(ret));

@@ -166,7 +166,7 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow*& row)
     ret = OB_ITER_END;
   } else if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "invalid arugment", K(ret), K(cells), K(allocator_), K(monitor_manager_));
+    SERVER_LOG(WARN, "invalid argument", K(ret), K(cells), K(allocator_), K(monitor_manager_));
   } else {
     while (OB_SUCC(get_next_monitor_info())) {  // take care of the possible "holes"
       if (NULL != plan_info_) {
