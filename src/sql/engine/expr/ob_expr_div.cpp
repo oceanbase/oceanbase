@@ -23,6 +23,8 @@ using namespace common;
 using namespace share;
 using namespace common::number;
 
+constexpr double EPSILON = 0.000000001;
+
 ObExprDiv::ObExprDiv(ObIAllocator& alloc, ObExprOperatorType type)
     : ObArithExprOperator(alloc, type, N_DIV, 2, NOT_ROW_DIMENSION, ObExprResultTypeUtil::get_div_result_type,
           ObExprResultTypeUtil::get_div_calc_type, div_funcs_)
