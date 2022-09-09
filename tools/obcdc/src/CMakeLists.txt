@@ -110,10 +110,10 @@ set(SRC_LIST
 add_library(obcdc_objects OBJECT ${SRC_LIST})
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
 target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
-target_compile_options(obcdc_objects PRIVATE -Werror)
+#target_compile_options(obcdc_objects PRIVATE -Werror)
 
 disable_pch(obcdc_objects)
-set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a -laio")
+set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmysqlclient -laio")
 
 if (OB_SO_CACHE)
   add_library(obcdc SHARED IMPORTED GLOBAL)
@@ -131,7 +131,7 @@ else()
     -Wl,--start-group
     oceanbase_static
     -Wl,--end-group
-    PRIVATE -static-libgcc -static-libstdc++
+    -lgcc -lstdc++
     -Wl,-Bsymbolic
     -Wl,-e,so_main
     ${LGPL_DEPS}
@@ -144,14 +144,14 @@ add_library(obcdc_objects_miner OBJECT ${SRC_LIST})
 disable_pch(obcdc_objects_miner)
 target_link_libraries(obcdc_objects_miner PUBLIC obcdc_base)
 add_library(obcdc_static
-  STATIC
+  SHARED
   ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
 target_link_libraries(obcdc_static
   PUBLIC obcdc_objects_miner
   -Wl,--start-group
   oceanbase_static
   -Wl,--end-group
-  PRIVATE -static-libgcc -static-libstdc++
+  PRIVATE -lgcc -lstdc++
   ${LGPL_DEPS}
   )
 set_target_properties(obcdc_static PROPERTIES OUTPUT_NAME "obcdc")

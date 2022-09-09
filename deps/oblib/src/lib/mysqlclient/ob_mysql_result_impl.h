@@ -12,7 +12,7 @@
 
 #ifndef __OB_COMMON_SQLCLIENT_OB_MYSQL_RESULT__
 #define __OB_COMMON_SQLCLIENT_OB_MYSQL_RESULT__
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "rpc/obmysql/ob_mysql_global.h"
 

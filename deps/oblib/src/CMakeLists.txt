@@ -3,11 +3,18 @@ add_library(oblib_base_base INTERFACE)
 message(STATUS "check deps for oblib")
 
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(RAPIDJSON REQUIRED IMPORTED_TARGET RapidJSON)
+pkg_check_modules(ISAL REQUIRED IMPORTED_TARGET libisal)
+
 target_include_directories(
   oblib_base_base INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${EASY_INCLUDE_DIRS}
   ${DEP_DIR}/include
+  ${RAPIDJSON_INCLUDE_DIRS}
+  ${ISAL_INCLUDE_DIRS}
 )
 
 set(ARCH_COMPILE_OPTIONS "")
@@ -21,8 +28,8 @@ if (OB_USE_CLANG)
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION 
     -Wall -Wextra -Wformat -Wno-deprecated
     -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-    -Wno-address-of-packed-member -Wno-sign-compare -Werror 
-    -Wno-inconsistent-missing-override 
+    -Wno-address-of-packed-member -Wno-sign-compare
+    -Wno-inconsistent-missing-override
     -fno-delete-null-pointer-checks
     -Wno-delete-non-virtual-dtor -Wno-dynamic-class-memaccess
     -Wno-format-security -Wno-reserved-user-defined-literal -Wno-sometimes-uninitialized
@@ -56,7 +63,7 @@ target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 target_link_libraries(oblib_base_base
   INTERFACE
   -L${DEP_DIR}/lib
-  -l:libisal.a -l:libunwind.a -lpthread -ldl -lrt -l:libssl.a -l:libcrypto.a -l:libcurl.a ${ARCH_LDFLAGS})
+  ${ISAL_LIBRARIES} -lunwind -lpthread -ldl -lrt -lcrypto -lcurl ${ARCH_LDFLAGS})
 
 add_library(oblib_base INTERFACE)
 target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)

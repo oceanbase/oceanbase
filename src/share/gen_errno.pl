@@ -310,6 +310,11 @@ print $fh_cpp '/**
 #define NULL 0
 #include <string.h>
 #endif
+
+#define ER_KEY_COLUMN_DOES_NOT_EXITS -5211
+#define ER_DROP_PARTITION_NON_EXISTENT -5303
+#define ER_BLOB_CANT_HAVE_DEFAULT -5994
+
 using namespace oceanbase::common;
 
 // fix ob_error.cpp file requires at least 20g memory for release(-O2) compilation

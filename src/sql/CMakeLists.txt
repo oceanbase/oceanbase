@@ -1172,8 +1172,9 @@ ob_server_add_pchs(sql
 
 ob_server_add_target(ob_sql)
 
+SET(GEN_PARSER_SCRIPT ${CMAKE_SOURCE_DIR}/src/sql/parser/gen_parser.sh)
 execute_process(
-  COMMAND bash gen_parser.sh
+  COMMAND bash ${GEN_PARSER_SCRIPT}
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/sql/parser
   OUTPUT_FILE _gen_parser.output
   ERROR_FILE _gen_parser.error)

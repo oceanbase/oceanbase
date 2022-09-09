@@ -12,7 +12,7 @@
 
 #ifndef OCEANBASE_SINGLE_MYSQL_CONNECTION_POOL_H_
 #define OCEANBASE_SINGLE_MYSQL_CONNECTION_POOL_H_
-#include <mariadb/mysql.h>
+#include <mysql/mysql.h>
 #include "lib/container/ob_se_array.h"
 #include "lib/list/ob_list.h"
 #include "lib/allocator/ob_cached_allocator.h"

@@ -20,6 +20,14 @@ set_property(GLOBAL PROPERTY EASY_INCLUDE_DIRS
   ${INNER_INCLUDE_DIRS}
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
+if(${OPENSSL_FOUND})
+  include_directories(${OPENSSL_INCLUDE_DIRS})
+else()
+  message("oceanbase need openssl")
+endif()
+
 target_include_directories(
   easy_base INTERFACE
   ${INNER_INCLUDE_DIRS}
@@ -43,13 +51,15 @@ target_compile_options(easy_base
   INTERFACE
   -D_GLIBCXX_USE_CXX11_ABI=0 -D_GNU_SOURCE -D__STDC_LIMIT_MACROS
   ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-  $<$<COMPILE_LANGUAGE:C>:-g -Wall -Werror -fPIC ${EASY_CC_WNO}>
+  $<$<COMPILE_LANGUAGE:C>:-g -Wall -fPIC ${EASY_CC_WNO}>
 )
 
 target_link_libraries(easy_base
   INTERFACE
   -L${DEP_DIR}/lib
-  -lpthread -lm -l:libssl.a -l:libcrypto.a
+  -L${OPENSSL_LIBDIR}
+  ${OPENSSL_LIBRARIES}
+  -lpthread -lm
   ${ARCH_LDFLAGS}
 )
 
