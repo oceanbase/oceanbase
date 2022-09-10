@@ -177,10 +177,18 @@ public:
       data_length_ = 0;
     }
   }
-
+  /*
+   * contain two condition: buffer_size_ = 0 means do not hold the buf, buffer_size_ > 0 means hold the buffer
+   */
   inline obstr_size_t set_length(const obstr_size_t length)
   {
-    if (OB_LIKELY(NULL != ptr_) && OB_LIKELY(length <= buffer_size_)) {
+    if (OB_ISNULL(ptr_)){
+      //do nothing
+    }
+    else if (buffer_size_ == 0) {
+      data_length_ = length;
+    }
+    else if (buffer_size_ > 0 && OB_LIKELY(length <= buffer_size_)) {
       data_length_ = length;
     }
     return data_length_;
