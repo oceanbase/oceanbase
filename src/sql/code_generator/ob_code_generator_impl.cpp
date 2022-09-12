@@ -1128,8 +1128,7 @@ int ObCodeGeneratorImpl::convert_limit(ObLogLimit& op, const PhyOpsDesc& child_o
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong # of children", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    // do nothing
   } else if (OB_FAIL(create_phy_op_desc(PHY_LIMIT, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
     LOG_WARN("failed to create phy op and desc", K(ret));
   } else if (OB_ISNULL(out_row_desc) || OB_ISNULL(input_row_desc) || OB_ISNULL(phy_op)) {
@@ -7269,7 +7268,7 @@ int ObCodeGeneratorImpl::convert_select_into(ObLogSelectInto& op, const PhyOpsDe
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong # of children", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
+    //do nothing
   } else if (OB_FAIL(create_phy_op_desc(PHY_SELECT_INTO, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
     LOG_WARN("failed to create phy op and desc", K(ret));
   } else if (OB_ISNULL(out_row_desc) || OB_ISNULL(input_row_desc) || OB_ISNULL(phy_op)) {
@@ -7303,7 +7302,7 @@ int ObCodeGeneratorImpl::convert_topk(ObLogTopk& op, const PhyOpsDesc& child_ops
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong # of children", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
+    //do nothing
   } else if (OB_FAIL(create_phy_op_desc(PHY_TOPK, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
     LOG_WARN("failed to create phy op and desc", K(ret));
   } else if (OB_ISNULL(out_row_desc) || OB_ISNULL(input_row_desc) || OB_ISNULL(phy_op)) {
@@ -7379,7 +7378,7 @@ int ObCodeGeneratorImpl::convert_count(ObLogCount& op, const PhyOpsDesc& child_o
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong # of childern", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
+    //do nothing
   } else if (OB_FAIL(create_phy_op_desc(PHY_COUNT, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
     LOG_WARN("failed to create phy op and desc", K(ret));
   } else if (OB_ISNULL(out_row_desc) || OB_ISNULL(input_row_desc) || OB_ISNULL(phy_op)) {
@@ -8584,7 +8583,7 @@ int ObCodeGeneratorImpl::convert_light_granule_iterator(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong # of children", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
+    //do nothing
   } else if (OB_ISNULL(child_log_op = op.get_child(0))) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(create_phy_op_desc(PHY_LIGHT_GRANULE_ITERATOR, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
@@ -8679,7 +8678,7 @@ int ObCodeGeneratorImpl::convert_granule_iterator(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong # of children", K(ret), K(child_ops.count()));
   } else if (FALSE_IT(input_row_desc = child_ops.at(0).second)) {
-    ret = OB_ERR_UNEXPECTED;
+    //do nothing
   } else if (OB_ISNULL(child_log_op = op.get_child(0))) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(create_phy_op_desc(PHY_GRANULE_ITERATOR, phy_op, out_row_desc, out_ops, op.get_op_id()))) {
