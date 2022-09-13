@@ -97,7 +97,7 @@ public:
     {
       return get_size();
     }
-    void* alloc(int64_t size)
+    void* alloc(const int64_t size)
     {
       return NULL == host_ ? NULL : host_->alloc(*this, size);
     }

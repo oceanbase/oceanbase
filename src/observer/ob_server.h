@@ -141,7 +141,7 @@ class ObRefreshTime {
 
   class ObCTASCleanUp {
   public:
-    explicit ObCTASCleanUp(ObServer* obs, bool drop_flag) : obs_(obs), drop_flag_(drop_flag)
+    explicit ObCTASCleanUp(ObServer* obs, bool drop_flag) : obs_(obs), drop_flag_(drop_flag), cleanup_rule_type_(0) 
     {}
     virtual ~ObCTASCleanUp()
     {}

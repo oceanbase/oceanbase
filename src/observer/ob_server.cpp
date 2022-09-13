@@ -1829,7 +1829,8 @@ int ObServer::get_network_speed_from_config_file(int64_t &network_speed)
       nic_rate_file_exist = 1;
     }
     memset(buf, 0, MAX_NIC_CONFIG_FILE_SIZE + 1);
-    fread(buf, 1, MAX_NIC_CONFIG_FILE_SIZE, fp);
+    // ignore return value of fread, because ferror can get fread state
+    IGNORE_RETURN fread(buf, 1, MAX_NIC_CONFIG_FILE_SIZE, fp);
     char *prate = nullptr;
 
     if (OB_UNLIKELY(0 != ferror(fp))) {
