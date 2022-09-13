@@ -1030,8 +1030,6 @@ public:
   int clean_all_sys_vars();
   SysVarIncInfo sys_var_inc_info_;
 
-  // current executing physical plan
-  ObPhysicalPlan* get_cur_phy_plan() const;
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   void reset_cur_phy_plan_to_null();

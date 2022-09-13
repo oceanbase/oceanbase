@@ -1629,12 +1629,7 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString& var, bool& is_exists
   return ret;
 }
 
-ObPhysicalPlan* ObBasicSessionInfo::get_cur_phy_plan() const
-{
-  return cur_phy_plan_;
-}
-
-int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
+int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_phy_plan)) {
