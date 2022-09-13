@@ -1,5 +1,5 @@
 # What is OceanBase Database
-OceanBase is a distributed relational SQL database built from scratch by Ant Group. It is highly scalable, resilient and can take on both transactional and analytical workloads, and it is highly compatible with MySQL syntax and features. OceanBase can be deployed on virtual machines in any cloud or physical hosts on-premise. Meanwhile, since it is a multi-tenant cluster, users can achieve database resource pooling and improve their efficiency.
+OceanBase is a distributed relational SQL database built from scratch. It is highly scalable, resilient and can take on both transactional and analytical workloads, and it is highly compatible with MySQL syntax and features. OceanBase can be deployed on virtual machines in any cloud or physical hosts on-premise. Meanwhile, since it is a multi-tenant cluster, users can achieve database resource pooling and improve their efficiency.
 
 ## Core features
 
