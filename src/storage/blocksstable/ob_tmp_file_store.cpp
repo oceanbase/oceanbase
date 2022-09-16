@@ -728,7 +728,7 @@ void ObTmpTenantFileStore::inc_ref()
   ATOMIC_INC(&ref_cnt_);
 }
 
-void ObTmpTenantFileStore::dec_ref()
+int64_t ObTmpTenantFileStore::dec_ref()
 {
   int ret = OB_SUCCESS;
   const int64_t tmp_ref = ATOMIC_SAF(&ref_cnt_, 1);
@@ -736,10 +736,8 @@ void ObTmpTenantFileStore::dec_ref()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "bug: ref_cnt < 0", K(ret), K(tmp_ref), K(lbt()));
     ob_abort();
-  } else if (0 == tmp_ref) {
-    this->~ObTmpTenantFileStore();
-    allocator_.free(this);
   }
+  return tmp_ref;
 }
 
 int ObTmpTenantFileStore::init(const uint64_t tenant_id, const ObStorageFileHandle& file_handle)
@@ -1210,19 +1208,21 @@ ObTmpTenantFileStoreHandle::~ObTmpTenantFileStoreHandle()
 {
   reset();
 }
-void ObTmpTenantFileStoreHandle::set_tenant_store(ObTmpTenantFileStore *tenant_store)
+void ObTmpTenantFileStoreHandle::set_tenant_store(
+    ObTmpTenantFileStore *tenant_store, common::ObConcurrentFIFOAllocator *allocator)
 {
   if (OB_NOT_NULL(tenant_store)) {
     reset();
-    tenant_store->inc_ref();  // ref for handle
+    tenant_store->inc_ref();
     tenant_store_ = tenant_store;
+    allocator_ = allocator;
   }
 }
 
 ObTmpTenantFileStoreHandle &ObTmpTenantFileStoreHandle::operator=(const ObTmpTenantFileStoreHandle &other)
 {
   if (&other != this) {
-    set_tenant_store(other.tenant_store_);
+    set_tenant_store(other.tenant_store_, other.allocator_);
   }
   return *this;
 }
@@ -1240,7 +1240,11 @@ bool ObTmpTenantFileStoreHandle::is_valid() const
 void ObTmpTenantFileStoreHandle::reset()
 {
   if (OB_NOT_NULL(tenant_store_)) {
-    tenant_store_->dec_ref();  // ref for handle
+    int64_t tmp_ref = tenant_store_->dec_ref();
+    if (0 == tmp_ref) {
+      tenant_store_->~ObTmpTenantFileStore();
+      allocator_->free(tenant_store_);
+    }
     tenant_store_ = NULL;
   }
 }
@@ -1461,7 +1465,7 @@ int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHand
           allocator_.free(store);
           store = NULL;
           STORAGE_LOG(WARN, "fail to init ObTmpTenantFileStore", K(ret), K(tenant_id));
-        } else if (FALSE_IT(handle.set_tenant_store(store))) {
+        } else if (FALSE_IT(handle.set_tenant_store(store, &allocator_))) {
         } else if (OB_FAIL(tenant_file_stores_.set_refactored(tenant_id, handle))) {
           STORAGE_LOG(WARN, "fail to set tenant_file_stores_", K(ret), K(tenant_id));
         }

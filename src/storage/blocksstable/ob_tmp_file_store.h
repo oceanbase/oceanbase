@@ -276,7 +276,7 @@ public:
     return tmp_block_manager_.get_block_size();
   }
   void inc_ref();
-  void dec_ref();
+  int64_t dec_ref();
 
 private:
   int read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io_info, ObTmpFileIOHandle& handle);
@@ -310,7 +310,7 @@ public:
   ~ObTmpTenantFileStoreHandle();
   ObTmpTenantFileStoreHandle(const ObTmpTenantFileStoreHandle &other);
   ObTmpTenantFileStoreHandle &operator=(const ObTmpTenantFileStoreHandle &other);
-  void set_tenant_store(ObTmpTenantFileStore *store);
+  void set_tenant_store(ObTmpTenantFileStore *store, common::ObConcurrentFIFOAllocator *allocator);
   bool is_empty() const;
   bool is_valid() const;
   void reset();
@@ -321,6 +321,7 @@ public:
 
 private:
   ObTmpTenantFileStore *tenant_store_;
+  common::ObConcurrentFIFOAllocator *allocator_;
 };
 
 class ObTmpFileStore {
