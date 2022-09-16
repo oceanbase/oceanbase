@@ -84,7 +84,7 @@ int ObJsonBin::check_valid_array_op(ObIJsonBase *value) const
   } else if (value->is_tree()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("value is json tree, not supported", K(ret), K(*value));
-  } 
+  }
 
   return ret;
 }
@@ -114,7 +114,7 @@ int ObJsonBin::check_valid_array_op(uint64_t index) const
   } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid json node type", K(ret), K(json_type()));
-  } 
+  }
 
   return ret;
 }
@@ -147,7 +147,7 @@ int ObJsonBin::array_insert(uint64_t index, ObIJsonBase *value)
       LOG_WARN("fail to insert value to array", K(ret), K(index), K(*value));
     }
   }
-  
+
   return ret;
 }
 
@@ -170,7 +170,7 @@ int ObJsonBin::array_append(ObIJsonBase *value)
 int ObJsonBin::replace(const ObIJsonBase *old_node, ObIJsonBase *new_node)
 {
   INIT_SUCC(ret);
-  
+
   if (OB_ISNULL(old_node) || OB_ISNULL(new_node)) { // check param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null param", K(ret), KP(old_node), KP(new_node));
@@ -239,7 +239,7 @@ int ObJsonBin::array_remove(uint64_t index)
     }
   }
 
-  return ret;  
+  return ret;
 }
 
 int ObJsonBin::get_raw_binary(common::ObString &out, ObIAllocator *allocator) const
@@ -287,7 +287,7 @@ int ObJsonBin::create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc json bin fail", K(ret), K(sizeof(ObJsonBin)));
-    }   
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -297,7 +297,7 @@ int ObJsonBin::create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const
       new_bin = new (buf) ObJsonBin(sub.ptr(), sub.length(), allocator);
       if (OB_FAIL(new_bin->reset_iter())) {
         LOG_WARN("fail to reset iter for new json bin", K(ret));
-      } 
+      }
     }
   }
 
@@ -374,7 +374,7 @@ int ObJsonBin::serialize_json_object(ObJsonObject *object, ObJsonBuffer &result,
   // object header [node_type:uint8_t][type:uint8_t][member_count:var][object_size_:var]
   ObJsonBinObjHeader header;
   header.is_continuous_ = 1;
-  uint64_t obj_size = object->get_serialize_size();  
+  uint64_t obj_size = object->get_serialize_size();
   header.entry_size_ = ObJsonVar::get_var_type(obj_size);
   header.obj_size_size_ = header.entry_size_;
   header.count_size_ = ObJsonVar::get_var_type(count);
@@ -484,7 +484,7 @@ int ObJsonBin::serialize_json_object(ObJsonObject *object, ObJsonBuffer &result,
     } else {
       ObJsonBinObjHeader *header = reinterpret_cast<ObJsonBinObjHeader*>(result.ptr() + st_pos);
       real_obj_size = static_cast<uint64_t>(result.length() - st_pos);
-      ObJsonVar::set_var(real_obj_size, header->obj_size_size_, header->used_size_ + ObJsonVar::get_var_size(header->count_size_));     
+      ObJsonVar::set_var(real_obj_size, header->obj_size_size_, header->used_size_ + ObJsonVar::get_var_size(header->count_size_));
     }
   }
 
@@ -908,7 +908,7 @@ int ObJsonBin::parse_tree(ObJsonNode *json_tree)
     }
   } else {
     ObJBVerType ver_type = ObJsonVerType::get_json_vertype(root_type);
-    if (!ObJsonVerType::is_opaque_or_string(ver_type) && 
+    if (!ObJsonVerType::is_opaque_or_string(ver_type) &&
         OB_FAIL(result_.append(reinterpret_cast<const char*>(&ver_type), sizeof(uint8_t)))) {
       LOG_WARN("failed to serialize json tree at append used size", K(ret), K(result_.length()));
       result_.reset();
@@ -1496,7 +1496,7 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
     uint8_t max_offset_type;
     bool is_first_uninline = true;
     bool is_continuous = (reinterpret_cast<const ObJsonBinHeader*>(data))->is_continuous_;
-    
+
     for (int64_t i = count - 1; OB_SUCC(ret) && i >= 0 && is_first_uninline; --i) {
       val_offset = offset + (entry_size + sizeof(uint8_t)) * i;
       if (cur_node == ObJsonNodeType::J_OBJECT) {
@@ -1504,7 +1504,7 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
       }
       const char* val_offset_ptr = data + val_offset;
       uint64_t node_offset;
-      
+
       node_type = static_cast<uint8_t>(*static_cast<const char*>(val_offset_ptr + entry_size));
       if (OB_JSON_TYPE_IS_INLINE(node_type)) {
         if (max_val_offset < val_offset_ptr + 1 - data) {
@@ -1524,7 +1524,7 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
 
     if (OB_SUCC(ret) && max_val_offset > offset) {
       uint64_t node_max_offset = 0;
-      if (!OB_JSON_TYPE_IS_INLINE(node_type) && 
+      if (!OB_JSON_TYPE_IS_INLINE(node_type) &&
           OB_FAIL(get_max_offset(data + max_val_offset, static_cast<ObJsonNodeType>(max_offset_type), node_max_offset))) {
         LOG_WARN("get max offset failed.", K(ret), K(cur_node));
       } else {
@@ -1542,28 +1542,21 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
   return ret;
 }
 
-int ObJsonBin::get_use_size(uint64_t& real_size, uint64_t& used_size) const
+int ObJsonBin::get_use_size(uint64_t &used_size) const
 {
   INIT_SUCC(ret);
   int32_t stk_len = stack_size(stack_buf_);
-  uint8_t node_type, type, obj_size_type;
-  uint64_t count, obj_size, offset = 0;
-  const char* data = curr_.ptr() + pos_;
-  parse_obj_header(data, offset, node_type, type, obj_size_type, count, obj_size);
-  ObJsonNodeType cur_node = ObJsonVerType::get_json_type(static_cast<ObJBVerType>(node_type));
+  const char *data = curr_.ptr() + pos_;
+  ObJBVerType ver_type = static_cast<ObJBVerType>(*reinterpret_cast<const uint8_t *>(data));
+  ObJsonNodeType json_type = static_cast<ObJsonNodeType>(ver_type);
+
   if (stk_len == 0) {
-    if (!(cur_node == ObJsonNodeType::J_ARRAY || cur_node == ObJsonNodeType::J_OBJECT)) {
-      real_size = obj_size; 
-    } else {
-      real_size = curr_.length();
-    }
     used_size = curr_.length();
   } else {
     uint64_t max_offset = 0;
-    if (OB_FAIL(get_max_offset(data, cur_node, max_offset))) {
+    if (OB_FAIL(get_max_offset(data, json_type, max_offset))) {
       LOG_WARN("get max offset.", K(ret));
     } else {
-      real_size = obj_size;
       used_size = max_offset;
       if (curr_.length() - pos_ < used_size) {
         used_size = curr_.length() - pos_;
@@ -1628,14 +1621,14 @@ int ObJsonBin::raw_binary(ObString &buf, ObIAllocator *allocator) const
 int ObJsonBin::raw_binary_at_iter(ObString &buf) const
 {
   INIT_SUCC(ret);
-  uint64_t used_size = 0, real_size = 0;
+  uint64_t used_size = 0;
   if (OB_ISNULL(curr_.ptr())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json binary ptr is null.", K(ret));
   } else if (pos_ >= curr_.length()) {
     ret = OB_ERROR_OUT_OF_RANGE;
     LOG_WARN("json binary iter pos invalid", K(ret), K(pos_), K(curr_.length()));
-  } else if (OB_FAIL(get_use_size(real_size, used_size))) {
+  } else if (OB_FAIL(get_use_size(used_size))) {
     LOG_WARN("get use size failed", K(ret));
   } else {
     buf.assign_ptr(curr_.ptr() + pos_, used_size);
@@ -1665,7 +1658,7 @@ int ObJsonBin::get_free_space(size_t &space) const
       space = actual_size - used_size;
     }
   }
-  
+
   return ret;
 }
 
@@ -1720,15 +1713,15 @@ int ObJsonBin::move_iter(ObJsonBuffer& stack, uint32_t start)
   stack_at(stack, start, node_meta);
   data += node_meta.offset_;
   offset = node_meta.offset_;
-  
+
   uint8_t node_type, type, obj_size_type;
   uint64_t count, obj_size;
-  
+
   for (uint32_t idx = 0; OB_SUCC(ret) && idx < depth; ++idx) {
     stack_at(stack, idx, node_meta);
     node_meta.offset_ = data - result_.ptr();
     parse_obj_header(data, offset, node_type, type, obj_size_type, count, obj_size);
-    if (ObJsonVerType::is_array(static_cast<ObJBVerType>(node_type)) || 
+    if (ObJsonVerType::is_array(static_cast<ObJBVerType>(node_type)) ||
         ObJsonVerType::is_object(static_cast<ObJBVerType>(node_type))) {
       uint64_t type_size = ObJsonVar::get_var_size(type);
       uint64_t key_entry_size = 2 * type_size;
@@ -1872,7 +1865,7 @@ int ObJsonBin::set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t ty
             element_count_ = length;
             bytes_ = length + pos;
             data_ = data_ + pos;
-          }  
+          }
         } else {
           ret = OB_ERR_INTERVAL_INVALID;
           LOG_WARN("parse string type invlaid vertype.", K(ret), K(vertype));
@@ -2088,7 +2081,7 @@ int ObJsonBin::lookup(const ObString &key)
   return ret;
 }
 
-void ObJsonBin::parse_obj_header(const char *data, uint64_t &offset, 
+void ObJsonBin::parse_obj_header(const char *data, uint64_t &offset,
      uint8_t &node_type, uint8_t &type, uint8_t& obj_size_type, uint64_t &count, uint64_t &obj_size) const
 {
   const ObJsonBinObjHeader *header = reinterpret_cast<const ObJsonBinObjHeader*>(data + offset);
@@ -2341,7 +2334,7 @@ int ObJsonBin::estimate_need_rebuild(ObJsonBuffer& update_stack, int64_t size_ch
       stack_update(update_stack, idx, path_node);
     }
 
-    // if top pos == 0, do rebuild 
+    // if top pos == 0, do rebuild
     if (top_pos != 0 && need_rebuild) {
       ObJsonBuffer nw_stack(update_stack.get_allocator());
       uint32_t tmp_pos = top_pos;
@@ -2372,7 +2365,7 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
       uint64_t offset = old_node.offset_;
       uint8_t node_type, var_type, obj_size_type;
       uint64_t count, obj_size;
-      
+
       const ObJsonBinObjHeader *header = reinterpret_cast<const ObJsonBinObjHeader*>(data + offset);
       // parsing header using v0 format
       parse_obj_header(data, offset, node_type, var_type, obj_size_type, count, obj_size);
@@ -2381,7 +2374,7 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
       new_header.entry_size_ = new_node.entry_type_;
       new_header.obj_size_size_ = new_node.size_type_;
       new_header.is_continuous_ = 1;
-      uint64_t new_count_size = ObJsonVar::get_var_size(header->count_size_); 
+      uint64_t new_count_size = ObJsonVar::get_var_size(header->count_size_);
       uint64_t new_type_size = ObJsonVar::get_var_size(new_node.entry_type_);
       uint64_t new_key_entry_size = new_type_size * 2;
       uint64_t new_val_entry_size = new_type_size + sizeof(uint8_t);
@@ -2421,13 +2414,13 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
           uint64_t new_key_entry_offset = result.length() - st_pos;
           new_val_entry_offset = new_key_entry_offset + count * new_key_entry_size;
           result.set_length(result.length() + reserve_entry_size);
-          
+
           // using latest bin format
           uint64_t key_offset, key_len;
           const char *key_entry = (data + offset);
           const char *last_key_offset_ptr = key_entry + key_entry_size * (count - 1);
           const char *last_key_len_ptr = key_entry + key_entry_size * (count - 1) + type_size;
-          
+
           // get last key offest and len
           if (OB_FAIL(ObJsonVar::read_var(last_key_offset_ptr, var_type, &key_offset))) {
             LOG_WARN("failed to read key offset", K(ret));
@@ -2458,12 +2451,12 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
       }
 
       // reserve value entry array
-      
+
       if (OB_SUCC(ret) && ObJsonVerType::is_array(static_cast<ObJBVerType>(old_node.ver_type_))) {
         new_val_entry_offset = result.length() - st_pos;
         result.set_length(result.length() + reserve_entry_size);
       }
-      
+
       // process value
       for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
         uint64_t new_val_offset = result.length() - st_pos;
@@ -2552,7 +2545,7 @@ int ObJsonBin::update_parents(int64_t size_change, bool is_continous)
     stack_at(stack_buf_, top_pos, old_node);
     stack_at(new_stack, top_pos, new_node);
     if (old_node.ver_type_ == ObJBVerType::J_OBJECT_V0 || old_node.ver_type_ == ObJBVerType::J_ARRAY_V0) {
-      if (OB_FAIL(result_.reserve(new_node.obj_size_)) || 
+      if (OB_FAIL(result_.reserve(new_node.obj_size_)) ||
           OB_FAIL(rebuild_with_meta(data, new_node.obj_size_, stack_buf_, new_stack, top_pos, stack_len-1, result_))) {
         LOG_WARN("failed to rebuild.", K(ret));
       } else {
@@ -2612,11 +2605,11 @@ int ObJsonBin::update_parents(int64_t size_change, bool is_continous)
       if (OB_FAIL(ObJsonVar::read_var(header->used_size_ + offset, header->obj_size_size_, &obj_size))) {
         LOG_WARN("failed to read obj size.", K(ret), K(header->obj_size_size_));
       } else {
-        obj_size += size_change; 
+        obj_size += size_change;
         if (OB_FAIL(ObJsonVar::set_var(obj_size, header->obj_size_size_, header->used_size_ + offset))) {
           LOG_WARN("failed to set new obj size.", K(ret), K(obj_size), K(header->obj_size_size_));
         }
-      }  
+      }
     } else {
       ret = OB_ERR_INTERVAL_INVALID;
       LOG_WARN("failed to update obj size.", K(ret));
@@ -2644,7 +2637,7 @@ int ObJsonBin::update_offset(uint64_t parent_offset, uint64_t idx, uint64_t valu
     uint64_t type_size = ObJsonVar::get_var_size(var_type);
     uint64_t key_entry_size = type_size * 2;
     uint64_t val_entry_size = (type_size + sizeof(uint8_t));
-    
+
     char* value_offset_ptr = data + offset + idx * val_entry_size;
     if (vertype == ObJBVerType::J_OBJECT_V0) {
       value_offset_ptr += key_entry_size * count;
@@ -2764,13 +2757,13 @@ int ObJsonBin::insert(ObJsonBin *new_value, int64_t pos)
 }
 
 int ObJsonBin::append(ObJsonBin *new_value)
-{ 
-  return insert(new_value, OB_JSON_INSERT_LAST); 
+{
+  return insert(new_value, OB_JSON_INSERT_LAST);
 }
 
-int ObJsonBin::add(const ObString &key, ObJsonBin *new_value) 
+int ObJsonBin::add(const ObString &key, ObJsonBin *new_value)
 {
-  return insert(key, new_value, OB_JSON_INSERT_LAST); 
+  return insert(key, new_value, OB_JSON_INSERT_LAST);
 }
 
 int ObJsonBin::update(int index, ObJsonBin *new_value)
@@ -2809,7 +2802,7 @@ int ObJsonBin::insert_internal_v0(ObJBNodeMeta& meta, int64_t pos, const ObStrin
   uint8_t node_type, var_type, obj_size_type;
   uint64_t count, obj_size;
   bool is_obj_type = json_type() == ObJsonNodeType::J_OBJECT;
-  
+
   char* data = result_.ptr();
   const ObJsonBinHeader *header = reinterpret_cast<const ObJsonBinHeader*>(data + offset);
   // parsing header using v0 format
@@ -2822,7 +2815,7 @@ int ObJsonBin::insert_internal_v0(ObJBNodeMeta& meta, int64_t pos, const ObStrin
   new_header.is_continuous_ = 1;
   new_header.count_size_ = ObJsonVar::get_var_type(count + 1);
   new_header.type_ = meta.ver_type_;
-  uint64_t new_count_size = ObJsonVar::get_var_size(new_header.count_size_); 
+  uint64_t new_count_size = ObJsonVar::get_var_size(new_header.count_size_);
   uint64_t new_type_size = ObJsonVar::get_var_size(new_header.entry_size_);
   uint64_t new_key_entry_size = new_type_size * 2;
   uint64_t new_val_entry_size = new_type_size + sizeof(uint8_t);
@@ -2974,7 +2967,7 @@ int ObJsonBin::insert_v0(int64_t pos, const ObString &key, ObJsonBin *new_value)
   INIT_SUCC(ret);
   bool is_exist = false;
   bool is_obj_type = json_type() == ObJsonNodeType::J_OBJECT;
-  
+
   if (is_obj_type) {
     size_t idx;
     if (OB_SUCC(lookup_index(key, &idx))) {
@@ -3000,7 +2993,7 @@ int ObJsonBin::insert_v0(int64_t pos, const ObString &key, ObJsonBin *new_value)
     uint64_t type_size = ObJsonVar::get_var_size(var_type);
     uint64_t key_entry_size = type_size * 2;
     uint64_t val_entry_size = (type_size + sizeof(uint8_t));
-    
+
     uint64_t new_obj_size = obj_size + new_value->get_used_bytes();
     uint8_t new_count_type = ObJsonVar::get_var_type(count + 1);
     uint8_t new_entry_type = ObJsonVar::get_var_type(new_obj_size);
@@ -3027,7 +3020,7 @@ int ObJsonBin::insert_v0(int64_t pos, const ObString &key, ObJsonBin *new_value)
       new_obj_size_type = ObJsonVar::get_var_type(new_obj_size);
       new_entry_type = new_obj_size_type;
     }
-    
+
     int32_t stk_len = stack_size(stack_buf_);
     ObJsonBuffer nw_stack(allocator_);
     uint32_t top_pos = stk_len;
@@ -3148,7 +3141,7 @@ int ObJsonBin::update_v0(int index, ObJsonBin *new_value)
       if (this->json_type() == ObJsonNodeType::J_ARRAY || this->json_type() == ObJsonNodeType::J_OBJECT) {
         can_do_inplace = (this->is_discontinuous() == false);
       }
-      int64_t bytes_changed = is_inlined ? new_value_bin->get_used_bytes() : 
+      int64_t bytes_changed = is_inlined ? new_value_bin->get_used_bytes() :
                               (new_value_bin->get_used_bytes() - this->get_used_bytes());
       if (bytes_changed <= 0 && can_do_inplace) {
         // 5. do inplace update
@@ -3187,7 +3180,7 @@ int ObJsonBin::update_v0(int index, ObJsonBin *new_value)
               ObJBNodeMeta new_top_meta;
               stack_at(nw_stack, top_pos, new_top_meta);
               stack_at(stack_buf_, top_pos, path_node);
-              
+
               int64_t meta_change = new_top_meta.obj_size_ - path_node.obj_size_;
               if (top_pos != 0) {
                 ObJBNodeMeta upper_node, path_node;
@@ -3262,7 +3255,7 @@ int ObJsonBin::update_v0(int index, ObJsonBin *new_value)
           stack_back(stack_buf_, path_node);
           int64_t parent_pos = path_node.offset_;
           data = result_.ptr();
-          
+
           type_size = ObJsonVar::get_var_size(path_node.entry_type_);
           key_entry_size = type_size * 2;
           val_entry_size = (type_size + sizeof(uint8_t));
@@ -3331,7 +3324,7 @@ int ObJsonBin::remove_v0(size_t index)
       char *next_key_entry = curr_key_entry + key_entry_size;
       uint64_t len = key_entry_size * (count - index - 1) + val_entry_size * index;
       MEMMOVE(curr_key_entry, next_key_entry, len);
-      // Adjust offset of value entry 
+      // Adjust offset of value entry
       offset += key_entry_size * (count - 1);
       extend_offset = key_entry_size;
     }
@@ -3379,7 +3372,7 @@ int ObJsonBin::remove_v0(size_t index)
 }
 
 
-int ObJsonBin::remove(size_t index) 
+int ObJsonBin::remove(size_t index)
 {
   INIT_SUCC(ret);
   ObJsonNodeType node_type = this->json_type();
@@ -3528,7 +3521,7 @@ int ObJsonBin::rebuild_json_obj_v0(const char *data, uint64_t length, ObJsonBuff
   uint64_t offset = 0;
   uint8_t node_type, var_type, obj_size_type;
   uint64_t count, obj_size;
-  
+
   const ObJsonBinObjHeader *header = reinterpret_cast<const ObJsonBinObjHeader*>(data + offset);
   // parsing header using v0 format
   parse_obj_header(data, offset, node_type, var_type, obj_size_type, count, obj_size);
@@ -3744,7 +3737,7 @@ int ObJsonBin::rebuild_json_value(const char *data,
         } else {
           uint64_t str_length = static_cast<uint64_t>(val);
           ret = result.append(data, str_length + pos);
-        }  
+        }
       } else {
         ret = OB_ERR_INTERVAL_INVALID;
         LOG_WARN("invalid string vertype.", K(ret), K(src_vertype));
@@ -3800,7 +3793,7 @@ int ObJsonBin::rebuild_json_value(const char *data,
           } else {
             ret = result.append(data, val_len + sizeof(uint16_t) + sizeof(uint64_t) + sizeof(uint8_t));
           }
-        }  
+        }
       } else {
         ret = OB_ERR_INTERVAL_INVALID;
         LOG_WARN("invalid json opaque vertype.", K(ret), K(src_vertype));
@@ -3829,7 +3822,7 @@ int ObJsonBin::rebuild(ObJsonBuffer &result)
     uint8_t type = 0;
     // first parse header type
     type = *reinterpret_cast<uint8_t*>(ptr);
-    
+
     // do recursion
     if (OB_FAIL(rebuild_json_value(ptr + offset, curr_.length() - offset, type, type, uint_val_, result))) {
       LOG_WARN("do rebuild recursion failed.", K(ret), K(type));
@@ -4086,7 +4079,7 @@ bool ObJsonVerType::is_scalar(ObJBVerType type)
 {
   ObJsonNodeType node_type = get_json_type(type);
 
-  return (node_type == ObJsonNodeType::J_NULL || 
+  return (node_type == ObJsonNodeType::J_NULL ||
           node_type == ObJsonNodeType::J_UINT ||
           node_type == ObJsonNodeType::J_INT ||
           node_type == ObJsonNodeType::J_DOUBLE ||
@@ -4094,7 +4087,7 @@ bool ObJsonVerType::is_scalar(ObJBVerType type)
           node_type == ObJsonNodeType::J_BOOLEAN ||
           node_type == ObJsonNodeType::J_DATE ||
           node_type == ObJsonNodeType::J_DATETIME ||
-          node_type == ObJsonNodeType::J_TIMESTAMP || 
+          node_type == ObJsonNodeType::J_TIMESTAMP ||
           node_type == ObJsonNodeType::J_OPAQUE);
 }
 
