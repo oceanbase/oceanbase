@@ -166,6 +166,9 @@ public:
   static int get_restore_sys_table_ids(
       const ObPhysicalRestoreInfo &info, common::ObIArray<common::ObPartitionKey> &pkey_list);
 
+  static int get_restore_normal_pg_keys(
+      const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list);
+
   static int check_is_snapshot_restore(const int64_t backup_snapshot, const int64_t restore_timestamp,
       const uint64_t cluster_version, bool &is_snapshot_restore);
 
@@ -174,6 +177,10 @@ private:
   static int get_restore_backup_info_v1_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
   // get info from simple path level
   static int get_restore_backup_info_v2_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
+  static int get_restore_normal_pg_keys_v1_(
+      const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list);
+  static int get_restore_normal_pg_keys_v2_(
+      const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list);
   static int inner_get_restore_backup_set_info_(const GetRestoreBackupInfoParam &param,
       ObBackupSetFileInfo &backup_set_info, ObExternTenantLocalityInfo &tenant_locality_info,
       common::ObIArray<common::ObPGKey> &sys_pg_keys);
