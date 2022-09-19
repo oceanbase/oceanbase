@@ -3453,6 +3453,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
           ObCollationType cs_type0 = tmp_obj[0].get_collation_type();
           ObObjType val_type1 = tmp_obj[1].get_type();
           ObScale scale1 = tmp_obj[1].get_scale();
+          scale1 = (val_type1 == ObBitType) ? aggr_info.param_exprs_.at(1)->datum_meta_.length_semantics_ : scale1;
           ObCollationType cs_type1 = tmp_obj[1].get_collation_type();
           ObString key_string = tmp_obj[0].get_string();
           if (OB_SUCC(ret) && ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
