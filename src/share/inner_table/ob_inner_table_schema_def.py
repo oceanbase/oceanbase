@@ -10244,6 +10244,49 @@ def_table_schema(**gen_iterate_virtual_table_def(
   real_tenant_id=True,
   table_name = '__all_virtual_kv_ttl_task_history',
   keywords = all_def_keywords['__all_kv_ttl_task_history']))
+def_table_schema(
+  table_name = '__all_virtual_schema_memory',
+  table_id = '12336',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = False,
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('type', 'varchar:128'),
+    ('used_schema_mgr_cnt', 'int'),
+    ('free_schema_mgr_cnt', 'int'),
+    ('mem_used', 'int'),
+    ('mem_total', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+)
+
+def_table_schema(
+  table_name = '__all_virtual_schema_slot',
+  table_id = '12337',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = False,
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('slot_id', 'int'),
+    ('schema_version', 'int'),
+    ('schema_count', 'int'),
+    ('total_ref_cnt', 'int'),
+    ('ref_info','varchar:OB_MAX_SCHEMA_REF_INFO'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+)
 
 ################################################################################
 # Oracle Virtual Table(15000,20000]

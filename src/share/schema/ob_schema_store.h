@@ -66,6 +66,7 @@ public:
   int create(const uint64_t tenant_id, const int64_t init_version_count, const int64_t init_version_count_for_liboblog);
   const ObSchemaStore* get(uint64_t tenant_id) const;
   ObSchemaStore* get(uint64_t tenant_id);
+  int get_all_tenant(common::ObIArray<uint64_t> &tenant_ids);
 
 private:
   common::ObLinkArray map_;

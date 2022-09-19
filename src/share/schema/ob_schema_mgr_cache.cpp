@@ -21,6 +21,26 @@
 
 namespace oceanbase {
 using namespace common;
+void ObSchemaSlot::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  slot_id_ = OB_INVALID_INDEX;
+  schema_version_ = OB_INVALID_VERSION;
+  schema_count_ = OB_INVALID_COUNT;
+  mod_ref_infos_.reset();
+  ref_cnt_ = OB_INVALID_COUNT;
+}
+
+void ObSchemaSlot::init(const uint64_t &tenant_id, const int64_t &slot_id, const int64_t &schema_version,
+    const int64_t &schema_count, const int64_t &ref_cnt, const common::ObString &str)
+{
+  tenant_id_ = tenant_id;
+  slot_id_ = slot_id;
+  schema_version_ = schema_version;
+  schema_count_ = schema_count;
+  ref_cnt_ = ref_cnt;
+  mod_ref_infos_ = str;
+}
 
 namespace share {
 namespace schema {
@@ -304,6 +324,157 @@ int ObSchemaMgrCache::get_recycle_schema_version(int64_t& schema_version) const
       ObSchemaMgr* latest_schema_mgr = schema_mgr_items_[latest_schema_idx_].schema_mgr_;
       if (OB_NOT_NULL(latest_schema_mgr)) {
         schema_version = latest_schema_mgr->get_schema_version();
+      }
+    }
+  }
+  return ret;
+}
+
+static const char *ref_info_type_strs[] = {
+    "STACK",
+    "VTABLE_SCAN_PARAM",
+    "INNER_SQL_RESULT",
+    "TABLE_API_ROW_ITER",
+    "STAT_CONV_INFO",
+    "SHUFFLE_TASK_HANDLE",
+    "LOAD_DATA_IMPL",
+    "PX_TASK_PROCESSS",
+    "TABLE_SCAN",
+    "DIST_EXECUTER",
+    "MINI_TASK_BASE",
+    "REMOTE_EXE",
+    "CACHED_GUARD",
+    "UNIQ_CHECK",
+    "LOGIC_ROW",
+    "TAILORED_ROW_ITER",
+    "SSTABLE_MERGE_CTX",
+    "SSTABLE_SPLIT_CTX",
+    "RELATIVE_TABLE",
+    "RECOVER_POINT",
+    "PART_SCHEMA_RECORDER",
+    "VIRTUAL_TABLE",
+    "PHY_RES_STAT",
+    "TENANT_PT_ITER",
+    "INDEX_PARAM",
+    "BACKUP_CHECKER",
+    "DIS_TASK_SPLITER",
+    "DAS_CTX",
+    "SCHEMA_RECORDER",
+    "MOD_MAX",
+};
+
+int ObSchemaMgrCache::get_ref_info_type_str_(const int64_t &index, const char *&type_str)
+{
+  STATIC_ASSERT(ARRAYSIZEOF(ref_info_type_strs) == (int64_t)ObSchemaMgrItem::Mod::MOD_MAX + 1,
+      "type string array size mismatch with enum Mod count");
+  int ret = OB_SUCCESS;
+  int type_str_len = ARRAYSIZEOF(ref_info_type_strs);
+  if (index >= type_str_len) {
+    ret = OB_ERROR_OUT_OF_RANGE;
+    LOG_WARN("index is out of range", KR(ret), K(type_str_len));
+  } else {
+    type_str = ref_info_type_strs[index];
+  }
+  return ret;
+}
+
+int ObSchemaMgrCache::build_ref_mod_infos_(
+    const int64_t *mod_ref, char *&buff, const int64_t &buf_len, common::ObString &str)
+{
+  int ret = OB_SUCCESS;
+  str.reset();
+  MEMSET(buff, 0, buf_len);
+
+  if (OB_ISNULL(mod_ref)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mod ref is NULL", KR(ret));
+  }
+  int64_t pos = 0;
+  const char *type_str = NULL;
+
+  for (int64_t i = 0; i < ARRAYSIZEOF(ref_info_type_strs) && OB_SUCC(ret); ++i) {
+    if (mod_ref[i] > 0) {
+      if (OB_FAIL(get_ref_info_type_str_(i, type_str))) {
+        LOG_WARN("fail to get ref info type str", KR(ret));
+      } else if (OB_FAIL(
+                     databuff_printf(buff, buf_len, pos, "%s%s:%ld", (0 != pos ? "," : ""), type_str, mod_ref[i]))) {
+        LOG_WARN("fail to fail to databuff printf tmp_buff", KR(ret), K(type_str), K(mod_ref[i]));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int str_len = pos;
+    if (0 != str_len) {
+      str.assign(buff, str_len);
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObIArray<ObSchemaSlot> &schema_slot_infos)
+{
+  int ret = OB_SUCCESS;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    int64_t *mod_ref = NULL;
+    ObSchemaMgr *schema_mgr = NULL;
+    int64_t cached_slot_num = OB_INVALID_COUNT;
+    int64_t slot_id = OB_INVALID_INDEX;
+    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    int64_t schema_version = OB_INVALID_VERSION;
+    int64_t schema_count = OB_INVALID_COUNT;
+    int64_t ref_cnt = OB_INVALID_COUNT;
+    ObSchemaSlot schema_slot;
+    ObString tmp_str;
+    ObString ref_infos;
+    // alloc 4096 in advance to organize ref_infos and reuse it
+    int64_t buf_len = OB_MAX_SCHEMA_REF_INFO;
+    char *tmp_buff = static_cast<char *>(allocator.alloc(buf_len));
+    if (OB_ISNULL(tmp_buff)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc tmp_buff faild", KR(ret));
+    } else {
+      TCRLockGuard guard(lock_);
+      cached_slot_num = max_cached_num_;
+      for (int64_t i = 0; i < cached_slot_num && OB_SUCC(ret); ++i) {
+        schema_mgr = schema_mgr_items_[i].schema_mgr_;
+        if (OB_NOT_NULL(schema_mgr)) {
+          ref_infos.reset();
+          tmp_str.reset();
+          slot_id = i;
+          tenant_id = schema_mgr->get_tenant_id();
+          schema_version = schema_mgr->get_schema_version();
+          ref_cnt = schema_mgr_items_[i].ref_cnt_;
+          mod_ref = schema_mgr_items_[i].mod_ref_cnt_;
+          if (OB_FAIL(schema_mgr->get_schema_count(schema_count))) {
+            LOG_WARN("fail to get schema count", KR(ret), K(tenant_id), K(schema_version));
+          } else if (0 == ref_cnt) {
+            // do nothing
+          } else if (OB_ISNULL(mod_ref)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant slot ref_cnt size > 0 but mod ref array is NULL",
+                KR(ret),
+                K(tenant_id),
+                K(slot_id),
+                K(schema_version));
+          } else if (OB_FAIL(build_ref_mod_infos_(mod_ref, tmp_buff, buf_len, tmp_str))) {
+            LOG_WARN("fail to build mode_ref_cnt to string", KR(ret), K(tenant_id), K(schema_version));
+            // deep copy string
+          } else if (OB_FAIL(ob_write_string(allocator, tmp_str, ref_infos))) {
+            LOG_WARN("set mod_ref_infos string faild", K(tmp_str));
+          }
+          if (OB_SUCC(ret)) {
+            schema_slot.init(tenant_id, slot_id, schema_version, schema_count, ref_cnt, ref_infos);
+            if (OB_FAIL(schema_slot_infos.push_back(schema_slot))) {
+              LOG_WARN("push back to schema_slot_infos failed", KR(ret), K(tenant_id), K(schema_version));
+            }
+          }
+        }  // OB_NOT_NULL(schema_mgr)
+      }    // for
+      if (OB_NOT_NULL(tmp_buff)) {
+        allocator.free(tmp_buff);
       }
     }
   }

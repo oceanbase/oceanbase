@@ -193,6 +193,8 @@
 #include "observer/virtual_table/ob_virtual_open_cursor_table.h"
 #include "observer/virtual_table/ob_all_virtual_backupset_history_mgr.h"
 #include "observer/virtual_table/ob_all_virtual_backup_clean_info.h"
+#include "observer/virtual_table/ob_all_virtual_schema_memory.h"
+#include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1992,6 +1994,26 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
               SERVER_LOG(WARN, "all cluster init failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator*>(all_cluster);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SCHEMA_MEMORY_TID: {
+            ObAllVirtualSchemaMemory *schema_memory = NULL;
+            share::schema::ObMultiVersionSchemaService &schema_service = root_service_.get_schema_service();
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSchemaMemory, schema_memory, schema_service))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSchemaMemory construct fail", KR(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(schema_memory);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SCHEMA_SLOT_TID: {
+            ObAllVirtualSchemaSlot *schema_slot = NULL;
+            share::schema::ObMultiVersionSchemaService &schema_service = root_service_.get_schema_service();
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSchemaSlot, schema_slot, schema_service))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSchemaSlot construct fail", KR(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(schema_slot);
             }
             break;
           }

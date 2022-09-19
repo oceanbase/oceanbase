@@ -149,6 +149,8 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_server_memory_info.cpp
   virtual_table/ob_all_virtual_server_object_pool.cpp
   virtual_table/ob_all_virtual_server_schema_info.cpp
+  virtual_table/ob_all_virtual_schema_memory.cpp
+  virtual_table/ob_all_virtual_schema_slot.cpp
   virtual_table/ob_all_virtual_session_event.cpp
   virtual_table/ob_all_virtual_session_stat.cpp
   virtual_table/ob_all_virtual_session_wait.cpp

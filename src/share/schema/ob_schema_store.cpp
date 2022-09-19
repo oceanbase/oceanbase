@@ -132,6 +132,23 @@ ObSchemaStore* ObSchemaStoreMap::get(uint64_t tenant_id)
   return slot ? *slot : NULL;
 }
 
+int ObSchemaStoreMap::get_all_tenant(common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  tenant_ids.reset();
+  common::ObLinkArray::Seg *seg = map_.head();
+  int64_t idx = 0;
+  void **p = NULL;
+  while (OB_NOT_NULL(p = map_.next(seg, idx)) && OB_SUCC(ret)) {
+    ObSchemaStore *schema_store = (ObSchemaStore *)*p;
+    if (OB_NOT_NULL(schema_store)) {
+      if (OB_FAIL(tenant_ids.push_back(schema_store->tenant_id_))) {
+        LOG_WARN("fail to push tenant_id to tenant_ids", KR(ret), K(schema_store->tenant_id_));
+      }
+    }
+  }
+  return ret;
+}
 };  // end namespace schema
 };  // end namespace share
 };  // end namespace oceanbase

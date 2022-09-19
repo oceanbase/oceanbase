@@ -4369,6 +4369,59 @@ int ObMultiVersionSchemaService::get_new_schema_version(uint64_t tenant_id, int6
   return ret;
 }
 
+int ObMultiVersionSchemaService::get_tenant_mem_info(
+    const uint64_t &tenant_id, common::ObIArray<ObSchemaMemory> &tenant_mem_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaMemMgr *mem_mgr = NULL;
+
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mem_mgr_map_.get_refactored(tenant_id, mem_mgr))) {
+    LOG_WARN("fail to get tenant mem_mgr", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(mem_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mem_mgr is NULL", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mem_mgr->get_all_alloc_info(tenant_mem_infos))) {
+    LOG_WARN("fail to get mem_mgr alloc info", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::get_tenant_slot_info(
+    common::ObIAllocator &allocator, const uint64_t &tenant_id, common::ObIArray<ObSchemaSlot> &tenant_slot_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaStore *schema_store = NULL;
+
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_store = schema_store_map_.get(tenant_id))) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("fail to get schema_store", KR(ret), K(tenant_id));
+  } else if (OB_FAIL((schema_store->schema_mgr_cache_).get_slot_info(allocator, tenant_slot_infos))) {
+    LOG_WARN("fail tp get slot info from schema_mgr_cache", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::get_schema_store_tenants(common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(schema_store_map_.get_all_tenant(tenant_ids))) {
+    LOG_WARN("fail to get all_tenant from schema_store_map_", KR(ret));
+  }
+  return ret;
+}
+
 // If schema_status_array is empty, it means strong consistent reading
 int ObMultiVersionSchemaService::get_schema_status(const ObArray<ObRefreshSchemaStatus>& schema_status_array,
     const uint64_t tenant_id, ObRefreshSchemaStatus& schema_status)
