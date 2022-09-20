@@ -3975,14 +3975,14 @@ int ObMultiVersionSchemaService::try_gc_existed_tenant_schema_mgr()
   ObArray<uint64_t> tenant_ids;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
+    LOG_WARN("inner stat error", KR(ret));
   } else if (!is_sys_full_schema()) {
     ret = OB_SCHEMA_EAGAIN;
-    LOG_WARN("full schema is not ready, cann't get fallback schema guard", K(ret));
+    LOG_WARN("full schema is not ready, cann't get fallback schema guard", KR(ret));
   } else if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-    LOG_WARN("get schema guard failed ", K(ret));
+    LOG_WARN("get schema guard failed ", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
-    LOG_WARN("fail to get tenant ids", K(ret));
+    LOG_WARN("fail to get tenant ids", KR(ret));
   } else {
     bool is_schema_splited = GCTX.is_schema_splited();
     ObSchemaMemMgr* mem_mgr = NULL;
@@ -3992,7 +3992,7 @@ int ObMultiVersionSchemaService::try_gc_existed_tenant_schema_mgr()
       mem_mgr = &mem_mgr_;
       schema_mgr_cache = &schema_mgr_cache_;
       if (OB_FAIL(try_gc_another_allocator(tenant_id, mem_mgr, schema_mgr_cache))) {
-        LOG_WARN("fail to gc another allocator", K(ret));
+        LOG_WARN("fail to gc another allocator", KR(ret));
       } else if (ObSchemaService::g_liboblog_mode_) {
         // liboblog/agentserver do nothing
       } else if (OB_FAIL(try_gc_tenant_schema_mgr_for_fallback(tenant_id, false))) {
@@ -4004,16 +4004,22 @@ int ObMultiVersionSchemaService::try_gc_existed_tenant_schema_mgr()
         const uint64_t tenant_id = tenant_ids.at(i);
         if (NULL == (schema_store = schema_store_map_.get(tenant_id))) {
           ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("fail to get schema_store", K(ret));
+          LOG_WARN("fail to get schema_store", KR(ret));
         } else if (FALSE_IT(schema_mgr_cache = &schema_store->schema_mgr_cache_)) {
         } else if (OB_FAIL(mem_mgr_map_.get_refactored(tenant_id, mem_mgr))) {
-          LOG_WARN("fail to get mem mgr", K(ret), K(tenant_id));
-        } else if (OB_FAIL(try_gc_another_allocator(tenant_id, mem_mgr, schema_mgr_cache))) {
-          LOG_WARN("fail to gc another allocator", K(ret), K(tenant_id));
-        } else if (ObSchemaService::g_liboblog_mode_) {
-          // liboblog/agentserver do nothing
-        } else if (OB_FAIL(try_gc_tenant_schema_mgr_for_fallback(tenant_id))) {
-          LOG_WARN("fail to gc tenant schema mgr for fallback", KR(ret), K(tenant_id));
+          LOG_WARN("fail to get mem mgr", KR(ret), K(tenant_id));
+        } else {
+          // ignore failure in eache scene
+          // 1. another allocator for schema refresh
+          if (OB_FAIL(try_gc_another_allocator(tenant_id, mem_mgr, schema_mgr_cache))) {
+            LOG_WARN("fail to gc another allocator", KR(ret), K(tenant_id));
+          }
+          // 2. schema fallback
+          if (ObSchemaService::g_liboblog_mode_) {
+            // liboblog/agentserver do nothing
+          } else if (OB_FAIL(try_gc_tenant_schema_mgr_for_fallback(tenant_id))) {
+            LOG_WARN("fail to gc tenant schema mgr for fallback", KR(ret), K(tenant_id));
+          }
         }
       }
     }

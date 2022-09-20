@@ -2259,8 +2259,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist, const ObString
                   false,  // is index
                   old_view_schema))) {
             LOG_WARN("failed to get table schema", K(view_name), K(ret));
-          }
-          if (OB_ISNULL(old_view_schema)) {
+          } else if (OB_ISNULL(old_view_schema)) {
             ret = OB_SUCCESS;
           } else {
             if (OB_FAIL(ddl_operator.drop_table(*old_view_schema, trans))) {

@@ -184,15 +184,17 @@ void ObSchemaHistoryRecycler::run3()
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_FAIL(recycle_schema_versions_.clear())) {
+    LOG_WARN("fail to clear recycle schema version map", KR(ret));
   } else {
     while (!stop_) {
       ObCurTraceId::init(GCTX.self_addr_);
       LOG_INFO("[SCHEMA_RECYCLE] recycle schema history start");
       if (OB_FAIL(try_recycle_schema_history())) {
-        LOG_WARN("fail to recycle schema history", K(ret));
+        LOG_WARN("fail to recycle schema history", KR(ret));
       }
-      LOG_INFO("[SCHEMA_RECYCLE] recycle schema history finish", K(ret));
+      LOG_INFO("[SCHEMA_RECYCLE] recycle schema history finish", KR(ret));
       // retry until stopped, reset ret to OB_SUCCESS
       ret = OB_SUCCESS;
       idle();
