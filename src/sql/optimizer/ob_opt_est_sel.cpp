@@ -34,8 +34,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
-double ObOptEstSel::DEFAULT_COLUMN_DISTINCT_RATIO = EST_DEF_COL_NUM_DISTINCT * 1.0 / OB_EST_DEFAULT_ROW_COUNT;
+
 constexpr double EPSILON = 0.000000001;
+
+double ObOptEstSel::DEFAULT_COLUMN_DISTINCT_RATIO = EST_DEF_COL_NUM_DISTINCT * 1.0 / OB_EST_DEFAULT_ROW_COUNT;
 
 int ObOptEstSel::calculate_selectivity(const ObEstSelInfo& est_sel_info, const ObIArray<ObRawExpr*>& quals,
     double& selectivity, ObIArray<ObExprSelPair>* all_predicate_sel, ObJoinType join_type, const ObRelIds* left_rel_ids,
