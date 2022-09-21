@@ -373,9 +373,8 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
         }
       }
       if (cur <= '9' && cur >= '0') {
-        cur = str[++i];
-        while (i < length && cur <= '9' && cur >= '0') {
-          cur = str[++i];
+        while (cur <= '9' && cur >= '0' && (++i < length)) {
+          cur = str[i];
         }
       } else {
         /* 0e */
