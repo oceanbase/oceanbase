@@ -815,6 +815,7 @@
 #define N_CHR "chr"
 #define N_EXP "exp"
 #define N_CALC_UROWID "calc_urowid"
+#define N_DAY_NAME "dayname"
 // for dll udf
 #define N_NORMAL_UDF "dll_normal_user_defined_function"
 #define N_AGG_UDF "dll_agg_user_defined_function"

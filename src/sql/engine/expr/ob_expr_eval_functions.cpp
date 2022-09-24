@@ -785,7 +785,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprJsonSet::eval_json_set,                                       /* 488 */
     ObExprJsonValue::eval_json_value,                                   /* 489 */
     ObExprJsonMemberOf::eval_json_member_of,                            /* 490 */
-    ObExprJsonExtract::eval_json_extract_null                           /* 491 */
+    ObExprJsonExtract::eval_json_extract_null,                          /* 491 */
+    ObExprDayName::calc_day_name                                        /* 500 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

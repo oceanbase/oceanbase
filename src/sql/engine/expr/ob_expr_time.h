@@ -151,6 +151,24 @@ private:
   static const ObSqlMonthNameMap MONTH_NAME_MAP[12];
 };
 
+class ObExprDayName : public ObExprTimeBase {
+public:
+  ObExprDayName();
+  explicit ObExprDayName(common::ObIAllocator& alloc);
+  virtual ~ObExprDayName();
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  static int calc_day_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static const char* get_day_name(int day);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprDayName);
+  typedef struct {
+    int32_t int_val;
+    const char* str_val;
+  } ObSqlDayNameMap;
+  static const ObSqlDayNameMap DAY_NAME_MAP[12];
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 

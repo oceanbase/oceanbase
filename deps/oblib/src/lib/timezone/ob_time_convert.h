@@ -93,7 +93,7 @@ typedef uint64_t ObDTMode;
 #define DT_MON_NAME \
   11  // monthname doesn't contains real data by using month directly
       // put it after DT_OFFSET_MIN will be fine
-
+#define DT_DAY_NAME 12
 extern const int64_t DT_PART_BASE[DATETIME_PART_CNT];
 extern const int64_t DT_PART_MIN[DATETIME_PART_CNT];
 extern const int64_t DT_PART_MAX[DATETIME_PART_CNT];

@@ -146,6 +146,7 @@ int ObExprTimeBase::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& exp
         with_date = true;
         break;
       case DT_MON_NAME:
+      case DT_DAY_NAME:
         with_date = true;
         break;
       default:
@@ -228,6 +229,9 @@ int ObExprTimeBase::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, O
         break;
       case DT_MON_NAME:
         rt_expr.eval_func_ = ObExprMonthName::calc_month_name;
+        break;
+      case DT_DAY_NAME:
+        rt_expr.eval_func_ = ObExprDayName::calc_day_name;
         break;
       default:
         LOG_WARN("ObExprTimeBase cg_expr switch default", K(dt_type_));
@@ -421,5 +425,55 @@ int ObExprMonthName::calc_result_type1(ObExprResType& type, ObExprResType& type1
   return OB_SUCCESS;
 }
 
+ObExprDayName::ObExprDayName(ObIAllocator& alloc)
+    : ObExprTimeBase(alloc, DT_DAY_NAME, T_FUN_SYS_DAY_NAME, N_DAY_NAME){};
+
+ObExprDayName::~ObExprDayName()
+{}
+
+const ObExprDayName::ObSqlDayNameMap ObExprDayName::DAY_NAME_MAP[] = {{0, "Sunday"},
+    {1, "Monday"},
+    {2, "Tuesday"},
+    {3, "Wednesday"},
+    {4, "Thursday"},
+    {5, "Friday"},
+    {6, "Saturday"}};
+
+OB_INLINE const char* ObExprDayName::get_day_name(int day)
+{
+  return DAY_NAME_MAP[day - 1].str_val;
+}
+
+int ObExprDayName::calc_day_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(calc(expr, ctx, expr_datum, DT_WDAY, true))) {
+    LOG_WARN("calc name of day failed", K(ret), K(expr));
+  } else if (!expr_datum.is_null()) {
+      expr_datum.set_int32(expr_datum.get_int32() % 7 + 1);
+      int32_t day = expr_datum.get_int32();
+      const char* day_name = get_day_name(day);
+      expr_datum.set_string(day_name, strlen(day_name));
+  }
+
+  return ret;
+}
+
+int ObExprDayName::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+{
+  ObCollationType cs_type = type_ctx.get_coll_type();
+  type.set_varchar();
+  type.set_collation_type(cs_type);
+  type.set_collation_level(CS_LEVEL_IMPLICIT);
+
+  common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
+  if (ob_is_enumset_tc(type1.get_type())) {
+    type1.set_calc_type(common::ObVarcharType);
+  } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+    type1.set_calc_type(common::ObIntType);
+  }
+
+  return OB_SUCCESS;
+}
 }  // namespace sql
 }  // namespace oceanbase

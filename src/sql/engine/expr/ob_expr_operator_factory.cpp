@@ -751,6 +751,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprJsonMergePatch);
   REG_OP(ObExprJsonPretty);
   REG_OP(ObExprJsonMemberOf);
+  REG_OP(ObExprDayName);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
