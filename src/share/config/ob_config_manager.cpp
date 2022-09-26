@@ -232,7 +232,7 @@ int ObConfigManager::dump2file(const char* path) const
       } else if ((fd = ::open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
         ret = OB_IO_ERROR;
         LOG_WARN("fail to create config file", K(tmp_path), KERRMSG, K(ret));
-      } else if (pos != (size = write(fd, buf, pos))) {
+      } else if (pos != (size = unintr_write(fd, buf, pos))) {
         ret = OB_IO_ERROR;
         LOG_WARN("Write server config fail!", K(errno), KERRMSG, K(pos), K(size), K(ret));
         if (0 != close(fd)) {

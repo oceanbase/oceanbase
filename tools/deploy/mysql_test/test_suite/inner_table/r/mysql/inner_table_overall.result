@@ -473,6 +473,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12325	__all_virtual_query_response_time	2	1099511627777	65536
 12326	__all_virtual_kv_ttl_task	2	1099511627777	1
 12327	__all_virtual_kv_ttl_task_history	2	1099511627777	1
+12336	__all_virtual_schema_memory	2	1099511627777	65536
+12337	__all_virtual_schema_slot	2	1099511627777	65536
 15001	ALL_VIRTUAL_TABLE_AGENT	2	1099511627782	1
 15002	ALL_VIRTUAL_COLUMN_AGENT	2	1099511627782	1
 15003	ALL_VIRTUAL_DATABASE_AGENT	2	1099511627782	1

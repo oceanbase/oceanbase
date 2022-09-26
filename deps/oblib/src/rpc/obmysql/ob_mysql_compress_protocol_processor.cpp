@@ -53,7 +53,7 @@ int ObMysqlCompressProtocolProcessor::decode(easy_message_t* m, rpc::ObPacket*& 
 
     if (0 == pktlen) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("invalid arugment", K(sessid), K(pktlen), K(pktlen_before_compress), K(ret));
+      LOG_ERROR("invalid argument", K(sessid), K(pktlen), K(pktlen_before_compress), K(ret));
     } else if (pktlen > rpktlen) {  // one packet was not received complete
       int64_t delta_len = pktlen - rpktlen;
       // valid packet, but not sufficient data received by easy, tell easy read more.

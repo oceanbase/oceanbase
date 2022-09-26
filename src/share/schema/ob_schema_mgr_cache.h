@@ -16,8 +16,58 @@
 #include <stdint.h>
 #include "lib/lock/ob_tc_rwlock.h"
 #include "share/ob_define.h"
+#include "lib/string/ob_string.h"
 
 namespace oceanbase {
+class ObSchemaSlot {
+public:
+  ObSchemaSlot()
+      : tenant_id_(OB_INVALID_TENANT_ID),
+        slot_id_(OB_INVALID_INDEX),
+        schema_version_(OB_INVALID_VERSION),
+        schema_count_(OB_INVALID_COUNT),
+        ref_cnt_(OB_INVALID_COUNT),
+        mod_ref_infos_()
+  {}
+  ~ObSchemaSlot()
+  {}
+  void reset();
+  void init(const uint64_t &tenant_id, const int64_t &slot_id, const int64_t &schema_version,
+      const int64_t &schema_count, const int64_t &ref_cnt, const common::ObString &str);
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  int64_t get_slot_id() const
+  {
+    return slot_id_;
+  }
+  int64_t get_schema_version() const
+  {
+    return schema_version_;
+  }
+  int64_t get_schema_count() const
+  {
+    return schema_count_;
+  }
+  int64_t get_ref_cnt() const
+  {
+    return ref_cnt_;
+  }
+  const common::ObString &get_mod_ref_infos() const
+  {
+    return mod_ref_infos_;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(slot_id), K_(schema_version), K_(schema_count), K_(ref_cnt), K_(mod_ref_infos));
+
+private:
+  uint64_t tenant_id_;
+  int64_t slot_id_;
+  int64_t schema_version_;
+  int64_t schema_count_;
+  int64_t ref_cnt_;
+  common::ObString mod_ref_infos_;
+};
 namespace common {}
 namespace share {
 namespace schema {
@@ -53,6 +103,8 @@ struct ObSchemaMgrItem {
     MOD_INDEX_PARAM = 24,
     MOD_BACKUP_CHECKER = 25,
     MOD_DIS_TASK_SPLITER = 26,
+    MOD_DAS_CTX = 27,
+    MOD_SCHEMA_RECORDER = 28,
     MOD_MAX
   };
   ObSchemaMgrItem() : schema_mgr_(NULL), ref_cnt_(0)
@@ -99,6 +151,7 @@ public:
   int get(const int64_t schema_version, const ObSchemaMgr*& schema_mgr, ObSchemaMgrHandle& handle);
   int get_nearest(const int64_t schema_version, const ObSchemaMgr*& schema_mgr, ObSchemaMgrHandle& handle);
   int get_recycle_schema_version(int64_t& schema_version) const;
+  int get_slot_info(common::ObIAllocator &allocator, common::ObIArray<ObSchemaSlot> &tenant_slot_infos);
   int put(ObSchemaMgr* schema_mgr, ObSchemaMgr*& eli_schema_mgr, ObSchemaMgrHandle* handle = NULL);
   int try_gc_tenant_schema_mgr(ObSchemaMgr*& eli_schema_mgr);
   int try_elimiante_schema_mgr(ObSchemaMgr*& eli_schema_mgr);
@@ -110,6 +163,8 @@ private:
   bool check_inner_stat() const;
   // need process in wlock
   int try_update_latest_schema_idx();
+  int get_ref_info_type_str_(const int64_t &index, const char *&type_str);
+  int build_ref_mod_infos_(const int64_t *mod_ref, char *&buff, const int64_t &buf_len, common::ObString &str);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaMgrCache);

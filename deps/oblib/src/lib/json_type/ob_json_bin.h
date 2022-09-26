@@ -74,7 +74,7 @@ typedef struct ObJsonBinHeader {
   uint8_t entry_size_   : 2; // the size describe var size of key_entry, val_entry
   uint8_t count_size_   : 2; // the size describe var size of element count
   uint8_t obj_size_size_ : 2; // the size describe var size of key_entry, val_entry
-  uint8_t is_continuous_  : 1; // memory of current node and subtree is continous 
+  uint8_t is_continuous_  : 1; // memory of current node and subtree is continous
   uint8_t reserved_   : 1; // reserved bit
   char used_size_[]; // var size
 } ObJsonBinHeader;
@@ -170,8 +170,7 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
-  int get_use_size(uint64_t& obj_size, uint64_t& used_size) const;
-  int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
+  int get_max_offset(const char *data, ObJsonNodeType cur_node, uint64_t &max_offset) const;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
   int replace(const ObIJsonBase *old_node, ObIJsonBase *new_node) override;
@@ -180,7 +179,7 @@ public:
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
 public:
   static OB_INLINE ObJBVerType get_null_vertype() { return J_NULL_V0; }
-  static OB_INLINE ObJBVerType get_decimal_vertype() { return J_DECIMAL_V0; } 
+  static OB_INLINE ObJBVerType get_decimal_vertype() { return J_DECIMAL_V0; }
   static OB_INLINE ObJBVerType get_int_vertype() { return J_INT_V0; }
   static OB_INLINE ObJBVerType get_uint_vertype() { return J_UINT_V0; }
   static OB_INLINE ObJBVerType get_double_vertype() { return J_DOUBLE_V0; }
@@ -197,7 +196,7 @@ public:
   int64_t to_string(char *buf, int64_t len) const;
   /*
   parse json tree to json bin
-  @param[in] Json_tree 
+  @param[in] Json_tree
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
   int parse_tree(ObJsonNode *json_tree);
@@ -361,7 +360,7 @@ private:
     uint8_t entry_type_; // tht obj_offset_type of key_offset or value_offset, may bigger than size_type_
     uint8_t reserve;     // to align uint64_t
     uint32_t idx_;       // the index of array or object array
-    uint64_t offset_;    // cur node offset from 
+    uint64_t offset_;    // cur node offset from
     uint64_t obj_size_;  // cur node total size
     ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint64_t idx, uint64_t offset, uint64_t obj_size) :
                 ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), idx_(idx), offset_(offset), obj_size_(obj_size) {}
@@ -384,7 +383,7 @@ private:
 
   int move_iter(ObJsonBuffer& stack, uint32_t start = 0);
   // build at tail, the offset_size type grow largger, need rebuild
-  int estimate_need_rebuild_kv_entry(ObJsonBuffer &result, ObJsonBuffer& origin_stack, 
+  int estimate_need_rebuild_kv_entry(ObJsonBuffer &result, ObJsonBuffer& origin_stack,
                             ObJsonBuffer& update_stack, uint32_t& top_pos, bool& rebuild);
   int serialize_json_object(ObJsonObject* object, ObJsonBuffer &result, uint32_t depth = 0);
   int serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, uint32_t depth = 0);
@@ -415,7 +414,7 @@ private:
   int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type, uint8_t entry_size = 0);
   void parse_obj_header(const char *data, uint64_t &offset, uint8_t &node_type,
                         uint8_t &type, uint8_t& obj_size_type, uint64_t &count, uint64_t &obj_size) const;
-  
+
   int get_element_in_array_v0(size_t index, char **get_addr_only);
   inline int get_element_in_array(size_t index, char **get_addr_only = NULL);
 
@@ -424,7 +423,7 @@ private:
 
   int get_key_in_object_v0(size_t i, ObString &key) const;
   inline int get_key_in_object(size_t i, ObString &key) const;
-  
+
   int update_parents(int64_t size_change, bool is_continous);
 
   int update_offset(uint64_t parent_offset, uint64_t idx, uint64_t value_offset);
@@ -436,7 +435,7 @@ private:
 
   int rebuild(ObJsonBuffer &result);
 
-  int rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer& old_stack, ObJsonBuffer& new_meta, 
+  int rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer& old_stack, ObJsonBuffer& new_meta,
                         uint32_t min, uint32_t max, ObJsonBuffer &result, uint32_t depth = 0);
 
   int rebuild_json_value_v0(const char *data, uint64_t length, uint8_t type,
@@ -455,11 +454,11 @@ private:
 
   int rebuild_json_process_value_v0(const char *data, uint64_t length, const char *old_val_entry, uint64_t new_val_entry_offset,
                                     uint64_t count, uint8_t var_type, int64_t st_pos, ObJsonBuffer &result) const;
-    
-  inline int rebuild_json_process_value(const char *data, uint64_t length, const char *old_val_entry, 
+
+  inline int rebuild_json_process_value(const char *data, uint64_t length, const char *old_val_entry,
                                         uint64_t new_val_entry_offset, uint64_t count, uint8_t var_type, int64_t st_pos,
                                         ObJsonBuffer &result, ObJBVerType cur_vertype, ObJBVerType dest_vertype) const;
-  
+
 
   void stack_update(ObJsonBuffer& stack, uint32_t idx, const ObJBNodeMeta& new_value);
   int stack_copy(ObJsonBuffer& src, ObJsonBuffer& dst);
@@ -474,7 +473,8 @@ private:
   int check_valid_object_op(uint64_t index) const;
   int check_valid_array_op(uint64_t index) const;
   int create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const;
-/* data */
+  int get_use_size(uint64_t &used_size) const;
+  /* data */
 private:
   common::ObIAllocator *allocator_;
   ObJsonBuffer result_;
@@ -482,7 +482,7 @@ private:
   bool is_alloc_;
   // path node stack used
   ObJsonBuffer stack_buf_;
-  
+
   // curr iter info
   uint8_t type_;
   int64_t pos_;

@@ -47,7 +47,7 @@ void ObFifoArena::ObWriteThrottleInfo::reset()
   ATOMIC_SET(&period_throttled_count_, 0);
   ATOMIC_SET(&period_throttled_time_, 0);
   ATOMIC_SET(&total_throttled_count_, 0);
-  ATOMIC_SET(&total_throttled_count_, 0);
+  ATOMIC_SET(&total_throttled_time_, 0);
 }
 
 void ObFifoArena::ObWriteThrottleInfo::reset_period_stat_info()
@@ -149,7 +149,7 @@ void ObFifoArena::shrink_cached_page(int64_t nway)
         if (NULL != ref) {
           // There may be concurrent removal, no need to pay attention to the return value
           UNUSED(ATOMIC_BCAS(paddr, page, NULL));
-          ATOMIC_FAA(&retired_, page->hold());
+          IGNORE_RETURN ATOMIC_FAA(&retired_, page->hold());
           release_ref(ref);
         }
       }

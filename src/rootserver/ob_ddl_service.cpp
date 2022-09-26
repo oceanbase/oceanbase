@@ -2259,8 +2259,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist, const ObString
                   false,  // is index
                   old_view_schema))) {
             LOG_WARN("failed to get table schema", K(view_name), K(ret));
-          }
-          if (OB_ISNULL(old_view_schema)) {
+          } else if (OB_ISNULL(old_view_schema)) {
             ret = OB_SUCCESS;
           } else {
             if (OB_FAIL(ddl_operator.drop_table(*old_view_schema, trans))) {
@@ -9850,7 +9849,7 @@ int ObDDLService::force_drop_schema(const obrpc::ObForceDropSchemaArg &arg)
     LOG_WARN("variable is not init");
   } else if (OB_INVALID_ID == schema_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arugment", K(schema_id));
+    LOG_WARN("invalid argument", K(schema_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_))) {
@@ -10263,7 +10262,7 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg, 
   } else if (OB_INVALID_ID == table_id || create_mem_version <= 0 || new_status <= INDEX_STATUS_NOT_FOUND ||
              new_status >= INDEX_STATUS_MAX) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arugment", KT(table_id), K(new_status), K(create_mem_version));
+    LOG_WARN("invalid argument", KT(table_id), K(new_status), K(create_mem_version));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table))) {

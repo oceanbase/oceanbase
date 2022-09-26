@@ -1084,7 +1084,7 @@ int ObLogicPartitionServiceRpcP<RPC_CODE>::update_header(const int64_t data_size
   int ret = OB_SUCCESS;
   if (data_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("update header get invalid arugment", K(ret), K(data_size));
+    LOG_WARN("update header get invalid argument", K(ret), K(data_size));
   } else {
     rpc_header_.data_size_ += static_cast<int32_t>(data_size);
     ++rpc_header_.object_count_;

@@ -243,8 +243,15 @@ int ObRawExprWrapEnumSet::visit(ObColumnRefRawExpr& expr)
 
 int ObRawExprWrapEnumSet::visit(ObWinFunRawExpr& expr)
 {
-  UNUSED(expr);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  if (expr.has_enum_set_column()) {
+    ObAggFunRawExpr *agg_raw_expr = expr.get_agg_expr();
+    if (OB_ISNULL(agg_raw_expr)) {
+    } else if (OB_FAIL(ObRawExprWrapEnumSet::visit(*agg_raw_expr))) {
+      LOG_WARN("fail to visit agg expr in window function", K(ret), K(agg_raw_expr));
+    }
+  }
+  return ret;
 }
 
 int ObRawExprWrapEnumSet::visit(ObPseudoColumnRawExpr& expr)

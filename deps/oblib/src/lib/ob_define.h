@@ -164,6 +164,7 @@ const int64_t OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE =
 // The actual maximum table name length of table_schema (the index table will have an additional prefix, so the actual
 // length is greater than OB_MAX_USER_TABLE_NAME_LENGTH)
 const int64_t OB_MAX_TABLE_NAME_LENGTH = 256;
+const int64_t OB_MAX_SCHEMA_REF_INFO = 4096;
 const int64_t OB_MAX_TABLE_NAME_BUF_LENGTH = OB_MAX_TABLE_NAME_LENGTH + 1;
 const int64_t OB_MAX_PLAN_EXPLAIN_NAME_LENGTH = 256;
 const int64_t OB_MAX_TABLE_TYPE_LENGTH = 64;

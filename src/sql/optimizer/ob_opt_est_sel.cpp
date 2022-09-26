@@ -34,6 +34,9 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
+
+constexpr double EPSILON = 0.000000001;
+
 double ObOptEstSel::DEFAULT_COLUMN_DISTINCT_RATIO = EST_DEF_COL_NUM_DISTINCT * 1.0 / OB_EST_DEFAULT_ROW_COUNT;
 
 int ObOptEstSel::calculate_selectivity(const ObEstSelInfo& est_sel_info, const ObIArray<ObRawExpr*>& quals,
@@ -3118,7 +3121,7 @@ int ObOptEstSel::get_agg_sel(const ObEstSelInfo& est_sel_info, const ObRawExpr& 
       }
     } else if (T_FUN_SUM == aggr_expr->get_expr_type() || T_FUN_AVG == aggr_expr->get_expr_type()) {
       LOG_TRACE("show group by origen rows and grouped rows", K(origen_rows), K(grouped_rows));
-      double rows_per_group = grouped_rows == 0.0 ? origen_rows : origen_rows / grouped_rows;
+      double rows_per_group = fabs(grouped_rows) < EPSILON ? origen_rows : origen_rows / grouped_rows;
       if (OB_FAIL(get_agg_sel_with_minmax(
               est_sel_info, *aggr_expr, const_expr1, const_expr2, type, selectivity, rows_per_group))) {
         LOG_WARN("failed to get agg sel with minmax", K(ret));

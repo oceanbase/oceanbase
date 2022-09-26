@@ -43,7 +43,8 @@ int ObExprJsonUnquote::calc_result_type1(ObExprResType &type,
   type.set_type(ObLongTextType);
   type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
   type.set_collation_level(CS_LEVEL_IMPLICIT);
-  
+  type.set_length(OB_MAX_LONGTEXT_LENGTH);
+
   if (type1.get_type() == ObNullType || type1.get_type() == ObDoubleType
       || type1.get_type() == ObIntType) {
     // do nothing

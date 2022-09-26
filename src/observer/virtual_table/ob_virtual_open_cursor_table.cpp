@@ -59,13 +59,17 @@ bool ObVirtualOpenCursorTable::ObEachSessionId::operator()(
   CK(OB_NOT_NULL(sess_info));
   CK(OB_NOT_NULL(allocator_));
   if (OB_SUCC(ret)) {
+    char *sql_id = nullptr;
     sql::ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
-    if (OB_NOT_NULL(sess_info->get_cur_phy_plan())) {
-      vsp.version = sess_info->get_version();
+    if (OB_ISNULL(sql_id = reinterpret_cast<char *>(allocator_->alloc(common::OB_MAX_SQL_ID_LENGTH + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SERVER_LOG(WARN, "failed to alloc buf", K(ret));
+    } else if (FALSE_IT(sess_info->get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1))) {
+    } else if (sql_id[0] != '\0') {
       vsp.id = sess_info->get_sessid();
       vsp.addr = reinterpret_cast<uint64_t>(sess_info);
+      vsp.sql_id.assign(sql_id, common::OB_MAX_SQL_ID_LENGTH);
       OZ(ob_write_string(*allocator_, sess_info->get_user_name(), vsp.user_name));
-      OZ(ob_write_string(*allocator_, sess_info->get_cur_phy_plan()->stat_.sql_id_, vsp.sql_id));
       if (vsp.is_valid()) {
         SessionInfoArray vsp_arr;
         OZ(sids_map_.get_refactored(vsp.sql_id, vsp_arr));

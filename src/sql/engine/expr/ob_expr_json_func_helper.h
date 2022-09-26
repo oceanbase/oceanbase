@@ -213,7 +213,20 @@ public:
         }
         break;
       }
-
+      case ObYearType: {
+        uint8_t in_val = datum.get_year();
+        int64_t full_year = 0;
+        if (OB_FAIL(ObTimeConverter::year_to_int(in_val, full_year))) {
+        } else {
+          buf = allocator->alloc(sizeof(ObJsonInt));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            json_node = (ObJsonInt*)new(buf)ObJsonInt(full_year);
+          }
+        }
+        break;
+      }
       case ObFloatType:
       case ObDoubleType:
       case ObUFloatType:
@@ -248,6 +261,27 @@ public:
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
           json_node = (ObJsonOpaque *)new (buf) ObJsonOpaque(datum.get_string(), type);
+        }
+        break;
+      }
+      case ObBitType: {
+        const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+        int64_t pos = 0;
+        char *bbuf = static_cast<char*>(allocator->alloc(BUF_LEN));
+        if (OB_ISNULL(bbuf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          uint64_t in_val = datum.get_uint64();
+          if (OB_FAIL(bit_to_char_array(in_val, scale, bbuf, BUF_LEN, pos))) {
+          } else {
+            common::ObString j_value(pos, bbuf);
+            buf = allocator->alloc(sizeof(ObJsonOpaque));
+            if (OB_ISNULL(buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+            } else {
+              json_node = (ObJsonOpaque *)new(buf)ObJsonOpaque(j_value, type);
+            }
+          }
         }
         break;
       }

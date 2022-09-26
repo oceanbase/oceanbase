@@ -1700,11 +1700,10 @@ int ObTableGroupHelp::check_part_expr_num_and_value_type(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rowkey obj ptr is null", K(ret), KPC(alter_part), KPC(orig_part));
       } else {
-        ObCastCtx cast_ctx(
-            const_cast<ObPartition*>(alter_part)->get_allocator(), NULL, CM_NONE, ObCharset::get_system_collation());
         for (int64_t k = 0; k < rowkey.get_obj_cnt() && OB_SUCC(ret); k++) {
           const ObObj& obj = rowkey.get_obj_ptr()[k];
           ObObj& tg_obj = const_cast<ObObj&>(tg_rowkey.get_obj_ptr()[k]);
+          LOG_TRACE("before convert obj", K(obj), K(tg_obj));
           if (obj.is_max_value() || tg_obj.is_max_value()) {
             // just pass
           } else if (!sql::ObResolverUtils::is_valid_partition_column_type(obj.get_type(), part_type, is_check_value)) {
@@ -1713,7 +1712,15 @@ int ObTableGroupHelp::check_part_expr_num_and_value_type(
             LOG_USER_ERROR(OB_ERR_VALUES_IS_NOT_INT_TYPE_ERROR,
                 alter_part->get_part_name().length(),
                 alter_part->get_part_name().ptr());
+          } else if (obj.get_meta().get_collation_type() != tg_obj.get_meta().get_collation_type()) {
+            ret = OB_ERR_PARTITION_VALUE_ERROR;
+            LOG_USER_ERROR(OB_ERR_PARTITION_VALUE_ERROR);
+            LOG_WARN("obj collation not match", KR(ret), K(obj), K(tg_obj));
           } else if (obj.get_type() != tg_obj.get_type()) {
+            ObCastCtx cast_ctx(const_cast<ObPartition *>(alter_part)->get_allocator(),
+                NULL,
+                CM_NONE,
+                obj.get_meta().get_collation_type());
             if (!ObPartitionUtils::is_types_equal_for_partition_check(obj.get_type(), tg_obj.get_type())) {
               ret = OB_ERR_WRONG_TYPE_COLUMN_VALUE_ERROR;
               LOG_USER_ERROR(OB_ERR_WRONG_TYPE_COLUMN_VALUE_ERROR);
@@ -1795,13 +1802,19 @@ int ObTableGroupHelp::check_part_expr_num_and_value_type(
                   orig_rowkey->at(0).get_count());
             } else {
               int64_t obj_count = new_rowkey->at(index).get_count();
-              ObCastCtx cast_ctx(const_cast<ObPartition*>(alter_part)->get_allocator(),
-                  NULL,
-                  CM_NONE,
-                  ObCharset::get_system_collation());
               for (int64_t i = 0; OB_SUCC(ret) && i < obj_count; ++i) {
                 ObObj& obj = const_cast<ObObj&>(new_rowkey->at(index).get_cell(i));
-                if (obj.get_type() != orig_rowkey->at(0).get_cell(i).get_type()) {
+                LOG_TRACE("before convert obj", K(obj), "orig_rowkey", orig_rowkey->at(0).get_cell(i));
+                if (obj.get_meta().get_collation_type() !=
+                    orig_rowkey->at(0).get_cell(i).get_meta().get_collation_type()) {
+                  ret = OB_ERR_PARTITION_VALUE_ERROR;
+                  LOG_USER_ERROR(OB_ERR_PARTITION_VALUE_ERROR);
+                  LOG_WARN("obj collation not match", KR(ret), K(obj), "orig_rowkey", orig_rowkey->at(0).get_cell(i));
+                } else if (obj.get_type() != orig_rowkey->at(0).get_cell(i).get_type()) {
+                  ObCastCtx cast_ctx(const_cast<ObPartition *>(alter_part)->get_allocator(),
+                      NULL,
+                      CM_NONE,
+                      obj.get_meta().get_collation_type());
                   if (!ObPartitionUtils::is_types_equal_for_partition_check(
                           obj.get_type(), orig_rowkey->at(0).get_cell(i).get_type())) {
                     ret = OB_ERR_WRONG_TYPE_COLUMN_VALUE_ERROR;

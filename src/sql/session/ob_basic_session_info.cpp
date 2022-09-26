@@ -115,6 +115,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       thread_id_(0),
       is_password_expired_(false)
 {
+  thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
   log_id_level_map_.reset_level();
   CHAR_CARRAY_INIT(tenant_);
@@ -1628,12 +1629,7 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString& var, bool& is_exists
   return ret;
 }
 
-ObPhysicalPlan* ObBasicSessionInfo::get_cur_phy_plan() const
-{
-  return cur_phy_plan_;
-}
-
-int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan* cur_phy_plan)
+int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_phy_plan)) {

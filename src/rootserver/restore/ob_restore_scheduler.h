@@ -95,7 +95,7 @@ private:
   /* restore tenant related */
   int fill_job_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
   int fill_restore_backup_info_param(
-      share::ObPhysicalRestoreJob& job, share::ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam& param);
+      const share::ObPhysicalRestoreJob& job, share::ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam& param);
   int fill_backup_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
   int fill_pkeys_for_physical_restore_log(const share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
   int fill_rs_info(share::ObPhysicalRestoreJob& job);
@@ -119,7 +119,19 @@ private:
   int convert_parameters(const share::ObPhysicalRestoreJob& job_info);
   int log_nop_operation(const share::ObPhysicalRestoreJob& job_info);
   int convert_column_statistic(const uint64_t tenant_id);
+  int generate_unavaliable_index_ids_(const share::ObPhysicalRestoreJob &job_info,
+      const common::ObIArray<uint64_t> &avaliable_index_ids, common::ObIArray<uint64_t> &unavaliable_index_ids);
+  int batch_fetch_base_avaliable_index_ids_(const uint64_t tenant_id, const int64_t schema_version,
+      const common::ObIArray<uint64_t> &avaliable_index_ids, const int64_t start_idx, const int64_t end_idx,
+      common::hash::ObHashSet<uint64_t> &base_avaliable_index_ids);
   /*------------------------*/
+
+  /*---create user partitions---*/
+  int get_pg_keys_for_physical_restore_data_(
+      const share::ObPhysicalRestoreJob &job_info, common::hash::ObHashSet<common::ObPGKey> &pg_key_set);
+  int fill_restore_partition_arg_(const share::schema::ObPartitionSchema &schema,
+      const common::hash::ObHashSet<common::ObPGKey> &pg_key_set, obrpc::ObRestorePartitionsArg &arg);
+  /*----------------------------*/
 
   /* filter schema */
   int gen_white_list(const share::ObPhysicalRestoreJob& job_info,
@@ -170,8 +182,6 @@ private:
       const PhysicalRestorePartition& partition, const ObPhysicalRestoreStat& stat, share::ObDMLSqlSplicer& dml);
   int clear_member_list_table(const uint64_t tenant_id);
 
-  int fill_restore_partition_arg(
-      const uint64_t schema_id, const share::schema::ObPartitionSchema* schema, obrpc::ObRestorePartitionsArg& arg);
   /*------------------------*/
 
   /* upgrade related */
@@ -191,6 +201,9 @@ private:
 
 private:
   int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob& job_info);
+
+private:
+  static const int64_t BUCKET_NUM = 1024;
   bool inited_;
   mutable ObRestoreIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

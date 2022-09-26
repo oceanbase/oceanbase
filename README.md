@@ -1,5 +1,7 @@
 # What is OceanBase Database
+
 OceanBase is a distributed relational SQL database built from scratch. It is highly scalable, resilient and can take on both transactional and analytical workloads, and it is highly compatible with MySQL syntax and features. OceanBase can be deployed on virtual machines in any cloud or physical hosts on-premise. Meanwhile, since it is a multi-tenant cluster, users can achieve database resource pooling and improve their efficiency.
+
 
 ## Core features
 
@@ -48,7 +50,7 @@ OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanP
 
 ## Community
 
-- [oceanbase.slack](https://oceanbase.slack.com/)
+- [oceanbase.slack](https://app.slack.com/client/T02CME03M8B/C02CZS7S0SV)
 - [Forum (Simplified Chinese)](https://ask.oceanbase.com/)
 - [DingTalk 33254054 (Simplified Chinese)](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding12cfbe0afb058f3cde5ce625ff4abdf6&53108=bb418&cbdbhh=qwertyuiop&origin=1)
-- [WeChat (Simplified Chinese)](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
+- [WeChat (Simplified Chinese)](https://user-images.githubusercontent.com/31211986/190353920-70ff486e-7153-4601-8df7-210d82629f4b.jpg)

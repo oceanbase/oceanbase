@@ -1293,6 +1293,109 @@ int ObRestoreBackupInfoUtil::get_restore_sys_table_ids(
   return OB_SUCCESS;
 }
 
+int ObRestoreBackupInfoUtil::get_restore_normal_pg_keys(
+    const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list)
+{
+  int ret = OB_SUCCESS;
+  bool is_cluster_level = param.backup_set_path_list_.empty();
+  if (is_cluster_level) {
+    if (OB_FAIL(get_restore_normal_pg_keys_v1_(param, pkey_list))) {
+      LOG_WARN("failed to get restore normal pg keys v1", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(get_restore_normal_pg_keys_v2_(param, pkey_list))) {
+      LOG_WARN("failed to get restore normal pg keys v2", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreBackupInfoUtil::get_restore_normal_pg_keys_v1_(
+    const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list)
+{
+  int ret = OB_SUCCESS;
+  ObClusterBackupDest dest;
+  ObExternBackupInfoMgr backup_info_mgr;
+  ObExternTenantInfoMgr tenant_info_mgr;
+  ObExternTenantInfo tenant_info;
+  ObExternBackupInfo backup_info;
+  const int64_t cluster_version = ObClusterVersion::get_instance().get_cluster_version();
+  ObFakeBackupLeaseService fake_backup_lease;
+  ObTenantNameSimpleMgr tenant_name_mgr;
+  ObExternPGListMgr pg_list_mgr;
+  uint64_t backup_tenant_id = 0;
+  const char *backup_dest = param.backup_dest_;
+  const char *backup_cluster_name = param.backup_cluster_name_;
+  const int64_t cluster_id = param.cluster_id_;
+  const int64_t incarnation = param.incarnation_;
+  const char *backup_tenant_name = param.backup_tenant_name_;
+  const int64_t restore_timestamp = param.restore_timestamp_;
+  const char *passwd_array = param.passwd_array_;
+
+  if (OB_ISNULL(backup_dest) || OB_ISNULL(backup_cluster_name) || cluster_id <= 0 || incarnation < 0 ||
+      OB_ISNULL(backup_tenant_name) || restore_timestamp <= 0 || OB_ISNULL(passwd_array)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get restore backup info get invalid argument",
+        K(ret),
+        KP(backup_dest),
+        KP(backup_cluster_name),
+        K(cluster_id),
+        KP(backup_tenant_name),
+        K(restore_timestamp),
+        KP(passwd_array));
+  } else if (strlen(backup_dest) >= share::OB_MAX_BACKUP_DEST_LENGTH ||
+             strlen(backup_cluster_name) >= OB_MAX_CLUSTER_NAME_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("backup dest or backup cluster name size over flow", K(ret), K(backup_dest), K(backup_cluster_name));
+  } else if (OB_FAIL(dest.set(backup_dest, backup_cluster_name, cluster_id, incarnation))) {
+    LOG_WARN(
+        "failed to set backup dest", K(ret), K(backup_dest), K(backup_cluster_name), K(cluster_id), K(incarnation));
+  } else if (OB_FAIL(tenant_name_mgr.init())) {
+    LOG_WARN("faiuiled to init tenant_name mgr", K(ret));
+  } else if (OB_FAIL(tenant_name_mgr.read_backup_file(dest))) {
+    LOG_WARN("failed to read backup tenant name mgr", K(ret), K(dest));
+  } else if (OB_FAIL(tenant_name_mgr.get_tenant_id(backup_tenant_name, restore_timestamp, backup_tenant_id))) {
+    LOG_WARN("failed to backup tenant id", K(ret), K(backup_tenant_name), K(restore_timestamp));
+  } else if (OB_FAIL(tenant_info_mgr.init(dest, fake_backup_lease))) {
+    LOG_WARN("failed to init tenant info mgr", K(ret), K(dest));
+  } else if (OB_FAIL(tenant_info_mgr.find_tenant_info(backup_tenant_id, tenant_info))) {
+    LOG_WARN("failed to find tenant info", K(ret), K(backup_tenant_id));
+  } else if (OB_FAIL(backup_info_mgr.init(tenant_info.tenant_id_, dest, fake_backup_lease))) {
+    LOG_WARN("failed to init backup info mgr", K(ret), K(dest), K(tenant_info));
+  } else if (OB_FAIL(backup_info_mgr.find_backup_info(restore_timestamp, passwd_array, backup_info))) {
+    LOG_WARN("failed to find backup info", K(ret), K(restore_timestamp), K(tenant_info));
+  } else if (OB_FAIL(pg_list_mgr.init(backup_tenant_id,
+                 backup_info.full_backup_set_id_,
+                 backup_info.inc_backup_set_id_,
+                 dest,
+                 backup_info.date_,
+                 backup_info.compatible_,
+                 fake_backup_lease))) {
+    LOG_WARN("failed to init pg list mgr", K(ret), K(backup_info), K(dest));
+  } else if (OB_FAIL(pg_list_mgr.get_normal_pg_list(pkey_list))) {
+    LOG_WARN("failed to get sys pg list", K(ret), K(backup_info), K(dest));
+  }
+  return ret;
+}
+
+int ObRestoreBackupInfoUtil::get_restore_normal_pg_keys_v2_(
+    const GetRestoreBackupInfoParam &param, common::ObIArray<common::ObPartitionKey> &pkey_list)
+{
+  int ret = OB_SUCCESS;
+  ObFakeBackupLeaseService fake_backup_lease;
+  ObExternPGListMgr pg_list_mgr;
+  ObSimpleBackupSetPath simple_set_path;  // largest backup set path
+
+  if (OB_FAIL(param.get_largest_backup_set_path(simple_set_path))) {
+    LOG_WARN("failed to get smallest largest backup set path", K(ret));
+  } else if (OB_FAIL(pg_list_mgr.init(simple_set_path, fake_backup_lease))) {
+    LOG_WARN("failed to get sys pg list", K(ret), K(simple_set_path));
+  } else if (OB_FAIL(pg_list_mgr.get_normal_pg_list(pkey_list))) {
+    LOG_WARN("failed to get sys pg list", K(ret), K(simple_set_path));
+  }
+  return ret;
+}
+
 int ObRestoreBackupInfoUtil::check_is_snapshot_restore(const int64_t backup_snapshot, const int64_t restore_timestamp,
     const uint64_t cluster_version, bool &is_snapshot_restore)
 {

@@ -24,6 +24,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 
 namespace oceanbase {
+class ObSchemaSlot;
 namespace common {}
 namespace tools {
 class ObAgentTaskGenerator;
@@ -120,7 +121,10 @@ public:
       const int64_t init_version_count, const int64_t init_version_count_for_liboblog, const bool with_timestamp);
 
   int init_sys_schema(const common::ObIArray<ObTableSchema>& table_schemas);
-
+  int get_tenant_mem_info(const uint64_t &tenant_id, common::ObIArray<ObSchemaMemory> &tenant_mem_infos);
+  int get_tenant_slot_info(
+      common::ObIAllocator &allocator, const uint64_t &tenant_id, common::ObIArray<ObSchemaSlot> &tenant_slot_infos);
+  int get_schema_store_tenants(common::ObIArray<uint64_t> &tenant_ids);
 public:
   //--------ddl funcs for RS module ---------//
   // check table exist

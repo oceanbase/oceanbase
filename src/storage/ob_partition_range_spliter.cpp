@@ -152,7 +152,7 @@ int ObPartitionParallelRanger::init(
   } else if (OB_UNLIKELY(!range.is_valid() || range_paras.empty() || parallel_target_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN,
-        "Invalid arugment to init ObPartitionParallelRanger",
+        "Invalid argument to init ObPartitionParallelRanger",
         K(ret),
         K(range),
         K(range_paras),
@@ -946,7 +946,7 @@ int ObPartitionMultiRangeSpliter::merge_and_push_range_array(const RangeSplitArr
 
   if (OB_UNLIKELY(src_range_split_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arugment to merge range array", K(ret), K(src_range_split_array));
+    STORAGE_LOG(WARN, "Invalid argument to merge range array", K(ret), K(src_range_split_array));
   } else {
     const ObStoreRange* last_range = nullptr;
     RangeSplitArray dst_range_array;
@@ -1032,7 +1032,7 @@ int ObPartitionMultiRangeSpliter::build_single_range_array(const ObIArray<ObStor
 
   if (OB_UNLIKELY(range_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arugment to build single range array", K(ret), K(range_array));
+    STORAGE_LOG(WARN, "Invalid argument to build single range array", K(ret), K(range_array));
   } else {
     RangeSplitArray range_split_array;
     ObStoreRange store_range;

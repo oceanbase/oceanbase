@@ -17,7 +17,26 @@
 
 namespace oceanbase {
 using namespace common;
+void ObSchemaMemory::reset()
+{
+  pos_ = OB_INVALID_INDEX;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  mem_used_ = OB_INVALID_COUNT;
+  mem_total_ = OB_INVALID_COUNT;
+  used_schema_mgr_cnt_ = OB_INVALID_COUNT;
+  free_schema_mgr_cnt_ = OB_INVALID_COUNT;
+}
 
+void ObSchemaMemory::init(const int64_t pos, const uint64_t &tenant_id, const int64_t &mem_used,
+    const int64_t &mem_total, const int64_t &used_schema_mgr_cnt, const int64_t &free_schema_mgr_cnt)
+{
+  pos_ = pos;
+  tenant_id_ = tenant_id;
+  mem_used_ = mem_used;
+  mem_total_ = mem_total;
+  used_schema_mgr_cnt_ = used_schema_mgr_cnt;
+  free_schema_mgr_cnt_ = free_schema_mgr_cnt;
+}
 namespace share {
 namespace schema {
 
@@ -59,7 +78,7 @@ int ObSchemaMemMgr::alloc(const int size, void*& ptr, ObIAllocator** allocator)
   if (NULL != allocator) {
     *allocator = NULL;
   }
-
+  SpinWLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -119,6 +138,8 @@ int ObSchemaMemMgr::in_current_allocator(const void* ptr, bool& in_curr_allocato
   int ret = OB_SUCCESS;
   in_curr_allocator = false;
   int tmp_idx = -1;
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
   if (OB_ISNULL(ptr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret));
@@ -136,6 +157,7 @@ int ObSchemaMemMgr::free(void* ptr)
 {
   int ret = OB_SUCCESS;
 
+  SpinWLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -178,6 +200,7 @@ int ObSchemaMemMgr::get_cur_alloc_cnt(int64_t& cnt) const
   int ret = OB_SUCCESS;
   cnt = 0;
 
+  SpinRLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -188,9 +211,50 @@ int ObSchemaMemMgr::get_cur_alloc_cnt(int64_t& cnt) const
   return ret;
 }
 
+int ObSchemaMemMgr::get_all_alloc_info(common::ObIArray<ObSchemaMemory> &schema_mem_infos)
+{
+  int ret = OB_SUCCESS;
+  schema_mem_infos.reset();
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", K(ret));
+  } else {
+    ObSchemaMemory schema_mem;
+    int64_t mem_used = OB_INVALID_COUNT;
+    int64_t mem_total = OB_INVALID_COUNT;
+    int64_t used_schema_mgr_cnt = OB_INVALID_COUNT;
+    int64_t free_schema_mgr_cnt = OB_INVALID_COUNT;
+    int64_t tenant_id = OB_INVALID_TENANT_ID;
+
+    tenant_id = tenant_id_;
+    mem_used = allocator_[pos_].used();
+    mem_total = allocator_[pos_].total();
+    used_schema_mgr_cnt = ptrs_[pos_].count();
+    free_schema_mgr_cnt = all_ptrs_[pos_].count() - used_schema_mgr_cnt;
+    schema_mem.init(0, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt);
+    if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
+      LOG_WARN("fail to push back schema_mem", KR(ret));
+    } else {
+      mem_used = allocator_[1 - pos_].used();
+      mem_total = allocator_[1 - pos_].total();
+      used_schema_mgr_cnt = ptrs_[1 - pos_].count();
+      free_schema_mgr_cnt = all_ptrs_[1 - pos_].count() - used_schema_mgr_cnt;
+      schema_mem.init(1, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt);
+      if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
+        LOG_WARN("fail to push back schema_mem", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaMemMgr::is_same_allocator(const void* p1, const void* p2, bool& is_same_allocator)
 {
   int ret = OB_SUCCESS;
+  SpinRLockGuard guard(schema_mem_rwlock_);
+
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -258,6 +322,7 @@ int ObSchemaMemMgr::check_can_switch_allocator(bool& can_switch) const
   int ret = OB_SUCCESS;
   can_switch = false;
 
+  SpinRLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -272,13 +337,14 @@ int ObSchemaMemMgr::switch_allocator()
 {
   int ret = OB_SUCCESS;
 
+  SpinWLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
   } else if (0 != ptrs_[1 - pos_].count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret));
-    dump();
+    dump_without_lock_();
   } else {
     allocator_[1 - pos_].reset();
     all_ptrs_[1 - pos_].reset();
@@ -290,6 +356,12 @@ int ObSchemaMemMgr::switch_allocator()
 }
 
 void ObSchemaMemMgr::dump() const
+{
+  SpinRLockGuard guard(schema_mem_rwlock_);
+  dump_without_lock_();
+}
+
+void ObSchemaMemMgr::dump_without_lock_() const
 {
   LOG_INFO("[SCHEMA_STATISTICS] cur allocator",
       K_(tenant_id),
@@ -329,6 +401,8 @@ int ObSchemaMemMgr::check_can_release(bool& can_release) const
 {
   int ret = OB_SUCCESS;
   can_release = false;
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -342,6 +416,7 @@ int ObSchemaMemMgr::try_reset_allocator()
 {
   int ret = OB_SUCCESS;
 
+  SpinWLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -350,7 +425,7 @@ int ObSchemaMemMgr::try_reset_allocator()
   if (OB_FAIL(ret)) {
   } else if (0 != ptrs_[pos_].count()) {
     LOG_INFO("allocator is not empty, just skip", K_(tenant_id));
-    dump();
+    dump_without_lock_();
   } else {
     all_ptrs_[pos_].reset();
     allocator_[pos_].reset();
@@ -360,7 +435,7 @@ int ObSchemaMemMgr::try_reset_allocator()
   if (OB_FAIL(ret)) {
   } else if (0 != ptrs_[1 - pos_].count()) {
     LOG_INFO("another allocator is not empty, just skip", K_(tenant_id));
-    dump();
+    dump_without_lock_();
   } else {
     all_ptrs_[1 - pos_].reset();
     allocator_[1 - pos_].reset();
@@ -372,12 +447,14 @@ int ObSchemaMemMgr::try_reset_allocator()
 int ObSchemaMemMgr::try_reset_another_allocator()
 {
   int ret = OB_SUCCESS;
+
+  SpinWLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
   } else if (0 != ptrs_[1 - pos_].count()) {
     LOG_INFO("another allocator is not empty, just skip", K_(tenant_id));
-    dump();
+    dump_without_lock_();
   } else if (0 != all_ptrs_[1 - pos_].count()) {
     all_ptrs_[1 - pos_].reset();
     allocator_[1 - pos_].reset();
@@ -389,6 +466,8 @@ int ObSchemaMemMgr::try_reset_another_allocator()
 int ObSchemaMemMgr::get_another_ptrs(common::ObArray<void*>& ptrs)
 {
   int ret = OB_SUCCESS;
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));

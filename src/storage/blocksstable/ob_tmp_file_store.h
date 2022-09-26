@@ -255,10 +255,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantMacroBlockManager);
 };
 
-class ObTmpTenantFileStore {
+class ObTmpTenantFileStore final {
 public:
   ObTmpTenantFileStore();
-  virtual ~ObTmpTenantFileStore();
+  ~ObTmpTenantFileStore();
   int init(const uint64_t tenant_id, const ObStorageFileHandle& file_handle);
   void destroy();
   int alloc(const int64_t dir_id, const uint64_t tenant_id, const int64_t size, ObTmpFileExtent& extent);
@@ -275,6 +275,8 @@ public:
   {
     return tmp_block_manager_.get_block_size();
   }
+  void inc_ref();
+  int64_t dec_ref();
 
 private:
   int read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io_info, ObTmpFileIOHandle& handle);
@@ -297,8 +299,29 @@ private:
   common::ObConcurrentFIFOAllocator allocator_;
   common::SpinRWLock lock_;
   bool is_inited_;
+  volatile int64_t ref_cnt_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantFileStore);
+};
+
+struct ObTmpTenantFileStoreHandle final {
+public:
+  ObTmpTenantFileStoreHandle();
+  ~ObTmpTenantFileStoreHandle();
+  ObTmpTenantFileStoreHandle(const ObTmpTenantFileStoreHandle &other);
+  ObTmpTenantFileStoreHandle &operator=(const ObTmpTenantFileStoreHandle &other);
+  void set_tenant_store(ObTmpTenantFileStore *store, common::ObConcurrentFIFOAllocator *allocator);
+  bool is_empty() const;
+  bool is_valid() const;
+  void reset();
+  OB_INLINE ObTmpTenantFileStore *get_tenant_store() const
+  {
+    return tenant_store_;
+  }
+
+private:
+  ObTmpTenantFileStore *tenant_store_;
+  common::ObConcurrentFIFOAllocator *allocator_;
 };
 
 class ObTmpFileStore {
@@ -327,7 +350,7 @@ public:
 private:
   ObTmpFileStore();
   virtual ~ObTmpFileStore();
-  int get_store(const uint64_t tenant_id, ObTmpTenantFileStore*& store);
+  int get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHandle& handle);
 
 private:
   static const uint64_t STORE_HASH_BUCKET_NUM = 1543L;
@@ -336,7 +359,7 @@ private:
   static const int64_t BLOCK_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int TMP_FILE_PAGE_CACHE_PRIORITY = 1;
   static const int TMP_FILE_BLOCK_CACHE_PRIORITY = 1;
-  typedef common::hash::ObHashMap<uint64_t, ObTmpTenantFileStore*, common::hash::SpinReadWriteDefendMode>
+  typedef common::hash::ObHashMap<uint64_t, ObTmpTenantFileStoreHandle, common::hash::SpinReadWriteDefendMode>
       TenantFileStoreMap;
   TenantFileStoreMap tenant_file_stores_;
   ObStorageFileHandle file_handle_;

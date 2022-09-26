@@ -2141,7 +2141,7 @@ int ObBackupBackupset::calc_backup_set_copy_id(
     LOG_WARN("backup backupset do not init", KR(ret));
   } else if (backup_set_id < 1) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get tenant backup backup task copy id get invalid arugment", KR(ret), K(job_info), K(backup_set_id));
+    LOG_WARN("get tenant backup backup task copy id get invalid argument", KR(ret), K(job_info), K(backup_set_id));
   } else if (OB_FAIL(get_job_copy_id_level(job_info, copy_id_level))) {
     LOG_WARN("failed to get job copy id level", KR(ret), K(job_info));
   } else if (OB_FAIL(ObBackupSetFilesOperator::get_backup_set_file_info_copy_list(

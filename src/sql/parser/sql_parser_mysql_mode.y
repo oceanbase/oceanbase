@@ -620,12 +620,22 @@ expr opt_as column_label
     ParseNode *alias_node = NULL;
     ParseNode *alias_name_node = NULL;
     malloc_terminal_node(alias_name_node, result->malloc_pool_, T_IDENT);
-    dup_node_string($3, alias_name_node, result->malloc_pool_);
+    if (0 == $3->str_len_) {
+      alias_name_node->str_value_ = NULL;
+      alias_name_node->str_len_ = 0;
+    } else {
+      dup_node_string($3, alias_name_node, result->malloc_pool_);
+    }
 
     malloc_non_terminal_node(alias_node, result->malloc_pool_, T_ALIAS, 2, $1, alias_name_node);
     malloc_non_terminal_node($$, result->malloc_pool_, T_EXPR_WITH_ALIAS, 1, alias_node);
     dup_expr_string($$, result, @3.first_column, @3.last_column);
-    dup_node_string($3, alias_node, result->malloc_pool_);
+    if (0 == $3->str_len_) {
+      alias_node->str_value_ = NULL;
+      alias_node->str_len_ = 0;
+    } else {
+      dup_node_string($3, alias_node, result->malloc_pool_);
+    }
     alias_node->param_num_ = 1;
   }
 }
@@ -4509,21 +4519,25 @@ DATETIME
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATETIME;
+  $$->is_hidden_const_ = 1;
 }
 | TIMESTAMP
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATETIME;
+  $$->is_hidden_const_ = 1;
 }
 | DATE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATE;
+  $$->is_hidden_const_ = 1;
 }
 | TIME
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_TIME;
+  $$->is_hidden_const_ = 1;
 }
 ;
 

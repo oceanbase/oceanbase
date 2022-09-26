@@ -14,6 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_TS_MGR_
 
 #include <stdint.h>
+#include "common/ob_clock_generator.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/lock/ob_drw_lock.h"
 #include "lib/hash/ob_link_hashmap.h"
@@ -189,10 +190,15 @@ public:
   }
   int set_invalid();
   int switch_ts_source(const uint64_t tenant_id, const int ts_type);
+  TO_STRING_KV(K_(tenant_id), K_(last_check_switch_ts), K_(last_obtain_switch_ts), K_(check_switch_interval),
+      K_(cur_ts_type), K_(last_access_ts));
 
 private:
   int switch_ts_source_(const uint64_t tenant_id, const int ts_type);
   void revert_ts_source_(ObTsSourceGuard& guard);
+
+public:
+  static const int64_t DEFAULT_NEED_PRINT_INTERVAL_US = 120 * 1000 * 1000;
 
 private:
   static const int64_t DEFAULT_CHECK_SWITCH_INTERVAL_US = 100 * 1000;
@@ -265,6 +271,12 @@ public:
       ret = common::OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "ha gts source is null", KR(ret), K(gts_tenant_info));
     } else {
+      if (common::ObClockGenerator::getClock() - ts_source_info->get_last_obtain_switch_ts() >=
+          ObTsSourceInfo::DEFAULT_NEED_PRINT_INTERVAL_US) {
+        if (EXECUTE_COUNT_PER_SEC(5)) {
+          TRANS_LOG(WARN, "gts source maybe need delete", K(gts_tenant_info), K(*ts_source_info));
+        }
+      }
       if (OB_FAIL(gts_source->refresh_gts(false))) {
         if (EXECUTE_COUNT_PER_SEC(1)) {
           TRANS_LOG(WARN, "refresh gts failed", KR(ret), K(gts_tenant_info));

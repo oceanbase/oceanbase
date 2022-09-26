@@ -116,38 +116,6 @@ public:
   };
 };
 
-struct ObSystemVariableSchemaKey {
-public:
-  ObSystemVariableSchemaKey();
-  ~ObSystemVariableSchemaKey();
-  bool operator==(const ObSystemVariableSchemaKey& other) const;
-  bool operator!=(const ObSystemVariableSchemaKey& other) const;
-  bool operator<(const ObSystemVariableSchemaKey& other) const;
-  ObSystemVariableSchemaKey& operator=(const ObSystemVariableSchemaKey& other);
-  int assign(const ObSystemVariableSchemaKey& other);
-  void reset();
-  bool is_valid() const;
-  uint64_t hash() const;
-  TO_STRING_KV(K_(zone), K_(name));
-
-public:
-  common::ObString zone_;
-  common::ObString name_;
-};
-
-struct ObSystemVariableCompressSchemaInfo {
-public:
-  ObSystemVariableCompressSchemaInfo() : key_(), max_schema_version_(common::OB_INVALID_VERSION)
-  {}
-  ~ObSystemVariableCompressSchemaInfo()
-  {}
-  TO_STRING_KV(K_(key), K_(max_schema_version));
-
-public:
-  ObSystemVariableSchemaKey key_;
-  int64_t max_schema_version_;
-};
-
 struct ObRecycleSchemaValue {
 public:
   ObRecycleSchemaValue();
@@ -313,6 +281,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRecycleSchemaExecutor);
 };
 
+// RECYCLE ONLY
 class ObSecondRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 public:
   ObSecondRecycleSchemaExecutor() = delete;
@@ -345,6 +314,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSecondRecycleSchemaExecutor);
 };
 
+// RECYCLE ONLY
 class ObThirdRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 public:
   ObThirdRecycleSchemaExecutor() = delete;
@@ -378,6 +348,44 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObThirdRecycleSchemaExecutor);
 };
 
+/*
+ * ##############################
+ * #       system variable      #
+ * ##############################
+ */
+struct ObSystemVariableSchemaKey {
+public:
+  ObSystemVariableSchemaKey();
+  ~ObSystemVariableSchemaKey();
+  bool operator==(const ObSystemVariableSchemaKey &other) const;
+  bool operator!=(const ObSystemVariableSchemaKey &other) const;
+  bool operator<(const ObSystemVariableSchemaKey &other) const;
+  ObSystemVariableSchemaKey &operator=(const ObSystemVariableSchemaKey &other);
+  int assign(const ObSystemVariableSchemaKey &other);
+  void reset();
+  bool is_valid() const;
+  uint64_t hash() const;
+  TO_STRING_KV(K_(zone), K_(name));
+
+public:
+  common::ObString zone_;
+  common::ObString name_;
+};
+
+struct ObSystemVariableCompressSchemaInfo {
+public:
+  ObSystemVariableCompressSchemaInfo() : key_(), max_schema_version_(common::OB_INVALID_VERSION)
+  {}
+  ~ObSystemVariableCompressSchemaInfo()
+  {}
+  TO_STRING_KV(K_(key), K_(max_schema_version));
+
+public:
+  ObSystemVariableSchemaKey key_;
+  int64_t max_schema_version_;
+};
+
+// COMPRESS ONLY
 class ObSystemVariableRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 public:
   ObSystemVariableRecycleSchemaExecutor() = delete;
@@ -408,6 +416,84 @@ private:
   common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObSystemVariableRecycleSchemaExecutor);
 };
+
+/*
+ * #######################################
+ * #   tenant object priviledge          #
+ * #######################################
+ */
+
+struct ObObjectPrivSchemaKey {
+public:
+  ObObjectPrivSchemaKey();
+  ~ObObjectPrivSchemaKey();
+  bool operator==(const ObObjectPrivSchemaKey &other) const;
+  bool operator!=(const ObObjectPrivSchemaKey &other) const;
+  bool operator<(const ObObjectPrivSchemaKey &other) const;
+  ObObjectPrivSchemaKey &operator=(const ObObjectPrivSchemaKey &other);
+  int assign(const ObObjectPrivSchemaKey &other);
+  void reset();
+  bool is_valid() const;
+  uint64_t hash() const;
+  TO_STRING_KV(K_(obj_id), K_(obj_type), K_(col_id), K_(grantor_id), K_(grantee_id), K_(priv_id));
+
+public:
+  int64_t obj_id_;
+  int64_t obj_type_;
+  int64_t col_id_;
+  int64_t grantor_id_;
+  int64_t grantee_id_;
+  int64_t priv_id_;
+};
+
+struct ObObjectPrivCompressSchemaInfo {
+public:
+  ObObjectPrivCompressSchemaInfo() : key_(), max_schema_version_(common::OB_INVALID_VERSION)
+  {}
+  ~ObObjectPrivCompressSchemaInfo()
+  {}
+  TO_STRING_KV(K_(key), K_(max_schema_version));
+
+public:
+  ObObjectPrivSchemaKey key_;
+  int64_t max_schema_version_;
+};
+
+// RECYCLE AND COMPRESS
+class ObObjectPrivRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
+public:
+  ObObjectPrivRecycleSchemaExecutor() = delete;
+  ObObjectPrivRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char *table_name,
+      common::ObMySQLProxy *sql_proxy, ObSchemaHistoryRecycler *recycler);
+  virtual ~ObObjectPrivRecycleSchemaExecutor();
+
+private:
+  virtual bool is_valid() const;
+  virtual int fill_schema_history_map();
+  virtual int recycle_schema_history();
+  virtual int compress_schema_history();
+
+  virtual int gen_fill_schema_history_sql(int64_t start_idx, common::ObSqlString &sql);
+  virtual int retrieve_schema_history(
+      common::sqlclient::ObMySQLResult &result, ObObjectPrivSchemaKey &key, ObRecycleSchemaValue &value);
+  virtual int fill_schema_history_key(const ObObjectPrivSchemaKey &cur_key, ObObjectPrivSchemaKey &key);
+  virtual int fill_schema_history(const ObObjectPrivSchemaKey &key, const ObRecycleSchemaValue &value);
+
+  virtual int gen_batch_recycle_schema_history_sql(
+      const common::ObIArray<ObObjectPrivSchemaKey> &dropped_schema_keys, common::ObSqlString &sql);
+  virtual int batch_recycle_schema_history(const common::ObIArray<ObObjectPrivSchemaKey> &dropped_schema_keys);
+
+  virtual int gen_batch_compress_schema_history_sql(
+      const ObIArray<ObObjectPrivCompressSchemaInfo> &compress_schema_infos, common::ObSqlString &sql);
+  virtual int batch_compress_schema_history(
+      const common::ObIArray<ObObjectPrivCompressSchemaInfo> &compress_schema_infos);
+
+private:
+  common::hash::ObHashMap<ObObjectPrivSchemaKey, ObRecycleSchemaValue, common::hash::NoPthreadDefendMode>
+      schema_history_map_;
+  DISALLOW_COPY_AND_ASSIGN(ObObjectPrivRecycleSchemaExecutor);
+};
+
 }  // end namespace rootserver
 }  // end namespace oceanbase
 

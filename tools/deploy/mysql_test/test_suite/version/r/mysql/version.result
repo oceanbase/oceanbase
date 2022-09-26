@@ -1,6 +1,6 @@
 select version();
 version()
-3.1.4-OceanBase CE
+3.1.5-OceanBase CE
 show variables like 'version';
 Variable_name	Value
-version	3.1.4-OceanBase CE
+version	3.1.5-OceanBase CE
