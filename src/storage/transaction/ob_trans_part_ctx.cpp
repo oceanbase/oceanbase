@@ -10602,6 +10602,7 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     clear_log_base_ts_ = ctx_info.clear_log_base_ts_;
     // for record log
     prev_checkpoint_id_ = ctx_info.prev_checkpoint_id_;
+    has_trans_state_log_ = ctx_info.has_trans_state_log_;
 
     (void)mark_dirty_trans();
 
@@ -10684,6 +10685,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
     info.clear_log_base_ts_ = clear_log_base_ts_;
     info.prev_checkpoint_id_ = prev_checkpoint_id_;
+    info.has_trans_state_log_ = has_trans_state_log_;
     TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
   }
 
