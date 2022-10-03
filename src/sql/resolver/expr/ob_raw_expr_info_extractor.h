@@ -49,7 +49,7 @@ private:
   int visit_subquery_node(ObOpRawExpr& expr);
   int visit_left_param(ObRawExpr& expr);
   int visit_right_param(ObOpRawExpr& expr);
-  void clear_info(ObRawExpr& expr);
+  int clear_info(ObRawExpr& expr);
   int pull_info(ObRawExpr& expr);
   int add_const(ObRawExpr& expr);
   int add_calculable(ObOpRawExpr& expr);

@@ -298,10 +298,10 @@ public:
           SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
         }
       }
-      if (pos >= desc_.len_) {
-        desc_.len_ = static_cast<int16_t>(pos) + 1;
-      }
       if (OB_SUCC(ret)) {
+        if (pos >= desc_.len_) {
+          desc_.len_ = static_cast<int16_t>(pos) + 1;
+        }
         bit_set_word_array_[pos] |= ((BitSetWord)1 << (index & PER_BITSETWORD_MASK));
       }
     }

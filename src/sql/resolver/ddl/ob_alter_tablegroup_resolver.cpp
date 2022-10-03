@@ -141,8 +141,8 @@ int ObAlterTablegroupResolver::resolve_partition_options(const ParseNode& node)
           ParseNode* partition_node = node.children_[0];
           if (OB_FAIL(resolve_add_partition(*partition_node))) {
             SQL_RESV_LOG(WARN, "Resolve add partition error!", K(ret));
-          } else {
-            arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::ADD_PARTITION);
+          } else if (OB_FAIL(arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::ADD_PARTITION))) {
+            LOG_WARN("failed to add member", K(ret));
           }
           break;
         }
@@ -150,8 +150,8 @@ int ObAlterTablegroupResolver::resolve_partition_options(const ParseNode& node)
           ParseNode* partition_node = node.children_[0];
           if (OB_FAIL(resolve_drop_partition(*partition_node))) {
             SQL_RESV_LOG(WARN, "Resolve drop partition error!", K(ret));
-          } else {
-            arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::DROP_PARTITION);
+          } else if (OB_FAIL(arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::DROP_PARTITION))) {
+            LOG_WARN("failed to add member", K(ret));
           }
           break;
         }
@@ -174,8 +174,8 @@ int ObAlterTablegroupResolver::resolve_partition_options(const ParseNode& node)
           } else if (OB_FAIL(resolve_partition_table_option(
                          alter_tablegroup_stmt, partition_node->children_[0], arg.alter_tablegroup_schema_))) {
             LOG_WARN("fail to resolve partition node", K(ret), K(partition_node));
-          } else {
-            arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE);
+          } else if (OB_FAIL(arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::PARTITIONED_TABLE))) {
+            LOG_WARN("failed to add member", K(ret));
           }
           break;
         }
@@ -198,8 +198,8 @@ int ObAlterTablegroupResolver::resolve_partition_options(const ParseNode& node)
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "reorganize partition");
           } else if (OB_FAIL(resolve_reorganize_partition(*partition_node))) {
             LOG_WARN("failed to reorganize partition", K(ret));
-          } else {
-            arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::REORGANIZE_PARTITION);
+          } else if (OB_FAIL(arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::REORGANIZE_PARTITION))) {
+            LOG_WARN("failed to add member", K(ret));
           }
           break;
         }
@@ -222,8 +222,8 @@ int ObAlterTablegroupResolver::resolve_partition_options(const ParseNode& node)
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "split partition");
           } else if (OB_FAIL(resolve_split_partition(*partition_node))) {
             LOG_WARN("failed to reorganize partition", K(ret));
-          } else {
-            arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION);
+          } else if (OB_FAIL(arg.alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SPLIT_PARTITION))) {
+            LOG_WARN("failed to add member", K(ret));
           }
           break;
         }

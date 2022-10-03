@@ -3293,8 +3293,9 @@ int ObSelectResolver::gen_unpivot_target_column(
                   if (OB_FAIL(ObRawExprUtils::create_cast_expr(
                           *params_.expr_factory_, select_item.expr_, res_type, new_expr, session_info_))) {
                     LOG_WARN("create cast expr for stmt failed", K(ret));
+                  } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+                    LOG_WARN("failed to add flag", K(ret));
                   } else {
-                    new_expr->add_flag(IS_INNER_ADDED_EXPR);
                     select_item.expr_ = new_expr;
                     LOG_DEBUG("add cast for column", K(select_item), K(res_type));
                   }
@@ -5711,10 +5712,8 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode* node)
           OZ(ObRawExprUtils::create_cast_expr(
               *params_.expr_factory_, limit_offset, dst_type, cast_expr, session_info_));
           CK(NULL != cast_expr);
-          if (OB_SUCC(ret)) {
-            limit_offset = cast_expr;
-            limit_offset->add_flag(IS_INNER_ADDED_EXPR);
-          }
+          OX(limit_offset = cast_expr);
+          OZ(limit_offset->add_flag(IS_INNER_ADDED_EXPR));
         }
       }
       if (OB_SUCC(ret)) {
@@ -5749,10 +5748,8 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode* node)
             OZ(ObRawExprUtils::create_cast_expr(
                 *params_.expr_factory_, limit_count, dst_type, cast_expr, session_info_));
             CK(NULL != cast_expr);
-            if (OB_SUCC(ret)) {
-              limit_count = cast_expr;
-              limit_count->add_flag(IS_INNER_ADDED_EXPR);
-            }
+            OX(limit_count = cast_expr);
+            OZ(limit_count->add_flag(IS_INNER_ADDED_EXPR));
           }
         }
       }
@@ -5773,10 +5770,8 @@ int ObSelectResolver::resolve_fetch_clause(const ParseNode* node)
             OZ(ObRawExprUtils::create_cast_expr(
                 *params_.expr_factory_, limit_percent, dst_type, cast_expr, session_info_));
             CK(NULL != cast_expr);
-            if (OB_SUCC(ret)) {
-              limit_percent = cast_expr;
-              limit_percent->add_flag(IS_INNER_ADDED_EXPR);
-            }
+            OX(limit_percent = cast_expr);
+            OZ(limit_percent->add_flag(IS_INNER_ADDED_EXPR));
           }
         }
       }

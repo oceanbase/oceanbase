@@ -2724,7 +2724,6 @@ int ObTransformPreProcess::add_filter_for_temporary_table(ObDMLStmt& stmt, const
         expr_col->set_table_name(table_item.get_table_name());
         expr_col->set_column_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME);
         expr_col->set_ref_id(table_item.table_id_, OB_HIDDEN_SESSION_ID_COLUMN_ID);
-        expr_col->add_relation_id(stmt.get_table_bit_index(table_item.table_id_));
         expr_col->set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         expr_col->set_collation_level(CS_LEVEL_SYSCONST);
         expr_col->set_result_type(result_type);
@@ -2733,7 +2732,9 @@ int ObTransformPreProcess::add_filter_for_temporary_table(ObDMLStmt& stmt, const
         column_item.table_id_ = expr_col->get_table_id();
         column_item.column_id_ = expr_col->get_column_id();
         column_item.column_name_ = expr_col->get_column_name();
-        if (OB_FAIL(stmt.add_column_item(column_item))) {
+        if (OB_FAIL(expr_col->add_relation_id(stmt.get_table_bit_index(table_item.table_id_)))) {
+          LOG_WARN("failed to add relation id", K(ret));
+        } else if (OB_FAIL(stmt.add_column_item(column_item))) {
           LOG_WARN("add column item to stmt failed", K(ret));
         }
       }

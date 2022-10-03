@@ -107,14 +107,16 @@ int ObRawExprInfoExtractor::visit(ObColumnRefRawExpr& expr)
     }                                                                    \
   } while (0)
 
-void ObRawExprInfoExtractor::clear_info(ObRawExpr& expr)
+int ObRawExprInfoExtractor::clear_info(ObRawExpr& expr)
 {
+  int ret = OB_SUCCESS;
   ObExprInfo& expr_info = expr.get_expr_info();
   bool is_implicit_cast = expr_info.has_member(IS_OP_OPERAND_IMPLICIT_CAST);
   expr_info.reset();
   if (is_implicit_cast) {
-    expr_info.add_member(IS_OP_OPERAND_IMPLICIT_CAST);
+    OZ(expr_info.add_member(IS_OP_OPERAND_IMPLICIT_CAST));
   }
+  return ret;
 }
 
 int ObRawExprInfoExtractor::pull_info(ObRawExpr& expr)
@@ -241,8 +243,9 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr& expr)
 {
   int ret = OB_SUCCESS;
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (is_inner_added && OB_FAIL(expr.add_flag(IS_INNER_ADDED_EXPR))) {
     LOG_WARN("add flag failed", K(ret));
@@ -453,8 +456,9 @@ ObItemType ObRawExprInfoExtractor::get_subquery_comparison_type(ObItemType cmp_t
 int ObRawExprInfoExtractor::visit(ObCaseOpRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(add_const(expr))) {
     LOG_WARN("fail to add const", K(expr), K(ret));
@@ -466,8 +470,9 @@ int ObRawExprInfoExtractor::visit(ObCaseOpRawExpr& expr)
 int ObRawExprInfoExtractor::visit(ObAggFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_AGG))) {
     LOG_WARN("failed to add flag IS_AGG", K(ret));
@@ -480,8 +485,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
   const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(add_const(expr))) {
     LOG_WARN("fail to add const", K(expr), K(ret));
@@ -628,8 +634,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
 int ObRawExprInfoExtractor::visit(ObSetOpRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(expr.add_flag(IS_SET_OP))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_SET_OP))) {
     LOG_WARN("failed to add flag IS_SET_OP", K(ret));
   }
   return ret;
@@ -638,8 +645,9 @@ int ObRawExprInfoExtractor::visit(ObSetOpRawExpr& expr)
 int ObRawExprInfoExtractor::visit(ObAliasRefRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(expr.add_flag(IS_ALIAS))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_ALIAS))) {
     LOG_WARN("failed to add flag", K(ret));
   } else if (OB_ISNULL(expr.get_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -657,8 +665,9 @@ int ObRawExprInfoExtractor::visit(ObAliasRefRawExpr& expr)
 int ObRawExprInfoExtractor::visit(ObFunMatchAgainst& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("pull match against info failed", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_DOMAIN_INDEX_FUNC))) {
     LOG_WARN("add flag to match against failed", K(ret));
@@ -669,8 +678,9 @@ int ObRawExprInfoExtractor::visit(ObFunMatchAgainst& expr)
 int ObRawExprInfoExtractor::visit(ObWinFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(pull_info(expr))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("pull match info failed", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_WINDOW_FUNC))) {
     LOG_WARN("add flag failed", K(ret));
@@ -683,8 +693,9 @@ int ObRawExprInfoExtractor::visit(ObWinFunRawExpr& expr)
 int ObRawExprInfoExtractor::visit(ObPseudoColumnRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  clear_info(expr);
-  if (OB_FAIL(expr.add_flag(IS_PSEUDO_COLUMN))) {
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("fail to clear info", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_PSEUDO_COLUMN))) {
     LOG_WARN("add flag fail", K(ret));
   } else if (T_LEVEL == expr.get_expr_type()) {
     if (OB_FAIL(expr.add_flag(IS_LEVEL))) {

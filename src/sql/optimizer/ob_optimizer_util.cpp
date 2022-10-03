@@ -4199,7 +4199,7 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet& fd_item_set, cons
             }
             if (OB_FAIL(ret)) {
               /*do nothing*/
-            } else if (checked_fd_item.add_member(fd_idx)) {
+            } else if (OB_FAIL(checked_fd_item.add_member(fd_idx))) {
               LOG_WARN("failed to add member", K(ret));
             } else if (OB_FAIL(split_child_exprs(fd_item, equal_sets, fd_set_parent_exprs, extended_order_exprs))) {
               LOG_WARN("failed to delete members", K(ret));

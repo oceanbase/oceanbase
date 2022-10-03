@@ -305,7 +305,6 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx* ctx, const TableI
     new_column_ref->set_table_name(table_item.alias_name_);
     new_column_ref->set_column_name(select_item.alias_name_);
     new_column_ref->set_ref_id(table_item.table_id_, column_id);  // only one column
-    new_column_ref->add_relation_id(stmt->get_table_bit_index(table_item.table_id_));
     new_column_ref->set_collation_type(select_expr->get_collation_type());
     new_column_ref->set_collation_level(select_expr->get_collation_level());
     new_column_ref->set_result_type(select_expr->get_result_type());
@@ -315,9 +314,11 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx* ctx, const TableI
     } else {
       new_column_ref->set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
     }
-    if (select_expr->is_column_ref_expr()) {
-      const ObColumnRefRawExpr* old_col = static_cast<const ObColumnRefRawExpr*>(select_expr);
-      const ColumnItem* old_col_item = NULL;
+    if (OB_FAIL(new_column_ref->add_relation_id(stmt->get_table_bit_index(table_item.table_id_)))) {
+      LOG_WARN("failed to add relation id", K(ret));
+    } else if (select_expr->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *old_col = static_cast<const ObColumnRefRawExpr *>(select_expr);
+      const ColumnItem *old_col_item = NULL;
       if (OB_ISNULL(table_item.ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is invalid", K(ret));

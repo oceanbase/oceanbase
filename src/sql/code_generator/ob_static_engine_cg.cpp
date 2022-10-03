@@ -362,7 +362,7 @@ int ObStaticEngineCG::set_specific_flag_to_exprs(const ObIArray<ObRawExpr*>& exp
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(i), K(exprs));
     } else {
-      exprs.at(i)->add_flag(flag);
+      OZ(exprs.at(i)->add_flag(flag));
     }
   }
 
