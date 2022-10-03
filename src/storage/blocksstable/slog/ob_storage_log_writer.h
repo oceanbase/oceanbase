@@ -75,9 +75,10 @@ private:
 
 class ObStorageLogWriter : public common::ObBaseLogWriter {
 public:
-  static const int64_t LOG_FILE_ALIGN_SIZE = 4 * 1024;                   // 4KB
-  static const int64_t LOG_BUF_RESERVED_SIZE = 3 * LOG_FILE_ALIGN_SIZE;  // NOP + switch_log
-  static const int64_t LOG_ITEM_MAX_LENGTH = 32 << 20;                   // 32MB
+  static const int64_t LOG_FILE_ALIGN_SIZE = 4 * 1024;                          // 4KB
+  static const int64_t LOG_BUF_RESERVED_SIZE = 3 * LOG_FILE_ALIGN_SIZE;         // NOP + switch_log
+  static const int64_t LOG_ITEM_MAX_LENGTH = 32 << 20;                          // 32MB
+  static const int64_t MAX_APPEND_WAIT_TIME_US = 365 * 24 * 3600 * 1000000L;    // 1year
 
   ObStorageLogWriter();
   virtual ~ObStorageLogWriter();
@@ -223,6 +224,7 @@ private:
   char *batch_write_buf_;
   int64_t batch_write_len_;
   int64_t batch_limit_size_;
+  int64_t flush_seq_;
 };
 
 template <typename T>

@@ -256,7 +256,8 @@ ObStorageLogWriter::ObStorageLogWriter()
       file_store_(nullptr),
       batch_write_buf_(nullptr),
       batch_write_len_(0),
-      batch_limit_size_(0)
+      batch_limit_size_(0),
+      flush_seq_(0)
 {}
 
 ObStorageLogWriter::~ObStorageLogWriter()
@@ -346,6 +347,7 @@ void ObStorageLogWriter::destroy()
     batch_write_buf_ = nullptr;
   }
   batch_write_len_ = 0;
+  flush_seq_ = 0;
   is_started_ = false;
   is_inited_ = false;
 }
@@ -365,6 +367,7 @@ int ObStorageLogWriter::start_log(const ObLogCursor& start_cursor)
     build_cursor_ = start_cursor;
     write_cursor_ = start_cursor;
     flush_cursor_ = start_cursor;
+    flush_seq_ = start_cursor.log_id_;
     is_started_ = true;
     LOG_INFO("start log", K(start_cursor));
   }
@@ -388,7 +391,7 @@ int ObStorageLogWriter::flush_log(
       ObMutexGuard guard(build_log_mutex_);
       if (OB_FAIL(get_log_item(cmd, log_buffer, log_item))) {
         LOG_WARN("get_log_item failed", K(ret), K(cmd), K(log_buffer));
-      } else if (OB_FAIL(append_log(*log_item))) {
+      } else if (OB_FAIL(append_log(*log_item, MAX_APPEND_WAIT_TIME_US))) {
         LOG_WARN("append_log failed", K(ret));
       }
     }
@@ -963,6 +966,12 @@ int ObStorageLogWriter::sync_log(common::ObIBaseLogItem** items, int64_t& sync_i
         if (i == write_index) {
           DEBUG_SYNC(BEFORE_SLOG_UPDATE_FLUSH_CURSOR);
           flush_cursor_ = log_item->end_cursor_;
+        }
+        if (OB_UNLIKELY(flush_seq_ != log_item->start_cursor_.log_id_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("flush_seq_ doesn't match", K(ret), K(flush_seq_), K(log_item->start_cursor_));
+        } else {
+          flush_seq_ = log_item->end_cursor_.log_id_;
         }
         log_item->finish_flush(OB_SUCCESS);
       }
