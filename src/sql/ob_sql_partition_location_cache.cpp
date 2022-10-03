@@ -450,7 +450,9 @@ ObSqlPartitionLocationCache::LocationDistributedMode ObSqlPartitionLocationCache
     case OB_ALL_VIRTUAL_PG_LOG_ARCHIVE_STAT_TID:
     case OB_ALL_VIRTUAL_OPEN_CURSOR_TID:
     case OB_ALL_VIRTUAL_RESERVED_TABLE_MGR_TID:
-    case OB_ALL_VIRTUAL_DAG_WARNING_HISTORY_TID: {
+    case OB_ALL_VIRTUAL_DAG_WARNING_HISTORY_TID:
+    case OB_ALL_VIRTUAL_SCHEMA_MEMORY_TID:
+    case OB_ALL_VIRTUAL_SCHEMA_SLOT_TID: {
       loc_dist_mode = ObSqlPartitionLocationCache::LOC_DIST_MODE_DISTRIBUTED;
       break;
     }
