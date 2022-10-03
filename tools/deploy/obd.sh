@@ -486,11 +486,11 @@ oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle,
 
 Options:
 -V, --version                            Show version of obd.
--c YAML_CONF, --config=YAML_CONF         The deploy yaml file.
--n DEPLOY_NAME, --deploy-name=DEPLOY_NAME
+-c YAML_CONF, --config YAML_CONF         The deploy yaml file.
+-n DEPLOY_NAME, --deploy-name DEPLOY_NAME
                                          The name of the deployment.
 -v VERBOSE                               Activate verbose output.
--p DATA_PATH, --data-path=DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
+-p DATA_PATH, --data-path DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
 --with-local-obproxy                     Use local obproxy.
@@ -539,6 +539,7 @@ function main() {
       --reboot ) NEED_REBOOT="1"; shift ;;
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
+      --port ) export port_gen="$2"; extra_args="$extra_args $1"; shift ;;
       -- ) shift ;;
       "" ) break ;;
       * ) extra_args="$extra_args $1"; [[ "$1" == "--help" || "$1" == "-h" ]] && HELP="1" ; shift ;;
