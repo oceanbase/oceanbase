@@ -13,6 +13,7 @@
 #include "ob_log_archive_struct.h"
 #include "ob_archive_allocator.h"
 #include "ob_archive_task_queue.h"
+#include "ob_log_archive_define.h"
 #include "lib/ob_running_mode.h"  // is_mini_mode
 
 using namespace oceanbase;
@@ -35,12 +36,18 @@ int ObArchiveAllocator::init()
   const int64_t clog_task_size = sizeof(ObPGArchiveCLogTask);
   const int64_t clog_task_status_size = sizeof(ObArchiveCLogTaskStatus);
   const int64_t send_task_status_size = sizeof(ObArchiveSendTaskStatus);
+  const int64_t DEFAULT_MIN_OBJ_COUNT_ON_BLOCK = 1;
   const int64_t UNUSED_HOLD_LIMIT = 0;
 
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     ARCHIVE_LOG(ERROR, "ObArchiveAllocator has been inited", KR(ret));
-  } else if (OB_FAIL(clog_task_allocator_.init(clog_task_size, "ArcCLogTask"))) {
+  } else if (OB_FAIL(clog_task_allocator_.init(clog_task_size,
+                 "ArcCLogTask",
+                 common::OB_SERVER_TENANT_ID,
+                 common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                 DEFAULT_MIN_OBJ_COUNT_ON_BLOCK,
+                 MAX_ARCHIVE_TASK_COUNT_LIMIT))) {
     ARCHIVE_LOG(WARN, "clog_task_allocator_ init fail", KR(ret));
   } else if (OB_FAIL(send_task_allocator_.init(SEND_TASK_CAPACITY_LIMIT, UNUSED_HOLD_LIMIT, SEND_TASK_PAGE_SIZE))) {
     ARCHIVE_LOG(WARN, "send_task_allocator_ init fail", KR(ret));
