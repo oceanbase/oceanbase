@@ -412,7 +412,8 @@ private:
                              uint64_t length,
                              uint8_t type,
                              uint64_t value_offset,
-                             ObJsonNode *&json_tree);
+                             ObJsonNode *&json_tree,
+                             uint64_t type_size);
 
   int deserialize_json_object_v0(const char *data, uint64_t length, ObJsonObject *object);
   inline int deserialize_json_object(const char *data, uint64_t length, ObJsonObject *object, ObJBVerType vertype);

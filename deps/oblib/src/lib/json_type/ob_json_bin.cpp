@@ -945,8 +945,9 @@ int ObJsonBin::to_tree(ObJsonNode *&json_tree)
     } else {
       // inline value store all store in union
       offset = OB_JSON_TYPE_IS_INLINE(type) ? uint_val_ : offset;
+      type = ObJsonVar::get_var_type(offset);
     }
-    if (OB_FAIL(deserialize_json_value(ptr + offset, curr_.length() - offset, type_, offset, json_tree))) {
+    if (OB_FAIL(deserialize_json_value(ptr + offset, curr_.length() - offset, type_, offset, json_tree, type))) {
       LOG_WARN("deserialize failed", K(ret), K(offset), K(type));
     }
   }
@@ -958,7 +959,8 @@ int ObJsonBin::deserialize_json_value(const char *data,
                                       uint64_t length,
                                       uint8_t type,
                                       uint64_t value_offset,
-                                      ObJsonNode *&json_tree)
+                                      ObJsonNode *&json_tree,
+                                      uint64_t type_size)
 {
   INIT_SUCC(ret);
   bool is_inlined = OB_JSON_TYPE_IS_INLINE(type);
@@ -1006,7 +1008,7 @@ int ObJsonBin::deserialize_json_value(const char *data,
         LOG_WARN("fail to alloc memory for int json node", K(ret));
       } else {
         if (is_inlined) {
-          ObJsonInt *node = new(buf)ObJsonInt(ObJsonVar::var_uint2int(value_offset));
+          ObJsonInt *node = new(buf)ObJsonInt(ObJsonVar::var_uint2int(value_offset, type_size));
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
           int64_t val = 0;
@@ -1329,7 +1331,7 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
           ObString key(key_len, reinterpret_cast<const char*>(key_buf));
           const char *val = data + value_offset;
           ObJsonNode *node = NULL;
-          ret = deserialize_json_value(val, length - value_offset, val_type, value_offset, node);
+          ret = deserialize_json_value(val, length - value_offset, val_type, value_offset, node, type);
           if (OB_SUCC(ret)) {
             if (OB_FAIL(object->add(key, node))) {
               LOG_WARN("failed to add node to obj", K(ret));
@@ -1392,8 +1394,8 @@ int ObJsonBin::deserialize_json_array_v0(const char *data, uint64_t length, ObJs
       } else {
         const char *val = data + val_offset;
         ObJsonNode *node = NULL;
-        if (OB_FAIL(deserialize_json_value(val, length - val_offset, val_type, val_offset, node))) {
-          LOG_WARN("failed to deserialize child node", K(ret), K(i), K(val_type), K(val_offset));
+        if (OB_FAIL(deserialize_json_value(val, length - val_offset, val_type, val_offset, node, type))) {
+          LOG_WARN("failed to deserialize child node", K(ret), K(i), K(val_type), K(val_offset), K(type));
         } else if (OB_FAIL(array->append(node))) {
           LOG_WARN("failed to append node to array", K(ret));
         }
@@ -4346,7 +4348,7 @@ uint64_t ObJsonVar::var_int2uint(int64_t var)
 
 int64_t ObJsonVar::var_uint2int(uint64_t var, uint8_t entry_size)
 {
-  ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(max(ObJsonVar::get_var_type(var), entry_size));
+  ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(entry_size);
   int64_t val = 0;
   switch (size) {
     case JBLS_UINT8: {
