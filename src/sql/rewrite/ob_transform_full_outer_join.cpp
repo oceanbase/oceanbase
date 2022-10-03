@@ -524,9 +524,29 @@ int ObTransformFullOuterJoin::create_select_items_for_semi_join(ObDMLStmt* stmt,
     if (OB_FAIL(select_item.deep_copy(*ctx_->expr_factory_, select_items.at(i), COPY_REF_DEFAULT))) {
       LOG_WARN("failed to deep copy select items.", K(ret));
     } else if (select_items.at(i).expr_->get_relation_ids().overlap(index_left)) {
-      if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, select_item.expr_))) {
+      ObCastMode cm;
+      ObRawExpr *null_expr = NULL;
+      ObSysFunRawExpr *cast_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, null_expr))) {
         LOG_WARN("failed build null exprs.", K(ret));
-      } else { /*do nothing.*/
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(true, /* explicit_cast */
+                     0,                                          /* result_flag */
+                     ctx_->session_info_,
+                     cm))) {
+        LOG_WARN("fail to get default cast mode", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
+                     null_expr,
+                     select_item.expr_->get_result_type(),
+                     cast_expr,
+                     ctx_->session_info_,
+                     false,
+                     cm))) {
+        LOG_WARN("failed to cast expr", K(ret));
+      } else if (OB_ISNULL(cast_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null expr", K(ret));
+      } else {
+        select_item.expr_ = cast_expr;
       }
     } else { /*do nothing.*/
     }
