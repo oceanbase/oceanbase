@@ -416,7 +416,7 @@ template <typename Compare>
 int ObSortedVector<T, Allocator>::insert(const_value_type value, iterator& insert_pos, Compare compare)
 {
   int ret = OB_SUCCESS;
-  if (std::is_pointer<T>::value && NULL == value) {
+  if (true == std::is_pointer<T>::value && NULL == value) {
     ret = OB_ERROR;
   }
   insert_pos = vector_.end();
