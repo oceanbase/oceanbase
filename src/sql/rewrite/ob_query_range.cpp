@@ -1389,12 +1389,12 @@ int ObQueryRange::pre_extract_basic_cmp(
     if (T_OP_LIKE != node->get_expr_type()) {
       if (2 != multi_expr->get_param_count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("multi_expr must has 2 arguments", K(ret));
+        LOG_WARN("multi_expr must have 2 arguments", K(ret));
       }
     } else {
       if (3 != multi_expr->get_param_count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("multi_expr must has 3 arguments", K(ret));
+        LOG_WARN("multi_expr must have 3 arguments", K(ret));
       } else {
         escape_expr = multi_expr->get_param_expr(2);
       }
@@ -1431,7 +1431,7 @@ int ObQueryRange::pre_extract_ne_op(
     LOG_WARN("expr is null.", K(t_expr), K_(query_range_ctx));
   } else if (2 != t_expr->get_param_count()) {  // trip op expr
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t_expr must has 2 arguments", K(ret));
+    LOG_WARN("t_expr must have 2 arguments", K(ret));
   } else {
     bool is_precise = true;
     const ObRawExpr* l_expr = t_expr->get_param_expr(0);
@@ -1478,7 +1478,7 @@ int ObQueryRange::pre_extract_is_op(
     // pk is null will be extracted
     if (3 != b_expr->get_param_count()) {  // binary op expr
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("b_expr must has 3 arguments", K(ret));
+      LOG_WARN("b_expr must have 3 arguments", K(ret));
     } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
                    b_expr->get_param_expr(1),
                    NULL,
@@ -1504,7 +1504,7 @@ int ObQueryRange::pre_extract_btw_op(
     LOG_WARN("expr is null.", K(t_expr), K_(query_range_ctx));
   } else if (3 != t_expr->get_param_count()) {  // trip op expr
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t_expr must has 3 arguments", K(ret));
+    LOG_WARN("t_expr must have 3 arguments", K(ret));
   } else {
     bool btw_op_is_precise = true;
     const ObRawExpr* l_expr = t_expr->get_param_expr(0);
@@ -1542,7 +1542,7 @@ int ObQueryRange::pre_extract_not_btw_op(
     LOG_WARN("expr is null.", K(t_expr), K_(query_range_ctx));
   } else if (3 != t_expr->get_param_count()) {  // trip op expr
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t_expr must has 3 arguments", K(ret));
+    LOG_WARN("t_expr must have 3 arguments", K(ret));
   } else {
     bool not_btw_op_is_precise = true;
     const ObRawExpr* l_expr = t_expr->get_param_expr(0);
@@ -1659,7 +1659,7 @@ int ObQueryRange::pre_extract_in_op(
     LOG_WARN("expr is null.", K(b_expr), K_(query_range_ctx));
   } else if (2 != b_expr->get_param_count()) {  // binary op expr
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t_expr must has 3 arguments", K(ret));
+    LOG_WARN("t_expr must have 3 arguments", K(ret));
   } else {
     const ObOpRawExpr* r_expr = static_cast<const ObOpRawExpr*>(b_expr->get_param_expr(1));
     if (NULL == r_expr) {

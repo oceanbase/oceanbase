@@ -189,7 +189,7 @@ int ObTableUpdateOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
 {
   int ret = OB_SUCCESS;
   ObPartitionArray part_keys;
-  // update operator must has project operation
+  // update operator must have project operation
   if (OB_FAIL(try_check_status())) {
     LOG_WARN("check status failed", K(ret));
   } else if (!has_got_old_row_) {

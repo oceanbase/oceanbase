@@ -1500,7 +1500,7 @@ int ObElectionGroup::handle_vote_success(const ObElectionMsgEGSuccess &msg, cons
 
       // count all move in failed but successfully renew lease partitions
       if (move_in_failed_array.count() > 0) {
-        // move in failed means version not equal, so move in failed must has been deserialized
+        // move in failed means version not equal, so move in failed must have been deserialized
         int tmp_ret = OB_SUCCESS;
         ObPartitionArray vote_succ_array;
         const int64_t fail_cnt = move_in_failed_array.count();

@@ -2196,7 +2196,7 @@ int ObTransformUtils::get_simple_filter_column(
         bool right_is_lossless = false;
         if (2 != expr->get_param_count()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr must has 2 arguments", K(ret));
+          LOG_WARN("expr must have 2 arguments", K(ret));
         } else if (OB_ISNULL(left = expr->get_param_expr(0)) || OB_ISNULL(right = expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcept null param expr", K(ret));

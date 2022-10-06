@@ -203,7 +203,7 @@ int ObTableUpdate::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   int ret = OB_SUCCESS;
   ObTableUpdateCtx* update_ctx = NULL;
   ObPartitionArray part_keys;
-  // update operator must has project operation
+  // update operator must have project operation
   if (OB_FAIL(try_check_status(ctx))) {
     LOG_WARN("check status failed", K(ret));
   } else if (OB_ISNULL(update_ctx = GET_PHY_OPERATOR_CTX(ObTableUpdateCtx, ctx, get_id()))) {

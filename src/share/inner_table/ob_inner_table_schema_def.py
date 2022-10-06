@@ -10428,7 +10428,7 @@ def_table_schema(**gen_agent_virtual_table_def('15118', all_def_keywords['__all_
 def_table_schema(**gen_agent_virtual_table_def('15119', all_def_keywords['__all_acquired_snapshot']))
 
 ## define oracle virtual table that is mapping real table
-## real table must has in_tenant_space=True if use gen_oracle_mapping_real_virtual_table_def
+## real table must have in_tenant_space=True if use gen_oracle_mapping_real_virtual_table_def
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15120', False, all_def_keywords['__all_table']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15121', False, all_def_keywords['__all_column']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15122', False, all_def_keywords['__all_database']))

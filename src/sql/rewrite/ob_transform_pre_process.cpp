@@ -2312,7 +2312,7 @@ int ObTransformPreProcess::recursive_replace_func_is_serving_tenant(
       int64_t tenant_id_int64 = -1;
       if (OB_UNLIKELY(3 != cond_expr->get_param_count())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("T_FUN_IS_SERVING_TENANT must has 3 params", K(ret), K(cond_expr->get_param_count()), K(*cond_expr));
+        LOG_WARN("T_FUN_IS_SERVING_TENANT must have 3 params", K(ret), K(cond_expr->get_param_count()), K(*cond_expr));
       } else if (OB_ISNULL(cond_expr->get_param_expr(0)) || OB_ISNULL(cond_expr->get_param_expr(1)) ||
                  OB_ISNULL(cond_expr->get_param_expr(2))) {
         ret = OB_ERR_UNEXPECTED;

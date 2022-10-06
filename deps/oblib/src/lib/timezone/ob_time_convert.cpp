@@ -515,7 +515,7 @@ int ObTimeConverter::str_to_datetime(
   } else if (OB_FAIL(validate_datetime(ob_time))) {
     LOG_WARN("invalid datetime", K(ret));
   } else if (!cvrt_ctx.is_timestamp_ && ob_time.is_tz_name_valid_) {
-    // only enable time zone data type can has tz name and tz addr
+    // only enable time zone data type can have tz name and tz addr
     LOG_WARN("DATETIME should not has time zone attr", K(ret));
     // for MySql non-strict sql_mode: still do the convert but without tz info
     ob_time.is_tz_name_valid_ = false;
