@@ -246,7 +246,7 @@ TEST_F(TestRowReader, test_number_float)
 {
   ObObj write_obj;
   uint32_t digits = 8;
-  write_obj.set_number_float(ObNumber(3, &digits));
+  write_obj.set_number_float(ObNumber(1, &digits));
 
   char* buf = get_serialize_buf();
   int64_t buf_size = 2 * 1024 * 1024;
