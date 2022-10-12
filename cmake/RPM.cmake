@@ -13,6 +13,8 @@ set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 # set relocation path install prefix for each component
 set(CPACK_RPM_DEVEL_PACKAGE_PREFIX /usr)
 set(CPACK_RPM_UTILS_PACKAGE_PREFIX /usr)
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home")
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin")
 list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
 set(CPACK_PACKAGE_NAME "oceanbase-ce")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase CE is a distributed relational database")
