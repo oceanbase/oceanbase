@@ -12286,7 +12286,8 @@ int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionA
 int ObPartTransCtx::do_calc_and_set_participants_(const ObPartitionArray &participants)
 {
   int ret = OB_SUCCESS;
-  int64_t participants_serialize_size = participants_.get_serialize_size() + participants.get_serialize_size();
+  // only get serialize size from parameter
+  int64_t participants_serialize_size = participants.get_serialize_size();
   int64_t undo_serialize_size = undo_status_.get_serialize_size();
   int64_t redo_log_id_serialize_size = prev_redo_log_ids_.get_serialize_size();
   bool has_redo_log = false;
