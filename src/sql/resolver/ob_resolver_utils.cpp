@@ -645,10 +645,10 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
             }
           }
 
-          if (OB_SUCC(ret) && share::is_mysql_mode() &&
-              OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, true, true))) {
-            LOG_WARN("invalid str", K(ret), K(val));
-          }
+          // if (OB_SUCC(ret) && share::is_mysql_mode() &&
+          //     OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, true, true))) {
+          //  LOG_WARN("invalid str", K(ret), K(val));
+          // }
           val.set_param_meta(val.get_meta());
         }
         LOG_DEBUG("resolve const char", K(val));
