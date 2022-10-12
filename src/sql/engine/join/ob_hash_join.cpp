@@ -2283,7 +2283,7 @@ int ObHashJoin::get_processor_type(ObPartHashJoinCtx& join_ctx) const
         join_ctx.set_processor(ObHashJoin::ObPartHashJoinCtx::RECURSIVE);
       } else if (enable_nest_loop) {
         // case 3: nest loop process
-        if (!need_right_bitset() || MAX_NEST_LOOP_RIGHT_ROW_COUNT >= join_ctx.right_op_->get_row_count_on_disk()) {
+        if (!need_right_bitset() && MAX_NEST_LOOP_RIGHT_ROW_COUNT >= join_ctx.right_op_->get_row_count_on_disk()) {
           join_ctx.set_processor(ObHashJoin::ObPartHashJoinCtx::NEST_LOOP);
         } else {
           join_ctx.set_processor(ObHashJoin::ObPartHashJoinCtx::RECURSIVE);

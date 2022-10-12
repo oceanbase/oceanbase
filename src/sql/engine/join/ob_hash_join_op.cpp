@@ -1011,7 +1011,7 @@ int ObHashJoinOp::get_processor_type()
         set_processor(RECURSIVE);
       } else if (enable_nest_loop) {
         // case 3: nest loop process
-        if (!need_right_bitset() || MAX_NEST_LOOP_RIGHT_ROW_COUNT >= right_batch_->get_row_count_on_disk()) {
+        if (!need_right_bitset() && MAX_NEST_LOOP_RIGHT_ROW_COUNT >= right_batch_->get_row_count_on_disk()) {
           set_processor(NEST_LOOP);
         } else {
           set_processor(RECURSIVE);
