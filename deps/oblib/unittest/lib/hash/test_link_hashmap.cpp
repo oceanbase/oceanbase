@@ -66,12 +66,21 @@ static uint64_t node_free CACHE_ALIGNED;
 
 ObMemAttr attr(1001, ObNewModIds::OB_MEMSTORE);
 
+static int64_t STEP = 0;
+
 class TestAllocHandle {
   typedef LinkHashNode<HashKey> Node;
 
 public:
-  HashValue* alloc_value()
+  TestAllocHandle() : is_inited_(true)
+  {}
+  ~TestAllocHandle()
   {
+    ATOMIC_STORE(&is_inited_, false);
+  }
+  HashValue *alloc_value()
+  {
+    abort_unless(ATOMIC_LOAD(&is_inited_) == true);
     ATOMIC_INC(&value_alloc);
     HashValue* value = (HashValue*)ob_malloc(sizeof(HashValue), attr);
     new (value) HashValue();
@@ -79,12 +88,14 @@ public:
   }
   void free_value(HashValue* val)
   {
+    abort_unless(ATOMIC_LOAD(&is_inited_) == true);
     ATOMIC_INC(&value_free);
     val->~HashValue();
     ob_free(val);
   }
   Node* alloc_node(HashValue* val)
   {
+    abort_unless(ATOMIC_LOAD(&is_inited_) == true);
     UNUSED(val);
     ATOMIC_INC(&node_alloc);
     Node* node = (Node*)ob_malloc(sizeof(Node), attr);
@@ -93,10 +104,18 @@ public:
   }
   void free_node(Node* node)
   {
+    if (ATOMIC_LOAD(&STEP) == 1) {
+      IGNORE_RETURN ATOMIC_BCAS(&STEP, 1, 2);
+      usleep(1 * 1000 * 1000);
+    }
+    abort_unless(ATOMIC_LOAD(&is_inited_) == true);
     ATOMIC_INC(&node_free);
     node->~Node();
     ob_free(node);
   }
+
+private:
+  bool is_inited_;
 };
 
 class AtomicGetFunctor {
@@ -118,9 +137,7 @@ static bool print(HashKey& key, HashValue* value)
   return true;
 }
 
-// typedef ObLinkHashMap<HashKey, HashValue, TestAllocHandle> Hashmap;
-typedef ObLinkHashMap<HashKey, HashValue, TestAllocHandle, TCRefHandle> Hashmap;
-// typedef ObLinkHashMapWithHazardValue<HashKey, HashValue, TestAllocHandle> Hashmap;
+typedef ObLinkHashMap<HashKey, HashValue, TestAllocHandle> Hashmap;
 
 TEST(TestObHashMap, Feature)
 {
@@ -326,7 +343,37 @@ TEST(TestObHashMap, Stress)
   EXPECT_EQ(node_free, node_alloc);
 }
 
-int main(int argc, char** argv)
+TEST(TestObHashMap, Retire)
+{
+  std::thread *t;
+  {
+    Hashmap A;
+    HashKey key;
+    HashValue *val_ptr = nullptr;
+    EXPECT_EQ(OB_SUCCESS, A.init());
+    key.v_ = 1;
+    EXPECT_EQ(OB_SUCCESS, A.create(key, val_ptr));
+    A.revert(val_ptr);
+    EXPECT_EQ(OB_SUCCESS, A.del(key));
+    ATOMIC_INC(&STEP);
+    t = new std::thread([&]() {
+      usleep(10 * 1000);
+      Hashmap B;
+      HashKey key;
+      EXPECT_EQ(OB_SUCCESS, B.init());
+      key.v_ = 1;
+      EXPECT_EQ(OB_SUCCESS, B.create(key, val_ptr));
+      B.revert(val_ptr);
+    });
+    while (ATOMIC_LOAD(&STEP) != 2)
+      ;
+    // ~A()
+  }
+  t->join();
+  delete t;
+}
+
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   oceanbase::common::ObLogger::get_logger().set_file_name("test_link_hashmap.log", true);

@@ -30,6 +30,12 @@ inline int32_t faa_if_positive(int32_t* addr, int32_t x)
   return ov;
 }
 
+inline static ObQSync &get_global_link_hashmap_qsync()
+{
+  static ObQSync qsync;
+  return qsync;
+}
+
 // DO NOT use me
 class BaseRefHandle {
 public:
@@ -65,42 +71,6 @@ protected:
   uint64_t qc_slot_;
 };
 
-// fast read, slow del, delay reclaim Value/Node
-class TCRefHandle final : public BaseRefHandle {
-public:
-  typedef RefNode Node;
-  explicit TCRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
-  {}
-  void born(Node* node)
-  {
-    UNUSED(get_tcref().born(&node->uref_));
-  }
-  int32_t end(Node* node)
-  {
-    UNUSED(get_tcref().end(&node->uref_));
-    return get_tcref().sync(&node->uref_);
-  }
-  bool inc(Node* node)
-  {
-    int32_t ref = 0;
-    if (TCRef::REF_LIMIT == (ref = get_tcref().inc_ref(&node->uref_))) {
-      ref = ATOMIC_LOAD(&node->uref_);
-    }
-    return ref > TCRef::REF_LIMIT / 2;
-  }
-  int32_t dec(Node* node)
-  {
-    return get_tcref().dec_ref(&node->uref_);
-  }
-
-private:
-  static TCRef& get_tcref()
-  {
-    static TCRef tcref;
-    return tcref;
-  }
-};
-
 // balanced read/del performance, realtime reclaim Value, batch/delay reclaim Node.
 class RefHandle final : public BaseRefHandle {
 public:
@@ -122,45 +92,6 @@ public:
   int32_t dec(Node* node)
   {
     return ATOMIC_AAF(&node->uref_, -1);
-  }
-};
-
-class DummyRefHandle final : public BaseRefHandle {
-public:
-  typedef RefNode Node;
-  enum { BORN_REF = 1 };
-  explicit DummyRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
-  {}
-  void enter_critical() override
-  {}
-  void leave_critical() override
-  {}
-  void retire(Node* node, HazardList& reclaim_list) override
-  {
-    reclaim_list.push(&node->retire_link_);
-  }
-  void purge(HazardList& reclaim_list) override
-  {
-    UNUSED(reclaim_list);
-  }
-  void born(Node* node)
-  {
-    UNUSED(node);
-  }
-  int32_t end(Node* node)
-  {
-    UNUSED(node);
-    return 0;
-  }
-  bool inc(Node* node)
-  {
-    UNUSED(node);
-    return true;
-  }
-  int32_t dec(Node* node)
-  {
-    UNUSED(node);
-    return 1;
   }
 };
 
@@ -264,8 +195,12 @@ public:
   void purge()
   {
     HazardList reclaim_list;
-    get_retire_station().purge(reclaim_list);
-    reclaim_nodes(reclaim_list);
+    {
+      CriticalGuard(get_global_link_hashmap_qsync());
+      get_retire_station().purge(reclaim_list);
+      reclaim_nodes(reclaim_list);
+    }
+    WaitQuiescent(get_global_link_hashmap_qsync());
   }
   int64_t count() const
   {
@@ -344,6 +279,7 @@ public:
       HazardList reclaim_list;
       HashNode* node = CONTAINER_OF(hash_link, HashNode, hash_link_);
       end_uref(node);
+      CriticalGuard(get_global_link_hashmap_qsync());
       ref_handle_.retire(node, reclaim_list);
       reclaim_nodes(reclaim_list);
       count_handle_.add(-1);
