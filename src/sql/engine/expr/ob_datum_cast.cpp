@@ -4940,7 +4940,7 @@ CAST_FUNC_NAME(json, float)
       if (CAST_FAIL(real_range_check(out_type, tmp_val, out_val))) {
         LOG_WARN("real_range_check failed", K(ret), K(tmp_val), K(out_val));
       } else {
-        SET_RES_DOUBLE(out_val);
+        SET_RES_FLOAT(out_val);
       }
     }
   }
