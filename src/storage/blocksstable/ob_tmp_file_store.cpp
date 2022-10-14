@@ -1201,7 +1201,7 @@ int ObTmpTenantFileStore::get_disk_macro_block_list(common::ObIArray<MacroBlockI
   return ret;
 }
 
-ObTmpTenantFileStoreHandle::ObTmpTenantFileStoreHandle() : tenant_store_()
+ObTmpTenantFileStoreHandle::ObTmpTenantFileStoreHandle() : tenant_store_(), allocator_()
 {}
 
 ObTmpTenantFileStoreHandle::~ObTmpTenantFileStoreHandle()
