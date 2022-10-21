@@ -1051,7 +1051,7 @@ int ObJsonPath::parse_name_with_rapidjson(char*& str, uint64_t& len)
     ObJsonString *val = static_cast<ObJsonString *>(dom);
     len = val->value().length();
     str = static_cast<char*> (allocator_->alloc(len));
-    if (OB_ISNULL(str)) {
+    if (len > 0  && OB_ISNULL(str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for member_name.",
         K(ret), K(len), K(val->value()));

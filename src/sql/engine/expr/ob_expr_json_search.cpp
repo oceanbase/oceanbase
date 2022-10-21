@@ -493,7 +493,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   }
 
   // check one_or_all flag
-  bool one_flag;
+  bool one_flag = false;
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[1];
     val_type = json_arg->datum_meta_.type_;
