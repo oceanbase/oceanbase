@@ -388,8 +388,14 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   ObArray<ObBackupLSTaskAttr> ls_task;
   int64_t finish_cnt = 0;
   uint64_t backup_meta_start_ts = trans_scn_to_timestamp(set_task_attr_.user_ls_start_scn_);
+  int64_t backup_user_meta_timeout = OB_MAX_BACKUP_META_TIMEOUT;
+
+#ifdef ERRSIM
+  backup_user_meta_timeout = GCONF.errsim_max_backup_meta_retry_time_interval;
+#endif
+
   DEBUG_SYNC(BEFORE_BACKUP_UESR_META);
-  if (backup_meta_start_ts + OB_MAX_BACKUP_META_TIMEOUT < ObTimeUtility::current_time()) {
+  if (backup_meta_start_ts + backup_user_meta_timeout < ObTimeUtility::current_time()) {
     // backup meta overtime, need change meta turn.
     // get new ls list, and do backup meta in new turn.
     if (OB_FAIL(enable_transfer_())) {

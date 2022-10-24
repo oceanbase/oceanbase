@@ -2406,6 +2406,8 @@ bool ObLSRestoreResultMgr::can_retrieable_err_(const int err) const
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
     case OB_SERVER_OUTOF_DISK_SPACE :
+    case OB_BACKUP_FILE_NOT_EXIST :
+    case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
     case OB_HASH_NOT_EXIST:
       bret = false;
       break;

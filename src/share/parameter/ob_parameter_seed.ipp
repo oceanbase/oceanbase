@@ -864,6 +864,12 @@ ERRSIM_DEF_INT(errsim_max_backup_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "max backup retry count in errsim mode"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_TIME(errsim_max_backup_meta_retry_time_interval, OB_CLUSTER_PARAMETER, "10s", "[1s,5m]",
+        "max backup meta retry time interval in errsim mode"
+        "Range: [1s, 5m]",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 ERRSIM_DEF_INT(errsim_tablet_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "batch tablet count when in errsim mode"
         "Range: [0,) in integer",
