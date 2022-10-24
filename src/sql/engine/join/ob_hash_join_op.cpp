@@ -388,7 +388,9 @@ int ObHashJoinOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
-  if ((OB_UNLIKELY(MY_SPEC.all_join_keys_.count() <= 0
+  if (OB_FAIL(set_shared_info())) {
+    LOG_WARN("failed to set shared info", K(ret));
+  } else if ((OB_UNLIKELY(MY_SPEC.all_join_keys_.count() <= 0
       || MY_SPEC.all_join_keys_.count() != MY_SPEC.all_hash_funcs_.count()
       || OB_ISNULL(left_)))) {
     ret = OB_ERR_UNEXPECTED;
@@ -402,8 +404,6 @@ int ObHashJoinOp::inner_open()
     LOG_WARN("fail to init base join ctx", K(ret));
   } else if (OB_FAIL(hash_table_.init(*alloc_))) {
     LOG_WARN("fail to init hash table", K(ret));
-  } else if (OB_FAIL(set_shared_info())) {
-    LOG_WARN("failed to set shared info", K(ret));
   } else {
     init_system_parameters();
     tenant_id_ = session->get_effective_tenant_id();

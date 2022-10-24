@@ -573,7 +573,9 @@ void ObLogFetcher::heartbeat_dispatch_routine()
 
       // Get the next heartbeat timestamp
       if (OB_FAIL(next_heartbeat_timestamp_(heartbeat_tstamp, last_timestamp_))) {
-        LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(last_timestamp_));
+        if (OB_NEED_RETRY != ret) {
+          LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(heartbeat_tstamp), K_(last_timestamp));
+        }
       } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == heartbeat_tstamp)) {
         LOG_ERROR("heartbeat timestamp is invalid", K(heartbeat_tstamp));
         ret = OB_ERR_UNEXPECTED;
@@ -600,7 +602,9 @@ void ObLogFetcher::heartbeat_dispatch_routine()
         ob_usleep((useconds_t)g_inner_heartbeat_interval);
       }
 
-      ret = OB_SUCCESS;
+      if (OB_NEED_RETRY == ret) {
+        ret = OB_SUCCESS;
+      }
     }
   }
 
@@ -720,6 +724,7 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
 int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int64_t last_timestamp)
 {
   int ret = OB_SUCCESS;
+  static int64_t cdc_start_tstamp_ns = TCTX.start_tstamp_ns_;
   static int64_t last_data_progress = OB_INVALID_TIMESTAMP;
   static int64_t last_ddl_handle_progress = OB_INVALID_TIMESTAMP;
   static palf::LSN last_ddl_handle_lsn;
@@ -733,6 +738,9 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   if (OB_ISNULL(sys_ls_handler_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
+  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP >= cdc_start_tstamp_ns)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("cdc_start_tstamp_ns is invalid", KR(ret), K(cdc_start_tstamp_ns));
   }
   // Get the DDL processing progress first, because the DDL is the producer of the data partition, and getting it first will ensure that the overall progress is not reverted
   // Note: the progress value should not be invalid
@@ -794,8 +802,15 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
           to_cstring(ddl_handle_lsn));
     }
 
+    if (OB_UNLIKELY(OB_INVALID_TIMESTAMP != heartbeat_tstamp && cdc_start_tstamp_ns -1 > heartbeat_tstamp)) {
+      ret = OB_NEED_RETRY;
+      if (REACH_TIME_INTERVAL(PRINT_HEARTBEAT_INTERVAL)) {
+        LOG_INFO("skip heartbeat_tstamp less than cdc_start_tstamp_ns_", KR(ret),
+            K(heartbeat_tstamp), K(cdc_start_tstamp_ns));
+      }
+    }
     // Checks if the heartbeat timestamp is reverted
-    if (OB_INVALID_TIMESTAMP != last_timestamp && heartbeat_tstamp < last_timestamp) {
+    else if (OB_INVALID_TIMESTAMP != last_timestamp && heartbeat_tstamp < last_timestamp) {
       LOG_ERROR("heartbeat timestamp is rollback, unexcepted error",
           "last_timestamp", NTS_TO_STR(last_timestamp),
           K(last_timestamp),
