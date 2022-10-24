@@ -21,17 +21,19 @@
 #include "sql/resolver/ddl/ob_create_profile_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
-int ObProfileDDLExecutor::execute(ObExecContext& ctx, ObUserProfileStmt& stmt)
+int ObProfileDDLExecutor::execute(ObExecContext &ctx, ObUserProfileStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
 
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -45,5 +47,5 @@ int ObProfileDDLExecutor::execute(ObExecContext& ctx, ObUserProfileStmt& stmt)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}// ns sql
+}// ns oceanbase

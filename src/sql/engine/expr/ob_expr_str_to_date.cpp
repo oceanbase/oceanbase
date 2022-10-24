@@ -17,19 +17,26 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprStrToDate::ObExprStrToDate(ObIAllocator& alloc)
+ObExprStrToDate::ObExprStrToDate(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_STR_TO_DATE, N_STR_TO_DATE, 2, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprStrToDate::~ObExprStrToDate()
-{}
+{
+}
 
-int ObExprStrToDate::calc_result_type2(
-    ObExprResType& type, ObExprResType& date, ObExprResType& format, ObExprTypeCtx& type_ctx) const
+
+int ObExprStrToDate::calc_result_type2(ObExprResType &type,
+                                       ObExprResType &date,
+                                       ObExprResType &format,
+                                       ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(date);
@@ -53,47 +60,79 @@ int ObExprStrToDate::calc_result_type2(
       bool has_date = false;
       bool has_time = false;
       uint32_t pos = 0;
-      pos = ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%a", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%b", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%c", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%D", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%d", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%e", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%j", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%M", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%m", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%U", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%u", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%V", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%v", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%W", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%w", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%X", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%x", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%Y", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%y", 2, 1);
+      pos = ObCharset::locate(format_obj.get_collation_type(),
+                              format_str.ptr(), format_str.length(), "%a", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%b", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%c", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%D", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%d", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%e", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%j", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%M", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%m", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%U", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%u", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%V", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%v", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%W", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%w", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%X", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%x", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%Y", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%y", 2, 1);
       if (pos > 0) {
         has_date = true;
       }
 
       pos = 0;
-      pos = ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%f", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%H", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%h", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%I", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%i", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%k", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%l", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%p", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%r", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%S", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%s", 2, 1) +
-            ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%T", 2, 1);
+      pos = ObCharset::locate(format_obj.get_collation_type(),
+                              format_str.ptr(), format_str.length(), "%f", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%H", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%h", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%I", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%i", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%k", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%l", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%p", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%r", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%S", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%s", 2, 1)
+            + ObCharset::locate(format_obj.get_collation_type(),
+                                format_str.ptr(), format_str.length(), "%T", 2, 1);
       if (pos > 0) {
         has_time = true;
       }
 
-      pos = ObCharset::locate(format_obj.get_collation_type(), format_str.ptr(), format_str.length(), "%f", 2, 1);
+      pos = ObCharset::locate(format_obj.get_collation_type(),
+                              format_str.ptr(), format_str.length(), "%f", 2, 1);
 
       if (0 == pos) {
         type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
@@ -111,6 +150,8 @@ int ObExprStrToDate::calc_result_type2(
         type.set_datetime();
         type.set_precision(static_cast<ObPrecision>(DATETIME_MIN_LENGTH + type.get_scale()));
       }
+
+
     }
   }
   if (OB_SUCC(ret)) {
@@ -120,14 +161,8 @@ int ObExprStrToDate::calc_result_type2(
     if (ob_is_enumset_tc(format.get_type())) {
       format.set_calc_type(ObVarcharType);
     }
-    const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-    if (OB_ISNULL(session)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast basic session to sql session info failed", K(ret));
-    } else if (session->use_static_typing_engine()) {
-      date.set_calc_type(ObVarcharType);
-      format.set_calc_type(ObVarcharType);
-    }
+    date.set_calc_type(ObVarcharType);
+    format.set_calc_type(ObVarcharType);
   }
   return ret;
 }
@@ -168,51 +203,9 @@ int set_error_code(const int ori_ret, ObString date_str)
   return ret;
 }
 
-int ObExprStrToDate::calc_result2(ObObj& result, const ObObj& date, const ObObj& format, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ObString date_str;
-  ObString format_str;
-  int64_t value = 0;
-  if (OB_UNLIKELY(ObNullType == date.get_type() || ObNullType == format.get_type())) {
-    result.set_null();
-  } else {
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-    EXPR_GET_VARCHAR_V2(date, date_str);
-    EXPR_GET_VARCHAR_V2(format, format_str);
-    if (OB_SUCC(ret)) {
-      ObTimeConvertCtx cvrt_ctx(TZ_INFO(expr_ctx.my_session_), false);
-      if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, format_str, cvrt_ctx, value))) {
-        LOG_WARN("convert str to date failed", K(date), K(format), K(ret));
-        if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
-          if (OB_INVALID_DATE_FORMAT == ret) {
-            print_user_warning(ret, date_str);
-            ret = OB_SUCCESS;
-            result.set_date(ObTimeConverter::ZERO_DATE);
-          } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_ARGUMENT == ret) {
-            print_user_warning(ret, date_str);
-            ret = OB_SUCCESS;
-            result.set_null();
-          }
-        } else {
-          ret = set_error_code(ret, date_str);
-        }
-      } else {
-        result.set_datetime(value);
-        const ObObj* obj_point = NULL;
-        EXPR_CAST_OBJ_V2(get_result_type().get_type(), result, obj_point);
-        if (OB_SUCC(ret) && OB_LIKELY(NULL != obj_point)) {
-          result = *obj_point;
-        } else {
-          LOG_WARN("fail to cast object", K(result), K(get_result_type().get_type()), K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprOracleToDate::set_my_result_from_ob_time(ObExprCtx& expr_ctx, ObTime& ob_time, ObObj& result) const
+int ObExprOracleToDate::set_my_result_from_ob_time(ObExprCtx &expr_ctx,
+                                                   ObTime &ob_time,
+                                                   ObObj &result) const
 {
   int ret = OB_SUCCESS;
   ObTimeConvertCtx time_cvrt_ctx(get_timezone_info(expr_ctx.my_session_), false);
@@ -226,30 +219,37 @@ int ObExprOracleToDate::set_my_result_from_ob_time(ObExprCtx& expr_ctx, ObTime& 
   return ret;
 }
 
-static int calc(const ObExpr& expr, ObEvalCtx& ctx, bool& is_null, int64_t& res_int)
+static int calc(const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, int64_t &res_int)
 {
   int ret = OB_SUCCESS;
   is_null = false;
   res_int = 0;
-  ObDatum* date_datum = NULL;
-  ObDatum* fmt_datum = NULL;
-  const ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+  ObDatum *date_datum = NULL;
+  ObDatum *fmt_datum = NULL;
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_FAIL(expr.args_[0]->eval(ctx, date_datum)) || OB_FAIL(expr.args_[1]->eval(ctx, fmt_datum))) {
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, date_datum)) ||
+             OB_FAIL(expr.args_[1]->eval(ctx, fmt_datum))) {
     LOG_WARN("eval arg failed", K(ret), KP(date_datum), KP(fmt_datum), K(expr));
   } else if (date_datum->is_null() || fmt_datum->is_null()) {
     is_null = true;
   } else {
-    const ObString& date_str = date_datum->get_string();
-    const ObString& fmt_str = fmt_datum->get_string();
+    const ObString &date_str = date_datum->get_string();
+    const ObString &fmt_str = fmt_datum->get_string();
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(session), false);
-    if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int))) {
+    ObDateSqlMode date_sql_mode;
+    const bool no_zero_in_date = is_no_zero_in_date(session->get_sql_mode());
+    if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
+    } else if (OB_FAIL(ObTimeConverter::str_to_datetime_format(date_str, fmt_str, cvrt_ctx, res_int,
+                                                        NULL, no_zero_in_date, date_sql_mode))) {
       int tmp_ret = ret;
       ObCastMode def_cast_mode = CM_NONE;
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, def_cast_mode))) {
-        LOG_WARN("get_def_cast_mode failed", K(ret), "ret of str_to_datetime_format is", tmp_ret);
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session,
+                                                    def_cast_mode))) {
+        LOG_WARN("get_def_cast_mode failed", K(ret),
+                 "ret of str_to_datetime_format is", tmp_ret);
       } else {
         if (CM_IS_WARN_ON_FAIL(def_cast_mode)) {
           if (OB_INVALID_DATE_FORMAT == tmp_ret) {
@@ -274,7 +274,8 @@ static int calc(const ObExpr& expr, ObEvalCtx& ctx, bool& is_null, int64_t& res_
   return ret;
 }
 
-int calc_str_to_date_expr_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_str_to_date_expr_date(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   bool is_null = false;
@@ -292,7 +293,8 @@ int calc_str_to_date_expr_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_
   return ret;
 }
 
-int calc_str_to_date_expr_time(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_str_to_date_expr_time(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   bool is_null = false;
@@ -310,7 +312,8 @@ int calc_str_to_date_expr_time(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_
   return ret;
 }
 
-int calc_str_to_date_expr_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_str_to_date_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   bool is_null = false;
@@ -325,7 +328,8 @@ int calc_str_to_date_expr_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
   return ret;
 }
 
-int ObExprStrToDate::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprStrToDate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                             ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -343,5 +347,5 @@ int ObExprStrToDate::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

@@ -1,5 +1,6 @@
 # owner: peihan.dph
 # owner group: sql2
+# tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
@@ -200,8 +201,3 @@ while ($left <= $cnt)
 }
 
 --sleep 2
-drop table t1;
-CREATE TABLE t1(c0 VARCHAR(500), c1 DECIMAL);
-insert into t1 values('', 123);
-SELECT ALL t1.c0 AS ref0 FROM t1 WHERE (NULL AND ( CAST(COALESCE(t1.c0,  EXISTS (SELECT 1)) AS SIGNED) IS NOT NULL)) IS NULL;
-drop table t1;

@@ -16,7 +16,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
-ObResourceManager& ObResourceManager::get_instance()
+ObResourceManager &ObResourceManager::get_instance()
 {
   static ObResourceManager THE_ONE;
   return THE_ONE;

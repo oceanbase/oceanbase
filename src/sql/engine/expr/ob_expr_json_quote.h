@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for define of func json_quote
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_QUOTE_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_QUOTE_H_
 
@@ -31,7 +30,6 @@ public:
   template <typename T>
   static int calc(const T &data, ObObjType type, ObCollationType cs_type,
                   ObJsonBuffer &j_buf, bool &is_null);
-  int calc_result1(common::ObObj &result, const common::ObObj &obj, common::ObExprCtx &expr_ctx) const override;
   int calc_result_type1(ObExprResType &type,
                         ObExprResType &type1,
                         common::ObExprTypeCtx &type_ctx) const override;

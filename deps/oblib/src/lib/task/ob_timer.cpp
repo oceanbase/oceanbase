@@ -17,8 +17,10 @@
 #include "lib/string/ob_string.h"
 #include "lib/stat/ob_diagnose_info.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 using namespace obutil;
 using namespace lib;
 
@@ -55,7 +57,7 @@ int ObTimer::create()
     } else {
       is_stopped_ = false;
       monitor_.notify_all();
-      OB_LOG(INFO, "ObTimer create success", KP(this), K_(thread_id), K(lbt()));
+      OB_LOG(INFO, "ObTimer create success", KP(this), K_(thread_id), KCSTRING(lbt()));
     }
   }
   return ret;
@@ -70,19 +72,22 @@ int ObTimer::start()
   } else if (is_stopped_) {
     is_stopped_ = false;
     monitor_.notify_all();
-    OB_LOG(INFO, "ObTimer start success", KP(this), K_(thread_id), K(lbt()));
+    OB_LOG(INFO, "ObTimer start success", KP(this), K_(thread_id), KCSTRING(lbt()));
   }
   return ret;
 }
 
 void ObTimer::stop()
 {
-  ObMonitor<Mutex>::Lock guard(monitor_);
-  if (!is_stopped_) {
-    is_stopped_ = true;
-    monitor_.notify_all();
-    OB_LOG(INFO, "ObTimer stop success", KP(this), K_(thread_id));
+  {
+    ObMonitor<Mutex>::Lock guard(monitor_);
+    if (!is_stopped_) {
+      is_stopped_ = true;
+      monitor_.notify_all();
+      OB_LOG(INFO, "ObTimer stop success", KP(this), K_(thread_id));
+    }
   }
+  cancel_all();
 }
 
 void ObTimer::wait()
@@ -97,20 +102,29 @@ void ObTimer::wait()
 void ObTimer::destroy()
 {
   if (!is_destroyed_ && is_inited_) {
-    ObMonitor<Mutex>::Lock guard(monitor_);
-    is_stopped_ = true;
-    is_destroyed_ = true;
-    is_inited_ = false;
-    has_running_repeat_task_ = false;
-    monitor_.notify_all();
-    tasks_num_ = 0;
+    {
+      ObMonitor<Mutex>::Lock guard(monitor_);
+      is_stopped_ = true;
+      is_destroyed_ = true;
+      is_inited_ = false;
+      has_running_repeat_task_=false;
+      monitor_.notify_all();
+    }
+    ThreadPool::wait();
+    {
+      ObMonitor<Mutex>::Lock guard(monitor_);
+      for (int64_t i = 0; i < tasks_num_; ++i) {
+        tokens_[i].task->cancelCallBack();
+        ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+      }
+      tasks_num_ = 0;
+    }
     OB_LOG(INFO, "ObTimer destroy", KP(this), K_(thread_id));
   }
-  ThreadPool::wait();
   ThreadPool::destroy();
 }
 
-bool ObTimer::task_exist(const ObTimerTask& task)
+bool ObTimer::task_exist(const ObTimerTask &task)
 {
   bool ret = false;
   ObMonitor<Mutex>::Lock guard(monitor_);
@@ -123,7 +137,7 @@ bool ObTimer::task_exist(const ObTimerTask& task)
   return ret;
 }
 
-int ObTimer::schedule(ObTimerTask& task, const int64_t delay, const bool repeate /*=false*/)
+int ObTimer::schedule(ObTimerTask &task, const int64_t delay, const bool repeate /*=false*/)
 {
   int ret = OB_SUCCESS;
   const bool schedule_immediately = false;
@@ -135,7 +149,7 @@ int ObTimer::schedule(ObTimerTask& task, const int64_t delay, const bool repeate
   return ret;
 }
 
-int ObTimer::schedule_repeate_task_immediately(ObTimerTask& task, const int64_t delay)
+int ObTimer::schedule_repeate_task_immediately(ObTimerTask &task, const int64_t delay)
 {
   int ret = OB_SUCCESS;
   const bool schedule_immediately = true;
@@ -148,8 +162,8 @@ int ObTimer::schedule_repeate_task_immediately(ObTimerTask& task, const int64_t 
   return ret;
 }
 
-int ObTimer::schedule_task(
-    ObTimerTask& task, const int64_t delay, const bool repeate, const bool is_scheduled_immediately)
+int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool repeate,
+    const bool is_scheduled_immediately)
 {
   int ret = OB_SUCCESS;
   ObMonitor<Mutex>::Lock guard(monitor_);
@@ -163,7 +177,7 @@ int ObTimer::schedule_task(
     OB_LOG(WARN, "too much timer task", K(ret), K_(tasks_num), "max_task_num", MAX_TASK_NUM);
   } else {
     int64_t time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
-    if (!is_scheduled_immediately) {
+    if(!is_scheduled_immediately) {
       time += delay;
     }
     if (is_stopped_) {
@@ -183,10 +197,10 @@ int ObTimer::schedule_task(
   return ret;
 }
 
-int ObTimer::insert_token(const Token& token)
+int ObTimer::insert_token(const Token &token)
 {
   int ret = OB_SUCCESS;
-  int32_t max_task_num = MAX_TASK_NUM;
+  int32_t max_task_num= MAX_TASK_NUM;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
@@ -208,12 +222,13 @@ int ObTimer::insert_token(const Token& token)
       }
       tokens_[pos] = token;
       ++tasks_num_;
+      ATOMIC_STORE(&(token.task->timer_), this);
     }
   }
   return ret;
 }
 
-int ObTimer::cancel(const ObTimerTask& task)
+int ObTimer::cancel(const ObTimerTask &task)
 {
   int ret = OB_SUCCESS;
   ObMonitor<Mutex>::Lock guard(monitor_);
@@ -229,7 +244,9 @@ int ObTimer::cancel(const ObTimerTask& task)
     }
     if (pos != -1) {
       tokens_[pos].task->cancelCallBack();
-      memmove(&tokens_[pos], &tokens_[pos + 1], sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
+      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr); 
+      memmove(&tokens_[pos], &tokens_[pos + 1],
+              sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
       --tasks_num_;
       OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(pos), K(wakeup_time_), K(tasks_num_), K(task));
     }
@@ -240,6 +257,10 @@ int ObTimer::cancel(const ObTimerTask& task)
 void ObTimer::cancel_all()
 {
   ObMonitor<Mutex>::Lock guard(monitor_);
+  for (int64_t i = 0; i < tasks_num_; ++i) {
+    tokens_[i].task->cancelCallBack();
+    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+  }
   tasks_num_ = 0;
   OB_LOG(INFO, "cancel all", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_));
 }
@@ -249,7 +270,7 @@ void ObTimer::run1()
   int tmp_ret = OB_SUCCESS;
   Token token(0, 0, NULL);
   thread_id_ = syscall(__NR_gettid);
-  OB_LOG(INFO, "timer thread started", KP(this), "tid", syscall(__NR_gettid), K(lbt()));
+  OB_LOG(INFO, "timer thread started", KP(this), "tid", syscall(__NR_gettid), KCSTRING(lbt()));
   if (OB_NOT_NULL(thread_name_)) {
     set_thread_name(thread_name_);
   } else {
@@ -269,11 +290,12 @@ void ObTimer::run1()
       if (is_destroyed_) {
         break;
       }
-      // add repeated task to tasks_ again
-      if (token.delay != 0 && token.task->need_retry()) {
+      //add repeated task to tasks_ again
+      if (token.delay != 0 && token.task->need_retry() && !is_stopped_) {
         has_running_repeat_task_ = false;
         token.scheduled_time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds() + token.delay;
-        if (OB_SUCCESS != (tmp_ret = insert_token(Token(token.scheduled_time, token.delay, token.task)))) {
+        if (OB_SUCCESS != (tmp_ret = insert_token(
+            Token(token.scheduled_time, token.delay, token.task)))) {
           OB_LOG(WARN, "insert token error", K(tmp_ret), K(token));
         }
       }
@@ -304,6 +326,7 @@ void ObTimer::run1()
           token = tokens_[0];
           memmove(tokens_, tokens_ + 1, (tasks_num_ - 1) * sizeof(tokens_[0]));
           --tasks_num_;
+          ATOMIC_STORE(&(token.task->timer_), nullptr);
           if (token.delay != 0) {
             has_running_repeat_task_ = true;
           }
@@ -316,11 +339,12 @@ void ObTimer::run1()
         } else {
           wakeup_time_ = tokens_[0].scheduled_time;
           {
+            // clock safty check. @see http://k3.alibaba-inc.com/issue/5068683
             const int64_t rt1 = ObTimeUtility::current_time();
             const int64_t rt2 = ObTimeUtility::current_time_coarse();
             const int64_t delta = rt1 > rt2 ? (rt1 - rt2) : (rt2 - rt1);
-            static const int64_t MAX_REALTIME_DELTA1 = 20000;   // 20ms
-            static const int64_t MAX_REALTIME_DELTA2 = 500000;  // 500ms
+            static const int64_t MAX_REALTIME_DELTA1 = 20000; // 20ms
+            static const int64_t MAX_REALTIME_DELTA2 = 500000; // 500ms
             if (delta > MAX_REALTIME_DELTA1) {
               OB_LOG(WARN, "Hardware clock skew", K(rt1), K(rt2), K_(wakeup_time), K(now));
             } else if (delta > MAX_REALTIME_DELTA2) {
@@ -351,15 +375,8 @@ void ObTimer::run1()
       }
 
       if (elapsed_time > 1000 * 1000) {
-        OB_LOG(WARN,
-            "timer task cost too much time",
-            "task",
-            to_cstring(*token.task),
-            K(start_time),
-            K(end_time),
-            K(elapsed_time),
-            KP(this),
-            K_(thread_id));
+        OB_LOG(WARN, "timer task cost too much time", "task", to_cstring(*token.task),
+            K(start_time), K(end_time), K(elapsed_time), KP(this), K_(thread_id));
       }
     }
   }
@@ -378,5 +395,5 @@ bool ObTimer::inited() const
   return is_inited_;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} /* common */
+} /* chunkserver */

@@ -39,3 +39,8 @@ while ($idx1 <= $cnt)
 
 connection conn_admin;
 --sleep 2
+
+--echo bugfix: https://github.com/oceanbase/oceanbase/issues/177
+select timediff("12:34:56.123", "13:33:22.34567");
+select timediff("13:34:23.01","13:34:23.002");
+select timediff("13:34:23.01","13:34:23.02");

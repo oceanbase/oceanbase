@@ -17,57 +17,51 @@
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObHazardPointer {
+class ObHazardPointer
+{
 public:
-  class ReclaimCallback {
+  class ReclaimCallback  {
   public:
-    ReclaimCallback()
-    {}
-    virtual ~ReclaimCallback()
-    {}
+    ReclaimCallback() {}
+    virtual ~ReclaimCallback() {}
     virtual void reclaim_ptr(uintptr_t ptr) = 0;
   };
-
 public:
-  inline ObHazardPointer() : hazard_list_(NULL), retire_list_(NULL), reclaim_callback_(NULL), is_inited_(false)
-  {}
+  inline ObHazardPointer() : hazard_list_(NULL),
+                             retire_list_(NULL),
+                             reclaim_callback_(NULL),
+                             is_inited_(false) { }
   inline ~ObHazardPointer();
   inline void destroy();
-  inline int init(ReclaimCallback* reclaim_callback);
+  inline int init(ReclaimCallback *reclaim_callback);
   inline int protect(uintptr_t ptr);
   inline int release(uintptr_t ptr);
   inline int retire(uintptr_t ptr);
-
 private:
   inline int reclaim();
-
 private:
-  struct Node {
-    Node() : ptr(0), next(NULL)
-    {}
-    virtual ~Node()
-    {
-      ptr = 0;
-      next = NULL;
-    }
+  struct Node
+  {
+    Node() : ptr(0), next(NULL) { }
+    virtual ~Node() { ptr = 0; next = NULL; }
     uintptr_t ptr;
-    Node* next;
+    Node *next;
   };
-  struct ThreadLocalNodeList {
-    ThreadLocalNodeList()
-    {}
+  struct ThreadLocalNodeList
+  {
+    ThreadLocalNodeList() { }
     Node head[OB_MAX_THREAD_NUM] CACHE_ALIGNED;
   };
-
 private:
-  ThreadLocalNodeList* hazard_list_;
-  ThreadLocalNodeList* retire_list_;
-  ReclaimCallback* reclaim_callback_;
+  ThreadLocalNodeList *hazard_list_;
+  ThreadLocalNodeList *retire_list_;
+  ReclaimCallback *reclaim_callback_;
   bool is_inited_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHazardPointer);
 };
@@ -91,7 +85,7 @@ void ObHazardPointer::destroy()
   is_inited_ = false;
 }
 
-int ObHazardPointer::init(ReclaimCallback* reclaim_callback)
+int ObHazardPointer::init(ReclaimCallback *reclaim_callback)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -133,9 +127,9 @@ int ObHazardPointer::protect(uintptr_t ptr)
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
     } else {
-      Node* prev = hazard_list_->head + tid;
+      Node *prev = hazard_list_->head + tid;
       while (OB_SUCCESS == ret && !is_set) {
-        Node* p = prev->next;
+        Node *p = prev->next;
         while (p != NULL) {
           if (p->ptr == 0) {
             ATOMIC_STORE(&p->ptr, ptr);
@@ -176,7 +170,7 @@ int ObHazardPointer::release(uintptr_t ptr)
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
     } else {
-      Node* p = hazard_list_->head[tid].next;
+      Node *p = hazard_list_->head[tid].next;
       while (OB_SUCCESS == ret && p != NULL) {
         if (p->ptr == ptr) {
           ATOMIC_STORE(&p->ptr, 0);
@@ -203,7 +197,7 @@ int ObHazardPointer::retire(uintptr_t ptr)
     COMMON_LOG(WARN, "retire ptr is NULL: ", K(ptr));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    Node* node = op_alloc(Node);
+    Node * node = op_alloc(Node);
     if (NULL == node) {
       COMMON_LOG(ERROR, "allocate memory for Node failed");
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -213,7 +207,7 @@ int ObHazardPointer::retire(uintptr_t ptr)
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "thread num is beyond the max thread num limit", K(ret), K(tid));
       } else {
-        Node* head = retire_list_->head + tid;
+        Node *head = retire_list_->head + tid;
         node->ptr = ptr;
         node->next = head->next;
         head->next = node;
@@ -228,12 +222,12 @@ int ObHazardPointer::reclaim()
 {
   int ret = OB_SUCCESS;
   int64_t max_tid = get_max_itid();
-  Node* retire_pre = retire_list_->head + get_itid();
-  Node* retire_node = retire_pre->next;
+  Node *retire_pre = retire_list_->head + get_itid();
+  Node *retire_node = retire_pre->next;
   while (NULL != retire_node) {
     bool is_hazard = false;
     for (int64_t i = 0; !is_hazard && i < max_tid; i++) {
-      Node* p = hazard_list_->head[i].next;
+      Node *p = hazard_list_->head[i].next;
       while (NULL != p) {
         if (ATOMIC_LOAD(&p->ptr) == retire_node->ptr) {
           is_hazard = true;
@@ -257,7 +251,7 @@ int ObHazardPointer::reclaim()
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_HASH_OB_HAZARD_POINTER_
+#endif // OCEANBASE_COMMON_HASH_OB_HAZARD_POINTER_

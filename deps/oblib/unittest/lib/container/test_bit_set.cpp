@@ -16,17 +16,16 @@
 #include "lib/utility/ob_test_util.h"
 #include "lib/container/ob_array.h"
 using namespace oceanbase::common;
-class TestBitSet : public ::testing::Test {
+class TestBitSet: public ::testing::Test
+{
 public:
   TestBitSet();
   virtual ~TestBitSet();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestBitSet);
-
 protected:
   // function members
 protected:
@@ -34,16 +33,20 @@ protected:
 };
 
 TestBitSet::TestBitSet()
-{}
+{
+}
 
 TestBitSet::~TestBitSet()
-{}
+{
+}
 
 void TestBitSet::SetUp()
-{}
+{
+}
 
 void TestBitSet::TearDown()
-{}
+{
+}
 
 TEST_F(TestBitSet, add_and_del_number)
 {
@@ -118,7 +121,7 @@ TEST_F(TestBitSet, do_mask)
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(50));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(100));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(111));
-  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(6, 101));
+  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(6,101));
   ASSERT_TRUE(bs.has_member(50));
   ASSERT_TRUE(bs.has_member(100));
   ASSERT_TRUE(!bs.has_member(5));
@@ -147,9 +150,9 @@ TEST_F(TestBitSet, set_operation)
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(50));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(100));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(111));
-  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(5, 101));
+  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(5,101));
 
-  // is_superset && is_subset
+  //is_superset && is_subset
   ObBitSet<16> bs1;
   ASSERT_TRUE(bs.is_superset(bs1));
   ASSERT_TRUE(bs1.is_subset(bs));
@@ -190,8 +193,8 @@ TEST_F(TestBitSet, number_and_clear)
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(100));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(111));
   ASSERT_EQ(4, bs.num_members());
-  ObArenaAllocator allocator(5);
-  // test case with allocator
+  ObArenaAllocator allocator("BitSet");
+  //test case with allocator
   ObBitSet<16, ObIAllocator&> bs1(allocator);
   ASSERT_EQ(0, bs1.bitset_word_count());
   ASSERT_TRUE(OB_SUCCESS == bs1.add_member(5));
@@ -273,6 +276,7 @@ TEST_F(TestBitSet, get_first_peculiar_bit)
   ASSERT_TRUE(OB_SUCCESS == bs1.add_member(5));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(50));
   ASSERT_EQ(50, bs.get_first_peculiar_bit(bs1));
+
 }
 
 TEST_F(TestBitSet, serialize)
@@ -391,6 +395,7 @@ TEST_F(TestBitSet, find_and_clear)
   ASSERT_EQ(OB_SUCCESS, bs.find_prev(pos, pos));
   ASSERT_EQ(5, pos);
 }
+
 
 TEST_F(TestBitSet, find_and_clear_for_fix_bit_set)
 {
@@ -575,10 +580,12 @@ TEST_F(TestBitSet, find_and_clear_for_fix_bit_set)
   ASSERT_EQ(31, pos);
   ASSERT_EQ(OB_SUCCESS, bs2.find_prev(pos, pos));
   ASSERT_EQ(5, pos);
+
+
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

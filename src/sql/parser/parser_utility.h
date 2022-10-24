@@ -18,10 +18,14 @@
 extern "C" {
 #endif
 
-int parser_to_hex_cstr(const void* in_data, const int64_t data_length, char* buff, const int64_t buff_size);
+int parser_to_hex_cstr(const void *in_data, const int64_t data_length, char *buff,
+                const int64_t buff_size);
 
-int parser_to_hex_cstr_(
-    const void* in_data, const int64_t data_length, char* buf, const int64_t buf_len, int64_t* pos, int64_t* cstr_pos);
+
+int parser_to_hex_cstr_(const void *in_data, const int64_t data_length,
+                 char *buf, const int64_t buf_len,
+                 int64_t *pos,
+                 int64_t *cstr_pos);
 
 #ifdef __cplusplus
 }

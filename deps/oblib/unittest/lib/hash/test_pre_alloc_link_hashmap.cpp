@@ -25,57 +25,47 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 
-struct Item {
+struct Item
+{
   int64_t key_;
   int64_t value_;
   int64_t ref_;
 
-  Item() : key_(0), value_(0), ref_(0)
-  {}
-  Item(const int64_t key, const int64_t value, const int64_t ref) : key_(key), value_(value), ref_(ref)
-  {}
+  Item(): key_(0), value_(0), ref_(0) {}
+  Item(const int64_t key, const int64_t value, const int64_t ref):
+    key_(key), value_(value), ref_(ref) {}
   TO_STRING_KV(K_(key), K_(value));
 };
 
-struct Node : public ObPreAllocLinkHashNode<int64_t, Item> {
-  explicit Node(Item& item) : ObPreAllocLinkHashNode(item), next_(NULL)
-  {}
-  virtual ~Node()
-  {}
-  static uint64_t hash(int64_t key)
-  {
-    return key;
-  }
-  virtual uint64_t hash() const
-  {
-    return hash(item_.key_);
-  }
-  virtual const int64_t& get_key() const
-  {
-    return item_.key_;
-  }
-  Node* next_;
+struct Node: public ObPreAllocLinkHashNode<int64_t, Item>
+{
+  explicit Node(Item &item): ObPreAllocLinkHashNode(item), next_(NULL) {}
+  virtual ~Node() { }
+  static uint64_t hash(int64_t key) {  return key; }
+  virtual uint64_t hash() const { return hash(item_.key_); }
+  virtual const int64_t &get_key() const { return item_.key_; }
+  Node *next_;
 };
 
-class ItemProtector {
+class ItemProtector
+{
 public:
-  static void hold(Item& item)
+  static void hold(Item &item)
   {
     ++item.ref_;
   }
-  static void release(Item& item)
+  static void release(Item &item)
   {
     --item.ref_;
   }
 };
 
 typedef common::hash::ObPreAllocLinkHashMap<int64_t, Item, Node, ItemProtector> TestMap;
-struct TestForeachFinder : public TestMap::ForeachFunctor {
-  TestForeachFinder() : count_(0)
-  {}
-  virtual ~TestForeachFinder()
-  {}
-  virtual int operator()(Item& item, bool& is_full)
+struct TestForeachFinder: public TestMap::ForeachFunctor
+{
+  TestForeachFinder(): count_(0) {}
+  virtual ~TestForeachFinder() {}
+  virtual int operator()(Item &item, bool &is_full)
   {
     int ret = OB_SUCCESS;
     if (count_ >= MAX_COUNT) {
@@ -89,16 +79,15 @@ struct TestForeachFinder : public TestMap::ForeachFunctor {
   }
 
   static const int64_t MAX_COUNT = 3;
-  Item* items_[MAX_COUNT];
+  Item *items_[MAX_COUNT];
   int64_t count_;
 };
 
-struct TestForeachCheckRef : public TestMap::ForeachFunctor {
-  TestForeachCheckRef() : count_(0)
-  {}
-  virtual ~TestForeachCheckRef()
-  {}
-  virtual int operator()(Item& item, bool& is_full)
+struct TestForeachCheckRef: public TestMap::ForeachFunctor
+{
+  TestForeachCheckRef(): count_(0) {}
+  virtual ~TestForeachCheckRef() {}
+  virtual int operator()(Item &item, bool &is_full)
   {
     int ret = OB_SUCCESS;
     is_full = false;
@@ -113,13 +102,12 @@ struct TestForeachCheckRef : public TestMap::ForeachFunctor {
   int64_t count_;
 };
 
-class TestEraseChecker : public TestMap::EraseChecker
+class TestEraseChecker: public TestMap::EraseChecker
 
 {
 public:
-  virtual ~TestEraseChecker()
-  {}
-  virtual int operator()(Item& item)
+  virtual ~TestEraseChecker() {}
+  virtual int operator()(Item &item)
   {
     int ret = OB_SUCCESS;
     if (item.value_ != 0) {
@@ -129,13 +117,12 @@ public:
   }
 };
 
-class TestGetFunctor : public TestMap::GetFunctor {
+class TestGetFunctor: public TestMap::GetFunctor
+{
 public:
-  TestGetFunctor() : item_(NULL)
-  {}
-  virtual ~TestGetFunctor()
-  {}
-  virtual int operator()(Item& item) override
+  TestGetFunctor(): item_(NULL) {}
+  virtual ~TestGetFunctor() {}
+  virtual int operator()(Item &item) override
   {
     int ret = OB_SUCCESS;
     item_ = NULL;
@@ -146,8 +133,7 @@ public:
     }
     return ret;
   }
-  Item* item_;
-
+  Item *item_;
 private:
   DISALLOW_COPY_AND_ASSIGN(TestGetFunctor);
 };
@@ -157,9 +143,9 @@ TEST(TestObMemLessLinkHashMap, basic)
   TestMap map;
   int64_t buckets_count = 0;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
-  Item item1 = {1, 0, 0};
-  Node* node1 = map.alloc_node(item1);
+  const lib::ObLabel &label = "1";
+  Item item1 = {1,0,0};
+  Node *node1 = map.alloc_node(item1);
   COMMON_LOG(INFO, "dump", K(item1), K(node1->item_), KP(&item1), KP(&node1->item_));
   TestForeachFinder finder;
 
@@ -175,20 +161,20 @@ TEST(TestObMemLessLinkHashMap, basic)
   ASSERT_EQ(OB_HASH_EXIST, map.put(*node1));
   ASSERT_EQ(1, map.get_count());
 
-  Item item2 = {1, 0, 0};
+  Item item2 = {1,0,0};
   Node node2(item2);
   ASSERT_EQ(OB_HASH_EXIST, map.put(node2));
   ASSERT_EQ(1, map.get_count());
 
-  Item* get_item = NULL;
+  Item *get_item = NULL;
   ASSERT_EQ(OB_SUCCESS, map.get(1, get_item));
   ASSERT_EQ(&item1, get_item);
-  ASSERT_EQ(OB_SUCCESS, map.foreach (finder));
+  ASSERT_EQ(OB_SUCCESS, map.foreach(finder));
   ASSERT_EQ(1, finder.count_);
   COMMON_LOG(INFO, "dump", K(node1), K(finder.items_[0]));
   ASSERT_EQ(&item1, finder.items_[0]);
 
-  Item* del_item = NULL;
+  Item *del_item = NULL;
   ASSERT_EQ(OB_SUCCESS, map.erase(1, del_item));
   ASSERT_EQ(&item1, del_item);
   ASSERT_EQ(OB_HASH_NOT_EXIST, map.erase(1, del_item));
@@ -200,26 +186,26 @@ TEST(TestObMemLessLinkHashMap, same_hash)
   TestMap map;
   int64_t buckets_count = 1;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
-  Item item1 = {1, 0, 0};
+  const lib::ObLabel &label = "1";
+  Item item1 = {1,0,0};
 
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
   buckets_count = map.get_buckets_count();
-  Node* node1 = map.alloc_node(item1);
-  Item item2 = {1 + buckets_count, 0, 0};
-  Node* node2 = map.alloc_node(item2);
+  Node *node1 = map.alloc_node(item1);
+  Item item2 = {1 + buckets_count,0,0};
+  Node *node2 = map.alloc_node(item2);
 
   ASSERT_EQ(OB_SUCCESS, map.put(*node1));
   ASSERT_EQ(OB_SUCCESS, map.put(*node2));
   ASSERT_EQ(2, map.get_count());
 
-  Item* got_item = NULL;
+  Item *got_item = NULL;
   ASSERT_EQ(OB_SUCCESS, map.get(1, got_item));
   ASSERT_EQ(&item1, got_item);
   ASSERT_EQ(OB_SUCCESS, map.get(item2.key_, got_item));
   ASSERT_EQ(&item2, got_item);
 
-  Item* del_item = NULL;
+  Item *del_item = NULL;
   ASSERT_EQ(OB_SUCCESS, map.erase(item2.key_, del_item));
   ASSERT_EQ(&item2, del_item);
   ASSERT_EQ(OB_SUCCESS, map.erase(item1.key_, del_item));
@@ -231,15 +217,15 @@ TEST(TestObMemLessLinkHashMap, erase)
   TestMap map;
   int64_t buckets_count = 100;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
+  const lib::ObLabel &label = "1";
   TestEraseChecker checker;
-  Item* del_item = NULL;
+  Item *del_item = NULL;
 
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
-  Item item1 = {1, 0, 0};
-  Node* node1 = map.alloc_node(item1);
-  Item item2 = {2, 1, 0};
-  Node* node2 = map.alloc_node(item2);
+  Item item1 = {1,0,0};
+  Node *node1 = map.alloc_node(item1);
+  Item item2 = {2,1, 0};
+  Node *node2 = map.alloc_node(item2);
   ASSERT_EQ(OB_SUCCESS, map.put(*node1));
   ASSERT_EQ(OB_SUCCESS, map.put(*node2));
   ASSERT_EQ(OB_SUCCESS, map.erase(1, del_item, &checker));
@@ -252,16 +238,16 @@ TEST(TestObMemLessLinkHashMap, get_functor)
   TestMap map;
   int64_t buckets_count = 100;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
+  const lib::ObLabel &label = "1";
 
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
 
-  Item item1 = {1, 0, 0};
-  Node* node1 = map.alloc_node(item1);
-  Item item2 = {2, 3, 0};
-  Node* node2 = map.alloc_node(item2);
+  Item item1 = {1,0,0};
+  Node *node1 = map.alloc_node(item1);
+  Item item2 = {2,3, 0};
+  Node *node2 = map.alloc_node(item2);
   TestGetFunctor get_functor;
-  Item* got_item = NULL;
+  Item *got_item = NULL;
 
   ASSERT_EQ(OB_SUCCESS, map.put(*node1));
   ASSERT_EQ(OB_SUCCESS, map.put(*node2));
@@ -277,38 +263,40 @@ TEST(TestObMemLessLinkHashMap, get_functor)
   ASSERT_EQ(OB_HASH_NOT_EXIST, map.exist(3));
 }
 
+
 TEST(TestObMemLessLinkHashMap, foreach)
 {
   TestMap map;
   int64_t buckets_count = 100;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
+  const lib::ObLabel &label = "1";
   const int64_t count = 10000;
-  Item* items[count];
+  Item *items[count];
   TestForeachFinder finder;
 
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
 
   for (int64_t i = 0; i < count; ++i) {
-    Item* item = new Item();
+    Item *item = new Item();
     item->key_ = i;
     item->value_ = i % 2;
-    Node* node = map.alloc_node(*item);
+    Node *node = map.alloc_node(*item);
     items[i] = item;
     ASSERT_EQ(OB_SUCCESS, map.put(*node));
   }
 
   for (int64_t i = 0; i < count; ++i) {
-    Item* got_item = NULL;
+    Item *got_item = NULL;
     ASSERT_EQ(OB_SUCCESS, map.get(i, got_item));
     ASSERT_EQ(items[i], got_item);
   }
 
-  ASSERT_EQ(OB_SUCCESS, map.foreach (finder));
+  ASSERT_EQ(OB_SUCCESS, map.foreach(finder));
   ASSERT_EQ(3, finder.count_);
   for (int64_t i = 0; i < 3; ++i) {
     COMMON_LOG(INFO, "dump", K(items[2 * i]), K(*finder.items_[i]));
   }
+
 
   for (int64_t i = 0; i < count; ++i) {
     delete items[i];
@@ -321,14 +309,14 @@ TEST(TestObMemLessLinkHashMap, iterator)
   TestMap::Iterator iter(map);
   int64_t buckets_count = 100000;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
+  const lib::ObLabel &label = "1";
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
-  Item item1 = {1, 0, 0};
-  Node* node1 = map.alloc_node(item1);
-  Item item2 = {2, 3, 0};
-  Node* node2 = map.alloc_node(item2);
+  Item item1 = {1,0,0};
+  Node *node1 = map.alloc_node(item1);
+  Item item2 = {2,3, 0};
+  Node *node2 = map.alloc_node(item2);
   TestGetFunctor get_functor;
-  Item* got_item = NULL;
+  Item *got_item = NULL;
 
   ASSERT_EQ(OB_SUCCESS, map.put(*node1));
   ASSERT_EQ(OB_SUCCESS, map.put(*node2));
@@ -345,22 +333,22 @@ TEST(TestObMemLessLinkHashMap, iterator2)
   TestMap map;
   int64_t buckets_count = 100;
   uint32_t latch_id = 1;
-  const lib::ObLabel& label = "1";
+  const lib::ObLabel &label = "1";
   ASSERT_EQ(OB_SUCCESS, map.init(buckets_count, latch_id, label));
 
   const int64_t count = 8061;
   for (int64_t i = 0; i < count; ++i) {
-    Item* item = new Item();
+    Item *item = new Item();
     item->key_ = i;
     item->value_ = i;
     item->ref_ = 0;
-    Node* node = map.alloc_node(*item);
+    Node *node = map.alloc_node(*item);
     ASSERT_EQ(OB_SUCCESS, map.put(*node));
   }
 
   {
     TestMap::Iterator iter(map);
-    Item* got_item = NULL;
+    Item *got_item = NULL;
     int64_t num = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter.get_next(got_item))) {
@@ -373,12 +361,13 @@ TEST(TestObMemLessLinkHashMap, iterator2)
   }
 
   TestForeachCheckRef checker;
-  ASSERT_EQ(OB_SUCCESS, map.foreach (checker));
+  ASSERT_EQ(OB_SUCCESS, map.foreach(checker));
   ASSERT_EQ(count, checker.count_);
+
 }
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

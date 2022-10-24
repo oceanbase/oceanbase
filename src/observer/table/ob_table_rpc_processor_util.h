@@ -181,7 +181,8 @@ public:
       EVENT_ADD(TABLEAPI_BATCH_HYBRID_INSERT_OR_UPDATE_ROW, rows); // @todo row count for each type
       SET_AUDIT_SQL_STRING(batch_hybrid);
       break;
-    // hbase mutate
+
+      // hbase mutate
     case ObTableProccessType::TABLE_API_HBASE_DELETE:
       EVENT_INC(HBASEAPI_DELETE_COUNT);
       EVENT_ADD(HBASEAPI_DELETE_TIME, elapsed_us);
@@ -224,14 +225,16 @@ public:
       EVENT_ADD(HBASEAPI_HYBRID_ROW, rows);
       SET_AUDIT_SQL_STRING(hbase_hybrid);
       break;
-    // table query
+
+      // table query
     case ObTableProccessType::TABLE_API_TABLE_QUERY:
       EVENT_INC(TABLEAPI_QUERY_COUNT);
       EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
       EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
       SET_AUDIT_SQL_STRING(table_query);
       break;
-    // hbase query
+
+      // hbase query
     case ObTableProccessType::TABLE_API_HBASE_QUERY:
       EVENT_INC(HBASEAPI_SCAN_COUNT);
       EVENT_ADD(HBASEAPI_SCAN_TIME, elapsed_us);

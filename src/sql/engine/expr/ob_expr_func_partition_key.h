@@ -15,62 +15,31 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprFuncPartOldKey : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+
+class ObExprFuncPartKey : public ObFuncExprOperator
+{
 public:
-  explicit ObExprFuncPartOldKey(common::ObIAllocator& alloc);
-  virtual ~ObExprFuncPartOldKey();
-
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_part_old_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-private:
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartOldKey);
-};
-
-class ObExprFuncPartKey : public ObFuncExprOperator {
-public:
-  explicit ObExprFuncPartKey(common::ObIAllocator& alloc);
+  explicit  ObExprFuncPartKey(common::ObIAllocator &alloc);
   virtual ~ObExprFuncPartKey();
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_partition_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_stack,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
+  static int calc_partition_key(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_partition_key_batch(BATCH_EVAL_FUNC_ARG_DECL);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartKey);
-};
 
-// key partitioning function, third version.
-// solve partition row skew problem
-class ObExprFuncPartNewKey : public ObFuncExprOperator {
-public:
-  explicit ObExprFuncPartNewKey(common::ObIAllocator& alloc);
-  virtual ~ObExprFuncPartNewKey();
-
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_new_partition_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-private:
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartNewKey);
 };
 
 }  // namespace sql
 }  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_FUNC_PARTITION_KEY_H_
+#endif // OCEANBASE_SQL_OB_EXPR_FUNC_PARTITION_KEY_H_

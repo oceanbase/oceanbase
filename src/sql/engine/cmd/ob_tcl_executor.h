@@ -15,76 +15,68 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObEndTransStmt;
-class ObEndTransExecutor {
+class ObEndTransExecutor
+{
 public:
-  ObEndTransExecutor()
-  {}
-  virtual ~ObEndTransExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObEndTransStmt& stmt);
-
+  ObEndTransExecutor() {}
+  virtual ~ObEndTransExecutor() {}
+  int execute(ObExecContext &ctx, ObEndTransStmt &stmt);
 private:
-  int end_trans(ObExecContext& ctx, ObEndTransStmt& stmt);
+  int end_trans(ObExecContext &ctx, ObEndTransStmt &stmt);
   DISALLOW_COPY_AND_ASSIGN(ObEndTransExecutor);
 };
 
 class ObStartTransStmt;
-class ObStartTransExecutor {
+class ObStartTransExecutor
+{
 public:
-  ObStartTransExecutor()
-  {}
-  virtual ~ObStartTransExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObStartTransStmt& stmt);
-
+  ObStartTransExecutor() {}
+  virtual ~ObStartTransExecutor() {}
+  int execute(ObExecContext &ctx, ObStartTransStmt &stmt);
 private:
-  int start_trans(ObExecContext& ctx, ObStartTransStmt& stmt);
+  int start_trans(ObExecContext &ctx, ObStartTransStmt &stmt);
   DISALLOW_COPY_AND_ASSIGN(ObStartTransExecutor);
 };
 
 class ObCreateSavePointStmt;
-class ObCreateSavePointExecutor {
+class ObCreateSavePointExecutor
+{
 public:
-  ObCreateSavePointExecutor()
-  {}
-  virtual ~ObCreateSavePointExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObCreateSavePointStmt& stmt);
-
+  ObCreateSavePointExecutor() {}
+  virtual ~ObCreateSavePointExecutor() {}
+  int execute(ObExecContext &ctx, ObCreateSavePointStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateSavePointExecutor);
 };
 
 class ObRollbackSavePointStmt;
-class ObRollbackSavePointExecutor {
+class ObRollbackSavePointExecutor
+{
 public:
-  ObRollbackSavePointExecutor()
-  {}
-  virtual ~ObRollbackSavePointExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObRollbackSavePointStmt& stmt);
-
+  ObRollbackSavePointExecutor() {}
+  virtual ~ObRollbackSavePointExecutor() {}
+  int execute(ObExecContext &ctx, ObRollbackSavePointStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRollbackSavePointExecutor);
 };
 
 class ObReleaseSavePointStmt;
-class ObReleaseSavePointExecutor {
+class ObReleaseSavePointExecutor
+{
 public:
-  ObReleaseSavePointExecutor()
-  {}
-  virtual ~ObReleaseSavePointExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObReleaseSavePointStmt& stmt);
-
+  ObReleaseSavePointExecutor() {}
+  virtual ~ObReleaseSavePointExecutor() {}
+  int execute(ObExecContext &ctx, ObReleaseSavePointStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObReleaseSavePointExecutor);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCRANBASE_SQL_ENGINE_CMD_OB_TCL_CMD_EXECUTOR_
+}
+}
+#endif // OCRANBASE_SQL_ENGINE_CMD_OB_TCL_CMD_EXECUTOR_

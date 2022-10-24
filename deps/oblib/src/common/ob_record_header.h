@@ -18,43 +18,52 @@
 #include "lib/checksum/ob_crc64.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-inline void format_i64(const int64_t value, int16_t& check_sum)
+inline void format_i64(const int64_t value, int16_t &check_sum)
 {
   int i = 0;
   while (i < 4) {
-    check_sum = static_cast<int16_t>(check_sum ^ ((value >> i * 16) & 0xFFFF));
+    check_sum =  static_cast<int16_t>(check_sum ^ ((value >> i * 16) & 0xFFFF));
     ++i;
   }
 }
 
-inline void format_i32(const int32_t value, int16_t& check_sum)
+inline void format_i32(const int32_t value, int16_t &check_sum)
 {
   int i = 0;
   while (i < 2) {
-    check_sum = static_cast<int16_t>(check_sum ^ ((value >> i * 16) & 0xFFFF));
+    check_sum =  static_cast<int16_t>(check_sum ^ ((value >> i * 16) & 0xFFFF));
     ++i;
   }
 }
 
-struct ObRecordHeader {
+struct ObRecordHeader
+{
   static const int16_t MAGIC_NUMER = static_cast<int16_t>(0xB0CC);
 
-  int16_t magic_;            // magic number
-  int16_t header_length_;    // header length
-  int16_t version_;          // version
-  int16_t header_checksum_;  // header checksum
-  int64_t timestamp_;        //
-  int32_t data_length_;      // length before compress
-  int32_t data_zlength_;     // length after compress, if without compresssion
+  int16_t magic_;          // magic number
+  int16_t header_length_;  // header length
+  int16_t version_;        // version
+  int16_t header_checksum_;// header checksum
+  int64_t timestamp_;       //
+  int32_t data_length_;    // length before compress
+  int32_t data_zlength_;   // length after compress, if without compresssion
   // data_length_= data_zlength_
   int64_t data_checksum_;  // record checksum
   ObRecordHeader();
 
-  TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(timestamp), K_(data_length),
-      K_(data_zlength), K_(data_checksum));
+  TO_STRING_KV(K_(magic),
+               K_(header_length),
+               K_(version),
+               K_(header_checksum),
+               K_(timestamp),
+               K_(data_length),
+               K_(data_zlength),
+               K_(data_checksum));
 
   /**
    * sert magic number of record header
@@ -92,6 +101,7 @@ struct ObRecordHeader {
    */
   int check_header_checksum() const;
 
+
   /**
    * this method should use after deserialization,use it to check
    * check_sum of record
@@ -102,7 +112,7 @@ struct ObRecordHeader {
    * @return int if success, return OB_SUCCESS, else return
    *         OB_ERROR
    */
-  int check_payload_checksum(const char* buf, const int64_t len) const;
+  int check_payload_checksum(const char *buf, const int64_t len) const;
 
   /**
    * after read a record and record_header, should check it
@@ -115,7 +125,7 @@ struct ObRecordHeader {
    * @return int if success, return OB_SUCCESS, else return
    *         OB_ERROR
    */
-  static int check_record(const char* buf, const int64_t len, const int16_t magic);
+  static int check_record(const char *buf, const int64_t len, const int16_t magic);
 
   /**
    * if user deserializes record header, he can use this fucntion
@@ -129,8 +139,10 @@ struct ObRecordHeader {
    * @return int if success, return OB_SUCCESS, else return
    *         OB_ERROR
    */
-  static int check_record(
-      const ObRecordHeader& record_header, const char* payload_buf, const int64_t payload_len, const int16_t magic);
+  static int check_record(const ObRecordHeader &record_header,
+                          const char *payload_buf,
+                          const int64_t payload_len,
+                          const int16_t magic);
 
   /**
    * give the buffer of record and record size, check whether the
@@ -147,8 +159,9 @@ struct ObRecordHeader {
    * @return int if success, return OB_SUCCESS, else return
    *         OB_ERROR or OB_INVALID_ARGUMENT
    */
-  static int check_record(const char* ptr, const int64_t size, const int16_t magic, ObRecordHeader& header,
-      const char*& payload_ptr, int64_t& payload_size);
+  static int check_record(const char *ptr, const int64_t size,
+                          const int16_t magic, ObRecordHeader &header,
+                          const char *&payload_ptr, int64_t &payload_size);
 
   /**
    * give the buffer of record and record size, doesn't check
@@ -164,14 +177,15 @@ struct ObRecordHeader {
    * @return int if success, return OB_SUCCESS, else return
    *         OB_ERROR or OB_INVALID_ARGUMENT
    */
-  static int get_record_header(
-      const char* ptr, const int64_t size, ObRecordHeader& header, const char*& payload_ptr, int64_t& payload_size);
+  static int get_record_header(const char *ptr, const int64_t size,
+                               ObRecordHeader &header,
+                               const char *&payload_ptr, int64_t &payload_size);
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
 static const int16_t OB_RECORD_HEADER_LENGTH = sizeof(ObRecordHeader);
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace Oceanbase::common
+}// namespace Oceanbase
 #endif

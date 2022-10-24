@@ -15,24 +15,32 @@
 #include "ob_values_op.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
-ObValuesSpec::ObValuesSpec(ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type), row_store_(alloc)
-{}
+ObValuesSpec::ObValuesSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type), row_store_(alloc)
+{
+}
 
-OB_SERIALIZE_MEMBER((ObValuesSpec, ObOpSpec), row_store_);
+OB_SERIALIZE_MEMBER((ObValuesSpec, ObOpSpec),
+                    row_store_);
 
-ObValuesOp::ObValuesOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
+
+ObValuesOp::ObValuesOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input)
-{}
+{
+}
 
 int ObValuesOp::inner_open()
 {
   int ret = OB_SUCCESS;
   row_store_it_ = MY_SPEC.row_store_.begin();
-  ObObj* cells = static_cast<ObObj*>(ctx_.get_allocator().alloc(sizeof(ObObj) * MY_SPEC.output_.count()));
+  ObObj *cells = static_cast<ObObj *>(ctx_.get_allocator().alloc(
+          sizeof(ObObj) * MY_SPEC.output_.count()));
   if (OB_ISNULL(cells)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret));
@@ -46,10 +54,10 @@ int ObValuesOp::inner_open()
   return ret;
 }
 
-int ObValuesOp::rescan()
+int ObValuesOp::inner_rescan()
 {
   row_store_it_ = MY_SPEC.row_store_.begin();
-  return ObOperator::rescan();
+  return ObOperator::inner_rescan();
 }
 
 int ObValuesOp::inner_get_next_row()
@@ -62,10 +70,9 @@ int ObValuesOp::inner_get_next_row()
   } else {
     clear_evaluated_flag();
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.output_.count(); i++) {
-      const ObObj& cell = cur_row_.cells_[i];
-      ObDatum& datum = MY_SPEC.output_.at(i)->locate_datum_for_write(eval_ctx_);
-      ObEvalInfo& eval_info = MY_SPEC.output_.at(i)->get_eval_info(eval_ctx_);
-      ObExpr* expr = MY_SPEC.output_.at(i);
+      const ObObj &cell = cur_row_.cells_[i];
+      ObDatum &datum = MY_SPEC.output_.at(i)->locate_datum_for_write(eval_ctx_);
+      ObExpr *expr = MY_SPEC.output_.at(i);
       if (cell.is_null()) {
         datum.set_null();
       } else if (cell.get_type() != expr->datum_meta_.type_) {
@@ -74,12 +81,12 @@ int ObValuesOp::inner_get_next_row()
       } else if (OB_FAIL(datum.from_obj(cell, expr->obj_datum_map_))) {
         LOG_WARN("convert obj to datum failed", K(ret));
       } else {
-        eval_info.evaluated_ = true;
+        expr->set_evaluated_projected(eval_ctx_);
       }
     }
   }
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

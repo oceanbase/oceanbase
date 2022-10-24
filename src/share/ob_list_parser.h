@@ -15,39 +15,32 @@
 
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-class ObListMatchCb {
+class ObListMatchCb
+{
 public:
-  virtual int match(const char* value) = 0;
-  virtual bool finish()
-  {
-    return true;
-  }
+  virtual int match(const char *value) = 0;
+  virtual bool finish() { return true; }
 };
 
-class ObListParser {
+class ObListParser
+{
 public:
-  ObListParser() : SYM_LIST_SEP(','), allow_space_(false), token_(0), cur_(NULL), cb_(NULL)
-  {}
-  ObListParser(char list_sep) : SYM_LIST_SEP(list_sep), token_(0), cur_(NULL), cb_(NULL)
-  {}
+  ObListParser() : SYM_LIST_SEP(','), allow_space_(false), token_(0), cur_(NULL), cb_(NULL) {}
+  ObListParser(char list_sep)
+      : SYM_LIST_SEP(list_sep), token_(0), cur_(NULL), cb_(NULL) {}
   ~ObListParser() = default;
-  void set_match_callback(ObListMatchCb& cb)
-  {
-    cb_ = &cb;
-  }
+  void set_match_callback(ObListMatchCb &cb) { cb_ = &cb; }
   // Whether to ignore the spaces before and after the value
-  void set_allow_space(bool allow)
-  {
-    allow_space_ = allow;
-  }
-  int parse(const char* data);
-
+  void set_allow_space(bool allow) { allow_space_ = allow; }
+  int parse(const char *data);
 private:
   int match(int sym);
-  int get_token();  // Pre-reading symbol
+  int get_token(); // Pre-reading symbol
 private:
   static const int MAX_TOKEN_SIZE = 1024;
   // Symbol table
@@ -57,19 +50,19 @@ private:
   // Delimiter
   // Can be customized according to different scenarios, such as
   // e.g.1 value1,value2,value3...
-  const char SYM_LIST_SEP;  // The separator in the middle of value','
+  const char SYM_LIST_SEP; // The separator in the middle of value','
   // Temporary variables
-  bool allow_space_;  // Whether to allow spaces
+  bool allow_space_; // Whether to allow spaces
   int token_;
   char value_buf_[MAX_TOKEN_SIZE];
-  const char* cur_;
+  const char *cur_;
   // Call back every time a List is parsed
-  ObListMatchCb* cb_;
+  ObListMatchCb *cb_;
 
   DISALLOW_COPY_AND_ASSIGN(ObListParser);
 };
 
-}  // namespace share
-}  // namespace oceanbase
+}
+}
 #endif /* __OCEANBASE_SHARE_LIST_PARSER_H__ */
 //// end of header file

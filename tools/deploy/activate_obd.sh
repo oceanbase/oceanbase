@@ -1,7 +1,12 @@
 #!/bin/bash
 DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
 export DEPLOY_PATH=$DIR/tools/deploy
-DEP_PATH=$DIR/deps/3rd
+if grep 'dep_create.sh' $DIR/build.sh 2>&1 >/dev/null
+then
+    DEP_PATH=$DIR/deps/3rd
+else
+    DEP_PATH=$DIR/rpm/.dep_create/var
+fi
 export OBD_BIN=${_OBD_BIN:-$DEP_PATH/usr/bin/obd}
 alias obd="${OBD_BIN}"
 export OBD_HOME=$DIR/tools/deploy

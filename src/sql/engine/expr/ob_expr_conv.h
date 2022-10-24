@@ -13,19 +13,24 @@
 #ifndef SRC_SQL_ENGINE_EXPR_OB_EXPR__CONV_H_
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR__CONV_H_
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
-class ObExprConv : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprConv : public ObStringExprOperator
+{
 public:
-  explicit ObExprConv(common::ObIAllocator& alloc);
+  explicit  ObExprConv(common::ObIAllocator &alloc);
   virtual ~ObExprConv();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
-      common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_conv(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                ObExprResType &type3,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_conv(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 
 private:
   static const int16_t MIN_BASE = 2;
@@ -34,7 +39,7 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConv);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR__CONV_H_ */

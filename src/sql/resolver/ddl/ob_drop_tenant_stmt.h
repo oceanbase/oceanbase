@@ -17,48 +17,41 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObDropTenantStmt : public ObDDLStmt {
+class ObDropTenantStmt : public ObDDLStmt
+{
 public:
-  explicit ObDropTenantStmt(common::ObIAllocator* name_pool);
+  explicit ObDropTenantStmt(common::ObIAllocator *name_pool);
   ObDropTenantStmt();
   virtual ~ObDropTenantStmt();
-  inline obrpc::ObDropTenantArg& get_drop_tenant_arg();
-  const common::ObString& get_tenant_name() const
-  {
-    return drop_tenant_arg_.tenant_name_;
-  }
-  virtual void print(FILE* fp, int32_t level, int32_t index = 0);
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
+  inline obrpc::ObDropTenantArg &get_drop_tenant_arg();
+  const common::ObString &get_tenant_name() const { return drop_tenant_arg_.tenant_name_; }
+  virtual void print(FILE *fp, int32_t level, int32_t index = 0);
+  virtual bool cause_implicit_commit() const { return true; }
 
   void set_if_exist(const bool if_exist)
   {
     drop_tenant_arg_.if_exist_ = if_exist;
   }
-  void set_tenant_name(const common::ObString& tenant_name);
+  void set_tenant_name(const common::ObString &tenant_name);
   void set_delay_to_drop(const bool delay_to_drop);
   void set_open_recyclebin(const bool open_recyclebin);
-  virtual obrpc::ObDDLArg& get_ddl_arg()
-  {
-    return drop_tenant_arg_;
-  }
-
+  virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_tenant_arg_; }
 private:
   obrpc::ObDropTenantArg drop_tenant_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTenantStmt);
 };
 
-inline obrpc::ObDropTenantArg& ObDropTenantStmt::get_drop_tenant_arg()
+inline obrpc::ObDropTenantArg &ObDropTenantStmt::get_drop_tenant_arg()
 {
   return drop_tenant_arg_;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* sql */
+} /* oceanbase */
 
-#endif  // OCEANBASE_SQL_OB_DROP_TENANT_STMT_H_
+#endif //OCEANBASE_SQL_OB_DROP_TENANT_STMT_H_

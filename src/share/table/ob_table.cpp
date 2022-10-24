@@ -344,13 +344,13 @@ public:
   GetPropertyFn(ObIArray<std::pair<ObString, ObObj> > &properties)
       :properties_(properties)
   {}
-  bool operator()(const hash::HashMapPair<ObString, ObObj> &kv)
+  int operator()(const hash::HashMapPair<ObString, ObObj> &kv)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(properties_.push_back(std::make_pair(kv.first, kv.second)))) {
       LOG_WARN("failed to push back", K(ret));
     }
-    return OB_SUCCESS == ret;
+    return ret;
   }
 private:
   ObIArray<std::pair<ObString, ObObj> > &properties_;
@@ -374,13 +374,13 @@ public:
   GetPropertyNameFn(ObIArray<ObString> &names)
       :names_(names)
   {}
-  bool operator()(const hash::HashMapPair<ObString, ObObj> &kv)
+  int operator()(const hash::HashMapPair<ObString, ObObj> &kv)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(names_.push_back(kv.first))) {
       LOG_WARN("failed to push back", K(ret));
     }
-    return OB_SUCCESS == ret;
+    return ret;
   }
 private:
   ObIArray<ObString> &names_;
@@ -404,13 +404,13 @@ public:
   GetPropertyValueFn(ObIArray<ObObj> &values)
       :values_(values)
   {}
-  bool operator()(const hash::HashMapPair<ObString, ObObj> &kv)
+  int operator()(const hash::HashMapPair<ObString, ObObj> &kv)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(values_.push_back(kv.second))) {
       LOG_WARN("failed to push back", K(ret));
     }
-    return OB_SUCCESS == ret;
+    return ret;
   }
 private:
   ObIArray<ObObj> &values_;
@@ -1102,7 +1102,6 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
 ////////////////////////////////////////////////////////////////
 ObTableEntityIterator::~ObTableEntityIterator()
 {}
-
 ////////////////////////////////////////////////////////////////
 const char* const ObHTableConstants::ROWKEY_CNAME = "K";
 const char* const ObHTableConstants::CQ_CNAME = "Q";
@@ -1240,7 +1239,6 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
                        limit_per_row_per_cf_,
                        offset_per_row_per_cf_,
                        filter_string_);
-
 ////////////////////////////////////////////////////////////////
 ObTableQueryResult::ObTableQueryResult()
     :row_count_(0),

@@ -15,15 +15,23 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprObVersion : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprObVersion : public ObStringExprOperator
+{
 public:
-  explicit ObExprObVersion(common::ObIAllocator& alloc);
+  explicit ObExprObVersion(common::ObIAllocator &alloc);
   virtual ~ObExprObVersion();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+
+  // for new engine
+  static int eval_version(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_OBVERSION_ */

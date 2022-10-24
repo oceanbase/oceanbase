@@ -16,33 +16,36 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
-class ObExtIterHashSetTest : public ::testing::Test {
-public:
-  ObExtIterHashSetTest();
-  virtual ~ObExtIterHashSetTest();
-  virtual void SetUp();
-  virtual void TearDown();
+class ObExtIterHashSetTest: public ::testing::Test
+{
+  public:
+    ObExtIterHashSetTest();
+    virtual ~ObExtIterHashSetTest();
+    virtual void SetUp();
+    virtual void TearDown();
 
-public:
-  ObArenaAllocator allocator_;
+  public:
+    ObArenaAllocator allocator_;
 
-private:
-  // disallow copy
-  ObExtIterHashSetTest(const ObExtIterHashSetTest& other);
-  ObExtIterHashSetTest& operator=(const ObExtIterHashSetTest& other);
-
-protected:
-  // data members
+  private:
+    // disallow copy
+    ObExtIterHashSetTest(const ObExtIterHashSetTest &other);
+    ObExtIterHashSetTest& operator=(const ObExtIterHashSetTest &other);
+  protected:
+    // data members
 };
 
 ObExtIterHashSetTest::ObExtIterHashSetTest() : allocator_(ObModIds::TEST)
-{}
+{
+}
 
 ObExtIterHashSetTest::~ObExtIterHashSetTest()
-{}
+{
+}
 
 void ObExtIterHashSetTest::SetUp()
-{}
+{
+}
 
 void ObExtIterHashSetTest::TearDown()
 {
@@ -70,7 +73,7 @@ TEST_F(ObExtIterHashSetTest, basic_test)
 
     // verify data
     ObExtIterHashSet<int64_t, N>::const_iterator_t it = set.begin();
-    for (int64_t value = 1; it != set.end(); ++it, value++) {
+    for(int64_t value = 1; it != set.end(); ++it, value++) {
       ASSERT_EQ(value, *it);
     }
     set.clear();
@@ -231,7 +234,7 @@ TEST_F(ObExtIterHashSetTest, many_N_single_buckets2)
 
 TEST_F(ObExtIterHashSetTest, many_N_many_buckets)
 {
-  static const uint64_t N = 128;
+  static const uint64_t N = 16;
   static const uint64_t BUCKET_NUM = 100;
   static const uint64_t ELEMENT_NUM = N * BUCKET_NUM;
   int64_t value = 0;
@@ -291,7 +294,7 @@ TEST_F(ObExtIterHashSetTest, many_N_many_buckets)
 
 TEST_F(ObExtIterHashSetTest, many_N_many_buckets2)
 {
-  static const uint64_t N = 1024;
+  static const uint64_t N = 128;
   static const uint64_t BUCKET_NUM = 10;
   static const uint64_t ELEMENT_NUM = N * BUCKET_NUM;
   int64_t value = 0;
@@ -349,9 +352,9 @@ TEST_F(ObExtIterHashSetTest, many_N_many_buckets2)
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

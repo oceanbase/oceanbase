@@ -16,31 +16,37 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/thread/thread_pool.h"
 
-namespace oceanbase {
-namespace common {
-class TestThreadCondStress : public lib::ThreadPool {
+namespace oceanbase
+{
+namespace common
+{
+class TestThreadCondStress: public lib::ThreadPool
+{
 public:
-  TestThreadCondStress(ObThreadCond& cond, const bool is_wait);
+  TestThreadCondStress(ObThreadCond &cond, const bool is_wait);
   virtual ~TestThreadCondStress();
   void run1() final;
-
 private:
-  ObThreadCond& cond_;
+  ObThreadCond &cond_;
   bool is_wait_;
 };
 
-TestThreadCondStress::TestThreadCondStress(ObThreadCond& cond, const bool is_wait) : cond_(cond), is_wait_(is_wait)
-{}
+TestThreadCondStress::TestThreadCondStress(ObThreadCond &cond, const bool is_wait)
+ : cond_(cond),
+   is_wait_(is_wait)
+{
+}
 
 TestThreadCondStress::~TestThreadCondStress()
-{}
+{
+}
 
 void TestThreadCondStress::run1()
 {
   int ret = OB_SUCCESS;
 
   if (is_wait_) {
-    while (!has_set_stop()) {
+    while(!has_set_stop()) {
       ret = cond_.lock();
       ASSERT_EQ(OB_SUCCESS, ret);
       ret = cond_.wait();
@@ -49,7 +55,7 @@ void TestThreadCondStress::run1()
       ASSERT_EQ(OB_SUCCESS, ret);
     }
   } else {
-    while (!has_set_stop()) {
+    while(!has_set_stop()) {
       ret = cond_.lock();
       ASSERT_EQ(OB_SUCCESS, ret);
       ret = cond_.signal();
@@ -65,14 +71,14 @@ TEST(ObThreadCond, normal)
   int ret = OB_SUCCESS;
   ObThreadCond cond;
 
-  // destroy when not init
+  //destroy when not init
   cond.destroy();
 
-  // repeatedly init
+  //repeatedly init
   ret = cond.init(ObWaitEventIds::DEFAULT_COND_WAIT);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // empty signal
+  //empty signal
   ret = cond.lock();
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = cond.signal();
@@ -82,7 +88,7 @@ TEST(ObThreadCond, normal)
   ret = cond.unlock();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // wait timeout
+  //wait timeout
   ret = cond.lock();
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = cond.wait(1);
@@ -90,7 +96,7 @@ TEST(ObThreadCond, normal)
   ret = cond.unlock();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // repeatly destroy
+  //repeatly destroy
   cond.destroy();
   cond.destroy();
 }
@@ -114,10 +120,10 @@ TEST(ObThreadCond, stress)
   sig_stress.wait();
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");
   testing::InitGoogleTest(&argc, argv);

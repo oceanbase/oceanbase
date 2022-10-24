@@ -26,11 +26,11 @@
 #include <sys/syscall.h>
 #include <fcntl.h>
 
-static int (*real_io_getevents)(
-    io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout);
-static int (*real_io_submit)(io_context_t ctx, long nr, struct iocb** iocbpp);
+static int (*real_io_getevents)(io_context_t ctx_id, long min_nr, long nr, struct io_event *events, struct timespec *timeout);
+static int (*real_io_submit)(io_context_t ctx, long nr, struct iocb **iocbpp);
 
-struct aio_conf_t {
+struct aio_conf_t
+{
   int work_fd_;
   int io_submit_failed_;
   int io_hang_;
@@ -45,9 +45,9 @@ static pthread_mutex_t load_conf_mutex;
 
 void io_init(void)
 {
-  void* handle = dlopen("libaio.so", RTLD_LAZY);
-  *(void**)&real_io_getevents = dlsym(handle, "io_getevents");
-  *(void**)&real_io_submit = dlsym(handle, "io_submit");
+  void *handle = dlopen("libaio.so", RTLD_LAZY);
+  *(void**) &real_io_getevents = dlsym(handle, "io_getevents");
+  *(void**) &real_io_submit = dlsym(handle, "io_submit");
   printf("init read aio func succeed\n");
 }
 
@@ -68,8 +68,7 @@ void load_conf()
   memset(buf, 0, sizeof(buf));
   read(fd, buf, sizeof(buf));
   close(fd);
-  sscanf(
-      buf, "%d,%d,%d,%d", &aio_conf.work_fd_, &aio_conf.io_submit_failed_, &aio_conf.io_hang_, &aio_conf.io_timeout_);
+  sscanf(buf, "%d,%d,%d,%d", &aio_conf.work_fd_, &aio_conf.io_submit_failed_, &aio_conf.io_hang_, &aio_conf.io_timeout_);
   printf("init read aio func succeed, %s\n", buf);
 }
 
@@ -82,8 +81,9 @@ void check_load_conf()
     load_conf_time = now;
   }
   pthread_mutex_unlock(&load_conf_mutex);
+
 }
-int io_submit(io_context_t ctx_id, long nr, struct iocb** iocbpp)
+int io_submit(io_context_t ctx_id, long nr, struct iocb **iocbpp)
 {
   int ret = 0;
   int is_triggered = 0;
@@ -101,7 +101,7 @@ int io_submit(io_context_t ctx_id, long nr, struct iocb** iocbpp)
   return ret;
 }
 
-int io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout)
+int io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event *events, struct timespec *timeout)
 {
   int ret = 0;
   int is_triggered = 0;
@@ -112,16 +112,16 @@ int io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* eve
   if (nevent < 0) {
     printf("real_io_getevents failed\n");
   } else if (0 == nevent) {
-    // printf("real_io_getevents get nothing\n");
+    //printf("real_io_getevents get nothing\n");
   } else {
-    struct iocb* cb = events[0].obj;
+    struct iocb *cb = events[0].obj;
     is_triggered = aio_conf.work_fd_ == cb->aio_fildes;
     if (!is_triggered) {
       ret = nevent;
     } else if (aio_conf.io_hang_) {
-      ret = 0;  // 0 event finish
+      ret = 0; // 0 event finish
     } else if (aio_conf.io_timeout_) {
-      this_routine::usleep(10 * 1000 * 1000);  // sleep 10s
+      ::usleep(10 * 1000 * 1000); // sleep 10s
       printf("finish io_getevents");
       ret = nevent;
     }

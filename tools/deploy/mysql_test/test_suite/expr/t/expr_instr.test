@@ -4,71 +4,78 @@ set @@session.explicit_defaults_for_timestamp=off;
 #### owner: yuchen.wyc
 #### owner group: sql3
 #### description: 测试instr函数
+# tags: expr, datatype
+
+--enable_sorted_result
+--result_format 4
+
 --echo ================ expression instr ================
-select instr('abc', '');
-select instr('', '');
-select instr('', 'abc');
-select instr('abc', 'abcd');
-select instr('abc', 'abc');
-select instr('abc', 'a');
-select instr('abc', 'b');
-select instr('abc', 'c');
-select instr('abc', 'bc');
-select instr('abcbc', 'bc');
-select instr('阿里巴巴', '阿里');
-select instr('阿里巴巴', '巴巴');
-select instr('阿里巴巴巴巴', '巴巴');
-select instr('阿里巴巴', '阿里巴巴');
-select instr('123', true);
-select instr('23', true);
-select instr(123, '23');
-select instr('123', 123);
-select instr('123.400000', 23.4);
-select instr('123.400000', 123.4);
-select instr('123.400000', null);
-select instr(null, '巴巴');
-select instr('巴巴', null);
-select instr(null, null);
 
-select instr(true, false);
-select instr(true, true);
-select instr(123, true);
-select instr(123, false);
-select instr(0123, false);
-select instr(1023, false);
-select instr(1023.4, false);
-select instr(1023.4, true);
-select instr(null, true);
-select instr(true, null);
+select instr('abc', '') from dual;
+select instr('', '') from dual;
+select instr('', 'abc') from dual;
+select instr('abc', 'abcd') from dual;
+select instr('abc', 'abc') from dual;
+select instr('abc', 'a') from dual;
+select instr('abc', 'b') from dual;
+select instr('abc', 'c') from dual;
+select instr('abc', 'bc') from dual;
+select instr('abcbc', 'bc') from dual;
+select instr('阿里巴巴', '阿里') from dual;
+select instr('阿里巴巴', '巴巴') from dual;
+select instr('阿里巴巴巴巴', '巴巴') from dual;
+select instr('阿里巴巴', '阿里巴巴') from dual;
+select instr(123, '23') from dual;
+select instr('123', 123) from dual;
+select instr('123.400000', 23.4) from dual;
+select instr('123.400000', 123.4) from dual;
+select instr('123.400000', null) from dual;
+select instr(null, '巴巴') from dual;
+select instr('巴巴', null) from dual;
+select instr(null, null) from dual;
+select instr('123', true) from dual;
 
-select instr(123, 23);
-select instr(123, 23456);
-select instr(123.4, 123);
-select instr(1234, 123.4);
-select instr(1234, null);
-select instr(null, 123);
+select instr(123, 23) from dual;
+select instr(123, 23456) from dual;
+select instr(123.4, 123) from dual;
+select instr(1234, 123.4) from dual;
+select instr(1234, null) from dual;
+select instr(null, 123) from dual;
 
-select instr(123.400000, 123.4);
-select instr(123.400000, 123.41);
-select instr(123.400000, null);
-select instr(null, 123.41);
+select instr(123.400000, 123.4) from dual;
+select instr(123.400000, 123.41) from dual;
+select instr(123.400000, null) from dual;
+select instr(null, 123.41) from dual;
 
 --disable_warnings
 drop table if exists test;
 --enable_warnings
-create table test(c1 datetime primary key);
+create table test(c1 date primary key);
 sleep 5;
+#alter session set nls_date_format = "yyyy-mm-dd hh24:mi:ss";
 insert into test values('2015-5-5');
 select instr(c1, '201') from test;
 select instr(c1, '') from test;
 select instr(c1, 'haha') from test;
 select instr(c1, '-5') from test;
 select instr(c1, '2015-5-5') from test;
-select instr(c1, true) from test;
 select instr(c1, 201) from test;
 select instr(c1, 201.1) from test;
 select instr(c1, null) from test;
 select instr(null, c1) from test;
+
+
+# with more params
+--error 1582
+select instr() from dual;
+--error 1582
+select instr('abcda') from dual;
+--error 1582
+select instr('abcda', 'a', 1) from dual;
+--error 1582
+select instr('abcda', 'a', 1, 1) from dual;
+
 --disable_warnings
-drop table if exists test;
+drop table test;
 --enable_warnings
+

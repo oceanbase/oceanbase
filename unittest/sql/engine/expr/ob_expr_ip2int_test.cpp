@@ -17,32 +17,35 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprIp2intTest : public ::testing::Test {
+class ObExprIp2intTest : public ::testing::Test
+{
 public:
   ObExprIp2intTest();
   virtual ~ObExprIp2intTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprIp2intTest(const ObExprIp2intTest& other);
-  ObExprIp2intTest& operator=(const ObExprIp2intTest& other);
-
+  ObExprIp2intTest(const ObExprIp2intTest &other);
+  ObExprIp2intTest& operator=(const ObExprIp2intTest &other);
 private:
   // data members
 };
 ObExprIp2intTest::ObExprIp2intTest()
-{}
+{
+}
 
 ObExprIp2intTest::~ObExprIp2intTest()
-{}
+{
+}
 
 void ObExprIp2intTest::SetUp()
-{}
+{
+}
 
 void ObExprIp2intTest::TearDown()
-{}
+{
+}
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define F(obj, t1, v1, ref_type, ref_value) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -60,7 +63,7 @@ TEST_F(ObExprIp2intTest, basic_test)
   T(ip2int, varchar, "10.10.10.10", int, 168430090);
   T(ip2int, varchar, "255.255.255.255", int, 4294967295);
   T(ip2int, varchar, "0.0.0.0", int, 0);
-  T(ip2int, varchar, "1.0.0.0", int, 1 << 24);
+  T(ip2int, varchar, "1.0.0.0", int, 1<<24);
   T(ip2int, varchar, "0.0.0.1", int, 1);
 
   // take care!
@@ -84,9 +87,10 @@ TEST_F(ObExprIp2intTest, fail_tst)
   F(ip2int, int, 0, null, 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

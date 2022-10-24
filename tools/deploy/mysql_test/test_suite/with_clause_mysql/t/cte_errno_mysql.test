@@ -80,4 +80,19 @@ with cte(n) AS ( select 1 from cte) select * from cte;
 --error 1146
 with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
 
+--error 5744
+with RECURSIVE cte(n) as (select 1  union all select (select n+1 from cte where n < 1) ) select n from cte;
+
+--error 5744
+with RECURSIVE cte(n) as (select 1 from dual union all select 1 + (select n+1 from cte where n < 1) from dual) select n from cte;
+
+--error 5744
+with RECURSIVE cte(n) as (select 1 from dual union all select -(select n+1 from cte where n < 1) from dual) select n from cte;
+
+--error 5744
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 as c1 from dual where c1 in (select n + 1 from cte where n < 10)) select n from cte;
+
+--error 5744
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 from dual where EXISTS(select n + 1 from cte where n < 10)) select n from cte;
+
 drop database cte_st;

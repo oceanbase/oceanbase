@@ -12,54 +12,15 @@ set @@session.explicit_defaults_for_timestamp=off;
 # on the presence of the log tables (which are CSV-based).
 #--source mysql_test/include/have_csv.inc
 
-let $cpu = 1;
-let $memory = 536870912;
-let $min_memory = 536870912;
-let $disk = 536870912;
-let $iops = 128;
-let $session = 64;
-
-connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connection obsys1;
-
---disable_warnings
-drop tenant if exists tt1 force;
-drop resource pool if exists mypool1;
-drop resource unit if exists mybox1;
---enable_warnings
---disable_query_log
-eval create resource unit mybox1 max_cpu $cpu, max_memory $memory, max_iops $iops, max_disk_size $disk, max_session_num $session, MIN_CPU=1, MIN_MEMORY=$min_memory, MIN_IOPS=128;
---enable_query_log
-let $zone_name=query_get_value(select zone from oceanbase.__all_zone where zone != '' limit 1, zone, 1);
-
---replace_column 1 create_time 2 modify_time 3 unit_config_id
-select * from oceanbase.__all_unit_config where name='mybox1';
-
---disable_query_log
-eval create resource pool mypool1 unit = 'mybox1', unit_num = 1, zone_list = ('$zone_name');
---replace_column 1 create_time 2 modify_time 3 resource_pool_id 6 unit_config_id 7 zone
-select * from oceanbase.__all_resource_pool where name='mypool1';
-
-eval create tenant tt1 replica_num = 1, primary_zone='$zone_name', resource_pool_list=('mypool1') set ob_tcp_invited_nodes='%';
---source mysql_test/include/check_tenant_sync.inc
---enable_query_log
---replace_column 1 create_time 2 modify_time 3 tenant_id 6 zone 7 zone 13 locality 14 logonly_replica_num 15 previous_locality 16 storage_format_version 17 storage_format_work_version
-select * from oceanbase.__all_tenant where tenant_name='tt1';
-#connect (conn1,$OBMYSQL_MS0,admin@tt1,admin,test,$OBMYSQL_PORT);
-let $__tenant_name__ = 'tt1';
---source mysql_test/include/get_tenant_server.inc
-
-disconnect obsys1;
-
-connect (tt1_root,$TE_SERVER_IP,root@tt1,,*NO-ONE*,$TE_SERVER_PORT);
-connection tt1_root;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
 
 create user testtt1 identified by 'testtt1';
 create database tt1_test;
 GRANT ALL ON *.* TO testtt1;
 
 --source mysql_test/include/check_schema_sync.inc
-connect (conn1,$TE_SERVER_IP,testtt1@tt1,testtt1,tt1_test,$TE_SERVER_PORT);
+connect (conn1,$OBMYSQL_MS0,testtt1@sys,testtt1,tt1_test,$OBMYSQL_PORT);
 connection conn1;
 
 --disable_query_log
@@ -192,14 +153,3 @@ SELECT t.table_name, c1.column_name
                   c2.column_name LIKE '%SCHEMA%')
   AND t.table_name NOT LIKE 'ndb%'
 AND t.table_name NOT LIKE 'innodb%';
-
-connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connection obsys1;
-
---disable_warnings
-drop tenant if exists tt1 force;
-drop resource pool if exists mypool1;
-drop resource unit if exists mybox1;
---enable_warnings
-
-disconnect obsys1;

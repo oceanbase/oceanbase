@@ -9,11 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include <numeric>
+
 #include "ob_task_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_simple_rate_limiter.h"
 #include "lib/oblog/ob_log.h"
+#include <numeric>
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -21,9 +22,10 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace share {
 
-class ObLogRateLimiter : public lib::ObSimpleRateLimiter {
+class ObLogRateLimiter
+    : public lib::ObSimpleRateLimiter
+{
   friend class ObTaskController;
-
 public:
   bool is_force_allows() const override
   {
@@ -37,21 +39,20 @@ public:
   }
 
 private:
-  static RLOCAL(int64_t, allows_);
+  RLOCAL_STATIC(int64_t, allows_);
 };
 
-RLOCAL(int64_t, ObLogRateLimiter::allows_);
+_RLOCAL(int64_t, ObLogRateLimiter::allows_);
 
 // class ObTaskController
 ObTaskController ObTaskController::instance_;
 
-ObTaskController::ObTaskController() : limiters_(), rate_pctgs_(), log_rate_limit_(LOG_RATE_LIMIT)
+ObTaskController::ObTaskController()
+    : limiters_(), rate_pctgs_(), log_rate_limit_(LOG_RATE_LIMIT)
 {}
 
 ObTaskController::~ObTaskController()
-{
-  destroy();
-}
+{}
 
 int ObTaskController::init()
 {
@@ -64,19 +65,19 @@ int ObTaskController::init()
     }
   }
   if (OB_SUCC(ret)) {
-#define LOG_PCTG(ID, PCTG)          \
-  do {                              \
-    set_log_rate_pctg<ID>(PCTG);    \
-    get_limiter(ID)->set_name(#ID); \
-  } while (0)
+#define LOG_PCTG(ID, PCTG)                      \
+    do {                                        \
+      set_log_rate_pctg<ID>(PCTG);              \
+      get_limiter(ID)->set_name(#ID);           \
+    } while (0)
 
     // Set percentage of each task here.
-    // @NOTE: Inquire @ before any change.
-    LOG_PCTG(ObTaskType::GENERIC, 100.0);        // default limiter
-    LOG_PCTG(ObTaskType::USER_REQUEST, 100.0);   // default limiter
+    // @NOTE: Inquire @yongle.xh before any change.
+    LOG_PCTG(ObTaskType::GENERIC, 100.0);  // default limiter
+    LOG_PCTG(ObTaskType::USER_REQUEST, 100.0);  // default limiter
     LOG_PCTG(ObTaskType::DATA_MAINTAIN, 100.0);  // default limiter
-    LOG_PCTG(ObTaskType::ROOT_SERVICE, 100.0);   // default limiter
-    LOG_PCTG(ObTaskType::SCHEMA, 100.0);         // default limiter
+    LOG_PCTG(ObTaskType::ROOT_SERVICE, 100.0);  // default limiter
+    LOG_PCTG(ObTaskType::SCHEMA, 100.0);  // default limiter
 
 #undef LOG_PCTG
 
@@ -121,16 +122,24 @@ void ObTaskController::set_log_rate_limit(int64_t limit)
 
 void ObTaskController::calc_log_rate()
 {
-  const double total = std::accumulate(rate_pctgs_, rate_pctgs_ + MAX_TASK_ID, .0);
+  const double total = std::accumulate(
+      rate_pctgs_, rate_pctgs_ + MAX_TASK_ID, .0);
   for (int i = 0; total != 0 && i < MAX_TASK_ID; i++) {
-    limiters_[i]->set_rate(static_cast<int64_t>(rate_pctgs_[i] / total * static_cast<double>(log_rate_limit_)));
+    limiters_[i]->set_rate(
+        static_cast<int64_t>(
+            rate_pctgs_[i]/total * static_cast<double>(log_rate_limit_)));
   }
 }
 
-ObTaskController& ObTaskController::get()
+ObTaskController &ObTaskController::get()
 {
   return instance_;
 }
 
-}  // namespace share
-}  // namespace oceanbase
+ObTaskController::RateLimiter *ObTaskController::get_limiter(ObTaskType id)
+{
+  return limiters_[toUType(id)];
+};
+
+}  // share
+}  // oceanbase

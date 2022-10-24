@@ -30,40 +30,39 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::obrpc;
 
-class Service {
-  // Deliver is the class that transfers the result of unpacking RpcHandler to the corresponding queue. Here will be
-  // countered The deliver method of Service facilitates the integration of logic into the Service class.
-  class Deliver : public ObReqQDeliver {
+class Service
+{
+  // Deliver is the class that transfers the result of unpacking RpcHandler to the corresponding queue. Here will be countered
+  // The deliver method of Service facilitates the integration of logic into the Service class.
+  class Deliver
+      : public ObReqQDeliver {
   public:
-    Deliver(ObiReqQHandler& qhandler, Service& service) : ObReqQDeliver(qhandler), service_(service)
+    Deliver(ObiReqQHandler &qhandler, Service &service)
+        : ObReqQDeliver(qhandler),
+          service_(service)
     {}
-    int init() override
-    {
-      return OB_SUCCESS;
-    }
-    void stop() override
-    {}
-    int deliver(rpc::ObRequest& req) override;
-
+    int init() override { return OB_SUCCESS; }
+    void stop() override {}
+    int deliver(rpc::ObRequest &req) override;
   private:
-    Service& service_;
+    Service &service_;
   };
   // Translator is responsible for translating an ObRequest request into the corresponding Processor. Here will
   // Reverse the translate method of Service, so that the logic is concentrated in the Service.
-  class Translator : public ObReqTranslator {
+  class Translator
+      : public ObReqTranslator {
   public:
-    Translator(Service& service) : service_(service)
+    Translator(Service &service)
+        : service_(service)
     {}
-
   protected:
-    ObReqProcessor* get_processor(ObRequest& req) override;
-
+    ObReqProcessor *get_processor(ObRequest &req) override;
   private:
-    Service& service_;
+    Service &service_;
   };
 
 public:
-  Service(int listen_port = 33244)
+  Service(int listen_port=33244)
       : easy_(),
         translator_(*this),
         qhandler_(translator_),
@@ -75,29 +74,21 @@ public:
         queue_(),
         proc_map_()
   {}
-  virtual ~Service()
-  {}
+  virtual ~Service() {}
 
   int init();
-  int get_listen_port() const
-  {
-    return listen_port_;
-  }
-  int get_proxy(ObRpcProxy& proxy)
-  {
-    return proxy.init(transport_);
-  }
+  int get_listen_port() const { return listen_port_; }
+  int get_proxy(ObRpcProxy &proxy) { return proxy.init(transport_); }
   const common::ObAddr get_dst() const
-  {
-    return common::ObAddr(common::ObAddr::IPV4, "127.0.0.1", get_listen_port());
-  }
+  { return common::ObAddr(common::ObAddr::IPV4, "127.0.0.1", get_listen_port()); }
 
   template <class Proc>
-  int reg_processor(Proc* p);
+  int reg_processor(Proc *p);
+
 
 protected:
-  ObReqProcessor* translate(ObRequest& req);
-  int deliver(ObRequest& req);
+  ObReqProcessor *translate(ObRequest &req);
+  int deliver(ObRequest &req);
 
 private:
   ObNetEasy easy_;
@@ -105,7 +96,7 @@ private:
   ObReqQHandler qhandler_;
   Deliver deliver_;
   ObRpcHandler handler_;
-  ObReqTransport* transport_;
+  ObReqTransport *transport_;
 
   int listen_port_;
   int try_listen_cnt_;
@@ -114,12 +105,12 @@ private:
   ObReqProcessor* proc_map_[65536];
 };
 
-int Service::Deliver::deliver(ObRequest& req)
+int Service::Deliver::deliver(ObRequest &req)
 {
   return service_.deliver(req);
 }
 
-ObReqProcessor* Service::Translator::get_processor(ObRequest& req)
+ObReqProcessor *Service::Translator::get_processor(ObRequest &req)
 {
   return service_.translate(req);
 }
@@ -128,7 +119,8 @@ int Service::init()
 {
   int ret = OB_SUCCESS;
   queue_.set_qhandler(&qhandler_);
-  if (OB_FAIL(queue_.get_thread().start())) {}
+  if (OB_FAIL(queue_.get_thread().start())) {
+  }
   if (OB_SUCC(ret)) {
     ObNetOptions opts;
     opts.rpc_io_cnt_ = 1;
@@ -146,13 +138,14 @@ int Service::init()
   return ret;
 }
 
-ObReqProcessor* Service::translate(ObRequest& req)
+ObReqProcessor *Service::translate(ObRequest &req)
 {
-  const ObRpcPacket& pkt = reinterpret_cast<const ObRpcPacket&>(req.get_packet());
+  const ObRpcPacket &pkt
+      = reinterpret_cast<const ObRpcPacket&>(req.get_packet());
   return proc_map_[pkt.get_pcode()];
 }
 
-int Service::deliver(ObRequest& req)
+int Service::deliver(ObRequest &req)
 {
   static constexpr int64_t MAX_QUEUE_LEN = 65536;
   int ret = OB_SUCCESS;
@@ -163,13 +156,15 @@ int Service::deliver(ObRequest& req)
 }
 
 template <class Proc>
-int Service::reg_processor(Proc* p)
+int Service::reg_processor(Proc *p)
 {
   int ret = OB_SUCCESS;
   proc_map_[Proc::PCODE] = p;
   return ret;
 }
 
-}  // namespace rpctesting
+
+
+}  // rpctesting
 
 #endif /* RPC_TESTING_H */

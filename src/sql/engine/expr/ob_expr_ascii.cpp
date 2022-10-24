@@ -20,49 +20,40 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
-ObExprAscii::ObExprAscii(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ASCII, N_ASCII, 1, NOT_ROW_DIMENSION)
-{}
+namespace sql
+{
+ObExprAscii::ObExprAscii(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc,
+                         T_FUN_SYS_ASCII,
+                         N_ASCII, 1,
+                         NOT_ROW_DIMENSION) {}
 
-int ObExprAscii::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprAscii::calc_result_type1(ObExprResType &type,
+                                   ObExprResType &type1,
+                                   ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
 
-  const ObSQLSessionInfo* session = type_ctx.get_session();
+  const ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    if (session->use_static_typing_engine()) {
-      if (is_oracle_mode()) {
-        type.set_number();
-        ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
-        OZ(params.push_back(&type1));
-        ObExprResType tmp_type;
-        OZ(aggregate_string_type_and_charset_oracle(*session, params, tmp_type));
-        OZ(deduce_string_param_calc_type_and_charset(*session, tmp_type, params));
-      } else {
-        type.set_int32();
-        if (ob_is_string_type(type1.get_type())) {
-          type1.set_calc_type(type1.get_type());
-          type1.set_calc_collation_type(type1.get_collation_type());
-        } else {
-          type1.set_calc_type(ObVarcharType);
-          type1.set_calc_collation_type(ObCharset::get_system_collation());
-        }
-      }
+    if (is_oracle_mode()) {
+      type.set_number();
+      type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_scale());
+      type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_precision());
+      ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
+      OZ(params.push_back(&type1));
+      ObExprResType tmp_type;
+      OZ(aggregate_string_type_and_charset_oracle(*session, params, tmp_type));
+      OZ(deduce_string_param_calc_type_and_charset(*session, tmp_type, params));
     } else {
-      if (type1.is_null()) {
-        type.set_null();
-      } else if (share::is_oracle_mode()) {
-        type.set_number();
-      } else {
-        type.set_utinyint();
-      }
+      type.set_int32();
       if (ob_is_string_type(type1.get_type())) {
         type1.set_calc_type(type1.get_type());
         type1.set_calc_collation_type(type1.get_collation_type());
@@ -76,7 +67,9 @@ int ObExprAscii::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
   return ret;
 }
 
-int ObExprAscii::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& expr_ctx)
+int ObExprAscii::calc(common::ObObj &obj,
+                      const common::ObObj &obj1,
+                      ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -90,7 +83,7 @@ int ObExprAscii::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& 
     ObString str_val = obj1.get_string();
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
 
-    if (str_val.length() <= 0) {
+    if (str_val.length() <= 0){
       tiny_val = 0;
     } else {
       tiny_val = static_cast<uint8_t>(str_val[0]);
@@ -100,28 +93,7 @@ int ObExprAscii::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& 
   return ret;
 }
 
-int ObExprAscii::calc_result1(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (share::is_oracle_mode()) {
-    common::ObObj tmp;
-    number::ObNumber result;
-    if (OB_FAIL(ObExprOrd::calc(tmp, obj1, expr_ctx))) {
-      LOG_WARN("failed to calc expr ord", K(ret));
-    } else if (tmp.is_null()) {
-      obj.set_null();
-    } else if (OB_FAIL(result.from(tmp.get_uint64(), *expr_ctx.calc_buf_))) {
-      LOG_WARN("failed to convert uint64 to ob number", K(ret));
-    } else {
-      obj.set_number(result);
-    }
-  } else {
-    ret = ObExprAscii::calc(obj, obj1, expr_ctx);
-  }
-  return ret;
-}
-
-int ObExprAscii::calc_ascii_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int ObExprAscii::calc_ascii_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   if (is_oracle_mode()) {
@@ -129,13 +101,13 @@ int ObExprAscii::calc_ascii_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& re
       LOG_WARN("calc_ord_expr failed", K(ret));
     }
   } else {
-    ObDatum* s_datum = NULL;
+    ObDatum *s_datum = NULL;
     if (OB_FAIL(expr.args_[0]->eval(ctx, s_datum))) {
       LOG_WARN("eval arg failed", K(ret));
     } else if (s_datum->is_null()) {
       res_datum.set_null();
     } else {
-      const ObString& str_val = s_datum->get_string();
+      const ObString &str_val = s_datum->get_string();
       if (str_val.empty()) {
         res_datum.set_int32(0);
       } else {
@@ -146,7 +118,8 @@ int ObExprAscii::calc_ascii_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& re
   return ret;
 }
 
-int ObExprAscii::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprAscii::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -156,51 +129,38 @@ int ObExprAscii::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, Ob
 }
 
 // ObExprOrd start
-ObExprOrd::ObExprOrd(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_ORD, N_ORD, 1, NOT_ROW_DIMENSION)
-{}
+ObExprOrd::ObExprOrd(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc,
+                         T_FUN_SYS_ORD,
+                         N_ORD, 1,
+                         NOT_ROW_DIMENSION) {}
 
-int ObExprOrd::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprOrd::calc_result_type1(ObExprResType &type,
+                                 ObExprResType &type1,
+                                 ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = type_ctx.get_session();
-
-  if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL", K(ret));
+  UNUSED(type_ctx);
+  type.set_int();
+  if (ob_is_string_type(type1.get_type())) {
+    type1.set_calc_type(type1.get_type());
+    type1.set_calc_collation_type(type1.get_collation_type());
   } else {
-    if (session->use_static_typing_engine()) {
-      type.set_int();
-      if (ob_is_string_type(type1.get_type())) {
-        type1.set_calc_type(type1.get_type());
-        type1.set_calc_collation_type(type1.get_collation_type());
-      } else {
-        type1.set_calc_type(ObVarcharType);
-        type1.set_calc_collation_type(ObCharset::get_system_collation());
-      }
-    } else {
-      if (type1.is_null()) {
-        type.set_null();
-      } else {
-        type.set_uint64();
-      }
-      if (ob_is_string_type(type1.get_type())) {
-        type1.set_calc_type(type1.get_type());
-        type1.set_calc_collation_type(type1.get_collation_type());
-      } else {
-        type1.set_calc_type(ObVarcharType);
-        type1.set_calc_collation_type(ObCharset::get_system_collation());
-      }
-    }
+    type1.set_calc_type(ObVarcharType);
+    type1.set_calc_collation_type(ObCharset::get_system_collation());
   }
+
   return ret;
 }
 
-int ObExprOrd::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& expr_ctx)
+int ObExprOrd::calc(common::ObObj &obj,
+                    const common::ObObj &obj1,
+                    ObExprCtx &expr_ctx)
 {
   ObCollationType cs_type = obj1.get_collation_type();
   int ret = OB_SUCCESS;
 
-  uint8_t type = 0;  // 0 for Ord(MB set), 1 for ascii(byte set)
+  uint8_t type = 0; // 0 for Ord(MB set), 1 for ascii(byte set)
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
     LOG_WARN("invalid collation type", K(ret));
     ret = OB_ERR_UNEXPECTED;
@@ -211,18 +171,20 @@ int ObExprOrd::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& ex
     // String trans
     ObString str_val = obj1.get_string();
 
-    const char* str_ptr = str_val.ptr();
+    const char *str_ptr = str_val.ptr();
     if (NULL != str_ptr) {
-      const ObCharsetInfo* cs = ObCharset::get_charset(cs_type);
-      uint64_t n = 0, char_len = cs->cset->ismbchar(str_val.ptr(), str_val.length());
-      if (char_len > str_val.length()) {
+      const char *end = str_val.ptr() + str_val.length();
+      const ObCharsetInfo *cs = ObCharset::get_charset(cs_type);
+      uint64_t n = 0, char_len = ob_ismbchar(cs, str_ptr, end);
+      if (char_len > str_val.length()){
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("my_ismbchar return wrong value", K(ret), K(char_len), K(str_val.length()));
-      } else if (0 == char_len) {
+        LOG_WARN("ob_ismbchar return wrong value",
+                 K(ret), K(char_len), K(str_val.length()));
+      } else if (0 == char_len){
         type = 1;
       } else {
-        while (char_len--) {
-          n = (n << 8) | (uint64_t)((uint8_t)*str_ptr++);
+        while (char_len--){
+          n = (n << 8) | (uint64_t)((uint8_t) *str_ptr++);
         }
         obj.set_uint64(n);
       }
@@ -233,7 +195,7 @@ int ObExprOrd::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& ex
     type = 1;
   }
 
-  if (OB_SUCCESS == ret && 1 == type) {
+  if (OB_SUCCESS == ret && 1 == type){
     ret = ObExprAscii::calc(obj, obj1, expr_ctx);
     if (OB_SUCC(ret) && (false == obj.is_null())) {
       obj.set_uint64(static_cast<uint64_t>(obj.get_utinyint()));
@@ -242,24 +204,12 @@ int ObExprOrd::calc(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& ex
 
   return ret;
 }
-int ObExprOrd::calc_result1(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  // test expr_ctx
-  if (OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(expr_ctx.my_session_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("expr_ctx not init", K(ret));
-  } else {
-    ret = calc(obj, obj1, expr_ctx);
-  }
-  return ret;
-}
 
-// ascii expr in oracle mode use this function too.
-int ObExprOrd::calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+// Oracle模式下的ascii表达式的计算逻辑也使用本函数
+int ObExprOrd::calc_ord_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* s_datum = NULL;
+  ObDatum *s_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, s_datum))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (s_datum->is_null()) {
@@ -268,8 +218,8 @@ int ObExprOrd::calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
     int64_t res_int = 0;
     bool res_null = false;
     const ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
-    const ObCharsetInfo* cs = ObCharset::get_charset(cs_type);
-    const ObString& str_val = s_datum->get_string();
+    const ObCharsetInfo *cs = ObCharset::get_charset(cs_type);
+    const ObString &str_val = s_datum->get_string();
     if (OB_ISNULL(cs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid cs_type", K(ret), K(cs_type));
@@ -280,16 +230,17 @@ int ObExprOrd::calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
         res_int = 0;
       }
     } else if (ObCharset::usemb(cs_type)) {
-      const char* str_ptr = str_val.ptr();
+      const char *str_ptr = str_val.ptr();
+      const char *end = str_val.ptr() + str_val.length();
       uint32_t n = 0;
-      uint32_t char_len = cs->cset->ismbchar(str_val.ptr(), str_val.length());
-      if (char_len > str_val.length()) {
+      uint32_t char_len = ob_ismbchar(cs, str_ptr, end);
+      if (char_len > str_val.length()){
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("my_ismbchar return wrong value", K(ret), K(char_len), K(str_val.length()));
-      } else if (0 == char_len) {
+        LOG_WARN("ob_ismbchar return wrong value", K(ret), K(char_len), K(str_val.length()));
+      } else if (0 == char_len){
         res_int = static_cast<uint8_t>(str_val[0]);
       } else {
-        while (char_len--) {
+        while (char_len--){
           n = (n << 8) | static_cast<uint32_t>(static_cast<uint8_t>(*str_ptr++));
         }
         res_int = n;
@@ -299,7 +250,7 @@ int ObExprOrd::calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
     }
 
     if (OB_SUCC(ret)) {
-      const ObObjType& res_type = expr.datum_meta_.type_;
+      const ObObjType &res_type = expr.datum_meta_.type_;
       if (res_null) {
         res_datum.set_null();
       } else if (ObNumberType == res_type) {
@@ -321,7 +272,8 @@ int ObExprOrd::calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
   return ret;
 }
 
-int ObExprOrd::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprOrd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -330,5 +282,5 @@ int ObExprOrd::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObEx
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // OceanBase

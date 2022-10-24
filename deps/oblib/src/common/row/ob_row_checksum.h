@@ -18,42 +18,43 @@
 #include "lib/utility/utility.h"
 #include "lib/allocator/page_arena.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 class ObRow;
-struct ObRowChecksumValue {
+struct ObRowChecksumValue
+{
   typedef std::pair<uint64_t, uint64_t> ObColumnIdChecksum;
 
-  ObRowChecksumValue()
-  {
-    reset();
-  }
+
+  ObRowChecksumValue() { reset(); }
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   template <typename Allocator>
-  int deep_copy(const ObRowChecksumValue& src, Allocator& allocator);
+  int deep_copy(const ObRowChecksumValue &src, Allocator &allocator);
 
   void reset();
   void reset_checksum();
 
   void sort();
 
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  int column_checksum2string(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int column_checksum2string(char *buf, const int64_t buf_len, int64_t &pos) const;
   template <typename Allocator>
-  int string2column_checksum(Allocator& allocator, const char* str);
+  int string2column_checksum(Allocator &allocator, const char *str);
 
   uint64_t checksum_;
   // we do not store detail column checksum if %column_count_ is zero
   int64_t column_count_;
-  ObColumnIdChecksum* column_checksum_array_;
+  ObColumnIdChecksum *column_checksum_array_;
 };
 
 template <typename Allocator>
-int ObRowChecksumValue::deep_copy(const ObRowChecksumValue& src, Allocator& allocator)
+int ObRowChecksumValue::deep_copy(const ObRowChecksumValue &src, Allocator &allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -62,12 +63,14 @@ int ObRowChecksumValue::deep_copy(const ObRowChecksumValue& src, Allocator& allo
   if (0 == column_count_) {
     column_checksum_array_ = NULL;
   } else {
-    if (NULL == (column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum*>(
-                     allocator.alloc(sizeof(ObColumnIdChecksum) * column_count_)))) {
+    if (NULL == (column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum *>(
+        allocator.alloc(sizeof(ObColumnIdChecksum) * column_count_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      COMMON_LOG(ERROR, "allocate memory failed", K(ret), "size", sizeof(ObColumnIdChecksum) * column_count_);
+      COMMON_LOG(ERROR, "allocate memory failed", K(ret),
+          "size", sizeof(ObColumnIdChecksum) * column_count_);
     } else {
-      MEMCPY(column_checksum_array_, src.column_checksum_array_, sizeof(ObColumnIdChecksum) * column_count_);
+      MEMCPY(column_checksum_array_, src.column_checksum_array_,
+             sizeof(ObColumnIdChecksum) * column_count_);
     }
   }
 
@@ -75,11 +78,11 @@ int ObRowChecksumValue::deep_copy(const ObRowChecksumValue& src, Allocator& allo
 }
 
 template <typename Allocator>
-int ObRowChecksumValue::string2column_checksum(Allocator& allocator, const char* str)
+int ObRowChecksumValue::string2column_checksum(Allocator &allocator, const char *str)
 {
   // %str can be NULL
   int64_t count = (NULL != str && strlen(str) > 0) ? 1 : 0;
-  const char* p = str;
+  const char *p = str;
   int ret = OB_SUCCESS;
   while (NULL != p && NULL != (p = strchr(p, ','))) {
     p++;
@@ -88,13 +91,14 @@ int ObRowChecksumValue::string2column_checksum(Allocator& allocator, const char*
   column_count_ = count;
   if (count == 0) {
     column_checksum_array_ = NULL;
-  } else if (NULL == (column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum*>(
-                          allocator.alloc(sizeof(*column_checksum_array_) * count)))) {
+  } else if (NULL == (column_checksum_array_ = reinterpret_cast<ObColumnIdChecksum *>(
+      allocator.alloc(sizeof(*column_checksum_array_) * count)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    COMMON_LOG(ERROR, "allocate memory failed", K(ret), "size", sizeof(*column_checksum_array_) * count);
+    COMMON_LOG(ERROR, "allocate memory failed", K(ret),
+        "size", sizeof(*column_checksum_array_) * count);
   } else {
     p = str;
-    char* end = NULL;
+    char *end = NULL;
     for (int64_t i = 0; i < count; i++) {
       column_checksum_array_[i].first = strtoul(p, &end, 10);
       if (*end != ':') {
@@ -123,7 +127,7 @@ int ObRowChecksumValue::string2column_checksum(Allocator& allocator, const char*
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_ROW_CHECKSUM_H_
+#endif // OCEANBASE_COMMON_OB_ROW_CHECKSUM_H_

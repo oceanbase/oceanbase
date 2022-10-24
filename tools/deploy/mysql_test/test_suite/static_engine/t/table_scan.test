@@ -1,4 +1,5 @@
 # owner: bin.lb
+#tags: optimizer
 # owner group: sql2
 
 --result_format 4

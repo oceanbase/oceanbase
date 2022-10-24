@@ -24,17 +24,22 @@
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObMultiVersionSchemaService;
 }
-}  // namespace share
-namespace obrpc {
-class ObSchemaServiceRpcProxy : public obrpc::ObRpcProxy {
+}
+namespace obrpc
+{
+class ObSchemaServiceRpcProxy : public obrpc::ObRpcProxy
+{
 public:
   DEFINE_TO(ObSchemaServiceRpcProxy);
-  //  RPC_S(PR5 get_latest_schema_version, OB_GET_LATEST_SCHEMA_VERSION, obrpc::Int64);
+//  RPC_S(PR5 get_latest_schema_version, OB_GET_LATEST_SCHEMA_VERSION, obrpc::Int64);
   RPC_SS(PR5 get_all_schema, OB_GET_ALL_SCHEMA, (ObGetAllSchemaArg), common::ObDataBuffer);
 };
 
@@ -58,12 +63,12 @@ private:
 };
 */
 
-struct ObAllSchema {
+struct ObAllSchema
+{
   OB_UNIS_VERSION(1);
 
 public:
-  ObAllSchema()
-  {}
+  ObAllSchema() {}
   DECLARE_TO_STRING;
 
   share::schema::ObTenantSchema tenant_;
@@ -76,26 +81,25 @@ public:
   common::ObSArray<share::schema::ObTablePriv> table_privs_;
 };
 
-class ObGetAllSchemaP : public ObRpcProcessor<obrpc::ObSchemaServiceRpcProxy::ObRpc<OB_GET_ALL_SCHEMA> > {
+class ObGetAllSchemaP : public ObRpcProcessor<
+                        obrpc::ObSchemaServiceRpcProxy::ObRpc<OB_GET_ALL_SCHEMA> >
+{
 public:
-  explicit ObGetAllSchemaP(share::schema::ObMultiVersionSchemaService* schema_service);
+  explicit ObGetAllSchemaP(share::schema::ObMultiVersionSchemaService *schema_service);
   virtual ~ObGetAllSchemaP();
-
 protected:
   virtual int before_process();
   virtual int process();
   virtual int after_process();
-
 private:
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  char* buf_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  char *buf_;
   int64_t buf_len_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetAllSchemaP);
 };
 
-}  // namespace obrpc
-}  // namespace oceanbase
+} // namespace obrpc
+} // namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_SCHEMA_SERVICE_RPC_PROXY_
+#endif //OCEANBASE_COMMON_OB_SCHEMA_SERVICE_RPC_PROXY_

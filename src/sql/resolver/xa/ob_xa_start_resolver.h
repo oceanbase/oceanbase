@@ -15,20 +15,22 @@
 
 #include "sql/resolver/ob_stmt_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObXaStartResolver : public ObStmtResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObXaStartResolver : public ObStmtResolver
+{
 public:
-  explicit ObXaStartResolver(ObResolverParams& params);
+  explicit ObXaStartResolver(ObResolverParams &params);
   virtual ~ObXaStartResolver();
 
-  virtual int resolve(const ParseNode& parse_node);
-
+  virtual int resolve(const ParseNode &parse_node);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObXaStartResolver);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end sql namespace
+} // end oceanbase namspace
 
 #endif /* OCEANBASE_RESOLVER_XA_START_RESOLVER_ */

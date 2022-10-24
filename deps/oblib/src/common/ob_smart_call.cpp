@@ -12,10 +12,12 @@
 
 #include "common/ob_smart_call.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-RLOCAL(int64_t, all_stack_size);
+_RLOCAL(int64_t, all_stack_size);
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

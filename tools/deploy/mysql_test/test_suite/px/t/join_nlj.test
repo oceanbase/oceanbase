@@ -14,7 +14,7 @@ explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.sub
 --sorted_result
 select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 
-CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify))duplicate_scope="cluster";
+CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify));
 
 CREATE TABLE orders (oid bigint primary key,pid bigint,amount int, addr varchar(20),key k (pid) local) partition by hash (oid) partitions 100;
 
@@ -30,7 +30,7 @@ insert into orders values(314267, 314267, 678, "192.168.1.8");
 insert into product values(314268, "abcd", now(), now(), 1234);
 insert into orders values(314268, 314268, 678, "192.168.1.8");
 
-explain select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
+#explain select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
 select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
 
 

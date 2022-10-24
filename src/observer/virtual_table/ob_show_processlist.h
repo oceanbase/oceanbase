@@ -15,26 +15,27 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "sql/session/ob_sql_session_mgr.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObNewRow;
 class ObScanner;
-}  // namespace common
-namespace sql {
+}
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace observer {
-class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
+namespace observer
+{
+class ObShowProcesslist : public common::ObVirtualTableScannerIterator
+{
 public:
   ObShowProcesslist();
   virtual ~ObShowProcesslist();
-  inline void set_session_mgr(sql::ObSQLSessionMgr* session_mgr)
-  {
-    session_mgr_ = session_mgr;
-  }
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  inline void set_session_mgr(sql::ObSQLSessionMgr *session_mgr) { session_mgr_ = session_mgr; }
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-
 private:
   enum SESSION_INFO_COLUMN {
     ID = OB_APP_MIN_COLUMN_ID,
@@ -57,39 +58,54 @@ private:
     TRANS_ID,
     THREAD_ID,
     SSL_CIPHER,
-    TRACE_ID
+    TRACE_ID,
+    TRANS_STATE,
+    TOTAL_TIME,
+    RETRY_CNT,
+    RETRY_INFO,
+    ACTION,
+    MODULE,
+    CLIENT_INFO,
+    SQL_TRACE
   };
-  class FillScanner {
+  class FillScanner
+  {
   public:
-    FillScanner() : allocator_(NULL), scanner_(NULL), cur_row_(NULL), my_session_(NULL), output_column_ids_()
+    FillScanner()
+        :allocator_(NULL),
+        scanner_(NULL),
+        cur_row_(NULL),
+        my_session_(NULL),
+        schema_guard_(NULL),
+        output_column_ids_()
     {
       trace_id_[0] = '\0';
     }
-    virtual ~FillScanner()
-    {}
+    virtual ~FillScanner(){}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
-    int init(ObIAllocator* allocator, common::ObScanner* scanner, sql::ObSQLSessionInfo* session_info,
-        common::ObNewRow* cur_row, const ObIArray<uint64_t>& column_ids,
-        share::schema::ObSchemaGetterGuard* schema_guard);
+    int init(ObIAllocator *allocator,
+             common::ObScanner *scanner,
+             sql::ObSQLSessionInfo * session_info,
+             common::ObNewRow *cur_row,
+             const ObIArray<uint64_t> &column_ids,
+             share::schema::ObSchemaGetterGuard* schema_guard);
     inline void reset();
-
   public:
     bool has_process_privilege();
-
   private:
-    ObIAllocator* allocator_;
-    common::ObScanner* scanner_;
-    common::ObNewRow* cur_row_;
-    sql::ObSQLSessionInfo* my_session_;
-    share::schema::ObSchemaGetterGuard* schema_guard_;
-    ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
-    char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
-    DISALLOW_COPY_AND_ASSIGN(FillScanner);
+      ObIAllocator *allocator_;
+      common::ObScanner *scanner_;
+      common::ObNewRow *cur_row_;
+      sql::ObSQLSessionInfo *my_session_;
+      share::schema::ObSchemaGetterGuard* schema_guard_;
+      ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
+      char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+      DISALLOW_COPY_AND_ASSIGN(FillScanner);
   };
-  sql::ObSQLSessionMgr* session_mgr_;
+  sql::ObSQLSessionMgr *session_mgr_;
   FillScanner fill_scanner_;
   DISALLOW_COPY_AND_ASSIGN(ObShowProcesslist);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}//observer
+}//oceanbase
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_SHOW_PROCESSLIST_ */

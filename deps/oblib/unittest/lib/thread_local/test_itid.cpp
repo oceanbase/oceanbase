@@ -20,8 +20,11 @@ using namespace std;
 unsigned long long get_ticks(void)
 {
   register uint64_t lo, hi;
-  __asm__ __volatile__("rdtscp" : "=a"(lo), "=d"(hi));
+  __asm__ __volatile__ (
+      "rdtscp" : "=a"(lo), "=d"(hi)
+  );
   return hi << 32 | lo;
+
 }
 
 TEST(TestItid, Basic)
@@ -34,10 +37,10 @@ TEST(TestItid, Basic)
 
   // Allow enough ID and check continuance.
   constexpr int64_t STARTER = 1;
-  for (int i = 0; i < 1024 * 64 - 1; i++) {
+  for (int i = 0; i < 1024*64-1; i++) {
     int64_t itid = alloc_itid();
-    EXPECT_EQ(i + STARTER, itid);
-    EXPECT_EQ(i + STARTER, detect_max_itid());
+    EXPECT_EQ(i+STARTER, itid);
+    EXPECT_EQ(i+STARTER, detect_max_itid());
   }
 
   // Return -1 if exceed total count of itid.
@@ -45,23 +48,24 @@ TEST(TestItid, Basic)
   EXPECT_EQ(INVALID_ITID, alloc_itid());
 
   // Maximum itid is 1024*64-1
-  EXPECT_EQ(1024 * 64 - 1, detect_max_itid());
+  EXPECT_EQ(1024*64-1, detect_max_itid());
 
   // Maximum itid changes if free the largest one.
-  free_itid(1024 * 64 - 1);
-  EXPECT_EQ(1024 * 64 - 2, detect_max_itid());
+  free_itid(1024*64-1);
+  EXPECT_EQ(1024*64-2, detect_max_itid());
 
   // Free itids and check maximum itid is right.
-  for (int i = 1024 * 64 - 2; i > 0; i--) {
+  for (int i = 1024*64-2; i > 0; i--) {
     free_itid(i);
-    EXPECT_EQ(i - 1, detect_max_itid());
+    EXPECT_EQ(i-1, detect_max_itid());
   }
 }
 
 TEST(TestItid, ThreadAllocFree)
 {
-  class Runnable : public lib::CoKThread {
-    void run(obsys::CThread*, void*) override
+  class Runnable
+      : public lib::Threads {
+    void run(obsys::CThread *, void *) override
     {
       EXPECT_LT(0, get_itid());
     }
@@ -77,8 +81,7 @@ TEST(TestItid, ThreadAllocFree)
   EXPECT_EQ(1, get_max_itid());
 }
 
-int64_t my_get_max_itid()
-{
+int64_t my_get_max_itid() {
   static __thread int64_t itid = 0;
   if (itid == 0) {
     itid++;
@@ -88,7 +91,8 @@ int64_t my_get_max_itid()
 
 TEST(TestItid, Perf)
 {
-  int64_t current = 0, previous = 0;
+  int64_t current = 0
+      , previous = 0;
   constexpr int64_t N = 1000000;
   {
     auto t1 = get_ticks();
@@ -112,10 +116,11 @@ TEST(TestItid, Perf)
   // more than 10% of previous version of this function which just
   // fetch a thread local variable.
   EXPECT_LE(static_cast<int64_t>((double)current * 0.9), previous)
-      << "  current: " << current << ", previous: " << previous << endl;
+      << "  current: " << current
+      << ", previous: " << previous << endl;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/engine/expr/ob_expr_uuid_short.h"
 #include "observer/ob_server_struct.h"
@@ -16,20 +17,24 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObExprUuidShort::ObExprUuidShort(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID_SHORT, N_UUID_SHORT, 0, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_UUID_SHORT, N_UUID_SHORT, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprUuidShort::~ObExprUuidShort()
-{}
+{
+}
 
 /**
  * Note:
- * The total number of serverids over(>=) 256 will not guarantee uniqueness,
- * but we will not report an error, because this is a undefined behavior in mysql.
+ * The total number of serverids over(>=) 256 will not guarantee uniqueness, 
+ * but we will not report an error, because this is a undefined behavior in mysql. 
  * In short, users should need to know this.
  */
 uint64_t ObExprUuidShort::generate_uuid_short()
@@ -45,15 +50,9 @@ uint64_t ObExprUuidShort::generate_uuid_short()
   return uuid_short;
 }
 
-int ObExprUuidShort::calc_result0(common::ObObj &result, common::ObExprCtx &expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  result.set_uint64(generate_uuid_short());
-  return ret;
-}
-
-int ObExprUuidShort::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
+int ObExprUuidShort::cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(expr_cg_ctx);
@@ -61,7 +60,9 @@ int ObExprUuidShort::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   return OB_SUCCESS;
 }
 
-int ObExprUuidShort::eval_uuid_short(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+int ObExprUuidShort::eval_uuid_short(const ObExpr &expr,
+                      ObEvalCtx &ctx,
+                      ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
@@ -70,5 +71,5 @@ int ObExprUuidShort::eval_uuid_short(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

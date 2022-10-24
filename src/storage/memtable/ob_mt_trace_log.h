@@ -10,21 +10,19 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_MT_TRACE_LOG_H_
-#define _OB_MT_TRACE_LOG_H_
-
 #include "share/ob_define.h"
 #include "lib/lock/ob_spin_lock.h"
 
-namespace oceanbase {
-namespace memtable {
-class ObMTTraceLog {
+namespace oceanbase
+{
+namespace memtable
+{
+class ObMTTraceLog
+{
 public:
   enum { TRACE_LOG_BUF_SIZE = 16L * 1024L };
-  ObMTTraceLog() : start_log_ts_(0), last_log_ts_(0), pos_(0)
-  {}
-  ~ObMTTraceLog()
-  {}
+  ObMTTraceLog(): start_log_ts_(0), last_log_ts_(0), pos_(0) {}
+  ~ObMTTraceLog() {}
   void reset()
   {
     start_log_ts_ = 0;
@@ -42,7 +40,7 @@ public:
     last_log_ts_ = cur_ts;
     return ret_ts;
   }
-  void fill(const char* format, ...) __attribute__((format(printf, 2, 3)))
+  void fill(const char *format, ...) __attribute__((format(printf, 2, 3)))
   {
     int tmp_err = 0;
     va_list ap;
@@ -60,17 +58,13 @@ public:
       va_end(ap);
     }
   }
-  const char* end_trace_log()
+  const char *end_trace_log()
   {
     last_log_ts_ = ::oceanbase::common::ObTimeUtility::current_time();
     fill(" | total_timeu=%ld", last_log_ts_ - start_log_ts_);
     return buf_;
   }
-  const char* get_trace_log()
-  {
-    return buf_;
-  }
-
+  const char *get_trace_log() { return buf_; }
 private:
   void try_fill_start_ts()
   {
@@ -83,11 +77,11 @@ private:
   }
   void force_flush()
   {
-    int64_t cur_ts = ::oceanbase::common::ObTimeUtility::current_time();
-    TRANS_LOG(INFO, "MT_TRACE[force_log]", "tlog", get_trace_log(), "timeu", cur_ts - start_log_ts_);
-    pos_ = 0;
+      int64_t cur_ts = ::oceanbase::common::ObTimeUtility::current_time();
+      TRANS_LOG(INFO, "MT_TRACE[force_log]", "tlog", get_trace_log(), "timeu", cur_ts - start_log_ts_);
+      pos_ = 0;
   }
-  int do_fill(const char* format, ...) __attribute__((format(printf, 2, 3)))
+  int do_fill(const char *format, ...) __attribute__((format(printf, 2, 3)))
   {
     int err = 0;
     va_list ap;
@@ -98,7 +92,7 @@ private:
     va_end(ap);
     return err;
   }
-  int do_fill(const char* format, va_list ap)
+  int do_fill(const char *format, va_list ap)
   {
     int err = 0;
     common::ObSpinLockGuard guard(lock_);
@@ -116,7 +110,6 @@ private:
     }
     return err;
   }
-
 private:
   common::ObSpinLock lock_;
   int64_t start_log_ts_;
@@ -125,8 +118,7 @@ private:
   char buf_[TRACE_LOG_BUF_SIZE];
 };
 #define MT_FILL_TRACE_LOG(tlog, fmt, ...) \
-  (tlog).fill(" | [%s] " fmt " u=%ld", __FUNCTION__, ##__VA_ARGS__, (tlog).update_ts())
+    (tlog).fill(" | [%s] " fmt " u=%ld", __FUNCTION__, ##__VA_ARGS__, (tlog).update_ts())
 
-};      // end namespace memtable
-};      // end namespace oceanbase
-#endif  //_OB_MT_TRACE_LOG_H_
+}; // end namespace memtable
+}; // end namespace oceanbase

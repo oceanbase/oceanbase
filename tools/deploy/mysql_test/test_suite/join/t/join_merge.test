@@ -20,6 +20,13 @@ delete from aa;
 insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
 delete from bb;
 insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
+--source mysql_test/include/minorfreeze.inc
+--real_sleep 10
+--source mysql_test/include/wait_minor_merge.inc
+--disable_query_log
+call dbms_stats.gather_table_stats('test','aa', method_opt=>'FOR ALL COLUMNS SIZE AUTO');
+call dbms_stats.gather_table_stats('test','bb', method_opt=>'FOR ALL COLUMNS SIZE AUTO');
+--enable_query_log
 --sleep 1
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
@@ -177,6 +184,7 @@ select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20
 drop table if exists t_r4_01_20;
 --enable_warnings
 
+## bug:https://aone.alibaba-inc.com/issue/9211556?spm=a2o8d.corp_prod_issue_list.0.0.25893050Y8aynZ&stat=1.5.38&toPage=1&versionId=1043693
 --disable_warnings
 drop table if exists t2, t7;
 --enable_warnings
@@ -246,6 +254,7 @@ explain select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c 
 select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 
 
+## bug: 9211556 end
 
 --echo ********** join condition 必须和 ordering 排序一致
 explain select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
@@ -272,6 +281,7 @@ select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t
 explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
 select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
 
+## misc bug 21243815
 --disable_warnings
 drop table if exists BB,CC;
 --enable_warnings
@@ -289,6 +299,49 @@ INSERT INTO CC VALUES ('x', 'r', 'v', 7, 8, 1, 't', 'j', 't') , (NULL, 'b', 'z',
 explain SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
 
 SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int);
+create table t2 (c1 int);
+insert into t1 values(1);
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+insert into t1 select * from t1;
+
+insert into t2 select * from t1;
+
+select count(*) from (select /*+leading(t1 t2) use_merge(t2)*/* from t1 where t1.c1 in (select * from t2));
+select count(*) from (select /*+leading(t1 t2) use_hash(t2)*/* from t1 where t1.c1 in (select * from t2));
+
+select count(*) from (select /*+leading(t1 t2) use_merge(t2)*/* from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1));
+select count(*) from (select /*+leading(t1 t2) use_hash(t2)*/* from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1));
+
+alter system set _rowsets_enabled = true;
+set ob_enable_plan_cache=0;
+
+select count(*) from (select /*+leading(t1 t2) use_merge(t2)*/* from t1 where t1.c1 in (select * from t2));
+select count(*) from (select /*+leading(t1 t2) use_hash(t2)*/* from t1 where t1.c1 in (select * from t2));
+
+select count(*) from (select /*+leading(t1 t2) use_merge(t2)*/* from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1));
+select count(*) from (select /*+leading(t1 t2) use_hash(t2)*/* from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1));
+
+set ob_enable_plan_cache=1;
+
+drop table t1;
+drop table t2;
 
 --disable_warnings
 drop table if exists t2, t7, t8, t9, BB, CC;

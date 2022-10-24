@@ -29,5 +29,34 @@ select @a:="10", @b:="1", @a > @b, @a < @b;
 select @a:=10,   @b:=2,   @a > @b, @a < @b;
 select @a:="10", @b:="2", @a > @b, @a < @b;
 
-sleep 2;
+--disable_warnings
+drop function if exists f1;
+drop function if exists f2;
+--enable_warnings
+create function f1(v1 int) returns year return v1;
+select f1(05);
+set @x = f1(05);
+select @x;
+drop function f1;
 
+create function f2(v1 int) returns time(6) return v1;
+select f2(12345);
+set @x = f2(12345);
+select @x;
+
+drop table t1;
+drop function f2;
+
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+create table t3(c1 int, c2 int);
+set @filterId = 1;
+insert into t1 select distinct c1, @filterId from t2 where c2 not in (select c2 from t3 where c1 = @filterId);
+
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings

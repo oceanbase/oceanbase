@@ -12,7 +12,6 @@
 
 #include <thread>
 #include "lib/hash/ob_link_hashmap.h"
-#include "lib/hash/ob_link_hashmap_with_hazard_value.h"
 #include "lib/hash/ob_hashutils.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_print_utils.h"
@@ -23,16 +22,13 @@ using namespace oceanbase;
 using namespace common;
 using namespace hash;
 
-class HashKey {
+class HashKey
+{
 public:
-  HashKey() : v_(0)
-  {}
-  HashKey(uint64_t v) : v_(v)
-  {}
-  HashKey(const HashKey& that) : v_(that.v_)
-  {}
-  int compare(const HashKey& that)
-  {
+  HashKey(): v_(0) {}
+  HashKey(uint64_t v): v_(v) {}
+  HashKey(const HashKey& that): v_(that.v_) {}
+  int compare(const HashKey& that) {
     int ret = 0;
     if (v_ > that.v_) {
       ret = 1;
@@ -41,21 +37,16 @@ public:
     }
     return ret;
   }
-  uint64_t hash() const
-  {
-    return v_;
-  }
+  uint64_t hash() const { return v_; }
   uint64_t v_;
 };
 
-class HashValue : public LinkHashValue<HashKey> {
+class HashValue : public LinkHashValue<HashKey>
+{
 public:
-  HashValue() : v_(0)
-  {}
-  HashValue(uint64_t v) : v_(v)
-  {}
-  HashValue(const HashValue& that) : v_(that.v_)
-  {}
+  HashValue(): v_(0) {}
+  HashValue(uint64_t v): v_(v) {}
+  HashValue(const HashValue& that): v_(that.v_) {}
   uint64_t v_;
 };
 
@@ -68,22 +59,18 @@ ObMemAttr attr(1001, ObNewModIds::OB_MEMSTORE);
 
 static int64_t STEP = 0;
 
-class TestAllocHandle {
+class TestAllocHandle
+{
   typedef LinkHashNode<HashKey> Node;
-
 public:
-  TestAllocHandle() : is_inited_(true)
-  {}
-  ~TestAllocHandle()
-  {
-    ATOMIC_STORE(&is_inited_, false);
-  }
-  HashValue *alloc_value()
+  TestAllocHandle() : is_inited_(true) {}
+  ~TestAllocHandle() { ATOMIC_STORE(&is_inited_, false); }
+  HashValue* alloc_value()
   {
     abort_unless(ATOMIC_LOAD(&is_inited_) == true);
     ATOMIC_INC(&value_alloc);
     HashValue* value = (HashValue*)ob_malloc(sizeof(HashValue), attr);
-    new (value) HashValue();
+    new(value) HashValue();
     return value;
   }
   void free_value(HashValue* val)
@@ -99,7 +86,7 @@ public:
     UNUSED(val);
     ATOMIC_INC(&node_alloc);
     Node* node = (Node*)ob_malloc(sizeof(Node), attr);
-    new (node) Node();
+    new(node) Node();
     return node;
   }
   void free_node(Node* node)
@@ -113,16 +100,15 @@ public:
     node->~Node();
     ob_free(node);
   }
-
 private:
   bool is_inited_;
 };
 
-class AtomicGetFunctor {
+class AtomicGetFunctor
+{
 public:
-  explicit AtomicGetFunctor() : ret_val_(0)
-  {}
-  void operator()(const HashKey& key, HashValue* value)
+  explicit AtomicGetFunctor() : ret_val_(0) {}
+  void operator()(const HashKey &key, HashValue *value)
   {
     UNUSED(key);
     ret_val_ = value->v_;
@@ -130,12 +116,7 @@ public:
   uint64_t ret_val_;
 };
 
-static bool print(HashKey& key, HashValue* value)
-{
-  UNUSED(key);
-  _OB_LOG(INFO, "key=%lu val=%lu", key.v_, value->v_);
-  return true;
-}
+static bool print(HashKey &key, HashValue *value) { UNUSED(key); _OB_LOG(INFO, "key=%lu val=%lu", key.v_, value->v_); return true; }
 
 typedef ObLinkHashMap<HashKey, HashValue, TestAllocHandle> Hashmap;
 
@@ -143,7 +124,7 @@ TEST(TestObHashMap, Feature)
 {
   Hashmap hm;
   HashKey key;
-  HashValue* val_ptr = nullptr;
+  HashValue *val_ptr = nullptr;
 
   EXPECT_EQ(OB_SUCCESS, hm.init());
 
@@ -202,7 +183,7 @@ TEST(TestObHashMap, Feature)
   key.v_ = 2;
   val_ptr = nullptr;
   EXPECT_EQ(OB_SUCCESS, hm.get(key, val_ptr));
-  val_ptr->v_ += 1;
+  val_ptr->v_ +=1 ;
   hm.revert(val_ptr);
   // 2:1, 3:1, 4:1
 
@@ -242,7 +223,7 @@ TEST(TestObHashMap, Feature)
 TEST(TestObHashMap, Stress)
 {
   constexpr int64_t THREAD_COUNT = 8;
-  constexpr int64_t DATA_COUNT_PER_THREAD = 8192;
+  constexpr int64_t DATA_COUNT_PER_THREAD = 2048;
 
   Hashmap hm(1024);
   // 0 for not inserted, 1 for inserted, 2 for inserted but deleted soon
@@ -256,7 +237,7 @@ TEST(TestObHashMap, Stress)
   for (auto i = 0; i < THREAD_COUNT; ++i) {
     insert_threads[i] = std::thread([&, i]() {
       HashKey key;
-      HashValue* val_ptr = nullptr;
+      HashValue *val_ptr = nullptr;
       for (auto j = 0; j < DATA_COUNT_PER_THREAD; ++j) {
         key.v_ = j + i * DATA_COUNT_PER_THREAD;
         EXPECT_EQ(OB_SUCCESS, hm.create(key, val_ptr));
@@ -290,7 +271,7 @@ TEST(TestObHashMap, Stress)
     get_threads[i] = std::thread([&, i]() {
       int ret = OB_SUCCESS;
       HashKey key;
-      HashValue* val_ptr = nullptr;
+      HashValue *val_ptr = nullptr;
       for (auto j = 0; j < DATA_COUNT_PER_THREAD; ++j) {
         key.v_ = j + i * DATA_COUNT_PER_THREAD;
         if (OB_SUCC(hm.get(key, val_ptr))) {
@@ -345,7 +326,7 @@ TEST(TestObHashMap, Stress)
 
 TEST(TestObHashMap, Retire)
 {
-  std::thread *t;
+  std::thread* t;
   {
     Hashmap A;
     HashKey key;
@@ -365,8 +346,7 @@ TEST(TestObHashMap, Retire)
       EXPECT_EQ(OB_SUCCESS, B.create(key, val_ptr));
       B.revert(val_ptr);
     });
-    while (ATOMIC_LOAD(&STEP) != 2)
-      ;
+    while(ATOMIC_LOAD(&STEP) != 2);
     // ~A()
   }
   t->join();
@@ -375,7 +355,7 @@ TEST(TestObHashMap, Retire)
 
 int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   oceanbase::common::ObLogger::get_logger().set_file_name("test_link_hashmap.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   return RUN_ALL_TESTS();

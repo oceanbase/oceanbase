@@ -3,8 +3,6 @@ explain_protocol: 0
 
 alter system set enable_async_syslog = false;
 
-set @@ob_enable_plan_cache = 0;
-set @@ob_log_level='debug';
 
 drop view if exists v1;
 create view v1 as select connection_id() from dual limit 10;
@@ -63,13 +61,13 @@ desc v1;
 | sysdate(3) | datetime | NO   |     |         |       |
 +------------+----------+------+-----+---------+-------+
 drop view v1;
-create view v1 as select cur_date() from dual limit 10;
+create view v1 as select curdate() from dual limit 10;
 desc v1;
-+------------+------+------+-----+---------+-------+
-| Field      | Type | Null | Key | Default | Extra |
-+------------+------+------+-----+---------+-------+
-| cur_date() | date | NO   |     |         |       |
-+------------+------+------+-----+---------+-------+
++-----------+------+------+-----+---------+-------+
+| Field     | Type | Null | Key | Default | Extra |
++-----------+------+------+-----+---------+-------+
+| curdate() | date | NO   |     |         |       |
++-----------+------+------+-----+---------+-------+
 drop view v1;
 create view v1 as select curtime() from dual limit 10;
 desc v1;
@@ -185,10 +183,10 @@ desc v1;
 drop view v1;
 create view v1 as select version() from dual limit 10;
 desc v1;
-+-----------+-------------+------+-----+---------+-------+
-| Field     | Type        | Null | Key | Default | Extra |
-+-----------+-------------+------+-----+---------+-------+
-| version() | varchar(18) | NO   |     |         |       |
-+-----------+-------------+------+-----+---------+-------+
++-----------+---------------+------+-----+---------+-------+
+| Field     | Type          | Null | Key | Default | Extra |
++-----------+---------------+------+-----+---------+-------+
+| version() | varchar(4096) | NO   |     |         |       |
++-----------+---------------+------+-----+---------+-------+
 drop view v1;
 

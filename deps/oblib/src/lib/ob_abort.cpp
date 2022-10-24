@@ -10,9 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_abort.h"
+#include <lib/ob_abort.h>
 
-void ob_abort(void) __THROW
+void ob_abort (void) __THROW
 {
   abort();
 }

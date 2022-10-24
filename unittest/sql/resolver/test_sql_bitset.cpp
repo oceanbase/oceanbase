@@ -19,13 +19,13 @@ using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 using namespace oceanbase;
 
-class TestSqlBitSet : public ::testing::Test {
+class TestSqlBitSet: public ::testing::Test
+{
 public:
   TestSqlBitSet();
   virtual ~TestSqlBitSet();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlBitSet);
 };
@@ -150,7 +150,7 @@ TEST_F(TestSqlBitSet, do_mask)
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(50));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(100));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(111));
-  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(6, 101));
+  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(6,101));
   ASSERT_TRUE(bs.has_member(50));
   ASSERT_TRUE(bs.has_member(100));
   ASSERT_TRUE(!bs.has_member(5));
@@ -174,9 +174,9 @@ TEST_F(TestSqlBitSet, set_operation)
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(50));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(100));
   ASSERT_TRUE(OB_SUCCESS == bs.add_member(111));
-  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(5, 101));
+  ASSERT_TRUE(OB_SUCCESS == bs.do_mask(5,101));
 
-  // is_superset && is_subset
+  //is_superset && is_subset
   ObSqlBitSet<16> bs1;
   ASSERT_TRUE(bs.is_superset(bs1));
   ASSERT_TRUE(bs1.is_subset(bs));
@@ -332,23 +332,21 @@ TEST_F(TestSqlBitSet, to_array)
   ASSERT_EQ(111, arr.at(3));
 }
 
-TestSqlBitSet::TestSqlBitSet()
-{}
-TestSqlBitSet::~TestSqlBitSet()
-{}
-void TestSqlBitSet::SetUp()
-{}
-void TestSqlBitSet::TearDown()
-{}
+TestSqlBitSet::TestSqlBitSet() {}
+TestSqlBitSet::~TestSqlBitSet() {}
+void TestSqlBitSet::SetUp() {}
+void TestSqlBitSet::TearDown() {}
 
-int main(int argc, char** argv)
+
+
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   int ret = 0;
   ContextParam param;
-  param.set_mem_attr(1001, 0, ObCtxIds::WORK_AREA).set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
-  CREATE_WITH_TEMP_CONTEXT(param)
-  {
+  param.set_mem_attr(1001, "SqlBitset", ObCtxIds::WORK_AREA)
+    .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
+  CREATE_WITH_TEMP_CONTEXT(param) {
     ret = RUN_ALL_TESTS();
   }
   return ret;

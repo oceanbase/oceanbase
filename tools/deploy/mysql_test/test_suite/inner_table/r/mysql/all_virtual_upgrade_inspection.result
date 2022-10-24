@@ -8,7 +8,4 @@ zone_check	succeed
 sys_stat_check	succeed
 sys_param_check	succeed
 sys_table_schema_check	succeed
-STATISTIC_PRIMARY_ZONE_ENTITY_COUNT	succeed
-SCHEMA_SPLIT_V2	succeed
-SCHEMA_REVISE	succeed
 all_check	succeed

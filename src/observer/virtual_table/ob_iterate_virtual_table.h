@@ -16,54 +16,50 @@
 #include "ob_agent_table_base.h"
 #include "lib/string/ob_sql_string.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 // Iterate tables of all tenants
-class ObIterateVirtualTable : public ObAgentTableBase {
+class ObIterateVirtualTable : public ObAgentTableBase
+{
 public:
   ObIterateVirtualTable();
   virtual ~ObIterateVirtualTable();
 
-  int init(const uint64_t base_table_id, const bool record_real_tenant_id,
-      const share::schema::ObTableSchema* index_table, const ObVTableScanParam& scan_param);
+  int init(const uint64_t base_table_id,
+           const share::schema::ObTableSchema *index_table,
+           const ObVTableScanParam &scan_param);
 
   virtual int do_open() override;
-  virtual int inner_get_next_row(common::ObNewRow*& row) override;
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
   virtual int inner_close() override;
-
-  int set_column_name_with_tenant_id(const char* column_name);
-
 private:
-  virtual int init_non_exist_map_item(MapItem& item, const share::schema::ObColumnSchemaV2& col) override;
+  virtual int init_non_exist_map_item(MapItem &item,
+      const share::schema::ObColumnSchemaV2 &col) override;
 
-  virtual int setup_inital_rowkey_condition(common::ObSqlString& cols, common::ObSqlString& vals) override;
-  virtual int add_extra_condition(common::ObSqlString& sql) override;
+  virtual int setup_inital_rowkey_condition(
+      common::ObSqlString &cols, common::ObSqlString &vals);
+  virtual int add_extra_condition(common::ObSqlString &sql) override;
 
-  bool check_tenant_in_range(const uint64_t tenant_id, const common::ObNewRange& range);
+  bool check_tenant_in_range(const uint64_t tenant_id, const common::ObNewRange &range);
   int next_tenant();
-  bool is_real_tenant_id() const;
 
-  virtual int change_column_value(const MapItem& item, ObIAllocator& allocator, ObObj& new_value) override;
+  virtual int change_column_value(const MapItem &item,
+                                  ObIAllocator &allocator,
+                                  ObObj &new_value) override;
 
-  virtual int deal_with_column_with_tenant_id(
-      const MapItem& item, ObIAllocator& allocator, bool decode, ObObj& new_value);
-
-  int str_to_int(const ObString& str, int64_t& value);
+  int str_to_int(const ObString &str, int64_t &value);
 
 private:
   int64_t tenant_idx_;
   uint64_t cur_tenant_id_;
-  // For sys table under user tenant, record real tenant id (effective_tenant_id()) in
-  // tenant_id field or zero. SYS tenant always record real tenant id (OB_SYS_TENANT_ID).
-  bool record_real_tenant_id_;
   common::ObArray<uint64_t, common::ObWrapperAllocator> tenants_;
   common::ObSqlString sql_;
-  static const int64_t DEFAULT_COLUMN_NUM = 5;
-  ObSEArray<ObString, DEFAULT_COLUMN_NUM> columns_with_tenant_id_;
 };
 
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_VIRTUAL_TABLE_OB_ITERATE_VIRTUAL_TABLE_H_
+#endif // OCEANBASE_VIRTUAL_TABLE_OB_ITERATE_VIRTUAL_TABLE_H_

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for func json_value.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_VALUE_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_VALUE_H_
 
@@ -24,6 +23,7 @@ namespace oceanbase
 {
 namespace sql
 {
+
 class 
 ObExprJsonValue : public ObFuncExprOperator
 {
@@ -35,11 +35,6 @@ public:
                                 int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
-  virtual int calc_resultN(common::ObObj& result,
-                           const common::ObObj* objs_stack,
-                           int64_t param_num,
-                           common::ObExprCtx& expr_ctx)
-                           const override;
   static int eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -124,7 +119,7 @@ private:
                          common::ObCollationType dst_coll_type,
                          ObDatum &res);
   template<typename Obj>
-  static bool try_set_error_val(Obj &res, int &ret, uint8_t error_type, Obj *error_val);
+  static bool try_set_error_val(Obj &res, int &ret, uint8_t error_type, Obj *error_val, const char *type = NULL);
   // new sql engine
   static inline void set_val(ObDatum &res, ObDatum *val)
   { res.set_datum(*val); }
@@ -138,14 +133,6 @@ private:
   const static uint8_t OB_JSON_ON_RESPONSE_NULL     = 1;
   const static uint8_t OB_JSON_ON_RESPONSE_DEFAULT  = 2;
   const static uint8_t OB_JSON_ON_RESPONSE_IMPLICIT = 3;
-  int get_on_empty_or_error_old(const ObObj *params,
-                                ObExprCtx& expr_ctx,
-                                const ObObjType dst_type,
-                                uint8_t index,
-                                bool &is_cover_by_error,
-                                const ObAccuracy &accuracy,
-                                uint8 &type,
-                                ObObj *default_value) const;
   static int get_on_empty_or_error(const ObExpr &expr,
                                    ObEvalCtx &ctx,
                                    uint8_t index,

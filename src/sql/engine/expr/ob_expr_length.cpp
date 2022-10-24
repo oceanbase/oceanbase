@@ -17,32 +17,38 @@
 #include <string.h>
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprLength::ObExprLength(ObIAllocator& alloc)
+ObExprLength::ObExprLength(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_LENGTH, N_LENGTH, 1, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprLength::~ObExprLength()
-{}
+{
+}
 
-int ObExprLength::calc_result_type1(ObExprResType& type, ObExprResType& text, ObExprTypeCtx& type_ctx) const
+int ObExprLength::calc_result_type1(ObExprResType &type, ObExprResType &text,
+                                    ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = type_ctx.get_session();
+  const ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    if (share::is_oracle_mode()) {
-      const ObAccuracy& acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[common::ORACLE_MODE][common::ObNumberType];
+    if (lib::is_oracle_mode()) {
+      const ObAccuracy &acc =
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[common::ORACLE_MODE][common::ObNumberType];
       type.set_number();
       type.set_scale(acc.get_scale());
       type.set_precision(acc.get_precision());
@@ -62,41 +68,7 @@ int ObExprLength::calc_result_type1(ObExprResType& type, ObExprResType& text, Ob
   return ret;
 }
 
-int ObExprLength::calc(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObObjTypeClass type_class = ob_obj_type_class(text.get_type());
-  if (!ob_is_castable_type_class(type_class)) {
-    result.set_null();
-  } else {
-    if (share::is_oracle_mode()) {
-      ObString m_text = text.get_string();
-      size_t c_len =
-          ObCharset::strlen_char(text.get_collation_type(), m_text.ptr(), static_cast<int64_t>(m_text.length()));
-      number::ObNumber num;
-      if (OB_FAIL(num.from(static_cast<int64_t>(c_len), *(expr_ctx.calc_buf_)))) {
-        LOG_WARN("copy number fail", K(ret));
-      } else {
-        result.set_number(num);
-      }
-    } else {
-      TYPE_CHECK(text, ObVarcharType);
-      ObString m_text = text.get_string();
-      result.set_int(static_cast<int64_t>(m_text.length()));
-    }
-  }
-  UNUSED(expr_ctx);
-  return ret;
-}
-
-int ObExprLength::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ret = calc(result, text, expr_ctx);
-  return ret;
-}
-
-int ObExprLength::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprLength::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -113,7 +85,7 @@ int ObExprLength::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
 
     if (!ob_is_castable_type_class(type_class)) {
       rt_expr.eval_func_ = ObExprLength::calc_null;
-    } else if (share::is_oracle_mode()) {
+    } else if (lib::is_oracle_mode()) {
       rt_expr.eval_func_ = ObExprLength::calc_oracle_mode;
     } else {
       CK(ObVarcharType == text_type);
@@ -123,25 +95,25 @@ int ObExprLength::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
   return ret;
 }
 
-int ObExprLength::calc_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprLength::calc_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   UNUSED(expr);
   UNUSED(ctx);
   expr_datum.set_null();
   return OB_SUCCESS;
 }
-int ObExprLength::calc_oracle_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprLength::calc_oracle_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* text_datum = NULL;
+  ObDatum *text_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, text_datum))) {
     LOG_WARN("eval param value failed", K(ret));
   } else if (text_datum->is_null()) {
     expr_datum.set_null();
   } else {
     ObString m_text = text_datum->get_string();
-    size_t c_len = ObCharset::strlen_char(
-        expr.args_[0]->datum_meta_.cs_type_, m_text.ptr(), static_cast<int64_t>(m_text.length()));
+    size_t c_len = ObCharset::strlen_char(expr.args_[0]->datum_meta_.cs_type_, m_text.ptr(),
+                                          static_cast<int64_t>(m_text.length()));
     ObNumStackOnceAlloc tmp_alloc;
     number::ObNumber num;
     if (OB_FAIL(num.from(static_cast<int64_t>(c_len), tmp_alloc))) {
@@ -152,10 +124,10 @@ int ObExprLength::calc_oracle_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
   }
   return ret;
 }
-int ObExprLength::calc_mysql_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprLength::calc_mysql_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* text_datum = NULL;
+  ObDatum *text_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, text_datum))) {
     LOG_WARN("eval param value failed", K(ret));
   } else if (text_datum->is_null()) {
@@ -166,5 +138,5 @@ int ObExprLength::calc_mysql_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

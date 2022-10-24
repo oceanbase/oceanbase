@@ -15,10 +15,11 @@
 
 #include "lib/ob_define.h"
 #include "lib/atomic/ob_atomic.h"
-#include "lib/coro/routine.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 // Small spin lock.
 // A small spin lock that uses only 1 bit.
@@ -57,35 +58,30 @@ namespace common {
 //    ptr_lock.unlock();
 //
 
-template <typename LockType>
-class ObSmallSpinLockGuard;
+template <typename LockType> class ObSmallSpinLockGuard;
 
-template <typename IntType, int64_t LockBit = 0, int64_t MaxSpin = 500, int64_t USleep = 100>
-class ObSmallSpinLock {
+template <typename IntType,
+          int64_t LockBit = 0,
+          int64_t MaxSpin = 500,
+          int64_t USleep = 100>
+class ObSmallSpinLock
+{
 public:
   typedef ObSmallSpinLock<IntType, LockBit, MaxSpin, USleep> MyType;
   typedef ObSmallSpinLockGuard<MyType> Guard;
-  typedef ObSmallSpinLockGuard<MyType> guard;  // Adapt to old code.
+  typedef ObSmallSpinLockGuard<MyType> guard; // Adapt to old code.
 public:
   // Constructor.
   // Usage I: To build a lock from nothing.
   // Non-lock bits are init to default value.
-  ObSmallSpinLock() : lock_()
-  {
-    init();
-  }
+  ObSmallSpinLock() : lock_() { init(); }
   // No virtual so no virtual function table.
-  ~ObSmallSpinLock()
-  {}
+  ~ObSmallSpinLock() { }
 
   // Converter.
-  // Usage II: Use 1 bit in an integer as a lock.
+// Usage II: Use 1 bit in an integer as a lock.
   // Remember to init() it before use.
-  static MyType& AsLock(IntType& val)
-  {
-    return reinterpret_cast<MyType&>(val);
-  }
-
+  static MyType& AsLock(IntType &val) { return reinterpret_cast<MyType&>(val); }
 public:
   // Init.
   // Init lock bit. Other bits of IntType unchanged.
@@ -96,7 +92,7 @@ public:
 
   // Init with value.
   // Init lock bit. Other bits equal to initial value.
-  void init(const IntType& val)
+  void init(const IntType &val)
   {
     init();
     set_data(val);
@@ -123,7 +119,7 @@ public:
       // Sleep when it exceeds spin limit.
       if (MaxSpin <= (cnt++)) {
         cnt = 0;
-        lib::this_routine::usleep(USleep);
+        ::usleep(USleep);
       }
       PAUSE();
     }
@@ -151,7 +147,7 @@ public:
   }
 
   // Set non-lock bits of this lock.
-  void set_data(const IntType& val)
+  void set_data(const IntType &val)
   {
     lock_ = static_cast<IntType>((val & (~LOCK_MASK)) | (lock_ & (LOCK_MASK)));
   }
@@ -162,31 +158,26 @@ private:
 };
 
 // Lock guard.
-template <typename LockType>
-class ObSmallSpinLockGuard {
+template<typename LockType>
+class ObSmallSpinLockGuard
+{
 public:
-  explicit ObSmallSpinLockGuard(LockType& lock) : lock_(&lock)
-  {
-    lock_->lock();
-  }
-  ~ObSmallSpinLockGuard()
-  {
-    lock_->unlock();
-  }
-
+  explicit ObSmallSpinLockGuard(LockType &lock) : lock_(&lock) { lock_->lock(); }
+  ~ObSmallSpinLockGuard() { lock_->unlock(); }
 private:
-  LockType* lock_;
+  LockType *lock_;
   DISALLOW_COPY_AND_ASSIGN(ObSmallSpinLockGuard);
 };
 
 // Byte lock.
-typedef ObSmallSpinLock<uint8_t, 0> ObByteLock;  // 1 byte lock.
+typedef ObSmallSpinLock<uint8_t, 0> ObByteLock; // 1 byte lock.
 typedef ObSmallSpinLockGuard<ObByteLock> ObByteLockGuard;
 
 // Ptr spin lock.
 // A wrapper of small spin lock that uses the last bit of a pointer as lock.
 template <typename T>
-struct ObPtrSpinLock {
+struct ObPtrSpinLock
+{
   // Use last bit in T*.
   typedef uint64_t ValType;
   ObSmallSpinLock<ValType, 0> lock_;
@@ -196,7 +187,7 @@ struct ObPtrSpinLock {
   void init()
   {
     lock_.init();
-    lock_.set_data(0);  // 0 as NULL.
+    lock_.set_data(0); // 0 as NULL.
   }
 
   bool try_lock()
@@ -223,7 +214,7 @@ struct ObPtrSpinLock {
 
   // Set ptr.
   // Ptr can't be an 'odd' pointer.
-  void set_ptr(const T* ptr)
+  void set_ptr(const T *ptr)
   {
     ValType val = reinterpret_cast<ValType>(ptr);
     lock_.set_data(val);
@@ -232,23 +223,17 @@ struct ObPtrSpinLock {
 
 // Lock guard.
 template <typename LockType>
-class ObPtrSpinLockGuard {
+class ObPtrSpinLockGuard
+{
 public:
-  explicit ObPtrSpinLockGuard(LockType& lock) : lock_(&lock)
-  {
-    lock_->lock();
-  }
-  ~ObPtrSpinLockGuard()
-  {
-    lock_->unlock();
-  }
-
+  explicit ObPtrSpinLockGuard(LockType &lock) : lock_(&lock) { lock_->lock(); }
+  ~ObPtrSpinLockGuard() { lock_->unlock(); }
 private:
-  LockType* lock_;
+  LockType *lock_;
   DISALLOW_COPY_AND_ASSIGN(ObPtrSpinLockGuard);
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_LIB_LOCK_OB_SMALL_LOCK_
+#endif // OCEANBASE_LIB_LOCK_OB_SMALL_LOCK_

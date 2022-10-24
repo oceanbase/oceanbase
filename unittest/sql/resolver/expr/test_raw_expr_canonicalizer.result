@@ -21,11 +21,9 @@ not (10 > 5 and 100 < 9)
   },
   "expr_info": [
     "IS_OR",
-    "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
     "CNT_CONST",
-    "CNT_OR",
-    "CNT_CALCULABLE_EXPR"
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -53,10 +51,8 @@ not (10 > 5 and 100 < 9)
         }
       },
       "expr_info": [
-        "IS_CALCULABLE_EXPR",
         "IS_CONST_EXPR",
-        "CNT_CONST",
-        "CNT_CALCULABLE_EXPR"
+        "CNT_CONST"
       ],
       "rel_id": [
       ],
@@ -146,10 +142,8 @@ not (10 > 5 and 100 < 9)
         }
       },
       "expr_info": [
-        "IS_CALCULABLE_EXPR",
         "IS_CONST_EXPR",
-        "CNT_CONST",
-        "CNT_CALCULABLE_EXPR"
+        "CNT_CONST"
       ],
       "rel_id": [
       ],
@@ -289,8 +283,13 @@ not not a > b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -332,8 +331,13 @@ not not a > b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     }
   ]
 }
@@ -406,8 +410,13 @@ not a > b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -449,8 +458,13 @@ not a > b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     }
   ]
 }
@@ -523,8 +537,13 @@ not a = b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -566,8 +585,13 @@ not a = b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     }
   ]
 }
@@ -640,8 +664,13 @@ not a < b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -683,8 +712,13 @@ not a < b
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     }
   ]
 }
@@ -758,8 +792,13 @@ not a is true
       "enum_set_values": [
       ],
       "is_lob_column":false,
+      "is_joined_dup_column":false,
       "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "is_hidden":false,
+      "from_alias_table":false,
+      "is_rowkey_column":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false
     },
      {
       "item_type":"T_BOOL",
@@ -825,7 +864,7 @@ not a is true
 }
 not a between 1 and 100
 {
-  "item_type":"T_OP_NOT_BTW",
+  "item_type":"T_OP_OR",
   "result_type": {
     "meta": {
       "type":"",
@@ -845,8 +884,10 @@ not a between 1 and 100
     }
   },
   "expr_info": [
+    "IS_OR",
     "CNT_CONST",
-    "CNT_COLUMN"
+    "CNT_COLUMN",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -854,7 +895,7 @@ not a between 1 and 100
   ],
   "children": [
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_LT",
       "result_type": {
         "meta": {
           "type":"",
@@ -874,42 +915,109 @@ not a between 1 and 100
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_RANGE_COND"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        }
+      ]
     },
      {
-      "item_type":"T_INT",
+      "item_type":"T_OP_GT",
       "result_type": {
         "meta": {
-          "type":"BIGINT",
+          "type":"",
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
         "accuracy": {
-          "length":1,
-          "precision":1,
-          "scale":0
+          "length":-1,
+          "precision":-1,
+          "scale":-1
         },
-        "flag":1,
+        "flag":0,
         "calc_type": {
           "type":"NULL",
           "collation":"invalid_type",
@@ -917,44 +1025,94 @@ not a between 1 and 100
         }
       },
       "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_RANGE_COND"
       ],
       "rel_id": [
       ],
-      "value": {
-        "BIGINT":1
-      }
-    },
-     {
-      "item_type":"T_INT",
-      "result_type": {
-        "meta": {
-          "type":"BIGINT",
-          "collation":"binary",
-          "coercibility":"NUMERIC"
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
         },
-        "accuracy": {
-          "length":3,
-          "precision":3,
-          "scale":0
-        },
-        "flag":1,
-        "calc_type": {
-          "type":"NULL",
-          "collation":"invalid_type",
-          "coercibility":"INVALID"
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":3,
+              "precision":3,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":100
+          }
         }
-      },
-      "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
-      ],
-      "rel_id": [
-      ],
-      "value": {
-        "BIGINT":100
-      }
+      ]
     }
   ]
 }
@@ -980,10 +1138,8 @@ not a between 1 and 100
     }
   },
   "expr_info": [
-    "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
-    "CNT_CONST",
-    "CNT_CALCULABLE_EXPR"
+    "CNT_CONST"
   ],
   "rel_id": [
   ],
@@ -1164,10 +1320,8 @@ not a between 1 and 100
     }
   },
   "expr_info": [
-    "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
-    "CNT_CONST",
-    "CNT_CALCULABLE_EXPR"
+    "CNT_CONST"
   ],
   "rel_id": [
   ],
@@ -1348,11 +1502,9 @@ not a between 1 and 100
     }
   },
   "expr_info": [
-    "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
     "CNT_CONST",
-    "CNT_OR",
-    "CNT_CALCULABLE_EXPR"
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -1411,11 +1563,9 @@ not a between 1 and 100
       },
       "expr_info": [
         "IS_OR",
-        "IS_CALCULABLE_EXPR",
         "IS_CONST_EXPR",
         "CNT_CONST",
-        "CNT_OR",
-        "CNT_CALCULABLE_EXPR"
+        "CNT_OR"
       ],
       "rel_id": [
       ],
@@ -1548,7 +1698,7 @@ not(not(a))
       ],
       "children": [
          {
-          "item_type":"T_REF_COLUMN",
+          "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
               "type":"",
@@ -1568,27 +1718,63 @@ not(not(a))
             }
           },
           "expr_info": [
-            "IS_COLUMN",
-            "CNT_COLUMN"
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
-          "database_name":"",
-          "table_name":"",
-          "synonym_name":"",
-          "synonym_db_name":"",
-          "column_name":"",
-          "expr_level":-1,
           "expr_levels": [
           ],
-          "column_flags":0,
-          "enum_set_values": [
-          ],
-          "is_lob_column":false,
-          "is_unpivot_mocked_column":false,
-          "is_hidden":false
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":-1,
+              "column_id":-1,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"",
+              "expr_level":-1,
+              "expr_levels": [
+              ],
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false
+            }
+          ]
         }
       ]
     }
@@ -1657,7 +1843,7 @@ A or (A And B) or (A And C)
       }
     },
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1677,27 +1863,63 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     }
   ]
 }
@@ -1731,7 +1953,7 @@ A or (A And B) or (A And C)
   ],
   "children": [
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1751,30 +1973,66 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     },
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1794,27 +2052,63 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     }
   ]
 }
@@ -1848,7 +2142,7 @@ A or (A And B) or (A And C)
   ],
   "children": [
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1868,30 +2162,66 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     },
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1911,27 +2241,63 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     }
   ]
 }
@@ -1965,7 +2331,7 @@ A or (A And B) or (A And C)
   ],
   "children": [
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -1985,30 +2351,66 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     },
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -2028,30 +2430,66 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     },
      {
-      "item_type":"T_REF_COLUMN",
+      "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
           "type":"",
@@ -2071,27 +2509,63 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
-        "IS_COLUMN",
-        "CNT_COLUMN"
+        "CNT_COLUMN",
+        "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
-      "database_name":"",
-      "table_name":"",
-      "synonym_name":"",
-      "synonym_db_name":"",
-      "column_name":"",
-      "expr_level":-1,
       "expr_levels": [
       ],
-      "column_flags":0,
-      "enum_set_values": [
-      ],
-      "is_lob_column":false,
-      "is_unpivot_mocked_column":false,
-      "is_hidden":false
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_joined_dup_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false,
+          "from_alias_table":false,
+          "is_rowkey_column":false,
+          "is_unique_key_column":false,
+          "is_mul_key_column":false
+        }
+      ]
     }
   ]
 }

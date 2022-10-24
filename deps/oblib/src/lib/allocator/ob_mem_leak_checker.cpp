@@ -17,6 +17,7 @@ namespace oceanbase
 {
 namespace common
 {
+lib::ObSimpleRateLimiter ObMemLeakChecker::rl_ = {INT64_MAX};
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

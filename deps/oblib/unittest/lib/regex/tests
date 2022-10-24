@@ -284,7 +284,7 @@ a[[:alph:]]	&C	ECTYPE
 a[[:alphabet:]]	&C	ECTYPE
 [[:alnum:]]+	-	-%@a0X-	a0X
 [[:alpha:]]+	-	-%@aX0-	aX
-# In the character set utf8mb4_general_ci,'\t' is not [:blank:], so only SS is adapted here, not T
+# 在字符集utf8mb4_general_ci中，'\t'不是[:blank:]，因此这里只适配SS，不适配T
 #[[:blank:]]+	-	aSSTb	SST
 [[:blank:]]+	-	aSSTb	SS
 [[:cntrl:]]+	-	aNTb	NT

@@ -15,48 +15,62 @@
 #include "lib/container/ob_array.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 struct JoinedTable;
 class ObDMLResolver;
 class ObAggFunRawExpr;
 class ObSelectResolver;
 class ObSelectStmt;
-class ObAggrExprPushUpAnalyzer {
+class ObAggrExprPushUpAnalyzer
+{
 public:
-  ObAggrExprPushUpAnalyzer(ObSelectResolver& cur_resolver)
-      : aggr_columns_checker_(aggr_columns_), level_exprs_checker_(level_exprs_), cur_resolver_(cur_resolver)
-  {}
-  ~ObAggrExprPushUpAnalyzer()
-  {}
+  ObAggrExprPushUpAnalyzer(ObSelectResolver &cur_resolver)
+    : cur_level_(-1),
+      has_cur_layer_column_(false),
+      level_exprs_checker_(level_exprs_),
+      cur_resolver_(cur_resolver) {}
+  ~ObAggrExprPushUpAnalyzer() {}
 
-  int analyze_and_push_up_aggr_expr(ObAggFunRawExpr* aggr_expr, ObAggFunRawExpr*& final_aggr);
-
+  int analyze_and_push_up_aggr_expr(ObRawExprFactory &expr_factory,
+                                    ObAggFunRawExpr *aggr_expr,
+                                    ObRawExpr *&final_aggr);
 private:
-  int analyze_aggr_param_exprs(common::ObIArray<ObRawExpr*>& param_exprs, ObExprLevels& aggr_expr_levels);
-  int analyze_aggr_param_expr(ObRawExpr*& param_expr, ObExprLevels& aggr_expr_levels);
-  int analyze_child_stmt(ObSelectStmt* child_stmt, ObExprLevels& aggr_expr_levels);
-  int analyze_joined_table_exprs(JoinedTable& joined_table, ObExprLevels& aggr_expr_levels);
+  int analyze_aggr_param_exprs(common::ObIArray<ObRawExpr*> &param_exprs);
+  int analyze_aggr_param_expr(ObRawExpr *&param_expr);
+  int analyze_child_stmt(ObSelectStmt* child_stmt);
   int32_t get_final_aggr_level() const;
-  ObSelectResolver* fetch_final_aggr_resolver(ObDMLResolver* cur_resolver, int32_t final_aggr_level);
+  ObSelectResolver *fetch_final_aggr_resolver(ObDMLResolver *cur_resolver, int32_t final_aggr_level);
   int push_up_aggr_column(int32_t final_aggr_level);
   int adjust_query_level(int32_t final_aggr_level);
-  int push_up_subquery_in_aggr(ObSelectResolver& final_resolver);
+  int push_up_subquery_in_aggr(ObSelectResolver &final_resolver,
+                               const ObIArray<ObExecParamRawExpr *> &exec_params);
 
+  int get_exec_params(const int32_t expr_level,
+                      ObIArray<ObExecParamRawExpr *> &exec_params);
+  int check_param_aggr(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                       bool &has_aggr);
+  int has_aggr_expr(const ObRawExpr *expr, bool &has);
+  int remove_alias_exprs();
+  int remove_alias_exprs(ObRawExpr* &expr);
 private:
   static const int64_t AGGR_HASH_BUCKET_SIZE = 64;
-
 private:
-  // table column or alias column in aggregate function
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> aggr_columns_;
-  RelExprChecker aggr_columns_checker_;
-  // all exprs that have expr level in aggregate function
+  int32_t cur_level_;
+  // contain current layer column (a real column or a alias select item)
+  bool has_cur_layer_column_;
+  // 1. ref an upper layer column
+  // 2. ref an upper layer select item
+  common::ObArray<ObExecParamRawExpr *, common::ModulePageAllocator, true> exec_columns_;
+  //all exprs that have expr level in aggregate function
   common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> level_exprs_;
   RelExprChecker level_exprs_checker_;
-  // all child stmts in aggregate function
+  //all child stmts in aggregate function
   common::ObArray<ObSelectStmt*, common::ModulePageAllocator, true> child_stmts_;
-  // aggregate function in this resolver
-  ObSelectResolver& cur_resolver_;
+  //aggregate function in this resolver
+  ObSelectResolver &cur_resolver_;
 };
 }  // namespace sql
 }  // namespace oceanbase

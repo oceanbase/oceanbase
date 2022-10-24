@@ -16,13 +16,14 @@
 #include "lib/lock/ob_monitor.h"
 #include "lib/lock/mutex.h"
 #include "lib/time/ob_time_utility.h"
-#include "lib/coro/routine.h"
 #include "lib/thread/ob_thread_name.h"
 
 using namespace oceanbase::lib;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObClockGenerator ObClockGenerator::clock_generator_;
 
@@ -72,7 +73,7 @@ void ObClockGenerator::run1()
 
   lib::set_thread_name("ClockGenerator");
   while (!ready_) {
-    this_routine::usleep(SLEEP_US);
+    ::usleep(SLEEP_US);
   }
   while (inited_) {
     int64_t retry = 0;
@@ -87,7 +88,7 @@ void ObClockGenerator::run1()
         if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL_US)) {
           TRANS_LOG(WARN, "clock out of order", K(cur_ts), K(cur_ts_), K(delta));
         }
-        this_routine::usleep(SLEEP_US);
+        ::usleep(SLEEP_US);
       }
     }
     if (delta < 0) {
@@ -96,9 +97,9 @@ void ObClockGenerator::run1()
     } else {
       ATOMIC_STORE(&cur_ts_, cur_ts);
     }
-    this_routine::usleep(SLEEP_US);
+    ::usleep(SLEEP_US);
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase

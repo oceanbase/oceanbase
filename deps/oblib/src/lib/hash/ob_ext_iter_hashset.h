@@ -13,18 +13,21 @@
 #ifndef OCEANBASE_LIB_HASH_OB_EXT_ITER_HASHSET_H__
 #define OCEANBASE_LIB_HASH_OB_EXT_ITER_HASHSET_H__
 
-#include "lib/hash/ob_iteratable_hashset.h"  // ObIteratableHashSet
+#include "lib/hash/ob_iteratable_hashset.h" // ObIteratableHashSet
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
-template <class K, uint64_t N, class Allocator>
-class ObExtIterHashSet;
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
+template <class K, uint64_t N, class Allocator> class ObExtIterHashSet;
 
 ///////////////////////////////////// ObExtIterHashSet Iterator /////////////////////////////////////
 template <class HashSet>
-class ObExtIterHashSetConstIterator {
+class ObExtIterHashSetConstIterator
+{
 public:
   typedef typename HashSet::const_key_ref_t const_key_ref_t;
   typedef ObExtIterHashSetConstIterator<HashSet> SelfType;
@@ -32,11 +35,11 @@ public:
   typedef typename HashSet::InnerHashSetIter InnerIter;
 
 public:
-  ObExtIterHashSetConstIterator(const HashSet* set, const BucketType* bucket, const InnerIter& iter)
+  ObExtIterHashSetConstIterator(const HashSet *set, const BucketType *bucket, const InnerIter &iter)
       : hash_set_(set), bucket_(bucket), iter_(iter)
   {}
 
-  ObExtIterHashSetConstIterator(const SelfType& other)
+  ObExtIterHashSetConstIterator(const SelfType &other)
       : hash_set_(other.hash_set_), bucket_(other.bucket_), iter_(other.iter_)
   {}
 
@@ -44,7 +47,7 @@ public:
   {}
 
 public:
-  ObExtIterHashSetConstIterator& operator=(const SelfType& other)
+  ObExtIterHashSetConstIterator &operator=(const SelfType &other)
   {
     if (this != &other) {
       hash_set_ = other.hash_set_;
@@ -54,19 +57,19 @@ public:
 
     return *this;
   }
-  ObExtIterHashSetConstIterator& operator=(SelfType&& other) = default;
+  ObExtIterHashSetConstIterator &operator=(SelfType &&other) = default;
 
-  bool operator==(const SelfType& other) const
+  bool operator==(const SelfType &other) const
   {
     return other.hash_set_ == hash_set_ && other.bucket_ == bucket_ && other.iter_ == iter_;
   }
 
-  bool operator!=(const SelfType& other) const
+  bool operator!=(const SelfType &other) const
   {
     return other.hash_set_ != hash_set_ || other.bucket_ != bucket_ || other.iter_ != iter_;
   }
 
-  SelfType& operator++()
+  SelfType &operator++()
   {
     if (NULL == hash_set_ || NULL == bucket_) {
       LIB_LOG(ERROR, "err hash set, iter or bucket", K(hash_set_), K(bucket_));
@@ -95,30 +98,30 @@ public:
   }
 
 private:
-  const HashSet* hash_set_;
-  const BucketType* bucket_;
+  const HashSet *hash_set_;
+  const BucketType *bucket_;
   InnerIter iter_;
 };
 
 ///////////////////////////////////// ObExtIterHashSet /////////////////////////////////////
 
 template <class K, uint64_t N = 1031, class Allocator = ObIAllocator>
-class ObExtIterHashSet {
+class ObExtIterHashSet
+{
 public:
-  typedef const K& const_key_ref_t;
+  typedef const K &const_key_ref_t;
   typedef ObIteratableHashSet<K, N> BaseHashSet;
   typedef ObExtIterHashSet<K, N, Allocator> SelfType;
   typedef ObExtIterHashSetConstIterator<SelfType> const_iterator_t;
   typedef typename BaseHashSet::const_iterator_t InnerHashSetIter;
 
-  struct HashSetBucket {
+  struct HashSetBucket
+  {
     BaseHashSet hash_set_;
-    HashSetBucket* next_;
+    HashSetBucket *next_;
 
-    HashSetBucket() : hash_set_(), next_(NULL)
-    {}
-    ~HashSetBucket()
-    {}
+    HashSetBucket() : hash_set_(), next_(NULL) {}
+    ~HashSetBucket() {}
     void reset()
     {
       hash_set_.reset();
@@ -127,7 +130,7 @@ public:
   };
 
 public:
-  explicit ObExtIterHashSet(Allocator& allocator);
+  explicit ObExtIterHashSet(Allocator &allocator);
   virtual ~ObExtIterHashSet();
 
 public:
@@ -136,21 +139,15 @@ public:
    * @retval OB_HASH_EXIST    key exists
    * @retval other ret        failed
    */
-  int set_refactored(const K& key);
+  int set_refactored(const K &key);
   /**
    * @retval OB_HASH_EXIST     key exists
    * @retval OB_HASH_NOT_EXIST key not exists
    */
-  int exist_refactored(const K& key) const
-  {
-    return is_exist_(key) ? OB_HASH_EXIST : OB_HASH_NOT_EXIST;
-  }
+  int exist_refactored(const K &key) const { return is_exist_(key) ? OB_HASH_EXIST : OB_HASH_NOT_EXIST; }
 
   void reset();
-  void clear()
-  {
-    reset();
-  }
+  void clear() { reset(); }
 
   const_iterator_t begin() const
   {
@@ -162,28 +159,22 @@ public:
     return const_iterator_t(this, buckets_tail_, buckets_tail_->hash_set_.end());
   }
 
-  int64_t count() const
-  {
-    return count_;
-  }
+  int64_t count() const { return count_; }
 
 public:
   DECLARE_TO_STRING;
 
 private:
-  bool is_exist_(const K& key) const;
-  bool is_full_() const
-  {
-    return count_ >= bucket_num_ * static_cast<int64_t>(N);
-  }
+  bool is_exist_(const K &key) const;
+  bool is_full_() const { return count_ >= bucket_num_ * static_cast<int64_t>(N); }
   int add_bucket_();
 
 private:
-  int64_t count_;                // count of object
-  int64_t bucket_num_;           // count of bucket
-  Allocator& allocator_;         // allocator
-  HashSetBucket buckets_;        // bucket lists
-  HashSetBucket* buckets_tail_;  // bucket lists tail
+  int64_t count_;                 // count of object
+  int64_t bucket_num_;            // count of bucket
+  Allocator &allocator_;          // allocator
+  HashSetBucket buckets_;         // bucket lists
+  HashSetBucket *buckets_tail_;    // bucket lists tail
 
 private:
   template <class HashSet>
@@ -194,8 +185,12 @@ private:
 };
 
 template <class K, uint64_t N, class Allocator>
-ObExtIterHashSet<K, N, Allocator>::ObExtIterHashSet(Allocator& allocator)
-    : count_(0), bucket_num_(1), allocator_(allocator), buckets_(), buckets_tail_(&buckets_)
+ObExtIterHashSet<K, N, Allocator>::ObExtIterHashSet(Allocator &allocator) :
+    count_(0),
+    bucket_num_(1),
+    allocator_(allocator),
+    buckets_(),
+    buckets_tail_(&buckets_)
 {}
 
 template <class K, uint64_t N, class Allocator>
@@ -205,7 +200,7 @@ ObExtIterHashSet<K, N, Allocator>::~ObExtIterHashSet()
 }
 
 template <class K, uint64_t N, class Allocator>
-int ObExtIterHashSet<K, N, Allocator>::set_refactored(const K& key)
+int ObExtIterHashSet<K, N, Allocator>::set_refactored(const K &key)
 {
   int ret = OB_SUCCESS;
   bool exist = is_exist_(key);
@@ -230,12 +225,12 @@ int ObExtIterHashSet<K, N, Allocator>::set_refactored(const K& key)
 }
 
 template <class K, uint64_t N, class Allocator>
-bool ObExtIterHashSet<K, N, Allocator>::is_exist_(const K& key) const
+bool ObExtIterHashSet<K, N, Allocator>::is_exist_(const K &key) const
 {
   bool exist = false;
-  const HashSetBucket* item = &buckets_;
+  const HashSetBucket *item = &buckets_;
 
-  while (!exist && NULL != item) {
+  while (! exist && NULL != item) {
     if (OB_HASH_EXIST == item->hash_set_.exist_refactored(key)) {
       exist = true;
       break;
@@ -251,12 +246,12 @@ template <class K, uint64_t N, class Allocator>
 int ObExtIterHashSet<K, N, Allocator>::add_bucket_()
 {
   int ret = OB_SUCCESS;
-  HashSetBucket* bucket = (HashSetBucket*)allocator_.alloc(sizeof(HashSetBucket));
+  HashSetBucket *bucket = (HashSetBucket *)allocator_.alloc(sizeof(HashSetBucket));
   if (NULL == bucket) {
     LIB_LOG(WARN, "allocate memory for bucket fail", "bucket_size", sizeof(HashSetBucket));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    new (bucket) HashSetBucket();
+    new(bucket) HashSetBucket();
 
     bucket->next_ = NULL;
     buckets_tail_->next_ = bucket;
@@ -272,10 +267,10 @@ int ObExtIterHashSet<K, N, Allocator>::add_bucket_()
 template <class K, uint64_t N, class Allocator>
 void ObExtIterHashSet<K, N, Allocator>::reset()
 {
-  HashSetBucket* bucket = buckets_.next_;
+  HashSetBucket *bucket = buckets_.next_;
 
   while (NULL != bucket) {
-    HashSetBucket* next = bucket->next_;
+    HashSetBucket *next = bucket->next_;
     bucket->~HashSetBucket();
     allocator_.free((void*)bucket);
 
@@ -290,12 +285,14 @@ void ObExtIterHashSet<K, N, Allocator>::reset()
 }
 
 template <class K, uint64_t N, class Allocator>
-int64_t ObExtIterHashSet<K, N, Allocator>::to_string(char* buf, const int64_t buf_len) const
+int64_t ObExtIterHashSet<K, N, Allocator>::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_ARRAY_START();
   const_iterator_t beg = begin();
-  for (const_iterator_t it = beg; it != end(); ++it) {
+  for (const_iterator_t it = beg;
+       it != end();
+       ++it) {
     if (it != beg) {
       J_COMMA();
     }
@@ -304,7 +301,7 @@ int64_t ObExtIterHashSet<K, N, Allocator>::to_string(char* buf, const int64_t bu
   J_ARRAY_END();
   return pos;
 }
-}  // namespace hash
-}  // namespace common
-}  // namespace oceanbase
+} // namespace hash
+} // namespace common
+} // namespace oceanbase
 #endif

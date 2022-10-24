@@ -14,10 +14,12 @@
 #include "sql/resolver/cmd/ob_empty_query_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-int ObEmptyQueryExecutor::execute(ObExecContext& ctx, ObEmptyQueryStmt& stmt)
+namespace sql
+{
+int ObEmptyQueryExecutor::execute(ObExecContext &ctx, ObEmptyQueryStmt &stmt)
 {
   UNUSED(ctx);
   UNUSED(stmt);
@@ -25,5 +27,5 @@ int ObEmptyQueryExecutor::execute(ObExecContext& ctx, ObEmptyQueryStmt& stmt)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}// sql
+}// oceanbase

@@ -15,22 +15,27 @@
 #include "sql/resolver/xa/ob_xa_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 
-namespace sql {
-ObXaStartResolver::ObXaStartResolver(ObResolverParams& params) : ObStmtResolver(params)
-{}
+namespace sql
+{
+ObXaStartResolver::ObXaStartResolver(ObResolverParams &params)
+    : ObStmtResolver(params)
+{
+}
 
 ObXaStartResolver::~ObXaStartResolver()
-{}
+{
+}
 
-int ObXaStartResolver::resolve(const ParseNode& parse_node)
+int ObXaStartResolver::resolve(const ParseNode &parse_node)
 {
   int ret = OB_SUCCESS;
-  ObXaStartStmt* xa_start_stmt = NULL;
-  if (OB_UNLIKELY(T_XA_START != parse_node.type_ || 1 != parse_node.num_child_)) {
+  ObXaStartStmt *xa_start_stmt = NULL;
+  if (OB_UNLIKELY(T_XA_START != parse_node.type_ || 1 !=parse_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected val", K(parse_node.type_), K(parse_node.num_child_), K(ret));
   } else if (OB_UNLIKELY(NULL == (xa_start_stmt = create_stmt<ObXaStartStmt>()))) {
@@ -49,5 +54,5 @@ int ObXaStartResolver::resolve(const ParseNode& parse_node)
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

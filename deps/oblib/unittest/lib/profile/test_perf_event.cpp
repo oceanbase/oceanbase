@@ -15,17 +15,16 @@
 #include "lib/utility/ob_test_util.h"
 
 using namespace oceanbase::common;
-class TestPerfEvent : public ::testing::Test {
+class TestPerfEvent: public ::testing::Test
+{
 public:
   TestPerfEvent();
   virtual ~TestPerfEvent();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestPerfEvent);
-
 protected:
   // function members
 protected:
@@ -33,16 +32,20 @@ protected:
 };
 
 TestPerfEvent::TestPerfEvent()
-{}
+{
+}
 
 TestPerfEvent::~TestPerfEvent()
-{}
+{
+}
 
 void TestPerfEvent::SetUp()
-{}
+{
+}
 
 void TestPerfEvent::TearDown()
-{}
+{
+}
 
 TEST_F(TestPerfEvent, basic_test)
 {
@@ -51,7 +54,7 @@ TEST_F(TestPerfEvent, basic_test)
   ENABLE_PERF_EVENT();
   for (int i = 0; i < 3; ++i) {
     PERF_RESET_RECORDER();
-    PERF_SET_CAT_ID(100 + i);
+    PERF_SET_CAT_ID(100+i);
     OB_PERF_EVENT_BEGIN(process);
     OB_PERF_EVENT(key);
     OB_PERF_EVENT(value);
@@ -66,7 +69,7 @@ TEST_F(TestPerfEvent, basic_test)
 
   ObPerfEventRecorder rec;
   int64_t count = 0;
-  while (OB_SUCCESS == ret && OB_SUCCESS == (ret = reader.read(rec))) {
+  while(OB_SUCCESS == ret && OB_SUCCESS == (ret = reader.read(rec))) {
     OB_LOG(INFO, "read perf event", K(rec));
     count++;
   }
@@ -76,9 +79,9 @@ TEST_F(TestPerfEvent, basic_test)
   ASSERT_EQ(3, count);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

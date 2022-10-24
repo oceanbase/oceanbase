@@ -17,15 +17,27 @@
 
 #include <cstdint>
 
-namespace oceanbase {
-namespace common {
-struct ObLocalStore {
-  ObLocalStore() : stack_addr_(nullptr), stack_size_(0)
+namespace oceanbase
+{
+namespace common
+{
+struct ObLocalStore
+{
+  ObLocalStore()
+    : stack_addr_(nullptr), stack_size_(0)
   {}
   ObThreadLogLevel log_level_;
-  void* stack_addr_;
+  void *stack_addr_;
   size_t stack_size_;
 };
-}  // namespace common
-}  // namespace oceanbase
+	
+inline ObLocalStore *get_local_store()
+{
+  // use thread local for raw thread.
+  RLOCAL_INLINE(ObLocalStore, default_local_store);
+  return &default_local_store;
+}
+
+}
+}
 #endif

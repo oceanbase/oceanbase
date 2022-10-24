@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains interface support for the JSON_V1 tree abstraction.
-
 #ifndef OCEANBASE_SQL_OB_JSON_TREE
 #define OCEANBASE_SQL_OB_JSON_TREE
 
@@ -195,7 +193,7 @@ public:
     for (uint64_t i = 0; i < count; i++) {
       child_node = get_value(i);
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, child_node->depth());
+        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
       }
     }
     return max_child + 1;
@@ -316,7 +314,7 @@ public:
     for (uint64_t i = 0; i < size; i++) {
       child_node = node_vector_[i];
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, child_node->depth());
+        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
       }
     }
     return max_child + 1;

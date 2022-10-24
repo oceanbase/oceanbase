@@ -1461,7 +1461,7 @@ def config_logging_module(log_filenamme):
 #'-t, --timeout=name  check timeout, default: 600(s).\n' + \
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -1927,7 +1927,7 @@ def config_logging_module(log_filenamme):
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -2140,25 +2140,6 @@ def config_logging_module(log_filenamme):
 #  else:
 #    logging.info("check expected storage format version '{0}' success".format(expect_version))
 #
-#def upgrade_table_schema_version(conn, cur):
-#  try:
-#    sql = """SELECT * FROM v$ob_cluster
-#             WHERE cluster_role = "PRIMARY"
-#             AND cluster_status = "VALID"
-#             AND (switchover_status = "NOT ALLOWED" OR switchover_status = "TO STANDBY") """
-#    (desc, results) = cur.exec_query(sql)
-#    is_primary = len(results) > 0
-#    if is_primary:
-#      sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-#      logging.info(sql)
-#      cur.exec_sql(sql)
-#    else:
-#      logging.info("standby cluster no need to run job update_table_schema_ersion")
-#  except Exception, e:
-#    logging.warn("update table schema failed")
-#    raise MyError("update table schema failed")
-#  logging.info("update table schema finish")
-#
 #def upgrade_storage_format_version(conn, cur):
 #  try:
 #    # enable_ddl
@@ -2228,7 +2209,6 @@ def config_logging_module(log_filenamme):
 #        check_cluster_version(query_cur)
 #        #upgrade_storage_format_version(conn, cur)
 #        #check_storage_format_version(query_cur)
-#        upgrade_table_schema_version(conn, query_cur)
 #        check_root_inspection(query_cur)
 #        enable_ddl(query_cur)
 #        enable_rebalance(query_cur)
@@ -2355,7 +2335,7 @@ def config_logging_module(log_filenamme):
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -2674,7 +2654,7 @@ def config_logging_module(log_filenamme):
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -3683,6 +3663,8 @@ def do_priv_check(my_host, my_port, my_user, my_passwd, upgrade_params):
         logging.info("****************************************************************************")
         logging.info("")
         logging.info("No Database Privs Exists.")
+        logging.info("If you want to use oracle priv set. ")
+        logging.info("First run python2.7 mysql_to_ora_priv.py to map privs in tenants:")
         logging.info(tenant_id_list)
         logging.info("")
         logging.info("****************************************************************************")

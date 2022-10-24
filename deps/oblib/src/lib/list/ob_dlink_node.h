@@ -17,98 +17,84 @@
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/utility/ob_macro_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <typename DLinkNode>
 class ObDList;
 
 // A template base class used as the node of double linked list
 // The concrete node class B should inherit ObDLinkNode<B>
 template <typename Derived>
-class ObDLinkBase {
+class ObDLinkBase
+{
 public:
   ObDLinkBase();
-  virtual ~ObDLinkBase()
-  {}
+  virtual ~ObDLinkBase() {}
 
-  Derived* get_next()
-  {
-    return next_;
-  }
-  Derived* get_prev()
-  {
-    return prev_;
-  }
+  Derived *get_next() {return next_;}
+  Derived *get_prev() {return prev_;}
 
-  const Derived* get_next() const
-  {
-    return next_;
-  }
-  const Derived* get_prev() const
-  {
-    return prev_;
-  }
+  const Derived *get_next() const {return next_;}
+  const Derived *get_prev() const {return prev_;}
 
   /// these utility functions do not check arguments on purpose,
   /// the caller should ensure the validity
   /// @assert NULL != e
   /// insert the node e before this node
-  void add_before(Derived* e);
+  void add_before(Derived *e);
   /// insert the node e after this node
-  void add_after(Derived* e);
+  void add_after(Derived *e);
   /// unlink this node from the list
   void unlink();
   /// add linked list after this node
-  void add_range_after(Derived* first, Derived* last);
+  void add_range_after(Derived *first, Derived *last);
   /// replace
-  void replace_by(Derived* e);
+  void replace_by(Derived *e);
 
-  virtual void reset()
-  {
-    prev_ = NULL;
-    next_ = NULL;
-  }
-  virtual int64_t to_string(char* buf, const int64_t buf_len) const
+  virtual void reset() {prev_ = NULL; next_ = NULL;}
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
     UNUSED(buf);
     UNUSED(buf_len);
     return 0;
   };
-
 protected:
-  void add(Derived* prev, Derived* e, Derived* next);
+  void add(Derived *prev, Derived *e, Derived *next);
   template <typename DLinkNode>
   friend class ObDList;
-
 protected:
-  Derived* prev_;
-  Derived* next_;
+  Derived *prev_;
+  Derived *next_;
 };
 
 template <typename Derived>
-ObDLinkBase<Derived>::ObDLinkBase() : prev_(NULL), next_(NULL)
-{}
+ObDLinkBase<Derived>::ObDLinkBase()
+    : prev_(NULL), next_(NULL)
+{
+}
 
 // insert one node before this node
 template <typename Derived>
-void ObDLinkBase<Derived>::add_before(Derived* e)
+void ObDLinkBase<Derived>::add_before(Derived *e)
 {
-  add(prev_, e, static_cast<Derived*>(this));
+  add(prev_, e, static_cast<Derived *>(this));
 }
 
 // insert one node after this node
 template <typename Derived>
-void ObDLinkBase<Derived>::add_after(Derived* e)
+void ObDLinkBase<Derived>::add_after(Derived *e)
 {
-  add(static_cast<Derived*>(this), e, next_);
+  add(static_cast<Derived *>(this), e, next_);
 }
 
 // remove node from list
 template <typename Derived>
 void ObDLinkBase<Derived>::unlink()
 {
-  Derived* next_node = next_;
-  Derived* prev_node = prev_;
+  Derived *next_node = next_;
+  Derived *prev_node = prev_;
   if (next_node && prev_node) {
     next_node->prev_ = prev_node;
     prev_node->next_ = next_node;
@@ -118,7 +104,7 @@ void ObDLinkBase<Derived>::unlink()
 
 // remove node from list
 template <typename Derived>
-void ObDLinkBase<Derived>::replace_by(Derived* e)
+void ObDLinkBase<Derived>::replace_by(Derived *e)
 {
   if (e != this) {
     e->next_ = next_;
@@ -131,7 +117,7 @@ void ObDLinkBase<Derived>::replace_by(Derived* e)
 }
 
 template <typename Derived>
-void ObDLinkBase<Derived>::add(Derived* prev, Derived* e, Derived* next)
+void ObDLinkBase<Derived>::add(Derived *prev, Derived *e, Derived *next)
 {
   prev->next_ = e;
   e->prev_ = prev;
@@ -140,48 +126,37 @@ void ObDLinkBase<Derived>::add(Derived* prev, Derived* e, Derived* next)
 }
 
 template <typename Derived>
-void ObDLinkBase<Derived>::add_range_after(Derived* first, Derived* last)
+void ObDLinkBase<Derived>::add_range_after(Derived *first, Derived *last)
 {
-  Derived* next = this->next_;
+  Derived *next = this->next_;
   this->next_ = first;
-  first->prev_ = static_cast<Derived*>(this);
+  first->prev_ = static_cast<Derived *>(this);
   next->prev_ = last;
   last->next_ = next;
 }
 
-template <typename T>
-struct ObDLinkNode : public ObDLinkBase<ObDLinkNode<T> > {
-  ObDLinkNode() : data_(){};
-  ~ObDLinkNode(){};
+template<typename T>
+struct ObDLinkNode: public ObDLinkBase<ObDLinkNode<T> >
+{
+  ObDLinkNode():data_() {};
+  ~ObDLinkNode() {};
 
-  T& get_data()
-  {
-    return data_;
-  };
-  const T& get_data() const
-  {
-    return data_;
-  };
-  bool operator==(const ObDLinkNode& other) const
-  {
-    return data_ == other.data_;
-  };
-  int64_t hash() const
-  {
-    return do_hash(data_);
-  };
-
+  T &get_data() {return data_;};
+  const T &get_data() const {return data_;};
+  bool operator== (const ObDLinkNode &other) const {return data_ == other.data_;};
+  int64_t hash() const { return do_hash(data_);};
 private:
   T data_;
 };
 
-template <typename T>
-struct ObDLinkDerived : public ObDLinkBase<T>, T {
-  ObDLinkDerived(){};
-  ~ObDLinkDerived(){};
+template<typename T>
+struct ObDLinkDerived: public ObDLinkBase<T>, T
+{
+  ObDLinkDerived() {};
+  ~ObDLinkDerived() {};
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_LIST_OB_DLINK_NODE_H_
+#endif //OCEANBASE_LIB_LIST_OB_DLINK_NODE_H_

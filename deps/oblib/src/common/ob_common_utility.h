@@ -17,21 +17,22 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
-extern const char* print_server_role(const common::ObServerRole server_role);
+namespace oceanbase
+{
+namespace common
+{
+extern const char *print_server_role(const common::ObServerRole server_role);
 
 //@brief recursive function call should use this function to check if recursion is too deep
-// to avoid stack overflow, default reserved statck size is 1M
+//to avoid stack overflow, default reserved statck size is 1M
 extern int64_t get_reserved_stack_size();
 extern void set_reserved_stack_size(int64_t reserved_size);
 extern int check_stack_overflow(
-    bool& is_overflow, int64_t reserved_stack_size = get_reserved_stack_size(), int64_t* used_size = nullptr);
-extern int get_stackattr(void*& stackaddr, size_t& stacksize);
-extern void set_stackattr(void* stackaddr, size_t stacksize);
-extern "C" {
-extern int check_stack_overflow_in_c(int* check_overflow);
-}
+    bool &is_overflow,
+    int64_t reserved_stack_size = get_reserved_stack_size(),
+    int64_t *used_size = nullptr);
+extern int get_stackattr(void *&stackaddr, size_t &stacksize);
+extern void set_stackattr(void *stackaddr, size_t stacksize);
 
 // return OB_SIZE_OVERFLOW if stack overflow
 inline int check_stack_overflow(void)
@@ -45,19 +46,19 @@ inline int check_stack_overflow(void)
  * @brief The ObFatalErrExtraInfoGuard class is used for printing extra info, when fatal error happens.
  *        The of pointer of the class is maintained on thread local.
  */
-class ObFatalErrExtraInfoGuard {
+class ObFatalErrExtraInfoGuard
+{
 public:
   explicit ObFatalErrExtraInfoGuard();
   virtual ~ObFatalErrExtraInfoGuard();
-  static const ObFatalErrExtraInfoGuard* get_thd_local_val_ptr();
+  static const ObFatalErrExtraInfoGuard *get_thd_local_val_ptr();
   DEFINE_VIRTUAL_TO_STRING();
-
 private:
-  static ObFatalErrExtraInfoGuard*& get_val();
-  ObFatalErrExtraInfoGuard* last_;
+  static ObFatalErrExtraInfoGuard *&get_val();
+  ObFatalErrExtraInfoGuard *last_;
 };
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_COMMON_OB_COMMON_UTILITY_H_ */

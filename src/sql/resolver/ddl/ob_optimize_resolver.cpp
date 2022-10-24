@@ -17,10 +17,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace oceanbase::sql;
 
-int ObOptimizeTableResolver::resolve(const ParseNode& parser_tree)
+int ObOptimizeTableResolver::resolve(const ParseNode &parser_tree)
 {
   int ret = OB_SUCCESS;
-  ObOptimizeTableStmt* stmt = nullptr;
+  ObOptimizeTableStmt *stmt = nullptr;
   if (OB_ISNULL(session_info_) || T_OPTIMIZE_TABLE != parser_tree.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(parser_tree.type_));
@@ -34,21 +34,21 @@ int ObOptimizeTableResolver::resolve(const ParseNode& parser_tree)
   }
   if (OB_SUCC(ret)) {
     stmt->set_tenant_id(session_info_->get_effective_tenant_id());
-    obrpc::ObOptimizeTableArg& arg = stmt->get_optimize_table_arg();
+    obrpc::ObOptimizeTableArg &arg = stmt->get_optimize_table_arg();
     arg.tenant_id_ = session_info_->get_effective_tenant_id();
-    void* buf = nullptr;
-    ObPlacementHashSet<obrpc::ObTableItem>* table_item_set = nullptr;
+    void *buf = nullptr;
+    ObPlacementHashSet<obrpc::ObTableItem> *table_item_set = nullptr;
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObPlacementHashSet<obrpc::ObTableItem>)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret));
     } else {
-      table_item_set = new (buf) ObPlacementHashSet<obrpc::ObTableItem>();
+      table_item_set = new(buf)ObPlacementHashSet<obrpc::ObTableItem>();
       ObString database_name;
       ObString table_name;
       obrpc::ObTableItem table_item;
-      ParseNode* table_node = nullptr;
+      ParseNode *table_node = nullptr;
       int64_t max_table_num = 1;
-      if (share::is_oracle_mode()) {
+      if (lib::is_oracle_mode()) {
         max_table_num = 1;
       } else {
         if (OB_UNLIKELY(!parser_tree.children_[TABLE_LIST_NODE])) {
@@ -59,8 +59,8 @@ int ObOptimizeTableResolver::resolve(const ParseNode& parser_tree)
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < max_table_num; ++i) {
-        table_node = share::is_oracle_mode() ? parser_tree.children_[TABLE_LIST_NODE]
-                                             : parser_tree.children_[TABLE_LIST_NODE]->children_[i];
+        table_node = lib::is_oracle_mode() ? parser_tree.children_[TABLE_LIST_NODE] :
+          parser_tree.children_[TABLE_LIST_NODE]->children_[i];
         if (nullptr == table_node) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, table node must not be NULL", K(ret));
@@ -93,10 +93,10 @@ int ObOptimizeTableResolver::resolve(const ParseNode& parser_tree)
   return ret;
 }
 
-int ObOptimizeTenantResolver::resolve(const ParseNode& parser_tree)
+int ObOptimizeTenantResolver::resolve(const ParseNode &parser_tree)
 {
   int ret = OB_SUCCESS;
-  ObOptimizeTenantStmt* stmt = nullptr;
+  ObOptimizeTenantStmt *stmt = nullptr;
   if (OB_ISNULL(session_info_) || T_OPTIMIZE_TENANT != parser_tree.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(parser_tree.type_));
@@ -110,7 +110,7 @@ int ObOptimizeTenantResolver::resolve(const ParseNode& parser_tree)
   }
   if (OB_SUCC(ret)) {
     ObString tenant_name;
-    ParseNode* node = const_cast<ParseNode*>(&parser_tree);
+    ParseNode *node = const_cast<ParseNode*>(&parser_tree);
     if (nullptr == node) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, node must not be NULL", K(ret));
@@ -118,18 +118,17 @@ int ObOptimizeTenantResolver::resolve(const ParseNode& parser_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse node", K(ret));
     } else {
-      tenant_name.assign_ptr(
-          const_cast<char*>(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
+      tenant_name.assign_ptr(const_cast<char *>(node->children_[0]->str_value_), static_cast<int32_t>(node->children_[0]->str_len_));
       stmt->set_tenant_name(tenant_name);
     }
   }
   return ret;
 }
 
-int ObOptimizeAllResolver::resolve(const ParseNode& parser_tree)
+int ObOptimizeAllResolver::resolve(const ParseNode &parser_tree)
 {
   int ret = OB_SUCCESS;
-  ObOptimizeAllStmt* stmt = nullptr;
+  ObOptimizeAllStmt *stmt = nullptr;
   if (OB_ISNULL(session_info_) || T_OPTIMIZE_ALL != parser_tree.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(parser_tree.type_));

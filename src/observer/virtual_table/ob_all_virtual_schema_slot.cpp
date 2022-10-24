@@ -1,24 +1,26 @@
 /**
- * Copyright (c) 2022 OceanBase
- * OceanBase is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan
- * PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
  *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
- * Mulan PubL v2 for more details.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SERVER
+# define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_schema_slot.h"
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_schema_mgr.h"
 #include "share/schema/ob_schema_mgr_cache.h"
 
-namespace oceanbase {
-namespace observer {
-void ObAllVirtualSchemaSlot::reset(common::ObIAllocator &allocator, common::ObIArray<ObSchemaSlot> &tenant_slot_infos)
+namespace oceanbase
+{
+namespace observer
+{
+void ObAllVirtualSchemaSlot::reset(common::ObIAllocator &allocator, common::ObIArray<ObSchemaSlot> &tenant_slot_infos) 
 {
   const char *ptr = NULL;
   common::ObString str;
@@ -28,7 +30,7 @@ void ObAllVirtualSchemaSlot::reset(common::ObIAllocator &allocator, common::ObIA
   for (int64_t i = 0; i < len && OB_SUCC(ret); ++i) {
     ptr = ((tenant_slot_infos.at(i)).get_mod_ref_infos()).ptr();
     if (OB_NOT_NULL(ptr)) {
-      allocator.free(const_cast<char *>(ptr));
+      allocator.free(const_cast<char*>(ptr));
     }
     (tenant_slot_infos.at(i)).reset();
   }
@@ -37,20 +39,31 @@ void ObAllVirtualSchemaSlot::reset(common::ObIAllocator &allocator, common::ObIA
 
 int ObAllVirtualSchemaSlot::inner_open()
 {
-  const ObAddr &addr = GCTX.self_addr_;
+  const ObAddr &addr = GCTX.self_addr();
   int ret = OB_SUCCESS;
-
+  
   if (false == addr.ip_to_string(ip_buffer_, sizeof(ip_buffer_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to convert ip to string", KR(ret), K(addr));
-  } else if (OB_FAIL(schema_service_.get_schema_store_tenants(tenant_ids_))) {
-    LOG_WARN("fail to get schema store tenants", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == effective_tenant_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant_id", KR(ret), K_(effective_tenant_id));
+  } else if(is_sys_tenant(effective_tenant_id_)) {
+    if (OB_FAIL(schema_service_.get_schema_store_tenants(tenant_ids_))) {
+      LOG_WARN("fail to get schema store tenants", KR(ret));
+    }
+  } else {
+    // user/meta tenant can see its own schema
+    if (schema_service_.check_schema_store_tenant_exist(effective_tenant_id_)) {
+      if (OB_FAIL(tenant_ids_.push_back(effective_tenant_id_))) {
+        LOG_WARN("fail to push back effective_tenant_id", KR(ret), K_(effective_tenant_id));
+      }
+    }
   }
   return ret;
 }
 
-int ObAllVirtualSchemaSlot::get_next_tenant_slot_info(ObSchemaSlot &schema_slot)
-{
+int ObAllVirtualSchemaSlot::get_next_tenant_slot_info(ObSchemaSlot &schema_slot) {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
@@ -67,9 +80,8 @@ int ObAllVirtualSchemaSlot::get_next_tenant_slot_info(ObSchemaSlot &schema_slot)
         if (OB_INVALID_TENANT_ID == tenant_id) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid tenant_id", KR(ret), K(tenant_idx_));
-          // ignore single failture
-        } else if (OB_SUCCESS !=
-                   (tmp_ret = schema_service_.get_tenant_slot_info(*allocator_, tenant_id, schema_slot_infos_))) {
+        // ignore single failture
+        } else if (OB_SUCCESS != (tmp_ret = schema_service_.get_tenant_slot_info(*allocator_, tenant_id, schema_slot_infos_))) {
           LOG_WARN("fail to get tenant slot info", KR(tmp_ret), K(tenant_id));
           reset(*allocator_, schema_slot_infos_);
         } else {
@@ -112,11 +124,12 @@ int ObAllVirtualSchemaSlot::inner_get_next_row(common::ObNewRow *&row)
       switch (col_id) {
         case SVR_IP: {
           cur_row_.cells_[i].set_varchar(common::ObString::make_string(ip_buffer_));
-          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
           break;
         }
         case SVR_PORT: {
-          cur_row_.cells_[i].set_int(static_cast<int64_t>((GCTX.self_addr_).get_port()));
+          cur_row_.cells_[i].set_int(static_cast<int64_t>(GCTX.self_addr().get_port()));
           break;
         }
         case TENANT_ID: {
@@ -135,7 +148,7 @@ int ObAllVirtualSchemaSlot::inner_get_next_row(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(static_cast<int64_t>(schema_count));
           break;
         }
-        case REF_CNT: {
+        case REF_CNT: { 
           cur_row_.cells_[i].set_int(static_cast<int64_t>(total_ref_cnt));
           break;
         }
@@ -145,10 +158,11 @@ int ObAllVirtualSchemaSlot::inner_get_next_row(common::ObNewRow *&row)
           } else {
             cur_row_.cells_[i].set_varchar("");
           }
-          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
           break;
         }
-        default: {
+        default : {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid col_id", KR(ret), K(col_id));
         }

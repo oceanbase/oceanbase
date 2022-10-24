@@ -11,7 +11,7 @@ import time
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
-  old_version = '3.1.0'
+  old_version = '4.0.0'
 #### --------------start : my_error.py --------------
 class MyError(Exception):
   def __init__(self, value):
@@ -102,7 +102,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
-sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 
 version_str = """version 1.0.0"""
 
@@ -489,7 +489,7 @@ def check_schema_split_v2_finish(query_cur):
 
 # 23. 检查是否有异常租户(creating，延迟删除，恢复中)
 def check_tenant_status(query_cur):
-  (desc, results) = query_cur.exec_query("""select count(*) as count from __all_tenant where status != 'TENANT_STATUS_NORMAL'""")
+  (desc, results) = query_cur.exec_query("""select count(*) as count from __all_tenant where status != 'NORMAL'""")
   if len(results) != 1 or len(results[0]) != 1:
     raise MyError('results len not match')
   elif 0 != results[0][0]:
@@ -553,39 +553,8 @@ def check_sys_table_leader(query_cur):
     elif results[0][0] != 0:
       raise MyError("""sys tables'leader should be {0}:{1}""".format(svr_ip, svr_port))
 
-# 29. 检查版本号设置inner sql不走px.
-def check_and_modify_px_query(query_cur, cur):
-  (desc, results) = query_cur.exec_query("""select distinct value from oceanbase.__all_virtual_sys_parameter_stat where name = 'min_observer_version'""")
-  if (len(results) != 1) :
-    raise MyError('distinct observer version not exist')
-  elif cmp(results[0][0], "3.1.1") == 0 or cmp(results[0][0], "3.1.0") == 0:
-    if cmp(results[0][0], "3.1.1") == 0:
-      cur.execute("alter system set _ob_enable_px_for_inner_sql = false")
-    (desc, results) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
-    if (len(results) != 1) :
-      raise MyError('cluster role results is not valid')
-    elif (cmp(results[0][0], "PRIMARY") == 0):
-      tenant_id_list = []
-      (desc, results) = query_cur.exec_query("""select distinct tenant_id from oceanbase.__all_tenant order by tenant_id desc""")
-      for r in results:
-        tenant_id_list.append(r[0])
-      for tenant_id in tenant_id_list:
-        cur.execute("alter system change tenant tenant_id = {0}".format(tenant_id))
-        sql = """set global _ob_use_parallel_execution = false"""
-        logging.info("tenant_id : %d , %s", tenant_id, sql)
-        cur.execute(sql)
-    elif (cmp(results[0][0], "PHYSICAL STANDBY") == 0):
-      sql = """set global _ob_use_parallel_execution = false"""
-      cur.execute(sql)
-      logging.info("execute sql in standby: %s", sql)
-    cur.execute("alter system change tenant tenant_id = 1")
-    time.sleep(5)
-    cur.execute("alter system flush plan cache global")
-    logging.info("execute: alter system flush plan cache global")
-  else:
-    logging.info('cluster version is not equal 3.1.1, skip px operate'.format(results[0][0]))
-
 # 30. check duplicate index name in mysql
+# https://work.aone.alibaba-inc.com/issue/36047465
 def check_duplicate_index_name_in_mysql(query_cur, cur):
   (desc, results) = query_cur.exec_query(
                     """
@@ -596,11 +565,6 @@ def check_duplicate_index_name_in_mysql(query_cur, cur):
                     """)
   if (len(results) != 0) :
     raise MyError("Duplicate index name exist in mysql tenant")
-
-# 31. check the _max_trx_size
-def check_max_trx_size_config(query_cur, cur):
-  set_parameter(cur, '_max_trx_size', '100G')
-  logging.info('set _max_trx_size to default value 100G')
 
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
@@ -630,13 +594,11 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
       modify_replica_safe_remove_time(cur)
       check_high_priority_net_thread_count_before_224(query_cur)
       check_standby_cluster(query_cur)
-      check_schema_split_v2_finish(query_cur)
+      #check_schema_split_v2_finish(query_cur)
       check_micro_block_verify_level(query_cur)
       check_restore_job_exist(query_cur)
       check_sys_table_leader(query_cur)
-      check_and_modify_px_query(query_cur, cur)
       check_duplicate_index_name_in_mysql(query_cur, cur)
-      check_max_trx_size_config(query_cur, cur)
     except Exception, e:
       logging.exception('run error')
       raise e

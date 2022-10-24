@@ -26,7 +26,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,       /*NullType=>VarcharType  */
         ObCharType,          /*NullType=>CharType  */
         ObVarcharType,       /*NullType=>HexStringType  */
-        ObMaxType,           /*NullType=>ExtendType  */
+        ObExtendType,        /*NullType=>ExtendType  */
         ObVarcharType,       /*NullType=>UnknownType  */
         ObTinyTextType,      /*NullType=>ObTinyTextType  */
         ObTextType,          /* NullType=>ObTextType  */
@@ -1301,7 +1301,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
 
     /*ExtendType*/
     {
-        ObMaxType,       /*ExtendType=>NullType  */
+        ObExtendType,    /*ExtendType=>NullType  */
         ObMaxType,       /*ExtendType=>TinyIntType  */
         ObMaxType,       /*ExtendType=>SmallIntType  */
         ObMaxType,       /*ExtendType=>MediumIntType  */
@@ -1326,7 +1326,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ExtendType=>VarcharType  */
         ObMaxType,       /*ExtendType=>CharType  */
         ObMaxType,       /*ExtendType=>HexStringType  */
-        ObMaxType,       /*ExtendType=>ExtendType  */
+        ObExtendType,    /*ExtendType=>ExtendType  */
         ObMaxType,       /*ExtendType=>UnknownType  */
         ObMaxType,       /*ExtendType=>ObTinyTextType  */
         ObMaxType,       /* ExtendType=>ObTextType  */

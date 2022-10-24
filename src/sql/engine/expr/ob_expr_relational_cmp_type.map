@@ -1196,7 +1196,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,        /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */
@@ -1248,7 +1248,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,        /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */
@@ -1300,7 +1300,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,        /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */

@@ -17,43 +17,43 @@
 
 namespace oceanbase {
 namespace sql {
-/**
- *  This class is used to traverse an expression tree in a post-order fashion to
- *  add all required expressions into the context data structure, which is used
- *  during output expr allocation.
- */
-class ObRawExprGetHashValue : public ObRawExprVisitor {
-public:
-  ObRawExprGetHashValue(uint64_t seed) : seed_(seed)
-  {}
-  virtual ~ObRawExprGetHashValue()
-  {}
-
   /**
-   *  The starting point
+   *  This class is used to traverse an expression tree in a post-order fashion to
+   *  add all required expressions into the context data structure, which is used
+   *  during output expr allocation.
    */
-  int get_hash_value(ObRawExpr& expr);
+  class ObRawExprGetHashValue: public ObRawExprVisitor
+  {
+  public:
+    ObRawExprGetHashValue(uint64_t seed) : seed_(seed) {}
+    virtual ~ObRawExprGetHashValue() {}
 
-  /// interface of ObRawExprVisitor
-  virtual int visit(ObConstRawExpr& expr);
-  virtual int visit(ObVarRawExpr& expr);
-  virtual int visit(ObQueryRefRawExpr& expr);
-  virtual int visit(ObColumnRefRawExpr& expr);
-  virtual int visit(ObOpRawExpr& expr);
-  virtual int visit(ObCaseOpRawExpr& expr);
-  virtual int visit(ObAggFunRawExpr& expr);
-  virtual int visit(ObSysFunRawExpr& expr);
-  virtual int visit(ObSetOpRawExpr& expr);
+    /**
+     *  The starting point
+     */
+    int get_hash_value(ObRawExpr &expr);
 
-private:
-  int add_expr(ObRawExpr& expr);
+    /// interface of ObRawExprVisitor
+    virtual int visit(ObConstRawExpr &expr);
+    virtual int visit(ObVarRawExpr &expr);
+    virtual int visit(ObOpPseudoColumnRawExpr &expr);
+    virtual int visit(ObQueryRefRawExpr &expr);
+    virtual int visit(ObColumnRefRawExpr &expr);
+    virtual int visit(ObOpRawExpr &expr);
+    virtual int visit(ObCaseOpRawExpr &expr);
+    virtual int visit(ObAggFunRawExpr &expr);
+    virtual int visit(ObSysFunRawExpr &expr);
+    virtual int visit(ObSetOpRawExpr &expr);
+    virtual int visit(ObPlQueryRefRawExpr &expr);
+  private:
+    int add_expr(ObRawExpr &expr);
 
-private:
-  uint64_t seed_;
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObRawExprGetHashValue);
-};
-}  // namespace sql
-}  // namespace oceanbase
+  private:
+    uint64_t seed_;
+    // disallow copy
+    DISALLOW_COPY_AND_ASSIGN(ObRawExprGetHashValue);
+  };
+}
+}
 
-#endif  // _OB_RAW_EXPR_GET_HASH_VALUE_H
+#endif // _OB_RAW_EXPR_GET_HASH_VALUE_H

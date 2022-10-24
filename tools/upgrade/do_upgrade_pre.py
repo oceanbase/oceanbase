@@ -105,6 +105,13 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
       # 计算需要添加或更新的系统变量
       conn.commit()
 
+      # 获取standby_cluster_info列表
+      standby_cluster_infos = []
+      if need_check_standby_cluster:
+        standby_cluster_infos = actions.fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+
       conn.autocommit = True
       (update_sys_var_list, update_sys_var_ori_list, add_sys_var_list) = upgrade_sys_vars.calc_diff_sys_var(cur, tenant_id_list[0])
       dump_sql_to_file(cur, query_cur, upgrade_params.sql_dump_filename, tenant_id_list, update_sys_var_list, add_sys_var_list)
@@ -121,21 +128,32 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         normal_ddl_actions_pre.do_normal_ddl_actions(cur)
         logging.info('================succeed to run ddl===============')
         conn.autocommit = False
+        # check ddl and dml sync
+        if need_check_standby_cluster:
+          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_NORMAL_DML in my_module_set:
         logging.info('================begin to run normal dml===============')
         normal_dml_actions_pre.do_normal_dml_actions(cur)
+        normal_dml_actions_pre.do_normal_dml_actions_by_standby_cluster(standby_cluster_infos)
         logging.info('================succeed to run normal dml===============')
         conn.commit()
         actions.refresh_commit_sql_list()
         logging.info('================succeed to commit dml===============')
+        # check ddl and dml sync
+        if need_check_standby_cluster:
+          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
         logging.info('================begin to run each tenant dml===============')
         conn.autocommit = True
         each_tenant_dml_actions_pre.do_each_tenant_dml_actions(cur, tenant_id_list)
+        each_tenant_dml_actions_pre.do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos)
         conn.autocommit = False
         logging.info('================succeed to run each tenant dml===============')
+        # check ddl and dml sync
+        if need_check_standby_cluster:
+          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       # 更新系统变量
       if run_modules.MODULE_SYSTEM_VARIABLE_DML in my_module_set:
@@ -144,6 +162,10 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         upgrade_sys_vars.exec_sys_vars_upgrade_dml(cur, tenant_id_list)
         conn.autocommit = False
         logging.info('================succeed to run system variable dml===============')
+        # check dml sync
+        if need_check_standby_cluster:
+          upgrade_sys_vars.exec_sys_vars_upgrade_dml_in_standby_cluster(standby_cluster_infos)
+          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
         logging.info('================begin to run special action===============')
@@ -152,6 +174,10 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         conn.autocommit = False
         actions.refresh_commit_sql_list()
         logging.info('================succeed to commit special action===============')
+        # check ddl and dml sync
+        if need_check_standby_cluster:
+          special_upgrade_action_pre.do_special_upgrade_in_standy_cluster(standby_cluster_infos, my_user, my_passwd)
+          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
     except Exception, e:
       logging.exception('run error')
       raise e

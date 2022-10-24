@@ -21,16 +21,22 @@
 #include "sql/engine/px/datahub/ob_dh_msg.h"
 #include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/px/datahub/ob_dh_dtl_proc.h"
+#include "sql/engine/px/datahub/components/ob_dh_sample.h"
 
-namespace oceanbase {
-namespace sql {
-namespace dtl {
+namespace oceanbase
+{
+namespace sql
+{
+namespace dtl
+{
 class ObDtlLocalFirstBufferCache;
-}  // namespace dtl
+} // namespace dtl
 
-class ObSqcLeaderTokenGuard {
+class ObSqcLeaderTokenGuard
+{
 public:
-  ObSqcLeaderTokenGuard(common::ObSpinLock& lock) : lock_(lock), hold_lock_(false)
+  ObSqcLeaderTokenGuard(common::ObSpinLock &lock)
+      : lock_(lock), hold_lock_(false)
   {
     if (common::OB_SUCCESS == lock_.trylock()) {
       hold_lock_ = true;
@@ -42,20 +48,17 @@ public:
       lock_.unlock();
     }
   }
-  bool hold_token() const
-  {
-    return hold_lock_;
-  }
-
+  bool hold_token() const { return hold_lock_; }
 private:
-  common::ObSpinLock& lock_;
+  common::ObSpinLock &lock_;
   bool hold_lock_;
 };
 
 class ObSqcCtx;
-class ObPxSQCProxy {
+class ObPxSQCProxy
+{
 public:
-  ObPxSQCProxy(ObSqcCtx& sqc_ctx, ObPxRpcInitSqcArgs& arg);
+  ObPxSQCProxy(ObSqcCtx &sqc_ctx, ObPxRpcInitSqcArgs &arg);
   virtual ~ObPxSQCProxy();
 
   // basics
@@ -63,116 +66,167 @@ public:
   void destroy();
 
   // for transmit op
-  int get_part_ch_map(ObPxPartChInfo& map, int64_t timeout_ts);
-  int get_transmit_data_ch(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet& task_ch_set,
-      dtl::ObDtlChTotalInfo** ch_info);
+  int get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts);
+  int get_transmit_data_ch(const int64_t sqc_id,
+                          const int64_t task_id,
+                          int64_t timeout_ts,
+                          ObPxTaskChSet &task_ch_set,
+                          dtl::ObDtlChTotalInfo **ch_info);
 
   // for receive op
-  int get_receive_data_ch(int64_t child_dfo_id, const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts,
-      ObPxTaskChSet& task_ch_set, dtl::ObDtlChTotalInfo* ch_info);
+  int get_receive_data_ch(int64_t child_dfo_id,
+                          const int64_t sqc_id,
+                          const int64_t task_id,
+                          int64_t timeout_ts,
+                          ObPxTaskChSet &task_ch_set,
+                          dtl::ObDtlChTotalInfo *ch_info);
+  // for px bloom filter op
+  int get_bloom_filter_ch(ObPxBloomFilterChSet &ch_set,
+                          int64_t &sqc_count,
+                          int64_t timeout_ts,
+                          bool is_transmit);
 
   // for peek datahub whole msg
   template <class PieceMsg, class WholeMsg>
-  int get_dh_msg(uint64_t op_id, const PieceMsg& piece, const WholeMsg*& whole, int64_t timeout_ts);
+  int get_dh_msg(
+      uint64_t op_id,
+      const PieceMsg &piece,
+      const WholeMsg *&whole,
+      int64_t timeout_ts,
+      bool send_piece = true,
+      bool need_wait_whole_msg = true);
 
+  // 用于 worker 汇报执行结果
   int report_task_finish_status(int64_t task_idx, int rc);
 
   // for root thread
   int check_task_finish_status(int64_t timeout_ts);
 
-  void get_self_dfo_key(dtl::ObDtlDfoKey& key);
-  void get_parent_dfo_key(dtl::ObDtlDfoKey& key);
+  void get_self_sqc_info(dtl::ObDtlSqcInfo &sqc_info);
+  void get_self_dfo_key(dtl::ObDtlDfoKey &key);
 
-  void set_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache* first_buffer_cache)
-  {
-    first_buffer_cache_ = first_buffer_cache;
-  }
-  dtl::ObDtlLocalFirstBufferCache* get_first_buffer_cache()
-  {
-    return first_buffer_cache_;
-  }
+  void get_parent_dfo_key(dtl::ObDtlDfoKey &key);
 
+  void set_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache *first_buffer_cache)
+  { first_buffer_cache_ = first_buffer_cache; }
+  dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return first_buffer_cache_; }
+
+  // 向qc汇报sqc的结束
   int report(int end_ret) const;
 
-  bool get_transmit_use_interm_result()
+  bool get_transmit_use_interm_result() { return sqc_arg_.sqc_.transmit_use_interm_result(); }
+  bool get_recieve_use_interm_result() { return sqc_arg_.sqc_.recieve_use_interm_result(); }
+  int64_t get_dfo_id() { return sqc_arg_.sqc_.get_dfo_id(); }
+  int64_t get_sqc_id() { return sqc_arg_.sqc_.get_sqc_id(); }
+  const ObPxRpcInitSqcArgs &get_sqc_arg() { return sqc_arg_; }
+  bool bloom_filter_ready() { return bloom_filter_ready_; }
+  void set_bloom_filter_ready(bool flag) { bloom_filter_ready_ = flag; }
+  int64_t &get_filter_channel_idx() { return filter_channel_idx_; }
+  int assign_bloom_filter_channels(common::ObIArray<dtl::ObDtlChannel *> &channels)
   {
-    return sqc_arg_.sqc_.transmit_use_interm_result();
+    return bloom_filter_channels_.assign(channels);
   }
-  bool get_recieve_use_interm_result()
-  {
-    return sqc_arg_.sqc_.recieve_use_interm_result();
-  }
-  int64_t get_dfo_id()
-  {
-    return sqc_arg_.sqc_.get_dfo_id();
-  }
-
+  common::ObIArray<BloomFilterIndex> &get_filter_indexes() { return filter_indexes_; }
+  void set_filter_data(ObPxBloomFilterData *data) { filter_data_ = data; }
+  ObPxBloomFilterData *get_filter_data() { return filter_data_; }
+  common::ObIArray<dtl::ObDtlChannel *> &get_filter_channels() { return bloom_filter_channels_; }
+  int generate_filter_indexes(int64_t each_group_size, int64_t channel_count);
+  void set_per_channel_bf_count(int64_t count) { per_channel_bf_count_ = count; }
+  int64_t get_per_channel_bf_count() { return per_channel_bf_count_; }
+  void set_bf_compress_type(common::ObCompressorType type)
+      { bf_compressor_type_ = type; }
+  common::ObCompressorType get_bf_compress_type()
+      { return bf_compressor_type_; }
+  int make_sqc_sample_piece_msg(ObDynamicSamplePieceMsg &msg, bool &finish);
+  ObDynamicSamplePieceMsg &get_piece_sample_msg() { return sample_msg_; }
+  int assign_bf_ch_set(ObPxBloomFilterChSet &bf_ch_set) { return bf_ch_set_.assign(bf_ch_set); } ;
 private:
   /* functions */
-  int setup_loop_proc(ObSqcCtx& sqc_ctx) const;
+  int setup_loop_proc(ObSqcCtx &sqc_ctx) const;
   int process_dtl_msg(int64_t timeout_ts);
   int do_process_dtl_msg(int64_t timeout_ts);
-  int link_sqc_qc_channel(ObPxRpcInitSqcArgs& sqc_arg);
-  int unlink_sqc_qc_channel(ObPxRpcInitSqcArgs& sqc_arg);
+  int link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg);
+  int unlink_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg);
   bool need_transmit_channel_map_via_dtl();
   bool need_receive_channel_map_via_dtl(int64_t child_dfo_id);
-  int get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider*& provider);
+  int get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider *&provider);
+  int64_t get_process_query_time();
   /* variables */
-  ObSqcCtx& sqc_ctx_;
-  ObPxRpcInitSqcArgs& sqc_arg_;
+  ObSqcCtx &sqc_ctx_;
+  ObPxRpcInitSqcArgs &sqc_arg_;
+  // 所有 worker 都抢这个锁，抢到者为 leader，负责推进 msg loop
   common::ObSpinLock leader_token_lock_;
-  dtl::ObDtlLocalFirstBufferCache* first_buffer_cache_;
+  dtl::ObDtlLocalFirstBufferCache *first_buffer_cache_;
 
+  // 这个锁是临时用，用于互斥多个线程同时用 sqc channel 发数据，
+  // Dtl 支持并发访问后可以删掉
   common::ObSpinLock dtl_lock_;
-
+  bool bloom_filter_ready_;
+  common::ObArray<dtl::ObDtlChannel *> bloom_filter_channels_;
+  ObPxBloomFilterChSet bf_ch_set_;
+  ObPxBloomFilterData *filter_data_;
+  common::ObArray<BloomFilterIndex> filter_indexes_;
+  int64_t per_channel_bf_count_;
+  int64_t filter_channel_idx_;
+  common::ObCompressorType bf_compressor_type_;
+  ObDynamicSamplePieceMsg sample_msg_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSQCProxy);
 };
 
+
 template <class PieceMsg, class WholeMsg>
-int ObPxSQCProxy::get_dh_msg(uint64_t op_id, const PieceMsg& piece, const WholeMsg*& whole, int64_t timeout_ts)
+int ObPxSQCProxy::get_dh_msg(
+    uint64_t op_id,
+    const PieceMsg &piece,
+    const WholeMsg *&whole,
+    int64_t timeout_ts,
+    bool send_piece /*= true*/,
+    bool need_wait_whole_msg /*= true*/)
 {
   int ret = common::OB_SUCCESS;
-  ObPxDatahubDataProvider* provider = nullptr;
+  ObPxDatahubDataProvider *provider = nullptr;
   if (OB_FAIL(get_whole_msg_provider(op_id, provider))) {
     SQL_LOG(WARN, "fail get provider", K(ret));
   } else {
-    {
+    if (send_piece) {
       ObLockGuard<ObSpinLock> lock_guard(dtl_lock_);
       // TODO: LOCK sqc channel
-      dtl::ObDtlChannel* ch = sqc_arg_.sqc_.get_sqc_channel();
+      dtl::ObDtlChannel *ch = sqc_arg_.sqc_.get_sqc_channel();
       if (OB_ISNULL(ch)) {
         ret = common::OB_ERR_UNEXPECTED;
         SQL_LOG(WARN, "empty channel", K(ret));
-      } else if (OB_FAIL(ch->send(piece, timeout_ts))) {
+      } else if (OB_FAIL(ch->send(piece, timeout_ts))) { // 尽力而为，如果 push 失败就由其它机制处理
         SQL_LOG(WARN, "fail push data to channel", K(ret));
       } else if (OB_FAIL(ch->flush())) {
         SQL_LOG(WARN, "fail flush dtl data", K(ret));
       }
     }
 
-    if (OB_SUCC(ret)) {
-      typename WholeMsg::WholeMsgProvider* p = static_cast<typename WholeMsg::WholeMsgProvider*>(provider);
+    if (OB_SUCC(ret) && need_wait_whole_msg) {
+      typename WholeMsg::WholeMsgProvider *p = static_cast<typename WholeMsg::WholeMsgProvider *>(provider);
       int64_t wait_count = 0;
       do {
+        ret = OB_SUCCESS;
         ObSqcLeaderTokenGuard guard(leader_token_lock_);
         if (guard.hold_token()) {
           ret = process_dtl_msg(timeout_ts);
           SQL_LOG(DEBUG, "process dtl msg done", K(ret));
         }
         if (OB_SUCC(ret)) {
-          const dtl::ObDtlMsg* msg = nullptr;
+          const dtl::ObDtlMsg *msg = nullptr;
           if (OB_FAIL(p->get_msg_nonblock(msg, timeout_ts))) {
-            SQL_LOG(WARN, "fail get msg", K(timeout_ts), K(ret));
+            SQL_LOG(TRACE, "fail get msg", K(timeout_ts), K(ret));
           } else {
-            whole = static_cast<const WholeMsg*>(msg);
+            whole = static_cast<const WholeMsg *>(msg);
           }
         }
         if (common::OB_EAGAIN == ret) {
-          if (0 == (++wait_count) % 100) {
-            SQL_LOG(TRACE, "try to get datahub data repeatly", K(timeout_ts), K(wait_count), K(ret));
+          if(0 == (++wait_count) % 100) {
+            SQL_LOG(TRACE, "try to get datahub data repeatly",
+                    K(timeout_ts), K(wait_count), K(ret));
           }
-          // wait 1000us
-          usleep(1000);
+          // wait 50us
+          ob_usleep(50);
         }
       } while (common::OB_EAGAIN == ret);
     }
@@ -180,7 +234,8 @@ int ObPxSQCProxy::get_dh_msg(uint64_t op_id, const PieceMsg& piece, const WholeM
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* __OB_SQL_PX_SQC_PROXY_H__ */
 //// end of header file
+

@@ -18,43 +18,39 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_se_array_iterator.h"
-#include "common/ob_partition_key.h"
+#include "common/ob_simple_iterator.h"
 
-namespace oceanbase {
-namespace common {
-template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
-class ObSimpleIterator {
+namespace oceanbase
+{
+namespace common
+{
+template <typename T, const char *LABEL, int64_t LOCAL_ARRAY_SIZE>
+class ObSimpleIterator
+{
 public:
-  ObSimpleIterator() : item_arr_(LABEL, OB_MALLOC_NORMAL_BLOCK_SIZE)
-  {
-    reset();
-  }
-  ~ObSimpleIterator(){};
+  ObSimpleIterator() : item_arr_(LABEL, OB_MALLOC_NORMAL_BLOCK_SIZE) { reset(); }
+  ~ObSimpleIterator() {};
   void reset();
 
-  int push(const T& item);
+  int push(const T &item);
   int set_ready();
-  bool is_ready() const
-  {
-    return is_ready_;
-  }
-  int get_next(T& item);
-
+  bool is_ready() const { return is_ready_; }
+  int get_next(T &item);
 private:
   bool is_ready_;
   typename common::ObSEArray<T, LOCAL_ARRAY_SIZE> item_arr_;
   typename common::ObSEArray<T, LOCAL_ARRAY_SIZE>::iterator it_;
 };
 
-template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
+template <typename T, const char *LABEL, int64_t LOCAL_ARRAY_SIZE>
 void ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::reset()
 {
   is_ready_ = false;
   item_arr_.reset();
 }
 
-template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
-int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::push(const T& item)
+template <typename T, const char *LABEL, int64_t LOCAL_ARRAY_SIZE>
+int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::push(const T &item)
 {
   int ret = OB_SUCCESS;
 
@@ -70,7 +66,7 @@ int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::push(const T& item)
   return ret;
 }
 
-template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
+template <typename T, const char *LABEL, int64_t LOCAL_ARRAY_SIZE>
 int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::set_ready()
 {
   int ret = OB_SUCCESS;
@@ -80,7 +76,7 @@ int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::set_ready()
     ret = OB_ERR_UNEXPECTED;
   } else {
     is_ready_ = true;
-    // First record the first element that needs to be traversed in preparation for the iterative operation
+    //First record the first element that needs to be traversed in preparation for the iterative operation
     it_ = item_arr_.begin();
   }
 
@@ -88,20 +84,20 @@ int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::set_ready()
 }
 
 /*
- * During the traversal, the first line returned is item_arr_..begin();
- * The next return is ++it, which is helpful to judge whether it has reached the end and avoid the risk of array out of
- * bounds
+ * 遍历的过程中，第一行返回的是item_arr_..begin()；
+ * 接下来返回的是++it，这样有利于判断it是否到达尾部,避免数组越界的风险
  */
-template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
-int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::get_next(T& item)
+template <typename T, const char *LABEL, int64_t LOCAL_ARRAY_SIZE>
+int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::get_next(T &item)
 {
   int ret = OB_SUCCESS;
 
   if (!is_ready_) {
-    OB_LOG(WARN, "ObTransIterator is not ready");
+    OB_LOG(WARN, "ObSimpleIterator is not ready");
     ret = OB_ERR_UNEXPECTED;
   } else if (item_arr_.end() == it_) {
-    OB_LOG(DEBUG, "array iterate end", "part_cnt", item_arr_.count(), K_(item_arr));
+//    OB_LOG(DEBUG, "array iterate end", "part_cnt", item_arr_.count(),
+//        K_(item_arr));
     ret = OB_ITER_END;
   } else {
     item = *it_;
@@ -111,7 +107,7 @@ int ObSimpleIterator<T, LABEL, LOCAL_ARRAY_SIZE>::get_next(T& item)
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_SIMPLE_ITERATOR_
+#endif //OCEANBASE_COMMON_OB_SIMPLE_ITERATOR_

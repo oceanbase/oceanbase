@@ -19,26 +19,36 @@
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/hash_func/ob_hash_func.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 #define ARRAY_INDEX(pos) (index_[pos] - index_base_)
 
 template <typename ItemArray, typename Item, uint64_t N = 1031>
-class ObArrayIndexHashSet {
+class ObArrayIndexHashSet
+{
 public:
   typedef uint32_t IndexType;
   static const IndexType INVALID_INDEX = UINT32_MAX;
 
 public:
-  ObArrayIndexHashSet() : array_(NULL), collision_count_(0), index_base_(INVALID_INDEX)
-  {}
-  explicit ObArrayIndexHashSet(const ItemArray& array) : array_(&array), index_base_(INVALID_INDEX)
+  ObArrayIndexHashSet()
+      : array_(NULL),
+        collision_count_(0),
+        index_base_(INVALID_INDEX)
+  {
+  }
+  explicit ObArrayIndexHashSet(const ItemArray &array)
+      : array_(&array),
+        index_base_(INVALID_INDEX)
   {
     reset();
   }
 
-  void init(const ItemArray& array)
+  void init(const ItemArray &array)
   {
     array_ = &array;
   }
@@ -52,7 +62,7 @@ public:
     if (idx >= N) {
       ret = OB_INVALID_ARGUMENT;
     } else {
-      const Item& item = (*array_)[idx];
+      const Item &item = (*array_)[idx];
       uint64_t pos = anchor_idx(item);
       uint64_t i = 0;
 
@@ -62,7 +72,8 @@ public:
           break;
         } else if (OB_LIKELY((*array_)[ARRAY_INDEX(pos)] == item)) {
           if (OB_UNLIKELY(idx != ARRAY_INDEX(pos))) {
-            _OB_LOG(WARN, "idx %ld, exist idx %lu", idx, static_cast<uint64_t>(ARRAY_INDEX(pos)));
+            _OB_LOG(WARN, "idx %ld, exist idx %lu", idx,
+                    static_cast<uint64_t>(ARRAY_INDEX(pos)));
             ret = OB_ENTRY_EXIST;
           }
           break;
@@ -81,7 +92,7 @@ public:
   }
 
   // return OB_SUCCESS if item existed, or OB_ENTRY_NOT_EXIST
-  inline int get_index(const Item& item, uint64_t& idx) const
+  inline int get_index(const Item &item, uint64_t &idx) const
   {
     int ret = OB_ENTRY_NOT_EXIST;
     uint64_t pos = anchor_idx(item);
@@ -118,7 +129,7 @@ public:
     collision_count_ = 0;
   }
 
-  inline uint64_t anchor_idx(const Item& item) const
+  inline uint64_t anchor_idx(const Item &item) const
   {
     return do_hash(item) % N;
   }
@@ -131,14 +142,14 @@ public:
 private:
   STATIC_ASSERT(N < UINT32_MAX, "unsupport N more than UINT32_MAX");
 
-  const ItemArray* array_;
+  const ItemArray *array_;
   IndexType index_[N];
   uint64_t collision_count_;
   uint64_t index_base_;
 
   DISALLOW_COPY_AND_ASSIGN(ObArrayIndexHashSet);
 };
-};      // end namespace hash
-};      // end namespace common
-};      // end namespace oceanbase
-#endif  // OCEANBASE_HASH_OB_ARRAY_INDEX_HASH_SET_
+}; // end namespace hash
+}; // end namespace common
+}; // end namespace oceanbase
+#endif // OCEANBASE_HASH_OB_ARRAY_INDEX_HASH_SET_

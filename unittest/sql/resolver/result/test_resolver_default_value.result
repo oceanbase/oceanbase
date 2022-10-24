@@ -1662,7 +1662,7 @@ ALTER TABLE default_t1 ADD v2 varchar(500) not null;
   ]
 }
 ***************   Case 17   ***************
-ALTER TABLE default_t1 ADD v3 varchar(500) not null default '@varchar500';
+ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
 {
   "ObTableStmt": {
     "partition_fun_expr": [
@@ -4876,7 +4876,7 @@ ALTER TABLE default_t1 ADD b2 binary not null;
   ]
 }
 ***************   Case 40   ***************
-ALTER TABLE default_t1 ADD b3 binary not null default '@binary'
+ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
 {
   "ObTableStmt": {
     "partition_fun_expr": [
@@ -5314,7 +5314,7 @@ ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
   ]
 }
 ***************   Case 43   ***************
-ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default '@varbinary@1000';
+ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@1000';
 {
   "ObTableStmt": {
     "partition_fun_expr": [

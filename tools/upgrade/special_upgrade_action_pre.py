@@ -47,6 +47,56 @@ import sys
 #    raise e
 #  logging.info('exec modify trigger finish')
 
+def do_special_upgrade_in_standy_cluster(standby_cluster_infos, user, passwd):
+  try:
+    for standby_cluster_info in standby_cluster_infos:
+      logging.info("do_special_upgrade_in_standy_cluster: cluster_id = {0}, ip = {1}, port = {2}"
+                   .format(standby_cluster_info['cluster_id'],
+                           standby_cluster_info['ip'],
+                           standby_cluster_info['port']))
+      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+                   .format(standby_cluster_info['cluster_id'],
+                           standby_cluster_info['ip'],
+                           standby_cluster_info['port']))
+      conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+                                     password =  standby_cluster_info['pwd'],
+                                     host     =  standby_cluster_info['ip'],
+                                     port     =  standby_cluster_info['port'],
+                                     database =  'oceanbase',
+                                     raise_on_warnings = True)
+
+      cur = conn.cursor(buffered=True)
+      conn.autocommit = True
+      query_cur = QueryCursor(cur)
+      is_primary = check_current_cluster_is_primary(query_cur)
+      if is_primary:
+        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+                          .format(standby_cluster_info['cluster_id'],
+                                  standby_cluster_info['ip'],
+                                  standby_cluster_info['port']))
+        raise e
+
+      ## process
+      do_special_upgrade_for_standby_cluster(conn, cur, user, passwd)
+
+      cur.close()
+      conn.close()
+  except Exception, e:
+    logging.exception("""do_special_upgrade_for_standby_cluster failed""")
+    raise e
+
+# 备库需要执行的升级动作，且备库仅系统租户可写
+def do_special_upgrade_for_standby_cluster(conn, cur, user, passwd):
+#升级语句对应的action要写在下面的actions begin和actions end这两行之间，
+#因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
+#这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+
+# 主库升级流程没加滚动升级步骤，或混部阶段DDL测试有相关case覆盖前，混部开始禁DDL
+  actions.set_parameter(cur, 'enable_ddl', 'False')
+  tenant_id_list = [1]
+####========******####======== actions begin ========####******========####
+  return
+####========******####========= actions end =========####******========####
 
 # 主库需要执行的升级动作
 def do_special_upgrade(conn, cur, tenant_id_list, user, passwd):
@@ -59,7 +109,6 @@ def do_special_upgrade(conn, cur, tenant_id_list, user, passwd):
 ####========******####======== actions begin ========####******========####
   return
 ####========******####========= actions end =========####******========####
-
 def do_add_recovery_status_to_all_zone(conn, cur):
   try:
     logging.info('add recovery status row to __all_zone for each zone')
@@ -97,45 +146,6 @@ def do_add_recovery_status_to_all_zone(conn, cur):
 
   except Exception, e:
     logging.exception('do_add_recovery_status_to_all_zone error')
-    raise e
-
-def do_add_storage_type_to_all_zone(conn, cur):
-  try:
-    logging.info('add storage type row to __all_zone for each zone')
-    zones = [];
-    storage_types = [];
-
-    # pre-check, may skip
-    check_updated_sql = "select * from oceanbase.__all_zone where zone !='' AND name='storage_type'"
-    cur.execute(check_updated_sql)
-    storage_types = cur.fetchall()
-    if 0 < len(storage_types):
-      logging.info('[storage_types] row already exists, no need to add')
-
-    # get zones
-    if 0 >= len(storage_types):
-      all_zone_sql = "select distinct(zone) zone from oceanbase.__all_zone where zone !=''"
-      cur.execute(all_zone_sql)
-      zone_results = cur.fetchall()
-      for r in zone_results:
-        zones.append("('" + r[0] + "', 'storage_type', 0, 'LOCAL')")
-
-    # add rows
-    if 0 < len(zones):
-      upgrade_sql = "insert into oceanbase.__all_zone(zone, name, value, info) values " + ','.join(zones)
-      logging.info(upgrade_sql)
-      cur.execute(upgrade_sql)
-      conn.commit()
-
-    # check result
-    if 0 < len(zones):
-      cur.execute(check_updated_sql)
-      check_results = cur.fetchall()
-      if len(check_results) != len(zones):
-        raise MyError('fail insert [storage_type] row into __all_zone')
-
-  except Exception, e:
-    logging.exception('do_add_storage_type_to_all_zone error')
     raise e
 
 def modify_trigger(conn, cur, tenant_ids):

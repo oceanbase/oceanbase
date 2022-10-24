@@ -20,17 +20,21 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_thread_cond.h"
 
-namespace oceanbase {
-namespace rpc {
+namespace oceanbase
+{
+namespace rpc
+{
 class ObRequest;
-}  // end of namespace rpc
+} // end of namespace rpc
 
-namespace obrpc {
+namespace obrpc
+{
 
-class ObRpcSessionHandler {
+class ObRpcSessionHandler
+{
 public:
   ObRpcSessionHandler();
-  virtual ~ObRpcSessionHandler(){};
+  virtual ~ObRpcSessionHandler() {};
 
   /**
    * prepare for wait next request packet.
@@ -47,35 +51,35 @@ public:
    * @param next_request packet object
    * @param timeout
    */
-  virtual int wait_for_next_request(int64_t session_id, rpc::ObRequest*& req, const int64_t timeout);
+  virtual int wait_for_next_request(int64_t session_id,
+                                    rpc::ObRequest *&req,
+                                    const int64_t timeout);
 
-  bool wakeup_next_thread(rpc::ObRequest& req);
+  bool wakeup_next_thread(rpc::ObRequest &req);
 
   virtual int destroy_session(int64_t session_id);
 
   virtual int64_t generate_session_id();
 
   inline void set_max_wait_thread_count(const uint64_t max_wait_count)
-  {
-    max_waiting_thread_count_ = max_wait_count;
-  }
+  { max_waiting_thread_count_ = max_wait_count; }
 
 private:
   enum { MAX_COND_COUNT = common::OB_MAX_CPU_NUM * 32 };
-  struct WaitObject {
+  struct WaitObject
+  {
     int64_t thid_;
-    rpc::ObRequest* req_;
-    WaitObject() : thid_(-1), req_(NULL)
+    rpc::ObRequest *req_;
+    WaitObject()
+        : thid_(-1), req_(NULL)
     {}
-    WaitObject(rpc::ObRequest* req) : req_(req)
+    WaitObject(rpc::ObRequest *req)
+        : req_(req)
     {}
   };
 
-  int get_session_id(const rpc::ObRequest& req, int64_t& session_id) const;
-  common::ObThreadCond& get_next_cond_(int64_t id)
-  {
-    return next_cond_[id % MAX_COND_COUNT];
-  }
+  int get_session_id(const rpc::ObRequest &req, int64_t &session_id) const;
+  common::ObThreadCond& get_next_cond_(int64_t id) { return next_cond_[id % MAX_COND_COUNT]; }
 
 private:
   static const int32_t DEFAULT_WAIT_TIMEOUT_MS = 1000;
@@ -89,12 +93,11 @@ private:
   volatile uint64_t sessid_;
   volatile uint64_t waiting_thread_count_;
   uint64_t max_waiting_thread_count_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcSessionHandler);
 };
 
-}  // namespace obrpc
-}  // namespace oceanbase
+}
+}
 
 #endif

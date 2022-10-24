@@ -16,15 +16,19 @@
 #include <gmock/gmock.h>
 #include "rootserver/ob_freeze_info_manager.h"
 
-namespace oceanbase {
-namespace storage {
+namespace oceanbase
+{
+namespace storage
+{
 class ObFrozenStatus;
 }
-namespace rootserver {
+namespace rootserver
+{
 
-class MockFreezeInfoManager : public ObFreezeInfoManager {
+class MockFreezeInfoManager: public ObFreezeInfoManager
+{
 public:
-  virtual int get_freeze_info(int64_t input_frozen_version, storage::ObFrozenStatus& frozen_status)
+  virtual int get_freeze_info(int64_t input_frozen_version, storage::ObFrozenStatus &frozen_status)
   {
     UNUSED(input_frozen_version);
     frozen_status.frozen_version_ = ORIGIN_FROZEN_VERSION;
@@ -33,9 +37,8 @@ public:
     frozen_status.schema_version_ = ORIGIN_SCHEMA_VERSION;
     return common::OB_SUCCESS;
   }
-  MOCK_METHOD2(
-      set_freeze_info, int(storage::ObFrozenStatus& src_frozen_status, storage::ObFrozenStatus& tgt_frozen_status));
-
+  MOCK_METHOD2(set_freeze_info, int(storage::ObFrozenStatus &src_frozen_status,
+                                    storage::ObFrozenStatus &tgt_frozen_status));
 private:
   static const int64_t ORIGIN_FROZEN_VERSION = 1;
   static const common::ObFreezeStatus ORIGIN_FREEZE_STATUS = common::COMMIT_SUCCEED;
@@ -43,6 +46,6 @@ private:
   static const int64_t ORIGIN_SCHEMA_VERSION = 1;
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 #endif

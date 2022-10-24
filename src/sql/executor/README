@@ -1,0 +1,53 @@
+See `ob_executor.h' for the interface of this module.
+
+Task Runtime Message Defination
+
+1. OB_REMOTE_EXECUTE
+
+1. Schedular发送给TaskRunner
+2. 异步handle调用
+3. 结果流式返回
+4. 入参ObTask
+5. 结果为若干个ObScanner
+
+2. OB_DIST_EXECUTE
+
+1. Schedular发送给TaskRunner
+2. 同步调用
+3. 结果非流式
+4. 入参ObTask
+5. 结果是ObResultCode
+
+3. OB_TASK_COMPLETE
+
+1. TaskWorker通知Schedular任务执行结果
+2. 同步调用
+3. 非流式
+4. 入参ObTaskID
+5. 结果ObResultCode
+
+4. OB_TASK_NOTIFY_FETCH
+
+1. Schedular发送给TaskWorker取下游结果
+2. 同步调用
+3. 非流式
+4. 入参ObTaskNotifyFetch
+5. 出参ObResultCode
+
+5. OB_TASK_FETCH_RESULT
+
+1. 上游TaskWorker向下游中间结果管理器取结果
+2. 同步调用
+3. 结果流式返回
+4. 入参ObTaskResultID
+5. 结果是若干个ObScanner
+
+
+6. OB_TASK_KILL
+
+1. Schedular发送给TaskWorker，终止任务并释放所有资源
+2. 同步调用
+3. 非流式
+4. 入参ObTaskID
+5. 出参ObResultCode
+

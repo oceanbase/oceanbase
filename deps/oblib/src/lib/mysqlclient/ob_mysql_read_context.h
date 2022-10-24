@@ -16,30 +16,29 @@
 #include "lib/mysqlclient/ob_isql_result_handler.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
 class ObMySQLResult;
 
-class ObMySQLReadContext : public ObISQLResultHandler {
+class ObMySQLReadContext : public ObISQLResultHandler
+{
 public:
-  ObMySQLReadContext() : result_(NULL), stmt_()
-  {}
-  virtual ~ObMySQLReadContext()
-  {}
+  ObMySQLReadContext() : result_(NULL), stmt_() {}
+  virtual ~ObMySQLReadContext() {}
 
-  virtual ObMySQLResult* mysql_result()
-  {
-    return result_;
-  }
+  virtual ObMySQLResult *mysql_result() { return result_; }
 
 public:
-  ObMySQLResult* result_;
+  ObMySQLResult *result_;
   ObMySQLStatement stmt_;
 };
 
-}  // end namespace sqlclient
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace sqlclient
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_MYSQLCLIENT_OB_MYSQL_READ_CONTEXT_H_
+#endif // OCEANBASE_MYSQLCLIENT_OB_MYSQL_READ_CONTEXT_H_

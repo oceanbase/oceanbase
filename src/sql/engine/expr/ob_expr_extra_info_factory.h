@@ -14,50 +14,78 @@
 #define OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_EXTRA_INFO_FACTORY_
 
 #include "sql/engine/expr/ob_expr.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "lib/allocator/ob_allocator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObIExprExtraInfo;
+namespace oceanbase
+{
+namespace sql
+{
+struct ObIExprExtraInfo;
 
-struct ObExprExtraInfoFactory {
+struct ObExprExtraInfoFactory
+{
 public:
-  typedef int (*AllocExtraInfoFunc)(
-      common::ObIAllocator& alloc, ObIExprExtraInfo*& extra_info, const ObExprOperatorType type);
+  typedef int (*AllocExtraInfoFunc) (common::ObIAllocator &alloc, ObIExprExtraInfo *&extra_info,
+                                     const ObExprOperatorType type);
   // allocate extra info
-  static int alloc(common::ObIAllocator& alloc, const ObExprOperatorType& type, ObIExprExtraInfo*& extra_info);
+  static int alloc(common::ObIAllocator &alloc,
+                   const ObExprOperatorType &type,
+                   ObIExprExtraInfo *&extra_info);
 
   static void register_expr_extra_infos();
 
-  inline static bool is_registered(const ObExprOperatorType& type)
+  inline static bool is_registered(const ObExprOperatorType &type)
   {
-    return type > T_INVALID && type < T_MAX_OP && NULL != ALLOC_FUNS_[type];
+    return type > T_INVALID && type < T_MAX_OP
+           && NULL != ALLOC_FUNS_[type];
+  }
+
+  // In the past, extra_ and extra_info_ were union structures in ObExpr. now move
+  // the extra_info_ in ObExpr from the union structure to the outer layer.
+  // therefore, in order to deal with upgrade compatibility issues, it is necessary to
+  // identify the type registered before moving extra_info_ to the outer layer.
+  // so, this function is used to determine whether the type is registered
+  // before moving extra_info_ to the outer layer of the union structure
+  // WARNING: It is forbidden to add new registration types to this function
+  inline static bool is_early_registered(const ObExprOperatorType &type)
+  {
+    return type == T_FUN_SYS_CALC_PARTITION_ID ||
+           type == T_FUN_SYS_CALC_TABLET_ID ||
+           type == T_FUN_SYS_CALC_PARTITION_TABLET_ID ||
+           type == T_FUN_ENUM_TO_STR ||
+           type == T_FUN_SET_TO_STR ||
+           type == T_FUN_ENUM_TO_INNER_TYPE ||
+           type == T_FUN_SET_TO_INNER_TYPE ||
+           type == T_FUN_COLUMN_CONV ||
+           type == T_FUN_NORMAL_UDF;
   }
 
 private:
   template <typename T>
-  static int alloc(common::ObIAllocator& alloc, ObIExprExtraInfo*& extra_info, const ObExprOperatorType type);
+  static int alloc(common::ObIAllocator &alloc, ObIExprExtraInfo *&extra_info,
+                   const ObExprOperatorType type);
 
 private:
   static AllocExtraInfoFunc ALLOC_FUNS_[T_MAX_OP];
 };
 
 template <typename T>
-int ObExprExtraInfoFactory::alloc(
-    common::ObIAllocator& alloc, ObIExprExtraInfo*& extra_info, const ObExprOperatorType type)
+int ObExprExtraInfoFactory::alloc(common::ObIAllocator &alloc,
+                                  ObIExprExtraInfo *&extra_info,
+                                  const ObExprOperatorType type)
 {
   int ret = common::OB_SUCCESS;
-  void* buf = NULL;
+  void *buf = NULL;
   if (OB_ISNULL(buf = alloc.alloc(sizeof(T)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(ERROR, "fail to alloc expr_operator", K(ret));
   } else {
-    extra_info = new (buf) T(alloc, type);
+    extra_info = new(buf) T(alloc, type);
   }
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 #endif

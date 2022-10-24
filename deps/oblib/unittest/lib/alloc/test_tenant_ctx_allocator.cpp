@@ -30,12 +30,12 @@ TEST(TestTenantAllocator, CtxAlloc)
   ObTenantCtxAllocator ta(123, 1);
   ta.set_tenant_memory_mgr();
   ta.set_limit(INT64_MAX);
-  ObMemAttr attr(123, 0, 1);
+  ObMemAttr attr(123, "TenantCtxAlloc", 1);
   const int64_t hold = get_memory_hold();
 
   cout << "current hold: " << hold << endl;
 
-  set_memory_limit(hold + (3 << 20));
+  set_memory_limit(hold + (3<<20));
   EXPECT_TRUE(NULL != ta.alloc(1, attr));
 
   ta.print_memory_usage();
@@ -46,7 +46,7 @@ TEST(TestTenantAllocator, SysLimit)
   ObTenantCtxAllocator ta(324);
   ta.set_tenant_memory_mgr();
   ta.set_limit(INT64_MAX);
-  ObMemAttr attr(324, 0);
+  ObMemAttr attr(324, "TenantCtxAlloc");
   const int64_t hold = get_memory_hold();
 
   cout << "current hold: " << hold << endl;
@@ -54,10 +54,10 @@ TEST(TestTenantAllocator, SysLimit)
   set_memory_limit(hold);
   EXPECT_EQ(NULL, ta.alloc(1, attr));
 
-  set_memory_limit(hold + (1 << 20));
+  set_memory_limit(hold + (1<<20));
   EXPECT_EQ(NULL, ta.alloc(1, attr));
 
-  set_memory_limit(hold + (3 << 20));
+  set_memory_limit(hold + (3<<20));
   EXPECT_TRUE(NULL != ta.alloc(1, attr));
 }
 
@@ -66,7 +66,7 @@ TEST(TestTenantAllocator, TenantLimit)
   ObTenantCtxAllocator ta(324);
   ta.set_tenant_memory_mgr();
   ta.set_limit(INT64_MAX);
-  ObMemAttr attr(324, 0);
+  ObMemAttr attr(324, "TenantCtxAlloc");
   const int64_t hold = get_memory_hold();
 
   cout << "current hold: " << hold << endl;
@@ -85,7 +85,7 @@ TEST(TestTenantAllocator, TenantLimit)
   EXPECT_TRUE(NULL != ta.alloc(1, attr));
 
   attr.prio_ = OB_NORMAL_ALLOC;
-  EXPECT_FALSE(NULL != ta.alloc(1, attr));
+  EXPECT_FALSE(NULL != ta.alloc(2 << 20, attr));
 
   attr.prio_ = OB_HIGH_ALLOC;
   EXPECT_TRUE(NULL != ta.alloc(1, attr));
@@ -146,20 +146,20 @@ TEST(TestTenantAllocator, reserve)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(ta.chunk_cnt_, reserve_size / INTACT_ACHUNK_SIZE);
   int64_t chunk_cnt = 0;
-  AChunk* chunk = &ta.head_chunk_;
+  AChunk *chunk = &ta.head_chunk_;
   while (chunk->next_ != nullptr) {
     chunk_cnt++;
     chunk = chunk->next_;
   }
   ASSERT_EQ(ta.chunk_cnt_, chunk_cnt);
-  ObMemAttr attr(tenant_id, 0, ctx_id);
-  void* ptr = ta.alloc(1, attr);
+  ObMemAttr attr(tenant_id, "TenantCtxAlloc",  ctx_id);
+  void *ptr = ta.alloc(1, attr);
   ASSERT_NE(nullptr, ptr);
   ASSERT_EQ(ta.chunk_cnt_, chunk_cnt - 1);
   int64_t total_alloc_size = 0;
   int64_t alloc_size = 512;
   while (true) {
-    void* ptr = ta.alloc(alloc_size, attr);
+    void *ptr = ta.alloc(alloc_size, attr);
     ASSERT_NE(nullptr, ptr);
     total_alloc_size += alloc_size;
     if (total_alloc_size > reserve_size) {
@@ -191,8 +191,8 @@ TEST(TestTenantAllocator, set_idle)
   ASSERT_EQ(OB_SUCCESS, ta.set_tenant_memory_mgr());
   const int64_t limit = 1L * 1024L * 1024L * 1024L;
   ta.set_limit(limit);
-  ObMemAttr attr(tenant_id, 0, ctx_id);
-  void* ptr = ta.alloc(INTACT_ACHUNK_SIZE / 2, attr);
+  ObMemAttr attr(tenant_id, "TenantCtxAlloc", ctx_id);
+  void *ptr = ta.alloc(INTACT_ACHUNK_SIZE / 2, attr);
   ASSERT_NE(nullptr, ptr);
   int64_t hold = ta.get_hold();
   ta.free(ptr);
@@ -200,7 +200,7 @@ TEST(TestTenantAllocator, set_idle)
   ASSERT_LT(ta.get_hold(), hold);
 
   const int64_t alloc_cnt = 10;
-  void* ptrs[alloc_cnt];
+  void *ptrs[alloc_cnt];
   for (int i = 0; i < alloc_cnt; ++i) {
     ptr = ta.alloc(INTACT_ACHUNK_SIZE / 2, attr);
     ASSERT_NE(nullptr, ptr);
@@ -242,16 +242,16 @@ TEST(TestTenantAllocator, idle)
   ret = ta.set_idle(idle_size);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  int64_t chunk_cnt = init_size / INTACT_ACHUNK_SIZE;
+  int64_t chunk_cnt = init_size/INTACT_ACHUNK_SIZE;
   ASSERT_EQ(ta.chunk_cnt_, chunk_cnt);
   int64_t hold = ta.get_hold();
   const int64_t alloc_size = 1024 * 100;
-  ObMemAttr attr(tenant_id, 0, ctx_id);
-  int k = 0;
-  ObArray<void*> ptrs;
+  ObMemAttr attr(tenant_id, "TenantCtxAlloc", ctx_id);
+  int k  = 0;
+  ObArray<void *> ptrs;
   while (hold == ta.get_hold()) {
     k++;
-    void* ptr = ta.alloc(alloc_size, attr);
+    void *ptr = ta.alloc(alloc_size, attr);
     ASSERT_NE(nullptr, ptr);
     ptrs.push_back(ptr);
   }
@@ -260,7 +260,7 @@ TEST(TestTenantAllocator, idle)
   ASSERT_EQ(0, ta.chunk_cnt_);
 
   while (ta.get_hold() < idle_size * 2) {
-    void* ptr = ta.alloc(alloc_size, attr);
+    void * ptr = ta.alloc(alloc_size, attr);
     ASSERT_NE(nullptr, ptr);
     ptrs.push_back(ptr);
   }
@@ -278,7 +278,7 @@ TEST(TestTenantAllocator, idle)
     ta.free(ptrs[i]);
     ASSERT_EQ(ta.get_hold(), hold);
   }
-  chunk_cnt = idle_size / INTACT_ACHUNK_SIZE;
+  chunk_cnt = idle_size/INTACT_ACHUNK_SIZE;
   ASSERT_EQ(ta.chunk_cnt_, chunk_cnt);
 
   ret = ta.set_idle(0);
@@ -299,35 +299,33 @@ TEST(TestTenantAllocator, chunk_free_list_push_pop_concurrency)
 
   int chunk_num = 0;
   int th_num = 32;
-  cotesting::FlexPool(
-      [&ta, &chunk_num](int, int) {
-        int64_t start_time = ObTimeUtility::current_time();
-        while (ObTimeUtility::current_time() < start_time + 10 * 1000 * 1000) {
-          AChunk* chunk = nullptr;
-          if (0 == ObRandom::rand(0, 1)) {
-            chunk = ta.pop_chunk();
-          } else {
-            chunk = new AChunk(0);
-            ATOMIC_INC(&chunk_num);
-          }
-          if (chunk != nullptr) {
-            usleep(1000);
-            ta.push_chunk(chunk);
-          }
-        }
-      },
-      th_num,
-      1)
-      .start();
-  AChunk* chunk = nullptr;
-  while ((chunk = ta.pop_chunk()) != nullptr) {
+  cotesting::FlexPool([&ta, &chunk_num]() {
+    int64_t start_time = ObTimeUtility::current_time();
+    while (ObTimeUtility::current_time() < start_time + 10 * 1000 * 1000)
+    {
+      AChunk *chunk = nullptr;
+      if (0 == ObRandom::rand(0, 1)) {
+        chunk = ta.pop_chunk();
+      } else {
+        chunk = new AChunk();
+        ATOMIC_INC(&chunk_num);
+      }
+      if (chunk != nullptr) {
+        usleep(1000);
+        ta.push_chunk(chunk);
+      }
+    }
+  }, th_num).start();
+  AChunk *chunk = nullptr;
+  while ((chunk = ta.pop_chunk()) != nullptr)
+  {
     delete chunk;
     chunk_num--;
   }
   ASSERT_EQ(0, chunk_num);
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
   OB_LOGGER.set_file_name("t.log", true, true);

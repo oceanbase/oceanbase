@@ -127,7 +127,7 @@ def do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos):
         raise e
 
       ## process
-      do_each_tenant_dml_actions(cur, tenant_id_list)
+      do_each_tenant_dml_actions(cur, tenant_id_list, True)
 
       cur.close()
       conn.close()
@@ -135,7 +135,7 @@ def do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos):
     logging.exception("""do_each_tenant_dml_actions_by_standby_cluster failed""")
     raise e
 
-def do_each_tenant_dml_actions(cur, tenant_id_list):
+def do_each_tenant_dml_actions(cur, tenant_id_list, standby=False):
   import each_tenant_dml_actions_post
   cls_list = reflect_action_cls_list(each_tenant_dml_actions_post, 'EachTenantDMLActionPost')
   for cls in cls_list:
@@ -160,7 +160,8 @@ def do_each_tenant_dml_actions(cur, tenant_id_list):
       action.check_after_do_each_tenant_action(tenant_id)
     action.change_tenant(sys_tenant_id)
     action.dump_after_do_action()
-    action.check_after_do_action()
+    if False == standby:
+      action.check_after_do_action()
 
 def get_each_tenant_dml_actions_sqls_str(tenant_id_list):
   import each_tenant_dml_actions_post

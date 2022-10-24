@@ -61,7 +61,7 @@ TEST_F(TestJsonPath, test_is_terminator)
   }
 }
 
-
+// 测试 basicNode的构造函数
 TEST_F(TestJsonPath, test_create_basic_node)
 {
   // **
@@ -102,7 +102,7 @@ TEST_F(TestJsonPath, test_create_basic_node)
   ASSERT_EQ(true, fa1->get_node_content().is_had_wildcard_);
 }
 
-// test append func
+// 测试 append函数
 TEST_F(TestJsonPath, test_append)
 {
   // append **
@@ -165,7 +165,7 @@ TEST_F(TestJsonPath, test_append)
   std::cout<<"6: "<<test_path.path_nodes_[5]->get_node_content().member_.object_name_<<std::endl;
 }
 
-// test parse_array_index() func, to get array_index
+// 测试 parse_array_index()函数，用于得到array_index(包括last和-的处理)
 TEST_F(TestJsonPath, test_parse_array_index)
 {
   int ret = OB_SUCCESS;
@@ -180,7 +180,7 @@ TEST_F(TestJsonPath, test_parse_array_index)
   ASSERT_EQ(true, from_end);
 }
 
-// test parse_array_node() func, to get array_node
+// 测试 parse_array_node()函数，用于得到array_node(包括[*], array_cell和array_range的处理)
 TEST_F(TestJsonPath, test_parse_array_node)
 {
   int ret = OB_SUCCESS;
@@ -196,7 +196,7 @@ TEST_F(TestJsonPath, test_parse_array_node)
   //ASSERT_EQ(false, test_path1.path_nodes_[0]->path_node_content_.array_cell_.index_);
 }
 
-// test parse array_cell_node
+// 测试能否正确解析array_cell_node
 TEST_F(TestJsonPath, test_array_cell_node)
 {
   int ret = OB_SUCCESS;
@@ -204,7 +204,7 @@ TEST_F(TestJsonPath, test_array_cell_node)
   ObJsonPath test_path("$[10]", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_ARRAY_CELL,test_path.path_nodes_[0]->get_node_type());
   ASSERT_EQ(10,test_path.path_nodes_[0]->get_node_content().array_cell_.index_);
@@ -212,7 +212,7 @@ TEST_F(TestJsonPath, test_array_cell_node)
 
 }
 
-// test parse array_range_node
+// 测试能否正确解析array_range_node
 TEST_F(TestJsonPath, test_array_range_node)
 {
   int ret = OB_SUCCESS;
@@ -220,7 +220,7 @@ TEST_F(TestJsonPath, test_array_range_node)
   ObJsonPath test_path("$[1 to 10]", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_ARRAY_RANGE,test_path.path_nodes_[0]->get_node_type());
   ASSERT_EQ(1,test_path.path_nodes_[0]->get_node_content().array_range_.first_index_);
@@ -229,7 +229,7 @@ TEST_F(TestJsonPath, test_array_range_node)
   ASSERT_EQ(false,test_path.path_nodes_[0]->get_node_content().array_range_.is_last_index_from_end_);
 }
 
-// test parse array_range_wildcard_node
+// 测试能否正确解析array_range_wildcard_node
 TEST_F(TestJsonPath, test_array_wildcard_node)
 {
   int ret = OB_SUCCESS;
@@ -237,12 +237,12 @@ TEST_F(TestJsonPath, test_array_wildcard_node)
   ObJsonPath test_path("$[*]", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_ARRAY_CELL_WILDCARD,test_path.path_nodes_[0]->get_node_type());
 }
 
-// test parse member_wildcard_node
+// 测试能否正确解析member_wildcard_node
 TEST_F(TestJsonPath, test_member_wildcard_node)
 {
   int ret = OB_SUCCESS;
@@ -250,12 +250,12 @@ TEST_F(TestJsonPath, test_member_wildcard_node)
   ObJsonPath test_path("$.*", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MEMBER_WILDCARD,test_path.path_nodes_[0]->get_node_type());
 }
 
-// test parse member_node
+// 测试能否正确解析member_node
 TEST_F(TestJsonPath, test_member_node)
 {
   int ret = OB_SUCCESS;
@@ -265,7 +265,7 @@ TEST_F(TestJsonPath, test_member_node)
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
   std::cout<<"test"<<std::endl;
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MEMBER,test_path.path_nodes_[0]->get_node_type());
   ObString str(test_path.path_nodes_[0]->get_node_content().member_.object_name_);
@@ -273,7 +273,7 @@ TEST_F(TestJsonPath, test_member_node)
   std::cout<<test_path.path_nodes_[0]->get_node_content().member_.object_name_<<std::endl;
 }
 
-// test parse ellipsis_node
+// 测试能否正确解析ellipsis_node
 TEST_F(TestJsonPath, test_ellipsis_node)
 {
   int ret = OB_SUCCESS;
@@ -281,7 +281,7 @@ TEST_F(TestJsonPath, test_ellipsis_node)
   ObJsonPath test_path("$**[10]", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(2, test_path.path_node_cnt());
   ASSERT_EQ(JPN_ELLIPSIS,test_path.path_nodes_[0]->get_node_type());
   ASSERT_EQ(JPN_ARRAY_CELL,test_path.path_nodes_[1]->get_node_type());
@@ -289,7 +289,7 @@ TEST_F(TestJsonPath, test_ellipsis_node)
   ASSERT_EQ(false,test_path.path_nodes_[1]->get_node_content().array_cell_.is_index_from_end_);
 }
 
-// test parse path expression
+// 测试能否成功解析path表达式
 TEST_F(TestJsonPath, test_parse_path)
 {
   int ret = OB_SUCCESS;
@@ -297,7 +297,7 @@ TEST_F(TestJsonPath, test_parse_path)
   ObJsonPath test_path("$[last-10 to last-1]", &allocator);
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
-  // only one node
+  // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
 
   if (OB_SUCC(ret)) {
@@ -305,7 +305,7 @@ TEST_F(TestJsonPath, test_parse_path)
     {
 
       if (i==0) {
-        // node type is wildcard
+        // 节点类型有 wildcard
         // ASSERT_EQ(JPN_MEMBER_WILDCARD,test_path.path_nodes_[i]->node_type);
         std::cout<<i<<std::endl;
         //ASSERT_EQ(JPN_ARRAY_CELL_WILDCARD,test_path.path_nodes_[i]->node_type);
@@ -443,12 +443,12 @@ TEST_F(TestJsonPath, test_random)
     dice = rand() % 5;
     switch (dice) {
       case 0:
-      // add JPN_MEMBER
+      // 添加 JPN_MEMBER
         str.append(".keyname");
         break;
 
       case 1:
-      // add JPN_MEMBER_WILDCARD
+      // 添加 JPN_MEMBER_WILDCARD
         str.append(".*");
         break;
         
@@ -476,7 +476,7 @@ TEST_F(TestJsonPath, test_random)
         break;
     }
   }
-  // to avoid last node is **
+  // 防止最后一个节点是**
   str.append("[1]");
 
   int ret = OB_SUCCESS;
@@ -502,17 +502,19 @@ TEST_F(TestJsonPath, test_good_path)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
-  // use to parse 
+  // 用于解析
   ObString str0 = "$.\"abc d\"";
   //ObString str0 = "$.abc.\"\".def";
   //.keyname[last-10 to last-1][5].a
   // ObString str0 = "$[9999999999999].keyname";
   std::cout<<str0.ptr()<<std::endl;
-  // use to compare to to_string
+  // 用于和to_string的对比(即str0去除多余空格)
+  // 去除转义符的接口待实现
+  // 此时会把转义符也作为keyname的一部分处理
   ObString str1 = "$.\"abc d\"";
   // ObString str1 = "$[9999999999999].keyname";
   ObJsonPath test_path(str0, &allocator);
-  // parse
+  // 解析
   ret = test_path.parse_path();
   ASSERT_EQ(OB_SUCCESS, ret);
   // to_string
@@ -532,7 +534,7 @@ TEST_F(TestJsonPath, test_good_path)
     }
   }
   
-  // verify equality
+  // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str3(str2.ptr());
   std::cout<<str2.ptr()<<std::endl;
   ASSERT_EQ(str1, str3);

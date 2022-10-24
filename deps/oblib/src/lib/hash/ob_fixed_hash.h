@@ -17,21 +17,22 @@
 #include "lib/queue/ob_link.h"
 #include "lib/hash/ob_hash.h"
 
-namespace oceanbase {
-namespace common {
-template <typename key_t>
-class FixedHash {
+namespace oceanbase
+{
+namespace common
+{
+template<typename key_t>
+class FixedHash
+{
 public:
   typedef ObLink Link;
-  struct node_t : public Link {
-    node_t() : hash_(0), key_()
-    {}
-    explicit node_t(key_t key) : key_(key)
-    {
+  struct node_t: public Link
+  {
+    node_t(): hash_(0), key_() {}
+    explicit node_t(key_t key): key_(key) {
       hash_ = hash_map_calc_hash(key_);
     }
-    ~node_t()
-    {}
+    ~node_t() {}
     static uint64_t hash_map_calc_hash(key_t key)
     {
       return calc_hash(key) | 1;
@@ -44,8 +45,7 @@ public:
       return this;
     }
 
-    bool is_dummy_node()
-    {
+    bool is_dummy_node() {
       return 0 == (hash_ & 1);
     }
 
@@ -70,49 +70,40 @@ public:
       return this;
     }
 
-    uint64_t get_spk()
-    {
-      return bitrev(hash_);
-    }
+    uint64_t get_spk() { return bitrev(hash_); }
     uint64_t hash_;
     key_t key_;
   };
 
-  FixedHash(void* buf, int64_t size) : nodes_((node_t*)buf), limit_(last2n(size / sizeof(node_t)))
-  {
+  FixedHash(void* buf, int64_t size):
+      nodes_((node_t*)buf), limit_(last2n(size/sizeof(node_t))) {
     init_buckets(nodes_, limit_);
   }
-  ~FixedHash()
-  {}
+  ~FixedHash() {}
 
-  int insert(key_t key, node_t* node)
-  {
+  int insert(key_t key, node_t* node) {
     node_t key_node(key);
     return ol_insert(get_pre(&key_node), node->set(key));
   }
 
-  int del(key_t key, node_t*& node)
-  {
+  int del(key_t key, node_t*& node) {
     node_t key_node(key);
     return ol_del(get_pre(&key_node), &key_node, node);
   }
 
-  int get(key_t key, node_t*& node)
-  {
+  int get(key_t key, node_t*& node) {
     node_t key_node(key);
     return ol_get(get_pre(&key_node), &key_node, node);
   }
 
-  node_t* next(node_t* node)
-  {
-    while (NULL != (node = next_node(node)) && node->is_dummy_node())
+  node_t* next(node_t* node) {
+    while(NULL != (node = next_node(node))
+          && node->is_dummy_node())
       ;
     return node;
   }
-
 private:
-  node_t* next_node(node_t* node)
-  {
+  node_t* next_node(node_t* node) {
     node_t* next = NULL;
     if (NULL == node) {
       next = nodes_;
@@ -124,7 +115,7 @@ private:
 
   static uint64_t last2n(const uint64_t x)
   {
-    return x == 0 ? 0 : (1UL << 63) >> (__builtin_clzll(x));
+    return x == 0? 0 : (1UL << 63) >> (__builtin_clzll(x));
   }
 
   static uint64_t bitrev(uint64_t x)
@@ -134,12 +125,12 @@ private:
     x = (((x & 0xf0f0f0f0f0f0f0f0UL) >> 4) | ((x & 0x0f0f0f0f0f0f0f0fUL) << 4));
     x = (((x & 0xff00ff00ff00ff00UL) >> 8) | ((x & 0x00ff00ff00ff00ffUL) << 8));
     x = (((x & 0xffff0000ffff0000UL) >> 16) | ((x & 0x0000ffff0000ffff) << 16));
-    return ((x >> 32) | (x << 32));
+    return((x >> 32) | (x << 32));
   }
 
   static uint64_t get_idx(uint64_t spk, uint64_t bcnt)
   {
-    return bcnt == 0 ? 0 : (spk & (bcnt - 1));
+    return bcnt == 0? 0 : (spk & (bcnt - 1));
   }
 
   node_t* get_pre(node_t* key_node)
@@ -147,17 +138,15 @@ private:
     return nodes_ + get_idx(key_node->get_spk(), limit_);
   }
 
-  static uint64_t get_bucket_pre_idx(uint64_t idx)
-  {
+  static uint64_t get_bucket_pre_idx(uint64_t idx) {
     return idx & ~last2n(idx);
   }
 
-  static int init_buckets(node_t* nodes, int64_t limit)
-  {
+  static int init_buckets(node_t* nodes, int64_t limit) {
     int err = 0;
-    new (nodes) node_t[limit];
+    new(nodes)node_t[limit];
     nodes[0].set_as_bucket(0);
-    for (int64_t i = 1; 0 == err && i < limit; i++) {
+    for(int64_t i = 1; 0 == err && i < limit; i++) {
       node_t* node = nodes + i;
       node->set_as_bucket(i);
       err = ol_insert(nodes + get_bucket_pre_idx(i), node);
@@ -170,6 +159,6 @@ private:
   int64_t limit_;
 };
 
-};     // end namespace common
-};     // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase
 #endif /* OCEANBASE_HASH_OB_FIXED_HASH_H_ */

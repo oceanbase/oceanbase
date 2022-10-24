@@ -68,6 +68,7 @@ select floor(i1/10*8),i1/10*8 from tbl1;
 select * from tbl1 order by floor(i4);
 select * from tbl1 order by floor(i4) desc;
 select floor(i4) abc from tbl1 order by abc desc;
+#there is a bug;
 select floor(v2) from tbl1;
 select floor(i3) from tbl1;
 select floor(d4) from tbl1;

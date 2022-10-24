@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include <string.h>
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "share/object/ob_obj_cast.h"
@@ -20,47 +20,22 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
-
-ObExprIp2int::ObExprIp2int(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_IP2INT, N_IP2INT, 1, NOT_ROW_DIMENSION)
-{}
-
-ObExprIp2int::~ObExprIp2int()
-{}
-
-int ObExprIp2int::calc(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx)
+namespace oceanbase
 {
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(text, ObVarcharType);
-    ObString m_text = text.get_string();
-    if (OB_FAIL(ip2int(result, m_text))) {
-      LOG_WARN("fail to convert ip to int", K(ret), K(m_text));
-    }
-  }
-  UNUSED(expr_ctx);
-  return ret;
+namespace sql
+{
+
+ObExprIp2int::ObExprIp2int(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_IP2INT, N_IP2INT, 1, NOT_ROW_DIMENSION)
+{
 }
 
-int ObExprIp2int::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
+ObExprIp2int::~ObExprIp2int()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(result, text, expr_ctx))) {
-    LOG_WARN("fail to calc", K(ret), K(text));
-  } else {
-  }
-  return ret;
 }
 
 template <typename T>
-int ObExprIp2int::ip2int(T& result, const ObString& text)
+int ObExprIp2int::ip2int(T &result, const ObString &text)
 {
   int ret = OB_SUCCESS;
   char buf[16];
@@ -75,8 +50,7 @@ int ObExprIp2int::ip2int(T& result, const ObString& text)
     for (int i = 0; OB_SUCC(ret) && i < len; ++i) {
       if (text.ptr()[i] == '.') {
         cnt++;
-      } else {
-      }
+      } else {}
     }
     if (OB_FAIL(ret)) {
     } else if (cnt != 3) {
@@ -96,7 +70,9 @@ int ObExprIp2int::ip2int(T& result, const ObString& text)
   return ret;
 }
 
-int ObExprIp2int::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprIp2int::cg_expr(ObExprCGCtx &op_cg_ctx,
+                          const ObRawExpr &raw_expr,
+                          ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -114,13 +90,13 @@ int ObExprIp2int::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObE
   return ret;
 }
 
-int ObExprIp2int::ip2int_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprIp2int::ip2int_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
     LOG_WARN("ip2int expr eval param value failed", K(ret));
   } else {
-    ObDatum& text = expr.locate_param_datum(ctx, 0);
+    ObDatum &text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
       expr_datum.set_null();
     } else {
@@ -133,5 +109,6 @@ int ObExprIp2int::ip2int_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& ex
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+

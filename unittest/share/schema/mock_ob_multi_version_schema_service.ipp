@@ -10,34 +10,37 @@
  * See the Mulan PubL v2 for more details.
  */
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 inline int MockObMultiVersionSchemaService::init()
 {
   int ret = common::OB_SUCCESS;
   common::ObKVGlobalCache::get_instance().init();
   if (OB_FAIL(init_maps())) {
-    _OB_LOG(WARN, "fail to init maps, ret[%d]", ret);
+     _OB_LOG(WARN, "fail to init maps, ret[%d]", ret);
   } else if (OB_FAIL(schema_cache_.init())) {
     _OB_LOG(WARN, "schema_cache_ init fail, ret[%d]", ret);
   } else if (OB_FAIL(init_sys_tenant_user_schema())) {
     _OB_LOG(WARN, "init sys tenant user schema fail, ret[%d]", ret);
   } else {
-    // increment_basepoint_set_ = true;
+    //increment_basepoint_set_ = true;
   }
   return ret;
 }
 
-inline int MockObMultiVersionSchemaService::get_schema_guard(ObSchemaGetterGuard& guard, int64_t snapshot_version)
-{
+inline int MockObMultiVersionSchemaService::get_schema_guard(ObSchemaGetterGuard &guard,
+    int64_t snapshot_version) {
   int ret = common::OB_SUCCESS;
   guard.reset();
   guard.schema_service_ = this;
 
   if (common::OB_INVALID_VERSION == snapshot_version) {
-    // int64_t latest_local_version = get_latest_local_version();
-    // if (ObSchemaService::is_core_temp_version(latest_local_version)) {
+    //int64_t latest_local_version = get_latest_local_version();
+    //if (ObSchemaService::is_core_temp_version(latest_local_version)) {
     //  guard.snapshot_version_ = latest_local_version + 2;
     //} else if (ObSchemaService::is_sys_temp_version(latest_local_version)) {
     //  guard.snapshot_version_ = latest_local_version + 1;
@@ -50,7 +53,7 @@ inline int MockObMultiVersionSchemaService::get_schema_guard(ObSchemaGetterGuard
   } else {
     guard.snapshot_version_ = snapshot_version;
   }
-  // if (OB_FAIL(ret)) {
+  //if (OB_FAIL(ret)) {
   //} else if (OB_FAIL(guard.id_schema_map_.destroy())) {
   //  _OB_LOG(WARN, "destroy failed, ret %d", ret);
   //} else if (OB_FAIL(guard.id_schema_map_.create(ObSchemaGetterGuard::OB_SCHEMA_NAME_MAP_BUCKET_NUM_GUARD,
@@ -59,12 +62,12 @@ inline int MockObMultiVersionSchemaService::get_schema_guard(ObSchemaGetterGuard
   //}
   return ret;
 }
-inline int MockObMultiVersionSchemaService::add_table_schema(ObTableSchema& table_schema, int64_t schema_version)
+inline int MockObMultiVersionSchemaService::add_table_schema(ObTableSchema &table_schema, int64_t schema_version)
 {
   int ret = common::OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
-  const ObTenantSchema* tenant_schema = NULL;
-  const ObSysVariableSchema* sys_variable = NULL;
+  const ObTenantSchema *tenant_schema = NULL;
+  const ObSysVariableSchema *sys_variable = NULL;
   if (OB_FAIL(get_schema_guard(schema_guard, INT64_MAX))) {
     _OB_LOG(WARN, "get schema guard fail, ret %d", ret);
   } else if (OB_FAIL(schema_guard.get_tenant_info(common::OB_SYS_TENANT_ID, tenant_schema))) {
@@ -79,7 +82,7 @@ inline int MockObMultiVersionSchemaService::add_table_schema(ObTableSchema& tabl
     _OB_LOG(WARN, "sys variable schema is null", K(ret));
   } else {
     common::ObNameCaseMode local_mode = sys_variable->get_name_case_mode();
-    if (local_mode <= common::OB_NAME_CASE_INVALID || local_mode >= common::OB_NAME_CASE_MAX) {
+    if (local_mode <= common::OB_NAME_CASE_INVALID || local_mode >= common::OB_NAME_CASE_MAX)   {
       ret = common::OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "invalid tenant mod, ret %d", ret);
     } else {
@@ -97,8 +100,8 @@ inline int MockObMultiVersionSchemaService::add_table_schema(ObTableSchema& tabl
       table_schema.set_name_case_mode(local_mode);
       if (OB_FAIL(update_infos.push_back(schema_update_info))) {
         _OB_LOG(WARN, "update_infos push back fail, ret %d", ret);
-      } else if (OB_FAIL(schema_cache_.put_schema(
-                     TABLE_SCHEMA, table_schema.get_table_id(), schema_version, table_schema))) {
+      } else if (OB_FAIL(schema_cache_.put_schema(TABLE_SCHEMA,table_schema.get_table_id(),
+          schema_version, table_schema))) {
         _OB_LOG(WARN, "put schema fail, ret %d", ret);
       } else if (OB_FAIL(update_name_maps(update_infos))) {
         _OB_LOG(WARN, "update name maps fail, ret %d", ret);
@@ -109,13 +112,12 @@ inline int MockObMultiVersionSchemaService::add_table_schema(ObTableSchema& tabl
   }
   return ret;
 }
-inline int MockObMultiVersionSchemaService::add_database_schema(
-    ObDatabaseSchema& database_schema, int64_t schema_version)
+inline int MockObMultiVersionSchemaService::add_database_schema(ObDatabaseSchema &database_schema, int64_t schema_version)
 {
   int ret = common::OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
-  const ObTenantSchema* tenant_schema = NULL;
-  const ObSysVariableSchema* sys_variable = NULL;
+  const ObTenantSchema *tenant_schema = NULL;
+  const ObSysVariableSchema *sys_variable = NULL;
   if (OB_FAIL(get_schema_guard(schema_guard, INT64_MAX))) {
     _OB_LOG(WARN, "get schema guard fail, ret %d", ret);
   } else if (OB_FAIL(schema_guard.get_tenant_info(common::OB_SYS_TENANT_ID, tenant_schema))) {
@@ -130,7 +132,7 @@ inline int MockObMultiVersionSchemaService::add_database_schema(
     _OB_LOG(WARN, "sys variable schema is null", K(ret));
   } else {
     common::ObNameCaseMode local_mode = sys_variable->get_name_case_mode();
-    if (local_mode <= common::OB_NAME_CASE_INVALID || local_mode >= common::OB_NAME_CASE_MAX) {
+    if (local_mode <= common::OB_NAME_CASE_INVALID || local_mode >= common::OB_NAME_CASE_MAX)   {
       ret = common::OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "invalid tenant mod, ret %d", ret);
     } else {
@@ -147,8 +149,8 @@ inline int MockObMultiVersionSchemaService::add_database_schema(
       database_schema.set_name_case_mode(local_mode);
       if (OB_FAIL(update_infos.push_back(schema_update_info))) {
         _OB_LOG(WARN, "update_infos push back fail, ret %d", ret);
-      } else if (OB_FAIL(schema_cache_.put_schema(
-                     DATABASE_SCHEMA, database_schema.get_database_id(), schema_version, database_schema))) {
+      } else if (OB_FAIL(schema_cache_.put_schema(DATABASE_SCHEMA,database_schema.get_database_id(),
+         schema_version, database_schema))) {
         _OB_LOG(WARN, "put schema fail, ret %d", ret);
       } else if (OB_FAIL(update_name_maps(update_infos))) {
         _OB_LOG(WARN, "update name maps fail, ret %d", ret);
@@ -159,6 +161,6 @@ inline int MockObMultiVersionSchemaService::add_database_schema(
   }
   return ret;
 }
-}  // end namespace schema
-}  // end namespace share
-}  // end namespace oceanbase
+} //end namespace schema
+} //end namespace share
+} //end namespace oceanbase

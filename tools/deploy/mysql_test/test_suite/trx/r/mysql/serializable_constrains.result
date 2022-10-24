@@ -79,7 +79,7 @@ c1	c2
 5	1
 6	1
 7	1
-select table_name from oceanbase.__all_table_v2 as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+select table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
 table_name
 xm_test_t1
 create table xm_test_t4 (pk int primary key);
@@ -93,10 +93,10 @@ c1	c2
 5	1
 6	1
 8	1
-select table_name from oceanbase.__all_table_v2 as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+select table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
 table_name
 xm_test_t1
-select /*+read_consistency(weak) */ table_name from oceanbase.__all_table_v2 as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
+select /*+read_consistency(weak) */ table_name from oceanbase.__all_table as t, oceanbase.__all_database as d where d.database_name='xm_test' and d.database_id = t.database_id and (t.table_name='xm_test_t1' or t.table_name='xm_test_t4');
 table_name
 xm_test_t1
 select * from xm_test_t1;
@@ -122,12 +122,6 @@ c1	c2
 7	1
 8	1
 9	1
-select t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
-table_name
-xm_test_t1
-xm_test_t2
-t_global_index
-xm_test_t4
 create table xm_test_t5 (pk int primary key);
 insert into xm_test_t1 values (10, 1);
 select * from xm_test_t1;
@@ -141,20 +135,6 @@ c1	c2
 7	1
 8	1
 10	1
-select t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
-table_name
-xm_test_t1
-xm_test_t2
-t_global_index
-xm_test_t4
-xm_test_t5
-select /*+read_consistency(weak) */ t.table_name from oceanbase.gv$table as t where t.database_name='xm_test' and t.table_type=3;
-table_name
-xm_test_t1
-xm_test_t2
-t_global_index
-xm_test_t4
-xm_test_t5
 select * from xm_test_t1;
 c1	c2
 1	1

@@ -15,10 +15,12 @@
 
 #include "lib/string/ob_fixed_length_string.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 typedef ObFixedLengthString<MAX_GTS_NAME_LENGTH> ObGtsName;
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_GTS_NAME_H_
+#endif // OCEANBASE_COMMON_OB_GTS_NAME_H_

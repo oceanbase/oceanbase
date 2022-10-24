@@ -685,6 +685,11 @@
 #      logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
 #      conn.commit()
 #
+#      # 获取standby_cluster_info列表
+#      standby_cluster_infos = actions.fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+#      # check ddl and dml sync
+#      actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+#
 #      actions.refresh_commit_sql_list()
 #      dump_sql_to_file(upgrade_params.sql_dump_filename, tenant_id_list)
 #      logging.info('================succeed to dump sql to file: {0}==============='.format(upgrade_params.sql_dump_filename))
@@ -695,6 +700,8 @@
 #        normal_ddl_actions_post.do_normal_ddl_actions(cur)
 #        logging.info('================succeed to run ddl===============')
 #        conn.autocommit = False
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_EACH_TENANT_DDL in my_module_set:
 #        has_run_ddl = True
@@ -703,29 +710,40 @@
 #        each_tenant_ddl_actions_post.do_each_tenant_ddl_actions(cur, tenant_id_list)
 #        logging.info('================succeed to run each tenant ddl===============')
 #        conn.autocommit = False
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_NORMAL_DML in my_module_set:
 #        logging.info('================begin to run normal dml===============')
+#        normal_dml_actions_post.do_normal_dml_actions_by_standby_cluster(standby_cluster_infos)
 #        normal_dml_actions_post.do_normal_dml_actions(cur)
 #        logging.info('================succeed to run normal dml===============')
 #        conn.commit()
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to commit dml===============')
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
 #        logging.info('================begin to run each tenant dml===============')
 #        conn.autocommit = True
+#        each_tenant_dml_actions_post.do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos)
 #        each_tenant_dml_actions_post.do_each_tenant_dml_actions(cur, tenant_id_list)
 #        conn.autocommit = False
 #        logging.info('================succeed to run each tenant dml===============')
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
 #        logging.info('================begin to run special action===============')
 #        conn.autocommit = True
+#        special_upgrade_action_post.do_special_upgrade_in_standy_cluster(standby_cluster_infos, my_user, my_passwd)
 #        special_upgrade_action_post.do_special_upgrade(conn, cur, tenant_id_list, my_user, my_passwd)
 #        conn.autocommit = False
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to commit special action===============')
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -894,6 +912,13 @@
 #      # 计算需要添加或更新的系统变量
 #      conn.commit()
 #
+#      # 获取standby_cluster_info列表
+#      standby_cluster_infos = []
+#      if need_check_standby_cluster:
+#        standby_cluster_infos = actions.fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+#        # check ddl and dml sync
+#        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+#
 #      conn.autocommit = True
 #      (update_sys_var_list, update_sys_var_ori_list, add_sys_var_list) = upgrade_sys_vars.calc_diff_sys_var(cur, tenant_id_list[0])
 #      dump_sql_to_file(cur, query_cur, upgrade_params.sql_dump_filename, tenant_id_list, update_sys_var_list, add_sys_var_list)
@@ -910,21 +935,32 @@
 #        normal_ddl_actions_pre.do_normal_ddl_actions(cur)
 #        logging.info('================succeed to run ddl===============')
 #        conn.autocommit = False
+#        # check ddl and dml sync
+#        if need_check_standby_cluster:
+#          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_NORMAL_DML in my_module_set:
 #        logging.info('================begin to run normal dml===============')
 #        normal_dml_actions_pre.do_normal_dml_actions(cur)
+#        normal_dml_actions_pre.do_normal_dml_actions_by_standby_cluster(standby_cluster_infos)
 #        logging.info('================succeed to run normal dml===============')
 #        conn.commit()
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to commit dml===============')
+#        # check ddl and dml sync
+#        if need_check_standby_cluster:
+#          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
 #        logging.info('================begin to run each tenant dml===============')
 #        conn.autocommit = True
 #        each_tenant_dml_actions_pre.do_each_tenant_dml_actions(cur, tenant_id_list)
+#        each_tenant_dml_actions_pre.do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos)
 #        conn.autocommit = False
 #        logging.info('================succeed to run each tenant dml===============')
+#        # check ddl and dml sync
+#        if need_check_standby_cluster:
+#          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      # 更新系统变量
 #      if run_modules.MODULE_SYSTEM_VARIABLE_DML in my_module_set:
@@ -933,6 +969,10 @@
 #        upgrade_sys_vars.exec_sys_vars_upgrade_dml(cur, tenant_id_list)
 #        conn.autocommit = False
 #        logging.info('================succeed to run system variable dml===============')
+#        # check dml sync
+#        if need_check_standby_cluster:
+#          upgrade_sys_vars.exec_sys_vars_upgrade_dml_in_standby_cluster(standby_cluster_infos)
+#          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #
 #      if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
 #        logging.info('================begin to run special action===============')
@@ -941,6 +981,10 @@
 #        conn.autocommit = False
 #        actions.refresh_commit_sql_list()
 #        logging.info('================succeed to commit special action===============')
+#        # check ddl and dml sync
+#        if need_check_standby_cluster:
+#          special_upgrade_action_pre.do_special_upgrade_in_standy_cluster(standby_cluster_infos, my_user, my_passwd)
+#          actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -1304,7 +1348,7 @@
 #        raise e
 #
 #      ## process
-#      do_each_tenant_dml_actions(cur, tenant_id_list)
+#      do_each_tenant_dml_actions(cur, tenant_id_list, True)
 #
 #      cur.close()
 #      conn.close()
@@ -1312,7 +1356,7 @@
 #    logging.exception("""do_each_tenant_dml_actions_by_standby_cluster failed""")
 #    raise e
 #
-#def do_each_tenant_dml_actions(cur, tenant_id_list):
+#def do_each_tenant_dml_actions(cur, tenant_id_list, standby=False):
 #  import each_tenant_dml_actions_post
 #  cls_list = reflect_action_cls_list(each_tenant_dml_actions_post, 'EachTenantDMLActionPost')
 #  for cls in cls_list:
@@ -1337,7 +1381,8 @@
 #      action.check_after_do_each_tenant_action(tenant_id)
 #    action.change_tenant(sys_tenant_id)
 #    action.dump_after_do_action()
-#    action.check_after_do_action()
+#    if False == standby:
+#      action.check_after_do_action()
 #
 #def get_each_tenant_dml_actions_sqls_str(tenant_id_list):
 #  import each_tenant_dml_actions_post
@@ -1453,7 +1498,7 @@
 #def get_actual_tenant_id(tenant_id):
 #  return tenant_id if (1 == tenant_id) else 0;
 #
-#def do_each_tenant_dml_actions(cur, tenant_id_list):
+#def do_each_tenant_dml_actions(cur, tenant_id_list, standby=False):
 #  import each_tenant_dml_actions_pre
 #  cls_list = reflect_action_cls_list(each_tenant_dml_actions_pre, 'EachTenantDMLActionPre')
 #
@@ -1490,7 +1535,8 @@
 #      action.check_after_do_each_tenant_action(tenant_id)
 #    action.change_tenant(sys_tenant_id)
 #    action.dump_after_do_action()
-#    action.check_after_do_action()
+#    if False == standby:
+#      action.check_after_do_action()
 #
 #def do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos):
 #  try:
@@ -1523,7 +1569,7 @@
 #        raise e
 #
 #      ## process
-#      do_each_tenant_dml_actions(cur, tenant_id_list)
+#      do_each_tenant_dml_actions(cur, tenant_id_list, True)
 #
 #      cur.close()
 #      conn.close()
@@ -1600,6 +1646,3687 @@
 #  result_str = results_to_str(desc, results)
 #  logging.info('dump query results, sql: %s, results:\n%s', sql, result_str)
 #
+####====XXXX======######==== I am a splitter ====######======XXXX====####
+#filename:mysql_to_ora_priv.py
+##!/usr/bin/env python
+## -*- coding: utf-8 -*-
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:__init__.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:actions.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import time
+##import re
+##import json
+##import traceback
+#from my_error import MyError
+#import sys
+#import mysql.connector
+#from mysql.connector import errorcode
+#import logging
+#import json
+#import config
+#import opts
+#import run_modules
+#import actions
+#import string
+#from MySQLdb import _mysql 
+#
+#
+#def dump_sql_to_file(dump_filename, tenant_id_list):
+##  normal_ddls_str = normal_ddl_actions_post.get_normal_ddl_actions_sqls_str()
+##  normal_dmls_str = normal_dml_actions_post.get_normal_dml_actions_sqls_str()
+#  #each_tenant_dmls_str = each_tenant_dml_actions_post.get_each_tenant_dml_actions_sqls_str(tenant_id_list)
+#  dump_file = open(dump_filename, 'w')
+#  dump_file.write('# 以下是priv_checker.py脚本中的步骤\n')
+#  dump_file.write('# 仅供priv_checker.py脚本运行失败需要人肉的时候参考\n')
+#  dump_file.close()
+#
+##def print_stats():
+##  logging.info('==================================================================================')
+##  logging.info('============================== STATISTICS BEGIN ==================================')
+##  logging.info('==================================================================================')
+##  logging.info('succeed run sql(except sql of special actions): \n\n%s\n', actions.get_succ_sql_list_str())
+##  logging.info('commited sql(except sql of special actions): \n\n%s\n', actions.get_commit_sql_list_str())
+##  logging.info('==================================================================================')
+##  logging.info('=============================== STATISTICS END ===================================')
+##  logging.info('==================================================================================')
+##
+##def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_params):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = actions.QueryCursor(cur)
+##      # 开始升级前的检查
+##      check_before_upgrade(query_cur, upgrade_params)
+##      # 获取租户id列表
+##      tenant_id_list = actions.fetch_tenant_ids(query_cur)
+##      if len(tenant_id_list) <= 0:
+##        logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
+##        raise MyError('no tenant id')
+##      logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
+##      conn.commit()
+##
+##      # 获取standby_cluster_info列表
+##      standby_cluster_infos = actions.fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+##      # check ddl and dml sync
+##      actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##
+##      actions.refresh_commit_sql_list()
+##      dump_sql_to_file(upgrade_params.sql_dump_filename, tenant_id_list)
+##      logging.info('================succeed to dump sql to file: {0}==============='.format(upgrade_params.sql_dump_filename))
+##
+##      if run_modules.MODULE_DDL in my_module_set:
+##        logging.info('================begin to run ddl===============')
+##        conn.autocommit = True
+##        normal_ddl_actions_post.do_normal_ddl_actions(cur)
+##        logging.info('================succeed to run ddl===============')
+##        conn.autocommit = False
+##        # check ddl and dml sync
+##        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##
+##      if run_modules.MODULE_EACH_TENANT_DDL in my_module_set:
+##        has_run_ddl = True
+##        logging.info('================begin to run each tenant ddl===============')
+##        conn.autocommit = True
+##        each_tenant_ddl_actions_post.do_each_tenant_ddl_actions(cur, tenant_id_list)
+##        logging.info('================succeed to run each tenant ddl===============')
+##        conn.autocommit = False
+##        # check ddl and dml sync
+##        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##
+##      if run_modules.MODULE_NORMAL_DML in my_module_set:
+##        logging.info('================begin to run normal dml===============')
+##        normal_dml_actions_post.do_normal_dml_actions(cur)
+##        logging.info('================succeed to run normal dml===============')
+##        conn.commit()
+##        actions.refresh_commit_sql_list()
+##        logging.info('================succeed to commit dml===============')
+##        # check ddl and dml sync
+##        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##
+##      if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
+##        logging.info('================begin to run each tenant dml===============')
+##        conn.autocommit = True
+##        each_tenant_dml_actions_post.do_each_tenant_dml_actions(cur, tenant_id_list)
+##        conn.autocommit = False
+##        logging.info('================succeed to run each tenant dml===============')
+##        # check ddl and dml sync
+##        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##
+##      if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
+##        logging.info('================begin to run special action===============')
+##        conn.autocommit = True
+##        special_upgrade_action_post.do_special_upgrade(conn, cur, tenant_id_list)
+##        conn.autocommit = False
+##        actions.refresh_commit_sql_list()
+##        logging.info('================succeed to commit special action===============')
+##        # check ddl and dml sync
+##        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      # 打印统计信息
+##      print_stats()
+##      # 将回滚sql写到文件中
+##      actions.dump_rollback_sql_to_file(upgrade_params.rollback_sql_filename)
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##class EachTenantDDLActionPostCreateAllTenantSecurityRecordAudit(BaseEachTenantDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 15
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record'""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record'""")
+##    if len(results) > 0:
+##      raise MyError('__all_tenant_security_audit_record already created')
+##  def dump_before_do_each_tenant_action(self, tenant_id):
+##    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record' and tenant_id = {0}""".format(tenant_id))
+##  def check_before_do_each_tenant_action(self, tenant_id):
+##    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record' and tenant_id = {0}""".format(tenant_id))
+##    if len(results) > 0:
+##      raise MyError('tenant_id:{0} has already create table __all_tenant_security_audit_record'.format(tenant_id))
+##  @staticmethod
+##  def get_each_tenant_action_ddl(tenant_id):
+##    pure_table_id = 259
+##    table_id = (tenant_id << 40) | pure_table_id
+##    return """
+##      CREATE TABLE `__all_tenant_security_audit_record` (
+##          `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+##          `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+##          `tenant_id` bigint(20) NOT NULL,
+##          `svr_ip` varchar(46) NOT NULL,
+##          `svr_port` bigint(20) NOT NULL,
+##          `record_timestamp_us` timestamp(6) NOT NULL,
+##          `user_id` bigint(20) unsigned NOT NULL,
+##          `user_name` varchar(64) NOT NULL,
+##          `effective_user_id` bigint(20) unsigned NOT NULL,
+##          `effective_user_name` varchar(64) NOT NULL,
+##          `client_ip` varchar(46) NOT NULL,
+##          `user_client_ip` varchar(46) NOT NULL,
+##          `proxy_session_id` bigint(20) unsigned NOT NULL,
+##          `session_id` bigint(20) unsigned NOT NULL,
+##          `entry_id` bigint(20) unsigned NOT NULL,
+##          `statement_id` bigint(20) unsigned NOT NULL,
+##          `trans_id` varchar(512) NOT NULL,
+##          `commit_version` bigint(20) NOT NULL,
+##          `trace_id` varchar(64) NOT NULL,
+##          `db_id` bigint(20) unsigned NOT NULL,
+##          `cur_db_id` bigint(20) unsigned NOT NULL,
+##          `sql_timestamp_us` timestamp(6) NOT NULL,
+##          `audit_id` bigint(20) unsigned NOT NULL,
+##          `audit_type` bigint(20) unsigned NOT NULL,
+##          `operation_type` bigint(20) unsigned NOT NULL,
+##          `action_id` bigint(20) unsigned NOT NULL,
+##          `return_code` bigint(20) NOT NULL,
+##          `obj_owner_name` varchar(64) DEFAULT NULL,
+##          `obj_name` varchar(256) DEFAULT NULL,
+##          `new_obj_owner_name` varchar(64) DEFAULT NULL,
+##          `new_obj_name` varchar(256) DEFAULT NULL,
+##          `auth_privileges` varchar(256) DEFAULT NULL,
+##          `auth_grantee` varchar(256) DEFAULT NULL,
+##          `logoff_logical_read` bigint(20) unsigned NOT NULL,
+##          `logoff_physical_read` bigint(20) unsigned NOT NULL,
+##          `logoff_logical_write` bigint(20) unsigned NOT NULL,
+##          `logoff_lock_count` bigint(20) unsigned NOT NULL,
+##          `logoff_dead_lock` varchar(40) DEFAULT NULL,
+##          `logoff_cpu_time_us` bigint(20) unsigned NOT NULL,
+##          `logoff_exec_time_us` bigint(20) unsigned NOT NULL,
+##          `logoff_alive_time_us` bigint(20) unsigned NOT NULL,
+##          `comment_text` varchar(65536) DEFAULT NULL,
+##          `sql_bind` varchar(65536) DEFAULT NULL,
+##          `sql_text` varchar(65536) DEFAULT NULL,
+##          PRIMARY KEY (`tenant_id`, `svr_ip`, `svr_port`, `record_timestamp_us`)          
+##      ) TABLE_ID = {0} DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1
+##        BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+##    """.format(table_id)
+##  @staticmethod
+##  def get_each_tenant_rollback_sql(tenant_id):
+##    return """select 1"""
+##  def dump_after_do_each_tenant_action(self, tenant_id):
+##    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record' and tenant_id = {0}""".format(tenant_id))
+##  def check_after_do_each_tenant_action(self, tenant_id):
+##    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record' and tenant_id = {0}""".format(tenant_id))
+##    if len(results) != 1:
+##      raise MyError('tenant_id:{0} create table __all_tenant_security_audit_record failed'.format(tenant_id))
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record'""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""select tenant_id, table_id, table_name from __all_table where table_name = '__all_tenant_security_audit_record'""")
+##    if len(results) != len(self.get_tenant_id_list()):
+##      raise MyError('there should be {0} rows in __all_table whose table_name is __all_tenant_security_audit_record, but there has {1} rows like that'.format(len(self.get_tenant_id_list()), len(results)))
+##
+##class NormalDDLActionPreAddAllUserType(BaseDDLAction):
+##    @staticmethod
+##    def get_seq_num():
+##      return 2
+##    def dump_before_do_action(self):
+##      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+##    def check_before_do_action(self):
+##      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'type'""")
+##      if len(results) > 0:
+##        raise MyError('column oceanbase.__all_user.type already exists')
+##    @staticmethod
+##    def get_action_ddl():
+##      return """alter table oceanbase.__all_user add column `type` bigint(20) DEFAULT '0'"""
+##    @staticmethod
+##    def get_rollback_sql():
+##      return """alter table oceanbase.__all_user drop column type"""
+##    def dump_after_do_action(self):
+##      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+##    def check_after_do_action(self):
+##      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'type'""")
+##      if len(results) != 1:
+##        raise MyError('failed to add column status for oceanbase.__all_user')
+##
+##class NormalDDLActionPreAddAllUserHistoryType(BaseDDLAction):
+##    @staticmethod
+##    def get_seq_num():
+##      return 3
+##    def dump_before_do_action(self):
+##      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+##    def check_before_do_action(self):
+##      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'type'""")
+##      if len(results) > 0:
+##        raise MyError('column oceanbase.__all_user_history.type already exists')
+##    @staticmethod
+##    def get_action_ddl():
+##      return """alter table oceanbase.__all_user_history add column `type` bigint(20) DEFAULT '0'"""
+##    @staticmethod
+##    def get_rollback_sql():
+##      return """alter table oceanbase.__all_user_history drop column type"""
+##    def dump_after_do_action(self):
+##      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+##    def check_after_do_action(self):
+##      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'type'""")
+##      if len(results) != 1:
+##        raise MyError('failed to add column status for oceanbase.__all_user_history')
+##
+##
+##class NormalDDLActionPreAddProfileIdAllUser(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 4
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'profile_id'""")
+##    if len(results) != 0:
+##      raise MyError('profile_id column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_user add column `profile_id` bigint(20) NOT NULL DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_user drop column profile_id"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'profile_id'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_user')
+##
+##class NormalDDLActionPreAddProfileIdAllUserHistory(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 5
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'profile_id'""")
+##    if len(results) != 0:
+##      raise MyError('profile_id column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_user_history add column `profile_id` bigint(20) DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_user_history drop column profile_id"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'profile_id'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_user_history')
+##
+##class NormalDDLActionPreModifyAllRootServiceEventHistoryIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 6
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_rootservice_event_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_rootservice_event_history like 'rs_svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_rootservice_event_history column rs_svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_rootservice_event_history modify column rs_svr_ip varchar(46) default ''"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_rootservice_event_history modify column rs_svr_ip varchar(32) default ''"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_rootservice_event_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_rootservice_event_history like 'rs_svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column rs_svr_ip for oceanbase.__all_rootservice_event_history')
+##
+##class NormalDDLActionPreModifyAllSStableChecksumIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 7
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sstable_checksum""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sstable_checksum like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_sstable_checksum column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_sstable_checksum modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_sstable_checksum modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sstable_checksum""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sstable_checksum like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_sstable_checksum')
+##
+##class NormalDDLActionPreModifyAllClogHistoryInfoV2IpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 8
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_clog_history_info_v2""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_clog_history_info_v2 like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_clog_history_info_v2 column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_clog_history_info_v2 modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_clog_history_info_v2 modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_clog_history_info_v2""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_clog_history_info_v2 like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_clog_history_info_v2')
+##
+##class NormalDDLActionPreModifyAllSysParameterIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 9
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sys_parameter""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sys_parameter like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_sys_parameter column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_sys_parameter modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_sys_parameter modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sys_parameter""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sys_parameter like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_sys_parameter')
+##
+##class NormalDDLActionPreModifyAllLocalIndexStatusIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 10
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_local_index_status""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_local_index_status like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_local_index_status column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_local_index_status modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_local_index_status modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_local_index_status""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_local_index_status like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_local_index_status')
+##
+##class NormalDDLActionPreModifyAllTenantResourceUsageIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 11
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_resource_usage""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_resource_usage like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_tenant_resource_usage column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_tenant_resource_usage modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_tenant_resource_usage modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_resource_usage""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_resource_usage like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_tenant_resource_usage')
+##
+##class NormalDDLActionPreModifyAllRootTableIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 12
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_root_table""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_root_table like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_root_table column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_root_table modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_root_table modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_root_table""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_root_table like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_root_table')
+##
+##class NormalDDLActionPreModifyAllServerEventHistoryIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 13
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_server_event_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_server_event_history like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_server_event_history column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_server_event_history modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_server_event_history modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_server_event_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_server_event_history like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_server_event_history')
+##
+##class NormalDDLActionPreModifyAllIndexScheduleTaskIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 14
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_index_schedule_task""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_index_schedule_task like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_index_schedule_task column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_index_schedule_task modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_index_schedule_task modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_index_schedule_task""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_index_schedule_task like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_index_schedule_task')
+##
+##class NormalDDLActionPreModifyAllMetaTableIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 15
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_meta_table""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_meta_table like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_meta_table column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_meta_table modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_meta_table modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_meta_table""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_meta_table like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_meta_table')
+##
+##class NormalDDLActionPreModifyAllSqlExecuteTaskIpColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 16
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sql_execute_task""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sql_execute_task like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_sql_execute_task column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_sql_execute_task modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_sql_execute_task modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sql_execute_task""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sql_execute_task like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_sql_execute_task')
+##
+#
+##
+##class NormalDDLActionPreModifyAllGlobalIndexDataSrcDataPartitionIDColumn(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 39
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_global_index_data_src""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_global_index_data_src like 'data_partition_id,'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_global_index_data_src column data_partition_id, not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_global_index_data_src change `data_partition_id,`  `data_partition_id` bigint(20) NOT NULL"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_global_index_data_src change `data_partition_id`  `data_partition_id,` bigint(20) NOT NULL"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_global_index_data_src""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_global_index_data_src like 'data_partition_id'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column data_partition_id, for oceanbase.__all_global_index_data_src')
+##
+##class NormalDDLActionPreAddAllForeignKeyEnableFlag(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 40
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'enable_flag'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key.enable_flag already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key add column `enable_flag` tinyint(4) NOT NULL DEFAULT '1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key drop column enable_flag"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'enable_flag'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column enable_flag for oceanbase.__all_foreign_key')
+##
+##class NormalDDLActionPreAddAllForeignKeyHistoryEnableFlag(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 41
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'enable_flag'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key_history.enable_flag already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key_history add column `enable_flag` tinyint(4) DEFAULT '1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key_history drop column enable_flag"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'enable_flag'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column enable_flag for oceanbase.__all_foreign_key_history')
+##
+##class NormalDDLActionPreAddAllForeignKeyRefCstType(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 42
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'ref_cst_type'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key.ref_cst_type already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key add column `ref_cst_type` bigint(20) NOT NULL DEFAULT '0'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key drop column ref_cst_type"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'ref_cst_type'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column ref_cst_type for oceanbase.__all_foreign_key')
+##
+##class NormalDDLActionPreAddAllForeignKeyHistoryRefCstType(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 43
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'ref_cst_type'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key_history.ref_cst_type already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key_history add column `ref_cst_type` bigint(20) DEFAULT '0'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key_history drop column ref_cst_type"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'ref_cst_type'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column ref_cst_type for oceanbase.__all_foreign_key_history')
+##
+##class NormalDDLActionPreAddAllForeignKeyRefCstId(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 44
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'ref_cst_id'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key.ref_cst_id already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key add column `ref_cst_id` bigint(20) NOT NULL DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key drop column ref_cst_id"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'ref_cst_id'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column ref_cst_id for oceanbase.__all_foreign_key')
+##
+##class NormalDDLActionPreAddAllForeignKeyHistoryRefCstId(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 45
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'ref_cst_id'""")
+##    if len(results) > 0:
+##      raise MyError('column oceanbase.__all_foreign_key_history.ref_cst_id already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_foreign_key_history add column `ref_cst_id` bigint(20) DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_foreign_key_history drop column ref_cst_id"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key_history like 'ref_cst_id'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column ref_cst_id for oceanbase.__all_foreign_key_history')
+##
+##class NormalDDLActionPreModifyAllSeedParameterSvrIp(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 46
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_seed_parameter""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_seed_parameter like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_seed_parameter column svr_ip not exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_seed_parameter modify column svr_ip varchar(46) not null"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_seed_parameter modify column svr_ip varchar(32) not null"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_seed_parameter""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_seed_parameter like 'svr_ip'""")
+##    if len(results) != 1:
+##      raise MyError('fail to modify column svr_ip for oceanbase.__all_seed_parameter')
+##
+##class NormalDDLActionPreAddClusterStatus(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 47
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_cluster""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_cluster like 'cluster_status'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_cluster add column cluster_status bigint(20) NOT NULL default 1"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_cluster drop column cluster_status"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_cluster""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_cluster like 'cluster_status'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_cluster')
+##
+##class NormalDDLActionPreAllTableAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 48
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_table add column `drop_schema_version` bigint(20) NOT NULL DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_table drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_table')
+##
+##class NormalDDLActionPreAllTablegroupAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 49
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tablegroup""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tablegroup like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_tablegroup add column `drop_schema_version` bigint(20) NOT NULL DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_tablegroup drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tablegroup""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tablegroup like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_tablegroup')
+##
+##class NormalDDLActionPreAllPartAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 50
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_part add column `drop_schema_version` bigint(20) NOT NULL DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_part drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_part')
+##
+##class NormalDDLActionPreAllTableHistoryAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 51
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_table_history add column `drop_schema_version` bigint(20) DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_table_history drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_table_history')
+##
+##class NormalDDLActionPreAllTablegroupHistoryAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 52
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tablegroup_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tablegroup_history like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_tablegroup_history add column `drop_schema_version` bigint(20) DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_tablegroup_history drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tablegroup_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tablegroup_history like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_tablegroup_history')
+##
+##class NormalDDLActionPreAllPartHistoryAddDropSchemaVersion(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 53
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part_history""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part_history like 'drop_schema_version'""")
+##    if len(results) != 0:
+##      raise MyError('cluster_status column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_part_history add column `drop_schema_version` bigint(20) DEFAULT '-1'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_part_history drop column `drop_schema_version`"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part_history""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part_history like 'drop_schema_version'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_part_history')
+##
+##class NormalDDLActionPreAddBuildingSnapshot(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 54
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_ori_schema_version""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_ori_schema_version like 'building_snapshot'""")
+##    if len(results) != 0:
+##      raise MyError('building_snapshot column alread exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """alter table oceanbase.__all_ori_schema_version add column building_snapshot bigint(20) NOT NULL default '0'"""
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """alter table oceanbase.__all_ori_schema_version drop column building_snapshot"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_ori_schema_version""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_ori_schema_version like 'building_snapshot'""")
+##    if len(results) != 1:
+##      raise MyError('failed to add column for oceanbase.__all_ori_schema_version')
+##
+##class NormalDDLActionPreAddAllRestoreInfo(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 55
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_restore_info'""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_restore_info'""")
+##    if len(results) > 0:
+##      raise MyError('table oceanbase.__all_restore_info already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """ CREATE TABLE `__all_restore_info` (
+##                 `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+##                 `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+##                 `job_id` bigint(20) NOT NULL,
+##                 `name` varchar(1024) NOT NULL,
+##                 `value` varchar(4096) NOT NULL,
+##                 PRIMARY KEY (`job_id`, `name`)
+##               ) TABLE_ID = 1099511628041 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+##  """
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """drop table oceanbase.__all_restore_info"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_restore_info'""")
+##    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.__all_restore_info""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_restore_info'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_restore_info not exists')
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_info""")
+##    if len(results) != 5:
+##      raise MyError('table oceanbase.__all_restore_info has invalid column descs')
+##
+##class NormalDDLActionPreAddAllFailoverInfo(BaseDDLAction):
+##  @staticmethod
+##  def get_seq_num():
+##    return 56
+##  def dump_before_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_failover_info'""")
+##  def check_before_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_failover_info'""")
+##    if len(results) > 0:
+##      raise MyError('table oceanbase.__all_failover_info already exists')
+##  @staticmethod
+##  def get_action_ddl():
+##    return """ CREATE TABLE `__all_failover_info` (
+##                 `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+##                 `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+##                 `failover_epoch` bigint(20) NOT NULL,
+##                 `tenant_id` bigint(20) NOT NULL,
+##                 `sys_table_scn` bigint(20) NOT NULL,
+##                 `user_table_scn` bigint(20) NOT NULL,
+##                 `schema_version` bigint(20) NOT NULL,
+##                   PRIMARY KEY (`failover_epoch`, `tenant_id`)
+##               ) TABLE_ID = 1099511628047 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+##  """
+##  @staticmethod
+##  def get_rollback_sql():
+##    return """drop table oceanbase.__all_failover_info"""
+##  def dump_after_do_action(self):
+##    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_failover_info'""")
+##    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.__all_failover_info""")
+##  def check_after_do_action(self):
+##    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_failover_info'""")
+##    if len(results) != 1:
+##      raise MyError('table oceanbase.__all_failover_info not exists')
+##    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_failover_info""")
+##    if len(results) != 7:
+##      raise MyError('table oceanbase.__all_failover_info has invalid column descs')
+##
+##class NormalDDLActionPreAddAllForeignKeyValidateFlag(BaseDDLAction):
+## @staticmethod
+## def get_seq_num():
+##   return 57
+## def dump_before_do_action(self):
+##   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+## def check_before_do_action(self):
+##   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'validate_flag'""")
+##   if len(results) > 0:
+##     raise MyError('column oceanbase.__all_foreign_key.validate_flag already exists')
+## @staticmethod
+## def get_action_ddl():
+##   return """alter table oceanbase.__all_foreign_key add column `validate_flag` tinyint(4) NOT NULL DEFAULT '1'"""
+## @staticmethod
+## def get_rollback_sql():
+##   return """alter table oceanbase.__all_foreign_key drop column validate_flag"""
+## def dump_after_do_action(self):
+##   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_foreign_key""")
+## def check_after_do_action(self):
+##   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_foreign_key like 'validate_flag'""")
+##   if len(results) != 1:
+##     raise MyError('failed to add column validate_flag for oceanbase.__all_foreign_key')
+##
+##    if 'password' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_module():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'module' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_log_file():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'log-file' == opt.get_long_name():
+##      return opt.get_value()
+###### ---------------end----------------------
+##
+###### --------------start :  do_upgrade_pre.py--------------
+#def config_logging_module(log_filenamme):
+#  logging.basicConfig(level=logging.INFO,\
+#      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
+#      datefmt='%Y-%m-%d %H:%M:%S',\
+#      filename=log_filenamme,\
+#      filemode='w')
+#  # 定义日志打印格式
+#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  #######################################
+#  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
+#  stdout_handler = logging.StreamHandler(sys.stdout)
+#  stdout_handler.setLevel(logging.INFO)
+#  # 设置日志打印格式
+#  stdout_handler.setFormatter(formatter)
+#  # 将定义好的stdout_handler日志handler添加到root logger
+#  logging.getLogger('').addHandler(stdout_handler)
+###### ---------------end----------------------
+##
+##
+##
+##
+###### START ####
+### 1. 检查前置版本
+##def check_observer_version(query_cur, upgrade_params):
+##  (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
+##  if len(results) != 1:
+##    raise MyError('query results count is not 1')
+##  elif cmp(results[0][0], upgrade_params.old_version) < 0 :
+##    raise MyError('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
+##  logging.info('check observer version success, version = {0}'.format(results[0][0]))
+##
+### 2. 检查paxos副本是否同步, paxos副本是否缺失
+##def check_paxos_replica(query_cur):
+##  # 2.1 检查paxos副本是否同步
+##  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from __all_virtual_clog_stat where is_in_sync = 0 and is_offline = 0 and replica_type != 16""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} replicas unsync, please check'.format(results[0][0]))
+##  # 2.2 检查paxos副本是否有缺失 TODO
+##  logging.info('check paxos replica success')
+##
+### 3. 检查是否有做balance, locality变更
+##def check_rebalance_task(query_cur):
+##  # 3.1 检查是否有做locality变更
+##  (desc, results) = query_cur.exec_query("""select count(1) as cnt from __all_rootservice_job where job_status='INPROGRESS' and return_code is null""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} locality tasks is doing, please check'.format(results[0][0]))
+##  # 3.2 检查是否有做balance
+##  (desc, results) = query_cur.exec_query("""select count(1) as rebalance_task_cnt from __all_virtual_rebalance_task_stat""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} rebalance tasks is doing, please check'.format(results[0][0]))
+##  logging.info('check rebalance task success')
+##
+### 4. 检查集群状态
+##def check_cluster_status(query_cur):
+##  # 4.1 检查是否非合并状态
+##  (desc, results) = query_cur.exec_query("""select info from __all_zone where zone='' and name='merge_status'""")
+##  if cmp(results[0][0], 'IDLE')  != 0 :
+##    raise MyError('global status expected = {0}, actual = {1}'.format('IDLE', results[0][0]))
+##  logging.info('check cluster status success')
+##  # 4.2 检查合并版本是否>=3
+##  (desc, results) = query_cur.exec_query("""select cast(value as unsigned) value from __all_zone where zone='' and name='last_merged_version'""")
+##  if results[0][0] < 2 :
+##    raise MyError('global last_merged_version expected >= 2 actual = {0}'.format(results[0][0]))
+##  logging.info('check global last_merged_version success')
+##
+### 5. 检查没有打开enable_separate_sys_clog
+##def check_disable_separate_sys_clog(query_cur):
+##  (desc, results) = query_cur.exec_query("""select count(1) from __all_sys_parameter where name like 'enable_separate_sys_clog'""")
+##  if results[0][0] > 0 :
+##    raise MyError('enable_separate_sys_clog is true, unexpected')
+##  logging.info('check separate_sys_clog success')
+##
+### 6. 检查配置宏块的data_seq
+##def check_macro_block_data_seq(query_cur):
+##  query_cur.exec_sql("""set ob_query_timeout=1800000000""")
+##  row_count = query_cur.exec_sql("""select * from __all_virtual_partition_sstable_macro_info where data_seq < 0 limit 1""")
+##  if row_count != 0:
+##    raise MyError('check_macro_block_data_seq failed, too old macro block needs full merge')
+##  logging.info('check_macro_block_data_seq success')
+##
+### 7.检查所有的表格的sstable checksum method都升级到2
+##def check_sstable_column_checksum_method_new(query_cur):
+##  query_cur.exec_sql("""set ob_query_timeout=1800000000""")
+##  row_count = query_cur.exec_sql("""select * from __all_table where table_id in (select index_id from __all_sstable_column_checksum where checksum_method = 1 and data_table_id != 0) limit 1""")
+##  if row_count != 0:
+##    raise MyError('check_sstable_column_checksum_method_new failed, please upgrade column checksum method using progressive compaction')
+##  row_count = query_cur.exec_sql("""select column_value from __all_core_table where table_name = '__all_table' and column_name = 'table_id' and column_value in (select index_id from __all_sstable_column_checksum where checksum_method = 1 and data_table_id != 0) limit 1""")
+##  if row_count != 0:
+##    raise MyError('check_sstable_column_checksum_method_new failed, please upgrade system table column checksum method using progressive compaction')
+##  row_count = query_cur.exec_sql("""select index_id from __all_sstable_column_checksum where checksum_method = 1 and index_id = 1099511627777 and data_table_id != 0 limit 1""")
+##  if row_count != 0:
+##    raise MyError('check_sstable_column_checksum_method_new failed, please upgrade system table column checksum method using progressive compaction')
+##  logging.info('check_sstable_column_checksum_method_new success')
+##
+### 8. 检查租户的resource_pool内存规格, 要求F类型unit最小内存大于5G，L类型unit最小内存大于2G.
+##def check_tenant_resource_pool(query_cur):
+##  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_resource_pool a, oceanbase.__all_unit_config b where a.unit_config_id = b.unit_config_id and b.unit_config_id != 100 and a.replica_type=0 and b.min_memory < 5368709120""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} tenant resource pool unit config is less than 5G, please check'.format(results[0][0]))
+##  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_resource_pool a, oceanbase.__all_unit_config b where a.unit_config_id = b.unit_config_id and b.unit_config_id != 100 and a.replica_type=5 and b.min_memory < 2147483648""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} tenant logonly resource pool unit config is less than 2G, please check'.format(results[0][0]))
+##
+### 9. 检查是否有日志型副本分布在Full类型unit中
+##def check_logonly_replica_unit(query_cur):
+##  # 统计all_tnant表中每个tenant的L类型的zone个数
+##  (desc, res_tenant_log_zone_cnt) = query_cur.exec_query("""select  tenant_id, (char_length(locality) - char_length(replace(locality, 'LOGONLY', ''))) / char_length('LOGONLY') as log_zone_cnt from __all_tenant""")
+##  # 统计all_resource_pool中每个tenant的L类型的resource_pool中包含的zone个数
+##  (desc, res_respool_log_zone_cnt) = query_cur.exec_query("""select tenant_id, sum(lzone_cnt) as rp_log_zone_cnt from (select  tenant_id, ((char_length(zone_list) - char_length(replace(zone_list, ';', ''))) + 1) as lzone_cnt from __all_resource_pool where replica_type=5) as vt group by tenant_id""")
+##  # 比较两个数量是否一致，不一致则报错
+##  for line in res_tenant_log_zone_cnt:
+##    tenant_id = line[0]
+##    tenant_log_zone_cnt = line[1]
+##    if tenant_log_zone_cnt > 0:
+##      is_found = False
+##      for rpline in res_respool_log_zone_cnt:
+##        rp_tenant_id = rpline[0]
+##        rp_log_zone_cnt = rpline[1]
+##        if tenant_id == rp_tenant_id:
+##          is_found = True
+##          if tenant_log_zone_cnt > rp_log_zone_cnt:
+##            raise MyError('{0} {1} check_logonly_replica_unit failed, log_type zone count not match with resource_pool'.format(line, rpline))
+##          break
+##      if is_found == False:
+##        raise MyError('{0} check_logonly_replica_unit failed, not found log_type resource_pool for this tenant'.format(line))
+##  logging.info('check_logonly_replica_unit success')
+##
+### 10. 检查租户分区数是否超出内存限制
+##def check_tenant_part_num(query_cur):
+##  # 统计每个租户在各个server上的分区数量
+##  (desc, res_part_num) = query_cur.exec_query("""select svr_ip, svr_port, table_id >> 40 as tenant_id, count(*) as part_num from  __all_virtual_clog_stat  group by 1,2,3  order by 1,2,3""")
+##  # 计算每个租户在每个server上的max_memory
+##  (desc, res_unit_memory) = query_cur.exec_query("""select u.svr_ip, u.svr_port, t.tenant_id, uc.max_memory, p.replica_type  from __all_unit u, __All_resource_pool p, __all_tenant t, __all_unit_config uc where p.resource_pool_id = u.resource_pool_id and t.tenant_id = p.tenant_id and p.unit_config_id = uc.unit_config_id""")
+##  # 查询每个server的memstore_limit_percentage
+##  (desc, res_svr_memstore_percent) = query_cur.exec_query("""select svr_ip, svr_port, name, value  from __all_virtual_sys_parameter_stat where name = 'memstore_limit_percentage'""")
+##  part_static_cost = 128 * 1024
+##  part_dynamic_cost = 400 * 1024
+##  # 考虑到升级过程中可能有建表的需求，因此预留512个分区
+##  part_num_reserved = 512
+##  for line in res_part_num:
+##    svr_ip = line[0]
+##    svr_port = line[1]
+##    tenant_id = line[2]
+##    part_num = line[3]
+##    for uline in res_unit_memory:
+##      uip = uline[0]
+##      uport = uline[1]
+##      utid = uline[2]
+##      umem = uline[3]
+##      utype = uline[4]
+##      if svr_ip == uip and svr_port == uport and tenant_id == utid:
+##        for mpline in res_svr_memstore_percent:
+##          mpip = mpline[0]
+##          mpport = mpline[1]
+##          if mpip == uip and mpport == uport:
+##            mspercent = int(mpline[3])
+##            mem_limit = umem
+##            if 0 == utype:
+##              # full类型的unit需要为memstore预留内存
+##              mem_limit = umem * (100 - mspercent) / 100
+##            part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost / 10);
+##            if part_num_limit <= 1000:
+##              part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost)
+##            if part_num >= (part_num_limit - part_num_reserved):
+##              raise MyError('{0} {1} {2} exceed tenant partition num limit, please check'.format(line, uline, mpline))
+##            break
+##  logging.info('check tenant partition num success')
+##
+### 11. 检查存在租户partition，但是不存在unit的observer
+##def check_tenant_resource(query_cur):
+##  (desc, res_unit) = query_cur.exec_query("""select tenant_id, svr_ip, svr_port from __all_virtual_partition_info where (tenant_id, svr_ip, svr_port) not in (select tenant_id, svr_ip, svr_port from __all_unit, __all_resource_pool where __all_unit.resource_pool_id = __all_resource_pool.resource_pool_id group by tenant_id, svr_ip, svr_port) group by tenant_id, svr_ip, svr_port""")
+##  for line in res_unit:
+##    raise MyError('{0} tenant unit not exist but partition exist'.format(line))
+##  logging.info("check tenant resource success")
+##
+### 12. 检查系统表(__all_table_history)索引生效情况
+##def check_sys_index_status(query_cur):
+##  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_table where data_table_id = 1099511627890 and table_id = 1099511637775 and index_type = 1 and index_status = 2""")
+##  if len(results) != 1 or results[0][0] != 1:
+##    raise MyError("""__all_table_history's index status not valid""")
+##  logging.info("""check __all_table_history's index status success""")
+##
+### 14. 检查升级前是否有只读zone
+##def check_readonly_zone(query_cur):
+##   (desc, results) = query_cur.exec_query("""select count(*) from __all_zone where name='zone_type' and info='ReadOnly'""")
+##   if results[0][0] != 0:
+##       raise MyError("""check_readonly_zone failed, ob2.2 not support readonly_zone""")
+##   logging.info("""check_readonly_zone success""")
+##
+### 16. 修改永久下线的时间，避免升级过程中缺副本
+##def modify_server_permanent_offline_time(query_cur):
+##  query_cur.exec_sql("""alter system set server_permanent_offline_time='72h'""")
+##  logging.info("modify server_permanent_offline_time success")
+##
+### 17. 修改安全删除副本时间
+##def modify_replica_safe_remove_time(query_cur):
+##  query_cur.exec_sql("""alter system set replica_safe_remove_time='72h'""")
+##  logging.info("modify modify_replica_safe_remove_time success")
+##
+### 18. 检查progressive_merge_round都升到1
+##def check_progressive_merge_round(query_cur):
+##  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_virtual_table where progressive_merge_round = 0 and table_type not in (1,2,4)""")
+##  if results[0][0] != 0:
+##      raise MyError("""progressive_merge_round should all be 1""")
+##  logging.info("""check progressive_merge_round status success""")
+##
+###19. 检查是否有内置用户，角色
+##def check_inner_user_role_exists(query_cur):
+##   (desc, results) = query_cur.exec_query(
+##     """select count(*) 
+##          from oceanbase.__all_tenant t, oceanbase.__all_virtual_user u 
+##        where t.tenant_id = u.tenant_id and 
+##              t.compatibility_mode=1 and 
+##              u.user_name in ('DBA','CONNECT','RESOURCE','LBACSYS','ORAAUDITOR');""")
+##   if results[0][0] != 0:
+##       raise MyError("""check_inner_user_role_exists failed, ob2.2 not support user_name in 'dba' etc... """)
+##   logging.info("""check_inner_user_role_exists success""")
+##
+### 19. 从小于224的版本升级上来时，需要确认high_priority_net_thread_count配置项值为0 (224版本开始该值默认为1)
+##def check_high_priority_net_thread_count_before_224(query_cur):
+##  # 获取最小版本
+##  (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
+##  if len(results) != 1:
+##    raise MyError('distinct observer version exist')
+##  elif cmp(results[0][0], "2.2.40") >= 0 :
+##    # 最小版本大于等于2.2.40，忽略检查
+##    logging.info('cluster version ({0}) is greate than or equal to 2.2.40, need not check standby cluster'.format(results[0][0]))
+##  else:
+##    # 低于224版本的需要确认配置项值为0
+##    logging.info('cluster version is ({0}), need check high_priority_net_thread_count'.format(results[0][0]))
+##    (desc, results) = query_cur.exec_query("""select value from __all_sys_parameter where name like 'high_priority_net_thread_count'""")
+##    for line in results:
+##        thread_cnt = line[0]
+##        if thread_cnt > 0:
+##            raise MyError('high_priority_net_thread_count is greater than 0, unexpected')
+##    logging.info('check high_priority_net_thread_count success')
+##
+### 20. 从小于224的版本升级上来时，要求不能有备库存在
+##def check_standby_cluster(query_cur):
+##  # 获取最小版本
+##  (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
+##  if len(results) != 1:
+##    raise MyError('distinct observer version exist')
+##  elif cmp(results[0][0], "2.2.40") >= 0 :
+##    # 最小版本大于等于2.2.40，忽略检查
+##    logging.info('cluster version ({0}) is greate than or equal to 2.2.40, need not check standby cluster'.format(results[0][0]))
+##  else:
+##    logging.info('cluster version is ({0}), need check standby cluster'.format(results[0][0]))
+##    (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_table where table_name = '__all_cluster'""")
+##    if results[0][0] == 0:
+##      logging.info('cluster ({0}) has no __all_cluster table, no standby cluster'.format(results[0][0]))
+##    else:
+##      (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_cluster""")
+##      if results[0][0] > 1:
+##        raise MyError("""multiple cluster exist in __all_cluster, maybe standby clusters added, not supported""")
+##  logging.info('check standby cluster from __all_cluster success')
+##
+### 开始升级前的检查
+##def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    conn.autocommit = True
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = QueryCursor(cur)
+##      check_observer_version(query_cur, upgrade_params)
+##      check_paxos_replica(query_cur)
+##      check_rebalance_task(query_cur)
+##      check_cluster_status(query_cur)
+##      check_disable_separate_sys_clog(query_cur)
+##      check_macro_block_data_seq(query_cur)
+##      check_sstable_column_checksum_method_new(query_cur)
+##      check_tenant_resource_pool(query_cur)
+##      check_logonly_replica_unit(query_cur)
+##      check_tenant_part_num(query_cur)
+##      check_tenant_resource(query_cur)
+##      check_readonly_zone(query_cur)
+##      modify_server_permanent_offline_time(query_cur)
+##      modify_replica_safe_remove_time(query_cur)
+##      check_progressive_merge_round(query_cur)
+##      check_inner_user_role_exists(query_cur)
+##      check_high_priority_net_thread_count_before_224(query_cur)
+##      check_standby_cluster(query_cur)
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##if __name__ == '__main__':
+##  upgrade_params = UpgradeParams()
+##  change_opt_defult_value('log-file', upgrade_params.log_filename)
+##  parse_options(sys.argv[1:])
+##  if not has_no_local_opts():
+##    deal_with_local_opts()
+##  else:
+##    check_db_client_opts()
+##    log_filename = get_opt_log_file()
+##    upgrade_params.log_filename = log_filename
+##    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+##    config_logging_module(upgrade_params.log_filename)
+##    try:
+##      host = get_opt_host()
+##      port = int(get_opt_port())
+##      user = get_opt_user()
+##      password = get_opt_password()
+##      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+##          host, port, user, password, log_filename)
+##      do_check(host, port, user, password, upgrade_params)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connctor error')
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error')
+##      raise e
+##
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:upgrade_cluster_health_checker.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import sys
+##import os
+##import time
+##import mysql.connector
+##from mysql.connector import errorcode
+##import logging
+##import getopt
+##
+##class UpgradeParams:
+##  log_filename = 'upgrade_cluster_health_checker.log'
+##
+###### --------------start : my_error.py --------------
+##class MyError(Exception):
+##  def __init__(self, value):
+##    self.value = value
+##  def __str__(self):
+##    return repr(self.value)
+##
+###### --------------start : actions.py 只允许执行查询语句--------------
+##class QueryCursor:
+##  __cursor = None
+##  def __init__(self, cursor):
+##    self.__cursor = cursor
+##  def exec_sql(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
+##      return rowcount
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+##  def exec_query(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      results = self.__cursor.fetchall()
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
+##      return (self.__cursor.description, results)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+###### ---------------end----------------------
+##
+###### --------------start :  opt.py --------------
+##help_str = \
+##"""
+##Help:
+##""" +\
+##sys.argv[0] + """ [OPTIONS]""" +\
+##'\n\n' +\
+##'-I, --help          Display this help and exit.\n' +\
+##'-V, --version       Output version information and exit.\n' +\
+##'-h, --host=name     Connect to host.\n' +\
+##'-P, --port=name     Port number to use for connection.\n' +\
+##'-u, --user=name     User for login.\n' +\
+##'-p, --password=name Password to use when connecting to server. If password is\n' +\
+##'                    not given it\'s empty string "".\n' +\
+##'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
+##'                    the following strings: ddl, normal_dml, each_tenant_dml,\n' +\
+##'                    system_variable_dml, special_action, all. "all" represents\n' +\
+##'                    that all modules should be run. They are splitted by ",".\n' +\
+##'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
+##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+##'-t, --timeout=name  check timeout, default: 600(s).\n' + \
+##'\n\n' +\
+##'Maybe you want to run cmd like that:\n' +\
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+##
+##version_str = """version 1.0.0"""
+##
+##class Option:
+##  __g_short_name_set = set([])
+##  __g_long_name_set = set([])
+##  __short_name = None
+##  __long_name = None
+##  __is_with_param = None
+##  __is_local_opt = None
+##  __has_value = None
+##  __value = None
+##  def __init__(self, short_name, long_name, is_with_param, is_local_opt, default_value = None):
+##    if short_name in Option.__g_short_name_set:
+##      raise MyError('duplicate option short name: {0}'.format(short_name))
+##    elif long_name in Option.__g_long_name_set:
+##      raise MyError('duplicate option long name: {0}'.format(long_name))
+##    Option.__g_short_name_set.add(short_name)
+##    Option.__g_long_name_set.add(long_name)
+##    self.__short_name = short_name
+##    self.__long_name = long_name
+##    self.__is_with_param = is_with_param
+##    self.__is_local_opt = is_local_opt
+##    self.__has_value = False
+##    if None != default_value:
+##      self.set_value(default_value)
+##  def is_with_param(self):
+##    return self.__is_with_param
+##  def get_short_name(self):
+##    return self.__short_name
+##  def get_long_name(self):
+##    return self.__long_name
+##  def has_value(self):
+##    return self.__has_value
+##  def get_value(self):
+##    return self.__value
+##  def set_value(self, value):
+##    self.__value = value
+##    self.__has_value = True
+##  def is_local_opt(self):
+##    return self.__is_local_opt
+##  def is_valid(self):
+##    return None != self.__short_name and None != self.__long_name and True == self.__has_value and None != self.__value
+##
+##g_opts =\
+##[\
+##Option('I', 'help', False, True),\
+##Option('V', 'version', False, True),\
+##Option('h', 'host', True, False),\
+##Option('P', 'port', True, False),\
+##Option('u', 'user', True, False),\
+##Option('p', 'password', True, False, ''),\
+### 要跑哪个模块，默认全跑
+##Option('m', 'module', True, False, 'all'),\
+### 日志文件路径，不同脚本的main函数中中会改成不同的默认值
+##Option('l', 'log-file', True, False),\
+### 一些检查的超时时间，默认是600s
+##Option('t', 'timeout', True, False, '600')
+##]\
+##
+##def change_opt_defult_value(opt_long_name, opt_default_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt.get_long_name() == opt_long_name:
+##      opt.set_value(opt_default_val)
+##      return
+##
+##def has_no_local_opts():
+##  global g_opts
+##  no_local_opts = True
+##  for opt in g_opts:
+##    if opt.is_local_opt() and opt.has_value():
+##      no_local_opts = False
+##  return no_local_opts
+##
+##def check_db_client_opts():
+##  global g_opts
+##  for opt in g_opts:
+##    if not opt.is_local_opt() and not opt.has_value():
+##      raise MyError('option "-{0}" has not been specified, maybe you should run "{1} --help" for help'\
+##          .format(opt.get_short_name(), sys.argv[0]))
+##
+##def parse_option(opt_name, opt_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt_name in (('-' + opt.get_short_name()), ('--' + opt.get_long_name())):
+##      opt.set_value(opt_val)
+##
+##def parse_options(argv):
+##  global g_opts
+##  short_opt_str = ''
+##  long_opt_list = []
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      short_opt_str += opt.get_short_name() + ':'
+##    else:
+##      short_opt_str += opt.get_short_name()
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      long_opt_list.append(opt.get_long_name() + '=')
+##    else:
+##      long_opt_list.append(opt.get_long_name())
+##  (opts, args) = getopt.getopt(argv, short_opt_str, long_opt_list)
+##  for (opt_name, opt_val) in opts:
+##    parse_option(opt_name, opt_val)
+##  if has_no_local_opts():
+##    check_db_client_opts()
+##
+##def deal_with_local_opt(opt):
+##  if 'help' == opt.get_long_name():
+##    global help_str
+##    print help_str
+##  elif 'version' == opt.get_long_name():
+##    global version_str
+##    print version_str
+##
+##def deal_with_local_opts():
+##  global g_opts
+##  if has_no_local_opts():
+##    raise MyError('no local options, can not deal with local options')
+##  else:
+##    for opt in g_opts:
+##      if opt.is_local_opt() and opt.has_value():
+##        deal_with_local_opt(opt)
+##        # 只处理一个
+##        return
+##
+##def get_opt_host():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'host' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_port():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'port' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_user():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'user' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_password():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'password' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_module():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'module' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_log_file():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'log-file' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_timeout():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'timeout' == opt.get_long_name():
+##      return opt.get_value()
+###### ---------------end----------------------
+##
+###### --------------start :  do_upgrade_pre.py--------------
+##def config_logging_module(log_filenamme):
+##  logging.basicConfig(level=logging.INFO,\
+##      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
+##      datefmt='%Y-%m-%d %H:%M:%S',\
+##      filename=log_filenamme,\
+##      filemode='w')
+##  # 定义日志打印格式
+##  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+##  #######################################
+##  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
+##  stdout_handler = logging.StreamHandler(sys.stdout)
+##  stdout_handler.setLevel(logging.INFO)
+##  # 设置日志打印格式
+##  stdout_handler.setFormatter(formatter)
+##  # 将定义好的stdout_handler日志handler添加到root logger
+##  logging.getLogger('').addHandler(stdout_handler)
+###### ---------------end----------------------
+##
+###### START ####
+### 1. 检查paxos副本是否同步, paxos副本是否缺失
+##def check_paxos_replica(query_cur):
+##  # 2.1 检查paxos副本是否同步
+##  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from __all_virtual_clog_stat where is_in_sync = 0 and is_offline = 0 and replica_type != 16""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} replicas unsync, please check'.format(results[0][0]))
+##  # 2.2 检查paxos副本是否有缺失 TODO
+##  logging.info('check paxos replica success')
+##
+### 2. 检查是否有做balance, locality变更
+##def check_rebalance_task(query_cur):
+##  # 3.1 检查是否有做locality变更
+##  (desc, results) = query_cur.exec_query("""select count(1) as cnt from __all_rootservice_job where job_status='INPROGRESS' and return_code is null""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} locality tasks is doing, please check'.format(results[0][0]))
+##  # 3.2 检查是否有做balance
+##  (desc, results) = query_cur.exec_query("""select count(1) as rebalance_task_cnt from __all_virtual_rebalance_task_stat""")
+##  if results[0][0] > 0 :
+##    raise MyError('{0} rebalance tasks is doing, please check'.format(results[0][0]))
+##  logging.info('check rebalance task success')
+##
+### 3. 检查集群状态
+##def check_cluster_status(query_cur):
+##  # 4.1 检查是否非合并状态
+##  (desc, results) = query_cur.exec_query("""select info from __all_zone where zone='' and name='merge_status'""")
+##  if cmp(results[0][0], 'IDLE')  != 0 :
+##    raise MyError('global status expected = {0}, actual = {1}'.format('IDLE', results[0][0]))
+##  logging.info('check cluster status success')
+##  # 4.2 检查合并版本是否>=3
+##  (desc, results) = query_cur.exec_query("""select cast(value as unsigned) value from __all_zone where zone='' and name='last_merged_version'""")
+##  if results[0][0] < 2:
+##      raise MyError('global last_merged_version expected >= 2 actual = {0}'.format(results[0][0]))
+##  logging.info('check global last_merged_version success')
+##
+### 4. 检查租户分区数是否超出内存限制
+##def check_tenant_part_num(query_cur):
+##  # 统计每个租户在各个server上的分区数量
+##  (desc, res_part_num) = query_cur.exec_query("""select svr_ip, svr_port, table_id >> 40 as tenant_id, count(*) as part_num from  __all_virtual_clog_stat  group by 1,2,3  order by 1,2,3""")
+##  # 计算每个租户在每个server上的max_memory
+##  (desc, res_unit_memory) = query_cur.exec_query("""select u.svr_ip, u.svr_port, t.tenant_id, uc.max_memory, p.replica_type  from __all_unit u, __All_resource_pool p, __all_tenant t, __all_unit_config uc where p.resource_pool_id = u.resource_pool_id and t.tenant_id = p.tenant_id and p.unit_config_id = uc.unit_config_id""")
+##  # 查询每个server的memstore_limit_percentage
+##  (desc, res_svr_memstore_percent) = query_cur.exec_query("""select svr_ip, svr_port, name, value  from __all_virtual_sys_parameter_stat where name = 'memstore_limit_percentage'""")
+##  part_static_cost = 128 * 1024
+##  part_dynamic_cost = 400 * 1024
+##  # 考虑到升级过程中可能有建表的需求，因此预留512个分区
+##  part_num_reserved = 512
+##  for line in res_part_num:
+##    svr_ip = line[0]
+##    svr_port = line[1]
+##    tenant_id = line[2]
+##    part_num = line[3]
+##    for uline in res_unit_memory:
+##      uip = uline[0]
+##      uport = uline[1]
+##      utid = uline[2]
+##      umem = uline[3]
+##      utype = uline[4]
+##      if svr_ip == uip and svr_port == uport and tenant_id == utid:
+##        for mpline in res_svr_memstore_percent:
+##          mpip = mpline[0]
+##          mpport = mpline[1]
+##          if mpip == uip and mpport == uport:
+##            mspercent = int(mpline[3])
+##            mem_limit = umem
+##            if 0 == utype:
+##              # full类型的unit需要为memstore预留内存
+##              mem_limit = umem * (100 - mspercent) / 100
+##            part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost / 10);
+##            if part_num_limit <= 1000:
+##              part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost)
+##            if part_num >= (part_num_limit - part_num_reserved):
+##              raise MyError('{0} {1} {2} exceed tenant partition num limit, please check'.format(line, uline, mpline))
+##            break
+##  logging.info('check tenant partition num success')
+##
+### 5. 检查存在租户partition，但是不存在unit的observer
+##def check_tenant_resource(query_cur):
+##  (desc, res_unit) = query_cur.exec_query("""select tenant_id, svr_ip, svr_port from __all_virtual_partition_info where (tenant_id, svr_ip, svr_port) not in (select tenant_id, svr_ip, svr_port from __all_unit, __all_resource_pool where __all_unit.resource_pool_id = __all_resource_pool.resource_pool_id group by tenant_id, svr_ip, svr_port) group by tenant_id, svr_ip, svr_port""")
+##  for line in res_unit:
+##    raise MyError('{0} tenant unit not exist but partition exist'.format(line))
+##  logging.info("check tenant resource success")
+##
+### 6. 检查progressive_merge_round都升到1
+##def check_progressive_merge_round(query_cur):
+##  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_virtual_table where progressive_merge_round = 0 and table_type not in (1,2,4) and data_table_id = 0""")
+##  if results[0][0] != 0:
+##    raise MyError("""progressive_merge_round of main table should all be 1""")
+##  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_virtual_table where progressive_merge_round = 0 and table_type not in (1,2,4) and data_table_id > 0 and data_table_id in (select table_id from __all_virtual_table where table_type not in (1,2,4) and data_table_id = 0)""")
+##  if results[0][0] != 0:
+##    raise MyError("""progressive_merge_round of index should all be 1""")
+##  logging.info("""check progressive_merge_round status success""")
+##
+### 主库状态检查
+##def check_primary_cluster_sync_status(query_cur, timeout):
+##  (desc, res) = query_cur.exec_query("""select  current_scn  from oceanbase.v$ob_cluster where cluster_role='PRIMARY' and cluster_status='VALID'""")
+##  if len(res) != 1:
+##      raise MyError('query results count is not 1')
+##  query_sql = "select count(*) from oceanbase.v$ob_standby_status where cluster_role != 'PHYSICAL STANDBY' or cluster_status != 'VALID' or current_scn < {0}".format(res[0][0]);  
+##  times = timeout
+##  print times
+##  while times > 0 :
+##    (desc, res1) = query_cur.exec_query(query_sql)
+##    if len(res1) == 1 and res1[0][0] == 0:
+##      break;
+##    time.sleep(1)
+##    times -=1
+##  if times == 0:
+##    raise MyError("there exists standby cluster not synchronizing, checking primary cluster status failed!!!")
+##  else:
+##    logging.info("check primary cluster sync status success")
+##
+### 备库状态检查
+##def check_standby_cluster_sync_status(query_cur, timeout):
+##  (desc, res) = query_cur.exec_query("""select time_to_usec(now(6)) from dual""")
+##  query_sql = "select count(*) from oceanbase.v$ob_cluster where (cluster_role != 'PHYSICAL STANDBY') or (cluster_status != 'VALID') or (current_scn  < {0}) or (switchover_status != 'NOT ALLOWED')".format(res[0][0]);
+##  times = timeout
+##  while times > 0 :
+##    (desc, res2) = query_cur.exec_query(query_sql)
+##    if len(res2) == 1 and res2[0][0] == 0:
+##      break
+##    time.sleep(1)
+##    times -= 1
+##  if times == 0:
+##    raise MyError('current standby cluster not synchronizing, please check!!!')
+##  else:
+##    logging.info("check standby cluster sync status success")
+##
+### 判断是主库还是备库
+##def check_cluster_sync_status(query_cur, timeout):
+##  (desc, res) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
+##  if res[0][0] == 'PRIMARY':
+##    check_primary_cluster_sync_status(query_cur, timeout)
+##  else:
+##    check_standby_cluster_sync_status(query_cur, timeout)
+##  
+##
+### 开始升级前的检查
+##def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    conn.autocommit = True
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = QueryCursor(cur)
+##      check_paxos_replica(query_cur)
+##      check_rebalance_task(query_cur)
+##      check_cluster_status(query_cur)
+##      check_tenant_part_num(query_cur)
+##      check_tenant_resource(query_cur)
+##      check_cluster_sync_status(query_cur, timeout)
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##if __name__ == '__main__':
+##  upgrade_params = UpgradeParams()
+##  change_opt_defult_value('log-file', upgrade_params.log_filename)
+##  parse_options(sys.argv[1:])
+##  if not has_no_local_opts():
+##    deal_with_local_opts()
+##  else:
+##    check_db_client_opts()
+##    log_filename = get_opt_log_file()
+##    upgrade_params.log_filename = log_filename
+##    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+##    config_logging_module(upgrade_params.log_filename)
+##    try:
+##      host = get_opt_host()
+##      port = int(get_opt_port())
+##      user = get_opt_user()
+##      password = get_opt_password()
+##      timeout = int(get_opt_timeout())
+##      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s', \
+##          host, port, user, password, log_filename, timeout)
+##      do_check(host, port, user, password, upgrade_params, timeout)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connctor error')
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error')
+##      raise e
+##
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:upgrade_post_checker.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import sys
+##import os
+##import time
+##import mysql.connector
+##from mysql.connector import errorcode
+##import logging
+##import getopt
+##
+##class UpgradeParams:
+##  log_filename = 'upgrade_post_checker.log'
+##  new_version = '3.0.0'
+###### --------------start : my_error.py --------------
+##class MyError(Exception):
+##  def __init__(self, value):
+##    self.value = value
+##  def __str__(self):
+##    return repr(self.value)
+##
+###### --------------start : actions.py--------------
+##class QueryCursor:
+##  __cursor = None
+##  def __init__(self, cursor):
+##    self.__cursor = cursor
+##  def exec_sql(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
+##      return rowcount
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+##  def exec_query(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      results = self.__cursor.fetchall()
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
+##      return (self.__cursor.description, results)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+###### ---------------end----------------------
+##
+###### --------------start :  opt.py --------------
+##help_str = \
+##"""
+##Help:
+##""" +\
+##sys.argv[0] + """ [OPTIONS]""" +\
+##'\n\n' +\
+##'-I, --help          Display this help and exit.\n' +\
+##'-V, --version       Output version information and exit.\n' +\
+##'-h, --host=name     Connect to host.\n' +\
+##'-P, --port=name     Port number to use for connection.\n' +\
+##'-u, --user=name     User for login.\n' +\
+##'-p, --password=name Password to use when connecting to server. If password is\n' +\
+##'                    not given it\'s empty string "".\n' +\
+##'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
+##'                    the following strings: ddl, normal_dml, each_tenant_dml,\n' +\
+##'                    system_variable_dml, special_action, all. "all" represents\n' +\
+##'                    that all modules should be run. They are splitted by ",".\n' +\
+##'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
+##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+##'\n\n' +\
+##'Maybe you want to run cmd like that:\n' +\
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+##
+##version_str = """version 1.0.0"""
+##
+##class Option:
+##  __g_short_name_set = set([])
+##  __g_long_name_set = set([])
+##  __short_name = None
+##  __long_name = None
+##  __is_with_param = None
+##  __is_local_opt = None
+##  __has_value = None
+##  __value = None
+##  def __init__(self, short_name, long_name, is_with_param, is_local_opt, default_value = None):
+##    if short_name in Option.__g_short_name_set:
+##      raise MyError('duplicate option short name: {0}'.format(short_name))
+##    elif long_name in Option.__g_long_name_set:
+##      raise MyError('duplicate option long name: {0}'.format(long_name))
+##    Option.__g_short_name_set.add(short_name)
+##    Option.__g_long_name_set.add(long_name)
+##    self.__short_name = short_name
+##    self.__long_name = long_name
+##    self.__is_with_param = is_with_param
+##    self.__is_local_opt = is_local_opt
+##    self.__has_value = False
+##    if None != default_value:
+##      self.set_value(default_value)
+##  def is_with_param(self):
+##    return self.__is_with_param
+##  def get_short_name(self):
+##    return self.__short_name
+##  def get_long_name(self):
+##    return self.__long_name
+##  def has_value(self):
+##    return self.__has_value
+##  def get_value(self):
+##    return self.__value
+##  def set_value(self, value):
+##    self.__value = value
+##    self.__has_value = True
+##  def is_local_opt(self):
+##    return self.__is_local_opt
+##  def is_valid(self):
+##    return None != self.__short_name and None != self.__long_name and True == self.__has_value and None != self.__value
+##
+##g_opts =\
+##[\
+##Option('I', 'help', False, True),\
+##Option('V', 'version', False, True),\
+##Option('h', 'host', True, False),\
+##Option('P', 'port', True, False),\
+##Option('u', 'user', True, False),\
+##Option('p', 'password', True, False, ''),\
+### 要跑哪个模块，默认全跑
+##Option('m', 'module', True, False, 'all'),\
+### 日志文件路径，不同脚本的main函数中中会改成不同的默认值
+##Option('l', 'log-file', True, False)
+##]\
+##
+##def change_opt_defult_value(opt_long_name, opt_default_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt.get_long_name() == opt_long_name:
+##      opt.set_value(opt_default_val)
+##      return
+##
+##def has_no_local_opts():
+##  global g_opts
+##  no_local_opts = True
+##  for opt in g_opts:
+##    if opt.is_local_opt() and opt.has_value():
+##      no_local_opts = False
+##  return no_local_opts
+##
+##def check_db_client_opts():
+##  global g_opts
+##  for opt in g_opts:
+##    if not opt.is_local_opt() and not opt.has_value():
+##      raise MyError('option "-{0}" has not been specified, maybe you should run "{1} --help" for help'\
+##          .format(opt.get_short_name(), sys.argv[0]))
+##
+##def parse_option(opt_name, opt_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt_name in (('-' + opt.get_short_name()), ('--' + opt.get_long_name())):
+##      opt.set_value(opt_val)
+##
+##def parse_options(argv):
+##  global g_opts
+##  short_opt_str = ''
+##  long_opt_list = []
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      short_opt_str += opt.get_short_name() + ':'
+##    else:
+##      short_opt_str += opt.get_short_name()
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      long_opt_list.append(opt.get_long_name() + '=')
+##    else:
+##      long_opt_list.append(opt.get_long_name())
+##  (opts, args) = getopt.getopt(argv, short_opt_str, long_opt_list)
+##  for (opt_name, opt_val) in opts:
+##    parse_option(opt_name, opt_val)
+##  if has_no_local_opts():
+##    check_db_client_opts()
+##
+##def deal_with_local_opt(opt):
+##  if 'help' == opt.get_long_name():
+##    global help_str
+##    print help_str
+##  elif 'version' == opt.get_long_name():
+##    global version_str
+##    print version_str
+##
+##def deal_with_local_opts():
+##  global g_opts
+##  if has_no_local_opts():
+##    raise MyError('no local options, can not deal with local options')
+##  else:
+##    for opt in g_opts:
+##      if opt.is_local_opt() and opt.has_value():
+##        deal_with_local_opt(opt)
+##        # 只处理一个
+##        return
+##
+##def get_opt_host():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'host' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_port():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'port' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_user():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'user' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_password():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'password' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_module():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'module' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_log_file():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'log-file' == opt.get_long_name():
+##      return opt.get_value()
+###### ---------------end----------------------
+##
+##def config_logging_module(log_filenamme):
+##  logging.basicConfig(level=logging.INFO,\
+##      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
+##      datefmt='%Y-%m-%d %H:%M:%S',\
+##      filename=log_filenamme,\
+##      filemode='w')
+##  # 定义日志打印格式
+##  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+##  #######################################
+##  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
+##  stdout_handler = logging.StreamHandler(sys.stdout)
+##  stdout_handler.setLevel(logging.INFO)
+##  # 设置日志打印格式
+##  stdout_handler.setFormatter(formatter)
+##  # 将定义好的stdout_handler日志handler添加到root logger
+##  logging.getLogger('').addHandler(stdout_handler)
+##
+###### STAR
+### 1 检查版本号
+##def check_cluster_version(query_cur):
+##  # 一方面配置项生效是个异步生效任务,另一方面是2.2.0之后新增租户级配置项刷新，和系统级配置项刷新复用同一个timer，这里暂且等一下。
+##  times = 30
+##  sql="select distinct value = '{0}' from oceanbase.__all_virtual_sys_parameter_stat where name='min_observer_version'".format(upgrade_params.new_version)
+##  while times > 0 :
+##    (desc, results) = query_cur.exec_query(sql)
+##    if len(results) == 1 and results[0][0] == 1:
+##      break;
+##    time.sleep(1)
+##    times -=1
+##  if times == 0:
+##    raise MyError("check cluster version timeout!")
+##  else:
+##    logging.info("check_cluster_version success")
+##
+##def check_storage_format_version(query_cur):
+##  # Specified expected version each time want to upgrade (see OB_STORAGE_FORMAT_VERSION_MAX)
+##  expect_version = 4;
+##  sql = "select value from oceanbase.__all_zone where zone = '' and name = 'storage_format_version'"
+##  times = 180
+##  while times > 0 :
+##    (desc, results) = query_cur.exec_query(sql)
+##    if len(results) == 1 and results[0][0] == expect_version:
+##      break
+##    time.sleep(10)
+##    times -= 1
+##  if times == 0:
+##    raise MyError("check storage format version timeout! Expected version {0}".format(expect_version))
+##  else:
+##    logging.info("check expected storage format version '{0}' success".format(expect_version))
+##
+##def upgrade_storage_format_version(conn, cur):
+##  try:
+##    # enable_ddl
+##    sql = "alter system set enable_ddl = true;"
+##    logging.info(sql)
+##    cur.execute(sql)
+##    time.sleep(10)
+##
+##    # run job
+##    sql = "alter system run job 'UPGRADE_STORAGE_FORMAT_VERSION';"
+##    logging.info(sql)
+##    cur.execute(sql)
+##
+##  except Exception, e:
+##    logging.warn("upgrade storage format version failed")
+##    raise MyError("upgrade storage format version failed")
+##  logging.info("upgrade storage format version finish")
+##
+### 2 检查内部表自检是否成功
+##def check_root_inspection(query_cur):
+##  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
+##  times = 180
+##  while times > 0 :
+##    (desc, results) = query_cur.exec_query(sql)
+##    if results[0][0] == 0:
+##      break
+##    time.sleep(10)
+##    times -= 1
+##  if times == 0:
+##    raise MyError('check root inspection failed!')
+##  logging.info('check root inspection success')
+##
+### 3 开ddl
+##def enable_ddl(query_cur):
+##  query_cur.exec_sql("""alter system set enable_ddl = true""")
+##  logging.info("enable_ddl success")
+##
+### 4 打开rebalance
+##def enable_rebalance(query_cur):
+##  query_cur.exec_sql("""alter system set enable_rebalance = true""")
+##  logging.info("enable_rebalance success")
+##
+### 5 打开rereplication
+##def enable_rereplication(query_cur):
+##  query_cur.exec_sql("""alter system set enable_rereplication = true""")
+##  logging.info("enable_rereplication success")
+##
+### 6 打开major freeze
+##def enable_major_freeze(query_cur):
+##  query_cur.exec_sql("""alter system set enable_major_freeze=true""")
+##  logging.info("enable_major_freeze success")
+##
+### 开始升级后的检查
+##def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    conn.autocommit = True
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = QueryCursor(cur)
+##      try:
+##        check_cluster_version(query_cur)
+##        #upgrade_storage_format_version(conn, cur)
+##        #check_storage_format_version(query_cur)
+##        check_root_inspection(query_cur)
+##        enable_ddl(query_cur)
+##        enable_rebalance(query_cur)
+##        enable_rereplication(query_cur )
+##        enable_major_freeze(query_cur)
+##      except Exception, e:
+##        logging.exception('run error')
+##        raise e
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##if __name__ == '__main__':
+##  upgrade_params = UpgradeParams()
+##  change_opt_defult_value('log-file', upgrade_params.log_filename)
+##  parse_options(sys.argv[1:])
+##  if not has_no_local_opts():
+##    deal_with_local_opts()
+##  else:
+##    check_db_client_opts()
+##    log_filename = get_opt_log_file()
+##    upgrade_params.log_filename = log_filename
+##    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+##    config_logging_module(upgrade_params.log_filename)
+##    try:
+##      host = get_opt_host()
+##      port = int(get_opt_port())
+##      user = get_opt_user()
+##      password = get_opt_password()
+##      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+##          host, port, user, password, log_filename)
+##      do_check(host, port, user, password, upgrade_params)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connctor error')
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error')
+##      raise e
+##
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:upgrade_rolling_post.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import sys
+##import os
+##import time
+##import mysql.connector
+##from mysql.connector import errorcode
+##import logging
+##import getopt
+##
+##class UpgradeParams:
+##  log_filename = 'upgrade_rolling_post.log'
+###### --------------start : my_error.py --------------
+##class MyError(Exception):
+##  def __init__(self, value):
+##    self.value = value
+##  def __str__(self):
+##    return repr(self.value)
+##
+###### --------------start : actions.py--------------
+##class QueryCursor:
+##  __cursor = None
+##  def __init__(self, cursor):
+##    self.__cursor = cursor
+##  def exec_sql(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
+##      return rowcount
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+##  def exec_query(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      results = self.__cursor.fetchall()
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
+##      return (self.__cursor.description, results)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+###### ---------------end----------------------
+##
+###### --------------start :  opt.py --------------
+##help_str = \
+##"""
+##Help:
+##""" +\
+##sys.argv[0] + """ [OPTIONS]""" +\
+##'\n\n' +\
+##'-I, --help          Display this help and exit.\n' +\
+##'-V, --version       Output version information and exit.\n' +\
+##'-h, --host=name     Connect to host.\n' +\
+##'-P, --port=name     Port number to use for connection.\n' +\
+##'-u, --user=name     User for login.\n' +\
+##'-p, --password=name Password to use when connecting to server. If password is\n' +\
+##'                    not given it\'s empty string "".\n' +\
+##'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
+##'                    the following strings: ddl, normal_dml, each_tenant_dml,\n' +\
+##'                    system_variable_dml, special_action, all. "all" represents\n' +\
+##'                    that all modules should be run. They are splitted by ",".\n' +\
+##'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
+##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+##'\n\n' +\
+##'Maybe you want to run cmd like that:\n' +\
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+##
+##version_str = """version 1.0.0"""
+##
+##class Option:
+##  __g_short_name_set = set([])
+##  __g_long_name_set = set([])
+##  __short_name = None
+##  __long_name = None
+##  __is_with_param = None
+##  __is_local_opt = None
+##  __has_value = None
+##  __value = None
+##  def __init__(self, short_name, long_name, is_with_param, is_local_opt, default_value = None):
+##    if short_name in Option.__g_short_name_set:
+##      raise MyError('duplicate option short name: {0}'.format(short_name))
+##    elif long_name in Option.__g_long_name_set:
+##      raise MyError('duplicate option long name: {0}'.format(long_name))
+##    Option.__g_short_name_set.add(short_name)
+##    Option.__g_long_name_set.add(long_name)
+##    self.__short_name = short_name
+##    self.__long_name = long_name
+##    self.__is_with_param = is_with_param
+##    self.__is_local_opt = is_local_opt
+##    self.__has_value = False
+##    if None != default_value:
+##      self.set_value(default_value)
+##  def is_with_param(self):
+##    return self.__is_with_param
+##  def get_short_name(self):
+##    return self.__short_name
+##  def get_long_name(self):
+##    return self.__long_name
+##  def has_value(self):
+##    return self.__has_value
+##  def get_value(self):
+##    return self.__value
+##  def set_value(self, value):
+##    self.__value = value
+##    self.__has_value = True
+##  def is_local_opt(self):
+##    return self.__is_local_opt
+##  def is_valid(self):
+##    return None != self.__short_name and None != self.__long_name and True == self.__has_value and None != self.__value
+##
+##g_opts =\
+##[\
+##Option('I', 'help', False, True),\
+##Option('V', 'version', False, True),\
+##Option('h', 'host', True, False),\
+##Option('P', 'port', True, False),\
+##Option('u', 'user', True, False),\
+##Option('p', 'password', True, False, ''),\
+### 要跑哪个模块，默认全跑
+##Option('m', 'module', True, False, 'all'),\
+### 日志文件路径，不同脚本的main函数中中会改成不同的默认值
+##Option('l', 'log-file', True, False)
+##]\
+##
+##def change_opt_defult_value(opt_long_name, opt_default_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt.get_long_name() == opt_long_name:
+##      opt.set_value(opt_default_val)
+##      return
+##
+##def has_no_local_opts():
+##  global g_opts
+##  no_local_opts = True
+##  for opt in g_opts:
+##    if opt.is_local_opt() and opt.has_value():
+##      no_local_opts = False
+##  return no_local_opts
+##
+##def check_db_client_opts():
+##  global g_opts
+##  for opt in g_opts:
+##    if not opt.is_local_opt() and not opt.has_value():
+##      raise MyError('option "-{0}" has not been specified, maybe you should run "{1} --help" for help'\
+##          .format(opt.get_short_name(), sys.argv[0]))
+##
+##def parse_option(opt_name, opt_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt_name in (('-' + opt.get_short_name()), ('--' + opt.get_long_name())):
+##      opt.set_value(opt_val)
+##
+##def parse_options(argv):
+##  global g_opts
+##  short_opt_str = ''
+##  long_opt_list = []
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      short_opt_str += opt.get_short_name() + ':'
+##    else:
+##      short_opt_str += opt.get_short_name()
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      long_opt_list.append(opt.get_long_name() + '=')
+##    else:
+##      long_opt_list.append(opt.get_long_name())
+##  (opts, args) = getopt.getopt(argv, short_opt_str, long_opt_list)
+##  for (opt_name, opt_val) in opts:
+##    parse_option(opt_name, opt_val)
+##  if has_no_local_opts():
+##    check_db_client_opts()
+##
+##def deal_with_local_opt(opt):
+##  if 'help' == opt.get_long_name():
+##    global help_str
+##    print help_str
+##  elif 'version' == opt.get_long_name():
+##    global version_str
+##    print version_str
+##
+##def deal_with_local_opts():
+##  global g_opts
+##  if has_no_local_opts():
+##    raise MyError('no local options, can not deal with local options')
+##  else:
+##    for opt in g_opts:
+##      if opt.is_local_opt() and opt.has_value():
+##        deal_with_local_opt(opt)
+##        # 只处理一个
+##        return
+##
+##def get_opt_host():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'host' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_port():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'port' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_user():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'user' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_password():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'password' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_module():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'module' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_log_file():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'log-file' == opt.get_long_name():
+##      return opt.get_value()
+###### ---------------end----------------------
+##
+##def config_logging_module(log_filenamme):
+##  logging.basicConfig(level=logging.INFO,\
+##      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
+##      datefmt='%Y-%m-%d %H:%M:%S',\
+##      filename=log_filenamme,\
+##      filemode='w')
+##  # 定义日志打印格式
+##  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+##  #######################################
+##  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
+##  stdout_handler = logging.StreamHandler(sys.stdout)
+##  stdout_handler.setLevel(logging.INFO)
+##  # 设置日志打印格式
+##  stdout_handler.setFormatter(formatter)
+##  # 将定义好的stdout_handler日志handler添加到root logger
+##  logging.getLogger('').addHandler(stdout_handler)
+##
+##def run(my_host, my_port, my_user, my_passwd, upgrade_params):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    conn.autocommit = True
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = QueryCursor(cur)
+##      (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
+##      if len(results) != 1:
+##          raise MyError('distinct observer version not exist')
+##      #rolling upgrade 在2.2.50版本后支持
+##      elif cmp(results[0][0], "2.2.50") >= 0:
+##          query_cur.exec_sql("""ALTER SYSTEM END ROLLING UPGRADE""")
+##          logging.info("END ROLLING UPGRADE success")
+##      else:
+##          logging.info("cluster version ({0}) less than 2.2.50, skip".format(results[0][0]))
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##if __name__ == '__main__':
+##  upgrade_params = UpgradeParams()
+##  change_opt_defult_value('log-file', upgrade_params.log_filename)
+##  parse_options(sys.argv[1:])
+##  if not has_no_local_opts():
+##    deal_with_local_opts()
+##  else:
+##    check_db_client_opts()
+##    log_filename = get_opt_log_file()
+##    upgrade_params.log_filename = log_filename
+##    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+##    config_logging_module(upgrade_params.log_filename)
+##    try:
+##      host = get_opt_host()
+##      port = int(get_opt_port())
+##      user = get_opt_user()
+##      password = get_opt_password()
+##      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+##          host, port, user, password, log_filename)
+##      run(host, port, user, password, upgrade_params)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connctor error')
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error')
+##      raise e
+##
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:upgrade_rolling_pre.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import sys
+##import os
+##import time
+##import mysql.connector
+##from mysql.connector import errorcode
+##import logging
+##import getopt
+##
+##class UpgradeParams:
+##  log_filename = 'upgrade_rolling_pre.log'
+###### --------------start : my_error.py --------------
+##class MyError(Exception):
+##  def __init__(self, value):
+##    self.value = value
+##  def __str__(self):
+##    return repr(self.value)
+##
+###### --------------start : actions.py--------------
+##class QueryCursor:
+##  __cursor = None
+##  def __init__(self, cursor):
+##    self.__cursor = cursor
+##  def exec_sql(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
+##      return rowcount
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+##  def exec_query(self, sql, print_when_succ = True):
+##    try:
+##      self.__cursor.execute(sql)
+##      results = self.__cursor.fetchall()
+##      rowcount = self.__cursor.rowcount
+##      if True == print_when_succ:
+##        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
+##      return (self.__cursor.description, results)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error, fail to execute sql: %s', sql)
+##      raise e
+###### ---------------end----------------------
+##
+###### --------------start :  opt.py --------------
+##help_str = \
+##"""
+##Help:
+##""" +\
+##sys.argv[0] + """ [OPTIONS]""" +\
+##'\n\n' +\
+##'-I, --help          Display this help and exit.\n' +\
+##'-V, --version       Output version information and exit.\n' +\
+##'-h, --host=name     Connect to host.\n' +\
+##'-P, --port=name     Port number to use for connection.\n' +\
+##'-u, --user=name     User for login.\n' +\
+##'-p, --password=name Password to use when connecting to server. If password is\n' +\
+##'                    not given it\'s empty string "".\n' +\
+##'-m, --module=name   Modules to run. Modules should be a string combined by some of\n' +\
+##'                    the following strings: ddl, normal_dml, each_tenant_dml,\n' +\
+##'                    system_variable_dml, special_action, all. "all" represents\n' +\
+##'                    that all modules should be run. They are splitted by ",".\n' +\
+##'                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
+##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+##'\n\n' +\
+##'Maybe you want to run cmd like that:\n' +\
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
+##
+##version_str = """version 1.0.0"""
+##
+##class Option:
+##  __g_short_name_set = set([])
+##  __g_long_name_set = set([])
+##  __short_name = None
+##  __long_name = None
+##  __is_with_param = None
+##  __is_local_opt = None
+##  __has_value = None
+##  __value = None
+##  def __init__(self, short_name, long_name, is_with_param, is_local_opt, default_value = None):
+##    if short_name in Option.__g_short_name_set:
+##      raise MyError('duplicate option short name: {0}'.format(short_name))
+##    elif long_name in Option.__g_long_name_set:
+##      raise MyError('duplicate option long name: {0}'.format(long_name))
+##    Option.__g_short_name_set.add(short_name)
+##    Option.__g_long_name_set.add(long_name)
+##    self.__short_name = short_name
+##    self.__long_name = long_name
+##    self.__is_with_param = is_with_param
+##    self.__is_local_opt = is_local_opt
+##    self.__has_value = False
+##    if None != default_value:
+##      self.set_value(default_value)
+##  def is_with_param(self):
+##    return self.__is_with_param
+##  def get_short_name(self):
+##    return self.__short_name
+##  def get_long_name(self):
+##    return self.__long_name
+##  def has_value(self):
+##    return self.__has_value
+##  def get_value(self):
+##    return self.__value
+##  def set_value(self, value):
+##    self.__value = value
+##    self.__has_value = True
+##  def is_local_opt(self):
+##    return self.__is_local_opt
+##  def is_valid(self):
+##    return None != self.__short_name and None != self.__long_name and True == self.__has_value and None != self.__value
+##
+##g_opts =\
+##[\
+##Option('I', 'help', False, True),\
+##Option('V', 'version', False, True),\
+##Option('h', 'host', True, False),\
+##Option('P', 'port', True, False),\
+##Option('u', 'user', True, False),\
+##Option('p', 'password', True, False, ''),\
+### 要跑哪个模块，默认全跑
+##Option('m', 'module', True, False, 'all'),\
+### 日志文件路径，不同脚本的main函数中中会改成不同的默认值
+##Option('l', 'log-file', True, False)
+##]\
+##
+##def change_opt_defult_value(opt_long_name, opt_default_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt.get_long_name() == opt_long_name:
+##      opt.set_value(opt_default_val)
+##      return
+##
+##def has_no_local_opts():
+##  global g_opts
+##  no_local_opts = True
+##  for opt in g_opts:
+##    if opt.is_local_opt() and opt.has_value():
+##      no_local_opts = False
+##  return no_local_opts
+##
+##def check_db_client_opts():
+##  global g_opts
+##  for opt in g_opts:
+##    if not opt.is_local_opt() and not opt.has_value():
+##      raise MyError('option "-{0}" has not been specified, maybe you should run "{1} --help" for help'\
+##          .format(opt.get_short_name(), sys.argv[0]))
+##
+##def parse_option(opt_name, opt_val):
+##  global g_opts
+##  for opt in g_opts:
+##    if opt_name in (('-' + opt.get_short_name()), ('--' + opt.get_long_name())):
+##      opt.set_value(opt_val)
+##
+##def parse_options(argv):
+##  global g_opts
+##  short_opt_str = ''
+##  long_opt_list = []
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      short_opt_str += opt.get_short_name() + ':'
+##    else:
+##      short_opt_str += opt.get_short_name()
+##  for opt in g_opts:
+##    if opt.is_with_param():
+##      long_opt_list.append(opt.get_long_name() + '=')
+##    else:
+##      long_opt_list.append(opt.get_long_name())
+##  (opts, args) = getopt.getopt(argv, short_opt_str, long_opt_list)
+##  for (opt_name, opt_val) in opts:
+##    parse_option(opt_name, opt_val)
+##  if has_no_local_opts():
+##    check_db_client_opts()
+##
+##def deal_with_local_opt(opt):
+##  if 'help' == opt.get_long_name():
+##    global help_str
+##    print help_str
+##  elif 'version' == opt.get_long_name():
+##    global version_str
+##    print version_str
+##
+##def deal_with_local_opts():
+##  global g_opts
+##  if has_no_local_opts():
+##    raise MyError('no local options, can not deal with local options')
+##  else:
+##    for opt in g_opts:
+##      if opt.is_local_opt() and opt.has_value():
+##        deal_with_local_opt(opt)
+##        # 只处理一个
+##        return
+##
+##def get_opt_host():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'host' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_port():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'port' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_user():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'user' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_password():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'password' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_module():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'module' == opt.get_long_name():
+##      return opt.get_value()
+##
+##def get_opt_log_file():
+##  global g_opts
+##  for opt in g_opts:
+##    if 'log-file' == opt.get_long_name():
+##      return opt.get_value()
+###### ---------------end----------------------
+##
+##def config_logging_module(log_filenamme):
+##  logging.basicConfig(level=logging.INFO,\
+##      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
+##      datefmt='%Y-%m-%d %H:%M:%S',\
+##      filename=log_filenamme,\
+##      filemode='w')
+##  # 定义日志打印格式
+##  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+##  #######################################
+##  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
+##  stdout_handler = logging.StreamHandler(sys.stdout)
+##  stdout_handler.setLevel(logging.INFO)
+##  # 设置日志打印格式
+##  stdout_handler.setFormatter(formatter)
+##  # 将定义好的stdout_handler日志handler添加到root logger
+##  logging.getLogger('').addHandler(stdout_handler)
+##
+##def run(my_host, my_port, my_user, my_passwd, upgrade_params):
+##  try:
+##    conn = mysql.connector.connect(user = my_user,
+##                                   password = my_passwd,
+##                                   host = my_host,
+##                                   port = my_port,
+##                                   database = 'oceanbase',
+##                                   raise_on_warnings = True)
+##    conn.autocommit = True
+##    cur = conn.cursor(buffered=True)
+##    try:
+##      query_cur = QueryCursor(cur)
+##      (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
+##      if len(results) != 1:
+##          raise MyError('distinct observer version not exist')
+##      #rolling upgrade 在2.2.50版本后支持
+##      elif cmp(results[0][0], "2.2.50") >= 0:
+##          query_cur.exec_sql("""ALTER SYSTEM BEGIN ROLLING UPGRADE""")
+##          logging.info("BEGIN ROLLING UPGRADE success")
+##      else:
+##          logging.info("cluster version ({0}) less than 2.2.50, skip".format(results[0][0]))
+##    except Exception, e:
+##      logging.exception('run error')
+##      raise e
+##    finally:
+##      cur.close()
+##      conn.close()
+##  except mysql.connector.Error, e:
+##    logging.exception('connection error')
+##    raise e
+##  except Exception, e:
+##    logging.exception('normal error')
+##    raise e
+##
+##if __name__ == '__main__':
+##  upgrade_params = UpgradeParams()
+##  change_opt_defult_value('log-file', upgrade_params.log_filename)
+##  parse_options(sys.argv[1:])
+##  if not has_no_local_opts():
+##    deal_with_local_opts()
+##  else:
+##    check_db_client_opts()
+##    log_filename = get_opt_log_file()
+##    upgrade_params.log_filename = log_filename
+##    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+##    config_logging_module(upgrade_params.log_filename)
+##    try:
+##      host = get_opt_host()
+##      port = int(get_opt_port())
+##      user = get_opt_user()
+##      password = get_opt_password()
+##      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+##          host, port, user, password, log_filename)
+##      run(host, port, user, password, upgrade_params)
+##    except mysql.connector.Error, e:
+##      logging.exception('mysql connctor error')
+##      raise e
+##    except Exception, e:
+##      logging.exception('normal error')
+##      raise e
+##
+#####====XXXX======######==== I am a splitter ====######======XXXX====####
+##filename:upgrade_sys_vars.py
+###!/usr/bin/env python
+### -*- coding: utf-8 -*-
+##
+##import new
+##import time
+##import re
+##import json
+##import traceback
+##import sys
+##import mysql.connector
+##from mysql.connector import errorcode
+##import logging
+##from my_error import MyError
+##import actions
+##from actions import DMLCursor
+##from actions import QueryCursor
+##from sys_vars_dict import sys_var_dict
+##import my_utils
+##
+##
+### 由于用了/*+read_consistency(WEAK) */来查询，因此升级期间不能允许创建或删除租户
+##
+##def calc_diff_sys_var(cur, tenant_id):
+##  try:
+##    change_tenant(cur, tenant_id)
+##    actual_tenant_id = get_actual_tenant_id(tenant_id)
+##    cur.execute("""select name, data_type, value, info, flags, min_val, max_val from __all_sys_variable_history where tenant_id=%s and (tenant_id, zone, name, schema_version) in (select tenant_id, zone, name, max(schema_version) from __all_sys_variable_history where tenant_id=%s group by tenant_id, zone, name);"""%(actual_tenant_id, actual_tenant_id))
+##    results = cur.fetchall()
+##    logging.info('there has %s system variable of tenant id %d', len(results), tenant_id)
+##    update_sys_var_list = []
+##    update_sys_var_ori_list = []
+##    add_sys_var_list = []
+##    for r in results:
+##      if sys_var_dict.has_key(r[0]):
+##        sys_var = sys_var_dict[r[0]]
+##        if long(sys_var["data_type"]) != long(r[1]) or sys_var["info"].strip() != r[3].strip() or long(sys_var["flags"]) != long(r[4]) or ("min_val" in sys_var.keys() and sys_var["min_val"] != r[5]) or ("max_val" in sys_var.keys() and sys_var["max_val"] != r[6]):
+##          update_sys_var_list.append(sys_var)
+##          update_sys_var_ori_list.append(r)
+##    for (name, sys_var) in sys_var_dict.items():
+##      sys_var_exist = 0
+##      for r in results:
+##        if r[0] == sys_var["name"]:
+##          sys_var_exist = 1
+##          break
+##      if 0 == sys_var_exist:
+##        add_sys_var_list.append(sys_var)
+##    # reset
+##    sys_tenant_id = 1
+##    change_tenant(cur, sys_tenant_id)
+##    return (update_sys_var_list, update_sys_var_ori_list, add_sys_var_list)
+##  except Exception, e:
+##    logging.exception('fail to calc diff sys var')
+##    raise e
+##
+##def gen_update_sys_var_sql_for_tenant(tenant_id, sys_var):
+##  actual_tenant_id = get_actual_tenant_id(tenant_id)
+##  update_sql = 'update oceanbase.__all_sys_variable set data_type = ' + str(sys_var["data_type"])\
+##      + ', info = \'' + sys_var["info"].strip() + '\', flags = ' + str(sys_var["flags"])
+##  update_sql = update_sql\
+##      + ((', min_val = \'' + sys_var["min_val"] + '\'') if "min_val" in sys_var.keys() else '')\
+##      + ((', max_val = \'' + sys_var["max_val"] + '\'') if "max_val" in sys_var.keys() else '')
+##  update_sql = update_sql + ' where tenant_id = ' + str(actual_tenant_id) + ' and name = \'' + sys_var["name"] + '\''
+##  return update_sql
+##
+##def gen_update_sys_var_history_sql_for_tenant(dml_cur, tenant_id, sys_var):
+##  try:
+##    actual_tenant_id = get_actual_tenant_id(tenant_id)
+##    (desc, results) = dml_cur.exec_query("""select schema_version from oceanbase.__all_sys_variable_history
+##                                            where tenant_id = {0} and name = '{1}'
+##                                            order by schema_version desc limit 1"""
+##                                            .format(actual_tenant_id, sys_var["name"]))
+##    schema_version = results[0][0]
+##    (desc, results) = dml_cur.exec_query("""select value from __all_sys_variable where tenant_id={0} and name='{1}' limit 1"""
+##                                         .format(actual_tenant_id, sys_var["name"]))
+##    res_len = len(results)
+##    if res_len != 1:
+##      logging.error('fail to get value from __all_sys_variable, result count:'+ str(res_len))
+##      raise MyError('fail to get value from __all_sys_variable')
+##    value = results[0][0]
+##    min_val = sys_var["min_val"] if "min_val" in sys_var.keys() else ''
+##    max_val = sys_var["max_val"] if "max_val" in sys_var.keys() else ''
+##    replace_sql = """replace into oceanbase.__all_sys_variable_history(
+##                          tenant_id,
+##                          zone,
+##                          name,
+##                          schema_version,
+##                          is_deleted,
+##                          data_type,
+##                          value,
+##                          info,
+##                          flags,
+##                          min_val,
+##                          max_val)
+##                      values(%d, '', '%s', %d, 0, %d, '%s', '%s', %d, '%s', '%s')
+##                  """%(actual_tenant_id, sys_var["name"], schema_version, sys_var["data_type"], value, sys_var["info"], sys_var["flags"], min_val, max_val)
+##    return replace_sql
+##  except Exception, e:
+##    logging.exception('fail to gen replace sys var history sql')
+##    raise e
+##
+##def gen_replace_sys_var_history_sql_for_tenant(dml_cur, tenant_id, sys_var):
+##  try:
+##    actual_tenant_id = get_actual_tenant_id(tenant_id)
+##    (desc, results) = dml_cur.exec_query("""select schema_version from oceanbase.__all_sys_variable_history
+##                                            where tenant_id={0} order by schema_version asc limit 1""".format(actual_tenant_id))
+##    schema_version = results[0][0]
+##    min_val = sys_var["min_val"] if "min_val" in sys_var.keys() else ''
+##    max_val = sys_var["max_val"] if "max_val" in sys_var.keys() else ''
+##    replace_sql = """replace into oceanbase.__all_sys_variable_history(
+##                          tenant_id,
+##                          zone,
+##                          name,
+##                          schema_version,
+##                          is_deleted,
+##                          data_type,
+##                          value,
+##                          info,
+##                          flags,
+##                          min_val,
+##                          max_val)
+##                      values(%d, '', '%s', %d, 0, %d, '%s', '%s', %d, '%s', '%s')
+##                  """%(actual_tenant_id, sys_var["name"], schema_version, sys_var["data_type"], sys_var["value"], sys_var["info"], sys_var["flags"], min_val, max_val)
+##    return replace_sql
+##  except Exception, e:
+##    logging.exception('fail to gen replace sys var history sql')
+##    raise e
+##
+##
+##def gen_sys_var_update_sqls_for_tenant(query_cur, tenant_id, update_sys_var_list):
+##  update_sqls = ''
+##  for i in range(0, len(update_sys_var_list)):
+##    sys_var = update_sys_var_list[i]
+##    if i > 0:
+##      update_sqls += '\n'
+##    update_sqls += gen_update_sys_var_sql_for_tenant(tenant_id, sys_var) + ';\n'
+##    update_sqls += gen_update_sys_var_history_sql_for_tenant(query_cur, tenant_id, sys_var) + ';'
+##  return update_sqls
+##
+##def update_sys_vars_for_tenant(dml_cur, tenant_id, update_sys_var_list):
+##  try:
+##    for i in range(0, len(update_sys_var_list)):
+##      sys_var = update_sys_var_list[i]
+##      update_sql = gen_update_sys_var_sql_for_tenant(tenant_id, sys_var)
+##      rowcount = dml_cur.exec_update(update_sql)
+##      if 1 != rowcount:
+##        # 以history为准，考虑可重入，此处不校验__all_sys_variable的更新结果
+##        logging.info('sys var not change, just skip, sql: %s, tenant_id: %d', update_sql, tenant_id)
+##      else:
+##        logging.info('succeed to update sys var for tenant, sql: %s, tenant_id: %d', update_sql, tenant_id)
+###replace update sys var to __all_sys_variable_history
+##      replace_sql = gen_update_sys_var_history_sql_for_tenant(dml_cur, tenant_id, sys_var)
+##      rowcount = dml_cur.exec_update(replace_sql)
+##      if 1 != rowcount and 2 != rowcount:
+##        logging.error('fail to replace sysvar, replace_sql:%s'%replace_sql)
+##        raise MyError('fail to repalce sysvar')
+##      else:
+##        logging.info('succeed to replace sys var history for tenant, sql: %s, tenant_id: %d', replace_sql, tenant_id)
+##  except Exception, e:
+##    logging.exception('fail to update for tenant, tenant_id: %d', tenant_id)
+##    raise e
+##
+##def gen_add_sys_var_sql_for_tenant(tenant_id, sys_var):
+##  actual_tenant_id = get_actual_tenant_id(tenant_id)
+##  add_sql = 'replace into oceanbase.__all_sys_variable(tenant_id, zone, name, data_type, value, info, flags, min_val, max_val) values('\
+##      + str(actual_tenant_id) +', \'\', \'' + sys_var["name"] + '\', ' + str(sys_var["data_type"]) + ', \'' + sys_var["value"] + '\', \''\
+##      + sys_var["info"].strip() + '\', ' + str(sys_var["flags"]) + ', \''
+##  add_sql = add_sql + (sys_var["min_val"] if "min_val" in sys_var.keys() else '') + '\', \''\
+##      + (sys_var["max_val"] if "max_val" in sys_var.keys() else '') + '\')'
+##  return add_sql
+##
+##def gen_sys_var_add_sqls_for_tenant(query_cur, tenant_id, add_sys_var_list):
+##  add_sqls = ''
+##  for i in range(0, len(add_sys_var_list)):
+##    sys_var = add_sys_var_list[i]
+##    if i > 0:
+##      add_sqls += '\n'
+##    add_sqls += gen_add_sys_var_sql_for_tenant(tenant_id, sys_var) + ';\n'
+##    add_sqls += gen_replace_sys_var_history_sql_for_tenant(query_cur, tenant_id, sys_var) + ';'
+##  return add_sqls
+##
+##def add_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list):
+##  try:
+##    for i in range(0, len(add_sys_var_list)):
+##      sys_var = add_sys_var_list[i]
+##      add_sql = gen_add_sys_var_sql_for_tenant(tenant_id, sys_var)
+##      rowcount = dml_cur.exec_update(add_sql)
+##      if 1 != rowcount:
+##        # 以history为准，考虑可重入，此处不校验__all_sys_variable的更新结果
+##        logging.info('sys var not change, just skip, sql: %s, tenant_id: %d', update_sql, tenant_id)
+##      else:
+##        logging.info('succeed to insert sys var for tenant, sql: %s, tenant_id: %d', add_sql, tenant_id)
+##      replace_sql = gen_replace_sys_var_history_sql_for_tenant(dml_cur, tenant_id, sys_var)
+##      rowcount = dml_cur.exec_update(replace_sql)
+##      if 1 != rowcount:
+##        logging.error('fail to replace system variable history, sql:%s'%replace_sql)
+##        raise MyError('fail to replace system variable history')
+##      else:
+##        logging.info('succeed to replace sys var for tenant, sql: %s, tenant_id: %d', replace_sql, tenant_id)
+##  except Exception, e:
+##    logging.exception('fail to add for tenant, tenant_id: %d', tenant_id)
+##    raise e
+##
+##
+##def gen_sys_var_special_update_sqls_for_tenant(tenant_id):
+##  special_update_sqls = ''
+##  return special_update_sqls
+##
+##def special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, sys_var_name, sys_var_value):
+##  try:
+##    sys_var = None
+##    for i in range(0, len(add_sys_var_list)):
+##      if (sys_var_name == add_sys_var_list[i]["name"]):
+##        sys_var = add_sys_var_list[i]
+##        break;
+##
+##    if None == sys_var:
+##      logging.info('%s is not new, no need special update again', sys_var_name)
+##      return
+##
+##    sys_var["value"] = sys_var_value;
+##    update_sql = gen_update_sys_var_value_sql_for_tenant(tenant_id, sys_var)
+##    rowcount = dml_cur.exec_update(update_sql)
+##    if 1 != rowcount:
+##      # 以history为准，考虑可重入，此处不校验__all_sys_variable的更新结果
+##      logging.info('sys var not change, just skip, sql: %s, tenant_id: %d', update_sql, tenant_id)
+##    else:
+##      logging.info('succeed to update sys var for tenant, sql: %s, tenant_id: %d', update_sql, tenant_id)
+##    #replace update sys var to __all_sys_variable_history
+##    replace_sql = gen_update_sys_var_history_sql_for_tenant(dml_cur, tenant_id, sys_var)
+##    rowcount = dml_cur.exec_update(replace_sql)
+##    if 1 != rowcount and 2 != rowcount:
+##      logging.error('fail to replace sysvar, replace_sql:%s'%replace_sql)
+##      raise MyError('fail to repalce sysvar')
+##    else:
+##      logging.info('succeed to replace sys var history for tenant, sql: %s, tenant_id: %d', replace_sql, tenant_id)
+##  except Exception, e:
+##    logging.exception('fail to add for tenant, tenant_id: %d', tenant_id)
+##    raise e
+##
+##def get_sys_vars_upgrade_dmls_str(cur, query_cur, tenant_id_list, update_sys_var_list, add_sys_var_list):
+##  ret_str = ''
+##  if len(tenant_id_list) <= 0:
+##    logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
+##    raise MyError('invalid arg')
+##  for i in range(0, len(tenant_id_list)):
+##    tenant_id = tenant_id_list[i]
+##    change_tenant(cur, tenant_id)
+##    if i > 0:
+##      ret_str += '\n'
+##    ret_str += gen_sys_var_update_sqls_for_tenant(query_cur, tenant_id, update_sys_var_list)
+##  if ret_str != '' and len(add_sys_var_list) > 0:
+##    ret_str += '\n'
+##  for i in range(0, len(tenant_id_list)):
+##    tenant_id = tenant_id_list[i]
+##    change_tenant(cur, tenant_id)
+##    if i > 0:
+##      ret_str += '\n'
+##    ret_str += gen_sys_var_add_sqls_for_tenant(query_cur, tenant_id, add_sys_var_list)
+##  if ret_str != '' and gen_sys_var_special_update_sqls_for_tenant(tenant_id_list[0]) != '':
+##    ret_str += '\n'
+##  for i in range(0, len(tenant_id_list)):
+##    tenant_id = tenant_id_list[i]
+##    change_tenant(cur, tenant_id)
+##    if i > 0:
+##      ret_str += '\n'
+##    ret_str += gen_sys_var_special_update_sqls_for_tenant(tenant_id)
+##  sys_tenant_id= 1
+##  change_tenant(cur, sys_tenant_id)
+##  return ret_str
+##
+##def gen_update_sys_var_value_sql_for_tenant(tenant_id, sys_var):
+##  update_sql = ('update oceanbase.__all_sys_variable set value = \'' + str(sys_var["value"])
+##      + '\' where tenant_id = ' + str(tenant_id) + ' and name = \'' + sys_var["name"] + '\'')
+##  return update_sql
+##
+##def exec_sys_vars_upgrade_dml(cur, tenant_id_list):
+##  if len(tenant_id_list) <= 0:
+##    logging.error('distinct tenant id count is <= 0, tenant_id_count: %d', len(tenant_id_list))
+##    raise MyError('invalid arg')
+##  dml_cur = DMLCursor(cur)
+##  # 操作前先dump出oceanbase.__all_sys_variable表的所有数据
+##  my_utils.query_and_dump_results(dml_cur, """select * from oceanbase.__all_virtual_sys_variable""")
+##  # 操作前先dump出oceanbase.__all_sys_variable_history表的所有数据
+##  my_utils.query_and_dump_results(dml_cur, """select * from oceanbase.__all_virtual_sys_variable_history""")
+##
+##  for i in range(0, len(tenant_id_list)):
+##    tenant_id = tenant_id_list[i]
+##    # calc diff
+##    (update_sys_var_list, update_sys_var_ori_list, add_sys_var_list) = calc_diff_sys_var(cur, tenant_id)
+##    logging.info('update system variables list: [%s]', ', '.join(str(sv) for sv in update_sys_var_list))
+##    logging.info('update system variables original list: [%s]', ', '.join(str(sv) for sv in update_sys_var_ori_list))
+##    logging.info('add system variables list: [%s]', ', '.join(str(sv) for sv in add_sys_var_list))
+##    # update
+##    change_tenant(cur, tenant_id)
+##    update_sys_vars_for_tenant(dml_cur, tenant_id, update_sys_var_list)
+##    add_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list)
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_date_format', 'YYYY-MM-DD HH24:MI:SS');
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_timestamp_format', 'YYYY-MM-DD HH24:MI:SS.FF');
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_timestamp_tz_format', 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD');
+##  # reset
+##  sys_tenant_id = 1
+##  change_tenant(cur, sys_tenant_id)
+##
+##def exec_sys_vars_upgrade_dml_in_standby_cluster(standby_cluster_infos):
+##  try:
+##    for standby_cluster_info in standby_cluster_infos:
+##      exec_sys_vars_upgrade_dml_by_cluster(standby_cluster_info)
+##  except Exception, e:
+##    logging.exception("""exec_sys_vars_upgrade_dml_in_standby_cluster failed""")
+##    raise e
+##
+##def exec_sys_vars_upgrade_dml_by_cluster(standby_cluster_info):
+##  try:
+##
+##    logging.info("exec_sys_vars_upgrade_dml_by_cluster : cluster_id = {0}, ip = {1}, port = {2}"
+##                 .format(standby_cluster_info['cluster_id'],
+##                         standby_cluster_info['ip'],
+##                         standby_cluster_info['port']))
+##    logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+##                 .format(standby_cluster_info['cluster_id'],
+##                         standby_cluster_info['ip'],
+##                         standby_cluster_info['port']))
+##    conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+##                                   password =  standby_cluster_info['pwd'],
+##                                   host     =  standby_cluster_info['ip'],
+##                                   port     =  standby_cluster_info['port'],
+##                                   database =  'oceanbase',
+##                                   raise_on_warnings = True)
+##    cur = conn.cursor(buffered=True)
+##    conn.autocommit = True
+##    dml_cur = DMLCursor(cur)
+##    query_cur = QueryCursor(cur)
+##    is_primary = actions.check_current_cluster_is_primary(conn, query_cur)
+##    if is_primary:
+##      logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+##                        .format(standby_cluster_info['cluster_id'],
+##                                standby_cluster_info['ip'],
+##                                standby_cluster_info['port']))
+##      raise e
+##
+##    # only update sys tenant in standby cluster
+##    tenant_id = 1
+##    # calc diff
+##    (update_sys_var_list, update_sys_var_ori_list, add_sys_var_list) = calc_diff_sys_var(cur, tenant_id)
+##    logging.info('update system variables list: [%s]', ', '.join(str(sv) for sv in update_sys_var_list))
+##    logging.info('update system variables original list: [%s]', ', '.join(str(sv) for sv in update_sys_var_ori_list))
+##    logging.info('add system variables list: [%s]', ', '.join(str(sv) for sv in add_sys_var_list))
+##    # update
+##    update_sys_vars_for_tenant(dml_cur, tenant_id, update_sys_var_list)
+##    add_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list)
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_date_format', 'YYYY-MM-DD HH24:MI:SS');
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_timestamp_format', 'YYYY-MM-DD HH24:MI:SS.FF');
+##    special_update_sys_vars_for_tenant(dml_cur, tenant_id, add_sys_var_list, 'nls_timestamp_tz_format', 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD');
+##
+##    cur.close()
+##    conn.close()
+##
+##  except Exception, e:
+##    logging.exception("""exec_sys_vars_upgrade_dml_in_standby_cluster failed :
+##                         cluster_id = {0}, ip = {1}, port = {2}"""
+##                         .format(standby_cluster_info['cluster_id'],
+##                                 standby_cluster_info['ip'],
+##                                 standby_cluster_info['port']))
+##    raise e
+##
+##
+#
+#
+#import os
+#import sys
+#import datetime
+#from random import Random
+#
+##def get_actual_tenant_id(tenant_id):
+##  return tenant_id if (1 == tenant_id) else 0;
+#
+#def change_tenant(cur, tenant_id):
+#  # change tenant
+#  sql = "alter system change tenant tenant_id = {0};".format(tenant_id)
+#  logging.info(sql);
+#  cur.execute(sql);
+#  # check
+#  sql = "select effective_tenant_id();"
+#  cur.execute(sql)
+#  result = cur.fetchall()
+#  if (1 != len(result) or 1 != len(result[0])):
+#    raise MyError("invalid result cnt")
+#  elif (tenant_id != result[0][0]):
+#    raise MyError("effective_tenant_id:{0} , tenant_id:{1}".format(result[0][0], tenant_id))
+#
+#
+#def fetch_tenant_ids(query_cur):
+#  try:
+#    tenant_id_list = []
+#    (desc, results) = query_cur.exec_query("""select distinct tenant_id from oceanbase.__all_tenant where compatibility_mode=1 order by tenant_id desc""")
+#    for r in results:
+#      tenant_id_list.append(r[0])
+#    return tenant_id_list
+#  except Exception, e:
+#    logging.exception('fail to fetch distinct tenant ids')
+#    raise e
+#
+#
+#class SplitError(Exception):
+#  def __init__(self, value):
+#    self.value = value
+#  def __str__(self):
+#    return repr(self.value)
+#
+#def random_str(rand_str_len = 8):
+#  str = ''
+#  chars = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789'
+#  length = len(chars) - 1
+#  random = Random()
+#  for i in range(rand_str_len):
+#    str += chars[random.randint(0, length)]
+#  return str
+#
+#def split_py_files(sub_files_dir):
+#  char_enter = '\n'
+#  file_splitter_line = '####====XXXX======######==== I am a splitter ====######======XXXX====####'
+#  sub_filename_line_prefix = '#filename:'
+#  sub_file_module_end_line = '#sub file module end'
+#  os.makedirs(sub_files_dir)
+#  print('succeed to create run dir: ' + sub_files_dir + char_enter)
+#  cur_file = open(sys.argv[0], 'r')
+#  cur_file_lines = cur_file.readlines()
+#  cur_file_lines_count = len(cur_file_lines)
+#  sub_file_lines = []
+#  sub_filename = ''
+#  begin_read_sub_py_file = False
+#  is_first_splitter_line = True
+#  i = 0
+#  while i < cur_file_lines_count:
+#    if (file_splitter_line + char_enter) != cur_file_lines[i]:
+#      if begin_read_sub_py_file:
+#        sub_file_lines.append(cur_file_lines[i])
+#    else:
+#      if is_first_splitter_line:
+#        is_first_splitter_line = False
+#      else:
+#        #读完一个子文件了，写到磁盘中
+#        sub_file = open(sub_files_dir + '/' + sub_filename, 'w')
+#        for sub_file_line in sub_file_lines:
+#          sub_file.write(sub_file_line[1:])
+#        sub_file.close()
+#        #清空sub_file_lines
+#        sub_file_lines = []
+#      #再读取下一行的文件名或者结束标记
+#      i += 1
+#      if i >= cur_file_lines_count:
+#        raise SplitError('invalid line index:' + str(i) + ', lines_count:' + str(cur_file_lines_count))
+#      elif (sub_file_module_end_line + char_enter) == cur_file_lines[i]:
+#        print 'succeed to split all sub py files'
+#        break
+#      else:
+#        mark_idx = cur_file_lines[i].find(sub_filename_line_prefix)
+#        if 0 != mark_idx:
+#          raise SplitError('invalid sub file name line, mark_idx = ' + str(mark_idx) + ', line = ' + cur_file_lines[i])
+#        else:
+#          sub_filename = cur_file_lines[i][len(sub_filename_line_prefix):-1]
+#          begin_read_sub_py_file = True
+#    i += 1
+#  cur_file.close()
+#
+#class UpgradeParams:
+#  log_filename = config.post_upgrade_log_filename
+#  sql_dump_filename = config.post_upgrade_sql_filename
+#  rollback_sql_filename =  config.post_upgrade_rollback_sql_filename
+#
+#class QueryCursor:
+#  _cursor = None
+#  def __init__(self, cursor):
+#    self._cursor = Cursor(cursor)
+#  def exec_query(self, sql, print_when_succ = True):
+#    try:
+#      # 这里检查是不是query，不是query就抛错
+#      check_is_query_sql(sql)
+#      return self._cursor.exec_query(sql, print_when_succ)
+#    except Exception, e:
+#      logging.exception('fail to execute dml query: %s', sql)
+#      raise e
+#
+#def fetch_user_names(query_cur):
+#  try:
+#    user_name_list = []
+#    (desc, results) = query_cur.exec_query("""select user_name from oceanbase.__all_user where type=0""")
+#    for r in results:
+#      user_name_list.append(r[0])
+#    return user_name_list
+#  except Exception, e:
+#    logging.exception('fail to fetch user names')
+#    raise e
+#
+#def get_priv_info(m_p):
+#  priv = []
+#  priv_str = ''
+#  obj_name=''
+#  words = m_p.split(" ")
+#  # build priv list
+#  i = 1
+#  while words[i].upper() != 'ON':
+#    if (words[i].upper() == 'ALL'):
+#      priv.append('ALL')
+#    else:
+#      if (words[i].upper() != 'PRIVILEGES'):
+#        priv.append(words[i])
+#    i= i+1
+#  # Jump 'ON'
+#  i=i+1
+#  #print words
+#  if (words[i] == '*.*'):
+#    priv_level = 'USER'
+#  else:
+#    ind = string.find(words[i], '.*')
+#    if (ind != -1):
+#      priv_level = 'DB'
+#      obj_name = words[i][0: ind]
+#    else:
+#      priv_level = 'OBJ'
+#      obj_name = words[i]
+#  #jump 'TO'
+#  i = i + 2
+#  user_name = words[i]
+#
+#  return (priv_level, user_name, priv, obj_name)
+#
+#def owner_priv_to_str(priv):
+#  priv_str = '';
+#  i = 0
+#  while i <  len(priv):
+#    if (string.find(priv[i].uppper(), 'CREATE') == -1):
+#      if (priv[i].upper() == 'SHOW VIEW'):
+#        priv_str = 'SELECT ,'
+#      else:
+#        priv_str = priv[i] + ' ,'
+#    i = i + 1
+#  priv_str = priv_str[0: len(priv_str) -1]
+#  return priv_str
+#
+#def owner_db_priv_to_str(priv):
+#  priv_str = ''
+#  i = 0
+#  while i <  len(priv):
+#    if (string.find(priv[i].uppper(), 'CREATE') != -1):
+#      priv_str = priv[i] + ' ,'
+#    i = i + 1
+#  priv_str = priv_str[0: len(priv_str) -1]
+#  return priv_str
+#
+#def other_db_priv_to_str(priv):
+#  priv_str = ''
+#  i = 0
+#  while i <  len(priv):
+#    if (string.find(priv[i].uppper(), 'CREATE') != -1):
+#      priv_str = 'CREATE TABLE ,'
+#    elif (string.find(priv[i].upper(), 'CREATE VIEW') != -1):
+#      priv_str = 'CREATE VIEW ,'
+#    i = i + 1
+#  priv_str = priv_str[0: len(priv_str) -1]
+#  return priv_str
+#
+#def user_priv_to_str(priv):
+#  priv_str = ''
+#  i = 0
+#  while i <  len(priv):
+#    if (string.find(priv[i].upper(), 'SUPER') != -1):
+#      priv_str = 'ALTER SYSTEM ,'
+#    elif (string.find(priv[i].upper(), 'CREATE USER') != -1):
+#      priv_str = 'CREATE USER, ALTER USER, DROP USER,'
+#    elif (string.find(priv[i].upper(), 'PROCESS') != -1):
+#      priv_str = 'SHOW PROCESS,'
+#    i = i + 1
+#  priv_str = priv_str[0: len(priv_str) -1]
+#
+#owner_db_all_privs = 'CREATE TABLE, CREATE VIEW, CREATE PROCEDURE, CREATE SYNONYM, CREATE SEQUENCE, CREATE TRIGGER, CREATE TYPE '
+#
+#other_db_all_privs = 'create any table, create any view, create any  procedure,\
+#create any synonym, create any sequence, create any trigger, create any type,\
+#alter any table,  alter any procedure, alter any sequence,\
+#alter any trigger, alter any type, drop any table, drop any view,\
+#drop any procedure, drop any synonym, drop any sequence, drop any trigger,\
+#drop any type, select any table, insert any table, update any table, delete any table,\
+#flashback any table, create any index, alter any index, drop any index,\
+#execute any procedure, create public synonym, drop public synonym,\
+#select any sequence, execute any type, create tablespace,\
+#alter tablespace, drop tablespace '
+#
+#other_obj_all_privs = 'alter, index, select, insert, update, delete '
+#
+#def map_priv(m_p):
+#   (priv_level, user_name, priv, obj_name)  = get_priv_info(m_p)
+#   #print priv_level, user_name, priv, obj_name
+#   if priv_level == 'DB':
+#     if user_name == obj_name:
+#       if priv[0] == 'ALL':
+#         return 'GRANT ' + owner_db_all_privs + ' TO ' + user_name
+#       else:
+#         priv_str = owner_db_priv_to_str(priv)
+#         return 'GRANT ' +  priv_str + ' TO ' + user_name
+#     else:
+#       if priv[0] == 'ALL':
+#         return 'GRANT ' + other_db_all_privs + ' TO ' + user_name
+#       else:
+#         priv_str = other_db_priv_to_str(priv)
+#         if (priv_str != ''):
+#           return 'GRANT ' + priv_str + 'TO ' + user_name
+#         else:
+#           return '';
+#   else:
+#     if priv_level == 'USER':
+#       if priv[0] == 'ALL':
+#         return 'GRANT DBA TO ' + user_name
+#       else:
+#         priv_str = user_priv_to_str(priv)
+#         return 'GRANT ' + priv_set + 'TO ' + user_name
+#     else:
+#       if user_name == obj_name:
+#         return ''
+#       else:
+#         if priv[0] == 'ALL':
+#           return 'GRANT ' + other_obj_all_privs + ' TO ' + user_name
+#         else:
+#           priv_str = other_priv_to_str(priv)
+#           return 'GRANT ' + priv_str + 'ON ' + obj_name + 'TO ' + user_name
+#
+###################################################################
+## check的条件：
+## 1. 存在库级grant并且用户名和库名不一致，并且用户不是SYS, 则check不通过
+## 
+##
+##
+###################################################################
+#def check_grant_sql(grant_sql):
+#  (priv_level, user_name, priv, obj_name)  = get_priv_info(grant_sql)
+#  if priv_level == 'DB':
+#     if user_name != obj_name and user_name.upper() != 'SYS' and user_name.upper() != '\'SYS\'':
+#       return False
+#  return True
+#
+#def fetch_user_privs(query_cur, user_name):
+#  try:
+#    grant_sql_list = []
+#    (desc, results) = query_cur.exec_query("""show grants for """ + user_name)
+#    for r in results:
+#      grant_sql_list.append(r[0])
+#    return grant_sql_list
+#  except Exception, e:
+#    logging.exception('fail to fetch user privs')
+#    raise e
+#
+#def check_is_dcl_sql(sql):
+#  word_list = sql.split()
+#  if len(word_list) < 1:
+#    raise MyError('sql is empty, sql="{0}"'.format(sql))
+#  key_word = word_list[0].lower()
+#  if 'grant' != key_word and 'revoke' != key_word:
+#    raise MyError('sql must be dcl, key_word="{0}", sql="{1}"'.format(key_word, sql))
+#
+#class Cursor:
+#  __cursor = None
+#  def __init__(self, cursor):
+#    self.__cursor = cursor
+#  def exec_sql(self, sql, print_when_succ = True):
+#    try:
+#      self.__cursor.execute(sql)
+#      rowcount = self.__cursor.rowcount
+#      if True == print_when_succ:
+#        logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
+#      return rowcount
+#    except mysql.connector.Error, e:
+#      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+#      raise e
+#    except Exception, e:
+#      logging.exception('normal error, fail to execute sql: %s', sql)
+#      raise e
+#  def exec_query(self, sql, print_when_succ = True):
+#    try:
+#      self.__cursor.execute(sql)
+#      results = self.__cursor.fetchall()
+#      rowcount = self.__cursor.rowcount
+#      if True == print_when_succ:
+#        logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
+#      return (self.__cursor.description, results)
+#    except mysql.connector.Error, e:
+#      logging.exception('mysql connector error, fail to execute sql: %s', sql)
+#      raise e
+#    except Exception, e:
+#      logging.exception('normal error, fail to execute sql: %s', sql)
+#      raise e
+#
+#class DCLCursor:
+#  _cursor = None
+#  def __init__(self, cursor):
+#    self._cursor = Cursor(cursor)
+#  def exec_dcl(self, sql, print_when_succ = True):
+#    try:
+#      # 这里检查是不是ddl，不是ddl就抛错
+#      check_is_dcl_sql(sql)
+#      return self._cursor.exec_sql(sql, print_when_succ)
+#    except Exception, e:
+#      logging.exception('fail to execute dcl: %s', sql)
+#      raise e
+#
+#def do_priv_map(my_host, my_port, my_user, my_passwd, upgrade_params):
+#  try:
+#    db = _mysql.connect(user = my_user,
+#                                   passwd = my_passwd,
+#                                   host = my_host,
+#                                   port = my_port
+#                                   )
+#    #获取所有的用户
+#    db.query("select username, userid from dba_users")
+#    r = db.store_result()
+#    row = r.fetch_row()
+#    while row :
+#      #对每个用户，获取权限
+#      db.query("show grants for " + row[0][0])
+#      r2 = db.store_result()
+#      row2 = r2.fetch_row()
+#      while row2 :
+#        #map权限，并执行
+#        o_p = map_priv(row2[0][0]);
+#        #print o_p
+#        if o_p != '':
+#          try:
+#            db.query(o_p)
+#            print 'execute ' + o_p + ' success.!'
+#          except Exception, e:
+#            raise e
+#          row2 = r2.fetch_row()
+#      row = r.fetch_row()
+#    db.close()
+#    
+#  except Exception, e:
+#    logging.exception('run error')
+#    raise e
+#    
+#def do_priv_map_by_argv(argv):
+#  upgrade_params = UpgradeParams()
+#  opts.change_opt_defult_value('log-file', upgrade_params.log_filename)
+#  opts.parse_options(argv)
+#  if not opts.has_no_local_opts():
+#    opts.deal_with_local_opts()
+#  else:
+#    opts.check_db_client_opts()
+#    log_filename = opts.get_opt_log_file()
+#    upgrade_params.log_filename = log_filename
+#    # 日志配置放在这里是为了前面的操作不要覆盖掉日志文件
+#    config_logging_module(upgrade_params.log_filename)
+#    try:
+#      host = opts.get_opt_host()
+#      port = int(opts.get_opt_port())
+#      user = opts.get_opt_user()
+#      password = opts.get_opt_password()
+#      
+#      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\"',\
+#          host, port, user, password, log_filename)
+#      do_priv_map(host, port, user, password, upgrade_params)
+#    
+#    except Exception, e:
+#      logging.exception('normal error')
+#      logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
+#      raise e
+#
+#
+#if __name__ == '__main__':
+#  #cur_filename = sys.argv[0][sys.argv[0].rfind(os.sep)+1:]
+#  #(cur_file_short_name,cur_file_ext_name1) = os.path.splitext(sys.argv[0])
+#  #(cur_file_real_name,cur_file_ext_name2) = os.path.splitext(cur_filename)
+#  #sub_files_dir_suffix = '_extract_files_' + datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f') + '_' + random_str()
+#  #sub_files_dir = cur_file_short_name + sub_files_dir_suffix
+#  #sub_files_short_dir = cur_file_real_name + sub_files_dir_suffix
+#  #split_py_files(sub_files_dir)
+#  #print sub_files_dir, sub_files_short_dir
+#  #print sys.argv[1:]
+#  do_priv_map_by_argv(sys.argv[1:])
+#  #exec('from ' + sub_files_short_dir + '.do_upgrade_post import do_upgrade_by_argv')
+#  #do_upgrade_by_argv(sys.argv[1:])
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:normal_ddl_actions_post.py
 ##!/usr/bin/env python
@@ -1695,7 +5422,1120 @@
 ##这两行之间的这些action，如果不写在这两行之间的话会导致清空不掉相应的action。
 #
 #####========******####======== actions begin ========####******========####
+#class NormalDDLActionPostAllTableV2AddAssociationTableId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 0
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'association_table_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'association_table_id'""")
+#    if len(results) != 0:
+#      raise MyError('association_table_id column alread exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2 add column `association_table_id` bigint(20) NOT NULL DEFAULT '-1' id 90"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_table_v2 drop column association_table_id"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'association_table_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column association_table_id for oceanbase.__all_table_v2')
+#
+#class NormalDDLActionPostAllTableV2HistoryAddAssociationTableId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 1
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'association_table_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'association_table_id'""")
+#    if len(results) != 0:
+#      raise MyError('association_table_id column alread exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2_history add column `association_table_id` bigint(20) DEFAULT '-1' id 91"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_table_v2_history drop column association_table_id"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'association_table_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column association_table_id for oceanbase.__all_table_v2_history')
+###FIXME: to remove
+#class NormalDDLActionPostModifyAllRestoreInfoValue(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 2
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_info""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_info where field = 'value' and type = 'longtext'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_info like 'value'""")
+#    if len(results) != 1:
+#      raise MyError('table oceanbase.__all_rootservice_event_history column value not exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_info modify column `value` longtext NOT NULL"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_info""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_info like 'value'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column value for oceanbase.__all_restore_info')
+#
+#class NormalDDLActionPostAddAllRestoreProgressWhiteList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 3
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'white_list'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'white_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_progress column white_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_progress add column `white_list` longtext NULL id 39"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'white_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column white_list for oceanbase.__all_restore_progress')
+#
+#class NormalDDLActionPostAddAllRestoreHistoryWhiteList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 4
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'white_list'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'white_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_history column white_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_history add column `white_list` longtext NULL id 42"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'white_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column white_list for oceanbase.__all_restore_history')
+#
+#class NormalDDLActionPostAddAllRestoreProgressBackupSetList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 6
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_set_list'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_set_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_progress column backup_set_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_progress add column `backup_set_list` longtext NULL id 40"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_set_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_set_list for oceanbase.__all_restore_progress') 
+# 
+#class NormalDDLActionPostAddAllRestoreProgressBackupPieceList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 7
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_piece_list'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_piece_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_progress column backup_piece_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_progress add column `backup_piece_list` longtext NULL id 41"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_progress""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_progress like 'backup_piece_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_piece_list for oceanbase.__all_restore_progress') 
+#class NormalDDLActionPostAddAllRestoreHistoryBackupSetList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 8
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_set_list'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_set_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_history column backup_set_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_history add column `backup_set_list` longtext NULL id 43"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_set_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_set_list for oceanbase.__all_restore_history')
+#    
+#    
+#class NormalDDLActionPostAddAllRestoreHistoryBackupPieceList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 9
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_piece_list'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_piece_list'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_restore_history column backup_piece_list exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_restore_history add column `backup_piece_list` longtext NULL id 44"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_restore_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_restore_history like 'backup_piece_list'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_piece_list for oceanbase.__all_restore_history')
+#  
+#class NormalDDLActionPostAddAllBackupBackupSetJobBackupDest(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 10
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'backup_dest'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'backup_dest'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job column backup_dest exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job add column `backup_dest` varchar(2048) DEFAULT NULL id 26"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'backup_dest'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_dest for oceanbase.__all_backup_backupset_job')
+#    
+#            
+#    
+#class NormalDDLActionPostAddAllBackupBackupSetJobMaxBackupTimes(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 11
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'max_backup_times'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'max_backup_times'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job column max_backup_times exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job add column `max_backup_times` bigint(20) NOT NULL id 27"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'max_backup_times'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column max_backup_times for oceanbase.__all_backup_backupset_job')
+#class NormalDDLActionPostAddAllBackupBackupSetJobResult(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 12
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'result'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'result'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job column result exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job add column `result` bigint(20) NOT NULL id 28"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'result'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column result for oceanbase.__all_backup_backupset_job')
+#class NormalDDLActionPostAddAllBackupBackupSetJobComment(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 13
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'comment'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'comment'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job column comment exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job add column `comment` varchar(4096) NOT NULL id 29"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job like 'comment'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column comment for oceanbase.__all_backup_backupset_job')
+#class NormalDDLActionPostAddAllBackupBackupSetJobHistoryBackupDest(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 14
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'backup_dest'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'backup_dest'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job_history column backup_dest exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job_history add column `backup_dest` varchar(2048) DEFAULT NULL id 26"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'backup_dest'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_dest for oceanbase.__all_backup_backupset_job_history')
+#    
+#            
+#    
+#class NormalDDLActionPostAddAllBackupBackupSetJobHistoryMaxBackupTimes(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 15
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'max_backup_times'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'max_backup_times'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job_history column max_backup_times exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job_history add column `max_backup_times` bigint(20) NOT NULL id 27"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'max_backup_times'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column max_backup_times for oceanbase.__all_backup_backupset_job_history')
+#class NormalDDLActionPostAddAllBackupBackupSetJobHistoryResult(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 16
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'result'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'result'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job_history column result exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job_history add column `result` bigint(20) NOT NULL id 28"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'result'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column result for oceanbase.__all_backup_backupset_job_history')
+#class NormalDDLActionPostAddAllBackupBackupSetJobHistoryComment(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 17
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'comment'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'comment'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_job_history column comment exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_job_history add column `comment` varchar(4096) NOT NULL id 29"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_job_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_job_history like 'comment'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column comment for oceanbase.__all_backup_backupset_job_history')
+#class NormalDDLActionPostAddAllBackupBackupSetTaskHistoryStartReplayLogTs(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 18
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_task_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'start_replay_log_ts'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'start_replay_log_ts'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_task_history column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_task_history add column `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0' id 53"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_task_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'start_replay_log_ts'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_replay_log_ts for oceanbase.__all_backup_backupset_task_history')       
+#    
+#class NormalDDLActionPostAddAllBackupBackupSetTaskHistoryDate(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 19
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_task_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'date'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'date'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backupset_task_history column date exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backupset_task_history add column `date` bigint(20) NOT NULL DEFAULT '0' id 54"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backupset_task_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backupset_task_history like 'date'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column date for oceanbase.__all_backup_backupset_task_history')           
+#      
+#class NormalDDLActionPostAddBackupTaskStartReplayLogTs(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 20
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_task""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'start_replay_log_ts'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'start_replay_log_ts'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_tenant_backup_task column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_tenant_backup_task add column `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0' id 48"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_task""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'start_replay_log_ts'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_replay_log_ts for oceanbase.__all_tenant_backup_task')           
+#  
+#      
+#class NormalDDLActionPostAddBackupTaskStartDate(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 21
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_task""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'date'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'date'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_tenant_backup_task column date exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_tenant_backup_task add column `date` bigint(20) NOT NULL DEFAULT '0' id  49"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_task""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_task like 'date'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column date for oceanbase.__all_tenant_backup_task')           
+#        
+#class NormalDDLActionPostAddBackupBackupsetTaskStartReplayLogTs(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 22
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_backupset_task""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task like 'start_replay_log_ts'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task like 'start_replay_log_ts'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_tenant_backup_backupset_task column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_tenant_backup_backupset_task add column `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0' id  52"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_backupset_task""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task like 'start_replay_log_ts'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_replay_log_ts for oceanbase.__all_tenant_backup_backupset_task')           
+#class NormalDDLActionPostAddBackupBackupsetTaskDate(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 23
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_backupset_task """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task like 'date'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task  like 'date'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_tenant_backup_backupset_task column date exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_tenant_backup_backupset_task add column `date` bigint(20) NOT NULL DEFAULT '0'  id  53"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_tenant_backup_backupset_task""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_tenant_backup_backupset_task like 'date'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column date for oceanbase.__all_tenant_backup_backupset_task')
+#class NormalDDLActionPostAddBackupLogArchiveStatusHistoryStartPieceId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 24
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_log_archive_status_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history like 'start_piece_id'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history  like 'start_piece_id'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_log_archive_status_history column start_piece_id exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_log_archive_status_history add column `start_piece_id` bigint(20) NOT NULL DEFAULT '0' id 31"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_log_archive_status_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history like 'start_piece_id'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_piece_id for oceanbase.__all_backup_log_archive_status_history')
+#class NormalDDLActionPostAddBackupLogArchiveStatusHistoryBackupPieceId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 25
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_log_archive_status_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history like 'backup_piece_id'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history  like 'backup_piece_id'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_log_archive_status_history column backup_piece_id exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_log_archive_status_history add column `backup_piece_id` bigint(20) NOT NULL DEFAULT '0' id 32"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_log_archive_status_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_log_archive_status_history like 'backup_piece_id'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_piece_id for oceanbase.__all_backup_log_archive_status_history')
+#  
+#class NormalDDLActionPostAddBackupTaskHistoryStartReplayLogTs(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 26
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history like 'start_replay_log_ts'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history  like 'start_replay_log_ts'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_task_history column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_task_history add column `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0' id 49"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history like 'start_replay_log_ts'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_replay_log_ts for oceanbase.__all_backup_task_history')
+#class NormalDDLActionPostAddBackupTaskHistoryDate(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 27
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history like 'date'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history  like 'date'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_task_history column date exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_task_history add column `date` bigint(20) NOT NULL DEFAULT '0' id 50"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_history like 'date'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column date for oceanbase.__all_backup_task_history')
+#      
+#class NormalDDLActionPostAddBackupTaskCleanHistoryStartReplayLogTs(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 28
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'start_replay_log_ts'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history  like 'start_replay_log_ts'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_task_clean_history column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_task_clean_history add column `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0' id 48"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'start_replay_log_ts'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_replay_log_ts for oceanbase.__all_backup_task_clean_history')
+#    
+#class NormalDDLActionPostAddBackupTaskCleanHistoryDate(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 29
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'date'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history  like 'date'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_task_clean_history column start_replay_log_ts exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_task_clean_history add column `date` bigint(20) NOT NULL DEFAULT '0' id 49"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'date'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column date for oceanbase.__all_backup_task_clean_history')
+#
+#class NormalDDLActionPostAddBackupBackupLogArchiveStatusHistoryCompatible(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 30
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'compatible'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history  like 'compatible'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backup_log_archive_status_history column compatible exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backup_log_archive_status_history add column `compatible` bigint(20) NOT NULL DEFAULT '0' id 31"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'compatible'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column compatible for oceanbase.__all_backup_backup_log_archive_status_history')
+#
+#class NormalDDLActionPostAddBackupBackupLogArchiveStatusHistoryStartPieceId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 31 
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'start_piece_id'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history  like 'start_piece_id'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backup_log_archive_status_history column start_piece_id exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backup_log_archive_status_history add column `start_piece_id` bigint(20) NOT NULL DEFAULT '0' id 32"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'start_piece_id'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column start_piece_id for oceanbase.__all_backup_backup_log_archive_status_history')
+#
+#class NormalDDLActionPostAddBackupBackupLogArchiveStatusHistoryBackupPieceId(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 32
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history """)
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'backup_piece_id'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history  like 'backup_piece_id'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_backup_backup_log_archive_status_history column backup_piece_id exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_backup_backup_log_archive_status_history add column `backup_piece_id` bigint(20) NOT NULL DEFAULT '0' id 33"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_backup_log_archive_status_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_backup_log_archive_status_history like 'backup_piece_id'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column backup_piece_id for oceanbase.__all_backup_backup_log_archive_status_history')
+#
+#class NormalDDLActionPostAddAllBackupPieceFiles(BaseDDLAction):
+#  table_name = '__all_backup_piece_files'
+#  @staticmethod
+#  def get_seq_num():
+#    return 33
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#      CREATE TABLE `__all_backup_piece_files` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `incarnation` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `round_id` bigint(20) NOT NULL,
+#  `backup_piece_id` bigint(20) NOT NULL,
+#  `copy_id` bigint(20) NOT NULL,
+#  `create_date` bigint(20) NOT NULL DEFAULT '0',
+#  `start_ts` bigint(20) NOT NULL DEFAULT '0',
+#  `checkpoint_ts` bigint(20) NOT NULL DEFAULT '0',
+#  `max_ts` bigint(20) NOT NULL DEFAULT '0',
+#  `status` varchar(64) NOT NULL DEFAULT '',
+#  `file_status` varchar(64) NOT NULL DEFAULT '',
+#  `backup_dest` varchar(2048) DEFAULT NULL,
+#  `compatible` bigint(20) NOT NULL DEFAULT '0',
+#  `start_piece_id` bigint(20) NOT NULL DEFAULT '0',
+#  PRIMARY KEY (`incarnation`, `tenant_id`, `round_id`, `backup_piece_id`, `copy_id`)
+#) TABLE_ID = 1099511628090 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 16:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#
+#class NormalDDLActionPostAllBackupTaskCleanHistoryAddBackupLevel(BaseDDLAction):
+# @staticmethod
+# def get_seq_num():
+#   return 34
+# def dump_before_do_action(self):
+#   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history""")
+# def skip_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'backup_level'""")
+#   return len(results) > 0;
+# def check_before_do_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'backup_level'""")
+#   if len(results) != 0:
+#     raise MyError('backup_level column alread exists')
+# @staticmethod
+# def get_action_ddl():
+#   return """alter table oceanbase.__all_backup_task_clean_history add column `backup_level` varchar(64) NOT NULL DEFAULT 'CLUSTER' id 50"""
+# @staticmethod
+# def get_rollback_sql():
+#   return """alter table oceanbase.__all_backup_task_clean_history drop column backup_level"""
+# def dump_after_do_action(self):
+#   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_backup_task_clean_history""")
+# def check_after_do_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_backup_task_clean_history like 'backup_level'""")
+#   if len(results) != 1:
+#     raise MyError('failed to add column backup_level for oceanbase.__all_backup_task_clean_history')
+#
+#class NormalDDLActionPostAddColumnTransitionPointAllTable(BaseDDLAction):
+#    @staticmethod
+#    def get_seq_num():
+#      return 35
+#    def dump_before_do_action(self):
+#      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#    def skip_action(self):
+#      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'transition_point'""")
+#      return len(results) > 0;
+#    def check_before_do_action(self):
+#      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'transition_point'""")
+#      if len(results) > 0:
+#        raise MyError('column oceanbase.__all_table_v2.transition_point already exists')
+#    @staticmethod
+#    def get_action_ddl():
+#      return """alter table oceanbase.__all_table_v2 add column `transition_point` varchar(4096) DEFAULT NULL id 91"""
+#    @staticmethod
+#    def get_rollback_sql():
+#      return """"""
+#    def dump_after_do_action(self):
+#      my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#    def check_after_do_action(self):
+#      (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'transition_point'""")
+#      if len(results) != 1:
+#        raise MyError('failed to add column transition_point for oceanbase.__all_table_v2')
+#
+#class NormalDDLActionPostAddColumnTransitionPointAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 36
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2_history.transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2_history add column `transition_point` varchar(4096) DEFAULT NULL id 92"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column transition_point for oceanbase.__all_table_v2_history')
+#
+#class NormalDDLActionPostAddColumnBTransitionPointAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 37
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2.b_transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2 add column `b_transition_point` varchar(8192) DEFAULT NULL id 92"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_transition_point for oceanbase.__all_table_v2')
+#
+#class NormalDDLActionPostAddColumnBTransitionPointAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 38
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2_history.b_transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2_history add column `b_transition_point` varchar(8192) DEFAULT NULL id 93"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_transition_point for oceanbase.__all_table_v2_history')
+#
+#class NormalDDLActionPostAddColumnIntervalRangeAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 39
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2.interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2 add column `interval_range` varchar(4096) DEFAULT NULL id 93"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column interval_range for oceanbase.__all_table_v2')
+#
+#class NormalDDLActionPostAddColumnIntervalRangeAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 40
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2_history.interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2_history add column `interval_range` varchar(4096) DEFAULT NULL id 94"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column interval_range for oceanbase.__all_table_v2_history')
+#
+#class NormalDDLActionPostAddColumnBIntervalRangeAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 41
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2.b_interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2 add column `b_interval_range` varchar(8192) DEFAULT NULL id 94"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2 like 'b_interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_interval_range for oceanbase.__all_table_v2')
+#
+#class NormalDDLActionPostAddColumnBIntervalRangeAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 42
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_v2_history.b_interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_v2_history add column `b_interval_range` varchar(8192) DEFAULT NULL id 95"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_v2_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_v2_history like 'b_interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_interval_range for oceanbase.__all_table_v2_history')
+#
 #####========******####========= actions end =========####******========####
+#
 #def do_normal_ddl_actions(cur):
 #  import normal_ddl_actions_post
 #  cls_list = reflect_action_cls_list(normal_ddl_actions_post, 'NormalDDLActionPost')
@@ -1886,7 +6726,1446 @@
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些action，如果不写在这两行之间的话会导致清空不掉相应的action。
 #
-#####========******####======== actions begin ========####******========####        
+#####========******####======== actions begin ========####******========####
+#class NormalDDLActionPreCreateAllRegionNetworkBandwidthLimit(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 1
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_region_network_bandwidth_limit'""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_region_network_bandwidth_limit'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_region_network_bandwidth_limit'""")
+#    if len(results) > 0:
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return  """CREATE TABLE `__all_region_network_bandwidth_limit` (
+#                `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#                `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#                `src_region` varchar(128) NOT NULL,
+#                `dst_region` varchar(128) NOT NULL,
+#                `max_bw` bigint(20) NOT NULL,
+#                PRIMARY KEY (`src_region`, `dst_region`)
+#               ) TABLE_ID = 1099511628096 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+#           """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '__all_region_network_bandwidth_limit'""")
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.__all_region_network_bandwidth_limit""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '__all_region_network_bandwidth_limit'""")
+#    if len(results) != 1:
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit not exists')
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_region_network_bandwidth_limit""")
+#    if len(results) != 5:
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column descs')
+#    elif results[0][0] != 'gmt_create' or results[0][1] != 'timestamp(6)' or results[0][2] != 'YES':
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column gmt_create')
+#    elif results[1][0] != 'gmt_modified' or results[1][1] != 'timestamp(6)' or results[1][2] != 'YES':
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column gmt_modified')
+#    elif results[2][0] != 'src_region' or results[2][1] != 'varchar(128)' or results[2][2] != 'NO' or results[2][3] != 'PRI':
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column src_region')
+#    elif results[3][0] != 'dst_region' or results[3][1] != 'varchar(128)' or results[3][2] != 'NO' or results[3][3] != 'PRI':
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column dst_region')
+#    elif results[4][0] != 'max_bw' or results[4][1] != 'bigint(20)' or results[4][2] != 'NO':
+#      raise MyError('table oceanbase.__all_region_network_bandwidth_limit has invalid column max_bw')
+#
+#class NormalDDLActionPreAddColumnAllRoutine(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 2
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_routine""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine like 'type_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine like 'type_id'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_routine.type_id already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_routine add column `type_id` bigint(20) DEFAULT '-1' id 35"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_routine""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine like 'type_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column type_id for oceanbase.__all_routine')
+#
+#class NormalDDLActionPreAddColumnAllRoutineHistory(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 3
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_routine_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine_history like 'type_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine_history like 'type_id'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_routine_history.type_id already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_routine_history add column `type_id` bigint(20) DEFAULT '-1' id 36"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_routine_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_routine_history like 'type_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column type_id for oceanbase.__all_routine_history')
+#
+#class NormalDDLActionPreAddColumnAssociationTableIdAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 4
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'association_table_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'association_table_id'""")
+#    if len(results) != 0:
+#      raise MyError('association_table_id column alread exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table add column `association_table_id` bigint(20) NOT NULL DEFAULT '-1' id 90"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_table drop column association_table_id"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'association_table_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column association_table_id for oceanbase.__all_table')
+#
+#class NormalDDLActionPreAddColumnAssociationTableIdAllTableHistory(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 5
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'association_table_id'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'association_table_id'""")
+#    if len(results) != 0:
+#      raise MyError('association_table_id column alread exists')
+#  @staticmethod
+#  def get_action_ddl():
+#   return """alter table oceanbase.__all_table_history add column `association_table_id` bigint(20) DEFAULT '-1' id 91"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_table_history drop column association_table_id"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'association_table_id'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column association_table_id for oceanbase.__all_table_history')
+#
+#
+#class NormalDDLActionPreAllPartAddPartitionType(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 6
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part like 'partition_type'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part like 'partition_type'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_part.partition_type already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_part add column `partition_type` bigint(20) NOT NULL DEFAULT '0' id 49"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part like 'partition_type'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column partition_type for oceanbase.__all_part')
+#
+#class NormalDDLActionPreAllPartHistoryAddPartitionType(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 7
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part_history like 'partition_type'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part_history like 'partition_type'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_part_history.partition_type already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_part_history add column `partition_type` bigint(20) DEFAULT '0' id 50"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_part_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_part_history like 'partition_type'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column partition_type for oceanbase.__all_part_history')
+#
+#class NormalDDLActionPreAllSubPartAddPartitionType(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 8
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sub_part""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part like 'partition_type'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part like 'partition_type'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_sub_part.partition_type already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_sub_part add column `partition_type` bigint(20) NOT NULL DEFAULT '0' id 41"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sub_part""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part like 'partition_type'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column partition_type for oceanbase.__all_sub_part')
+#
+#class NormalDDLActionPreAllSubPartHistoryAddPartitionType(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 9
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sub_part_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part_history like 'partition_type'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part_history like 'partition_type'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_sub_part_history.partition_type already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_sub_part_history add column `partition_type` bigint(20) DEFAULT '0' id 42"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_sub_part_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_sub_part_history like 'partition_type'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column partition_type for oceanbase.__all_sub_part_history')
+#
+#class NormalDDLActionPreAddBMemberListArg(BaseDDLAction):
+# @staticmethod
+# def get_seq_num():
+#   return 11
+# def dump_before_do_action(self):
+#   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_partition_member_list""")
+# def skip_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list like 'b_member_list_arg'""")
+#   return (len(results) > 0)
+# def check_before_do_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list like 'b_member_list_arg'""")
+#   if len(results) != 0:
+#     raise MyError('b_member_list_arg column alread exists')
+# @staticmethod
+# def get_action_ddl():
+#   return """alter table oceanbase.__all_partition_member_list add column `b_member_list_arg` longtext id 24"""
+# @staticmethod
+# def get_rollback_sql():
+#   return """"""
+# def dump_after_do_action(self):
+#   my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_partition_member_list""")
+# def check_after_do_action(self):
+#   (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list like 'b_member_list_arg'""")
+#   if len(results) != 1:
+#     raise MyError('failed to add column b_member_list_arg for oceanbase.__all_partition_member_list')
+#
+#class NormalDDLActionPreModifyAllPartitionMemberList(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 12
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_partition_member_list""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list where field = 'member_list' and type = 'longtext'""")
+#    return len(results) > 0
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list like 'member_list'""")
+#    if len(results) != 1:
+#      raise MyError('table oceanbase.__all_rootservice_event_history column member_list not exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_partition_member_list modify column `member_list` longtext"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_partition_member_list""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_partition_member_list where field = 'member_list' and type = 'longtext'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column member_list for oceanbase.__all_partition_member_list')
+#
+#class NormalDDLActionPreAddAllBackupBackupPieceJob(BaseDDLAction):
+#  table_name = '__all_backup_backuppiece_job'
+#  @staticmethod
+#  def get_seq_num():
+#    return 13
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """ CREATE TABLE `__all_backup_backuppiece_job` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `job_id` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `backup_piece_id` bigint(20) NOT NULL,
+#  `max_backup_times` bigint(20) NOT NULL,
+#  `result` bigint(20) NOT NULL,
+#  `status` varchar(64) NOT NULL,
+#  `backup_dest` varchar(2048) DEFAULT NULL,
+#  `comment` varchar(4096) NOT NULL,
+#  `type` bigint(20) NOT NULL,
+#  PRIMARY KEY (`job_id`, `tenant_id`, `incarnation`, `backup_piece_id`)
+#) TABLE_ID = 1099511628086 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+#           """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 12:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#        
+#class NormalDDLActionPreAddAllBackupBackupPieceJobHistory(BaseDDLAction):
+#  table_name = '__all_backup_backuppiece_job_history'
+#  @staticmethod
+#  def get_seq_num():
+#    return 14
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  CREATE TABLE `__all_backup_backuppiece_job_history` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `job_id` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `backup_piece_id` bigint(20) NOT NULL,
+#  `max_backup_times` bigint(20) NOT NULL,
+#  `result` bigint(20) NOT NULL,
+#  `status` varchar(64) NOT NULL,
+#  `backup_dest` varchar(2048) DEFAULT NULL,
+#  `comment` varchar(4096) NOT NULL,
+#  `type` bigint(20) NOT NULL,
+#  PRIMARY KEY (`job_id`, `tenant_id`, `incarnation`, `backup_piece_id`)
+#) TABLE_ID = 1099511628087 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 12:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#        
+#class NormalDDLActionPreAddAllBackupBackupPieceTask(BaseDDLAction):
+#  table_name = '__all_backup_backuppiece_task'
+#  @staticmethod
+#  def get_seq_num():
+#    return 15
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#      CREATE TABLE `__all_backup_backuppiece_task` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `job_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `round_id` bigint(20) NOT NULL,
+#  `backup_piece_id` bigint(20) NOT NULL,
+#  `copy_id` bigint(20) NOT NULL,
+#  `start_time` timestamp(6) NOT NULL,
+#  `end_time` timestamp(6) NOT NULL,
+#  `status` varchar(64) NOT NULL,
+#  `backup_dest` varchar(2048) DEFAULT NULL,
+#  `result` bigint(20) NOT NULL,
+#  `comment` varchar(4096) NOT NULL,
+#  PRIMARY KEY (`job_id`, `incarnation`, `tenant_id`, `round_id`, `backup_piece_id`, `copy_id`)
+#) TABLE_ID = 1099511628088 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 14:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#class NormalDDLActionPreAddAllBackupBackupPieceTaskHistory(BaseDDLAction):
+#  table_name = '__all_backup_backuppiece_task_history'
+#  @staticmethod
+#  def get_seq_num():
+#    return 16
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#    CREATE TABLE `__all_backup_backuppiece_task_history` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `job_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `round_id` bigint(20) NOT NULL,
+#  `backup_piece_id` bigint(20) NOT NULL,
+#  `copy_id` bigint(20) NOT NULL,
+#  `start_time` timestamp(6) NOT NULL,
+#  `end_time` timestamp(6) NOT NULL,
+#  `status` varchar(64) NOT NULL,
+#  `backup_dest` varchar(2048) DEFAULT NULL,
+#  `result` bigint(20) NOT NULL,
+#  `comment` varchar(4096) NOT NULL,
+#  PRIMARY KEY (`job_id`, `incarnation`, `tenant_id`, `round_id`, `backup_piece_id`, `copy_id`)
+#) TABLE_ID = 1099511628089 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'   
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 14:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#class NormalDDLActionPreAddAllBackupSetFiles(BaseDDLAction):
+#  table_name = '__all_backup_set_files'
+#  @staticmethod
+#  def get_seq_num():
+#    return 17
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#     CREATE TABLE `__all_backup_set_files` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `incarnation` bigint(20) NOT NULL,
+#  `tenant_id` bigint(20) NOT NULL,
+#  `backup_set_id` bigint(20) NOT NULL,
+#  `copy_id` bigint(20) NOT NULL,
+#  `backup_type` varchar(1) NOT NULL,
+#  `snapshot_version` bigint(20) NOT NULL,
+#  `prev_full_backup_set_id` bigint(20) NOT NULL,
+#  `prev_inc_backup_set_id` bigint(20) NOT NULL,
+#  `prev_backup_data_version` bigint(20) NOT NULL,
+#  `pg_count` bigint(20) NOT NULL,
+#  `macro_block_count` bigint(20) NOT NULL,
+#  `finish_pg_count` bigint(20) NOT NULL,
+#  `finish_macro_block_count` bigint(20) NOT NULL,
+#  `input_bytes` bigint(20) NOT NULL,
+#  `output_bytes` bigint(20) NOT NULL,
+#  `start_time` bigint(20) NOT NULL,
+#  `end_time` bigint(20) NOT NULL,
+#  `compatible` bigint(20) NOT NULL,
+#  `cluster_version` bigint(20) NOT NULL,
+#  `status` varchar(64) NOT NULL,
+#  `result` bigint(20) NOT NULL,
+#  `cluster_id` bigint(20) NOT NULL,
+#  `backup_data_version` bigint(20) NOT NULL,
+#  `backup_schema_version` bigint(20) NOT NULL,
+#  `cluster_version_display` varchar(64) NOT NULL,
+#  `partition_count` bigint(20) NOT NULL,
+#  `finish_partition_count` bigint(20) NOT NULL,
+#  `encryption_mode` varchar(64) NOT NULL DEFAULT 'None',
+#  `passwd` varchar(128) NOT NULL DEFAULT '',
+#  `file_status` varchar(64) NOT NULL,
+#  `backup_dest` varchar(2048) NOT NULL,
+#  `start_replay_log_ts` bigint(20) NOT NULL DEFAULT '0',
+#  `date` bigint(20) NOT NULL DEFAULT '0',
+#  `backup_level` varchar(64) NOT NULL DEFAULT 'CLUSTER',
+#  PRIMARY KEY (`incarnation`, `tenant_id`, `backup_set_id`, `copy_id`)
+#) TABLE_ID = 1099511628091 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 36:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#class NormalDDLActionPreAddAllBackupInfo(BaseDDLAction):
+#  table_name = '__all_backup_info'
+#  @staticmethod
+#  def get_seq_num():
+#    return 18
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#     CREATE TABLE `__all_backup_info` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `name` varchar(1024) NOT NULL,
+#  `value` longtext NOT NULL,
+#  PRIMARY KEY (`name`)
+#) TABLE_ID = 1099511628093 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 4:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#class NormalDDLActionPreAddAllBackupLogArchiveStatusV2(BaseDDLAction):
+#  table_name = '__all_backup_log_archive_status_v2'
+#  @staticmethod
+#  def get_seq_num():
+#    return 19
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#     CREATE TABLE `__all_backup_log_archive_status_v2` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `tenant_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `log_archive_round` bigint(20) NOT NULL,
+#  `min_first_time` timestamp(6) NOT NULL,
+#  `max_next_time` timestamp(6) NOT NULL,
+#  `input_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `output_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `deleted_input_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `deleted_output_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `pg_count` bigint(20) NOT NULL DEFAULT '0',
+#  `status` varchar(64) NOT NULL,
+#  `is_mount_file_created` bigint(20) NOT NULL DEFAULT '0',
+#  `compatible` bigint(20) NOT NULL DEFAULT '0',
+#  `start_piece_id` bigint(20) NOT NULL DEFAULT '0',
+#  `backup_piece_id` bigint(20) NOT NULL DEFAULT '0',
+#  `backup_dest` varchar(2048) NOT NULL DEFAULT '',
+#  PRIMARY KEY (`tenant_id`)
+#) TABLE_ID = 1099511628094 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase' 
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 18:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#class NormalDDLActionPreAddAllBackupBackupLogArchiveStatusV2(BaseDDLAction):
+#  table_name = '__all_backup_backup_log_archive_status_v2'
+#  @staticmethod
+#  def get_seq_num():
+#    return 20
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    return (len(results) > 0)
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) > 0:
+#      raise MyError("""table oceanabse.{0} already exists""".format(self.table_name))
+#  @staticmethod
+#  def get_action_ddl():
+#    return """  
+#     CREATE TABLE `__all_backup_backup_log_archive_status_v2` (
+#  `gmt_create` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6),
+#  `gmt_modified` timestamp(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+#  `tenant_id` bigint(20) NOT NULL,
+#  `copy_id` bigint(20) NOT NULL,
+#  `incarnation` bigint(20) NOT NULL,
+#  `log_archive_round` bigint(20) NOT NULL,
+#  `min_first_time` timestamp(6) NOT NULL,
+#  `max_next_time` timestamp(6) NOT NULL,
+#  `input_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `output_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `deleted_input_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `deleted_output_bytes` bigint(20) NOT NULL DEFAULT '0',
+#  `pg_count` bigint(20) NOT NULL DEFAULT '0',
+#  `status` varchar(64) NOT NULL,
+#  `is_mount_file_created` bigint(20) NOT NULL DEFAULT '0',
+#  `compatible` bigint(20) NOT NULL DEFAULT '0',
+#  `start_piece_id` bigint(20) NOT NULL DEFAULT '0',
+#  `backup_piece_id` bigint(20) NOT NULL DEFAULT '0',
+#  `backup_dest` varchar(2048) NOT NULL DEFAULT '',
+#  PRIMARY KEY (`tenant_id`)
+#) TABLE_ID =  1099511628097 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'  
+# """
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """show tables from oceanbase like '{0}'""".format(self.table_name))
+#    my_utils.query_and_dump_results(self._query_cursor, """show columns from oceanbase.{0}""".format(self.table_name))
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show tables from oceanbase like '{0}'""".format(self.table_name))
+#    if len(results) != 1:
+#      raise MyError("""table oceanbase.{0} not exists""".format(self.table_name))
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.{0}""".format(self.table_name))
+#    if len(results) != 19:
+#      raise MyError("""table oceanbase.{0} has invalid column descs""".format(self.table_name))
+#
+#class NormalDDLActionPreAddColumnAllUserMaxConnections(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 21
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_connections'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_connections'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_user.max_connections already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_user add column `max_connections` bigint(20) NOT NULL DEFAULT '0' id 53"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_connections'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column max_connections for oceanbase.__all_user')
+#
+#class NormalDDLActionPreAddColumnAllUserMaxUserConnections(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 22
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_user_connections'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_user_connections'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_user.max_user_connections already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_user add column `max_user_connections` bigint(20) NOT NULL DEFAULT '0' id 54"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user like 'max_user_connections'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column max_user_connections for oceanbase.__all_user')
+#
+#class NormalDDLActionPreAddColumnAllUserHistoryMaxConnections(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 23
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_connections'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_connections'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_user_history.max_connections already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_user_history add column `max_connections` bigint(20) DEFAULT '0' id 55"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_connections'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column max_connections for oceanbase.__all_user_history')
+#
+#class NormalDDLActionPreAddColumnAllUserHistoryMaxUserConnections(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 24
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_user_connections'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_user_connections'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_user_history.max_user_connections already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_user_history add column `max_user_connections` bigint(20) DEFAULT '0' id 56"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_user_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_user_history like 'max_user_connections'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column max_user_connections for oceanbase.__all_user_history')
+#
+#class NormalDDLActionPreAllDblinkAddDriveProto(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 25
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'driver_proto'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'driver_proto'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column driver_proto exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `driver_proto` bigint(20) NOT NULL DEFAULT '0' id 28"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column driver_proto"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'driver_proto'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column driver_proto for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddFlag(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 26
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'flag'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'flag'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column flag exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `flag` bigint(20) NOT NULL DEFAULT '0' id 29"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column flag"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'flag'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column flag for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddConnString(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 27
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'conn_string'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'conn_string'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column conn_string exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `conn_string` varchar(4096) DEFAULT '' id 30"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column conn_string"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'conn_string'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column conn_string for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddServiceName(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 28
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'service_name'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'service_name'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column service_name exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `service_name` varchar(128) DEFAULT '' id 31"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column service_name"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'service_name'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column service_name for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddAuthusr(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 29
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authusr'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authusr'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column authusr exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `authusr` varchar(128) DEFAULT '' id 32"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column authusr"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authusr'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authusr for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddAuthpwd(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 30
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwd'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwd'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column authpwd exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `authpwd` varchar(128) DEFAULT '' id 33"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column authpwd"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwd'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authpwd for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddPasswordx(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 31
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'passwordx'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'passwordx'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column passwordx exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `passwordx` varbinary(128) DEFAULT '' id 34"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column passwordx"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'passwordx'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column passwordx for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkAddAuthpwdx(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 32
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwdx'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwdx'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink column authpwdx exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink add column `authpwdx` varbinary(128) DEFAULT '' id 35"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink drop column authpwdx"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink like 'authpwdx'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authpwdx for oceanbase.__all_dblink')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddDriveProto(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 33
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'driver_proto'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'driver_proto'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column driver_proto exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `driver_proto` bigint(20) DEFAULT '0' id 30"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column driver_proto"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'driver_proto'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column driver_proto for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddFlag(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 34
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'flag'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'flag'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column flag exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `flag` bigint(20) DEFAULT '0' id 31"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column flag"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'flag'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column flag for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddConnString(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 35
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'conn_string'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'conn_string'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column conn_string exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `conn_string` varchar(4096) DEFAULT '' id 32"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column conn_string"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'conn_string'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column conn_string for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddServiceName(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 36
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'service_name'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'service_name'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column service_name exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `service_name` varchar(128) DEFAULT '' id 33"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column service_name"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'service_name'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column service_name for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddAuthusr(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 37
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authusr'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authusr'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column authusr exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `authusr` varchar(128) DEFAULT '' id 34"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column authusr"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authusr'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authusr for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddAuthpwd(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 38
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwd'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwd'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column authpwd exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `authpwd` varchar(128) DEFAULT '' id 35"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column authpwd"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwd'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authpwd for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddPasswordx(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 39
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'passwordx'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'passwordx'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column passwordx exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `passwordx` varbinary(128) DEFAULT '' id 36"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column passwordx"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'passwordx'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column passwordx for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAllDblinkHistoryAddAuthpwdx(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 40
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwdx'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwdx'""")
+#    if len(results) != 0:
+#      raise MyError('table oceanbase.__all_dblink_history column authpwdx exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_dblink_history add column `authpwdx` varbinary(128) DEFAULT '' id 37"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """alter table oceanbase.__all_dblink_history drop column authpwdx"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_dblink_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_dblink_history like 'authpwdx'""")
+#    if len(results) != 1:
+#      raise MyError('fail to modify column authpwdx for oceanbase.__all_dblink_history')
+#
+#class NormalDDLActionPreAddColumnTransitionPointAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 41
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table.transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table add column `transition_point` varchar(4096) DEFAULT NULL id 91"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column transition_point for oceanbase.__all_table')
+#
+#class NormalDDLActionPreAddColumnTransitionPointAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 42
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_history.transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_history add column `transition_point` varchar(4096) DEFAULT NULL id 92"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column transition_point for oceanbase.__all_table_history')
+#
+#class NormalDDLActionPreAddColumnBTransitionPointAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 43
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table.b_transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table add column `b_transition_point` varchar(8192) DEFAULT NULL id 92"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_transition_point for oceanbase.__all_table')
+#
+#class NormalDDLActionPreAddColumnBTransitionPointAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 44
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_transition_point'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_transition_point'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_history.b_transition_point already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_history add column `b_transition_point` varchar(8192) DEFAULT NULL NULL id 93"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_transition_point'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_transition_point for oceanbase.__all_table_history')
+#
+#class NormalDDLActionPreAddColumnIntervalRangeAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 45
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table.interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table add column `interval_range` varchar(4096) DEFAULT NULL id 93"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column interval_range for oceanbase.__all_table')
+#
+#class NormalDDLActionPreAddColumnIntervalRangeAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 46
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_history.interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_history add column `interval_range` varchar(4096) DEFAULT NULL id 94"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column interval_range for oceanbase.__all_table_history')
+#
+#class NormalDDLActionPreAddColumnBIntervalRangeAllTable(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 47
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table.b_interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table add column `b_interval_range` varchar(8192) DEFAULT NULL id 94"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table like 'b_interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_interval_range for oceanbase.__all_table')
+#
+#class NormalDDLActionPreAddColumnBIntervalRangeAllTableHistroy(BaseDDLAction):
+#  @staticmethod
+#  def get_seq_num():
+#    return 48
+#  def dump_before_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def skip_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_interval_range'""")
+#    return len(results) > 0;
+#  def check_before_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_interval_range'""")
+#    if len(results) > 0:
+#      raise MyError('column oceanbase.__all_table_history.b_interval_range already exists')
+#  @staticmethod
+#  def get_action_ddl():
+#    return """alter table oceanbase.__all_table_history add column `b_interval_range` varchar(8192) DEFAULT NULL id 95"""
+#  @staticmethod
+#  def get_rollback_sql():
+#    return """"""
+#  def dump_after_do_action(self):
+#    my_utils.query_and_dump_results(self._query_cursor, """desc oceanbase.__all_table_history""")
+#  def check_after_do_action(self):
+#    (desc, results) = self._query_cursor.exec_query("""show columns from oceanbase.__all_table_history like 'b_interval_range'""")
+#    if len(results) != 1:
+#      raise MyError('failed to add column b_interval_range for oceanbase.__all_table_history')
+#
 #####========******####========= actions end =========####******========####
 #def do_normal_ddl_actions(cur):
 #  import normal_ddl_actions_pre
@@ -2256,7 +8535,7 @@
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -3885,7 +10164,7 @@
 ##'-t, --timeout=name  check timeout, default: 600(s).\n' + \
 ##'\n\n' +\
 ##'Maybe you want to run cmd like that:\n' +\
-##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 ##
 ##version_str = """version 1.0.0"""
 ##
@@ -4351,7 +10630,7 @@
 ##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 ##'\n\n' +\
 ##'Maybe you want to run cmd like that:\n' +\
-##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 ##
 ##version_str = """version 1.0.0"""
 ##
@@ -4564,25 +10843,6 @@
 ##  else:
 ##    logging.info("check expected storage format version '{0}' success".format(expect_version))
 ##
-##def upgrade_table_schema_version(conn, cur):
-##  try:
-##    sql = """SELECT * FROM v$ob_cluster
-##             WHERE cluster_role = "PRIMARY"
-##             AND cluster_status = "VALID"
-##             AND (switchover_status = "NOT ALLOWED" OR switchover_status = "TO STANDBY") """
-##    (desc, results) = cur.exec_query(sql)
-##    is_primary = len(results) > 0
-##    if is_primary:
-##      sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-##      logging.info(sql)
-##      cur.exec_sql(sql)
-##    else:
-##      logging.info("standby cluster no need to run job update_table_schema_ersion")
-##  except Exception, e:
-##    logging.warn("update table schema failed")
-##    raise MyError("update table schema failed")
-##  logging.info("update table schema finish")
-##
 ##def upgrade_storage_format_version(conn, cur):
 ##  try:
 ##    # enable_ddl
@@ -4652,7 +10912,6 @@
 ##        check_cluster_version(query_cur)
 ##        #upgrade_storage_format_version(conn, cur)
 ##        #check_storage_format_version(query_cur)
-##        upgrade_table_schema_version(conn, query_cur)
 ##        check_root_inspection(query_cur)
 ##        enable_ddl(query_cur)
 ##        enable_rebalance(query_cur)
@@ -4779,7 +11038,7 @@
 ##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 ##'\n\n' +\
 ##'Maybe you want to run cmd like that:\n' +\
-##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 ##
 ##version_str = """version 1.0.0"""
 ##
@@ -5098,7 +11357,7 @@
 ##'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 ##'\n\n' +\
 ##'Maybe you want to run cmd like that:\n' +\
-##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+##sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 ##
 ##version_str = """version 1.0.0"""
 ##
@@ -6107,6 +12366,8 @@
 #        logging.info("****************************************************************************")
 #        logging.info("")
 #        logging.info("No Database Privs Exists.")
+#        logging.info("If you want to use oracle priv set. ")
+#        logging.info("First run python2.7 mysql_to_ora_priv.py to map privs in tenants:")
 #        logging.info(tenant_id_list)
 #        logging.info("")
 #        logging.info("****************************************************************************")
@@ -6273,96 +12534,66 @@
 #from mysql.connector import errorcode
 #import actions
 #
+#def do_special_upgrade_in_standy_cluster(standby_cluster_infos, user, passwd):
+#  try:
+#    for standby_cluster_info in standby_cluster_infos:
+#      logging.info("do_special_upgrade_in_standy_cluster: cluster_id = {0}, ip = {1}, port = {2}"
+#                   .format(standby_cluster_info['cluster_id'],
+#                           standby_cluster_info['ip'],
+#                           standby_cluster_info['port']))
+#      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+#                   .format(standby_cluster_info['cluster_id'],
+#                           standby_cluster_info['ip'],
+#                           standby_cluster_info['port']))
+#      conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+#                                     password =  standby_cluster_info['pwd'],
+#                                     host     =  standby_cluster_info['ip'],
+#                                     port     =  standby_cluster_info['port'],
+#                                     database =  'oceanbase',
+#                                     raise_on_warnings = True)
+#
+#      cur = conn.cursor(buffered=True)
+#      conn.autocommit = True
+#      query_cur = QueryCursor(cur)
+#      is_primary = check_current_cluster_is_primary(query_cur)
+#      if is_primary:
+#        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+#                          .format(standby_cluster_info['cluster_id'],
+#                                  standby_cluster_info['ip'],
+#                                  standby_cluster_info['port']))
+#        raise e
+#
+#      ## process
+#      do_special_upgrade_for_standby_cluster(conn, cur, user, passwd)
+#
+#      cur.close()
+#      conn.close()
+#  except Exception, e:
+#    logging.exception("""do_special_upgrade_for_standby_cluster failed""")
+#    raise e
+#
+## 备库需要执行的升级动作，且备库仅系统租户可写
+#def do_special_upgrade_for_standby_cluster(conn, cur, user, passwd):
+##升级语句对应的action要写在下面的actions begin和actions end这两行之间，
+##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
+##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+#  tenant_id_list = [1]
+#  upgrade_system_package(conn, cur)
+#####========******####======== actions begin ========####******========####
+#  run_upgrade_job(conn, cur, "4.0.0.0")
+#  return
+#####========******####========= actions end =========####******========####
+#
 #def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
 #  # special upgrade action
 ##升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+#  upgrade_system_package(conn, cur)
 #####========******####======== actions begin ========####******========####
-#  run_upgrade_job(conn, cur, "3.1.5")
+#  run_upgrade_job(conn, cur, "4.0.0.0")
 #  return
 #####========******####========= actions end =========####******========####
-#
-#def trigger_schema_split_job(conn, cur, user, pwd):
-#  try:
-#    query_cur = actions.QueryCursor(cur)
-#    is_primary = actions.check_current_cluster_is_primary(query_cur)
-#    if not is_primary:
-#      logging.warn("current cluster should by primary")
-#      raise e
-#
-#    # primary cluster
-#    trigger_schema_split_job_by_cluster(conn, cur)
-#
-#    # stanby cluster
-#    standby_cluster_list = actions.fetch_standby_cluster_infos(conn, query_cur, user, pwd)
-#    for standby_cluster in standby_cluster_list:
-#      # connect
-#      logging.info("start to trigger schema split by cluster: cluster_id = {0}"
-#                   .format(standby_cluster['cluster_id']))
-#      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
-#                   .format(standby_cluster['cluster_id'],
-#                           standby_cluster['ip'],
-#                           standby_cluster['port']))
-#      tmp_conn = mysql.connector.connect(user     =  standby_cluster['user'],
-#                                         password =  standby_cluster['pwd'],
-#                                         host     =  standby_cluster['ip'],
-#                                         port     =  standby_cluster['port'],
-#                                         database =  'oceanbase')
-#      tmp_cur = tmp_conn.cursor(buffered=True)
-#      tmp_conn.autocommit = True
-#      tmp_query_cur = actions.QueryCursor(tmp_cur)
-#      # check if stanby cluster
-#      is_primary = actions.check_current_cluster_is_primary(tmp_query_cur)
-#      if is_primary:
-#        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-#                          .format(standby_cluster['cluster_id'],
-#                                  standby_cluster['ip'],
-#                                  standby_cluster['port']))
-#        raise e
-#      # trigger schema split
-#      trigger_schema_split_job_by_cluster(tmp_conn, tmp_cur)
-#      # close
-#      tmp_cur.close()
-#      tmp_conn.close()
-#      logging.info("""trigger schema split success : cluster_id = {0}, ip = {1}, port = {2}"""
-#                      .format(standby_cluster['cluster_id'],
-#                              standby_cluster['ip'],
-#                              standby_cluster['port']))
-#
-#  except Exception, e:
-#    logging.warn("trigger schema split failed")
-#    raise e
-#  logging.info("trigger schema split success")
-#
-#def trigger_schema_split_job_by_cluster(conn, cur):
-#  try:
-#    # check record in rs_job
-#    sql = "select count(*) from oceanbase.__all_rootservice_job where job_type = 'SCHEMA_SPLIT_V2';"
-#    logging.info(sql)
-#    cur.execute(sql)
-#    result = cur.fetchall()
-#    if 1 != len(result) or 1 != len(result[0]):
-#      logging.warn("unexpected result cnt")
-#      raise e
-#    elif 0 == result[0][0]:
-#      # insert fail record to start job
-#      sql = "replace into oceanbase.__all_rootservice_job(job_id, job_type, job_status, progress, rs_svr_ip, rs_svr_port) values (0, 'SCHEMA_SPLIT_V2', 'FAILED', 100, '0.0.0.0', '0');"
-#      logging.info(sql)
-#      cur.execute(sql)
-#      # check record in rs_job
-#      sql = "select count(*) from oceanbase.__all_rootservice_job where job_type = 'SCHEMA_SPLIT_V2' and job_status = 'FAILED';"
-#      logging.info(sql)
-#      cur.execute(sql)
-#      result = cur.fetchall()
-#      if 1 != len(result) or 1 != len(result[0]) or 1 != result[0][0]:
-#        logging.warn("schema split record should be 1")
-#        raise e
-#
-#  except Exception, e:
-#    logging.warn("start schema split task failed")
-#    raise e
-#  logging.info("start schema split task success")
 #
 #def query(cur, sql):
 #  cur.execute(sql)
@@ -6371,21 +12602,6 @@
 #
 #def get_tenant_names(cur):
 #  return [_[0] for _ in query(cur, 'select tenant_name from oceanbase.__all_tenant')]
-#
-#def update_cluster_update_table_schema_version(conn, cur):
-#  time.sleep(30)
-#  try:
-#    query_timeout_sql = "set ob_query_timeout = 30000000;"
-#    logging.info(query_timeout_sql)
-#    cur.execute(query_timeout_sql)
-#    sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-#    logging.info(sql)
-#    cur.execute(sql)
-#  except Exception, e:
-#    logging.warn("run update table schema version job failed")
-#    raise e
-#  logging.info("run update table schema version job success")
-#
 #
 #def run_create_inner_schema_job(conn, cur):
 #  try:
@@ -6468,87 +12684,6 @@
 #    logging.warn("run create_inner_schema job failed")
 #    raise e
 #  logging.info("run create_inner_schema job success")
-#
-#def statistic_primary_zone_count(conn, cur):
-#  try:
-#    ###### disable ddl
-#    ori_enable_ddl = actions.get_ori_enable_ddl(cur)
-#    if ori_enable_ddl == 1:
-#      actions.set_parameter(cur, 'enable_ddl', 'False')
-#
-#    # check record in rs_job
-#    count_sql = """select count(*) from oceanbase.__all_rootservice_job
-#            where job_type = 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT';"""
-#    result = query(cur, count_sql)
-#    job_count = 0
-#    if (1 != len(result)) :
-#      logging.warn("unexpected sql output")
-#      raise e
-#    else :
-#      job_count = result[0][0]
-#      # run job
-#      sql = "alter system run job 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT';"
-#      logging.info(sql)
-#      cur.execute(sql)
-#      # wait job finish
-#      times = 180
-#      ## 先检查job count变化
-#      count_check = False
-#      while times > 0:
-#        result = query(cur, count_sql)
-#        if (1 != len(result)):
-#          logging.warn("unexpected sql output")
-#          raise e
-#        elif (result[0][0] > job_count):
-#          count_check = True
-#          logging.info('statistic_primary_zone_entity_count job detected')
-#          break
-#        time.sleep(10)
-#        times -= 1
-#        if times == 0:
-#          raise MyError('statistic_primary_zone_entity_count job failed!')
-#
-#      ## 继续检查job status状态
-#      status_sql = """select job_status from oceanbase.__all_rootservice_job
-#                      where job_type = 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT' order by job_id desc limit 1;"""
-#      status_check = False
-#      while times > 0 and count_check == True:
-#        result = query(cur, status_sql)
-#        if (0 == len(result)):
-#          logging.warn("unexpected sql output")
-#          raise e
-#        elif (1 != len(result) or 1 != len(result[0])):
-#          logging.warn("result len not match")
-#          raise e
-#        elif result[0][0] == "FAILED":
-#          logging.warn("run statistic_primary_zone_entity_count job faild")
-#          raise e
-#        elif result[0][0] == "INPROGRESS":
-#          logging.info('statistic_primary_zone_entity_count job is still running')
-#        elif result[0][0] == "SUCCESS":
-#          status_check = True
-#          break;
-#        else:
-#          logging.warn("invalid result: {0}" % (result[0][0]))
-#          raise e
-#        time.sleep(10)
-#        times -= 1
-#        if times == 0:
-#          raise MyError('check statistic_primary_zone_entity_count job failed!')
-#
-#      if (status_check == True and count_check == True):
-#        logging.info('check statistic_primary_zone_entity_count job success')
-#      else:
-#        logging.warn("run statistic_primary_zone_entity_count job faild")
-#        raise e
-#
-#    # enable ddl
-#    if ori_enable_ddl == 1:
-#      actions.set_parameter(cur, 'enable_ddl', 'True')
-#  except Exception, e:
-#    logging.warn("run statistic_primary_zone_entity_count job failed")
-#    raise e
-#  logging.info("run statistic_primary_zone_entity_count job success")
 #
 #def disable_major_freeze(conn, cur):
 #  try:
@@ -6670,6 +12805,94 @@
 #    logging.warn("run upgrade job failed, version:{0}".format(version))
 #    raise e
 #  logging.info("run upgrade job success, version:{0}".format(version))
+#
+#
+#def upgrade_system_package(conn, cur):
+#  try:
+#    ori_enable_ddl = actions.get_ori_enable_ddl(cur)
+#    if ori_enable_ddl == 0:
+#      actions.set_parameter(cur, 'enable_ddl', 'True')
+#
+#    sql = "set ob_query_timeout = 300000000;"
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = """
+#      CREATE OR REPLACE PACKAGE __DBMS_UPGRADE
+#        PROCEDURE UPGRADE(package_name VARCHAR(1024));
+#        PROCEDURE UPGRADE_ALL();
+#      END;
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = """
+#      CREATE OR REPLACE PACKAGE BODY __DBMS_UPGRADE
+#        PROCEDURE UPGRADE(package_name VARCHAR(1024));
+#          PRAGMA INTERFACE(c, UPGRADE_SINGLE);
+#        PROCEDURE UPGRADE_ALL();
+#          PRAGMA INTERFACE(c, UPGRADE_ALL);
+#      END;
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = """
+#      CALL __DBMS_UPGRADE.UPGRADE_ALL();
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    ###### alter session compatibility mode
+#    sql = "set ob_compatibility_mode='oracle';"
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = "set ob_query_timeout = 300000000;"
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = """
+#      CREATE OR REPLACE PACKAGE "__DBMS_UPGRADE" IS
+#        PROCEDURE UPGRADE(package_name VARCHAR2);
+#        PROCEDURE UPGRADE_ALL;
+#      END;
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    sql = """
+#      CREATE OR REPLACE PACKAGE BODY "__DBMS_UPGRADE" IS
+#        PROCEDURE UPGRADE(package_name VARCHAR2);
+#          PRAGMA INTERFACE(c, UPGRADE_SINGLE);
+#        PROCEDURE UPGRADE_ALL;
+#          PRAGMA INTERFACE(c, UPGRADE_ALL);
+#      END;
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    ########## update system package ##########
+#    sql = """
+#      CALL "__DBMS_UPGRADE".UPGRADE_ALL();
+#    """
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#    ###### alter session compatibility mode
+#    sql = "set ob_compatibility_mode='mysql';"
+#    logging.info(sql)
+#    cur.execute(sql)
+#    time.sleep(10)
+#
+#    if ori_enable_ddl == 0:
+#      actions.set_parameter(cur, 'enable_ddl', 'False')
+#
+#    logging.info("upgrade package finished!")
+#  except Exception, e:
+#    logging.warn("upgrade package failed!")
+#    raise e
+#
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:special_upgrade_action_pre.py
 ##!/usr/bin/env python
@@ -6721,6 +12944,56 @@
 ##    raise e
 ##  logging.info('exec modify trigger finish')
 #
+#def do_special_upgrade_in_standy_cluster(standby_cluster_infos, user, passwd):
+#  try:
+#    for standby_cluster_info in standby_cluster_infos:
+#      logging.info("do_special_upgrade_in_standy_cluster: cluster_id = {0}, ip = {1}, port = {2}"
+#                   .format(standby_cluster_info['cluster_id'],
+#                           standby_cluster_info['ip'],
+#                           standby_cluster_info['port']))
+#      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+#                   .format(standby_cluster_info['cluster_id'],
+#                           standby_cluster_info['ip'],
+#                           standby_cluster_info['port']))
+#      conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+#                                     password =  standby_cluster_info['pwd'],
+#                                     host     =  standby_cluster_info['ip'],
+#                                     port     =  standby_cluster_info['port'],
+#                                     database =  'oceanbase',
+#                                     raise_on_warnings = True)
+#
+#      cur = conn.cursor(buffered=True)
+#      conn.autocommit = True
+#      query_cur = QueryCursor(cur)
+#      is_primary = check_current_cluster_is_primary(query_cur)
+#      if is_primary:
+#        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+#                          .format(standby_cluster_info['cluster_id'],
+#                                  standby_cluster_info['ip'],
+#                                  standby_cluster_info['port']))
+#        raise e
+#
+#      ## process
+#      do_special_upgrade_for_standby_cluster(conn, cur, user, passwd)
+#
+#      cur.close()
+#      conn.close()
+#  except Exception, e:
+#    logging.exception("""do_special_upgrade_for_standby_cluster failed""")
+#    raise e
+#
+## 备库需要执行的升级动作，且备库仅系统租户可写
+#def do_special_upgrade_for_standby_cluster(conn, cur, user, passwd):
+##升级语句对应的action要写在下面的actions begin和actions end这两行之间，
+##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
+##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+#
+## 主库升级流程没加滚动升级步骤，或混部阶段DDL测试有相关case覆盖前，混部开始禁DDL
+#  actions.set_parameter(cur, 'enable_ddl', 'False')
+#  tenant_id_list = [1]
+#####========******####======== actions begin ========####******========####
+#  return
+#####========******####========= actions end =========####******========####
 #
 ## 主库需要执行的升级动作
 #def do_special_upgrade(conn, cur, tenant_id_list, user, passwd):
@@ -6733,7 +13006,6 @@
 #####========******####======== actions begin ========####******========####
 #  return
 #####========******####========= actions end =========####******========####
-#
 #def do_add_recovery_status_to_all_zone(conn, cur):
 #  try:
 #    logging.info('add recovery status row to __all_zone for each zone')
@@ -6771,45 +13043,6 @@
 #
 #  except Exception, e:
 #    logging.exception('do_add_recovery_status_to_all_zone error')
-#    raise e
-#
-#def do_add_storage_type_to_all_zone(conn, cur):
-#  try:
-#    logging.info('add storage type row to __all_zone for each zone')
-#    zones = [];
-#    storage_types = [];
-#
-#    # pre-check, may skip
-#    check_updated_sql = "select * from oceanbase.__all_zone where zone !='' AND name='storage_type'"
-#    cur.execute(check_updated_sql)
-#    storage_types = cur.fetchall()
-#    if 0 < len(storage_types):
-#      logging.info('[storage_types] row already exists, no need to add')
-#
-#    # get zones
-#    if 0 >= len(storage_types):
-#      all_zone_sql = "select distinct(zone) zone from oceanbase.__all_zone where zone !=''"
-#      cur.execute(all_zone_sql)
-#      zone_results = cur.fetchall()
-#      for r in zone_results:
-#        zones.append("('" + r[0] + "', 'storage_type', 0, 'LOCAL')")
-#
-#    # add rows
-#    if 0 < len(zones):
-#      upgrade_sql = "insert into oceanbase.__all_zone(zone, name, value, info) values " + ','.join(zones)
-#      logging.info(upgrade_sql)
-#      cur.execute(upgrade_sql)
-#      conn.commit()
-#
-#    # check result
-#    if 0 < len(zones):
-#      cur.execute(check_updated_sql)
-#      check_results = cur.fetchall()
-#      if len(check_results) != len(zones):
-#        raise MyError('fail insert [storage_type] row into __all_zone')
-#
-#  except Exception, e:
-#    logging.exception('do_add_storage_type_to_all_zone error')
 #    raise e
 #
 #def modify_trigger(conn, cur, tenant_ids):
@@ -7212,7 +13445,7 @@
 ##!/usr/bin/env python
 ## -*- coding: utf-8 -*-
 #
-## sys_vars_dict.py is generated by gen_ob_sys_variables.py, according ob_system_variable_init.json and upgrade_sys_var_base_script.py, DO NOT edited directly
+## sys_vars_dict.py是由gen_ob_sys_variables.py根据ob_system_variable_init.json和upgrade_sys_var_base_script.py文件生成的，不可修改
 #sys_var_dict = {}
 #sys_var_dict["auto_increment_increment"] = {"id": 0, "name": "auto_increment_increment", "value": "1", "data_type": 10, "info": " ", "flags": 131, "min_val": "1", "max_val": "65535"}
 #sys_var_dict["auto_increment_offset"] = {"id": 1, "name": "auto_increment_offset", "value": "1", "data_type": 10, "info": " ", "flags": 3, "min_val": "1", "max_val": "65535"}
@@ -7220,7 +13453,7 @@
 #sys_var_dict["character_set_client"] = {"id": 3, "name": "character_set_client", "value": "45", "data_type": 5, "info": "The character set in which statements are sent by the client", "flags": 163}
 #sys_var_dict["character_set_connection"] = {"id": 4, "name": "character_set_connection", "value": "45", "data_type": 5, "info": "The character set which should be translated to after receiving the statement", "flags": 163}
 #sys_var_dict["character_set_database"] = {"id": 5, "name": "character_set_database", "value": "45", "data_type": 5, "info": "The character set of the default database", "flags": 4131}
-#sys_var_dict["character_set_results"] = {"id": 6, "name": "character_set_results", "value": "45", "data_type": 5, "info": "The character set which server should translate to before shipping result sets or error message back to the client", "flags": 35}
+#sys_var_dict["character_set_results"] = {"id": 6, "name": "character_set_results", "value": "45", "data_type": 5, "info": "The character set which server should translate to before shipping result sets or error message back to the client", "flags": 99}
 #sys_var_dict["character_set_server"] = {"id": 7, "name": "character_set_server", "value": "45", "data_type": 5, "info": "The server character set", "flags": 4131}
 #sys_var_dict["character_set_system"] = {"id": 8, "name": "character_set_system", "value": "45", "data_type": 5, "info": "The character set used by the server for storing identifiers.", "flags": 7}
 #sys_var_dict["collation_connection"] = {"id": 9, "name": "collation_connection", "value": "45", "data_type": 5, "info": "The collation which the server should translate to after receiving the statement", "flags": 227}
@@ -7229,7 +13462,7 @@
 #sys_var_dict["interactive_timeout"] = {"id": 12, "name": "interactive_timeout", "value": "28800", "data_type": 5, "info": "The number of seconds the server waits for activity on an interactive connection before closing it.", "flags": 3, "min_val": "1", "max_val": "31536000"}
 #sys_var_dict["last_insert_id"] = {"id": 13, "name": "last_insert_id", "value": "0", "data_type": 10, "info": " ", "flags": 2, "min_val": "0", "max_val": "18446744073709551615"}
 #sys_var_dict["max_allowed_packet"] = {"id": 14, "name": "max_allowed_packet", "value": "4194304", "data_type": 5, "info": "Max packet length to send to or receive from the server", "flags": 139, "min_val": "1024", "max_val": "1073741824"}
-#sys_var_dict["sql_mode"] = {"id": 15, "name": "sql_mode", "value": "4194304", "data_type": 10, "info": " ", "flags": 4291}
+#sys_var_dict["sql_mode"] = {"id": 15, "name": "sql_mode", "value": "12582912", "data_type": 10, "info": " ", "flags": 4291}
 #sys_var_dict["time_zone"] = {"id": 16, "name": "time_zone", "value": "+8:00", "data_type": 22, "info": " ", "flags": 131}
 #sys_var_dict["tx_isolation"] = {"id": 17, "name": "tx_isolation", "value": "READ-COMMITTED", "data_type": 22, "info": "Transaction Isolcation Levels: READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE", "flags": 131}
 #sys_var_dict["version_comment"] = {"id": 18, "name": "version_comment", "value": "OceanBase 1.0.0", "data_type": 22, "info": " ", "flags": 5}
@@ -7242,7 +13475,7 @@
 #sys_var_dict["div_precision_increment"] = {"id": 25, "name": "div_precision_increment", "value": "4", "data_type": 5, "info": " ", "flags": 195, "min_val": "0", "max_val": "30"}
 #sys_var_dict["explicit_defaults_for_timestamp"] = {"id": 26, "name": "explicit_defaults_for_timestamp", "value": "1", "data_type": 5, "info": "whether use traditional mode for timestamp", "flags": 195}
 #sys_var_dict["group_concat_max_len"] = {"id": 27, "name": "group_concat_max_len", "value": "1024", "data_type": 10, "info": " ", "flags": 131, "min_val": "4", "max_val": "18446744073709551615"}
-#sys_var_dict["identity"] = {"id": 28, "name": "identity", "value": "0", "data_type": 10, "info": " ", "flags": 2, "min_val": "0", "max_val": "18446744073709551615"}
+#sys_var_dict["identity"] = {"id": 28, "name": "identity", "value": "0", "data_type": 10, "info": "This variable is a synonym for the last_insert_id variable. It exists for compatibility with other database systems.", "flags": 2, "min_val": "0", "max_val": "18446744073709551615"}
 #sys_var_dict["lower_case_table_names"] = {"id": 29, "name": "lower_case_table_names", "value": "1", "data_type": 5, "info": "how table database names are stored and compared, 0 means stored using the lettercase in the CREATE_TABLE or CREATE_DATABASE statement. Name comparisons are case sensitive; 1 means that table and database names are stored in lowercase abd name comparisons are not case sensitive.", "flags": 133, "min_val": "0", "max_val": "2"}
 #sys_var_dict["net_read_timeout"] = {"id": 30, "name": "net_read_timeout", "value": "30", "data_type": 5, "info": " ", "flags": 3, "min_val": "1", "max_val": "31536000"}
 #sys_var_dict["net_write_timeout"] = {"id": 31, "name": "net_write_timeout", "value": "60", "data_type": 5, "info": " ", "flags": 3, "min_val": "1", "max_val": "31536000"}
@@ -7251,15 +13484,15 @@
 #sys_var_dict["sql_select_limit"] = {"id": 34, "name": "sql_select_limit", "value": "9223372036854775807", "data_type": 5, "info": " ", "flags": 131, "min_val": "0", "max_val": "9223372036854775807"}
 #sys_var_dict["timestamp"] = {"id": 35, "name": "timestamp", "value": "0", "data_type": 15, "info": " ", "flags": 2, "min_val": "0"}
 #sys_var_dict["tx_read_only"] = {"id": 36, "name": "tx_read_only", "value": "0", "data_type": 5, "info": " ", "flags": 131}
-#sys_var_dict["version"] = {"id": 37, "name": "version", "value": "5.6.25", "data_type": 22, "info": " ", "flags": 5}
+#sys_var_dict["version"] = {"id": 37, "name": "version", "value": "", "data_type": 22, "info": " ", "flags": 1}
 #sys_var_dict["sql_warnings"] = {"id": 38, "name": "sql_warnings", "value": "0", "data_type": 5, "info": " ", "flags": 3}
 #sys_var_dict["max_user_connections"] = {"id": 39, "name": "max_user_connections", "value": "0", "data_type": 10, "info": " ", "flags": 11, "min_val": "0", "max_val": "4294967295"}
 #sys_var_dict["init_connect"] = {"id": 40, "name": "init_connect", "value": "", "data_type": 22, "info": " ", "flags": 1}
 #sys_var_dict["license"] = {"id": 41, "name": "license", "value": "", "data_type": 22, "info": " ", "flags": 5}
 #sys_var_dict["net_buffer_length"] = {"id": 42, "name": "net_buffer_length", "value": "16384", "data_type": 5, "info": "Buffer length for TCP/IP and socket communication", "flags": 11, "min_val": "1024", "max_val": "1048576"}
 #sys_var_dict["system_time_zone"] = {"id": 43, "name": "system_time_zone", "value": "CST", "data_type": 22, "info": "The server system time zone", "flags": 133}
-#sys_var_dict["query_cache_size"] = {"id": 44, "name": "query_cache_size", "value": "1048576", "data_type": 10, "info": "The memory allocated to store results from old queries(not used yet)", "flags": 1, "min_val": "0", "max_val": "18446744073709551615"}
-#sys_var_dict["query_cache_type"] = {"id": 45, "name": "query_cache_type", "value": "0", "data_type": 5, "info": "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)", "flags": 3}
+#sys_var_dict["query_cache_size"] = {"id": 44, "name": "query_cache_size", "value": "0", "data_type": 10, "info": "The memory allocated to store results from old queries(not used yet)", "flags": 4097, "min_val": "0", "max_val": "18446744073709551615"}
+#sys_var_dict["query_cache_type"] = {"id": 45, "name": "query_cache_type", "value": "0", "data_type": 5, "info": "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)", "flags": 4101}
 #sys_var_dict["sql_quote_show_create"] = {"id": 46, "name": "sql_quote_show_create", "value": "1", "data_type": 5, "info": " ", "flags": 3}
 #sys_var_dict["max_sp_recursion_depth"] = {"id": 47, "name": "max_sp_recursion_depth", "value": "0", "data_type": 5, "info": "The number of times that any given stored procedure may be called recursively.", "flags": 131, "min_val": "0", "max_val": "255"}
 #sys_var_dict["sql_safe_updates"] = {"id": 48, "name": "sql_safe_updates", "value": "0", "data_type": 5, "info": "enable mysql sql safe updates", "flags": 4227}
@@ -7276,10 +13509,10 @@
 #sys_var_dict["local_infile"] = {"id": 59, "name": "local_infile", "value": "1", "data_type": 5, "info": "", "flags": 4099}
 #sys_var_dict["lock_wait_timeout"] = {"id": 60, "name": "lock_wait_timeout", "value": "31536000", "data_type": 5, "info": "", "flags": 4099, "min_val": "1", "max_val": "31536000"}
 #sys_var_dict["long_query_time"] = {"id": 61, "name": "long_query_time", "value": "10", "data_type": 15, "info": "", "flags": 4099, "min_val": "0"}
-#sys_var_dict["max_connections"] = {"id": 62, "name": "max_connections", "value": "4294967295", "data_type": 10, "info": "", "flags": 4097, "min_val": "1", "max_val": "4294967295"}
+#sys_var_dict["max_connections"] = {"id": 62, "name": "max_connections", "value": "2147483647", "data_type": 10, "info": "", "flags": 4097, "min_val": "1", "max_val": "2147483647"}
 #sys_var_dict["max_execution_time"] = {"id": 63, "name": "max_execution_time", "value": "0", "data_type": 5, "info": "", "flags": 4099}
 #sys_var_dict["protocol_version"] = {"id": 64, "name": "protocol_version", "value": "10", "data_type": 5, "info": "", "flags": 4099}
-#sys_var_dict["server_id"] = {"id": 65, "name": "server_id", "value": "0", "data_type": 5, "info": "", "flags": 4099, "min_val": "0", "max_val": "4294967295"}
+#sys_var_dict["server_id"] = {"id": 65, "name": "server_id", "value": "1", "data_type": 5, "info": "This variable specifies the server ID(not used yet, only sys var compatible)", "flags": 4097, "min_val": "0", "max_val": "4294967295"}
 #sys_var_dict["ssl_ca"] = {"id": 66, "name": "ssl_ca", "value": "", "data_type": 22, "info": "", "flags": 4099}
 #sys_var_dict["ssl_capath"] = {"id": 67, "name": "ssl_capath", "value": "", "data_type": 22, "info": "", "flags": 4099}
 #sys_var_dict["ssl_cert"] = {"id": 68, "name": "ssl_cert", "value": "", "data_type": 22, "info": "", "flags": 4099}
@@ -7289,7 +13522,7 @@
 #sys_var_dict["ssl_key"] = {"id": 72, "name": "ssl_key", "value": "", "data_type": 22, "info": "", "flags": 4099}
 #sys_var_dict["time_format"] = {"id": 73, "name": "time_format", "value": "%H:%i:%s", "data_type": 22, "info": "", "flags": 4099}
 #sys_var_dict["tls_version"] = {"id": 74, "name": "tls_version", "value": "", "data_type": 22, "info": "TLSv1,TLSv1.1,TLSv1.2", "flags": 4099}
-#sys_var_dict["tmp_table_size"] = {"id": 75, "name": "tmp_table_size", "value": "16777216", "data_type": 10, "info": "", "flags": 4099, "min_val": "1024", "max_val": "18446744073709551615"}
+#sys_var_dict["tmp_table_size"] = {"id": 75, "name": "tmp_table_size", "value": "16777216", "data_type": 10, "info": "", "flags": 3, "min_val": "1024", "max_val": "18446744073709551615"}
 #sys_var_dict["tmpdir"] = {"id": 76, "name": "tmpdir", "value": "", "data_type": 22, "info": "", "flags": 4099}
 #sys_var_dict["unique_checks"] = {"id": 77, "name": "unique_checks", "value": "1", "data_type": 5, "info": "", "flags": 4099}
 #sys_var_dict["version_compile_machine"] = {"id": 78, "name": "version_compile_machine", "value": "", "data_type": 22, "info": "", "flags": 4099}
@@ -7298,16 +13531,23 @@
 #sys_var_dict["session_track_schema"] = {"id": 81, "name": "session_track_schema", "value": "1", "data_type": 5, "info": "specifies whether return schema change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_system_variables"] = {"id": 82, "name": "session_track_system_variables", "value": "time_zone, autocommit, character_set_client, character_set_results, character_set_connection", "data_type": 22, "info": "specifies whether return system variables change info in ok packet", "flags": 4099}
 #sys_var_dict["session_track_state_change"] = {"id": 83, "name": "session_track_state_change", "value": "0", "data_type": 5, "info": "specifies whether return session state change info in ok packet", "flags": 4099}
+#sys_var_dict["have_query_cache"] = {"id": 84, "name": "have_query_cache", "value": "NO", "data_type": 22, "info": "Whether to have query cache or not(not used yet, only compatible)", "flags": 4101}
+#sys_var_dict["query_cache_limit"] = {"id": 85, "name": "query_cache_limit", "value": "0", "data_type": 10, "info": "The maximum query result set that can be cached by the query cache(not used yet, only sys var compatible)", "flags": 4097, "min_val": "0", "max_val": "18446744073709551615"}
+#sys_var_dict["query_cache_min_res_unit"] = {"id": 86, "name": "query_cache_min_res_unit", "value": "0", "data_type": 10, "info": "The smallest unit of memory allocated by the query cache(not used yet, only sys var compatible)", "flags": 4097, "min_val": "0", "max_val": "18446744073709551615"}
+#sys_var_dict["query_cache_wlock_invalidate"] = {"id": 87, "name": "query_cache_wlock_invalidate", "value": "0", "data_type": 5, "info": "query cache wirte lock for MyISAM engine (not used yet, only sys var compatible)", "flags": 4099}
+#sys_var_dict["binlog_format"] = {"id": 88, "name": "binlog_format", "value": "2", "data_type": 5, "info": "set the binary logging format(not used yet, only sys var compatible)", "flags": 4103}
+#sys_var_dict["binlog_checksum"] = {"id": 89, "name": "binlog_checksum", "value": "CRC32", "data_type": 22, "info": "this variable causes the source to write a checksum for each event in the binary log(not used yet, only sys var compatible)", "flags": 4101}
+#sys_var_dict["binlog_rows_query_log_events"] = {"id": 90, "name": "binlog_rows_query_log_events", "value": "0", "data_type": 5, "info": "This system variable affects row-based logging only(not used yet, only sys var compatible)", "flags": 4103}
+#sys_var_dict["log_bin"] = {"id": 91, "name": "log_bin", "value": "1", "data_type": 5, "info": "This variable reports only on the status of binary logging(not used yet, only sys var compatible)", "flags": 4101}
+#sys_var_dict["server_uuid"] = {"id": 92, "name": "server_uuid", "value": "ObExprUuid::gen_server_uuid", "data_type": 22, "info": "server uuid", "flags": 4101}
 #sys_var_dict["default_storage_engine"] = {"id": 93, "name": "default_storage_engine", "value": "OceanBase", "data_type": 22, "info": "The default storage engine of OceanBase", "flags": 4099}
-#sys_var_dict["ob_default_replica_num"] = {"id": 10000, "name": "ob_default_replica_num", "value": "1", "data_type": 5, "info": "The default replica number of table per zone if not specified when creating table.", "flags": 3}
 #sys_var_dict["ob_interm_result_mem_limit"] = {"id": 10001, "name": "ob_interm_result_mem_limit", "value": "2147483648", "data_type": 5, "info": "Indicate how many bytes the interm result manager can alloc most for this tenant", "flags": 131}
 #sys_var_dict["ob_proxy_partition_hit"] = {"id": 10002, "name": "ob_proxy_partition_hit", "value": "1", "data_type": 5, "info": "Indicate whether sql stmt hit right partition, readonly to user, modify by ob", "flags": 22}
 #sys_var_dict["ob_log_level"] = {"id": 10003, "name": "ob_log_level", "value": "disabled", "data_type": 22, "info": "log level in session", "flags": 3}
-#sys_var_dict["ob_max_parallel_degree"] = {"id": 10004, "name": "ob_max_parallel_degree", "value": "16", "data_type": 5, "info": "Max parellel sub request to chunkservers for one request", "flags": 67}
 #sys_var_dict["ob_query_timeout"] = {"id": 10005, "name": "ob_query_timeout", "value": "10000000", "data_type": 5, "info": "Query timeout in microsecond(us)", "flags": 131}
 #sys_var_dict["ob_read_consistency"] = {"id": 10006, "name": "ob_read_consistency", "value": "3", "data_type": 5, "info": "read consistency level: 3=STRONG, 2=WEAK, 1=FROZEN", "flags": 195}
 #sys_var_dict["ob_enable_transformation"] = {"id": 10007, "name": "ob_enable_transformation", "value": "1", "data_type": 5, "info": "whether use transform in session", "flags": 195}
-#sys_var_dict["ob_trx_timeout"] = {"id": 10008, "name": "ob_trx_timeout", "value": "100000000", "data_type": 5, "info": "The max duration of one transaction", "flags": 131}
+#sys_var_dict["ob_trx_timeout"] = {"id": 10008, "name": "ob_trx_timeout", "value": "86400000000", "data_type": 5, "info": "The max duration of one transaction", "flags": 131}
 #sys_var_dict["ob_enable_plan_cache"] = {"id": 10009, "name": "ob_enable_plan_cache", "value": "1", "data_type": 5, "info": "whether use plan cache in session", "flags": 131}
 #sys_var_dict["ob_enable_index_direct_select"] = {"id": 10010, "name": "ob_enable_index_direct_select", "value": "0", "data_type": 5, "info": "whether can select from index table", "flags": 195}
 #sys_var_dict["ob_proxy_set_trx_executed"] = {"id": 10011, "name": "ob_proxy_set_trx_executed", "value": "0", "data_type": 5, "info": "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully", "flags": 22}
@@ -7326,11 +13566,9 @@
 #sys_var_dict["ob_plan_cache_evict_low_percentage"] = {"id": 10024, "name": "ob_plan_cache_evict_low_percentage", "value": "50", "data_type": 5, "info": "memory usage percentage  of plan_cache_limit at which plan cache eviction will be stopped", "flags": 129, "min_val": "0", "max_val": "100"}
 #sys_var_dict["recyclebin"] = {"id": 10025, "name": "recyclebin", "value": "0", "data_type": 5, "info": "When the recycle bin is enabled, dropped tables and their dependent objects are placed in the recycle bin. When the recycle bin is disabled, dropped tables and their dependent objects are not placed in the recycle bin; they are just dropped.", "flags": 3}
 #sys_var_dict["ob_capability_flag"] = {"id": 10026, "name": "ob_capability_flag", "value": "0", "data_type": 10, "info": "Indicate features that observer supports, readonly after modified by first observer", "flags": 22, "min_val": "0", "max_val": "18446744073709551615"}
-#sys_var_dict["ob_stmt_parallel_degree"] = {"id": 10027, "name": "ob_stmt_parallel_degree", "value": "1", "data_type": 5, "info": "The parallel degree of a job in a query, which represent how many tasks of a job can be run parallelly", "flags": 195, "min_val": "1", "max_val": "10240"}
 #sys_var_dict["is_result_accurate"] = {"id": 10028, "name": "is_result_accurate", "value": "1", "data_type": 5, "info": "when query is with topk hint, is_result_accurate indicates whether the result is acuurate or not ", "flags": 130}
 #sys_var_dict["error_on_overlap_time"] = {"id": 10029, "name": "error_on_overlap_time", "value": "0", "data_type": 5, "info": "The variable determines how OceanBase should handle an ambiguous boundary datetime value a case in which it is not clear whether the datetime is in standard or daylight saving time", "flags": 131}
 #sys_var_dict["ob_compatibility_mode"] = {"id": 10030, "name": "ob_compatibility_mode", "value": "0", "data_type": 5, "info": "What DBMS is OceanBase compatible with? MYSQL means it behaves like MySQL while ORACLE means it behaves like Oracle.", "flags": 2183}
-#sys_var_dict["ob_create_table_strict_mode"] = {"id": 10031, "name": "ob_create_table_strict_mode", "value": "0", "data_type": 5, "info": "If set true, create all the replicas according to the locality or the operation will fail.", "flags": 3}
 #sys_var_dict["ob_sql_work_area_percentage"] = {"id": 10032, "name": "ob_sql_work_area_percentage", "value": "5", "data_type": 5, "info": "The percentage limitation of tenant memory for SQL execution.", "flags": 1, "min_val": "0", "max_val": "100"}
 #sys_var_dict["ob_safe_weak_read_snapshot"] = {"id": 10033, "name": "ob_safe_weak_read_snapshot", "value": "1", "data_type": 5, "info": "The safe weak read snapshot version in one server", "flags": 146, "min_val": "0", "max_val": "9223372036854775807"}
 #sys_var_dict["ob_route_policy"] = {"id": 10034, "name": "ob_route_policy", "value": "1", "data_type": 5, "info": "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST", "flags": 195}
@@ -7350,18 +13588,16 @@
 #sys_var_dict["ob_enable_jit"] = {"id": 10048, "name": "ob_enable_jit", "value": "0", "data_type": 5, "info": "JIT execution engine mode, default is AUTO", "flags": 195}
 #sys_var_dict["ob_temp_tablespace_size_percentage"] = {"id": 10049, "name": "ob_temp_tablespace_size_percentage", "value": "0", "data_type": 5, "info": "the percentage limitation of some temp tablespace size in tenant disk.", "flags": 3}
 #sys_var_dict["_optimizer_adaptive_cursor_sharing"] = {"id": 10050, "name": "_optimizer_adaptive_cursor_sharing", "value": "0", "data_type": 5, "info": "Enable use of adaptive cursor sharing", "flags": 147}
-#sys_var_dict["ob_timestamp_service"] = {"id": 10051, "name": "ob_timestamp_service", "value": "1", "data_type": 5, "info": "the type of timestamp service", "flags": 129}
 #sys_var_dict["plugin_dir"] = {"id": 10052, "name": "plugin_dir", "value": "./plugin_dir/", "data_type": 22, "info": "the dir to place plugin dll", "flags": 5}
-#sys_var_dict["undo_retention"] = {"id": 10053, "name": "undo_retention", "value": "0", "data_type": 5, "info": "specifies (in seconds) the low threshold value of undo retention.", "flags": 1, "min_val": "0", "max_val": "4294967295"}
 #sys_var_dict["_ob_use_parallel_execution"] = {"id": 10054, "name": "_ob_use_parallel_execution", "value": "1", "data_type": 5, "info": "auto use parallel execution", "flags": 211}
-#sys_var_dict["ob_sql_audit_percentage"] = {"id": 10055, "name": "ob_sql_audit_percentage", "value": "3", "data_type": 5, "info": "The limited percentage of tenant memory for sql audit", "flags": 129, "min_val": "0", "max_val": "100"}
+#sys_var_dict["ob_sql_audit_percentage"] = {"id": 10055, "name": "ob_sql_audit_percentage", "value": "3", "data_type": 5, "info": "The limited percentage of tenant memory for sql audit", "flags": 129, "min_val": "0", "max_val": "80"}
 #sys_var_dict["ob_enable_sql_audit"] = {"id": 10056, "name": "ob_enable_sql_audit", "value": "1", "data_type": 5, "info": "wether use sql audit in session", "flags": 129}
 #sys_var_dict["optimizer_use_sql_plan_baselines"] = {"id": 10057, "name": "optimizer_use_sql_plan_baselines", "value": "1", "data_type": 5, "info": "Enable use sql plan baseline", "flags": 131}
 #sys_var_dict["optimizer_capture_sql_plan_baselines"] = {"id": 10058, "name": "optimizer_capture_sql_plan_baselines", "value": "1", "data_type": 5, "info": "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline.", "flags": 131}
-#sys_var_dict["parallel_max_servers"] = {"id": 10059, "name": "parallel_max_servers", "value": "0", "data_type": 5, "info": "number of threads created to run parallel statements for each observer.", "flags": 129, "min_val": "0", "max_val": "1800"}
+#sys_var_dict["parallel_max_servers"] = {"id": 10059, "name": "parallel_max_servers", "value": "0", "data_type": 5, "info": "number of threads created to run parallel statements for each observer.", "flags": 17, "min_val": "0", "max_val": "1800"}
 #sys_var_dict["parallel_servers_target"] = {"id": 10060, "name": "parallel_servers_target", "value": "0", "data_type": 5, "info": "number of threads allowed to run parallel statements before statement queuing will be used.", "flags": 1, "min_val": "0", "max_val": "9223372036854775807"}
 #sys_var_dict["ob_early_lock_release"] = {"id": 10061, "name": "ob_early_lock_release", "value": "0", "data_type": 5, "info": "If set true, transaction open the elr optimization.", "flags": 129}
-#sys_var_dict["ob_trx_idle_timeout"] = {"id": 10062, "name": "ob_trx_idle_timeout", "value": "120000000", "data_type": 5, "info": "The stmt interval timeout of transaction(us)", "flags": 131}
+#sys_var_dict["ob_trx_idle_timeout"] = {"id": 10062, "name": "ob_trx_idle_timeout", "value": "86400000000", "data_type": 5, "info": "The stmt interval timeout of transaction(us)", "flags": 131}
 #sys_var_dict["block_encryption_mode"] = {"id": 10063, "name": "block_encryption_mode", "value": "0", "data_type": 5, "info": "specifies the encryption algorithm used in the functions aes_encrypt and aes_decrypt", "flags": 131}
 #sys_var_dict["nls_date_format"] = {"id": 10064, "name": "nls_date_format", "value": "DD-MON-RR", "data_type": 22, "info": "specifies the default date format to use with the TO_CHAR and TO_DATE functions, (YYYY-MM-DD HH24:MI:SS) is Common value", "flags": 643}
 #sys_var_dict["nls_timestamp_format"] = {"id": 10065, "name": "nls_timestamp_format", "value": "DD-MON-RR HH.MI.SSXFF AM", "data_type": 22, "info": "specifies the default date format to use with the TO_CHAR and TO_TIMESTAMP functions, (YYYY-MM-DD HH24:MI:SS.FF) is Common value", "flags": 643}
@@ -7373,7 +13609,7 @@
 #sys_var_dict["nls_sort"] = {"id": 10071, "name": "nls_sort", "value": "BINARY", "data_type": 22, "info": "specifies the collating sequence for character value comparison in various SQL operators and clauses.", "flags": 707}
 #sys_var_dict["nls_comp"] = {"id": 10072, "name": "nls_comp", "value": "BINARY", "data_type": 22, "info": "specifies the collation behavior of the database session. value can be BINARY | LINGUISTIC | ANSI", "flags": 707}
 #sys_var_dict["nls_characterset"] = {"id": 10073, "name": "nls_characterset", "value": "AL32UTF8", "data_type": 22, "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the CHAR, VARCHAR2, LONG and CLOB columns of a table.", "flags": 1733}
-#sys_var_dict["nls_nchar_characterset"] = {"id": 10074, "name": "nls_nchar_characterset", "value": "AL32UTF8", "data_type": 22, "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table.", "flags": 705}
+#sys_var_dict["nls_nchar_characterset"] = {"id": 10074, "name": "nls_nchar_characterset", "value": "AL16UTF16", "data_type": 22, "info": "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table.", "flags": 705}
 #sys_var_dict["nls_date_language"] = {"id": 10075, "name": "nls_date_language", "value": "AMERICAN", "data_type": 22, "info": "specifies the language to use for the spelling of day and month names and date abbreviations (a.m., p.m., AD, BC) returned by the TO_DATE and TO_CHAR functions.", "flags": 643}
 #sys_var_dict["nls_length_semantics"] = {"id": 10076, "name": "nls_length_semantics", "value": "BYTE", "data_type": 22, "info": "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS.", "flags": 707}
 #sys_var_dict["nls_nchar_conv_excp"] = {"id": 10077, "name": "nls_nchar_conv_excp", "value": "FALSE", "data_type": 22, "info": "determines whether an error is reported when there is data loss during an implicit or explicit character type conversion between NCHAR/NVARCHAR2 and CHAR/VARCHAR2.", "flags": 707}
@@ -7383,7 +13619,6 @@
 #sys_var_dict["tracefile_identifier"] = {"id": 10081, "name": "tracefile_identifier", "value": "", "data_type": 22, "info": "The name of tracefile.", "flags": 130}
 #sys_var_dict["_groupby_nopushdown_cut_ratio"] = {"id": 10082, "name": "_groupby_nopushdown_cut_ratio", "value": "3", "data_type": 10, "info": "ratio used to decide whether push down should be done in distribtued query optimization.", "flags": 147}
 #sys_var_dict["_px_broadcast_fudge_factor"] = {"id": 10083, "name": "_px_broadcast_fudge_factor", "value": "100", "data_type": 5, "info": "set the tq broadcasting fudge factor percentage.", "flags": 82, "min_val": "0", "max_val": "100"}
-#sys_var_dict["_primary_zone_entity_count"] = {"id": 10084, "name": "_primary_zone_entity_count", "value": "-1", "data_type": 5, "info": "statistic primary zone entity(table/tablegroup/database) count under tenant.", "flags": 21}
 #sys_var_dict["transaction_isolation"] = {"id": 10085, "name": "transaction_isolation", "value": "READ-COMMITTED", "data_type": 22, "info": "Transaction Isolcation Levels: READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE", "flags": 131}
 #sys_var_dict["ob_trx_lock_timeout"] = {"id": 10086, "name": "ob_trx_lock_timeout", "value": "-1", "data_type": 5, "info": "the max duration of waiting on row lock of one transaction", "flags": 131}
 #sys_var_dict["validate_password_check_user_name"] = {"id": 10087, "name": "validate_password_check_user_name", "value": "0", "data_type": 5, "info": "", "flags": 129}
@@ -7393,8 +13628,8 @@
 #sys_var_dict["validate_password_policy"] = {"id": 10091, "name": "validate_password_policy", "value": "0", "data_type": 5, "info": "", "flags": 129}
 #sys_var_dict["validate_password_special_char_count"] = {"id": 10092, "name": "validate_password_special_char_count", "value": "0", "data_type": 10, "info": "", "flags": 129, "min_val": "0", "max_val": "2147483647"}
 #sys_var_dict["default_password_lifetime"] = {"id": 10093, "name": "default_password_lifetime", "value": "0", "data_type": 10, "info": "", "flags": 129, "min_val": "0", "max_val": "65535"}
+#sys_var_dict["_ob_ols_policy_session_labels"] = {"id": 10094, "name": "_ob_ols_policy_session_labels", "value": "", "data_type": 22, "info": "store all session labels for all label security policy.", "flags": 146}
 #sys_var_dict["ob_trace_info"] = {"id": 10095, "name": "ob_trace_info", "value": "", "data_type": 22, "info": "store trace info", "flags": 2}
-#sys_var_dict["ob_enable_batched_multi_statement"] = {"id": 10096, "name": "ob_enable_batched_multi_statement", "value": "0", "data_type": 5, "info": "enable use of batched multi statement", "flags": 131}
 #sys_var_dict["_px_partition_scan_threshold"] = {"id": 10097, "name": "_px_partition_scan_threshold", "value": "64", "data_type": 5, "info": "least number of partitions per slave to start partition-based scan", "flags": 82, "min_val": "0", "max_val": "100"}
 #sys_var_dict["_ob_px_bcast_optimization"] = {"id": 10098, "name": "_ob_px_bcast_optimization", "value": "1", "data_type": 5, "info": "broadcast optimization.", "flags": 147}
 #sys_var_dict["_ob_px_slave_mapping_threshold"] = {"id": 10099, "name": "_ob_px_slave_mapping_threshold", "value": "200", "data_type": 5, "info": "percentage threshold to use slave mapping plan", "flags": 83, "min_val": "0", "max_val": "1000"}
@@ -7412,7 +13647,26 @@
 #sys_var_dict["nls_currency"] = {"id": 10111, "name": "nls_currency", "value": "$", "data_type": 22, "info": "specifies the string to use as the local currency symbol for the L number format element. The default value of this parameter is determined by NLS_TERRITORY.", "flags": 643}
 #sys_var_dict["nls_iso_currency"] = {"id": 10112, "name": "nls_iso_currency", "value": "AMERICA", "data_type": 22, "info": "specifies the string to use as the international currency symbol for the C number format element. The default value of this parameter is determined by NLS_TERRITORY", "flags": 643}
 #sys_var_dict["nls_dual_currency"] = {"id": 10113, "name": "nls_dual_currency", "value": "$", "data_type": 22, "info": "specifies the dual currency symbol for the territory. The default is the dual currency symbol defined in the territory of your current language environment.", "flags": 643}
+#sys_var_dict["plsql_ccflags"] = {"id": 10115, "name": "plsql_ccflags", "value": "", "data_type": 22, "info": "Lets you control conditional compilation of each PL/SQL unit independently.", "flags": 643}
 #sys_var_dict["_ob_proxy_session_temporary_table_used"] = {"id": 10116, "name": "_ob_proxy_session_temporary_table_used", "value": "0", "data_type": 5, "info": "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully", "flags": 22}
+#sys_var_dict["_enable_parallel_ddl"] = {"id": 10117, "name": "_enable_parallel_ddl", "value": "1", "data_type": 5, "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.", "flags": 210}
+#sys_var_dict["_force_parallel_ddl_dop"] = {"id": 10118, "name": "_force_parallel_ddl_dop", "value": "1", "data_type": 10, "info": "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement.", "flags": 210}
+#sys_var_dict["cursor_sharing"] = {"id": 10119, "name": "cursor_sharing", "value": "0", "data_type": 5, "info": "whether needs to do parameterization? EXACT - query will not do parameterization; FORCE - query will do parameterization.", "flags": 3}
+#sys_var_dict["_optimizer_null_aware_antijoin"] = {"id": 10120, "name": "_optimizer_null_aware_antijoin", "value": "1", "data_type": 5, "info": "specifies whether null aware anti join plan allow generated", "flags": 3}
+#sys_var_dict["_px_partial_rollup_pushdown"] = {"id": 10121, "name": "_px_partial_rollup_pushdown", "value": "1", "data_type": 5, "info": "enable partial rollup push down optimization.", "flags": 147}
+#sys_var_dict["_px_dist_agg_partial_rollup_pushdown"] = {"id": 10122, "name": "_px_dist_agg_partial_rollup_pushdown", "value": "1", "data_type": 5, "info": "enable distinct aggregate function to partial rollup push down optimization.", "flags": 147}
+#sys_var_dict["_create_audit_purge_job"] = {"id": 10123, "name": "_create_audit_purge_job", "value": "", "data_type": 22, "info": "control audit log trail job in mysql mode", "flags": 4113}
+#sys_var_dict["_drop_audit_purge_job"] = {"id": 10124, "name": "_drop_audit_purge_job", "value": "", "data_type": 22, "info": "drop audit log trail job in mysql mode", "flags": 4113}
+#sys_var_dict["_set_purge_job_interval"] = {"id": 10125, "name": "_set_purge_job_interval", "value": "", "data_type": 22, "info": "set purge job interval in mysql mode, range in 1-999 days", "flags": 4113}
+#sys_var_dict["_set_purge_job_status"] = {"id": 10126, "name": "_set_purge_job_status", "value": "", "data_type": 22, "info": "set purge job status in mysql mode, range: true/false", "flags": 4113}
+#sys_var_dict["_set_last_archive_timestamp"] = {"id": 10127, "name": "_set_last_archive_timestamp", "value": "", "data_type": 22, "info": "set last archive timestamp in mysql mode, must utc time in usec from 1970", "flags": 4113}
+#sys_var_dict["_clear_last_archive_timestamp"] = {"id": 10128, "name": "_clear_last_archive_timestamp", "value": "", "data_type": 22, "info": "clear last archive timestamp in mysql mode", "flags": 4113}
+#sys_var_dict["_aggregation_optimization_settings"] = {"id": 10129, "name": "_aggregation_optimization_settings", "value": "0", "data_type": 10, "info": "Manually control some behaviors of aggregation", "flags": 3}
+#sys_var_dict["_px_shared_hash_join"] = {"id": 10130, "name": "_px_shared_hash_join", "value": "1", "data_type": 5, "info": "enable shared hash table hash join optimization.", "flags": 147}
+#sys_var_dict["sql_notes"] = {"id": 10131, "name": "sql_notes", "value": "0", "data_type": 5, "info": " ", "flags": 3}
+#sys_var_dict["innodb_strict_mode"] = {"id": 10132, "name": "innodb_strict_mode", "value": "1", "data_type": 5, "info": "in certain case, warnings would be transformed to errors", "flags": 3}
+#sys_var_dict["_windowfunc_optimization_settings"] = {"id": 10133, "name": "_windowfunc_optimization_settings", "value": "0", "data_type": 10, "info": "settings for window function optimizations", "flags": 3, "min_val": "0", "max_val": "9223372036854775807"}
+#sys_var_dict["ob_enable_rich_error_msg"] = {"id": 10134, "name": "ob_enable_rich_error_msg", "value": "0", "data_type": 5, "info": "control whether print svr_ip,execute_time,trace_id", "flags": 3}
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:upgrade_checker.py
 ##!/usr/bin/env python
@@ -7428,7 +13682,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
-#  old_version = '3.1.0'
+#  old_version = '4.0.0'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):
@@ -7519,7 +13773,7 @@
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -7906,7 +14160,7 @@
 #
 ## 23. 检查是否有异常租户(creating，延迟删除，恢复中)
 #def check_tenant_status(query_cur):
-#  (desc, results) = query_cur.exec_query("""select count(*) as count from __all_tenant where status != 'TENANT_STATUS_NORMAL'""")
+#  (desc, results) = query_cur.exec_query("""select count(*) as count from __all_tenant where status != 'NORMAL'""")
 #  if len(results) != 1 or len(results[0]) != 1:
 #    raise MyError('results len not match')
 #  elif 0 != results[0][0]:
@@ -7970,39 +14224,8 @@
 #    elif results[0][0] != 0:
 #      raise MyError("""sys tables'leader should be {0}:{1}""".format(svr_ip, svr_port))
 #
-## 29. 检查版本号设置inner sql不走px.
-#def check_and_modify_px_query(query_cur, cur):
-#  (desc, results) = query_cur.exec_query("""select distinct value from oceanbase.__all_virtual_sys_parameter_stat where name = 'min_observer_version'""")
-#  if (len(results) != 1) :
-#    raise MyError('distinct observer version not exist')
-#  elif cmp(results[0][0], "3.1.1") == 0 or cmp(results[0][0], "3.1.0") == 0:
-#    if cmp(results[0][0], "3.1.1") == 0:
-#      cur.execute("alter system set _ob_enable_px_for_inner_sql = false")
-#    (desc, results) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
-#    if (len(results) != 1) :
-#      raise MyError('cluster role results is not valid')
-#    elif (cmp(results[0][0], "PRIMARY") == 0):
-#      tenant_id_list = []
-#      (desc, results) = query_cur.exec_query("""select distinct tenant_id from oceanbase.__all_tenant order by tenant_id desc""")
-#      for r in results:
-#        tenant_id_list.append(r[0])
-#      for tenant_id in tenant_id_list:
-#        cur.execute("alter system change tenant tenant_id = {0}".format(tenant_id))
-#        sql = """set global _ob_use_parallel_execution = false"""
-#        logging.info("tenant_id : %d , %s", tenant_id, sql)
-#        cur.execute(sql)
-#    elif (cmp(results[0][0], "PHYSICAL STANDBY") == 0):
-#      sql = """set global _ob_use_parallel_execution = false"""
-#      cur.execute(sql)
-#      logging.info("execute sql in standby: %s", sql)
-#    cur.execute("alter system change tenant tenant_id = 1")
-#    time.sleep(5)
-#    cur.execute("alter system flush plan cache global")
-#    logging.info("execute: alter system flush plan cache global")
-#  else:
-#    logging.info('cluster version is not equal 3.1.1, skip px operate'.format(results[0][0]))
-#
 ## 30. check duplicate index name in mysql
+## https://work.aone.alibaba-inc.com/issue/36047465
 #def check_duplicate_index_name_in_mysql(query_cur, cur):
 #  (desc, results) = query_cur.exec_query(
 #                    """
@@ -8013,11 +14236,6 @@
 #                    """)
 #  if (len(results) != 0) :
 #    raise MyError("Duplicate index name exist in mysql tenant")
-#
-## 31. check the _max_trx_size
-#def check_max_trx_size_config(query_cur, cur):
-#  set_parameter(cur, '_max_trx_size', '100G')
-#  logging.info('set _max_trx_size to default value 100G')
 #
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
@@ -8047,13 +14265,11 @@
 #      modify_replica_safe_remove_time(cur)
 #      check_high_priority_net_thread_count_before_224(query_cur)
 #      check_standby_cluster(query_cur)
-#      check_schema_split_v2_finish(query_cur)
+#      #check_schema_split_v2_finish(query_cur)
 #      check_micro_block_verify_level(query_cur)
 #      check_restore_job_exist(query_cur)
 #      check_sys_table_leader(query_cur)
-#      check_and_modify_px_query(query_cur, cur)
 #      check_duplicate_index_name_in_mysql(query_cur, cur)
-#      check_max_trx_size_config(query_cur, cur)
 #    except Exception, e:
 #      logging.exception('run error')
 #      raise e
@@ -8173,7 +14389,7 @@
 #'-t, --timeout=name  check timeout, default: 600(s).\n' + \
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -8576,7 +14792,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_post_checker.log'
-#  new_version = '3.1.5'
+#  new_version = '4.0.0.0'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):
@@ -8667,7 +14883,7 @@
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -8882,29 +15098,6 @@
 #  else:
 #    logging.info("check expected storage format version '{0}' success".format(expect_version))
 #
-#def upgrade_table_schema_version(conn, cur):
-#  try:
-#    sql = """SELECT * FROM v$ob_cluster
-#             WHERE cluster_role = "PRIMARY"
-#             AND cluster_status = "VALID"
-#             AND (switchover_status = "NOT ALLOWED" OR switchover_status = "TO STANDBY") """
-#    (desc, results) = cur.exec_query(sql)
-#    is_primary = len(results) > 0
-#    if is_primary:
-#      sql = "set @@session.ob_query_timeout = 60000000;"
-#      logging.info(sql)
-#      cur.exec_sql(sql)
-#
-#      sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-#      logging.info(sql)
-#      cur.exec_sql(sql)
-#    else:
-#      logging.info("standby cluster no need to run job update_table_schema_ersion")
-#  except Exception, e:
-#    logging.warn("update table schema failed")
-#    raise MyError("update table schema failed")
-#  logging.info("update table schema finish")
-#
 #def upgrade_storage_format_version(conn, cur):
 #  try:
 #    # enable_ddl
@@ -8935,6 +15128,20 @@
 #    raise e
 #  logging.info('check root inspection success')
 #
+## 3 check standby cluster
+#def check_standby_cluster(conn, query_cur, my_user, my_passwd):
+#  try:
+#    is_primary = check_current_cluster_is_primary(query_cur)
+#    if not is_primary:
+#      logging.info("""current cluster is standby cluster, just skip""")
+#    else:
+#      tenant_id_list = fetch_tenant_ids(query_cur)
+#      standby_cluster_infos = fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+#      check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+#  except Exception, e:
+#    logging.exception('fail to fetch standby cluster info')
+#    raise e
+#
 ## 4 开ddl
 #def enable_ddl(cur):
 #  set_parameter(cur, 'enable_ddl', 'True')
@@ -8950,108 +15157,6 @@
 ## 7 打开major freeze
 #def enable_major_freeze(cur):
 #  set_parameter(cur, 'enable_major_freeze', 'True')
-#  
-## 8 打开sql走px
-#def enable_px_inner_sql(query_cur, cur):
-#  cur.execute("alter system set _ob_enable_px_for_inner_sql = True")
-#  (desc, results) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
-#  if (len(results) != 1) :
-#    raise MyError('cluster role results is not valid')
-#  elif (cmp(results[0][0], "PRIMARY") == 0):
-#    tenant_id_list = fetch_tenant_ids(query_cur)
-#    for tenant_id in tenant_id_list:
-#      cur.execute("alter system change tenant tenant_id = {0}".format(tenant_id))
-#      sql = """set global _ob_use_parallel_execution = true"""
-#      logging.info("tenant_id : %d , %s", tenant_id, sql)
-#      cur.execute(sql)
-#  elif (cmp(results[0][0], "PHYSICAL STANDBY") == 0):
-#    sql = """set global _ob_use_parallel_execution = true"""
-#    cur.execute(sql)
-#    logging.info("execute sql in standby: %s", sql)
-#
-#def execute_schema_split_v2(conn, cur, query_cur, user, pwd):
-#  try:
-#    # check local cluster finish schema split
-#    done = check_schema_split_v2_finish(query_cur)
-#    if not done:
-#      ###### disable ddl
-#      set_parameter(cur, 'enable_ddl', 'False')
-#
-#      # run job
-#      sql = """alter system run job 'SCHEMA_SPLIT_V2'"""
-#      logging.info("""run job 'SCHEMA_SPLIT_V2'""")
-#      query_cur.exec_sql(sql)
-#      # check schema split v2 finish
-#      check_schema_split_v2_finish_until_timeout(query_cur, 360)
-#
-#    # primary cluster should wait standby clusters' schema split results
-#    is_primary = check_current_cluster_is_primary(query_cur)
-#    if is_primary:
-#      standby_cluster_list = fetch_standby_cluster_infos(conn, query_cur, user, pwd)
-#      for standby_cluster in standby_cluster_list:
-#        # connect
-#        logging.info("start to check schema split result by cluster: cluster_id = {0}"
-#                     .format(standby_cluster['cluster_id']))
-#        logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
-#                     .format(standby_cluster['cluster_id'],
-#                             standby_cluster['ip'],
-#                             standby_cluster['port']))
-#        tmp_conn = mysql.connector.connect(user     =  standby_cluster['user'],
-#                                           password =  standby_cluster['pwd'],
-#                                           host     =  standby_cluster['ip'],
-#                                           port     =  standby_cluster['port'],
-#                                           database =  'oceanbase')
-#        tmp_cur = tmp_conn.cursor(buffered=True)
-#        tmp_conn.autocommit = True
-#        tmp_query_cur = Cursor(tmp_cur)
-#        # check if stanby cluster
-#        is_primary = check_current_cluster_is_primary(tmp_query_cur)
-#        if is_primary:
-#          logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-#                            .format(standby_cluster['cluster_id'],
-#                                    standby_cluster['ip'],
-#                                    standby_cluster['port']))
-#          raise e
-#        # check schema split finish
-#        check_schema_split_v2_finish_until_timeout(tmp_query_cur, 180)
-#        # close
-#        tmp_cur.close()
-#        tmp_conn.close()
-#        logging.info("""check schema split result success : cluster_id = {0}, ip = {1}, port = {2}"""
-#                        .format(standby_cluster['cluster_id'],
-#                                standby_cluster['ip'],
-#                                standby_cluster['port']))
-#  except Exception, e:
-#    logging.warn("execute schema_split_v2 failed")
-#    raise e
-#  logging.info("execute schema_split_v2 success")
-#
-#def check_schema_split_v2_finish(query_cur):
-#  done = False;
-#  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where name = 'SCHEMA_SPLIT_V2' and info = 'succeed'"
-#  logging.info(sql)
-#  (desc, results) = query_cur.exec_query(sql)
-#  if 1 != len(results) or 1 != len(results[0]):
-#    logging.warn("should has one record")
-#    raise e
-#  elif 1 == results[0][0]:
-#    done = True
-#  else:
-#    done = False
-#  return done
-#
-#def check_schema_split_v2_finish_until_timeout(query_cur, times):
-#  while times > 0:
-#    done = check_schema_split_v2_finish(query_cur)
-#    if done:
-#      break;
-#    else:
-#      times -= 1
-#      time.sleep(10)
-#    if 0 == times:
-#      logging.warn('check schema split v2 timeout!')
-#      raise e
-#  logging.info("check schema split v2 success")
 #
 #def fetch_tenant_ids(query_cur):
 #  try:
@@ -9187,6 +15292,50 @@
 #    logging.exception("fail to check ddl and dml sync")
 #    raise e
 #
+#def check_ddl_and_dml_sync_by_cluster(standby_cluster_info, sys_infos):
+#  try:
+#    # connect
+#    logging.info("start to check ddl and dml sync by cluster: cluster_id = {0}"
+#                 .format(standby_cluster_info['cluster_id']))
+#    logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+#                 .format(standby_cluster_info['cluster_id'],
+#                         standby_cluster_info['ip'],
+#                         standby_cluster_info['port']))
+#    tmp_conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+#                                       password =  standby_cluster_info['pwd'],
+#                                       host     =  standby_cluster_info['ip'],
+#                                       port     =  standby_cluster_info['port'],
+#                                       database =  'oceanbase',
+#                                       raise_on_warnings = True)
+#    tmp_cur = tmp_conn.cursor(buffered=True)
+#    tmp_conn.autocommit = True
+#    tmp_query_cur = Cursor(tmp_cur)
+#    is_primary = check_current_cluster_is_primary(tmp_query_cur)
+#    if is_primary:
+#      logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+#                        .format(standby_cluster_info['cluster_id'],
+#                                standby_cluster_info['ip'],
+#                                standby_cluster_info['port']))
+#      raise e
+#
+#    for sys_info in sys_infos:
+#      check_ddl_and_dml_sync_by_tenant(tmp_query_cur, sys_info)
+#
+#    # close
+#    tmp_cur.close()
+#    tmp_conn.close()
+#    logging.info("""check_ddl_and_dml_sync_by_cluster success : cluster_id = {0}, ip = {1}, port = {2}"""
+#                    .format(standby_cluster_info['cluster_id'],
+#                            standby_cluster_info['ip'],
+#                            standby_cluster_info['port']))
+#
+#  except Exception, e:
+#    logging.exception("""fail to check ddl and dml sync : cluster_id = {0}, ip = {1}, port = {2}"""
+#                         .format(standby_cluster_info['cluster_id'],
+#                                 standby_cluster_info['ip'],
+#                                 standby_cluster_info['port']))
+#    raise e
+#
 #def check_ddl_and_dml_sync_by_tenant(query_cur, sys_info):
 #  try:
 #    times = 1800 # 30min
@@ -9245,13 +15394,14 @@
 #      query_cur = Cursor(cur)
 #      try:
 #        check_cluster_version(query_cur)
-#        upgrade_table_schema_version(conn, query_cur)
+#        #upgrade_storage_format_version(conn, cur)
+#        #check_storage_format_version(query_cur)
 #        check_root_inspection(query_cur)
+#        check_standby_cluster(conn, query_cur, my_user, my_passwd)
 #        enable_ddl(cur)
 #        enable_rebalance(cur)
 #        enable_rereplication(cur)
 #        enable_major_freeze(cur)
-#        enable_px_inner_sql(query_cur, cur)
 #      except Exception, e:
 #        logging.exception('run error')
 #        raise e
@@ -9373,7 +15523,7 @@
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #
@@ -9692,7 +15842,7 @@
 #'-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 #'\n\n' +\
 #'Maybe you want to run cmd like that:\n' +\
-#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+#sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 #
 #version_str = """version 1.0.0"""
 #

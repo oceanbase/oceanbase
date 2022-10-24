@@ -15,24 +15,27 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprConnectByRoot : public ObExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprConnectByRoot : public ObExprOperator
+{
 public:
-  explicit ObExprConnectByRoot(common::ObIAllocator& alloc);
-  virtual ~ObExprConnectByRoot()
-  {}
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  explicit ObExprConnectByRoot(common::ObIAllocator &alloc);
+  virtual ~ObExprConnectByRoot() {}
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int eval_connect_by_root(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  static int eval_connect_by_root(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprConnectByRoot) const;
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_CONNECT_BY_ROOT_
+}
+}
+#endif // OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_CONNECT_BY_ROOT_

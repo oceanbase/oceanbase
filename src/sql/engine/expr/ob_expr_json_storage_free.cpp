@@ -10,13 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_storage_free
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_storage_free.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/json_type/ob_json_tree.h"
 
@@ -92,22 +91,6 @@ int ObExprJsonStorageFree::calc(const T &data, ObObjType type, ObCollationType c
   return ret;
 }
 
-// for old sql engine
-int ObExprJsonStorageFree::calc_result1(common::ObObj &result, const common::ObObj &obj,
-                                        common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  
-  if (OB_ISNULL(allocator)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(obj, obj.get_type(), obj.get_collation_type(), allocator, result))) {
-    LOG_WARN("fail to calc json storage free result", K(ret), K(obj.get_type()));
-  }
-  return ret;
-}
-
 // for new sql engine
 int ObExprJsonStorageFree::eval_json_storage_free(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
@@ -123,7 +106,8 @@ int ObExprJsonStorageFree::eval_json_storage_free(const ObExpr &expr, ObEvalCtx 
   } else if (OB_FAIL(arg->eval(ctx, datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else {
-    common::ObIAllocator &tmp_allocator = ctx.get_reset_tmp_alloc();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
     if (OB_FAIL(calc(*datum, arg->datum_meta_.type_, cs_type, &tmp_allocator, res))) {
       LOG_WARN("fail to calc json free result", K(ret), K(arg->datum_meta_.type_));
     }

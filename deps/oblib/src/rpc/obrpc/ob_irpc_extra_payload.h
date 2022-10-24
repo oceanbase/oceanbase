@@ -15,63 +15,52 @@
 
 #include "lib/utility/ob_unify_serialize.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
-class ObIRpcExtraPayload {
+class ObIRpcExtraPayload
+{
 public:
-  virtual ~ObIRpcExtraPayload()
-  {}
+  virtual ~ObIRpcExtraPayload() {}
 
   virtual int64_t get_serialize_size() const = 0;
   virtual int serialize(SERIAL_PARAMS) const = 0;
   virtual int deserialize(DESERIAL_PARAMS) = 0;
 
-  static inline ObIRpcExtraPayload& instance()
-  {
-    return *instance_pointer();
-  }
+  static inline ObIRpcExtraPayload &instance() { return *instance_pointer(); }
   // not thread safe
-  static void set_extra_payload(ObIRpcExtraPayload& extra_payload)
+  static void set_extra_payload(ObIRpcExtraPayload &extra_payload)
   {
     instance_pointer() = &extra_payload;
   }
 
 private:
-  static inline ObIRpcExtraPayload*& instance_pointer();
+  static inline ObIRpcExtraPayload *&instance_pointer();
 };
 
-class ObEmptyExtraPayload : public ObIRpcExtraPayload {
+class ObEmptyExtraPayload : public ObIRpcExtraPayload
+{
 public:
-  virtual int64_t get_serialize_size() const override
-  {
-    return 0;
-  }
-  virtual int serialize(SERIAL_PARAMS) const override
-  {
-    UNF_UNUSED_SER;
-    return common::OB_SUCCESS;
-  }
-  virtual int deserialize(DESERIAL_PARAMS) override
-  {
-    UNF_UNUSED_DES;
-    return common::OB_SUCCESS;
-  }
+  virtual int64_t get_serialize_size() const override { return 0; }
+  virtual int serialize(SERIAL_PARAMS) const override { UNF_UNUSED_SER; return common::OB_SUCCESS; }
+  virtual int deserialize(DESERIAL_PARAMS) override { UNF_UNUSED_DES; return common::OB_SUCCESS; }
 
-  static ObEmptyExtraPayload& empty_instance()
+  static ObEmptyExtraPayload &empty_instance()
   {
     static ObEmptyExtraPayload global_empty_extra_payload;
     return global_empty_extra_payload;
   }
 };
 
-inline ObIRpcExtraPayload*& ObIRpcExtraPayload::instance_pointer()
+inline ObIRpcExtraPayload *&ObIRpcExtraPayload::instance_pointer()
 {
-  static ObIRpcExtraPayload* global_rpc_extra_payload = &ObEmptyExtraPayload::empty_instance();
+  static ObIRpcExtraPayload *global_rpc_extra_payload = &ObEmptyExtraPayload::empty_instance();
   return global_rpc_extra_payload;
 }
 
-}  // end namespace obrpc
-}  // end namespace oceanbase
+} // end namespace obrpc
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_OBRPC_OB_IRPC_EXTRA_PAYLOAD_H_
+#endif // OCEANBASE_OBRPC_OB_IRPC_EXTRA_PAYLOAD_H_

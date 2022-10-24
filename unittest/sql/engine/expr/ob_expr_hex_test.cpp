@@ -17,63 +17,65 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprHexTest : public ::testing::Test {
+class ObExprHexTest : public ::testing::Test
+{
 public:
   ObExprHexTest();
   virtual ~ObExprHexTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprHexTest(const ObExprHexTest& other);
-  ObExprHexTest& operator=(const ObExprHexTest& other);
-
+  ObExprHexTest(const ObExprHexTest &other);
+  ObExprHexTest& operator=(const ObExprHexTest &other);
 private:
   // data members
 };
 ObExprHexTest::ObExprHexTest()
-{}
+{
+}
 
 ObExprHexTest::~ObExprHexTest()
-{}
+{
+}
 
 void ObExprHexTest::SetUp()
-{}
+{
+}
 
 void ObExprHexTest::TearDown()
-{}
+{
+}
 
-#define EXPECT_RESULT1_NO_PARAM(str_op_object, str_buf, func, type1, ref_type)                    \
-  {                                                                                               \
-    ObObj t1;                                                                                     \
-    ObObj r;                                                                                      \
-    ObObj ref;                                                                                    \
-    t1.set_##type1();                                                                             \
-    t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                   \
-    ref.set_##ref_type();                                                                         \
-    ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                  \
-    ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);                                                \
-    int err = str_op_object.func(r, t1, expr_ctx);                                                \
-    _OB_LOG(INFO, "text=%s expect=%s result=%s", to_cstring(t1), to_cstring(ref), to_cstring(r)); \
-    EXPECT_TRUE(OB_SUCCESS == err);                                                               \
-    ASSERT_TRUE(ref.get_type() == r.get_type());                                                  \
-    if (ref.get_type() != ObNullType) {                                                           \
-      EXPECT_TRUE(ObObjCmpFuncs::compare_oper_nullsafe(ref, r, CS_TYPE_UTF8MB4_BIN, CO_EQ));      \
-    }                                                                                             \
-  }                                                                                               \
-  while (0)
-#define EXPECT_FAIL_RESULT1_NO_PARAM(str_op_object, str_buf, func, type1) \
-  {                                                                       \
-    ObObj t1;                                                             \
-    ObObj r;                                                              \
-    ObObj ref;                                                            \
-    t1.set_##type1();                                                     \
-    ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);                        \
-    int err = str_op_object.func(r, t1, expr_ctx);                        \
-    ASSERT_TRUE(OB_SUCCESS != err);                                       \
-  }                                                                       \
-  while (0)
+#define EXPECT_RESULT1_NO_PARAM(str_op_object, str_buf, func, type1, ref_type) \
+                                        {                               \
+                                         ObObj t1;                  \
+                                         ObObj r;                   \
+                                         ObObj ref;                 \
+                                         t1.set_##type1();            \
+                                         t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
+                                         ref.set_##ref_type(); \
+                                         ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
+                                         ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
+                                         int err = str_op_object.func(r, t1, expr_ctx); \
+                                         _OB_LOG(INFO, "text=%s expect=%s result=%s", to_cstring(t1), to_cstring(ref), to_cstring(r)); \
+                                         EXPECT_TRUE(OB_SUCCESS == err); \
+                                         ASSERT_TRUE(ref.get_type() == r.get_type()); \
+                                         if (ref.get_type() != ObNullType) \
+                                         { \
+                                           EXPECT_TRUE(ObObjCmpFuncs::compare_oper_nullsafe(ref, r, CS_TYPE_UTF8MB4_BIN, CO_EQ));\
+                                         } \
+                                        } while(0)
+#define EXPECT_FAIL_RESULT1_NO_PARAM(str_op_object, str_buf, func, type1)                \
+                                    {                                               \
+                                      ObObj t1;                                     \
+                                      ObObj r;                                      \
+                                      ObObj ref;                                    \
+                                      t1.set_##type1();                           \
+                                      ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
+                                      int err = str_op_object.func(r, t1, expr_ctx); \
+                                      ASSERT_TRUE(OB_SUCCESS != err); \
+                                    } while(0)
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define T_NO_PARAM(obj, t1, ref_type) EXPECT_RESULT1_NO_PARAM(obj, &buf, calc_result1, t1, ref_type)
 #define F(obj, t1, v1, ref_type, ref_value) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1)
@@ -106,9 +108,11 @@ TEST_F(ObExprHexTest, fail_test)
   T(hex, bool, false, varchar, "0");
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

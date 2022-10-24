@@ -650,7 +650,7 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
     case ObJsonNodeType::J_DOUBLE: {
       const ObJsonDouble *d = static_cast<const ObJsonDouble*>(json_tree);
       double value = d->value();
-      if (std::isnan(value) || std::isinf(value)) {
+      if (isnan(value) || isinf(value)) {
         ret = OB_INVALID_NUMERIC;
         LOG_WARN("invalid double value", K(ret), K(value));
       } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&value), sizeof(double)))) {
@@ -1322,16 +1322,11 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
       } else {
         // TODO if with key dict, read key from dict
         // to consider, add option to controll need alloc or not
-        void *key_buf = nullptr;
-        if (key_len > 0) { 
-          key_buf = allocator_->alloc(key_len);
-          if (key_buf == NULL) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to alloc memory for data buf", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
+        void *key_buf = allocator_->alloc(key_len);
+        if (key_buf == NULL) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory for data buf", K(ret));
+        } else {
           MEMCPY(key_buf, data + key_offset, key_len);
           ObString key(key_len, reinterpret_cast<const char*>(key_buf));
           const char *val = data + value_offset;
@@ -1342,7 +1337,7 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
               LOG_WARN("failed to add node to obj", K(ret));
             }
           } else {
-            LOG_WARN("failed to deserialize child node.", K(ret), K(i), K(val_type));
+            LOG_WARN("failed to deserialize child node.", K(ret), K(i), K(val_type), K(type));
           }
         }
       }
@@ -1549,12 +1544,12 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
   return ret;
 }
 
-int ObJsonBin::get_use_size(uint64_t &used_size) const
+int ObJsonBin::get_use_size(uint64_t& used_size) const
 {
   INIT_SUCC(ret);
   int32_t stk_len = stack_size(stack_buf_);
-  const char *data = curr_.ptr() + pos_;
-  ObJBVerType ver_type = static_cast<ObJBVerType>(*reinterpret_cast<const uint8_t *>(data));
+  const char* data = curr_.ptr() + pos_;
+  ObJBVerType ver_type = static_cast<ObJBVerType>(*reinterpret_cast<const uint8_t*>(data));
   ObJsonNodeType json_type = static_cast<ObJsonNodeType>(ver_type);
 
   if (stk_len == 0) {
@@ -2403,7 +2398,7 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
         old_val_entry += key_entry_size * count;
       }
 
-      uint64_t new_val_entry_offset;
+      uint64_t new_val_entry_offset = 0;
       if (OB_FAIL(result.append(reinterpret_cast<const char*>(&new_header), OB_JSON_BIN_HEADER_LEN))) {
         LOG_WARN("failed to append header", K(ret));
       } else if (OB_FAIL(ObJsonVar::append_var(count, new_header.count_size_, result))) {
@@ -2845,7 +2840,7 @@ int ObJsonBin::insert_internal_v0(ObJBNodeMeta& meta, int64_t pos, const ObStrin
     meta_len += key_entry_size * count;
   }
 
-  uint64_t new_val_entry_offset;
+  uint64_t new_val_entry_offset = 0;
   if (OB_FAIL(result.reserve(meta.obj_size_))) {
     LOG_WARN("failed to reserve mem", K(ret), K(meta.obj_size_));
   } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&new_header), OB_JSON_BIN_HEADER_LEN))) {
@@ -3362,7 +3357,7 @@ int ObJsonBin::remove_v0(size_t index)
       uint64_t new_obj_size;
       uint64_t count_var_size = ObJsonVar::get_var_size(header->count_size_);
       if (OB_FAIL(ObJsonVar::read_var(header->used_size_ + count_var_size, header->obj_size_size_, &new_obj_size))) {
-        LOG_WARN("fail to read header obj size.", K(ret), K(header->used_size_), K(header->obj_size_size_));
+        LOG_WARN("fail to read header obj size.", K(ret), KP(header->used_size_), K(header->obj_size_size_));
       } else {
         new_obj_size += bytes_changed;
         if (OB_FAIL(ObJsonVar::set_var(new_obj_size, header->obj_size_size_, header->used_size_ + count_var_size))) {
@@ -3685,21 +3680,12 @@ int ObJsonBin::rebuild_json_value(const char *data,
       break;
     }
     case ObJsonNodeType::J_DECIMAL: {
-      ObPrecision prec = -1;
-      ObScale scale = -1;
-      number::ObNumber num;
       int64_t pos = 0;
-      if (OB_FAIL(serialization::decode_i16(data, length, pos, &prec))) {
-        LOG_WARN("fail to deserialize decimal precision.", K(ret), K(length));
-      } else if (OB_FAIL(serialization::decode_i16(data, length, pos, &scale))) {
-        LOG_WARN("fail to deserialize decimal scale.", K(ret), K(length), K(prec));
-      } else if (OB_FAIL(num.deserialize(data, length, pos))) {
-        LOG_WARN("fail to deserialize number.", K(ret), K(length));
+      number::ObNumber temp_number;
+      if (OB_FAIL(temp_number.deserialize(data, length, pos))) {
+        LOG_WARN("failed to deserialize decimal data", K(ret));
       } else {
-        ObJsonDecimal decimal(num, prec, scale);
-        if (OB_FAIL(serialize_json_decimal(&decimal, result))) {
-          LOG_WARN("failed to seialize json decimal", K(ret));
-        }
+        ret = result.append(data, pos);
       }
       break;
     }
@@ -4325,7 +4311,7 @@ int ObJsonVar::read_var(const char *data, uint8_t type, int64_t *var)
 uint64_t ObJsonVar::var_int2uint(int64_t var)
 {
   ObJsonBinLenSize size = static_cast<ObJsonBinLenSize>(ObJsonVar::get_var_type(var));
-  uint64_t val = 0;
+  uint64 val = 0;
   switch (size) {
     case JBLS_UINT8: {
       val = static_cast<uint64_t>(static_cast<int8_t>(var));
@@ -4402,4 +4388,3 @@ uint8_t ObJsonVar::get_var_type(int64_t var)
 }
 } // namespace common
 } // namespace oceanbase
-

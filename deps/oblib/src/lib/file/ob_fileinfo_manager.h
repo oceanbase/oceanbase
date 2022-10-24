@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
-#define OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
+#ifndef  OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
+#define  OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/vfs.h>
@@ -24,30 +24,33 @@
 #include <algorithm>
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
-class IFileInfo {
+namespace oceanbase
+{
+namespace common
+{
+class IFileInfo
+{
 public:
-  virtual ~IFileInfo(){};
-
+  virtual ~IFileInfo() {};
 public:
   virtual int get_fd() const = 0;
 };
 
-class IFileInfoMgr {
+class IFileInfoMgr
+{
 public:
-  virtual ~IFileInfoMgr(){};
-
+  virtual ~IFileInfoMgr() {};
 public:
-  virtual const IFileInfo* get_fileinfo(const uint64_t key_id) = 0;
-  virtual int revert_fileinfo(const IFileInfo* file_info) = 0;
+  virtual const IFileInfo *get_fileinfo(const uint64_t key_id) = 0;
+  virtual int revert_fileinfo(const IFileInfo *file_info) = 0;
   virtual int erase_fileinfo(const uint64_t key_id)
   {
     UNUSED(key_id);
     return OB_NOT_SUPPORTED;
   };
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
+#endif //OCEANBASE_UPDATESERVER_FILEINFO_MANAGER_H_
+

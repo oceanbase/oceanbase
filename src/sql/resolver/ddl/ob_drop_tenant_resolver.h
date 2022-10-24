@@ -15,15 +15,17 @@
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "lib/container/ob_se_array.h"
-namespace oceanbase {
-namespace sql {
-class ObDropTenantResolver : public ObDDLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropTenantResolver: public ObDDLResolver
+{
 public:
-  explicit ObDropTenantResolver(ObResolverParams& params);
+  explicit ObDropTenantResolver(ObResolverParams &params);
   virtual ~ObDropTenantResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // types and constants
 private:
@@ -34,7 +36,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_RESOLVER_DDL_DROP_TENANT_RESOLVER_ */

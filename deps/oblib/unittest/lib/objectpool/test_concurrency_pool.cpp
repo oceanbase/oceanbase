@@ -13,9 +13,16 @@
 #include <pthread.h>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
+#include <gtest/gtest.h>
 
 using namespace oceanbase;
+using namespace oceanbase::lib;
 using namespace common;
+
+class COP
+    : public ::testing::Test
+{
+};
 
 #define obj_alloc(type) op_alloc(type)
 #define obj_free(ptr) op_free(ptr)
@@ -27,42 +34,45 @@ using namespace common;
 #define obj_reclaim_free(ptr) op_reclaim_free(ptr)
 
 template <int64_t size>
-struct FixedMemStruct {
+struct FixedMemStruct
+{
   char data_[size];
 };
 #define fixed_mem_alloc(size) obj_tc_alloc(FixedMemStruct<size>)
-#define fixed_mem_free(ptr, size) obj_tc_free((FixedMemStruct<size>*)ptr)
+#define fixed_mem_free(ptr, size) obj_tc_free((FixedMemStruct<size> *)ptr)
 
-struct TestObject1 {
+struct TestObject1
+{
   static const int64_t OP_LOCAL_NUM = 1280000;
 
-  TestObject1() : next_(NULL)
-  {}
-  void* next_;
+  TestObject1() : next_(NULL) {}
+  void *next_;
   char data_[8];
 };
 
-struct TestObject2 : public TestObject1 {
+struct TestObject2 : public TestObject1
+{
   char other_[16];
 };
 
-struct TestObject3 : public TestObject1 {
+struct TestObject3 : public TestObject1
+{
   char other_[16];
 };
 
-struct TestObject4 : public TestObject1 {
+struct TestObject4 : public TestObject1
+{
   char other_[32];
 };
 
-struct TestObject5 : public TestObject1 {
+struct TestObject5 : public TestObject1
+{
   char other_[48];
 };
 
-struct TestStat {
-  TestStat()
-  {
-    memset(this, 0, sizeof(TestStat));
-  }
+struct TestStat
+{
+  TestStat() { memset(this, 0, sizeof(TestStat)); }
   volatile int64_t global_alloc_count_;
   volatile int64_t global_alloc_time_;
   volatile int64_t global_free_count_;
@@ -88,55 +98,58 @@ volatile int64_t prepared3 = 0;
 volatile int64_t prepared4 = 0;
 static const int64_t THREAD_COUNT = 15;
 
-void test_fixed_mem_op()
+TEST(COP, test_fixed_mem_op)
 {
-  void* ptr = fixed_mem_alloc(2048);
+  void *ptr =  fixed_mem_alloc(2048);
   OB_ASSERT(NULL != ptr);
   fixed_mem_free(ptr, 2048);
 }
 
-void test_global_op()
+TEST(COP, test_global_op)
 {
-  TestObject1* obj = NULL;
+  TestObject1 *obj = NULL;
   obj = obj_alloc(TestObject1);
   OB_ASSERT(NULL != obj);
   obj_free(obj);
 
   ObObjFreeListList::get_freelists().dump();
-  ObObjFreeListList::get_freelists().snap_baseline();
 }
 
-void test_tc_op()
+TEST(COP, test_tc_op)
 {
-  TestObject2* obj2 = NULL;
+  TestObject2 *obj2 = NULL;
   obj2 = obj_tc_alloc(TestObject2);
   OB_ASSERT(NULL != obj2);
   obj_tc_free(obj2);
 
   // reuse freelist of TestObject2
-  TestObject3* obj3 = obj_tc_alloc(TestObject3);
+  TestObject3 *obj3 = obj_tc_alloc(TestObject3);
   OB_ASSERT(NULL != obj3);
   obj_tc_free(obj3);
 
-  // double free
-  // obj_tc_free(obj3);
+  //double free
+  //obj_tc_free(obj3);
 
-  TestObject4* obj4 = obj_reclaim_alloc(TestObject4);
+  TestObject4 *obj4 = obj_reclaim_alloc(TestObject4);
   OB_ASSERT(NULL != obj4);
   obj_reclaim_free(obj4);
-  // double free
-  // obj_reclaim_free(obj4);
+  //double free
+  //obj_reclaim_free(obj4);
 
   ObObjFreeListList::get_freelists().dump();
-  ObObjFreeListList::get_freelists().dump_baselinerel();
 }
 
-enum AllocType { GLOBAL, TC, RECLAIM };
+enum AllocType
+{
+  GLOBAL,
+  TC,
+  RECLAIM
+};
 
 template <class T>
-void alloc_objs(T& head, int64_t count, AllocType type = TC)
+void alloc_objs(T &head, int64_t count, AllocType type = TC)
 {
-  T* obj = NULL;
+  T *obj = NULL;
 
   for (int64_t i = 0; i < count; i++) {
     if (GLOBAL == type) {
@@ -153,11 +166,11 @@ void alloc_objs(T& head, int64_t count, AllocType type = TC)
 }
 
 template <class T>
-void free_objs(T& head, int64_t count, AllocType type = TC)
+void free_objs(T &head, int64_t count, AllocType type = TC)
 {
-  T* obj = NULL;
+  T *obj = NULL;
   for (int64_t i = 0; i < count; i++) {
-    obj = (T*)head.next_;
+    obj = (T *)head.next_;
     if (NULL == obj) {
       break;
     }
@@ -172,7 +185,7 @@ void free_objs(T& head, int64_t count, AllocType type = TC)
   }
 }
 
-void test_reclaim()
+TEST(COP, test_reclaim)
 {
   TestObject4 head4;
   alloc_objs<TestObject4>(head4, 10000, RECLAIM);
@@ -185,10 +198,10 @@ void test_reclaim()
   ObObjFreeListList::get_freelists().dump();
 }
 
-void* thread_func(void* arg)
+void *thread_func(void *arg)
 {
   UNUSED(arg);
-  int64_t index = *(int64_t*)arg;
+  int64_t index = *(int64_t *)arg;
 
   TestObject1 head1;
   TestObject2 head2;
@@ -245,7 +258,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   free_objs<TestObject1>(head1, INT64_MAX, GLOBAL);
@@ -254,10 +267,10 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
-  // int64_t alloc_count = 1000000L;
+  //int64_t alloc_count = 1000000L;
   int64_t start_time = ::oceanbase::common::ObTimeUtility::current_time();
   alloc_objs<TestObject1>(head1, alloc_count, GLOBAL);
   int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -266,7 +279,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -277,7 +290,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -288,7 +301,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -299,7 +312,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -310,7 +323,7 @@ void* thread_func(void* arg)
 
   ATOMIC_FAA(&prepared, 1);
   while (0 != prepared % THREAD_COUNT) {
-    this_routine::usleep(10000);
+    ::usleep(10000);
   }
 
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
@@ -366,7 +379,7 @@ void single_thread_perf()
   ATOMIC_FAA(&single_thread_perf_stat.reclaim_free_time_, end_time - start_time);
 }
 
-void thread_run()
+TEST(COP, test_thread_run)
 {
   pthread_t id[THREAD_COUNT];
   srandom((uint32_t)time(NULL));
@@ -378,7 +391,7 @@ void thread_run()
     }
   }
 
-  void* ret = NULL;
+  void *ret = NULL;
   for (int64_t i = 0; i < THREAD_COUNT; i++) {
     pthread_join(id[i], &ret);
   }
@@ -388,34 +401,25 @@ void thread_run()
   ObObjFreeListList::get_freelists().dump();
   printf("%15s %15s %15s %15s %15s %15s %15s\n", "type", "gp", "sgp", "tp", "stp", "rp", "srp");
   printf("%15s %15ld %15ld %15ld %15ld %15ld %15ld\n",
-      "alloc",
-      perf_stat.global_alloc_count_ * 1000L * 1000L / perf_stat.global_alloc_time_,
-      single_thread_perf_stat.global_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.global_alloc_time_,
-      perf_stat.tc_alloc_count_ * 1000L * 1000L / perf_stat.tc_alloc_time_,
-      single_thread_perf_stat.tc_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.tc_alloc_time_,
-      perf_stat.reclaim_alloc_count_ * 1000L * 1000L / perf_stat.reclaim_alloc_time_,
-      single_thread_perf_stat.reclaim_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.reclaim_alloc_time_);
+         "alloc",
+         perf_stat.global_alloc_count_ * 1000L * 1000L / perf_stat.global_alloc_time_,
+         single_thread_perf_stat.global_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.global_alloc_time_,
+         perf_stat.tc_alloc_count_ * 1000L * 1000L / perf_stat.tc_alloc_time_,
+         single_thread_perf_stat.tc_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.tc_alloc_time_,
+         perf_stat.reclaim_alloc_count_ * 1000L * 1000L / perf_stat.reclaim_alloc_time_,
+         single_thread_perf_stat.reclaim_alloc_count_ * 1000L * 1000L / single_thread_perf_stat.reclaim_alloc_time_);
   printf("%15s %15ld %15ld %15ld %15ld %15ld %15ld\n",
-      "free",
-      perf_stat.global_free_count_ * 1000L * 1000L / perf_stat.global_free_time_,
-      single_thread_perf_stat.global_free_count_ * 1000L * 1000L / single_thread_perf_stat.global_free_time_,
-      perf_stat.tc_free_count_ * 1000L * 1000L / perf_stat.tc_free_time_,
-      single_thread_perf_stat.tc_free_count_ * 1000L * 1000L / single_thread_perf_stat.tc_free_time_,
-      perf_stat.reclaim_free_count_ * 1000L * 1000L / perf_stat.reclaim_free_time_,
-      single_thread_perf_stat.reclaim_free_count_ * 1000L * 1000L / single_thread_perf_stat.reclaim_free_time_);
+         "free",
+         perf_stat.global_free_count_ * 1000L * 1000L / perf_stat.global_free_time_,
+         single_thread_perf_stat.global_free_count_ * 1000L * 1000L / single_thread_perf_stat.global_free_time_,
+         perf_stat.tc_free_count_ * 1000L * 1000L / perf_stat.tc_free_time_,
+         single_thread_perf_stat.tc_free_count_ * 1000L * 1000L / single_thread_perf_stat.tc_free_time_,
+         perf_stat.reclaim_free_count_ * 1000L * 1000L / perf_stat.reclaim_free_time_,
+         single_thread_perf_stat.reclaim_free_count_ * 1000L * 1000L / single_thread_perf_stat.reclaim_free_time_);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  UNUSED(argc);
-  UNUSED(argv);
-
-  test_fixed_mem_op();
-  test_global_op();
-  test_tc_op();
-  test_reclaim();
-
-  thread_run();
-
-  return 0;
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

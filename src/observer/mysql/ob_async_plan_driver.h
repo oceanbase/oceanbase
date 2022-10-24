@@ -15,27 +15,36 @@
 
 #include "observer/mysql/ob_query_driver.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace sql {
-class ObSqlCtx;
+namespace sql
+{
+struct ObSqlCtx;
 class ObSQLSessionInfo;
-}  // namespace sql
+}
 
-namespace observer {
+
+namespace observer
+{
 
 class ObIMPPacketSender;
-class ObGlobalContext;
+struct ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObSqlEndTransCb;
-class ObAsyncPlanDriver : public ObQueryDriver {
+class ObAsyncPlanDriver : public ObQueryDriver
+{
 public:
-  ObAsyncPlanDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-      ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender);
+  ObAsyncPlanDriver(const ObGlobalContext &gctx,
+                    const sql::ObSqlCtx &ctx,
+                    sql::ObSQLSessionInfo &session,
+                    ObQueryRetryCtrl &retry_ctrl,
+                    ObIMPPacketSender &sender,
+                    bool is_prexecute = false);
   virtual ~ObAsyncPlanDriver();
 
-  virtual int response_result(ObMySQLResultSet& result);
+  virtual int response_result(ObMySQLResultSet &result);
 
 private:
   /* functions */
@@ -44,7 +53,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAsyncPlanDriver);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+
+}
+}
 #endif /* OCEANBASE_OBSERVER_MYSQL_ASYNC_PLAN_DRIVER_ */
 //// end of header file
+

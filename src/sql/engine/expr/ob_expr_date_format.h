@@ -17,51 +17,52 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprDateFormat : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprDateFormat : public ObStringExprOperator
+{
 public:
-  explicit ObExprDateFormat(common::ObIAllocator& alloc);
+  explicit  ObExprDateFormat(common::ObIAllocator &alloc);
   virtual ~ObExprDateFormat();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& date, const common::ObObj& format, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_date_format(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int calc_date_format_invalid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &date,
+                                ObExprResType &format,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
 
   static const int64_t OB_MAX_DATE_FORMAT_BUF_LEN = 1024;
-  static void check_reset_status(common::ObExprCtx& expr_ctx, int& ret, common::ObObj& result);
+  static void check_reset_status(common::ObExprCtx &expr_ctx, int &ret, common::ObObj &result);
 };
 
-inline int ObExprDateFormat::calc_result_type2(
-    ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprDateFormat::calc_result_type2(ObExprResType &type,
+                                               ObExprResType &date,
+                                               ObExprResType &format,
+                                               common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(date);
   UNUSED(format);
   int ret = common::OB_SUCCESS;
-  //  common::ObCollationType collation_connection = common::CS_TYPE_INVALID;
+//  common::ObCollationType collation_connection = common::CS_TYPE_INVALID;
   type.set_varchar();
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type.set_length(DATETIME_MAX_LENGTH);
 
-  const ObSQLSessionInfo* session = type_ctx.get_session();
-  if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if (session->use_static_typing_engine()) {
-    date.set_calc_collation_type(type.get_collation_type());
-    format.set_calc_collation_type(type.get_collation_type());
-  }
+  date.set_calc_collation_type(type.get_collation_type());
+  format.set_calc_collation_type(type.get_collation_type());
 
   if (OB_SUCC(ret)) {
-    // for enum or set obj, we need calc type
+    //for enum or set obj, we need calc type
     if (ob_is_enum_or_set_type(date.get_type())) {
       date.set_calc_type(common::ObVarcharType);
     } else if (ob_is_double_tc(date.get_type()) || ob_is_float_tc(date.get_type())) {
@@ -85,10 +86,6 @@ public:
                                 ObExprResType &unit,
                                 ObExprResType &format,
                                 common::ObExprTypeCtx &type_ctx) const;
-  virtual int calc_result2(common::ObObj &result,
-                           const common::ObObj &unit,
-                           const common::ObObj &format,
-                           common::ObExprCtx &expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -114,7 +111,7 @@ private:
 
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} //sql
+} //oceanbase
 
-#endif  // OCEANBASE_SQL_OB_EXPR_DATE_FORMAT_H_
+#endif //OCEANBASE_SQL_OB_EXPR_DATE_FORMAT_H_

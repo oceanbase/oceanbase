@@ -16,22 +16,29 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "lib/stat/ob_session_stat.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObTenantVirtualStatname : public common::ObVirtualTableScannerIterator {
+class ObTenantVirtualStatname : public common::ObVirtualTableScannerIterator
+{
 public:
   ObTenantVirtualStatname();
   virtual ~ObTenantVirtualStatname();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-  inline void set_tenant_id(const uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
+  virtual int inner_get_next_row(common::ObNewRow *&row);
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   virtual void reset();
-
 private:
-  enum SYS_COLUMN { TENANT_ID = common::OB_APP_MIN_COLUMN_ID, STAT_ID, STATISTIC_NO, NAME, DISPLAY_NAME, CLASS };
+  enum SYS_COLUMN
+  {
+    TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
+    STAT_ID,
+    STATISTIC_NO,
+    NAME,
+    DISPLAY_NAME,
+    CLASS
+  };
   int32_t stat_iter_;
   uint64_t tenant_id_;
   common::ObObj cells_[common::OB_ROW_MAX_COLUMNS_COUNT];

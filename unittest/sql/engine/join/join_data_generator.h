@@ -17,9 +17,12 @@
 #include "sql/engine/ob_phy_operator.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
-class JoinDataGenerator : public ObPhyOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class JoinDataGenerator : public ObPhyOperator
+{
 public:
   const static int64_t CELL_CNT = 4;
 
@@ -30,50 +33,32 @@ public:
 
   const static int64_t INT_VARCHAR_BUF_SIZE = 10;
 
-  class Ctx : public ObPhyOperatorCtx {
+  class Ctx : public ObPhyOperatorCtx
+  {
   public:
-    Ctx(ObExecContext& c) : ObPhyOperatorCtx(c)
-    {}
-    virtual void destroy()
-    {
-      return ObPhyOperatorCtx::destroy_base();
-    }
+    Ctx(ObExecContext &c) : ObPhyOperatorCtx(c) {}
+    virtual void destroy() { return ObPhyOperatorCtx::destroy_base(); }
   };
 
-  explicit JoinDataGenerator(common::ObIAllocator& alloc) : ObPhyOperator(alloc)
+  explicit JoinDataGenerator(common::ObIAllocator &alloc) : ObPhyOperator(alloc)
   {
     type_ = PHY_TABLE_SCAN;
   }
 
-  virtual int set_child(int32_t, ObPhyOperator&)
-  {
-    return common::OB_SUCCESS;
-  }
-  virtual ObPhyOperator* get_child(int32_t) const
-  {
-    return NULL;
-  }
-  virtual int32_t get_child_num() const
-  {
-    return 0;
-  }
-  virtual int inner_get_next_row(ObExecContext&, const common::ObNewRow*&) const
-  {
-    return common::OB_SUCCESS;
-  }
-  int close(ObExecContext&) const
-  {
-    return common::OB_SUCCESS;
-  }
+  virtual int set_child(int32_t, ObPhyOperator &) { return common::OB_SUCCESS; }
+  virtual ObPhyOperator *get_child(int32_t) const { return NULL; }
+  virtual int32_t get_child_num() const { return 0; }
+  virtual int inner_get_next_row(ObExecContext &, const common::ObNewRow *&) const { return common::OB_SUCCESS; }
+  int close(ObExecContext &) const { return common::OB_SUCCESS; }
 
   ~JoinDataGenerator()
   {
     if (str_) {
-      delete[] str_;
+      delete []str_;
       str_ = NULL;
     }
     if (projector_) {
-      delete[] projector_;
+      delete []projector_;
       projector_ = NULL;
     }
   }
@@ -82,16 +67,16 @@ public:
   int test_init()
   {
     int ret = OB_SUCCESS;
-    if (NULL == projector_) {
-      projector_ = new int32_t[CELL_CNT];
-      projector_size_ = CELL_CNT;
-      for (int i = 0; i < CELL_CNT; i++) {
-        projector_[i] = i;
-      }
-    }
+	if (NULL == projector_) {
+		projector_ = new int32_t[CELL_CNT];
+		projector_size_ = CELL_CNT;
+		for (int i = 0; i < CELL_CNT; i++) {
+			projector_[i] = i;
+		}
+	}
     set_column_count(CELL_CNT);
 
-    row_id_ = 0;
+	row_id_ = 0;
     if (reverse_) {
       row_id_ = row_cnt_ - 1;
     }
@@ -104,13 +89,13 @@ public:
     return ret;
   }
 
-  virtual int init_op_ctx(ObExecContext& ec) const override
+  virtual int init_op_ctx(ObExecContext &ec) const override
   {
-    Ctx* ctx = NULL;
+    Ctx *ctx = NULL;
     return CREATE_PHY_OPERATOR_CTX(Ctx, ec, get_id(), get_type(), ctx);
   }
 
-  virtual int inner_open(ObExecContext& ec) const override
+  virtual int inner_open(ObExecContext &ec) const override
   {
     return init_op_ctx(ec);
   }
@@ -122,7 +107,7 @@ public:
     idx_cnt_ = 0;
   }
 
-  virtual int get_next_row(ObExecContext&, const common::ObNewRow*& row) const override
+  virtual int get_next_row(ObExecContext &, const common::ObNewRow *&row) const override
   {
     while (true) {
       if (row_id_ < 0 || row_id_ >= row_cnt_) {
@@ -150,19 +135,22 @@ public:
 
     int64_t rand = murmurhash64A(&row_id_, sizeof(row_id_), 0);
     rand = murmurhash64A(&idx_, sizeof(idx_), (uint64_t)rand);
-    ObObj* objs[] = {&cells_[ROW_ID_CELL], &cells_[IDX_CELL], &cells_[RAND_CELL]};
-    int64_t ints[] = {row_id_val_(row_id_), idx_val_(idx_), rand};
+    ObObj *objs[] = { &cells_[ROW_ID_CELL], &cells_[IDX_CELL], &cells_[RAND_CELL] };
+    int64_t ints[] = { row_id_val_(row_id_), idx_val_(idx_), rand };
     if (!gen_varchar_cell_) {
       for (int64_t i = 0; i < ARRAYSIZEOF(objs); i++) {
         objs[i]->set_int(ints[i]);
       }
     } else {
-      char* bufs[] = {&int_varchar_buf_[ROW_ID_CELL * INT_VARCHAR_BUF_SIZE],
-          &int_varchar_buf_[IDX_CELL * INT_VARCHAR_BUF_SIZE],
-          &int_varchar_buf_[RAND_CELL * INT_VARCHAR_BUF_SIZE]};
+      char *bufs[] = {
+        &int_varchar_buf_[ROW_ID_CELL * INT_VARCHAR_BUF_SIZE],
+        &int_varchar_buf_[IDX_CELL * INT_VARCHAR_BUF_SIZE],
+        &int_varchar_buf_[RAND_CELL * INT_VARCHAR_BUF_SIZE]
+      };
 
       for (int64_t i = 0; i < ARRAYSIZEOF(objs); i++) {
-        snprintf(bufs[i], INT_VARCHAR_BUF_SIZE, "%0.*ld", (int)INT_VARCHAR_BUF_SIZE, ints[i]);
+        // '0' flag ignored with precision and ‘%d’ gnu_printf format
+        snprintf(bufs[i], INT_VARCHAR_BUF_SIZE, "%.*ld", (int)INT_VARCHAR_BUF_SIZE, ints[i]);
         objs[i]->set_varchar(bufs[i], INT_VARCHAR_BUF_SIZE);
       }
     }
@@ -187,11 +175,11 @@ private:
   mutable int64_t row_id_ = 0;
   mutable int64_t idx_ = 0;
   mutable int64_t idx_cnt_ = 0;
-  mutable char* str_ = NULL;
+  mutable char *str_ = NULL;
   mutable char int_varchar_buf_[CELL_CNT * INT_VARCHAR_BUF_SIZE];
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end sql
+} // end oceanbase
 
-#endif  // OCEANBASE_JOIN_JOIN_DATA_GENERATOR_H_
+#endif // OCEANBASE_JOIN_JOIN_DATA_GENERATOR_H_

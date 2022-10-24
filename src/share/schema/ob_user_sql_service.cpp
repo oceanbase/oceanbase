@@ -21,41 +21,58 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 
 int ObUserSqlService::create_user(
-    const ObUserInfo& user, const int64_t new_schema_version, const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+    const ObUserInfo &user,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const ObSchemaOperationType type = OB_DDL_CREATE_USER;
   if (!user.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input arguments error", K(user), K(ret));
-  } else if (OB_FAIL(replace_user(user, new_schema_version, ddl_stmt_str, sql_client, type))) {
+  } else if (OB_FAIL(replace_user(user, new_schema_version,
+                                  ddl_stmt_str, sql_client,
+                                  type))) {
     LOG_WARN("failed to replace user", K(ret), K(user));
   }
   return ret;
 }
-
+ 
 int ObUserSqlService::alter_user(
-    const ObUserInfo& user, const int64_t new_schema_version, const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+    const ObUserInfo &user,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const ObSchemaOperationType type = OB_DDL_ALTER_USER;
   if (!user.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input arguments error", K(user), K(ret));
-  } else if (OB_FAIL(replace_user(user, new_schema_version, ddl_stmt_str, sql_client, type))) {
+  } else if (OB_FAIL(replace_user(user, new_schema_version,
+                                  ddl_stmt_str, sql_client,
+                                  type))) {
     LOG_WARN("failed to replace user", K(ret), K(user));
   }
   return ret;
 }
-
-int ObUserSqlService::replace_user(const ObUserInfo& user, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client, const ObSchemaOperationType type)
+ 
+int ObUserSqlService::replace_user(
+    const ObUserInfo &user,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const ObSchemaOperationType type)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user.get_tenant_id();
@@ -101,35 +118,42 @@ int ObUserSqlService::replace_user(const ObUserInfo& user, const int64_t new_sch
   return ret;
 }
 
-int ObUserSqlService::drop_user_delete_role_grantee_map(const uint64_t tenant_id, bool is_role,
-    const uint64_t new_schema_version, const ObUserInfo* user, const ObString* ddl_stmt_str, ObISQLClient& sql_client,
-    ObSchemaGetterGuard& schema_guard)
+int ObUserSqlService::drop_user_delete_role_grantee_map(
+  const uint64_t tenant_id,
+  bool is_role,
+  const uint64_t new_schema_version,
+  const ObUserInfo *user,
+  const ObString *ddl_stmt_str,
+  ObISQLClient &sql_client,
+  ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  CK(NULL != user);
+  CK (NULL != user);
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user->get_user_id();
-  const ObUserInfo* tmp_user = NULL;
+  const ObUserInfo *tmp_user = NULL;
   int64_t affected_rows = 0;
-  common::ObSEArray<uint64_t, 8> schema_id_array = is_role ? user->get_grantee_id_array() : user->get_role_id_array();
+  common::ObSEArray<uint64_t, 8> schema_id_array = is_role
+      ? user->get_grantee_id_array()
+      : user->get_role_id_array();
   const bool is_need_update = schema_id_array.count() > 0;
   if (is_need_update) {
-    common::ObArray<ObUserInfo> user_infos;  // used to update related users' schema version
-    ObSqlString del_sql;                     // from __all_tenant_role_grantee_map
-    ObSqlString insert_sql;                  // insert into __all_tenant_role_grantee_map_history
+    common::ObArray<ObUserInfo> user_infos; // used to update related users' schema version
+    ObSqlString del_sql; // from __all_tenant_role_grantee_map
+    ObSqlString insert_sql; // insert into __all_tenant_role_grantee_map_history
     bool is_first = true;
     // delete row from __all_tenant_role_grantee_map
     if (is_role) {
       if (OB_FAIL(del_sql.append_fmt("DELETE FROM %s WHERE TENANT_ID = %lu and ROLE_ID = %lu and GRANTEE_ID IN (",
-              OB_ALL_TENANT_ROLE_GRANTEE_MAP_TNAME,
-              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))) {
+          OB_ALL_TENANT_ROLE_GRANTEE_MAP_TNAME,
+          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+          ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))) {
         LOG_WARN("append table name failed, ", K(ret), K(tenant_id), K(user_id));
       }
     } else if (FAILEDx(del_sql.append_fmt("DELETE FROM %s WHERE TENANT_ID = %lu and GRANTEE_ID = %lu and ROLE_ID IN (",
-                   OB_ALL_TENANT_ROLE_GRANTEE_MAP_TNAME,
-                   ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                   ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))) {
+        OB_ALL_TENANT_ROLE_GRANTEE_MAP_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+        ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))) {
       LOG_WARN("append table name failed, ", K(ret), K(tenant_id), K(user_id));
     }
 
@@ -143,8 +167,8 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(const uint64_t tenant_id
       const uint64_t id = schema_id_array.at(i);
       // collect user infos
       tmp_user = NULL;
-      if (OB_FAIL(schema_guard.get_user_info(id, tmp_user))) {
-        LOG_WARN("failed to get user info", K(ret), K(id));
+      if (OB_FAIL(schema_guard.get_user_info(tenant_id, id, tmp_user))) {
+        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(id));
       } else if (NULL == tmp_user) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user info is null", K(ret), K(id));
@@ -172,14 +196,14 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(const uint64_t tenant_id
         }
       }
       const int64_t is_deleted = 1;
-      if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)",
-              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? id : user_id),
-              ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? user_id : id),
-              new_schema_version,
-              is_deleted,
-              static_cast<uint64_t>(0), /* admin option.  to do */
-              static_cast<uint64_t>(0) /* disable flag.  to do */))) {
+      if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)", 
+          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
+          ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? id : user_id), 
+          ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? user_id : id),
+          new_schema_version, 
+          is_deleted,
+          static_cast<uint64_t>(0), /* admin option. xinqi.zlm to do */
+          static_cast<uint64_t>(0)/* disable flag. xinqi.zlm to do */))) {
         LOG_WARN("append sql failed, ", K(ret));
       }
       is_first = false;
@@ -206,15 +230,23 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(const uint64_t tenant_id
       }
     }
     // update related users' schema version
-    if (FAILEDx((update_user_schema_version(tenant_id, user_infos, ddl_stmt_str, sql_client)))) {
+    if (FAILEDx((update_user_schema_version(tenant_id,
+        user_infos,
+        ddl_stmt_str,
+        sql_client)))) {
       LOG_WARN("Failed to grant or revoke user", K(exec_tenant_id), K(ret));
     }
   }
   return ret;
 }
 
-int ObUserSqlService::drop_user(const uint64_t tenant_id, const uint64_t user_id, const uint64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client, ObSchemaGetterGuard& schema_guard)
+int ObUserSqlService::drop_user(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   static const int64_t IS_DELETED = 1;
@@ -228,9 +260,11 @@ int ObUserSqlService::drop_user(const uint64_t tenant_id, const uint64_t user_id
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-          OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-          OB_FAIL(dml.add_gmt_modified())) {
+      if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                                 exec_tenant_id, tenant_id)))
+          || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                  exec_tenant_id, user_id)))
+          || OB_FAIL(dml.add_gmt_modified())) {
         LOG_WARN("add column failed", K(ret));
       }
     }
@@ -245,8 +279,8 @@ int ObUserSqlService::drop_user(const uint64_t tenant_id, const uint64_t user_id
 
     // mark delete __all_user_history
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version)) ||
-          OB_FAIL(dml.add_column("is_deleted", IS_DELETED))) {
+      if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+          || OB_FAIL(dml.add_column("is_deleted", IS_DELETED))) {
         LOG_WARN("add column failed", K(ret));
       } else if (OB_FAIL(exec.exec_replace(OB_ALL_USER_HISTORY_TNAME, dml, affected_rows))) {
         LOG_WARN("execute sql failed", K(ret));
@@ -274,47 +308,54 @@ int ObUserSqlService::drop_user(const uint64_t tenant_id, const uint64_t user_id
   // 2. If dropping user is:
   //    1). role: update related grantees' schema version
   //    2). grantee: update related roles' schema version
-  const ObUserInfo* user = NULL;
-  if (FAILEDx(schema_guard.get_user_info(user_id, user))) {
-    LOG_WARN("failed to get user info", K(ret), K(user_id));
+  const ObUserInfo *user = NULL;
+  if (FAILEDx(schema_guard.get_user_info(tenant_id, user_id, user))) {
+    LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
   } else if (NULL == user) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user info is null", K(ret), K(user_id));
   } else {
     const bool is_role = user->is_role();
 
-    OZ(drop_user_delete_role_grantee_map(
-        tenant_id, is_role, new_schema_version, user, ddl_stmt_str, sql_client, schema_guard));
+    OZ (drop_user_delete_role_grantee_map(tenant_id, is_role, new_schema_version,
+                                          user, ddl_stmt_str, sql_client, schema_guard));
     if (OB_SUCC(ret) && is_role) {
-      OZ(drop_user_delete_role_grantee_map(
-          tenant_id, false, new_schema_version, user, ddl_stmt_str, sql_client, schema_guard));
+      OZ (drop_user_delete_role_grantee_map(tenant_id, false, new_schema_version,
+                                            user, ddl_stmt_str, sql_client, schema_guard));
     }
   }
 
   return ret;
 }
 
-int ObUserSqlService::rename_user(const ObUserInfo& user_info, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::rename_user(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
-  const ObString& new_user_name = user_info.get_user_name_str();
-  const ObString& new_host_name = user_info.get_host_name_str();
+  const ObString &new_user_name = user_info.get_user_name_str();
+  const ObString &new_host_name = user_info.get_host_name_str();
   ObSqlString sql_string;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+     || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-        OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-        OB_FAIL(dml.add_column("user_name", new_user_name)) || OB_FAIL(dml.add_column("host", new_host_name)) ||
-        OB_FAIL(dml.add_gmt_modified())) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("user_name", new_user_name))
+        || OB_FAIL(dml.add_column("host", new_host_name))
+        || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
 
@@ -347,26 +388,68 @@ int ObUserSqlService::rename_user(const ObUserInfo& user_info, const int64_t new
   return ret;
 }
 
-int ObUserSqlService::set_passwd(const ObUserInfo& user_info, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::alter_role(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_passwd_impl(user_info, 
+                              new_schema_version, 
+                              ddl_stmt_str, 
+                              sql_client, 
+                              OB_DDL_ALTER_ROLE))) {
+    LOG_WARN("fail to set_passwd_impl");
+  }
+  return ret;
+}
+
+int ObUserSqlService::set_passwd(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_passwd_impl(user_info, 
+                              new_schema_version, 
+                              ddl_stmt_str, 
+                              sql_client, 
+                              OB_DDL_SET_PASSWD))) {
+    LOG_WARN("fail to set_passwd_impl");
+  }
+  return ret;
+}
+
+int ObUserSqlService::set_passwd_impl(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const ObSchemaOperationType type)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
   ObSqlString sql_string;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+     || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid id", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-        OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-        OB_FAIL(dml.add_column("passwd", user_info.get_passwd())) ||
-        OB_FAIL(dml.add_time_column("password_last_changed", user_info.get_password_last_changed())) ||
-        OB_FAIL(dml.add_gmt_modified())) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("passwd", user_info.get_passwd()))
+        || OB_FAIL(dml.add_time_column("password_last_changed",
+                                      user_info.get_password_last_changed()))
+        || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
 
@@ -389,7 +472,7 @@ int ObUserSqlService::set_passwd(const ObUserInfo& user_info, const int64_t new_
       priv_operation.schema_version_ = new_schema_version;
       priv_operation.tenant_id_ = tenant_id;
       priv_operation.user_id_ = user_id;
-      priv_operation.op_type_ = OB_DDL_SET_PASSWD;
+      priv_operation.op_type_ = type;
       priv_operation.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
       if (OB_FAIL(log_operation(priv_operation, sql_client))) {
         LOG_WARN("Failed to log operation", K(ret));
@@ -411,15 +494,18 @@ int ObUserSqlService::set_max_connections(
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
   ObSqlString sql_string;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+     || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid id", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
         || OB_FAIL(dml.add_column("max_connections", user_info.get_max_connections()))
         || OB_FAIL(dml.add_column("max_user_connections", user_info.get_max_user_connections()))
         || OB_FAIL(dml.add_gmt_modified())) {
@@ -456,27 +542,34 @@ int ObUserSqlService::set_max_connections(
   return ret;
 }
 
-int ObUserSqlService::alter_user_require(const ObUserInfo& user_info, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::alter_user_require(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
   ObSqlString sql_string;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+     || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid id", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-        OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-        OB_FAIL(dml.add_column("ssl_type", user_info.get_ssl_type())) ||
-        OB_FAIL(dml.add_column("ssl_cipher", user_info.get_ssl_cipher())) ||
-        OB_FAIL(dml.add_column("x509_issuer", user_info.get_x509_issuer())) ||
-        OB_FAIL(dml.add_column("x509_subject", user_info.get_x509_subject())) || OB_FAIL(dml.add_gmt_modified())) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("ssl_type", user_info.get_ssl_type()))
+        || OB_FAIL(dml.add_column("ssl_cipher", user_info.get_ssl_cipher()))
+        || OB_FAIL(dml.add_column("x509_issuer", user_info.get_x509_issuer()))
+        || OB_FAIL(dml.add_column("x509_subject", user_info.get_x509_subject()))
+        || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
 
@@ -510,15 +603,19 @@ int ObUserSqlService::alter_user_require(const ObUserInfo& user_info, const int6
   return ret;
 }
 
-int ObUserSqlService::grant_revoke_user(const ObUserInfo& user_info, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::grant_revoke_user(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   const uint64_t user_id = user_info.get_user_id();
   ObSqlString sql_string;
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+     || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(tenant_id), K(user_id), K(ret));
   } else {
@@ -560,7 +657,9 @@ int ObUserSqlService::grant_revoke_user(const ObUserInfo& user_info, const int64
 }
 
 int ObUserSqlService::alter_user_profile(
-    const ObUserInfo& user_info, const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+    const ObUserInfo &user_info,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
@@ -568,17 +667,21 @@ int ObUserSqlService::alter_user_profile(
   const uint64_t user_id = user_info.get_user_id();
   const uint64_t profile_id = user_info.get_profile_id();
 
-  if (!is_valid_tenant_id(tenant_id) || !is_valid_id(user_id)) {
+  if (!is_valid_tenant_id(tenant_id)
+      || !is_valid_id(user_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-        OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-        OB_FAIL(dml.add_column("profile_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, profile_id))) ||
-        OB_FAIL(dml.add_gmt_modified())) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("profile_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, profile_id)))
+        || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
 
@@ -612,8 +715,11 @@ int ObUserSqlService::alter_user_profile(
   return ret;
 }
 
-int ObUserSqlService::lock_user(const ObUserInfo& user_info, const int64_t new_schema_version,
-    const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::lock_user(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
@@ -621,16 +727,20 @@ int ObUserSqlService::lock_user(const ObUserInfo& user_info, const int64_t new_s
   const uint64_t user_id = user_info.get_user_id();
   const bool locked = user_info.get_is_locked();
 
-  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+  if (OB_INVALID_ID == tenant_id
+      || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(tenant_id), K(user_id), K(ret));
   } else {
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
-        OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id))) ||
-        OB_FAIL(dml.add_column("is_locked", locked)) || OB_FAIL(dml.add_gmt_modified())) {
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                                exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("is_locked", locked))
+        || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
 
@@ -665,7 +775,9 @@ int ObUserSqlService::lock_user(const ObUserInfo& user_info, const int64_t new_s
 }
 
 int ObUserSqlService::add_user_history(
-    const ObUserInfo& user_info, const int64_t schema_version, common::ObISQLClient& sql_client)
+    const ObUserInfo &user_info,
+    const int64_t schema_version,
+    common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
@@ -677,8 +789,8 @@ int ObUserSqlService::add_user_history(
     LOG_WARN("gen_user_dml failed", K(user_info), K(ret));
   } else {
     const int64_t is_deleted = 0;
-    if (OB_FAIL(dml.add_pk_column("schema_version", schema_version)) ||
-        OB_FAIL(dml.add_column("is_deleted", is_deleted))) {
+    if (OB_FAIL(dml.add_pk_column("schema_version", schema_version))
+        || OB_FAIL(dml.add_column("is_deleted", is_deleted))) {
       LOG_WARN("add column failed", K(ret));
     } else if (OB_FAIL(exec.exec_replace(OB_ALL_USER_HISTORY_TNAME, dml, affected_rows))) {
       LOG_WARN("execute update sql fail", K(ret));
@@ -690,69 +802,81 @@ int ObUserSqlService::add_user_history(
   return ret;
 }
 
-int ObUserSqlService::gen_user_dml(const uint64_t exec_tenant_id, const ObUserInfo& user, ObDMLSqlSplicer& dml)
+int ObUserSqlService::gen_user_dml(
+    const uint64_t exec_tenant_id,
+    const ObUserInfo &user,
+    ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
   const bool is_ssl_support = (user.get_ssl_type() != ObSSLType::SSL_TYPE_NOT_SPECIFIED);
   LOG_INFO("gen_user_dml", K(is_ssl_support), K(user));
-  if (OB_FAIL(
-          dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, user.get_tenant_id()))) ||
-      OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user.get_user_id()))) ||
-      OB_FAIL(dml.add_column("user_name", user.get_user_name())) ||
-      OB_FAIL(dml.add_column("host", user.get_host_name())) || OB_FAIL(dml.add_column("passwd", user.get_passwd())) ||
-      OB_FAIL(dml.add_column("info", user.get_info())) ||
-      OB_FAIL(dml.add_column("PRIV_ALTER", user.get_priv(OB_PRIV_ALTER) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE", user.get_priv(OB_PRIV_CREATE) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE_USER", user.get_priv(OB_PRIV_CREATE_USER) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_DELETE", user.get_priv(OB_PRIV_DELETE) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_DROP", user.get_priv(OB_PRIV_DROP) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_GRANT_OPTION", user.get_priv(OB_PRIV_GRANT) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_INSERT", user.get_priv(OB_PRIV_INSERT) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_UPDATE", user.get_priv(OB_PRIV_UPDATE) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_SELECT", user.get_priv(OB_PRIV_SELECT) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_INDEX", user.get_priv(OB_PRIV_INDEX) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE_VIEW", user.get_priv(OB_PRIV_CREATE_VIEW) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_SHOW_VIEW", user.get_priv(OB_PRIV_SHOW_VIEW) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_SHOW_DB", user.get_priv(OB_PRIV_SHOW_DB) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_SUPER", user.get_priv(OB_PRIV_SUPER) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_PROCESS", user.get_priv(OB_PRIV_PROCESS) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("IS_LOCKED", user.get_is_locked() ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE_SYNONYM", user.get_priv(OB_PRIV_CREATE_SYNONYM) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_FILE", user.get_priv(OB_PRIV_FILE) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_ALTER_TENANT", user.get_priv(OB_PRIV_ALTER_TENANT) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_ALTER_SYSTEM", user.get_priv(OB_PRIV_ALTER_SYSTEM) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_POOL", user.get_priv(OB_PRIV_CREATE_RESOURCE_POOL) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_UNIT", user.get_priv(OB_PRIV_CREATE_RESOURCE_UNIT) ? 1 : 0)) ||
-      OB_FAIL(dml.add_column("max_connections", user.get_max_connections())) ||
-      OB_FAIL(dml.add_column("max_user_connections", user.get_max_user_connections())) ||
-      (is_ssl_support && OB_FAIL(dml.add_column("SSL_TYPE", user.get_ssl_type()))) ||
-      (is_ssl_support && OB_FAIL(dml.add_column("SSL_CIPHER", user.get_ssl_cipher()))) ||
-      (is_ssl_support && OB_FAIL(dml.add_column("X509_ISSUER", user.get_x509_issuer()))) ||
-      (is_ssl_support && OB_FAIL(dml.add_column("X509_SUBJECT", user.get_x509_subject()))) ||
-      OB_FAIL(dml.add_column("TYPE", user.is_role() ? 1 : 0)) ||
-      OB_FAIL(
-          dml.add_column("profile_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user.get_profile_id()))) ||
-      OB_FAIL(dml.add_time_column("password_last_changed", user.get_password_last_changed())) ||
-      OB_FAIL(dml.add_gmt_modified())) {
+  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                             exec_tenant_id, user.get_tenant_id())))
+      || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
+                                              exec_tenant_id,user.get_user_id())))
+      || OB_FAIL(dml.add_column("user_name", user.get_user_name()))
+      || OB_FAIL(dml.add_column("host", user.get_host_name()))
+      || OB_FAIL(dml.add_column("passwd", user.get_passwd()))
+      || OB_FAIL(dml.add_column("info", user.get_info()))
+      || OB_FAIL(dml.add_column("PRIV_ALTER", user.get_priv(OB_PRIV_ALTER) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE", user.get_priv(OB_PRIV_CREATE) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE_USER", user.get_priv(OB_PRIV_CREATE_USER) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_DELETE", user.get_priv(OB_PRIV_DELETE) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_DROP", user.get_priv(OB_PRIV_DROP) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_GRANT_OPTION", user.get_priv(OB_PRIV_GRANT) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_INSERT", user.get_priv(OB_PRIV_INSERT) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_UPDATE", user.get_priv(OB_PRIV_UPDATE) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_SELECT", user.get_priv(OB_PRIV_SELECT) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_INDEX", user.get_priv(OB_PRIV_INDEX) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE_VIEW", user.get_priv(OB_PRIV_CREATE_VIEW) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_SHOW_VIEW", user.get_priv(OB_PRIV_SHOW_VIEW) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_SHOW_DB", user.get_priv(OB_PRIV_SHOW_DB) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_SUPER", user.get_priv(OB_PRIV_SUPER) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_PROCESS", user.get_priv(OB_PRIV_PROCESS) ? 1 : 0))
+      || OB_FAIL(dml.add_column("IS_LOCKED", user.get_is_locked() ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE_SYNONYM", user.get_priv(OB_PRIV_CREATE_SYNONYM) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_FILE", user.get_priv(OB_PRIV_FILE) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_ALTER_TENANT", user.get_priv(OB_PRIV_ALTER_TENANT) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_ALTER_SYSTEM", user.get_priv(OB_PRIV_ALTER_SYSTEM) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_POOL", 
+                                user.get_priv(OB_PRIV_CREATE_RESOURCE_POOL) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_UNIT", 
+                                user.get_priv(OB_PRIV_CREATE_RESOURCE_UNIT) ? 1 : 0))
+      || OB_FAIL(dml.add_column("max_connections", user.get_max_connections()))
+      || OB_FAIL(dml.add_column("max_user_connections", user.get_max_user_connections()))
+      || OB_FAIL(dml.add_column("PRIV_REPL_SLAVE", user.get_priv(OB_PRIV_REPL_SLAVE) ? 1 : 0))
+      || OB_FAIL(dml.add_column("PRIV_REPL_CLIENT", user.get_priv(OB_PRIV_REPL_CLIENT) ? 1 : 0))
+      || (is_ssl_support && OB_FAIL(dml.add_column("SSL_TYPE", user.get_ssl_type())))
+      || (is_ssl_support && OB_FAIL(dml.add_column("SSL_CIPHER", user.get_ssl_cipher())))
+      || (is_ssl_support && OB_FAIL(dml.add_column("X509_ISSUER", user.get_x509_issuer())))
+      || (is_ssl_support && OB_FAIL(dml.add_column("X509_SUBJECT", user.get_x509_subject())))
+      || OB_FAIL(dml.add_column("TYPE", user.is_role() ? 1 : 0))
+      || OB_FAIL(dml.add_column("profile_id", ObSchemaUtils::get_extract_schema_id(
+                                              exec_tenant_id, user.get_profile_id())))
+      || OB_FAIL(dml.add_time_column("password_last_changed", user.get_password_last_changed()))
+      || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
   }
   return ret;
 }
 
-int ObUserSqlService::update_user_schema_version(const uint64_t tenant_id,
-    const common::ObArray<ObUserInfo>& user_infos, const ObString* ddl_stmt_str, ObISQLClient& sql_client)
+int ObUserSqlService::update_user_schema_version(
+    const uint64_t tenant_id,
+    const common::ObArray<ObUserInfo> &user_infos,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   UNUSED(ddl_stmt_str);
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_INVALID_ID == tenant_id || user_infos.count() < 1) {
+  if (OB_INVALID_ID == tenant_id
+      || user_infos.count() < 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(tenant_id), K(ret));
   } else {
     // update __all_user history table
     for (int64_t i = 0; OB_SUCC(ret) && i < user_infos.count(); i++) {
       int64_t new_schema_version = OB_INVALID_VERSION;
-      const ObUserInfo& user_info = user_infos.at(i);
+      const ObUserInfo &user_info = user_infos.at(i);
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, OB_INVALID_VERSION, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(add_user_history(user_info, new_schema_version, sql_client))) {
@@ -765,7 +889,7 @@ int ObUserSqlService::update_user_schema_version(const uint64_t tenant_id,
         priv_operation.tenant_id_ = tenant_id;
         priv_operation.user_id_ = user_info.get_user_id();
         priv_operation.op_type_ = OB_DDL_MODIFY_USER_SCHEMA_VERSION;
-        // priv_operation.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
+        //priv_operation.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
         priv_operation.ddl_stmt_str_ = ObString();
         if (OB_FAIL(log_operation(priv_operation, sql_client))) {
           LOG_WARN("Failed to log operation", K(ret));
@@ -777,6 +901,7 @@ int ObUserSqlService::update_user_schema_version(const uint64_t tenant_id,
   return ret;
 }
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
+
+} //end of schema
+} //end of share
+} //end of oceanbase

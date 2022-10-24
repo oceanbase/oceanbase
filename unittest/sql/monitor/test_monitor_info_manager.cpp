@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_MONITOR
 #include <gtest/gtest.h>
-#include "lib/thread/runnable.h"
 #include "share/ob_thread_pool.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
@@ -21,7 +20,6 @@ using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-using obsys::CThread;
 
 static const int64_t TEST_MAX_OPERATOR_COUNT = 5;
 static const int64_t TEST_MAX_EXECUTOR_COUNT = 1000;
@@ -30,9 +28,9 @@ static const int64_t TEST_BATCH_CG_COUNT = 5000;
 static const int64_t OB_MAX_INFORMATION_COUNT = 5;
 static const int64_t N = 10;
 static const int64_t TEST_GET_COUNT = 4;
-// class TestGetByQueryId : public CDefaultRunnable
+//class TestGetByQueryId : public CDefaultRunnable
 //{
-// public:
+//public:
 //  TestGetByQueryId(ObMonitorInfoManager *monitor_info)
 //      : CDefaultRunnable(TEST_GET_COUNT), monitor_info_(monitor_info), query_id_(0)
 //  {}
@@ -40,13 +38,13 @@ static const int64_t TEST_GET_COUNT = 4;
 //  virtual void run(CThread*, void *) {do_get();}
 //  int64_t get_query_id() { return ATOMIC_AAF(&query_id_, 1); }
 //  static int do_check_operator_info(int64_t query_id, ObPhyOperatorMonitorInfo &op_info);
-// private:
+//private:
 //  int do_get();
-// private:
+//private:
 //  ObMonitorInfoManager *monitor_info_;
 //  int64_t query_id_;
 //};
-// int TestGetByQueryId::do_get()
+//int TestGetByQueryId::do_get()
 //{
 //  int ret = OB_SUCCESS;
 //  int64_t query_id = 0;
@@ -66,7 +64,7 @@ static const int64_t TEST_GET_COUNT = 4;
 //  //}
 //  return ret;
 //}
-// int TestGetByQueryId::do_check_operator_info(int64_t query_id, ObPhyOperatorMonitorInfo &op_info)
+//int TestGetByQueryId::do_check_operator_info(int64_t query_id, ObPhyOperatorMonitorInfo &op_info)
 //{
 //  int ret = OB_SUCCESS;
 //  for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
@@ -76,9 +74,9 @@ static const int64_t TEST_GET_COUNT = 4;
 //  }
 //  return ret;
 //}
-// class TestGetByPlanId: public CDefaultRunnable
+//class TestGetByPlanId: public CDefaultRunnable
 //{
-// public:
+//public:
 //  TestGetByPlanId(ObMonitorInfoManager *monitor_info)
 //      : CDefaultRunnable(TEST_GET_COUNT), monitor_info_(monitor_info), plan_id_(0)
 //  {}
@@ -87,13 +85,13 @@ static const int64_t TEST_GET_COUNT = 4;
 //  int64_t get_plan_id() { return ATOMIC_AAF(&plan_id_, 1); }
 //  static int do_check_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info);
 //  static int do_check_avg_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info);
-// private:
+//private:
 //  int do_get();
-// private:
+//private:
 //  ObMonitorInfoManager *monitor_info_;
 //  int64_t plan_id_;
 //};
-// int TestGetByPlanId::do_get()
+//int TestGetByPlanId::do_get()
 //{
 //  int ret = OB_SUCCESS;
 //  int64_t plan_id = 0;
@@ -124,7 +122,7 @@ static const int64_t TEST_GET_COUNT = 4;
 //  }
 //  return ret;
 //}
-// int TestGetByPlanId::do_check_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info)
+//int TestGetByPlanId::do_check_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info)
 //{
 //  int ret = OB_SUCCESS;
 //  for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
@@ -137,7 +135,7 @@ static const int64_t TEST_GET_COUNT = 4;
 //  }
 //  return ret;
 //}
-// int TestGetByPlanId::do_check_avg_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info)
+//int TestGetByPlanId::do_check_avg_operator_info(int64_t plan_id, ObPhyOperatorMonitorInfo &op_info)
 //{
 //  int ret = OB_SUCCESS;
 //  for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
@@ -151,36 +149,37 @@ static const int64_t TEST_GET_COUNT = 4;
 //  }
 //  return ret;
 //}
-namespace oceanbase {
-namespace sql {
-class TestMonitorInfoManager : public ::testing::Test, public share::ObThreadPool {
+namespace oceanbase
+{
+namespace sql
+{
+class TestMonitorInfoManager : public ::testing::Test, public share::ObThreadPool
+{
 public:
-  TestMonitorInfoManager() : seq_(0), monitor_mgr_()
-  // test1_(&monitor_mgr_),
-  // test2_(&monitor_mgr_)
+  TestMonitorInfoManager() :
+    seq_(0),
+    monitor_mgr_()
+    //test1_(&monitor_mgr_),
+    //test2_(&monitor_mgr_)
   {
     monitor_mgr_.init();
-    // monitor_mgr_.set_max_monitor_count(TEST_MAX_MONITOR_COUNT);
-    // monitor_mgr_.set_batch_cg_count(TEST_BATCH_CG_COUNT);
+    //monitor_mgr_.set_max_monitor_count(TEST_MAX_MONITOR_COUNT);
+    //monitor_mgr_.set_batch_cg_count(TEST_BATCH_CG_COUNT);
   }
-  virtual ~TestMonitorInfoManager()
-  {}
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
-  virtual void run1()
-  {
-    // do_add();
+  virtual ~TestMonitorInfoManager() {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
+  virtual void run1() {
+    //do_add();
   }
   void do_stress()
   {
     start();
     sleep(5);
-    // test1_.start();
-    // test2_.start();
+    //test1_.start();
+    //test2_.start();
     int64_t last_seq = ATOMIC_LOAD(&seq_);
-    while (ATOMIC_LOAD(&seq_) < TEST_MAX_EXECUTOR_COUNT) {
+    while(ATOMIC_LOAD(&seq_) < TEST_MAX_EXECUTOR_COUNT) {
       sleep(1);
       int64_t cur_seq = ATOMIC_LOAD(&seq_);
       LOG_INFO("ring array", "tps", cur_seq - last_seq);
@@ -189,24 +188,20 @@ public:
       }
       last_seq = cur_seq;
     }
-    // test1_.wait();
-    // test2_.wait();
+    //test1_.wait();
+    //test2_.wait();
     wait();
   }
-  int64_t get_seq()
-  {
-    return ATOMIC_AAF(&seq_, 1);
-  }
+  int64_t get_seq() { return ATOMIC_AAF(&seq_, 1); }
   int do_add();
   int do_add_and_check();
   int do_gc();
-  int build_monitor_info(int64_t query_id, int64_t plan_id, ObPhyPlanMonitorInfo* plan);
-
+  int build_monitor_info(int64_t query_id, int64_t plan_id, ObPhyPlanMonitorInfo *plan);
 public:
   int64_t seq_;
   ObMonitorInfoManager monitor_mgr_;
-  // TestGetByQueryId test1_;
-  // TestGetByPlanId test2_;
+  //TestGetByQueryId test1_;
+  //TestGetByPlanId test2_;
 };
 
 int TestMonitorInfoManager::do_add_and_check()
@@ -218,7 +213,7 @@ int TestMonitorInfoManager::do_add_and_check()
     int64_t plan_id = query_id / N;
     if (plan_id == 0) {
     } else {
-      ObPhyPlanMonitorInfo* info = NULL;
+      ObPhyPlanMonitorInfo *info = NULL;
       if (OB_FAIL(monitor_mgr_.alloc(query_id, info))) {
         LOG_ERROR("fail to create monitor info", K(ret), K(query_id), K(plan_id));
       } else if (OB_FAIL(build_monitor_info(query_id, plan_id, info))) {
@@ -227,7 +222,7 @@ int TestMonitorInfoManager::do_add_and_check()
         LOG_ERROR("fail to add monitor info", K(ret), K(query_id), K(plan_id));
       } else {
         LOG_INFO("add monitor info success", K(query_id), K(plan_id), K(info));
-        ObPhyPlanMonitorInfo* plan_info;
+        ObPhyPlanMonitorInfo *plan_info;
         common::ObRaQueue::Ref ref;
         if (OB_FAIL(monitor_mgr_.get_by_index(query_id, plan_info, &ref))) {
           LOG_WARN("fail to get monitor info", K(ret), K(query_id));
@@ -241,7 +236,7 @@ int TestMonitorInfoManager::do_add_and_check()
   return ret;
 }
 
-// int TestMonitorInfoManager::do_add()
+//int TestMonitorInfoManager::do_add()
 //{
 //  int ret = OB_SUCCESS;
 //  int64_t query_id = 0;
@@ -263,7 +258,7 @@ int TestMonitorInfoManager::do_add_and_check()
 //  return ret;
 //}
 //
-// int TestMonitorInfoManager::do_gc()
+//int TestMonitorInfoManager::do_gc()
 //{
 //  int ret = OB_SUCCESS;
 //  int64_t gc_count = (TEST_MAX_EXECUTOR_COUNT - TEST_MAX_MONITOR_COUNT) / TEST_BATCH_CG_COUNT;
@@ -306,7 +301,7 @@ int TestMonitorInfoManager::do_add_and_check()
 //  return ret;
 //}
 
-int TestMonitorInfoManager::build_monitor_info(int64_t query_id, int64_t plan_id, ObPhyPlanMonitorInfo* info)
+int TestMonitorInfoManager::build_monitor_info(int64_t query_id, int64_t plan_id, ObPhyPlanMonitorInfo *info)
 {
   int ret = OB_SUCCESS;
   info->set_plan_id(plan_id);
@@ -324,7 +319,7 @@ int TestMonitorInfoManager::build_monitor_info(int64_t query_id, int64_t plan_id
   }
   return ret;
 }
-// TEST_F(TestMonitorInfoManager, stress)
+//TEST_F(TestMonitorInfoManager, stress)
 //{
 //  do_stress();
 //}
@@ -332,23 +327,23 @@ int TestMonitorInfoManager::build_monitor_info(int64_t query_id, int64_t plan_id
 TEST_F(TestMonitorInfoManager, simple_add_and_get)
 {
   do_add_and_check();
-  // do_gc();
+  //do_gc();
 }
 TEST_F(TestMonitorInfoManager, test_serialize)
 {
-  // ObPhyOperatorMonitorInfo op_info;
+  //ObPhyOperatorMonitorInfo op_info;
   const int64_t buf_len = 1024;
   char buf[buf_len];
   int64_t pos = 0;
-  // EXPECT_EQ(OB_SUCCESS, op_info.serialize(buf, buf_len, pos));
-  // EXPECT_EQ(pos, op_info.get_serialize_size());
+  //EXPECT_EQ(OB_SUCCESS, op_info.serialize(buf, buf_len, pos));
+  //EXPECT_EQ(pos, op_info.get_serialize_size());
   ObPhyOperatorMonitorInfo dest_info;
   int64_t data_len = pos;
   pos = 0;
   int ret = OB_SUCCESS;
-  // int64_t ret = dest_info.deserialize(buf, data_len, pos);
-  // EXPECT_EQ(OB_SUCCESS, ret);
-  // LOG_INFO("output dest info", K(dest_info));
+  //int64_t ret = dest_info.deserialize(buf, data_len, pos);
+  //EXPECT_EQ(OB_SUCCESS, ret);
+  //LOG_INFO("output dest info", K(dest_info));
   ObPhyOperatorMonitorInfo op_info2;
 
   op_info2.set_job_id(10);
@@ -391,13 +386,13 @@ TEST_F(TestMonitorInfoManager, test_dispatch)
   EXPECT_EQ(OB_SUCCESS, collector.get_extend_info(arena_allocator, extend_buf));
   ObPhyPlanMonitorInfo dest_plan_info(allocator);
   ObExecStatDispatch dispatch;
-  ObExecContext ctx;
   ObArenaAllocator alloc;
+  ObExecContext ctx(alloc);
   ObPhysicalPlan plan;
   EXPECT_EQ(OB_SUCCESS, dispatch.set_extend_info(extend_buf));
   EXPECT_EQ(OB_SUCCESS, dispatch.dispatch(true, &dest_plan_info, false, &plan));
   for (int64_t i = 0; i < TEST_MAX_OPERATOR_COUNT; i++) {
-    ObPhyOperatorMonitorInfo* op_info = NULL;
+    ObPhyOperatorMonitorInfo *op_info = NULL;
     EXPECT_EQ(OB_SUCCESS, dest_plan_info.get_operator_info_by_index(i, op_info));
     for (int64_t i = 0; i < OB_MAX_INFORMATION_COUNT; i++) {
       int64_t value = 0;
@@ -409,7 +404,7 @@ TEST_F(TestMonitorInfoManager, test_dispatch)
   }
 }
 
-// TEST_F(TestMonitorInfoManager, tets_duplicated)
+//TEST_F(TestMonitorInfoManager, tets_duplicated)
 //{
 //  ObMonitorInfoManager monitor_mgr;
 //  monitor_mgr.init(0);
@@ -448,12 +443,12 @@ TEST_F(TestMonitorInfoManager, test_dispatch)
 //  monitor_mgr_.reclain_map();
 //  EXPECT_EQ(0, monitor_mgr_.plan_execution_time_map_.count());
 //}
-}  // namespace sql
-}  // namespace oceanbase
-int main(int argc, char* argv[])
+}
+}
+int main(int argc, char *argv[])
 {
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_monitor.log", true);
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

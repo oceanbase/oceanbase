@@ -17,16 +17,18 @@
 #include <gtest/gtest.h>
 #include "schema/db_initializer.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace share::schema;
 
-class TestGlobalStatProxy : public ::testing::Test {
+class TestGlobalStatProxy : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
+  virtual void TearDown() {}
 
 protected:
   schema::DBInitializer initer_;
@@ -66,10 +68,10 @@ TEST_F(TestGlobalStatProxy, common)
   ASSERT_EQ(3, frozen_version);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

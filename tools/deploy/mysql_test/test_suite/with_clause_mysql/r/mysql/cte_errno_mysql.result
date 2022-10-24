@@ -77,4 +77,19 @@ ERROR 42S02: Table doesn't exist
 with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
 ERROR 42S02: Table doesn't exist
 
+with RECURSIVE cte(n) as (select 1  union all select (select n+1 from cte where n < 1) ) select n from cte;
+ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 1 + (select n+1 from cte where n < 1) from dual) select n from cte;
+ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+
+with RECURSIVE cte(n) as (select 1 from dual union all select -(select n+1 from cte where n < 1) from dual) select n from cte;
+ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 as c1 from dual where c1 in (select n + 1 from cte where n < 10)) select n from cte;
+ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+
+with RECURSIVE cte(n) as (select 1 from dual union all select 2 from dual where EXISTS(select n + 1 from cte where n < 10)) select n from cte;
+ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+
 drop database cte_st;

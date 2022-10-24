@@ -25,146 +25,152 @@
 #include "sql/engine/ob_double_children_phy_operator.h"
 #include "sql/engine/ob_multi_children_phy_operator.h"
 #include "observer/ob_req_time_service.h"
+#include "storage/mock_gctx.h"
 #undef private
 #undef protected
 using namespace oceanbase::common;
 
-namespace test {
-class MockVisitor : public ObPhyOperatorVisitor {
+namespace test
+{
+class MockVisitor : public ObPhyOperatorVisitor
+{
 public:
-  MockVisitor() : level_(0)
-  {}
-  ~MockVisitor()
-  {}
-  virtual int pre_visit(const ObSingleChildPhyOperator& op)
+  MockVisitor() : level_(0) {}
+  ~MockVisitor() {}
+  virtual int pre_visit(const ObSingleChildPhyOperator &op)
   {
     int ret = OB_SUCCESS;
     OB_LOG(INFO, "output:", K(level_), "type", op.get_type());
     level_++;
     return ret;
   }
-  virtual int post_visit(const ObSingleChildPhyOperator& op)
+  virtual int post_visit(const ObSingleChildPhyOperator &op)
   {
     level_--;
     const_cast<ObSingleChildPhyOperator&>(op).reuse();
     return OB_SUCCESS;
   }
-  virtual int pre_visit(const ObDoubleChildrenPhyOperator& op)
+  virtual int pre_visit(const ObDoubleChildrenPhyOperator &op)
   {
     int ret = OB_SUCCESS;
     OB_LOG(INFO, "output:", K(level_), "type", op.get_type());
     level_++;
     return ret;
   }
-  virtual int post_visit(const ObDoubleChildrenPhyOperator& op)
+  virtual int post_visit(const ObDoubleChildrenPhyOperator &op)
   {
     level_--;
     const_cast<ObDoubleChildrenPhyOperator&>(op).reuse();
     return OB_SUCCESS;
   }
-  virtual int pre_visit(const ObMultiChildrenPhyOperator& op)
+  virtual int pre_visit(const ObMultiChildrenPhyOperator &op)
   {
     int ret = OB_SUCCESS;
     OB_LOG(INFO, "output:", K(level_), "type", op.get_type());
     level_++;
     return ret;
   }
-  virtual int post_visit(const ObMultiChildrenPhyOperator& op)
+  virtual int post_visit(const ObMultiChildrenPhyOperator &op)
   {
     level_--;
     const_cast<ObMultiChildrenPhyOperator&>(op).reuse();
     return OB_SUCCESS;
   }
-  virtual int pre_visit(const ObNoChildrenPhyOperator& op)
+  virtual int pre_visit(const ObNoChildrenPhyOperator &op)
   {
     int ret = OB_SUCCESS;
     OB_LOG(INFO, "output:", K(level_), "type", op.get_type());
     level_++;
     return ret;
   }
-  virtual int post_visit(const ObNoChildrenPhyOperator& op)
+  virtual int post_visit(const ObNoChildrenPhyOperator &op)
   {
     level_--;
     const_cast<ObNoChildrenPhyOperator&>(op).reuse();
     return OB_SUCCESS;
   }
-  virtual int pre_visit(const ObPhyOperator& op)
+  virtual int pre_visit(const ObPhyOperator &op)
   {
     int ret = OB_SUCCESS;
     OB_LOG(INFO, "output:", K(level_), "type", op.get_type());
     level_++;
     return ret;
   }
-  virtual int post_visit(const ObPhyOperator& op)
+  virtual int post_visit(const ObPhyOperator &op)
   {
     level_--;
     const_cast<ObPhyOperator&>(op).reuse();
     return OB_SUCCESS;
   }
-
 private:
   int level_;
 };
 
-class TestCodeGenerator : public TestOptimizerUtils {
+class TestCodeGenerator: public TestOptimizerUtils
+{
 public:
   TestCodeGenerator();
   virtual ~TestCodeGenerator();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestCodeGenerator);
-
 protected:
   // function members
-  void do_optimize(ObStmt& stmt, ObLogPlan*& plan, ObPhyPlanType distr_method);
-  void do_code_generate(const ObLogPlan& log_plan, ObCodeGenerator& code_gen, ObPhysicalPlan& phy_plan);
-  int do_rewrite(ObStmt*& stmt, ObPhysicalPlan* phy_plan);
-
+  void do_optimize(ObStmt &stmt,
+                   ObLogPlan *&plan,
+                   ObPhyPlanType distr_method);
+  void do_code_generate(const ObLogPlan &log_plan,
+                        ObCodeGenerator &code_gen,
+                        ObPhysicalPlan &phy_plan);
+  int do_rewrite(ObStmt *&stmt, ObPhysicalPlan *phy_plan);
 protected:
   // data members
-  oceanbase::share::ObLocationFetcher fetcher_;
   ParamStore params_;
   ObAddr addr_;
-  ObOptimizerContext* optimizer_ctx_;
-  ObTransformerCtx* transformer_ctx_;
+  ObOptimizerContext *optimizer_ctx_;
+  ObTransformerCtx *transformer_ctx_;
   ObSchemaChecker schema_checker_;
   ObQueryHint query_hint_;
 };
 
-TestCodeGenerator::TestCodeGenerator() : fetcher_(), optimizer_ctx_(NULL), transformer_ctx_(NULL)
+TestCodeGenerator::TestCodeGenerator()
+    : optimizer_ctx_(NULL),
+      transformer_ctx_(NULL)
 {
   memcpy(schema_file_path_, "./test_code_generator.schema", sizeof("./test_code_generator.schema"));
 }
 
 TestCodeGenerator::~TestCodeGenerator()
-{}
+{
+}
 
 void TestCodeGenerator::SetUp()
 {
   TestOptimizerUtils::SetUp();
+  init_global_context();
   schema_checker_.init(sql_schema_guard_);
   ObArenaAllocator tmp_alloc;
   params_.block_alloc_ = ObWrapperAllocator(tmp_alloc);
   exec_ctx_.get_sql_ctx()->session_info_ = &session_info_;
   optimizer_ctx_ = new ObOptimizerContext(&session_info_,
-      &exec_ctx_,
-      // schema_mgr_,
-      &sql_schema_guard_,
-      &stat_manager_,
-      NULL,
-      &partition_service_,
-      allocator_,
-      &part_cache_,
-      &params_,
-      addr_,
-      NULL,
-      OB_MERGED_VERSION_INIT,
-      query_hint_,
-      expr_factory_,
-      NULL);
+                                          &exec_ctx_,
+                                          //schema_mgr_,
+                                          &sql_schema_guard_,
+                                          &stat_manager_,
+                                          NULL,
+                                          &partition_service_,
+                                          allocator_,
+                                          &part_cache_,
+                                          &params_,
+                                          addr_,
+                                          NULL,
+                                          query_hint_,
+                                          expr_factory_,
+                                          NULL,
+                                          false,
+                                          stmt_factory_.get_query_ctx());
   ASSERT_TRUE(optimizer_ctx_);
   transformer_ctx_ = new ObTransformerCtx();
   ASSERT_TRUE(transformer_ctx_);
@@ -195,25 +201,27 @@ void TestCodeGenerator::TearDown()
   }
 }
 
-int TestCodeGenerator::do_rewrite(ObStmt*& stmt, ObPhysicalPlan* phy_plan)
+int TestCodeGenerator::do_rewrite(ObStmt *&stmt, ObPhysicalPlan *phy_plan)
 {
   int ret = OB_SUCCESS;
   transformer_ctx_->phy_plan_ = phy_plan;
   ObTransformerImpl trans(transformer_ctx_);
   if (stmt->is_select_stmt()) {
-    ObDMLStmt* dml_stmt = static_cast<ObDMLStmt*>(stmt);
+    ObDMLStmt *dml_stmt = static_cast<ObDMLStmt *>(stmt);
     if (OB_FAIL(trans.transform(dml_stmt))) {
       _OB_LOG(WARN, "fail to transform stmt, ret = %d", ret);
     } else {
-      stmt = dml_stmt;
-    }
+	  stmt = dml_stmt;
+	}
   }
   return ret;
 }
 
-void TestCodeGenerator::do_optimize(ObStmt& stmt, ObLogPlan*& plan, ObPhyPlanType distr)
+void TestCodeGenerator::do_optimize(ObStmt &stmt,
+                                    ObLogPlan *&plan,
+                                    ObPhyPlanType distr)
 {
-  ParamStore& params_i = *(&params_);
+  ParamStore &params_i = *(&params_);
   int64_t count = params_i.count();
   UNUSED(count);
   ObTableLocation table_location;
@@ -221,10 +229,10 @@ void TestCodeGenerator::do_optimize(ObStmt& stmt, ObLogPlan*& plan, ObPhyPlanTyp
   OK(optimizer_ctx_->get_table_location_list().push_back(table_location));
   if (distr == OB_PHY_PLAN_REMOTE) {
     SQL_CG_LOG(DEBUG, "setting local address to 2.2.2.2");
-    optimizer_ctx_->set_local_server_ipv4_addr("2.2.2.2", 8888);
+    optimizer_ctx_->set_local_server_addr("2.2.2.2", 8888);
   } else {
     SQL_CG_LOG(DEBUG, "setting local address to 1.1.1.1");
-    optimizer_ctx_->set_local_server_ipv4_addr("1.1.1.1", 8888);
+    optimizer_ctx_->set_local_server_addr("1.1.1.1", 8888);
   }
 
   ObQueryHint query_hint = dynamic_cast<ObDMLStmt&>(stmt).get_stmt_hint().get_query_hint();
@@ -237,7 +245,9 @@ void TestCodeGenerator::do_optimize(ObStmt& stmt, ObLogPlan*& plan, ObPhyPlanTyp
   _OB_LOG(INFO, "logical_plan=%s", buf);
 }
 
-void TestCodeGenerator::do_code_generate(const ObLogPlan& log_plan, ObCodeGenerator& code_gen, ObPhysicalPlan& phy_plan)
+void TestCodeGenerator::do_code_generate(const ObLogPlan &log_plan,
+                                         ObCodeGenerator &code_gen,
+                                         ObPhysicalPlan &phy_plan)
 {
   OK(code_gen.generate(log_plan, phy_plan));
 }
@@ -253,36 +263,40 @@ TEST_F(TestCodeGenerator, basic_test)
   std::ofstream of_result(tmp_file);
   ASSERT_TRUE(of_result.is_open());
   std::string line;
-  ObStmt* stmt = NULL;
-  ObLogPlan* logical_plan = NULL;
-  ObPhysicalPlan* phy_plan = NULL;
+  ObStmt *stmt = NULL;
+  ObLogPlan *logical_plan = NULL;
+  ObPhysicalPlan *phy_plan = NULL;
   int64_t line_no = 1;
   while (std::getline(if_tests, line)) {
-    if (line.size() <= 0)
-      continue;
-    if (line.at(0) == '#')
-      continue;
+    if (line.size() <= 0) continue;
+    if (line.at(0) == '#') continue;
     _OB_LOG(DEBUG, "================================================================");
-    of_result << "[" << line_no++ << "] ";
+    of_result << "[" << line_no++ << "] " ;
     of_result << line << std::endl;
     bool is_print = true;
     params_.reset();
     OB_LOG(INFO, "case:", K(line.c_str()));
 
-    ObPhysicalPlanCtx* pctx = exec_ctx_.get_physical_plan_ctx();
+
+    ObPhysicalPlanCtx *pctx = exec_ctx_.get_physical_plan_ctx();
     ASSERT_TRUE(NULL != pctx);
 
-    ObCodeGenerator code_gen(
-        false /*use_jit*/, false /*use static typing engine*/, CLUSTER_VERSION_3000, &(pctx->get_datum_param_store()));
+    ObCodeGenerator code_gen(false/*use_jit*/,
+                             false/*use static typing engine*/,
+                             CLUSTER_VERSION_3000,
+                             &(pctx->get_datum_param_store()));
     ObCacheObjectFactory::alloc(phy_plan);
     ASSERT_TRUE(NULL != (phy_plan));
 
     ASSERT_NO_FATAL_FAILURE(do_resolve(line.c_str(), stmt, is_print, JSON_FORMAT, OB_SUCCESS, false));
+    ASSERT_EQ(OB_SUCCESS, ObSql::calc_pre_calculable_exprs(exec_ctx_,
+                                                       *static_cast<ObDMLStmt*>(stmt),
+                                                       *phy_plan));
     ASSERT_EQ(OB_SUCCESS, do_rewrite(stmt, phy_plan));
     ASSERT_NO_FATAL_FAILURE(do_optimize(*stmt, logical_plan, OB_PHY_PLAN_REMOTE));
     ASSERT_NO_FATAL_FAILURE(do_code_generate(*logical_plan, code_gen, *phy_plan));
     of_result << CSJ(*phy_plan) << std::endl;
-    ObPhyOperator* main_query = phy_plan->get_main_query();
+    ObPhyOperator *main_query = phy_plan->get_main_query();
     ASSERT_TRUE(NULL != main_query);
     MockVisitor visitor;
     ASSERT_EQ(OB_SUCCESS, main_query->accept(visitor));
@@ -294,18 +308,19 @@ TEST_F(TestCodeGenerator, basic_test)
   of_result.close();
   // verify results
   UNUSED(result_file);
+  // TODO @ banliu.zyd: case有问题，暂时注释
   // ASSERT_NO_FATAL_FAILURE(TestSqlUtils::is_equal_content(tmp_file, result_file));
 }
-}  // namespace test
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   system("rm -rf test_code_generator.log");
   observer::ObReqTimeGuard req_timeinfo_guard;
   OB_LOGGER.set_log_level("DEBUG");
   OB_LOGGER.set_file_name("test_code_generator.log", true);
   ::oceanbase::sql::init_sql_factories();
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   test::parse_cmd_line_param(argc, argv, test::clp);
   return RUN_ALL_TESTS();
 }

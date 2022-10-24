@@ -14,21 +14,23 @@
 #define OCEANBASE_SQL_SYS_PARAMS_MGR_H_
 
 #include "lib/list/ob_list.h"
-#include "sql/engine/ob_phy_operator.h"
 #include "sql/engine/ob_physical_plan.h"
 
-namespace oceanbase {
-namespace sql {
-const char* STR_SYS_PAREAMS = "sys_params";
-const char* STR_SORT_MEM_SIZE_LIMIT = "sort_mem_size_limit";
-const char* STR_GROUP_MEM_SIZE_LIMIT = "group_mem_size_limit";
+namespace oceanbase
+{
+namespace sql
+{
+const char *STR_SYS_PAREAMS = "sys_params";
+const char *STR_SORT_MEM_SIZE_LIMIT = "sort_mem_size_limit";
+const char *STR_GROUP_MEM_SIZE_LIMIT = "group_mem_size_limit";
 // FIX ME,
 // 1. MIN value
-static const int64_t MIN_SORT_MEM_SIZE_LIMIT = 10000;   // 10M
-static const int64_t MIN_GROUP_MEM_SIZE_LIMIT = 10000;  // 10M
+static const int64_t MIN_SORT_MEM_SIZE_LIMIT = 10000; // 10M
+static const int64_t MIN_GROUP_MEM_SIZE_LIMIT = 10000; // 10M
 // 2. MAX value, -1 means no limit
 
-class ObSysParamsMgr {
+class ObSysParamsMgr
+{
 public:
   ObSysParamsMgr();
   virtual ~ObSysParamsMgr();
@@ -36,7 +38,7 @@ public:
   void set_sort_mem_size_limit(const int64_t size);
   void set_gorup_mem_size_limit(const int64_t size);
 
-  int parse_from_file(const char* file_name);
+  int parse_from_file(const char *file_name);
 
   int64_t get_sort_mem_size_limit() const;
   int64_t get_group_mem_size_limit() const;
@@ -64,7 +66,7 @@ void ObSysParamsMgr::set_sort_mem_size_limit(const int64_t size)
   } else if (size < 0) {
     sort_mem_size_limit_ = -1;
   } else {
-    ;  // lease than MIN value, no change
+    ; // lease than MIN value, no change
   }
 }
 
@@ -75,10 +77,13 @@ void ObSysParamsMgr::set_gorup_mem_size_limit(const int64_t size)
   } else if (size < 0) {
     group_mem_size_limit_ = -1;
   } else {
-    ;  // lease than MIN value, no change
+    ; // lease than MIN value, no change
   }
 }
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_SYS_PARAMS_MGR_H_ */
+
+
+

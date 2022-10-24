@@ -15,38 +15,42 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace share {
-class ObPartitionTableOperator;
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObSchemaGetterGuard;
 }
-}  // namespace share
+}
 
-namespace sql {
+namespace sql
+{
 class ObIVirtualTableIteratorFactory;
 class ObSQLSessionInfo;
-class ObVirtualTableCtx {
+class ObVirtualTableCtx
+{
 public:
-  ObVirtualTableCtx() : vt_iter_factory_(NULL), schema_guard_(NULL), partition_table_operator_(NULL), session_(NULL)
+  ObVirtualTableCtx()
+      : vt_iter_factory_(NULL),
+        schema_guard_(NULL),
+        session_(NULL)
   {}
-  ~ObVirtualTableCtx()
-  {}
+  ~ObVirtualTableCtx() {}
 
   void reset()
   {
     vt_iter_factory_ = NULL;
     schema_guard_ = NULL;
-    partition_table_operator_ = NULL;
     session_ = NULL;
   }
 
-  ObIVirtualTableIteratorFactory* vt_iter_factory_;
-  share::schema::ObSchemaGetterGuard* schema_guard_;
-  const share::ObPartitionTableOperator* partition_table_operator_;
-  ObSQLSessionInfo* session_;
+  ObIVirtualTableIteratorFactory *vt_iter_factory_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
+  ObSQLSessionInfo *session_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_TABLE_OB_VIRTUAL_TABLE_CTX_ */
