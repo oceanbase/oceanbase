@@ -739,7 +739,9 @@ int ObLobDataWriter::check_rowkey(const ObStoreRowkey& rowkey, bool& check_ret) 
   } else {
     check_ret = true;
     for (int64_t i = 0; check_ret && i < rowkey_column_cnt_; i++) {
-      if (column_types_.at(i).get_type() != rowkey.get_obj_ptr()[i].get_type()) {
+      if (rowkey.get_obj_ptr()[i].is_null()) {
+        // pass
+      } else if (column_types_.at(i).get_type() != rowkey.get_obj_ptr()[i].get_type()) {
         check_ret = false;
       }
     }
