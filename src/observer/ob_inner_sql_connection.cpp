@@ -1286,6 +1286,9 @@ int ObInnerSQLConnection::start_transaction_inner(
           } else if (FALSE_IT(get_session().set_trans_type(transaction::ObTxClass::SYS))) {
           }
         }
+        if (OB_FAIL(ret)) {
+          reset_resource_conn_info();
+        }
       }
       if (OB_SUCC(ret)) {
         set_is_in_trans(true);
