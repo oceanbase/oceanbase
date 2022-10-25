@@ -30,10 +30,6 @@ using namespace lib;
 using namespace common;
 using namespace share;
 
-bool share::has_independ_inc_backup_set(const int64_t version)
-{
-  return version >= OB_BACKUP_COMPATIBLE_VERSION_V2 && version < OB_BACKUP_COMPATIBLE_VERSION_MAX;
-}
 bool share::is_valid_backup_inner_table_version(const ObBackupInnerTableVersion &version)
 {
   return version > 0 && version < OB_BACKUP_INNER_TABLE_VMAX;

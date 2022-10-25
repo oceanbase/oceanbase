@@ -33,21 +33,23 @@ int ObLSBackupCleanScheduler::schedule_backup_clean_dag(const obrpc::ObLSBackupC
   int ret = OB_SUCCESS;
   ObLSBackupCleanDagNetInitParam param;
   ObLSBackupCleanDagNet *clean_dag_net = nullptr;
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
-  if (OB_ISNULL(scheduler)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null MTL scheduler", K(ret), K(scheduler));
-  } else if (OB_FAIL(param.set(args))) {
-    LOG_WARN("failed to set ls backup clean net init param",K(ret), K(args));
-  } else if (OB_FAIL(scheduler->create_and_add_dag_net(&param, clean_dag_net))) {
-    if (OB_TASK_EXIST == ret) {
-      ret = OB_SUCCESS;
-      LOG_INFO("[BACKUP_CLEAN]alreadly have log stream backup dag net in DagScheduler", K(ret));
+  MTL_SWITCH(args.tenant_id_) {
+    ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+    if (OB_ISNULL(scheduler)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null MTL scheduler", K(ret), K(scheduler));
+    } else if (OB_FAIL(param.set(args))) {
+      LOG_WARN("failed to set ls backup clean net init param",K(ret), K(args));
+    } else if (OB_FAIL(scheduler->create_and_add_dag_net(&param, clean_dag_net))) {
+      if (OB_TASK_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("[BACKUP_CLEAN]alreadly have log stream backup dag net in DagScheduler", K(ret));
+      } else {
+        LOG_WARN("failed to create log stream backup dag net", K(ret));
+      }
     } else {
-      LOG_WARN("failed to create log stream backup dag net", K(ret));
+      LOG_INFO("[BACKUP_CLEAN]success to create log stream backup dag net", K(ret), K(param));
     }
-  } else {
-    LOG_INFO("[BACKUP_CLEAN]success to create log stream backup dag net", K(ret), K(param));
   }
 
   return ret;

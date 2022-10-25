@@ -33,16 +33,6 @@ namespace oceanbase
 namespace share
 {
 
-enum ObBackupCompatibleVersion // used for data backup TODO(chongrong): delete it?
-{
-  OB_BACKUP_COMPATIBLE_VERSION_V1 = 1, // since 2.2.60
-  OB_BACKUP_COMPATIBLE_VERSION_V2 = 2, // since 2.2.77
-  OB_BACKUP_COMPATIBLE_VERSION_V3 = 3, // since 3.1 
-  OB_BACKUP_COMPATIBLE_VERSION_V4 = 4, // since 4.0
-  OB_BACKUP_COMPATIBLE_VERSION_MAX,
-};
-
-bool has_independ_inc_backup_set(const int64_t version);
 // for log archive and data backup, exclude backup lease service inner table
 enum ObBackupInnerTableVersion {
   OB_BACKUP_INNER_TABLE_V1 = 1, // since 2.2.60
