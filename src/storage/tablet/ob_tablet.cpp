@@ -596,6 +596,12 @@ int ObTablet::load_deserialize(
 
   if (OB_SUCC(ret)) {
     pos = new_pos;
+    if (tablet_meta_.max_sync_storage_schema_version_ > storage_schema_.schema_version_) {
+      LOG_INFO("tablet meta status is not right, upgrade may happened. fix max_sync_schema_version on purpose",
+          K(tablet_meta_.max_sync_storage_schema_version_),
+          K(storage_schema_.schema_version_));
+      tablet_meta_.max_sync_storage_schema_version_ = storage_schema_.schema_version_;
+    }
     is_inited_ = true;
     LOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
   } else if (OB_UNLIKELY(!is_inited_)) {
@@ -2867,7 +2873,7 @@ int ObTablet::check_max_sync_schema_version() const
     } else if (OB_FAIL(data_memtable_mgr->get_multi_source_data_unit(&storage_schema, &tmp_allocator))) {
       LOG_ERROR("failed to storage schema from memtable, max_sync_schema_version is invalid", K(ret),
           K(max_sync_schema_version), KPC(data_memtable_mgr));
-    } else if (OB_UNLIKELY(storage_schema.schema_version_ != max_sync_schema_version)) {
+    } else if (OB_UNLIKELY(storage_schema.schema_version_ < max_sync_schema_version)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected max sync schema version", K(ret), K(max_sync_schema_version),
           "storage_schema_on_memtable", storage_schema,
