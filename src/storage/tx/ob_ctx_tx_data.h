@@ -57,10 +57,12 @@ public:
 
   ObTransID get_tx_id() const;
 
-  int prep_add_undo_action(ObUndoAction &undo_action,
-                           storage::ObTxData *&tmp_ctx_tx_data,
-                           storage::ObTxData *&tmp_tx_data_table_tx_data);
-  int add_undo_action(ObUndoAction &undo_action);
+  int prepare_add_undo_action(ObUndoAction &undo_action,
+                              storage::ObTxData *&tmp_tx_data,
+                              storage::ObUndoStatusNode *&tmp_undo_status);
+  int cancel_add_undo_action(storage::ObTxData *tmp_tx_data, storage::ObUndoStatusNode *tmp_undo_status);
+  int commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode &tmp_undo_status);
+  int add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status = NULL);
 
   int get_tx_commit_data(const storage::ObTxCommitData *&tx_commit_data) const;
 

@@ -159,6 +159,7 @@ int64_t ObUndoStatusList::get_serialize_size_() const
 bool ObUndoStatusList::is_contain(const int64_t seq_no) const
 {
   bool bool_ret = false;
+  SpinRLockGuard guard(lock_);
   ObUndoStatusNode *node_ptr = head_;
   while (OB_NOT_NULL(node_ptr)) {
     for (int i = 0; i < node_ptr->size_; i++) {
@@ -423,11 +424,11 @@ bool ObTxData::is_valid_in_tx_data_table() const
   return bool_ret;
 }
 
-int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action)
+int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *undo_node)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");
   int ret = OB_SUCCESS;
-  ObByteLockGuard guard(undo_status_list_.lock_);
+  SpinWLockGuard guard(undo_status_list_.lock_);
   ObTxDataTable *tx_data_table = nullptr;
   ObUndoStatusNode *node = undo_status_list_.head_;
   if (OB_ISNULL(tx_table)) {
@@ -442,9 +443,13 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       // STORAGE_LOG(DEBUG, "generate new undo status node");
       ObUndoStatusNode *new_node = nullptr;
-      if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
+      if (OB_NOT_NULL(undo_node)) {
+        new_node = undo_node;
+        undo_node = NULL;
+      } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
         STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         new_node->next_ = node;
         undo_status_list_.head_ = new_node;
         node = new_node;
@@ -458,6 +463,10 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
       STORAGE_LOG(WARN, "Too many undo actions. The size of tx data is overflow.", KR(ret),
                   K(undo_status_list_.undo_node_cnt_), KPC(this));
     }
+  }
+
+  if (OB_NOT_NULL(undo_node)) {
+    tx_data_table->free_undo_status_node(undo_node);
   }
 
   return ret;
