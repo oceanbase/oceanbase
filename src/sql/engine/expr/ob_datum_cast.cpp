@@ -3913,7 +3913,8 @@ CAST_FUNC_NAME(enumset, int)
   {
     uint64_t in_val = child_res->get_enumset();
     int64_t out_val = 0;
-    if (OB_FAIL(common_uint_int(expr, ObIntType, in_val, ctx, out_val))) {
+    ObObjType out_type = expr.datum_meta_.type_;
+    if (OB_FAIL(common_uint_int(expr, out_type, in_val, ctx, out_val))) {
       LOG_WARN("common_uint_int failed", K(ret));
     } else {
       res_datum.set_int(out_val);
@@ -4006,9 +4007,10 @@ CAST_FUNC_NAME(enumset_inner, int)
   {
     ObEnumSetInnerValue inner_value;
     int64_t out_val = 0;
+    ObObjType out_type = expr.datum_meta_.type_;
     if (OB_FAIL(child_res->get_enumset_inner(inner_value))) {
       LOG_WARN("failed to inner_value", KPC(child_res), K(ret));
-    } else if (OB_FAIL(common_uint_int(expr, ObIntType, inner_value.numberic_value_, ctx, out_val))) {
+    } else if (OB_FAIL(common_uint_int(expr, out_type, inner_value.numberic_value_, ctx, out_val))) {
       LOG_WARN("common_uint_int failed", K(ret));
     } else {
       res_datum.set_int(out_val);
@@ -4021,9 +4023,12 @@ CAST_FUNC_NAME(enumset_inner, uint)
 {
   EVAL_ARG()
   {
+    DEF_IN_OUT_TYPE();
     ObEnumSetInnerValue inner_value;
     if (OB_FAIL(child_res->get_enumset_inner(inner_value))) {
       LOG_WARN("failed to inner_value", KPC(child_res), K(ret));
+    } else if (CAST_FAIL(uint_upper_check(out_type, inner_value.numberic_value_))) {
+      LOG_WARN("int_upper_check failed", K(ret), K(inner_value.numberic_value_));
     } else {
       res_datum.set_uint(inner_value.numberic_value_);
     }
