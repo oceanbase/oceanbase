@@ -1337,6 +1337,7 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
       } else if (has_tenant_resource) {
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
           // TODO ADD LOG and check get_session
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid tx_desc", K(ls_id), K(type));
         } else {
           MTL_SWITCH(tenant_id) {
