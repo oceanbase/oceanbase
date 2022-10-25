@@ -589,6 +589,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     // restore有自己的inner_sql_connection，sql_modifier不为null
     bool is_restore = NULL != sql_modifier_;
     res.sql_ctx().is_restore_ = is_restore;
+    get_session().set_process_query_time(ObTimeUtility::current_time());
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
