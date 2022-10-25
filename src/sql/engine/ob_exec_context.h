@@ -286,6 +286,7 @@ public:
 
   bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
   void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
+  inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
 
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
@@ -613,6 +614,8 @@ protected:
   bool is_ps_prepare_stage_;
   // for sql plan monitor
   int64_t register_op_id_;
+  // indicate if eval_tmp_allocator_ is used
+  bool tmp_alloc_used_;
   // -------------------
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
