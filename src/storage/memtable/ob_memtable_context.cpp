@@ -686,7 +686,7 @@ int ObMemtableCtx::sync_log_succ(const int64_t log_ts, const ObCallbackScope &ca
 {
   int ret = OB_SUCCESS;
 
-  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+  if (is_partial_rollbacked_() || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     if (OB_FAIL(log_gen_.sync_log_succ(log_ts, callbacks))) {
       TRANS_LOG(WARN, "sync log failed", K(ret));
     }
@@ -702,7 +702,7 @@ void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
   if (!callbacks.is_empty()) {
     set_partial_rollbacked_();
   }
-  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+  if (is_partial_rollbacked_() || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     log_gen_.sync_log_fail(callbacks);
   } else {
     TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
