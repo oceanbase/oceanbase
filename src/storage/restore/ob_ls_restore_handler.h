@@ -46,7 +46,7 @@ public:
   ~ObLSRestoreResultMgr() {}
   int get_result() const { return result_; }
   const share::ObTaskId &get_trace_id() const { return trace_id_; }
-  bool can_retry() const { return retry_cnt_ < OB_MAX_RESTORE_RETRY_TIMES &&  can_retrieable_err_(result_); }
+  bool can_retry() const;
   bool is_met_retry_time_interval();
   void set_result(const int result, const share::ObTaskId &trace_id, const RestoreFailedType &failed_type);
   int get_comment_str(Comment &comment) const;
