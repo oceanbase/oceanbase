@@ -209,7 +209,7 @@ struct ObSpanCtx final : public common::ObDLinkBase<ObSpanCtx>
 struct ObTrace
 {
   static constexpr uint64_t MAGIC_CODE = 0x1234567887654321ul;
-  static constexpr int64_t DEFAULT_BUFFER_SIZE = (1L << 13);
+  static constexpr int64_t DEFAULT_BUFFER_SIZE = (1L << 16);
   static constexpr int64_t MIN_BUFFER_SIZE = (1L << 13);
   static ObTrace* get_instance();
   static void set_trace_buffer(void* buffer, int64_t buffer_size);
@@ -273,46 +273,31 @@ struct ObTrace
   bool append_tag(ObTagType tag_type, const T& value)
   {
     int ret = false;
+    ObString v("");
     if (OB_ISNULL(value.ptr())) {
       // do nothing
     } else {
-      auto l = value.length();
-      if (offset_ + sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*) >= buffer_size_) {
-        // do nothing
-      } else {
-        ObTagCtx<void*>* tag = new (data_ + offset_) ObTagCtx<void*>;
-        tag->next_ = last_active_span_->tags_;
-        last_active_span_->tags_ = tag;
-        tag->tag_type_ = tag_type;
-        memcpy(&(tag->data_), value.ptr(), l);
-        offset_ += (sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*));
-        data_[offset_ - 1] = '\0';
-        ret = true;
-      }
+      v = value;
+    }
+    auto l = v.length();
+    if (offset_ + sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*) >= buffer_size_) {
+      // do nothing
+    } else {
+      ObTagCtx<void*>* tag = new (data_ + offset_) ObTagCtx<void*>;
+      tag->next_ = last_active_span_->tags_;
+      last_active_span_->tags_ = tag;
+      tag->tag_type_ = tag_type;
+      memcpy(&(tag->data_), v.ptr(), l);
+      offset_ += (sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*));
+      data_[offset_ - 1] = '\0';
+      ret = true;
     }
     return ret;
   }
   template<class T, typename std::enable_if<std::is_convertible<T, const char*>::value, bool>::type = true>
   bool append_tag(ObTagType tag_type, const T& value)
   {
-    int ret = false;
-    if (OB_ISNULL(value)) {
-      // do nothing
-    } else {
-      auto l = strlen(value);
-      if (offset_ + sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*) >= buffer_size_) {
-        // do nothing
-      } else {
-        ObTagCtx<void*>* tag = new (data_ + offset_) ObTagCtx<void*>;
-        tag->next_ = last_active_span_->tags_;
-        last_active_span_->tags_ = tag;
-        tag->tag_type_ = tag_type;
-        memcpy(&(tag->data_), value, l + 1);
-        offset_ += (sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*));
-        ret = true;
-      }
-    }
-    return ret;
+    return append_tag(tag_type, OB_ISNULL(value) ? ObString("") : ObString(value));
   }
 private:
   bool check_magic() { return MAGIC_CODE == magic_code_; }
