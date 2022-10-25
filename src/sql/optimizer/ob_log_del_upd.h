@@ -54,7 +54,9 @@ public:
   void set_all_table_columns(const common::ObIArray<TableColumns>* all_table_columns)
   {
     all_table_columns_ = all_table_columns;
-    if (nullptr != all_table_columns_ && !all_table_columns_->empty() &&
+    if (OB_ISNULL(all_table_columns_)) {
+      SQL_LOG(INFO, "empty table_columns");
+    } else if (!all_table_columns_->empty() &&
         !all_table_columns_->at(0).index_dml_infos_.empty()) {
       table_columns_ = &(all_table_columns_->at(0).index_dml_infos_.at(0).column_exprs_);
     } else {

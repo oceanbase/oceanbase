@@ -1866,120 +1866,120 @@ int ObJoinOrder::estimate_rowcount_for_access_path(const uint64_t table_id, cons
   ObRowCountEstTask* table_est_task = NULL;
   ObSEArray<ObAddr, 4> addr_list;
 
-  obrpc::ObEstPartRes all_path_results;
+  SMART_VAR(obrpc::ObEstPartRes, all_path_results) {
+    const EstimatedPartition& best_table_part = table_meta_info_.table_est_part_;
+    // do not use storage estimation when
+    // 1. all partitions are stored in the remote and we cannot use RPC estimation
+    // 2. it is a virtual table, which uses default row count
+    bool is_vt = is_oracle_mapping_real_virtual_table(table_meta_info_.ref_table_id_);
+    const bool use_storage_estimation = best_table_part.is_valid() &&
+                                        (!is_virtual_table(table_meta_info_.ref_table_id_) || is_vt) &&
+                                        !OPT_CTX.use_default_stat();
 
-  const EstimatedPartition& best_table_part = table_meta_info_.table_est_part_;
-  // do not use storage estimation when
-  // 1. all partitions are stored in the remote and we cannot use RPC estimation
-  // 2. it is a virtual table, which uses default row count
-  bool is_vt = is_oracle_mapping_real_virtual_table(table_meta_info_.ref_table_id_);
-  const bool use_storage_estimation = best_table_part.is_valid() &&
-                                      (!is_virtual_table(table_meta_info_.ref_table_id_) || is_vt) &&
-                                      !OPT_CTX.use_default_stat();
-
-  if (OB_FAIL(all_path_results.index_param_res_.prepare_allocate(all_paths.count()))) {
-    LOG_WARN("failed to pre-allocate estimate results", K(ret));
-  } else if (!use_storage_estimation) {
-    // do nothing
-  } else if (OB_FAIL(addr_list.push_back(best_table_part.addr_))) {
-    LOG_WARN("failed to push back address", K(ret));
-  } else if (OB_FAIL(get_estimate_task(tasks, best_table_part.addr_, table_est_task))) {
-    LOG_WARN("failed to create est argument", K(ret), K(best_table_part));
-  } else if (OB_ISNULL(table_est_task)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table estimation task is null", K(ret));
-  } else if (OB_FAIL(collect_table_est_info(best_table_part.pkey_, table_est_task->est_arg_))) {
-    LOG_WARN("failed to collect table est info", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && use_storage_estimation && i < all_paths.count(); ++i) {
-    AccessPath* ap = NULL;
-    EstimatedPartition best_index_part;
-    ObRowCountEstTask* index_est_task = NULL;
-    if (OB_ISNULL(ap = all_paths.at(i))) {
+    if (OB_FAIL(all_path_results.index_param_res_.prepare_allocate(all_paths.count()))) {
+      LOG_WARN("failed to pre-allocate estimate results", K(ret));
+    } else if (!use_storage_estimation) {
+      // do nothing
+    } else if (OB_FAIL(addr_list.push_back(best_table_part.addr_))) {
+      LOG_WARN("failed to push back address", K(ret));
+    } else if (OB_FAIL(get_estimate_task(tasks, best_table_part.addr_, table_est_task))) {
+      LOG_WARN("failed to create est argument", K(ret), K(best_table_part));
+    } else if (OB_ISNULL(table_est_task)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("access path is null", K(ret));
-    } else if (!ap->is_global_index_) {
-      best_index_part = best_table_part;
-      index_est_task = table_est_task;
-    } else if (OB_ISNULL(ap->table_partition_info_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::choose_best_partition_for_estimation(
-                   ap->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list(),
-                   OPT_CTX.get_partition_service(),
-                   *OPT_CTX.get_stat_manager(),
-                   OPT_CTX.get_local_server_addr(),
-                   addr_list,
-                   no_use_remote_est,
-                   best_index_part))) {
-      LOG_WARN("failed to choose best partition for global index", K(ret));
-    } else if (!best_index_part.is_valid()) {
-      // does not find a non-empty partition for global index estimation
-    } else if (OB_FAIL(get_estimate_task(tasks, best_index_part.addr_, index_est_task))) {
-      LOG_WARN("failed to find estimate tasks", K(ret));
-    } else if (OB_ISNULL(index_est_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("estimation task is null", K(ret));
-    } else if (!index_est_task->est_arg_->index_params_.empty()) {
-      // do nothing for used estimation task
-    } else if (OB_FAIL(addr_list.push_back(best_index_part.addr_))) {
-      LOG_WARN("failed to append addr list", K(ret));
-    } else if (OB_FAIL(index_est_task->est_arg_->column_ids_.assign(table_est_task->est_arg_->column_ids_))) {
-      LOG_WARN("failed to assgin table estimate task", K(ret));
-    } else {
-      index_est_task->est_arg_->schema_version_ = table_meta_info_.schema_version_;
+      LOG_WARN("table estimation task is null", K(ret));
+    } else if (OB_FAIL(collect_table_est_info(best_table_part.pkey_, table_est_task->est_arg_))) {
+      LOG_WARN("failed to collect table est info", K(ret));
     }
-    if (OB_SUCC(ret) && best_index_part.is_valid()) {
-      if (OB_FAIL(index_est_task->path_id_set_.add_member(i))) {
-        LOG_WARN("failed to add path id in bit set", K(ret));
-      } else if (OB_FAIL(collect_path_est_info(ap, best_index_part.pkey_, index_est_task->est_arg_))) {
-        LOG_WARN("failed to collect path est info", K(ret));
-      } else {
-        LOG_TRACE("path est info", K(*index_est_task->est_arg_));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(process_storage_rowcount_estimation(tasks, all_paths, all_path_results))) {
-      LOG_WARN("failed to estimate rowcount with storage", K(ret));
-    } else if (!is_inner_path && OB_FAIL(compute_table_rowcount_info(all_path_results, table_id, ref_table_id))) {
-      LOG_WARN("failed to estimate scan param", K(ret));
-    } else {
-      LOG_TRACE("storage estimate results", K(all_path_results), K(is_inner_path));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_paths.count(); i++) {
-    AccessPath* ap = all_paths.at(i);
-    ap->table_row_count_ = table_meta_info_.table_row_count_;
-    ap->est_cost_info_.table_meta_info_.assign(table_meta_info_);
-    if (ap->is_global_index_) {
-      if (OB_ISNULL(ap->table_partition_info_)) {
+    for (int64_t i = 0; OB_SUCC(ret) && use_storage_estimation && i < all_paths.count(); ++i) {
+      AccessPath* ap = NULL;
+      EstimatedPartition best_index_part;
+      ObRowCountEstTask* index_est_task = NULL;
+      if (OB_ISNULL(ap = all_paths.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("access path is null", K(ret));
+      } else if (!ap->is_global_index_) {
+        best_index_part = best_table_part;
+        index_est_task = table_est_task;
+      } else if (OB_ISNULL(ap->table_partition_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::choose_best_partition_for_estimation(
+                    ap->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list(),
+                    OPT_CTX.get_partition_service(),
+                    *OPT_CTX.get_stat_manager(),
+                    OPT_CTX.get_local_server_addr(),
+                    addr_list,
+                    no_use_remote_est,
+                    best_index_part))) {
+        LOG_WARN("failed to choose best partition for global index", K(ret));
+      } else if (!best_index_part.is_valid()) {
+        // does not find a non-empty partition for global index estimation
+      } else if (OB_FAIL(get_estimate_task(tasks, best_index_part.addr_, index_est_task))) {
+        LOG_WARN("failed to find estimate tasks", K(ret));
+      } else if (OB_ISNULL(index_est_task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("estimation task is null", K(ret));
+      } else if (!index_est_task->est_arg_->index_params_.empty()) {
+        // do nothing for used estimation task
+      } else if (OB_FAIL(addr_list.push_back(best_index_part.addr_))) {
+        LOG_WARN("failed to append addr list", K(ret));
+      } else if (OB_FAIL(index_est_task->est_arg_->column_ids_.assign(table_est_task->est_arg_->column_ids_))) {
+        LOG_WARN("failed to assgin table estimate task", K(ret));
       } else {
-        ap->est_cost_info_.table_meta_info_.part_count_ =
-            ap->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+        index_est_task->est_arg_->schema_version_ = table_meta_info_.schema_version_;
+      }
+      if (OB_SUCC(ret) && best_index_part.is_valid()) {
+        if (OB_FAIL(index_est_task->path_id_set_.add_member(i))) {
+          LOG_WARN("failed to add path id in bit set", K(ret));
+        } else if (OB_FAIL(collect_path_est_info(ap, best_index_part.pkey_, index_est_task->est_arg_))) {
+          LOG_WARN("failed to collect path est info", K(ret));
+        } else {
+          LOG_TRACE("path est info", K(*index_est_task->est_arg_));
+        }
       }
     }
-    // estimate row count
+
     if (OB_SUCC(ret)) {
-      const obrpc::ObEstPartResElement& result = all_path_results.index_param_res_.at(i);
-      if (OB_FAIL(fill_table_scan_param(ap->est_cost_info_))) {
-        LOG_WARN("failed to fill scan param for cost table info", K(ret));
-      } else if (OB_FAIL(ap->est_records_.assign(result.est_records_))) {
-        LOG_WARN("failed to assign estimate records", K(ret));
-      } else if (OB_FAIL(ObOptEstCost::estimate_row_count(result,
-                     ap->est_cost_info_,
-                     &get_plan()->get_predicate_selectivities(),
-                     ap->output_row_count_,
-                     ap->query_range_row_count_,
-                     ap->phy_query_range_row_count_,
-                     ap->index_back_row_count_))) {
-        LOG_WARN("failed to estimate row count and cost", K(ret));
+      if (OB_FAIL(process_storage_rowcount_estimation(tasks, all_paths, all_path_results))) {
+        LOG_WARN("failed to estimate rowcount with storage", K(ret));
+      } else if (!is_inner_path && OB_FAIL(compute_table_rowcount_info(all_path_results, table_id, ref_table_id))) {
+        LOG_WARN("failed to estimate scan param", K(ret));
+      } else {
+        LOG_TRACE("storage estimate results", K(all_path_results), K(is_inner_path));
       }
     }
-  }  // for paths end
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_paths.count(); i++) {
+      AccessPath* ap = all_paths.at(i);
+      ap->table_row_count_ = table_meta_info_.table_row_count_;
+      ap->est_cost_info_.table_meta_info_.assign(table_meta_info_);
+      if (ap->is_global_index_) {
+        if (OB_ISNULL(ap->table_partition_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          ap->est_cost_info_.table_meta_info_.part_count_ =
+              ap->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+        }
+      }
+      // estimate row count
+      if (OB_SUCC(ret)) {
+        const obrpc::ObEstPartResElement& result = all_path_results.index_param_res_.at(i);
+        if (OB_FAIL(fill_table_scan_param(ap->est_cost_info_))) {
+          LOG_WARN("failed to fill scan param for cost table info", K(ret));
+        } else if (OB_FAIL(ap->est_records_.assign(result.est_records_))) {
+          LOG_WARN("failed to assign estimate records", K(ret));
+        } else if (OB_FAIL(ObOptEstCost::estimate_row_count(result,
+                      ap->est_cost_info_,
+                      &get_plan()->get_predicate_selectivities(),
+                      ap->output_row_count_,
+                      ap->query_range_row_count_,
+                      ap->phy_query_range_row_count_,
+                      ap->index_back_row_count_))) {
+          LOG_WARN("failed to estimate row count and cost", K(ret));
+        }
+      }
+    }  // for paths end
+  }
   return ret;
 }
 
@@ -2012,53 +2012,54 @@ int ObJoinOrder::process_storage_rowcount_estimation(
   }
   for (int64_t task_id = 0; OB_SUCC(ret) && task_id < tasks.count(); ++task_id) {
     const ObRowCountEstTask& task = tasks.at(task_id);
-    obrpc::ObEstPartRes result;
-    if (OB_ISNULL(task.est_arg_) || OB_UNLIKELY(!task.addr_.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid param", K(ret), K(task.est_arg_), K(task.addr_));
-    } else if (task.addr_ == OPT_CTX.get_local_server_addr()) {
-      est_method = RowCountEstMethod::LOCAL_STORAGE;
-      if (OB_FAIL(ObOptEstCost::storage_estimate_rowcount(
-              OPT_CTX.get_partition_service(), *OPT_CTX.get_stat_manager(), *task.est_arg_, result))) {
-        LOG_WARN("failed to estimate partition rows", K(ret));
-        ret = OB_SUCCESS;
-      }
-    } else {
-      est_method = RowCountEstMethod::REMOTE_STORAGE;
-      if (OB_FAIL(remote_storage_estimate_rowcount(task.addr_, *task.est_arg_, result))) {
-        LOG_WARN("failed to estimate use remote storage", K(ret));
-        ret = OB_SUCCESS;
-      }
-    }
-    // try to fill table stat
-    if (OB_SUCC(ret) && task_id == 0) {
-      all_results.part_rowcount_size_res_ = result.part_rowcount_size_res_;
-      if (all_results.part_rowcount_size_res_.row_count_ == 0) {
-        all_results.part_rowcount_size_res_.reliable_ = false;
-      }
-      if (!all_results.part_rowcount_size_res_.reliable_) {
-        // table row count = 0, use default row count
-        break;
-      }
-    }
-    // try to fill access path stat
-    const ObIArray<obrpc::ObEstPartResElement>& index_results = result.index_param_res_;
-    for (int64_t i = 0, rid = 0; OB_SUCC(ret) && i < all_paths.count() && rid < index_results.count(); ++i) {
-      if (!task.path_id_set_.has_member(i)) {
-        continue;
-      } else if (!index_results.at(rid).reliable_) {
-        // do nothing if the storage estimation result is not reliable
-      } else if (all_paths.at(i)->is_global_index_ && all_paths.at(i)->est_cost_info_.ranges_.count() == 1 &&
-                 all_paths.at(i)->est_cost_info_.ranges_.at(0).is_whole_range() &&
-                 index_results.at(rid).logical_row_count_ == 0) {
-        // Although table has rows, we find the partition of the gindex is emtpy
-        // It happens when there is no table stat for choosing estimated partition
-        // Ignore the storage estimate results
+    SMART_VAR(obrpc::ObEstPartRes, result) {
+      if (OB_ISNULL(task.est_arg_) || OB_UNLIKELY(!task.addr_.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param", K(ret), K(task.est_arg_), K(task.addr_));
+      } else if (task.addr_ == OPT_CTX.get_local_server_addr()) {
+        est_method = RowCountEstMethod::LOCAL_STORAGE;
+        if (OB_FAIL(ObOptEstCost::storage_estimate_rowcount(
+                OPT_CTX.get_partition_service(), *OPT_CTX.get_stat_manager(), *task.est_arg_, result))) {
+          LOG_WARN("failed to estimate partition rows", K(ret));
+          ret = OB_SUCCESS;
+        }
       } else {
-        all_results.index_param_res_.at(i) = index_results.at(rid);
-        all_paths.at(i)->est_cost_info_.row_est_method_ = est_method;
+        est_method = RowCountEstMethod::REMOTE_STORAGE;
+        if (OB_FAIL(remote_storage_estimate_rowcount(task.addr_, *task.est_arg_, result))) {
+          LOG_WARN("failed to estimate use remote storage", K(ret));
+          ret = OB_SUCCESS;
+        }
       }
-      ++rid;
+      // try to fill table stat
+      if (OB_SUCC(ret) && task_id == 0) {
+        all_results.part_rowcount_size_res_ = result.part_rowcount_size_res_;
+        if (all_results.part_rowcount_size_res_.row_count_ == 0) {
+          all_results.part_rowcount_size_res_.reliable_ = false;
+        }
+        if (!all_results.part_rowcount_size_res_.reliable_) {
+          // table row count = 0, use default row count
+          break;
+        }
+      }
+      // try to fill access path stat
+      const ObIArray<obrpc::ObEstPartResElement>& index_results = result.index_param_res_;
+      for (int64_t i = 0, rid = 0; OB_SUCC(ret) && i < all_paths.count() && rid < index_results.count(); ++i) {
+        if (!task.path_id_set_.has_member(i)) {
+          continue;
+        } else if (!index_results.at(rid).reliable_) {
+          // do nothing if the storage estimation result is not reliable
+        } else if (all_paths.at(i)->is_global_index_ && all_paths.at(i)->est_cost_info_.ranges_.count() == 1 &&
+                  all_paths.at(i)->est_cost_info_.ranges_.at(0).is_whole_range() &&
+                  index_results.at(rid).logical_row_count_ == 0) {
+          // Although table has rows, we find the partition of the gindex is emtpy
+          // It happens when there is no table stat for choosing estimated partition
+          // Ignore the storage estimate results
+        } else {
+          all_results.index_param_res_.at(i) = index_results.at(rid);
+          all_paths.at(i)->est_cost_info_.row_est_method_ = est_method;
+        }
+        ++rid;
+      }
     }
   }
   // release memory used by row count estimation task

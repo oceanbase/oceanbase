@@ -689,7 +689,6 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   bool has_auto_inc_part_key = false;
   bool has_rand_part_key = false;
   bool has_subquery_part_key = false;
-  bool trigger_exist = false;
   bool is_one_part_table = false;
   bool is_match = false;
   ObInsertStmt* insert_stmt = static_cast<ObInsertStmt*>(get_stmt());
@@ -713,11 +712,7 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   }
 
   if (OB_SUCC(ret) && OB_FAIL(generate_sharding_info(target_sharding_info))) {
-    if (ret == OB_NO_PARTITION_FOR_GIVEN_VALUE && trigger_exist) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to generate sharding info", K(ret));
-    }
+    LOG_WARN("failed to generate sharding info", K(ret));
   }
 
   if (OB_FAIL(ret) || is_needed) {

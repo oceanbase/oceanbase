@@ -2064,84 +2064,84 @@ int ObLogPlan::weak_select_replicas(ObPartitionService& partition_service, const
   ObPhyTableLocationInfo* phy_tbl_loc_info = nullptr;
   ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_SELECT_REPLICA);
   ObList<ObRoutePolicy::CandidateReplica, ObArenaAllocator> intersect_server_list(allocator);
-  ObRoutePolicy route_policy(local_server, partition_service);
   ObRoutePolicyCtx route_policy_ctx;
   route_policy_ctx.policy_type_ = route_type;
   route_policy_ctx.consistency_level_ = WEAK;
   route_policy_ctx.is_proxy_priority_hit_support_ = proxy_priority_hit_support;
-
-  if (OB_FAIL(route_policy.init())) {
-    LOG_WARN("fail to init route policy", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < phy_tbl_loc_info_list.count(); ++i) {
-    if (OB_ISNULL(phy_tbl_loc_info = phy_tbl_loc_info_list.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("phy table loc info is NULL", K(phy_tbl_loc_info), K(i), K(ret));
-    } else {
-      ObPhyPartitionLocationInfoIArray& phy_part_loc_info_list =
-          phy_tbl_loc_info->get_phy_part_loc_info_list_for_update();
-      for (int64_t j = 0; OB_SUCC(ret) && j < phy_part_loc_info_list.count(); ++j) {
-        ObPhyPartitionLocationInfo& phy_part_loc_info = phy_part_loc_info_list.at(j);
-        if (phy_part_loc_info.has_selected_replica()) {  // do nothing
-        } else {
-          ObIArray<ObRoutePolicy::CandidateReplica>& replica_array =
-              phy_part_loc_info.get_partition_location().get_replica_locations();
-          if (OB_FAIL(route_policy.init_candidate_replicas(replica_array))) {
-            LOG_WARN("fail to init candidate replicas", K(replica_array), K(ret));
-          } else if (OB_FAIL(route_policy.calculate_replica_priority(replica_array, route_policy_ctx))) {
-            LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
-          } else if (OB_FAIL(route_policy.select_replica_with_priority(
-                         route_policy_ctx, replica_array, phy_part_loc_info))) {
-            LOG_WARN("fail to select replica", K(replica_array), K(ret));
-          }
-        }
-      }
+  SMART_VAR(ObRoutePolicy, route_policy, local_server, partition_service) {
+    if (OB_FAIL(route_policy.init())) {
+      LOG_WARN("fail to init route policy", K(ret));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(route_policy.select_intersect_replica(
-                 route_policy_ctx, phy_tbl_loc_info_list, intersect_server_list, is_hit_partition))) {
-    LOG_WARN("fail to select intersect replica",
-        K(route_policy_ctx),
-        K(phy_tbl_loc_info_list),
-        K(intersect_server_list),
-        K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (proxy_priority_hit_support) {
-      // nothing, current doesn't support
-    } else {
-      ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_SELECT_REPLICA);
-      ObAddrList intersect_servers(allocator);
-      if (OB_FAIL(calc_hit_partition_for_compat(
-              phy_tbl_loc_info_list, local_server, is_hit_partition, intersect_servers))) {
-        LOG_WARN("fail to calc hit partition for compat", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < phy_tbl_loc_info_list.count(); ++i) {
+      if (OB_ISNULL(phy_tbl_loc_info = phy_tbl_loc_info_list.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("phy table loc info is NULL", K(phy_tbl_loc_info), K(i), K(ret));
       } else {
-        if (is_hit_partition && route_policy.is_follower_first_route_policy_type(route_policy_ctx)) {
-          if (OB_FAIL(calc_follower_first_feedback(
-                  phy_tbl_loc_info_list, local_server, intersect_servers, follower_first_feedback))) {
-            LOG_WARN("fail to calc follower first feedback", K(ret));
+        ObPhyPartitionLocationInfoIArray& phy_part_loc_info_list =
+            phy_tbl_loc_info->get_phy_part_loc_info_list_for_update();
+        for (int64_t j = 0; OB_SUCC(ret) && j < phy_part_loc_info_list.count(); ++j) {
+          ObPhyPartitionLocationInfo& phy_part_loc_info = phy_part_loc_info_list.at(j);
+          if (phy_part_loc_info.has_selected_replica()) {  // do nothing
+          } else {
+            ObIArray<ObRoutePolicy::CandidateReplica>& replica_array =
+                phy_part_loc_info.get_partition_location().get_replica_locations();
+            if (OB_FAIL(route_policy.init_candidate_replicas(replica_array))) {
+              LOG_WARN("fail to init candidate replicas", K(replica_array), K(ret));
+            } else if (OB_FAIL(route_policy.calculate_replica_priority(replica_array, route_policy_ctx))) {
+              LOG_WARN("fail to calculate replica priority", K(replica_array), K(route_policy_ctx), K(ret));
+            } else if (OB_FAIL(route_policy.select_replica_with_priority(
+                          route_policy_ctx, replica_array, phy_part_loc_info))) {
+              LOG_WARN("fail to select replica", K(replica_array), K(ret));
+            }
           }
         }
       }
     }
-  }
-  if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-    LOG_INFO("selected replica ",
-        "intersect_server_list",
-        intersect_server_list,
-        "\n phy_tbl_loc_info_list",
-        phy_tbl_loc_info_list,
-        "\n route_policy",
-        route_policy,
-        "\n route_policy_ctx",
-        route_policy_ctx,
-        "\n follower_first_feedback",
-        follower_first_feedback,
-        "\n is_hit_partition",
-        is_hit_partition);
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(route_policy.select_intersect_replica(
+                  route_policy_ctx, phy_tbl_loc_info_list, intersect_server_list, is_hit_partition))) {
+      LOG_WARN("fail to select intersect replica",
+          K(route_policy_ctx),
+          K(phy_tbl_loc_info_list),
+          K(intersect_server_list),
+          K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (proxy_priority_hit_support) {
+        // nothing, current doesn't support
+      } else {
+        ObArenaAllocator allocator(ObModIds::OB_SQL_OPTIMIZER_SELECT_REPLICA);
+        ObAddrList intersect_servers(allocator);
+        if (OB_FAIL(calc_hit_partition_for_compat(
+                phy_tbl_loc_info_list, local_server, is_hit_partition, intersect_servers))) {
+          LOG_WARN("fail to calc hit partition for compat", K(ret));
+        } else {
+          if (is_hit_partition && route_policy.is_follower_first_route_policy_type(route_policy_ctx)) {
+            if (OB_FAIL(calc_follower_first_feedback(
+                    phy_tbl_loc_info_list, local_server, intersect_servers, follower_first_feedback))) {
+              LOG_WARN("fail to calc follower first feedback", K(ret));
+            }
+          }
+        }
+      }
+    }
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_INFO("selected replica ",
+          "intersect_server_list",
+          intersect_server_list,
+          "\n phy_tbl_loc_info_list",
+          phy_tbl_loc_info_list,
+          "\n route_policy",
+          route_policy,
+          "\n route_policy_ctx",
+          route_policy_ctx,
+          "\n follower_first_feedback",
+          follower_first_feedback,
+          "\n is_hit_partition",
+          is_hit_partition);
+    }
   }
   return ret;
 }
@@ -7342,46 +7342,47 @@ int ObLogPlan::calc_and_set_exec_pwj_map(ObLocationConstraintContext& location_c
     ObIArray<ObPwjConstraint*>& non_strict_cons = location_constraint.non_strict_constraints_;
     const int64_t tbl_count = location_constraint.base_table_constraints_.count();
     ObSEArray<PwjTable, 8> pwj_tables;
-    ObPwjComparer strict_pwj_comparer(true);
-    ObPwjComparer non_strict_pwj_comparer(false);
     PWJPartitionIdMap pwj_map;
     if (OB_FAIL(pwj_tables.prepare_allocate(tbl_count))) {
       LOG_WARN("failed to prepare allocate pwj tables", K(ret));
     } else if (OB_FAIL(pwj_map.create(8, ObModIds::OB_PLAN_EXECUTE))) {
       LOG_WARN("create pwj map failed", K(ret));
     }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < tbl_count; ++i) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < strict_cons.count(); ++j) {
-        const ObPwjConstraint* pwj_cons = strict_cons.at(j);
-        if (OB_ISNULL(pwj_cons) || OB_UNLIKELY(pwj_cons->count() <= 1)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
-        } else if (pwj_cons->at(0) == i) {
-          if (OB_FAIL(check_pwj_cons(
-                  *pwj_cons, location_constraint.base_table_constraints_, pwj_tables, strict_pwj_comparer, pwj_map))) {
-            LOG_WARN("failed to check pwj cons", K(ret));
+    
+    SMART_VAR(ObPwjComparer, strict_pwj_comparer, true) {
+      SMART_VAR(ObPwjComparer, non_strict_pwj_comparer, false) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tbl_count; ++i) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < strict_cons.count(); ++j) {
+            const ObPwjConstraint* pwj_cons = strict_cons.at(j);
+            if (OB_ISNULL(pwj_cons) || OB_UNLIKELY(pwj_cons->count() <= 1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
+            } else if (pwj_cons->at(0) == i) {
+              if (OB_FAIL(check_pwj_cons(
+                      *pwj_cons, location_constraint.base_table_constraints_, pwj_tables, strict_pwj_comparer, pwj_map))) {
+                LOG_WARN("failed to check pwj cons", K(ret));
+              }
+            }
           }
-        }
-      }
 
-      for (int64_t j = 0; OB_SUCC(ret) && j < non_strict_cons.count(); ++j) {
-        const ObPwjConstraint* pwj_cons = non_strict_cons.at(j);
-        if (OB_ISNULL(pwj_cons) || OB_UNLIKELY(pwj_cons->count() <= 1)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
-        } else if (pwj_cons->at(0) == i) {
-          if (OB_FAIL(check_pwj_cons(*pwj_cons,
-                  location_constraint.base_table_constraints_,
-                  pwj_tables,
-                  non_strict_pwj_comparer,
-                  pwj_map))) {
-            LOG_WARN("failed to check pwj cons", K(ret));
+          for (int64_t j = 0; OB_SUCC(ret) && j < non_strict_cons.count(); ++j) {
+            const ObPwjConstraint* pwj_cons = non_strict_cons.at(j);
+            if (OB_ISNULL(pwj_cons) || OB_UNLIKELY(pwj_cons->count() <= 1)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
+            } else if (pwj_cons->at(0) == i) {
+              if (OB_FAIL(check_pwj_cons(*pwj_cons,
+                      location_constraint.base_table_constraints_,
+                      pwj_tables,
+                      non_strict_pwj_comparer,
+                      pwj_map))) {
+                LOG_WARN("failed to check pwj cons", K(ret));
+              }
+            }
           }
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       PWJPartitionIdMap* exec_pwj_map = NULL;
       if (OB_FAIL(exec_ctx->get_pwj_map(exec_pwj_map))) {
