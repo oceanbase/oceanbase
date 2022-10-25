@@ -1938,7 +1938,7 @@ static struct VarsInit{
       ObSysVars[145].info_ = "Enable use sql plan baseline" ;
       ObSysVars[145].name_ = "optimizer_use_sql_plan_baselines" ;
       ObSysVars[145].data_type_ = ObIntType ;
-      ObSysVars[145].value_ = "1" ;
+      ObSysVars[145].value_ = "0" ;
       ObSysVars[145].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[145].id_ = SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES)) ;
@@ -1950,7 +1950,7 @@ static struct VarsInit{
       ObSysVars[146].info_ = "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline." ;
       ObSysVars[146].name_ = "optimizer_capture_sql_plan_baselines" ;
       ObSysVars[146].data_type_ = ObIntType ;
-      ObSysVars[146].value_ = "1" ;
+      ObSysVars[146].value_ = "0" ;
       ObSysVars[146].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[146].id_ = SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES)) ;
