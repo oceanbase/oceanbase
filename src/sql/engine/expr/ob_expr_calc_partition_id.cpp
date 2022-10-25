@@ -436,14 +436,41 @@ int ObExprCalcPartitionId::calc_opt_route_hash_one(const ObExpr& expr, ObEvalCtx
     if (datum->is_null()) {
       // do nothing
     } else {
-      value = datum->get_int();
-      if (OB_UNLIKELY(INT64_MIN == value)) {
-        value = INT64_MAX;
+      switch (ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
+        case ObIntTC: {
+          value = datum->get_int();
+          break;
+        }
+        case ObUIntTC: {
+          value = static_cast<int64_t>(datum->get_uint());
+          break;
+        }
+        case ObBitTC: {
+          value = static_cast<int64_t>(datum->get_bit());
+          break;
+        }
+        case ObYearTC: {
+          value = static_cast<int64_t>(datum->get_year());
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("type is wrong", K(ret), K(expr.args_[0]->datum_meta_.type_));
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(INT64_MIN == value)) {
+          value = INT64_MAX;
+        } else {
+          value = value < 0 ? -value : value;
+        }
       } else {
-        value = value < 0 ? -value : value;
+        LOG_WARN("Failed to get value", K(ret));
       }
     }
-    if (OB_FAIL(ObPartitionUtils::calc_hash_part_idx(value, calc_part_info->part_num_, part_idx))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObPartitionUtils::calc_hash_part_idx(value, calc_part_info->part_num_, part_idx))) {
       LOG_WARN("fail to calc hash part idx", K(ret), K(*calc_part_info), K(datum->get_int()));
     } else {
       res_datum.set_int(part_idx);
