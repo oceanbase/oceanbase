@@ -197,7 +197,7 @@ int ObPhysicalCopyTask::process()
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
   } else if (copy_ctx_->ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
-    //do nothing
+    FLOG_INFO("ha dag net is already failed, skip physical copy task", KPC(copy_ctx_));
   } else {
     if (copy_ctx_->tablet_id_.is_inner_tablet() || copy_ctx_->tablet_id_.is_ls_inner_tablet()) {
     } else {
@@ -635,6 +635,8 @@ int ObPhysicalCopyFinishTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy finish task do not init", K(ret));
+  } else if (copy_ctx_.ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
+    FLOG_INFO("ha dag net is already failed, skip physical copy finish task", K(copy_ctx_));
   } else if (OB_FAIL(create_sstable_())) {
     LOG_WARN("failed to create sstable", K(ret), K(copy_ctx_));
   } else if (OB_FAIL(check_sstable_valid_())) {
@@ -1104,6 +1106,8 @@ int ObTabletCopyFinishTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
+    FLOG_INFO("ha dag net is already failed, skip physical copy finish task", K(tablet_id_), KPC(ha_dag_));
   } else if (OB_FAIL(create_new_table_store_())) {
     LOG_WARN("failed to create new table store", K(ret), K(tablet_id_));
   } else if (OB_FAIL(update_tablet_data_status_())) {
