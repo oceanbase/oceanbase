@@ -59,7 +59,21 @@ static bool enable_new_sql_nio()
 
 static int get_default_net_thread_count()
 {
-  return max(6, get_cpu_num() / 8);
+  int cnt = 1;
+  int cpu_num = get_cpu_num();
+
+  if (cpu_num <= 4) {
+    cnt = 2;
+  } else if (cpu_num <= 8) {
+    cnt = 3;
+  } else if (cpu_num <= 16) {
+    cnt = 5;
+  } else if (cpu_num <= 32) {
+    cnt = 7;
+  } else {
+    cnt = max(8, get_cpu_num() / 6);
+  }
+  return cnt;
 }
 
 int ObSrvNetworkFrame::init()
