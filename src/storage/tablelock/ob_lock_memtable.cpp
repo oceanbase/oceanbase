@@ -795,27 +795,31 @@ int ObLockMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   UNUSED(need_freeze);
-  WLockGuard guard(flush_lock_);
-  int64_t rec_log_ts = get_rec_log_ts();
-  if (rec_log_ts >= recycle_log_ts) {
-    LOG_INFO("lock memtable no need to flush", K(rec_log_ts), K(recycle_log_ts),
-             K(is_frozen_), K(ls_id_));
-  } else if (is_active_memtable()) {
-    if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(freeze_log_ts_))) {
-      LOG_WARN("get_max_consequent_callbacked_log_ts failed", K(ret), K(ls_id_));
-    } else if (flushed_log_ts_ >= freeze_log_ts_) {
-      LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_log_ts), K_(freeze_log_ts));
-    } else {
-      ObLogTsRange log_ts_range;
-      log_ts_range.start_log_ts_ = 1;
-      log_ts_range.end_log_ts_ = freeze_log_ts_;
-      set_log_ts_range(log_ts_range);
-      set_snapshot_version(freeze_log_ts_);
-      ATOMIC_STORE(&is_frozen_, true);
+  {
+    WLockGuard guard(flush_lock_);
+    int64_t rec_log_ts = get_rec_log_ts();
+    if (rec_log_ts >= recycle_log_ts) {
+      LOG_INFO("lock memtable no need to flush", K(rec_log_ts), K(recycle_log_ts),
+              K(is_frozen_), K(ls_id_));
+    } else if (is_active_memtable()) {
+      if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(freeze_log_ts_))) {
+        LOG_WARN("get_max_consequent_callbacked_log_ts failed", K(ret), K(ls_id_));
+      } else if (flushed_log_ts_ >= freeze_log_ts_) {
+        LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_log_ts), K_(freeze_log_ts));
+      } else {
+        ObLogTsRange log_ts_range;
+        log_ts_range.start_log_ts_ = 1;
+        log_ts_range.end_log_ts_ = freeze_log_ts_;
+        set_log_ts_range(log_ts_range);
+        set_snapshot_version(freeze_log_ts_);
+        ATOMIC_STORE(&is_frozen_, true);
+      }
     }
   }
 
   if (is_frozen_memtable()) {
+    // dependent to judging is_active_memtable() in dag
+    // otherwise maybe merge active memtable
     compaction::ObTabletMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = LS_LOCK_TABLET;
