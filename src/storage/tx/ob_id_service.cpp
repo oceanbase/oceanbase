@@ -117,6 +117,10 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
   } else if (last_id < 0 || limited_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(last_id), K(limited_id));
+  } else if (limited_id <= ATOMIC_LOAD(&limited_id_)) {
+    if (EXECUTE_COUNT_PER_SEC(10)) {
+      TRANS_LOG(INFO, "no log required", K(limited_id), K(ATOMIC_LOAD(&limited_id_)));
+    }
   } else if (OB_FAIL(check_and_fill_ls())) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else {
@@ -500,6 +504,7 @@ int ObPresistIDLogCb::on_success()
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "timestamp service is null", K(ret));
       } else {
+        timestamp_service->test_lock();
         if (OB_FAIL(timestamp_service->handle_submit_callback(true, limited_id_, log_ts_))) {
           TRANS_LOG(WARN, "timestamp service handle log callback fail", K(ret), K_(limited_id), K_(log_ts));
         }
@@ -513,6 +518,7 @@ int ObPresistIDLogCb::on_success()
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "trans id service is null", K(ret));
       } else {
+        trans_id_service->test_lock();
         if (OB_FAIL(trans_id_service->handle_submit_callback(true, limited_id_, log_ts_))) {
           TRANS_LOG(WARN, "trans id  service handle log callback fail", K(ret), K_(limited_id), K_(log_ts));
         }
@@ -526,6 +532,7 @@ int ObPresistIDLogCb::on_success()
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "das id service is null", K(ret));
       } else {
+        das_id_service->test_lock();
         if (OB_FAIL(das_id_service->handle_submit_callback(true, limited_id_, log_ts_))) {
           TRANS_LOG(WARN, "das id service handle log callback fail", K(ret), K_(limited_id), K_(log_ts));
         }
