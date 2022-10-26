@@ -257,7 +257,7 @@ int ObIDService::flush(int64_t rec_log_ts)
     if (OB_FAIL(update_ls_id_meta(true))) {
       TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_));
     } else {
-      ATOMIC_BCAS(&rec_log_ts_, latest_rec_log_ts, INT_MAX64);
+      (void)ATOMIC_BCAS(&rec_log_ts_, latest_rec_log_ts, INT_MAX64);
     }
     TRANS_LOG(INFO, "flush", K(ret), K(service_type_), K(rec_log_ts_), K(limited_id_));
   }
