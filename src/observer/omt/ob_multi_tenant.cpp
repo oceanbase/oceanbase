@@ -1213,9 +1213,7 @@ bool ObMultiTenant::is_available_tenant(uint64_t tenant_id) const
   if (OB_SUCCESS == ret && NULL != tenant) {
     if (tenant->get_create_status() == ObTenantCreateStatus::CREATE_COMMIT) {
       ObUnitInfoGetter::ObUnitStatus unit_status = tenant->get_unit().unit_status_;
-      if (unit_status == ObUnitInfoGetter::UNIT_NORMAL || unit_status == ObUnitInfoGetter::UNIT_MIGRATE_IN || unit_status == ObUnitInfoGetter::UNIT_MIGRATE_OUT) {
-        available = true;
-      }
+      available = share::ObUnitInfoGetter::is_valid_tenant(unit_status);
     }
   }
   return available;
