@@ -320,8 +320,7 @@ int ObDDLTableMergeTask::process()
       LOG_WARN("check if major sstable exist failed", K(ret));
     } else if (is_major_sstable_exist) {
       LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
-      // TODO(cangdi): after compacting ddl sstable, a major compaction occurs, which may lead to checksum error
-      sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
+      sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
       skip_major_process = true;
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
@@ -611,17 +610,17 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         } else {
           const int64_t rebuild_seq = ls_handle.get_ls()->get_rebuild_seq();
           ObTabletHandle new_tablet_handle;
-          ObUpdateTableStoreParam param(table_handle,
-                                        tablet_handle.get_obj()->get_snapshot_version(),
-                                        ddl_param.table_key_.is_major_sstable() ? false: true, // keep_old_ddl_sstable
-                                        &storage_schema,
-                                        rebuild_seq,
-                                        ddl_param.table_key_.is_major_sstable() ? true : false, // update_with_major_flag
-                                        ddl_param.table_key_.is_major_sstable() ? true : false); // need report checksum
-          if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), param, new_tablet_handle))) {
-            LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(param));
+          ObUpdateTableStoreParam table_store_param(table_handle,
+                                                    tablet_handle.get_obj()->get_snapshot_version(),
+                                                    ddl_param.table_key_.is_major_sstable() ? false: true, // keep_old_ddl_sstable
+                                                    &storage_schema,
+                                                    rebuild_seq,
+                                                    ddl_param.table_key_.is_major_sstable() ? true : false, // update_with_major_flag
+                                                    ddl_param.table_key_.is_major_sstable() ? true : false); // need report checksum
+          if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
+            LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
           } else {
-            LOG_INFO("create ddl sstable success", K(ddl_param), K(param));
+            LOG_INFO("create ddl sstable success", K(ddl_param), K(param), K(table_store_param));
           }
         }
       }
