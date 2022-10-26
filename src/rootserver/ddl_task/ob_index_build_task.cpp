@@ -423,7 +423,7 @@ int ObIndexBuildTask::check_health()
         ret = check_errsim_error();
       }
     #endif
-    if (OB_FAIL(ret) && !ObIDDLTask::error_need_retry(ret)) {
+    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
       switch_status(new_status, ret);
@@ -622,7 +622,7 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   } else if (OB_SUCCESS != complete_sstable_job_ret_code_) {
     ret = complete_sstable_job_ret_code_;
     LOG_WARN("sstable complete job has failed", K(ret), K(object_id_), K(index_table_id_));
-    if (ObIDDLTask::error_need_retry(ret) || OB_REPLICA_NOT_READABLE == ret || OB_ERR_INSUFFICIENT_PX_WORKER == ret) {
+    if (ObIDDLTask::in_ddl_retry_white_list(ret) || OB_REPLICA_NOT_READABLE == ret || OB_ERR_INSUFFICIENT_PX_WORKER == ret) {
       // retry sql job by re-submit
       is_sstable_complete_task_submitted_ = false;
       complete_sstable_job_ret_code_ = INT64_MAX;
@@ -919,7 +919,7 @@ int ObIndexBuildTask::enable_index()
     }
   }
   DEBUG_SYNC(CREATE_INDEX_TAKE_EFFECT);
-  if (OB_FAIL(ret) && !ObIDDLTask::error_need_retry(ret)) {
+  if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
     state_finished = true;
     next_status = ObDDLTaskStatus::TAKE_EFFECT;
   }

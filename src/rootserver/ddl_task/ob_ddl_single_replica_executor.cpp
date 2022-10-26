@@ -216,7 +216,7 @@ int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTablet
         if (OB_SUCCESS == ret_code) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_SUCCEED;
-        } else if (ObIDDLTask::error_need_retry(ret_code) || OB_REPLICA_NOT_READABLE == ret_code || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code) || OB_REPLICA_NOT_READABLE == ret_code || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_RETRY;
         } else {

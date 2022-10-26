@@ -777,7 +777,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
     ret_code_ = check_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (ObIDDLTask::error_need_retry(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
+    if (ObIDDLTask::in_ddl_retry_white_list(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
       check_replica_request_time_ = 0;
       check_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;
@@ -1745,7 +1745,7 @@ int ObConstraintTask::check_health()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("data table not exist", K(ret), K(is_source_table_exist));
     }
-    if (OB_FAIL(ret) && !ObIDDLTask::error_need_retry(ret)) {
+    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
       switch_status(new_status, ret);
