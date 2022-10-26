@@ -160,7 +160,6 @@ int ObTransformPredicateMoveAround::check_outline_valid_to_transform(const ObDML
       } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(tmp_trans_list_loc))
         || !trans_hint->is_pred_deduce_hint()) {
         break;
-        LOG_DEBUG("show debug", K(trans_hint), K(i));
       } else {
         bool is_valid = query_hint->is_valid_outline_transform(tmp_trans_list_loc, 
                                                                     get_hint(view->get_stmt_hint()));
@@ -824,6 +823,8 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   } else if (OB_ISNULL(pullup_preds)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pullup predicate array is null", K(ret));
+  } else if (enable_no_pred_deduce) {
+    //do nothing
   } else if (stmt->is_set_stmt()) {
     ObSelectStmt *sel_stmt = static_cast<ObSelectStmt*>(stmt);
     if (OB_FAIL(pushdown_into_set_stmt(sel_stmt,
@@ -831,8 +832,6 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
                                        pushdown_preds))) {
       LOG_WARN("recursive pushdown preds into set stmt failed", K(ret));
     } else {/*do nothing*/}
-  } else if (enable_no_pred_deduce) {
-    LOG_TRACE("NO PRED DEDUCE");
   } else if (stmt->is_hierarchical_query()) {
     ObArray<ObRawExpr *> dummy_preds;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
@@ -847,8 +846,6 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       } else {/*do nothing*/}
     }
   } else {
-      LOG_DEBUG("show enable no pred deduce0", K(enable_no_pred_deduce), K(old_where_preds), 
-                                                                    K(stmt->get_condition_exprs()));
     if (OB_FAIL(stmt->has_rownum(has_rownum))) {
       LOG_WARN("failed to check stmt has rownum", K(ret));
     } else if (stmt->is_select_stmt()) {
@@ -899,9 +896,6 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       }
     }
   }
-  LOG_DEBUG("show enable no pred deduce1", K(enable_no_pred_deduce), K(old_where_preds), 
-                                                                    K(stmt->get_condition_exprs()), 
-                                                                    K(*stmt));
   if (OB_SUCC(ret) && !stmt->is_set_stmt() && !stmt->is_hierarchical_query()) {
     ObIArray<FromItem> &from_items = stmt->get_from_items();
     ObIArray<SemiInfo*> &semi_infos = stmt->get_semi_infos();
@@ -919,15 +913,11 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       }
     }
   }
-  LOG_DEBUG("show enable no pred deduce2", K(enable_no_pred_deduce), K(old_where_preds), 
-                                                                K(stmt->get_condition_exprs()));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_transform_happened(stmt, old_where_preds, stmt->get_condition_exprs()))) {
       LOG_WARN("failed to check transform happened", K(ret));
     }
   }
-  LOG_DEBUG("show enable no pred deduce3", K(enable_no_pred_deduce), K(old_where_preds), 
-                                                              K(stmt->get_condition_exprs()));
   return ret;
 }
 
@@ -1908,12 +1898,10 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(
         //do nothing for full join
       }
     }
-    LOG_DEBUG("check trans happen1", K(trans_happened_));
     if (OB_FAIL(ret)) {
     } else if (check_transform_happened(stmt, old_join_condition, joined_table->join_conditions_)) {
       LOG_WARN("failed to check transform happened", K(ret));
     }
-    LOG_DEBUG("check trans happen2", K(trans_happened_));
   }
   return ret;
 }
