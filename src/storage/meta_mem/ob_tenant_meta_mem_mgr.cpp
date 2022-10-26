@@ -377,7 +377,7 @@ int ObTenantMetaMemMgr::get_min_end_log_ts_for_ls(const share::ObLSID &ls_id, in
     SSTableSet::const_iterator iter = last_min_minor_sstable_set_.begin();
     while (OB_SUCC(ret) && iter != last_min_minor_sstable_set_.end()) {
       const MinMinorSSTableInfo &info = iter->first;
-      if (info.ls_id_ != ls_id) {
+      if (info.ls_id_ != ls_id || info.table_key_.tablet_id_.is_ls_inner_tablet()) {
         // just skip
       } else if (OB_UNLIKELY(!info.is_valid())) {
         ret = OB_ERR_UNEXPECTED;

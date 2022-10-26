@@ -267,13 +267,26 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
   } else if (ctx.param_.is_minor_merge()) {
     // when this merege is MINOR_MERGE or MINI_MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
     ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.compaction_filter_;
-    if (OB_ISNULL(compaction_filter_)) {
+    ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(ctx.tables_handle_.get_table(0));
+    if (OB_ISNULL(oldest_tx_data_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
+    } else if (OB_ISNULL(compaction_filter_)) {
       // This minor merge do not filter any tx data
-      param.filled_tx_log_ts_ = ctx.log_ts_range_.start_log_ts_;
+      param.filled_tx_log_ts_ = oldest_tx_data_sstable->get_filled_tx_scn();
     } else if (compaction_filter_->get_max_filtered_end_scn() > 0) {
       param.filled_tx_log_ts_ = compaction_filter_->get_max_filtered_end_scn();
     } else {
       param.filled_tx_log_ts_ = compaction_filter_->get_recycle_scn();
+    }
+
+    if (OB_SUCC(ret) && param.filled_tx_log_ts_ < oldest_tx_data_sstable->get_filled_tx_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invliad filled tx log ts",
+                KR(ret),
+                K(param),
+                K(oldest_tx_data_sstable->get_filled_tx_scn()),
+                KPC(oldest_tx_data_sstable));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
