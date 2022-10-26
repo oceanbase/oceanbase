@@ -4801,9 +4801,10 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo>& subq
     subquery_resolver.set_parent_namespace_resolver(this);
     OZ(subquery_resolver.set_cte_ctx(cte_ctx_, true, true));
     OZ(add_cte_table_to_children(subquery_resolver));
-    if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
-      subquery_resolver.set_parent_aggr_level(
-          info.parents_expr_info_.has_member(IS_AGG) ? current_level_ : parent_aggr_level_);
+    if (info.parents_expr_info_.has_member(IS_AGG)) {
+      subquery_resolver.set_parent_aggr_level(current_level_);
+    } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
+      subquery_resolver.set_parent_aggr_level(parent_aggr_level_);
     }
     OZ(do_resolve_subquery_info(info, subquery_resolver));
   }
