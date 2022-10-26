@@ -375,11 +375,9 @@ int ObGlobalAutoIncService::check_leader_(const uint64_t tenant_id, bool &is_lea
       ret = OB_NOT_MASTER;
       LOG_WARN("cache ls is null", K(ret));
     } else if (OB_FAIL(cache_ls_->get_log_handler()->get_role(role, proposal_id))) {
-      if (OB_NOT_RUNNING == ret) {
-        ret = OB_NOT_MASTER;
-      } else {
-        LOG_WARN("get ls role fail", K(ret));
-      }
+      int tmp_ret = ret;
+      ret = OB_NOT_MASTER;
+      LOG_WARN("get ls role fail", K(ret), K(tmp_ret));
     } else if (common::ObRole::LEADER == role) {
       is_leader = true;
     } else {
