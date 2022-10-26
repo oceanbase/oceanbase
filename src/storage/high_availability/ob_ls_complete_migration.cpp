@@ -331,7 +331,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
-        ObLSLockGuard lock_ls(ls);
+        ObLSLockGuard lock_ls(ls, true/*rdlock*/);
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
           LOG_WARN("failed to get migration status", K(ret), K(ctx_));
         } else if (ctx_.is_failed()) {
