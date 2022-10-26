@@ -1502,6 +1502,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     ObPsStmtInfoGuard guard;
     ObPsStmtInfo *ps_info = NULL;
     pctx->set_original_param_cnt(origin_params_count);
+    pctx->set_orig_question_mark_cnt(origin_params_count);
     if (OB_FAIL(ps_cache->get_stmt_info_guard(inner_stmt_id, guard))) {
       LOG_WARN("get stmt info guard failed", K(ret), K(inner_stmt_id));
     } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
@@ -1539,7 +1540,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
 #endif
       if (!ps_info->get_fixed_raw_params().empty()) {
         pctx->set_is_ps_rewrite_sql();
-        pctx->set_orig_question_mark_cnt(origin_params_count);
       }
       if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));
