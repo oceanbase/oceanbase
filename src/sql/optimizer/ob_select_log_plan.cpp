@@ -2622,11 +2622,8 @@ bool ObSelectLogPlan::is_set_partition_wise_valid(const ObLogicalOperator &left_
                                                   const ObLogicalOperator &right_plan)
 {
   bool is_valid = true;
-  if (left_plan.is_exchange_allocated() && !right_plan.is_exchange_allocated() &&
-      right_plan.get_contains_merge_op()) {
-    is_valid = false;
-  } else if (!left_plan.is_exchange_allocated() &&
-              right_plan.is_exchange_allocated() && left_plan.get_contains_merge_op()) {
+  if ((left_plan.is_exchange_allocated() || right_plan.is_exchange_allocated()) &&
+      (left_plan.get_contains_pw_merge_op() || right_plan.get_contains_pw_merge_op())) {
     is_valid = false;
   } else { /*do nothing*/ }
   return is_valid;

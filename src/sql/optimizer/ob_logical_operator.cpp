@@ -344,7 +344,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     dblink_id_(0),   // 0 represent local cluster.
     plan_depth_(0),
     contain_fake_cte_(false),
-    contain_merge_op_(false),
+    contain_pw_merge_op_(false),
     contain_das_op_(false),
     dup_table_pos_(),
     strong_sharding_(NULL),
@@ -802,27 +802,32 @@ int ObLogicalOperator::compute_op_other_info()
 
     // compute contains merge style op
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && !contain_merge_op_ && i < get_num_of_child(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && !contain_pw_merge_op_ && i < get_num_of_child(); i++) {
         if (OB_ISNULL(get_child(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
         } else {
-          contain_merge_op_ |= get_child(i)->get_contains_merge_op();
+          contain_pw_merge_op_ |= get_child(i)->get_contains_pw_merge_op() && 
+                                  log_op_def::LOG_EXCHANGE != get_child(i)->get_type();
         }
       }
-      if (OB_SUCC(ret) && !contain_merge_op_) {
+      if (OB_SUCC(ret) && !contain_pw_merge_op_) {
         if (log_op_def::LOG_GROUP_BY == get_type()) {
           ObLogGroupBy *group_by = static_cast<ObLogGroupBy*>(this);
-          contain_merge_op_ = !group_by->get_group_by_exprs().empty() &&
-                               (AggregateAlgo::MERGE_AGGREGATE == group_by->get_algo());
+          contain_pw_merge_op_ = !group_by->get_group_by_exprs().empty() &&
+                               (AggregateAlgo::MERGE_AGGREGATE == group_by->get_algo()) &&
+                               is_partition_wise();
         } else if (log_op_def::LOG_DISTINCT == get_type()) {
           ObLogDistinct *distinct = static_cast<ObLogDistinct*>(this);
-          contain_merge_op_ = AggregateAlgo::MERGE_AGGREGATE == distinct->get_algo();
+          contain_pw_merge_op_ = AggregateAlgo::MERGE_AGGREGATE == distinct->get_algo() &&
+                               is_partition_wise();
         } else if (log_op_def::LOG_SET == get_type()) {
           ObLogSet *set = static_cast<ObLogSet*>(this);
-          contain_merge_op_ = set->is_set_distinct() && SetAlgo::MERGE_SET == set->get_algo();
+          contain_pw_merge_op_ = set->is_set_distinct() && SetAlgo::MERGE_SET == set->get_algo() &&
+                               is_partition_wise();
         } else if (log_op_def::LOG_WINDOW_FUNCTION == get_type()) {
-          contain_merge_op_ = is_block_op();
+          contain_pw_merge_op_ = is_block_op() &&
+                               is_partition_wise();
         } else { /*do nothing*/ }
       }
     }
@@ -885,7 +890,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_phy_plan_type(path->phy_plan_type_);
     set_location_type(path->location_type_);
     set_contains_fake_cte(path->contain_fake_cte_);
-    set_contains_merge_op(path->contain_merge_op_);
+    set_contains_pw_merge_op(path->contain_pw_merge_op_);
     set_contains_das_op(path->contain_das_op_);
     is_pipelined_plan_ = path->is_pipelined_path();
     is_nl_style_pipelined_plan_ = path->is_nl_style_pipelined_path();
@@ -1013,7 +1018,7 @@ int ObLogicalOperator::compute_property()
               K(phy_plan_type_),
               K(location_type_),
               K(contain_fake_cte_),
-              K(contain_merge_op_),
+              K(contain_pw_merge_op_),
               K(contain_das_op_),
               K(width_));
   }
