@@ -21,6 +21,7 @@ ob_define(ENABLE_SMART_VAR_CHECK OFF)
 ob_define(ENABLE_COMPILE_DLL_MODE OFF)
 ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
+ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -38,6 +39,11 @@ if(WITH_COVERAGE)
   # -DDBUILD_COVERAGE marco use to mark 'coverage build type' and to handle some speical case
   set(CMAKE_COVERAGE_FLAG "-ftest-coverage -fprofile-arcs -Xclang -coverage-version='502*' -DBUILD_COVERAGE")
   set(DEBUG_PREFIX "")
+endif()
+
+ob_define(AUTO_FDO_OPT "")
+if(ENABLE_AUTO_FDO)
+  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof")
 endif()
 
 
@@ -66,7 +72,7 @@ if (OB_USE_CLANG)
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
     set(REORDER_COMP_OPT "-ffunction-sections -funique-internal-linkage-names -fdebug-info-for-profiling")
-    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1")
+    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
   set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} ${CMAKE_COVERAGE_FLAG} -std=gnu++11")
