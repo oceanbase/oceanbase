@@ -489,7 +489,9 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_link_(false)
+    is_link_(false),
+    is_part_range_get_(false),
+    is_subpart_range_get_(false)
   {
   }
 
@@ -531,7 +533,9 @@ public:
     has_dynamic_exec_param_(false),
     is_valid_temporal_part_range_(false),
     is_valid_temporal_subpart_range_(false),
-    is_link_(false)
+    is_link_(false),
+    is_part_range_get_(false),
+    is_subpart_range_get_(false)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -720,8 +724,8 @@ public:
   inline bool is_part_or_subpart_all_partition() const 
   {
     return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
-      (part_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_ONE)) ||
-      ((subpart_get_all_ || part_get_all_) && (part_level_ == share::schema::PARTITION_LEVEL_TWO));
+           (part_level_ == share::schema::PARTITION_LEVEL_ONE && (part_get_all_ || !is_part_range_get_)) ||
+           (part_level_ == share::schema::PARTITION_LEVEL_TWO && (subpart_get_all_ || part_get_all_ || !is_part_range_get_ || !is_subpart_range_get_));
   }
 
   void set_has_dynamic_exec_param(bool flag) {  has_dynamic_exec_param_ = flag; }
@@ -920,6 +924,7 @@ private:
                              const common::ObIArray<ObRawExpr*> &filter_exprs,
                              ObPartLocCalcNode *&res_node,
                              bool &get_all,
+                             bool &is_range_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx);
 
@@ -1025,7 +1030,8 @@ private:
                              bool &is_col_part_expr,
                              ObPartLocCalcNode *&calc_node,
                              ObPartLocCalcNode *&gen_col_node,
-                             bool &get_all);
+                             bool &get_all,
+                             bool &is_range_get);
 
   int calc_partition_ids_by_in_expr(
                    ObExecContext &exec_ctx,
@@ -1123,6 +1129,8 @@ private:
   bool is_valid_temporal_subpart_range_;
 
   bool is_link_;   //used to identify whether the table is a link_table
+  bool is_part_range_get_;
+  bool is_subpart_range_get_;
 };
 
 }
