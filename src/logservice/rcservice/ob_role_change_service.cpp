@@ -541,18 +541,18 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_(
   //     we must ensure that the 'end_lsn' provid by 'apply_service_' is correctly.
   // just switch_role to follower firstly, avoid sync log failed because palf has changed leader.
   } else if (FALSE_IT(log_handler->switch_role(new_role, curr_proposal_id))) {
-  } else if (FALSE_IT(time_guard.click("wait_apply_service_apply_done_"))
-      || OB_FAIL(wait_apply_service_apply_done_(ls_id, end_lsn))) {
-    CLOG_LOG(WARN, "wait_apply_service_apply_done_ failed", K(ret),
+  } else if (FALSE_IT(time_guard.click("wait_apply_service_apply_done_when_change_leader_"))
+      || OB_FAIL(wait_apply_service_apply_done_when_change_leader_(log_handler, curr_proposal_id, ls_id, end_lsn))) {
+    CLOG_LOG(WARN, "wait_apply_service_apply_done_when_change_leader_ failed", K(ret),
 				K(new_role), K(new_proposal_id), K(dst_addr));
   // apply service will not update end_lsn after switch_to_follower, so wait apply done first here
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_follower"))
       || OB_FAIL(apply_service_->switch_to_follower(ls_id))) {
-    CLOG_LOG(ERROR, "apply_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
+    CLOG_LOG(WARN, "apply_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
   } else if (FALSE_IT(time_guard.click("replay_service->switch_to_follower"))
       || OB_FAIL(replay_service_->switch_to_follower(ls_id, end_lsn))) {
-    CLOG_LOG(ERROR, "replay_service_ switch_to_follower failed", K(ret), KPC(ls), K(new_role), K(new_proposal_id));
-    // NB: execute 'change_leader_to' lastly, can make 'wait_apply_service_apply_done_' finish quickly.
+    CLOG_LOG(WARN, "replay_service_ switch_to_follower failed", K(ret), KPC(ls), K(new_role), K(new_proposal_id));
+    // NB: execute 'change_leader_to' lastly, can make 'wait_apply_service_apply_done_when_change_leader_' finish quickly.
   } else if (OB_FAIL(log_handler->change_leader_to(dst_addr))) {
     CLOG_LOG(WARN, "ObLogHandler change_leader failed", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
   } else {
@@ -714,6 +714,43 @@ int ObRoleChangeService::wait_apply_service_apply_done_(
     } else if (false == is_done) {
       ob_usleep(5*1000);
       CLOG_LOG(WARN, "wait apply done return false, need retry", K(ls_id), K(is_done), K(end_lsn), K(start_ts));
+    } else {
+    }
+  }
+  return ret;
+}
+
+int ObRoleChangeService::wait_apply_service_apply_done_when_change_leader_(
+    const ObLogHandler *log_handler,
+    const int64_t proposal_id,
+    const share::ObLSID &ls_id,
+    palf::LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  bool is_done = false;
+  palf::LSN max_lsn;
+  common::ObRole unused_curr_role;
+  int64_t unused_curr_proposal_id;
+  common::ObRole new_role;
+  int64_t new_proposal_id;
+  bool is_pending_state = false;
+  while (OB_SUCC(ret) && (false == is_done || end_lsn != max_lsn)) {
+    if (OB_FAIL(apply_service_->is_apply_done(ls_id, is_done, end_lsn))) {
+      CLOG_LOG(WARN, "apply_service_ is_apply_done failed", K(ret), K(is_done), K(end_lsn));
+    } else if (OB_FAIL(log_handler->get_max_lsn(max_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsn from palf failed", K(ret), K(ls_id), K(end_lsn));
+    } else if (OB_FAIL(log_handler->prepare_switch_role(unused_curr_role, unused_curr_proposal_id,
+            new_role, new_proposal_id, is_pending_state))) {
+      CLOG_LOG(WARN, "failed prepare_switch_role", K(ret), K(new_role), K(proposal_id), K(ls_id));
+      // if palf has changed role, return OB_STATE_NOT_MATCH, change leader failed.
+    } else if (LEADER != new_role || proposal_id != new_proposal_id) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "palf has changed leader, wait_apply_service_apply_done_when_change_leader_ failed", K(ret), K(proposal_id),
+          K(new_proposal_id));
+    } else if (false == is_done || end_lsn != max_lsn) {
+      CLOG_LOG(INFO, "wait apply done return false, need retry", K(ls_id), K(is_done),
+          K(end_lsn), K(max_lsn));
+      ob_usleep(5*1000);
     } else {
     }
   }
