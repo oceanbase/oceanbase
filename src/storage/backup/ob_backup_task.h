@@ -447,6 +447,14 @@ public:
 private:
   int may_need_advance_checkpoint_();
   int fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &clog_checkpoint_ts);
+  int check_tx_data_can_explain_user_data_();
+  int get_backup_tx_data_table_filled_tx_log_ts_(int64_t &filled_tx_log_ts);
+  int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
+  int get_sys_ls_retry_id_(int64_t &retry_id);
+  int prepare_meta_index_store_param_(const int64_t retry_id, ObBackupIndexStoreParam &param);
+  int get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_tx_log_ts);
+  int get_tablet_min_filled_tx_log_ts_(ObTabletHandle &tablet_handle,
+      int64_t &min_filled_tx_log_ts, bool &has_minor_sstable);
 
 private:
   bool is_inited_;

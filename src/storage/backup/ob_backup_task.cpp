@@ -29,6 +29,7 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -3621,6 +3622,8 @@ int ObLSBackupPrepareTask::process()
     LOG_WARN("prepare task do not init", K(ret));
   } else if (OB_FAIL(may_need_advance_checkpoint_())) {
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
+  } else if (OB_FAIL(check_tx_data_can_explain_user_data_())) {
+    LOG_WARN("failed to check tx data can explain user data", K(ret));
   } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
@@ -3825,6 +3828,189 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &
   } else {
     rebuild_seq = ls_meta_package.ls_meta_.get_rebuild_seq();
     clog_checkpoint_ts = ls_meta_package.ls_meta_.get_clog_checkpoint_ts();
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::check_tx_data_can_explain_user_data_()
+{
+  int ret = OB_SUCCESS;
+  int64_t backup_filled_tx_log_ts = INT64_MAX;
+  int64_t cur_min_filled_tx_log_ts = INT64_MAX;
+  if (!backup_data_type_.is_minor_backup()) {
+    // do nothing
+  } else if (OB_FAIL(get_backup_tx_data_table_filled_tx_log_ts_(backup_filled_tx_log_ts))) {
+    LOG_WARN("failed to get backup tx data table filled tx log ts", K(ret));
+  } else if (OB_FAIL(get_cur_ls_min_filled_tx_log_ts_(cur_min_filled_tx_log_ts))) {
+    LOG_WARN("failed to get cur ls min end log ts in latest tablets", K(ret));
+  } else {
+    if (cur_min_filled_tx_log_ts >= backup_filled_tx_log_ts) {
+      LOG_INFO("can backup replica", K(ret), K(cur_min_filled_tx_log_ts), K(backup_filled_tx_log_ts));
+    } else {
+      ret = OB_REPLICA_CANNOT_BACKUP;
+      LOG_WARN("can not backup replica", K(ret), K(cur_min_filled_tx_log_ts), K(backup_filled_tx_log_ts));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_log_ts_(int64_t &filled_tx_log_ts)
+{
+  int ret = OB_SUCCESS;
+  filled_tx_log_ts = INT64_MAX;
+  const common::ObTabletID &tx_data_tablet_id = LS_TX_DATA_TABLET;
+  const ObBackupMetaType meta_type = ObBackupMetaType::BACKUP_SSTABLE_META;
+  ObBackupDataType sys_backup_data_type;
+  sys_backup_data_type.set_sys_data_backup();
+  ObBackupMetaIndex meta_index;
+  ObBackupPath backup_path;
+  ObArray<ObBackupSSTableMeta> meta_array;
+  ObBackupMetaIndexStore meta_index_store;
+  if (OB_FAIL(prepare_meta_index_store_(meta_index_store))) {
+    LOG_WARN("failed to prepare meta index store", K(ret));
+  } else if (OB_FAIL(meta_index_store.get_backup_meta_index(tx_data_tablet_id, meta_type, meta_index))) {
+    LOG_WARN("failed to get backup meta index", K(ret), K(tx_data_tablet_id), K(meta_type));
+  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(param_.backup_dest_,
+      param_.backup_set_desc_, param_.ls_id_, sys_backup_data_type, meta_index.turn_id_,
+      meta_index.retry_id_, meta_index.file_id_, backup_path))) {
+    LOG_WARN("failed to get ls meta index backup path", K(ret), K_(param), K(sys_backup_data_type), K(meta_index));
+  } else if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
+      backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, meta_array))) {
+    LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
+  } else if (meta_array.empty()) {
+    filled_tx_log_ts = 0;
+    LOG_INFO("the log stream do not have tx data sstable", K(ret));
+  } else {
+    filled_tx_log_ts = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_log_ts_;
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::get_sys_ls_retry_id_(int64_t &retry_id)
+{
+  int ret = OB_SUCCESS;
+  retry_id = -1;
+  ObBackupDataStore store;
+  ObBackupPath backup_path;
+  if (OB_FAIL(store.init(param_.backup_dest_))) {
+    LOG_WARN("failed to init backup data store", K(ret), K_(param));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_backup_dir_path(
+      param_.backup_dest_, param_.backup_set_desc_, param_.ls_id_, backup_path))) {
+    LOG_WARN("failed to get ls backup dir path", K(ret), K_(param));
+  } else if (OB_FAIL(store.get_max_sys_ls_retry_id(backup_path, param_.ls_id_, retry_id))) {
+    LOG_WARN("failed to get max sys retry id", K(ret), K(backup_path), K(param_));
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store)
+{
+  int ret = OB_SUCCESS;
+  ObBackupRestoreMode mode = ObBackupRestoreMode::BACKUP_MODE;
+  ObBackupIndexStoreParam index_store_param;
+  const bool is_sec_meta = false;
+  int64_t sys_retry_id = -1;
+  if (OB_FAIL(get_sys_ls_retry_id_(sys_retry_id))) {
+    LOG_WARN("failed to get sys ls retry id", K(ret));
+  } else if (OB_FAIL(prepare_meta_index_store_param_(sys_retry_id, index_store_param))) {
+    LOG_WARN("failed to preparep meta index store param", K(ret), K(sys_retry_id));
+  } else if (OB_FAIL(meta_index_store.init(mode, index_store_param, param_.backup_dest_,
+     param_.backup_set_desc_, is_sec_meta, *index_kv_cache_))) {
+    LOG_WARN("failed to init meta index store", K(ret), K(mode), K(index_store_param));
+  } 
+  return ret;
+}
+
+int ObLSBackupPrepareTask::prepare_meta_index_store_param_(
+    const int64_t retry_id, ObBackupIndexStoreParam &index_param)
+{
+  int ret = OB_SUCCESS;
+  if (retry_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("retry id is not valid", K(ret), K(retry_id));
+  } else {
+    index_param.index_level_ = ObBackupIndexLevel::BACKUP_INDEX_LEVEL_LOG_STREAM;
+    index_param.tenant_id_ = param_.tenant_id_;
+    index_param.backup_set_id_ = param_.backup_set_desc_.backup_set_id_;
+    index_param.ls_id_ = param_.ls_id_;
+    index_param.is_tenant_level_ = false;
+    index_param.backup_data_type_.set_sys_data_backup();
+    index_param.turn_id_ = param_.turn_id_;
+    index_param.retry_id_ = retry_id;
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_tx_log_ts)
+{
+  int ret = OB_SUCCESS;
+  min_filled_tx_log_ts = INT64_MAX;
+  ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
+  storage::ObLSHandle ls_handle;
+  storage::ObLS *ls = NULL;
+  ObLSTabletService *ls_tablet_svr = NULL;
+  ObTabletHandle tablet_handle;
+  const uint64_t tenant_id = param_.tenant_id_;
+  const share::ObLSID &ls_id = param_.ls_id_;
+  if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream not exist", K(ret), K(ls_id));
+  } else if (FALSE_IT(ls_tablet_svr = ls->get_tablet_svr())) {
+  } else if (OB_FAIL(ls_tablet_svr->build_tablet_iter(iterator))) {
+    STORAGE_LOG(WARN, "build ls table iter failed.", KR(ret));
+  } else {
+    while (OB_SUCC(iterator.get_next_tablet(tablet_handle))) {
+      int64_t tmp_filled_tx_log_ts = INT64_MAX;
+      bool has_minor_sstable = false;
+      if (OB_FAIL(get_tablet_min_filled_tx_log_ts_(tablet_handle, tmp_filled_tx_log_ts, has_minor_sstable))) {
+        STORAGE_LOG(WARN, "get min end_log_ts from a single tablet failed.", KR(ret));
+      } else if (!has_minor_sstable) {
+        continue;
+      } else if (tmp_filled_tx_log_ts < min_filled_tx_log_ts) {
+        min_filled_tx_log_ts = tmp_filled_tx_log_ts;
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::get_tablet_min_filled_tx_log_ts_(
+    ObTabletHandle &tablet_handle, int64_t &min_filled_tx_log_ts, bool &has_minor_sstable)
+{
+  int ret = OB_SUCCESS;
+  has_minor_sstable = false;
+  min_filled_tx_log_ts = INT64_MAX;
+  ObTablet *tablet = nullptr;
+  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is nullptr.", K(ret), K(tablet_handle));
+  } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
+    // skip inner tablet
+  } else {
+    min_filled_tx_log_ts = tablet->get_tablet_meta().clog_checkpoint_ts_;
+    ObTabletTableStore &table_store = tablet->get_table_store();
+    const ObSSTableArray &sstable_array = table_store.get_minor_sstables();
+    has_minor_sstable = !sstable_array.empty();
+    for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
+      ObITable *table_ptr = sstable_array[i];
+      ObSSTable *sstable = NULL;
+      if (OB_ISNULL(table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table ptr should not be null", K(ret));
+      } else if (!table_ptr->is_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table ptr type not expectedd", K(ret));
+      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
+      } else {
+        min_filled_tx_log_ts = std::min(sstable->get_meta().get_basic_meta().filled_tx_log_ts_, min_filled_tx_log_ts);
+      }
+    }
   }
   return ret;
 }
