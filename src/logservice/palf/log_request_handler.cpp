@@ -415,18 +415,18 @@ int LogRequestHandler::handle_sync_request<LogGetMCStReq, LogGetMCStResp>(
   int ret = common::OB_SUCCESS;
   if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
     PalfHandleImplGuard guard;
     if (false == palf_env_impl_->check_disk_space_enough() ||
         false == palf_env_impl_->check_tenant_memory_enough()) {
       resp.is_normal_replica_ = false;
     } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
-      CLOG_LOG(ERROR, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
+      PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->get_memberchange_status(server, req, resp))) {
-      CLOG_LOG(WARN, "PalfHandleImpl get_memberchange_status failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
+      PALF_LOG(WARN, "PalfHandleImpl get_memberchange_status failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
     } else {
-      CLOG_LOG(TRACE, "PalfHandleImpl get_memberchange_status success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_env_impl_));
+      PALF_LOG(TRACE, "PalfHandleImpl get_memberchange_status success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_env_impl_));
     }
   }
   return ret;
