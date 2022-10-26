@@ -809,6 +809,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21333	CDB_OB_AUTO_INCREMENT	1	201001	1
 21334	DBA_SEQUENCES	1	201001	1
 21335	DBA_SCHEDULER_WINDOWS	1	201001	1
+21336	DBA_OB_USERS	1	201001	1
+21337	CDB_OB_USERS	1	201001	1
+21338	DBA_OB_DATABASE_PRIVILEGE	1	201001	1
+21339	CDB_OB_DATABASE_PRIVILEGE	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;
@@ -1040,3 +1044,7 @@ select * from oceanbase.DBA_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_ZONE_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.DBA_OB_TABLET_REPLICAS limit 1;
+select * from oceanbase.DBA_OB_USERS limit 1;
+select * from oceanbase.CDB_OB_USERS limit 1;
+select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1;
+select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1;
