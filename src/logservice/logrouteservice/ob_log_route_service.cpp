@@ -145,19 +145,21 @@ void ObLogRouteService::stop()
 
 void ObLogRouteService::wait()
 {
-  LOG_INFO("ObLogRouteService wait begin");
-  TG_WAIT(lib::TGDefIDs::LogRouterTimer);
-  int64_t num = 0;
-  int ret = OB_SUCCESS;
-  while (OB_SUCC(TG_GET_QUEUE_NUM(tg_id_, num)) && num > 0) {
-    PAUSE();
+  if (IS_INIT) {
+    LOG_INFO("ObLogRouteService wait begin");
+    TG_WAIT(lib::TGDefIDs::LogRouterTimer);
+    int64_t num = 0;
+    int ret = OB_SUCCESS;
+    while (OB_SUCC(TG_GET_QUEUE_NUM(tg_id_, num)) && num > 0) {
+      PAUSE();
+    }
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "ObLogRouteService failed to get queue number");
+    }
+    TG_STOP(tg_id_);
+    TG_WAIT(tg_id_);
+    LOG_INFO("ObLogRouteService wait finish");
   }
-  if (OB_FAIL(ret)) {
-    CLOG_LOG(WARN, "ObLogApplyService failed to get queue number");
-  }
-  TG_STOP(tg_id_);
-  TG_WAIT(tg_id_);
-  LOG_INFO("ObLogRouteService wait finish");
 }
 
 void ObLogRouteService::destroy()

@@ -306,7 +306,7 @@ int TransCtx::prepare_(
     const uint64_t tenant_id = host_tls_id.get_tenant_id();
     int64_t host_commit_log_timestamp = host.get_commit_ts();
     const palf::LSN &host_commit_log_lsn = host.get_commit_log_lsn();
-    const ObLSLogInfo *part_array = host.get_participants();
+    const transaction::ObLSLogInfoArray &part_array = host.get_participants();
     int64_t part_count = host.get_participant_count();
     const int64_t trans_commit_version = host.get_trans_commit_version();
     tenant_id_ = tenant_id;
@@ -314,7 +314,7 @@ int TransCtx::prepare_(
     // default serve
     bool is_serving_host_part = true;
 
-    if (OB_UNLIKELY(part_count <= 0) || OB_ISNULL(part_array)) {
+    if (OB_UNLIKELY(part_count <= 0)) {
       LOG_ERROR("invalid participant array", K(part_count), K(part_array), K(host));
       ret = OB_ERR_UNEXPECTED;
     }

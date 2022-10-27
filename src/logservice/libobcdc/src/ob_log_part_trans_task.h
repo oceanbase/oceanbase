@@ -982,14 +982,14 @@ public:
 
   common::ObIAllocator &get_allocator() { return allocator_; }
 
-  const transaction::ObLSLogInfo *get_participants() const
+  const transaction::ObLSLogInfoArray &get_participants() const
   {
     return participants_;
   }
 
   int64_t get_participant_count() const
   {
-    return participant_count_;
+    return participants_.count();
   }
 
   // for unittest start
@@ -1090,8 +1090,8 @@ public:
       K_(prepare_log_lsn),
       K_(commit_ts),
       K_(commit_log_lsn),
-      K_(participant_count),
-      KP_(participants),
+      "participant_count", participants_.count(),
+      K_(participants),
       K_(trace_id),
       K_(trace_info),
       K_(sorted_log_entry_info),
@@ -1184,9 +1184,8 @@ private:
   transaction::TransType  trans_type_;
   bool                    is_xa_or_dup_;          // true if xa dist trans or duplicate table trans.
 
-  int64_t                   participant_count_;
   // participants info, used for determine the sequence of trans at sequencer moudle.
-  transaction::ObLSLogInfo  *participants_;
+  transaction::ObLSLogInfoArray participants_;
   // App Trace ID (get from commit_info log)
   ObString                trace_id_;
   // App Trace Info (get from commit_info log)
