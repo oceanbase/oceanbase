@@ -155,7 +155,7 @@ public:
   bool has_pl();
 
 private:
-  static const int64_t MAX_TRY_STEPS = 6;
+  static const int64_t MAX_TRY_STEPS = 8;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];
 
   int alloc_ezbuf();

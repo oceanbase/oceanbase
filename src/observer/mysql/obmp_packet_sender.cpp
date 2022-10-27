@@ -1026,9 +1026,9 @@ bool ObMPPacketSender::has_pl()
   return has_pl;
 }
 
-// current lob will <= 64MB, TODO oushen
+// current max_allow_packet_size <= 1G, TODO haozheng
 int64_t ObMPPacketSender::TRY_EZ_BUF_SIZES[] = {64*1024, 128*1024, 2*1024*1024 - 1024, 4*1024*1024 - 1024,
-                                                64*1024*1024 - 1024, 128*1024*1024};
+                                                64*1024*1024 - 1024, 128*1024*1024, 512*1024*1024, 1024*1024*1024};
 
 
 }; // end namespace observer
