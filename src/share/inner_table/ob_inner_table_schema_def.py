@@ -19575,47 +19575,8 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-def_table_schema(
-  owner             = 'jianyun.sjy',
-  table_name        = 'GV$OB_IO_QUOTA',
-  table_id          = '21243',
-  table_type        = 'SYSTEM_VIEW',
-  in_tenant_space   = False,
-  gm_columns        = [],
-  rowkey_columns    = [],
-  normal_columns    = [],
-  view_definition   = """
-    SELECT
-        SVR_IP,
-        SVR_PORT,
-        TENANT_ID,
-        CATEGORY,
-        MODE,
-        SIZE,
-        MIN_IOPS,
-        MAX_IOPS,
-        REAL_IOPS,
-        MIN_MBPS,
-        MAX_MBPS,
-        REAL_MBPS
-    FROM oceanbase.__all_virtual_io_quota
-  """.replace("\n", " "),
-)
-
-def_table_schema(
-  owner             = 'jianyun.sjy',
-  table_name        = 'V$OB_IO_QUOTA',
-  table_id          = '21244',
-  table_type        = 'SYSTEM_VIEW',
-  in_tenant_space   = False,
-  gm_columns        = [],
-  rowkey_columns    = [],
-  normal_columns    = [],
-  view_definition   = """
-    SELECT * FROM oceanbase.GV$OB_IO_QUOTA
-    WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
-  """.replace("\n", " "),
-)
+# reserve 21243 for GV$OB_IO_QUOTA
+# reserve 21244 for V$OB_IO_QUOTA
 
 
 # 4.0 backup clean view

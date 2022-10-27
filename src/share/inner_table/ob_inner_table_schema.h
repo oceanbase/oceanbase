@@ -1210,8 +1210,6 @@ public:
   static int v_ob_io_calibration_status_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_io_benchmark_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_io_benchmark_schema(share::schema::ObTableSchema &table_schema);
-  static int gv_ob_io_quota_schema(share::schema::ObTableSchema &table_schema);
-  static int v_ob_io_quota_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_delete_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_delete_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_delete_tasks_schema(share::schema::ObTableSchema &table_schema);
@@ -3050,8 +3048,6 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_io_calibration_status_schema,
   ObInnerTableSchema::gv_ob_io_benchmark_schema,
   ObInnerTableSchema::v_ob_io_benchmark_schema,
-  ObInnerTableSchema::gv_ob_io_quota_schema,
-  ObInnerTableSchema::v_ob_io_quota_schema,
   ObInnerTableSchema::cdb_ob_backup_delete_jobs_schema,
   ObInnerTableSchema::cdb_ob_backup_delete_job_history_schema,
   ObInnerTableSchema::cdb_ob_backup_delete_tasks_schema,
@@ -8813,10 +8809,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 212;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 550;
-const int64_t OB_SYS_VIEW_COUNT = 603;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1370;
+const int64_t OB_SYS_VIEW_COUNT = 601;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1368;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1373;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1371;
 
 } // end namespace share
 } // end namespace oceanbase
