@@ -148,7 +148,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         } else if (OB_SUCCESS == ret_array.at(i)) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_REQUESTED;
           LOG_INFO("rpc send successfully", K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
-        } else if (OB_HASH_EXIST == ret_array.at(i) || OB_TIMEOUT == ret_array.at(i) || OB_EAGAIN == ret_array.at(i)) {
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_array.at(i))) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_RETRY;
           LOG_INFO("task need retry", K(ret_array.at(i)), K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         } else {
