@@ -756,8 +756,13 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
   } else if (schema_ctx_.storage_schema_->get_schema_version() > old_tablet->get_storage_schema().get_schema_version()) {
-    update_table_store_flag = true;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can't have larger storage schema", K(ret), K(schema_ctx_.storage_schema_), K(old_tablet->get_storage_schema()));
   } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()) {
+    // need write slog to update snapshot_version on tablet_meta
+    update_table_store_flag = true;
+  } else if (get_merge_table_result.log_ts_range_.end_log_ts_ > old_tablet->get_clog_checkpoint_ts()) {
+    // need write slog to update clog_checkpoint_log_ts on tablet_meta
     update_table_store_flag = true;
   }
 
