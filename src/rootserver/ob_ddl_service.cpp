@@ -6034,20 +6034,26 @@ int ObDDLService::check_generated_column_modify_authority(
 {
   int ret = OB_SUCCESS;
   if (old_column_schema.is_generated_column() && alter_column_schema.is_generated_column()) {
-    ObString old_def;
-    ObString alter_def;
-    if (OB_FAIL(old_column_schema.get_cur_default_value().get_string(old_def))) {
-      LOG_WARN("get old generated column definition failed", K(ret), K(old_column_schema));
-    } else if (OB_FAIL(alter_column_schema.get_cur_default_value().get_string(alter_def))) {
-      LOG_WARN("get new generated column definition failed", K(ret), K(alter_column_schema));
-    } else if (!ObCharset::case_insensitive_equal(old_def, alter_def)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify generated column definition");
-      LOG_WARN("generated column schema definition changed", K(ret), K(old_column_schema), K(alter_column_schema));
+    if ((old_column_schema.is_virtual_generated_column() && alter_column_schema.is_virtual_generated_column())
+     || (old_column_schema.is_stored_generated_column() && alter_column_schema.is_stored_generated_column())) {
+      ObString old_def;
+      ObString alter_def;
+      if (OB_FAIL(old_column_schema.get_cur_default_value().get_string(old_def))) {
+        LOG_WARN("get old generated column definition failed", K(ret), K(old_column_schema));
+      } else if (OB_FAIL(alter_column_schema.get_cur_default_value().get_string(alter_def))) {
+        LOG_WARN("get new generated column definition failed", K(ret), K(alter_column_schema));
+      } else if (!ObCharset::case_insensitive_equal(old_def, alter_def)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify generated column definition");
+        LOG_WARN("generated column schema definition changed", K(ret), K(old_column_schema), K(alter_column_schema));
+      }
+    } else {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
     }
   } else if (old_column_schema.is_generated_column() || alter_column_schema.is_generated_column()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Changing the STORED status for generated columns");
+    ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+    LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
   }
   return ret;
 }
