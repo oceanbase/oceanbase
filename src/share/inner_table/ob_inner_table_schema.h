@@ -3473,6 +3473,16 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_table_locations_ora_schema,
   NULL,};
 
+const schema_create_func core_index_table_schema_creators [] = {
+  NULL,};
+
+const schema_create_func sys_index_table_schema_creators [] = {
+  ObInnerTableSchema::all_table_history_idx_data_table_id_schema,
+  ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema,
+  ObInnerTableSchema::all_backup_set_files_idx_status_schema,
+  ObInnerTableSchema::all_ddl_task_status_idx_task_key_schema,
+  NULL,};
+
 const schema_create_func information_schema_table_schema_creators[] = {
   NULL,};
 

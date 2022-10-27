@@ -2115,10 +2115,6 @@ private:
       const int64_t tenant_id,
       const share::schema::AlterTableSchema &alter_table_schema,
       const share::schema::ObTableSchema &orig_table_schema);
-  int add_sys_table_index(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      common::ObIArray<share::schema::ObTableSchema> &schemas);
   int add_sys_table_lob_aux(const int64_t tenant_id, const uint64_t table_id,
                             ObTableSchema &meta_schema, ObTableSchema &data_schema);
   int check_has_multi_autoinc(share::schema::ObTableSchema &table_schema);

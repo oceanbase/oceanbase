@@ -5683,9 +5683,12 @@ public:
 
   static bool is_sys_table_index_tid(const int64_t index_id);
   static bool is_sys_table_has_index(const int64_t table_id);
-  static int64_t get_sys_table_index_tid(const int64_t table_id);
-  static int get_sys_table_index_schema(const int64_t data_table_id,
-                                        share::schema::ObTableSchema &index_schema);
+  static int fill_sys_index_infos(share::schema::ObTableSchema &table);
+  static int get_sys_table_index_tids(const int64_t table_id, common::ObIArray<uint64_t> &index_tids);
+  static int append_sys_table_index_schemas(
+             const uint64_t tenant_id,
+             const uint64_t data_table_id,
+             common::ObIArray<share::schema::ObTableSchema> &tables);
   static int add_sys_table_index_ids(
              const uint64_t tenant_id,
              common::ObIArray<uint64_t> &table_ids);

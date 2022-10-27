@@ -1242,7 +1242,11 @@ int ObRootInspection::check_sys_table_schemas_(
       share::core_table_schema_creators,
       share::sys_table_schema_creators,
       share::virtual_table_schema_creators,
-      share::sys_view_schema_creators, NULL };
+      share::sys_view_schema_creators,
+      // TODO: will check sys index when compat case changed.
+      //share::core_index_table_schema_creators,
+      //share::sys_index_table_schema_creators,
+      NULL };
 
     int back_ret = OB_SUCCESS;
     ObTableSchema table_schema;
@@ -1269,6 +1273,8 @@ int ObRootInspection::check_sys_table_schemas_(
         } else if (OB_FAIL(check_table_schema(tenant_id, table_schema))) {
           // don't print table_schema, otherwise log will be too much
           LOG_WARN("check_table_schema failed", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(check_sys_view_(tenant_id, table_schema))) {
+          LOG_WARN("fail to check sys view", KR(ret), K(tenant_id));
         }
         back_ret = OB_SUCCESS == back_ret ? ret : back_ret;
         ret = OB_SUCCESS;
@@ -1320,8 +1326,6 @@ int ObRootInspection::check_table_schema(
     can_retry_ = true;
   } else if (OB_FAIL(check_table_schema(hard_code_table, *table))) {
     LOG_WARN("fail to check table schema", KR(ret), K(tenant_id), K(hard_code_table), KPC(table));
-  } else if (OB_FAIL(check_sys_view_(tenant_id, hard_code_table))) {
-    LOG_WARN("fail to check sys view", KR(ret), K(tenant_id), K(hard_code_table));
   }
   return ret;
 }
@@ -1642,15 +1646,7 @@ int ObRootInspection::check_column_schema(const ObString &table_name,
   }
 
     if (!ignore_column_id) {
-      uint64_t tid = hard_code_column.get_table_id();
-      uint64_t cid = hard_code_column.get_column_id();
-      if ((OB_ALL_TABLE_HISTORY_TID == tid && cid <= 75)
-          || (OB_ALL_TABLE_TID == tid && cid <= 74)
-          || (OB_ALL_TENANT_TID == tid && cid <= 36)
-          || (OB_ALL_TENANT_HISTORY_TID == tid && cid <= 38)) {
-      } else {
-        CMP_COLUMN_ATTR(column_id);
-      }
+      CMP_COLUMN_ATTR(column_id);
     }
     CMP_COLUMN_ATTR(tenant_id);
     CMP_COLUMN_ATTR(table_id);

@@ -1796,7 +1796,8 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
       if (OB_SUCC(ret)
           && ObSysTableChecker::is_sys_table_has_index(first_table.get_table_id())) {
         ObArray<ObTableSchema> schemas;
-        if (OB_FAIL(add_sys_table_index(tenant_id, first_table.get_table_id(), schemas))) {
+        if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+                    tenant_id, first_table.get_table_id(), schemas))) {
           LOG_WARN("fail to add sys table index", K(ret), K(tenant_id),
                    "table_id", first_table.get_table_id());
         } else if (OB_FAIL(ddl_operator.create_table(schemas.at(0),
@@ -19239,6 +19240,7 @@ int ObDDLService::create_tenant_sys_tablets(
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
+    ObArray<uint64_t> index_tids;
     if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
       LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
     } else if (OB_FAIL(table_creator.init())) {
@@ -19254,17 +19256,25 @@ int ObDDLService::create_tenant_sys_tablets(
         if (OB_FAIL(table_schemas.push_back(&data_table))) {
           LOG_WARN("fail to push back data table ptr", KR(ret), K(data_table_id));
         } else if (ObSysTableChecker::is_sys_table_has_index(data_table_id)) {
-           // sys table's index should be next to its data table.
-          int64_t index_id = OB_INVALID_ID;
-          if (i + 1 >= tables.count()) {
+          if (OB_FAIL(ObSysTableChecker::get_sys_table_index_tids(data_table_id, index_tids))) {
+            LOG_WARN("fail to get sys index tids", KR(ret), K(data_table_id));
+          } else if (i + index_tids.count()  >= tables.count()
+                     || index_tids.count() <= 0) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sys table's index should be next to its data table", KR(ret), K(i));
-          } else if (FALSE_IT(index_id = tables.at(i + 1).get_table_id())) {
-          } else if (index_id != ObSysTableChecker::get_sys_table_index_tid(data_table_id)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sys table's index not matched", KR(ret), K(index_id), K(data_table_id));
-          } else if (OB_FAIL(table_schemas.push_back(&tables.at(i + 1)))) {
-            LOG_WARN("fail to push back index table ptr", KR(ret), K(index_id), K(data_table_id));
+            LOG_WARN("sys table's index should be next to its data table",
+                     KR(ret), K(i), "index_cnt",  index_tids.count());
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < index_tids.count(); j++) {
+              const ObTableSchema &index_schema = tables.at(i + j + 1);
+              const int64_t index_id = index_schema.get_table_id();
+              if (index_id != index_tids.at(j)
+                  || data_table_id != index_schema.get_data_table_id()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("sys index schema order is not match", KR(ret), K(data_table_id), K(j), K(index_schema));
+              } else if (OB_FAIL(table_schemas.push_back(&index_schema))) {
+                LOG_WARN("fail to push back index schema", KR(ret), K(index_id), K(data_table_id));
+              }
+            } // end for
           }
         }
 
@@ -29513,28 +29523,6 @@ int ObDDLService::force_set_locality(
       if (OB_SUCC(ret) && OB_FAIL(publish_schema(OB_SYS_TENANT_ID))) {
         LOG_WARN("publish schema failed, ", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::add_sys_table_index(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    common::ObIArray<share::schema::ObTableSchema> &schemas)
-{
-  int ret = OB_SUCCESS;
-  if (ObSysTableChecker::is_sys_table_has_index(table_id)) {
-    ObTableSchema index_schema;
-    const int64_t data_table_id = table_id;
-    if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(
-        data_table_id, index_schema))) {
-      LOG_WARN("fail to get sys table's index schema", KR(ret), K(data_table_id));
-    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
-               tenant_id, index_schema))) {
-      LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(schemas.push_back(index_schema))) {
-      LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
     }
   }
   return ret;
