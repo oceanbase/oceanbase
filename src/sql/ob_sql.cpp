@@ -1611,6 +1611,10 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           }
         }
       } else {
+        if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_dynamic_sql_) {
+          // call procedure stmt call always parse as dynamic sql
+          context.is_dynamic_sql_ = true;
+        }
         ObParser parser(allocator, session.get_sql_mode(),
                         session.get_local_collation_connection());
         ParseResult parse_result;
