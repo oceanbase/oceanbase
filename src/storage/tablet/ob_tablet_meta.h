@@ -78,6 +78,14 @@ public:
   int init(
       common::ObIAllocator &allocator,
       const ObMigrationTabletParam &param);
+  int init(
+      common::ObIAllocator &allocator,
+      const ObTabletMeta &old_tablet_meta,
+      const ObTabletTxMultiSourceDataUnit &tx_data,
+      const ObTabletBindingInfo &ddl_data,
+      const share::ObTabletAutoincSeq &autoinc_seq,
+      const ObMigrationTabletParam *tablet_meta);
+
   void reset();
   bool is_valid() const;
 
@@ -151,7 +159,14 @@ public:
   int64_t ddl_start_log_ts_;
   int64_t ddl_snapshot_version_;
   int64_t max_sync_storage_schema_version_;
+  //ATTENTION : Add a new variable need consider ObMigrationTabletParam
+  // and tablet meta init interface for migration.
+  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
 
+private:
+  int inner_check_(
+      const ObTabletMeta &old_tablet_meta,
+      const ObMigrationTabletParam *tablet_meta);
 private:
   static const int32_t TABLET_META_VERSION = 1;
 private:

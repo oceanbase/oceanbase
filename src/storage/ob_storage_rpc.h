@@ -326,11 +326,12 @@ public:
   ~ObCopyTabletSSTableHeader() {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count));
+  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count), K_(tablet_meta));
 
   common::ObTabletID tablet_id_;
   storage::ObCopyTabletStatus::STATUS status_;
   int64_t sstable_count_;
+  ObMigrationTabletParam tablet_meta_;
 };
 
 // Leader notify follower to restore some tablets.

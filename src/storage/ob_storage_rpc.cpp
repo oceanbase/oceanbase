@@ -542,7 +542,8 @@ OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoHeader,
 ObCopyTabletSSTableHeader::ObCopyTabletSSTableHeader()
   : tablet_id_(),
     status_(ObCopyTabletStatus::MAX_STATUS),
-    sstable_count_(0)
+    sstable_count_(0),
+    tablet_meta_()
 {
 }
 
@@ -551,17 +552,20 @@ void ObCopyTabletSSTableHeader::reset()
   tablet_id_.reset();
   status_ = ObCopyTabletStatus::MAX_STATUS;
   sstable_count_ = 0;
+  tablet_meta_.reset();
 }
 
 bool ObCopyTabletSSTableHeader::is_valid() const
 {
   return tablet_id_.is_valid()
       && ObCopyTabletStatus::is_valid(status_)
-      && sstable_count_ >= 0;
+      && sstable_count_ >= 0
+      && ((ObCopyTabletStatus::TABLET_EXIST == status_ && tablet_meta_.is_valid())
+          || ObCopyTabletStatus::TABLET_NOT_EXIST == status_);
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableHeader,
-    tablet_id_, status_, sstable_count_);
+    tablet_id_, status_, sstable_count_, tablet_meta_);
 
 ObNotifyRestoreTabletsArg::ObNotifyRestoreTabletsArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_array_(), restore_status_()

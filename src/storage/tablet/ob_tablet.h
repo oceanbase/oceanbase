@@ -476,6 +476,7 @@ private:
   // we keep it on tablet because we cannot get them in ObTablet::deserialize
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
+
   ObIMemtableMgr *memtable_mgr_;
   logservice::ObLogHandler *log_handler_;
 
@@ -484,6 +485,11 @@ private:
   ObTableReadInfo full_read_info_;
   common::ObIAllocator *allocator_;
   ObMetaObjGuard<ObTablet> next_tablet_guard_;
+
+  //ATTENTION : Add a new variable need consider ObMigrationTabletParam
+  // and tablet meta init interface for migration.
+  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+
   bool is_inited_;
 };
 

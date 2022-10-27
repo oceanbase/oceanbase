@@ -1069,7 +1069,8 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     ls_(nullptr),
     reporter_(nullptr),
     ha_dag_(nullptr),
-    tables_handle_()
+    tables_handle_(),
+    src_tablet_meta_(nullptr)
 
 {
 }
@@ -1081,20 +1082,23 @@ ObTabletCopyFinishTask::~ObTabletCopyFinishTask()
 int ObTabletCopyFinishTask::init(
     const common::ObTabletID &tablet_id,
     ObLS *ls,
-    observer::ObIMetaReport *reporter)
+    observer::ObIMetaReport *reporter,
+    const ObMigrationTabletParam *src_tablet_meta)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet copy finish task init twice", K(ret));
-  } else if (!tablet_id.is_valid() || OB_ISNULL(ls) || OB_ISNULL(reporter)) {
+  } else if (!tablet_id.is_valid() || OB_ISNULL(ls) || OB_ISNULL(reporter) || OB_ISNULL(src_tablet_meta)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init tablet copy finish task get invalid argument", K(ret), K(tablet_id), KP(ls), KP(reporter));
+    LOG_WARN("init tablet copy finish task get invalid argument", K(ret), K(tablet_id), KP(ls),
+        KP(reporter), KP(src_tablet_meta));
   } else {
     tablet_id_ = tablet_id;
     ls_ = ls;
     reporter_ = reporter;
     ha_dag_ = static_cast<ObStorageHADag *>(this->get_dag());
+    src_tablet_meta_ = src_tablet_meta;
     is_inited_ = true;
   }
   return ret;
@@ -1199,7 +1203,7 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   } else {
     update_table_store_param.multi_version_start_ = 0;
     update_table_store_param.need_report_ = true;
-    update_table_store_param.storage_schema_ = &tablet->get_storage_schema();
+    update_table_store_param.tablet_meta_ = src_tablet_meta_;
     update_table_store_param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle_))) {

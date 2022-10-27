@@ -326,6 +326,7 @@ int ObTablet::init(
   int ret = OB_SUCCESS;
   allocator_ = &(MTL(ObTenantMetaMemMgr*)->get_tenant_allocator());
   int64_t max_sync_schema_version = 0;
+  const ObStorageSchema *storage_schema = nullptr;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -340,15 +341,16 @@ int ObTablet::init(
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
   } else if (OB_FAIL(old_tablet.get_max_sync_storage_schema_version(max_sync_schema_version))) {
     LOG_WARN("failed to get max sync storage schema version", K(ret));
-  } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_,
-      param.snapshot_version_, param.multi_version_start_, tx_data, ddl_data, autoinc_seq,
-      // use min schema version to avoid lose storage_schema in replay/reboot
-      // use old tablet clog_checkpoint_ts to avoid lose storage schema in migration
-      MIN(MAX(param.storage_schema_->schema_version_, old_tablet.storage_schema_.schema_version_), max_sync_schema_version)))) {
+  } else if (FALSE_IT(storage_schema = OB_ISNULL(param.tablet_meta_) ? &old_tablet.storage_schema_ : &param.tablet_meta_->storage_schema_)) {
+  } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_, tx_data, ddl_data, autoinc_seq, param.tablet_meta_
+      // this interface for migration to batch update table store
+      // use old tablet clog_checkpoint_ts to avoid lose tx data
+      // use max schema to makesure sstable and schema match
+     ))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param), K(tx_data), K(ddl_data), K(autoinc_seq));
   } else if (OB_FAIL(table_store_.build_ha_new_table_store(*allocator_, this, param, old_tablet.table_store_))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));
-  } else if (OB_FAIL(choose_and_save_storage_schema(*allocator_, old_tablet.storage_schema_, *param.storage_schema_))) {
+  } else if (OB_FAIL(choose_and_save_storage_schema(*allocator_, old_tablet.storage_schema_, *storage_schema))) {
     LOG_WARN("failed to choose and save storage schema", K(ret), K(old_tablet), K(param));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_));

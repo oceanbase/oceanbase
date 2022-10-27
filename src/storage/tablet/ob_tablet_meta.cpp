@@ -229,6 +229,75 @@ int ObTabletMeta::init(
   return ret;
 }
 
+int ObTabletMeta::init(
+    common::ObIAllocator &allocator,
+    const ObTabletMeta &old_tablet_meta,
+    const ObTabletTxMultiSourceDataUnit &tx_data,
+    const ObTabletBindingInfo &ddl_data,
+    const share::ObTabletAutoincSeq &autoinc_seq,
+    const ObMigrationTabletParam *tablet_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!old_tablet_meta.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(old_tablet_meta));
+  } else if (OB_FAIL(inner_check_(old_tablet_meta, tablet_meta))) {
+    LOG_WARN("failed to do inner check", K(ret), K(old_tablet_meta), KP(tablet_meta));
+  } else {
+    const int64_t snapshot_version = OB_ISNULL(tablet_meta) ?
+        old_tablet_meta.snapshot_version_ : MAX(old_tablet_meta.snapshot_version_, tablet_meta->snapshot_version_);
+    const int64_t multi_version_start =  OB_ISNULL(tablet_meta) ?
+        old_tablet_meta.multi_version_start_ : MAX(old_tablet_meta.multi_version_start_, tablet_meta->multi_version_start_);
+    const int64_t max_sync_storage_schema_version = OB_ISNULL(tablet_meta) ?
+        old_tablet_meta.max_sync_storage_schema_version_ : MIN(old_tablet_meta.max_sync_storage_schema_version_,
+            tablet_meta->max_sync_storage_schema_version_);
+    ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
+    if (!table_store_flag.with_major_sstable()) {
+      table_store_flag = OB_ISNULL(tablet_meta) ? table_store_flag : tablet_meta->table_store_flag_;
+    }
+
+    version_ = TABLET_META_VERSION;
+    ls_id_ = old_tablet_meta.ls_id_;
+    tablet_id_ = old_tablet_meta.tablet_id_;
+    data_tablet_id_ = old_tablet_meta.data_tablet_id_;
+    ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
+    create_scn_ = old_tablet_meta.create_scn_;
+    start_scn_ = old_tablet_meta.start_scn_;
+    clog_checkpoint_ts_ = old_tablet_meta.clog_checkpoint_ts_;
+    ddl_checkpoint_ts_ = old_tablet_meta.ddl_checkpoint_ts_;
+    snapshot_version_ = snapshot_version;
+    multi_version_start_ = multi_version_start;
+    compat_mode_ = old_tablet_meta.compat_mode_;
+    if (FAILEDx(autoinc_seq_.assign(autoinc_seq))) {
+      LOG_WARN("failed to assign autoinc seq", K(ret));
+    }
+    ha_status_ = old_tablet_meta.ha_status_;
+    report_status_ = old_tablet_meta.report_status_;
+    tx_data_ = tx_data;
+    if (FAILEDx(ddl_data_.assign(ddl_data))) {
+      LOG_WARN("failed to assign ddl data", K(ret));
+    }
+    table_store_flag_ = table_store_flag;
+    ddl_checkpoint_ts_ = old_tablet_meta.ddl_checkpoint_ts_;
+    ddl_start_log_ts_ = old_tablet_meta.ddl_start_log_ts_;
+    ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
+    max_sync_storage_schema_version_ = max_sync_storage_schema_version;
+    
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
 void ObTabletMeta::reset()
 {
   version_ = 0;
@@ -580,6 +649,29 @@ int ObTabletMeta::update_create_scn(const int64_t create_scn)
 
   return ret;
 }
+
+int ObTabletMeta::inner_check_(
+    const ObTabletMeta &old_tablet_meta,
+    const ObMigrationTabletParam *tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  if (!old_tablet_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inner check get invalid argument", K(ret), K(old_tablet_meta));
+  } else if (OB_ISNULL(tablet_meta)) {
+    //do nohting
+  } else if (OB_FAIL(old_tablet_meta.ls_id_ != tablet_meta->ls_id_
+      || old_tablet_meta.tablet_id_ != tablet_meta->tablet_id_
+      || old_tablet_meta.data_tablet_id_ != tablet_meta->data_tablet_id_
+      || old_tablet_meta.ref_tablet_id_ != tablet_meta->ref_tablet_id_
+      || old_tablet_meta.compat_mode_ != tablet_meta->compat_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old tablet meta part variable is not same with migration tablet param",
+        K(ret), K(old_tablet_meta), KPC(tablet_meta));
+  }
+  return ret;
+}
+
 
 ObMigrationTabletParam::ObMigrationTabletParam()
   : allocator_(),

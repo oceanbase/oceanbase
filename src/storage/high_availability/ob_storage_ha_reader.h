@@ -335,6 +335,7 @@ public:
   virtual ~ObCopySSTableInfoRestoreReader() {}
 
   int init(
+      const share::ObLSID &ls_id,
       const ObRestoreBaseInfo &restore_base_info,
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
@@ -356,6 +357,9 @@ private:
       common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
   int set_backup_sstable_meta_array_(
       const common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
+  int get_tablet_meta_(
+      const common::ObTabletID &tablet_id,
+      ObMigrationTabletParam &tablet_meta);
 
 
 private:
@@ -368,6 +372,8 @@ private:
   bool is_sstable_iter_end_;
   common::ObArray<backup::ObBackupSSTableMeta> backup_sstable_meta_array_;
   common::ObArenaAllocator allocator_;
+  share::ObLSID ls_id_;
+  ObLSHandle ls_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableInfoRestoreReader);
 };
 
@@ -408,6 +414,8 @@ private:
       blocksstable::ObSSTable *sstable,
       bool &need_copy_sstable);
   int get_copy_sstable_count_(int64_t &sstable_count);
+  int get_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+
 private:
   bool is_inited_;
   obrpc::ObCopyTabletSSTableInfoArg tablet_sstable_info_;
