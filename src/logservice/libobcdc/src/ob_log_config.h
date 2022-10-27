@@ -273,8 +273,10 @@ public:
   // ------------------------------------------------------------------------
   //              configurations which supports dynamically modify
   // ------------------------------------------------------------------------
-  T_DEF_INT_INFT(mysql_connect_timeout_sec, OB_CLUSTER_PARAMETER, 40, 1, "mysql connection timeout in seconds");
-  T_DEF_INT_INFT(mysql_query_timeout_sec, OB_CLUSTER_PARAMETER, 30, 1, "mysql query timeout in seconds");
+  T_DEF_INT_INFT(rs_sql_connect_timeout_sec, OB_CLUSTER_PARAMETER, 40, 1, "rootservice mysql connection timeout in seconds");
+  T_DEF_INT_INFT(rs_sql_query_timeout_sec, OB_CLUSTER_PARAMETER, 30, 1, "rootservice mysql query timeout in seconds");
+  T_DEF_INT_INFT(tenant_sql_connect_timeout_sec, OB_CLUSTER_PARAMETER, 40, 1, "tenant mysql connection timeout in seconds");
+  T_DEF_INT_INFT(tenant_sql_query_timeout_sec, OB_CLUSTER_PARAMETER, 30, 1, "tenant mysql query timeout in seconds");
   T_DEF_INT_INFT(start_lsn_locator_rpc_timeout_sec, OB_CLUSTER_PARAMETER, 60, 1,
       "start lsn locator rpc timeout in seconds");
   T_DEF_INT_INFT(start_lsn_locator_batch_count, OB_CLUSTER_PARAMETER, 5, 1, "start lsn locator batch count");

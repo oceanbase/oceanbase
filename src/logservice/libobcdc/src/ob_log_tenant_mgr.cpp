@@ -352,10 +352,6 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     }
   }
 
-
-  // del tenant_start_ddl_info if exists regardless of ret(in case of tenant already dropped etc.)
-  try_del_tenant_start_ddl_info_(tenant_id);
-
   if (OB_SUCCESS == ret) {
     ISTAT("[ADD_TENANT]", K(tenant_id), K(tenant_name), K(is_new_created_tenant), K(is_new_tenant_by_restore),
         K(is_tenant_served), K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(sys_schema_version),
@@ -522,12 +518,16 @@ int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
             K(sys_schema_version), K(timeout));
       }
     } else {
-      // NOTE: currently add_tenant is serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is safe.
-      add_tenant_start_ddl_info_map_.reset();
       // add tenant success
       add_tenant_succ = true;
     }
   }
+
+  // NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
+  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end.)
+  // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
+  // and other unexpected case, otherwise global_heartbeat will be stucked.)
+  try_del_tenant_start_ddl_info_(tenant_id);
 
   return ret;
 }
@@ -558,8 +558,13 @@ int ObLogTenantMgr::get_first_schema_version_of_tenant_(const uint64_t tenant_id
       timeout))) {
     // OB_TENANT_HAS_BEEN_DROPPED return caller
     if (OB_TIMEOUT != ret) {
-      LOG_ERROR("get_first_trans_end_schema_version fail", KR(ret), K(tenant_id),
-          K(first_schema_version));
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_WARN("get_first_trans_end_schema_version fail cause tenant dropped", KR(ret), K(tenant_id),
+            K(first_schema_version));
+      } else {
+        LOG_ERROR("get_first_trans_end_schema_version fail", KR(ret), K(tenant_id),
+            K(first_schema_version));
+      }
     }
   } else if (OB_UNLIKELY(first_schema_version <= 0)) {
     LOG_ERROR("tenant first schema versioin is invalid", K(tenant_id), K(first_schema_version));
