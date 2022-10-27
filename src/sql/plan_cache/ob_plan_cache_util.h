@@ -376,12 +376,30 @@ struct ObPCConstParamInfo {
   common::ObSEArray<int64_t, 4> const_idx_;
   common::ObSEArray<common::ObObj, 4> const_params_;
   TO_STRING_KV(K_(const_idx), K_(const_params));
+  bool operator==(const ObPCConstParamInfo &other) const
+  {
+    bool cmp_ret = true;
+    for (int i=0; cmp_ret && i < const_idx_.count(); i++) {
+      cmp_ret = const_idx_.at(i) == other.const_idx_.at(i);
+    }
+    for (int i=0; cmp_ret && i < const_params_.count(); i++) {
+      cmp_ret = const_params_.at(i) == other.const_params_.at(i);
+    }
+    return cmp_ret;
+  }
 };
 
 struct ObPCParamEqualInfo {
   int64_t first_param_idx_;
   int64_t second_param_idx_;
   TO_STRING_KV(K_(first_param_idx), K_(second_param_idx));
+  inline bool operator==(const ObPCParamEqualInfo &other) const
+  {
+    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
+                   second_param_idx_ == other.second_param_idx_;
+
+    return cmp_ret;
+  }
 };
 
 struct ObFastParserResult {
