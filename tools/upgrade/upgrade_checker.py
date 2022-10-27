@@ -285,16 +285,16 @@ def config_logging_module(log_filenamme):
 #### ---------------end----------------------
 
 
-
+fail_list=[]
 
 #### START ####
 # 1. 检查前置版本
 def check_observer_version(query_cur, upgrade_params):
   (desc, results) = query_cur.exec_query("""select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'""")
   if len(results) != 1:
-    raise MyError('query results count is not 1')
+    fail_list.append('query results count is not 1')
   elif cmp(results[0][0], upgrade_params.old_version) < 0 :
-    raise MyError('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
+    fail_list.append('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
   logging.info('check observer version success, version = {0}'.format(results[0][0]))
 
 # 2. 检查paxos副本是否同步, paxos副本是否缺失
@@ -302,7 +302,7 @@ def check_paxos_replica(query_cur):
   # 2.1 检查paxos副本是否同步
   (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from GV$OB_LOG_STAT where in_sync = 'NO'""")
   if results[0][0] > 0 :
-    raise MyError('{0} replicas unsync, please check'.format(results[0][0]))
+    fail_list.append('{0} replicas unsync, please check'.format(results[0][0]))
   # 2.2 检查paxos副本是否有缺失 TODO
   logging.info('check paxos replica success')
 
@@ -311,11 +311,11 @@ def check_rebalance_task(query_cur):
   # 3.1 检查是否有做locality变更
   (desc, results) = query_cur.exec_query("""select count(1) as cnt from DBA_OB_TENANT_JOBS where job_status='INPROGRESS' and result_code is null""")
   if results[0][0] > 0 :
-    raise MyError('{0} locality tasks is doing, please check'.format(results[0][0]))
+    fail_list.append('{0} locality tasks is doing, please check'.format(results[0][0]))
   # 3.2 检查是否有做balance
   (desc, results) = query_cur.exec_query("""select count(1) as rebalance_task_cnt from CDB_OB_LS_REPLICA_TASKS""")
   if results[0][0] > 0 :
-    raise MyError('{0} rebalance tasks is doing, please check'.format(results[0][0]))
+    fail_list.append('{0} rebalance tasks is doing, please check'.format(results[0][0]))
   logging.info('check rebalance task success')
 
 # 4. 检查集群状态
@@ -323,32 +323,64 @@ def check_cluster_status(query_cur):
   # 4.1 检查是否非合并状态
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where STATUS != 'IDLE'""")
   if results[0][0] > 0 :
-    raise MyError('{0} tenant is merging, please check'.format(results[0][0]))
+    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
-
-# 16. 修改永久下线的时间，避免升级过程中缺副本
-def modify_server_permanent_offline_time(cur):
-  set_parameter(cur, 'server_permanent_offline_time', '72h')
-
-# 23. 检查是否有异常租户(creating，延迟删除，恢复中)
+  
+# 5. 检查是否有异常租户(creating，延迟删除，恢复中)
 def check_tenant_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(*) as count from DBA_OB_TENANTS where status != 'NORMAL'""")
   if len(results) != 1 or len(results[0]) != 1:
-    raise MyError('results len not match')
+    fail_list.append('results len not match')
   elif 0 != results[0][0]:
-    raise MyError('has abnormal tenant, should stop')
+    fail_list.append('has abnormal tenant, should stop')
   else:
     logging.info('check tenant status success')
 
-# 27. 检查无恢复任务
+# 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_RESTORE_PROGRESS""")
   if len(results) != 1 or len(results[0]) != 1:
-    raise MyError('failed to restore job cnt')
+    fail_list.append('failed to restore job cnt')
   elif results[0][0] != 0:
-      raise MyError("""still has restore job, upgrade is not allowed temporarily""")
+      fail_list.append("""still has restore job, upgrade is not allowed temporarily""")
   logging.info('check restore job success')
 
+
+def check_is_primary_zone_distributed(primary_zone_str):
+  semicolon_pos = len(primary_zone_str)
+  for i in range(len(primary_zone_str)):
+    if primary_zone_str[i] == ';':
+      semicolon_pos = i
+      break
+  comma_pos = len(primary_zone_str)
+  for j in range(len(primary_zone_str)):
+    if primary_zone_str[j] == ',':
+      comma_pos = j
+      break
+  if comma_pos < semicolon_pos:
+    return True
+  else:
+    return False
+
+# 7. 升级前需要primary zone只有一个
+def check_tenant_primary_zone(query_cur):
+  (desc, results) = query_cur.exec_query("""select tenant_name,primary_zone from DBA_OB_TENANTS where  tenant_id != 1""");
+  for item in results:
+    if cmp(item[1], "RANDOM") == 0:
+      fail_list.append('{0} tenant primary zone random before update not allowed'.format(item[0]))
+    elif check_is_primary_zone_distributed(item[1]):
+      fail_list.append('{0} tenant primary zone distributed before update not allowed'.format(item[0]))
+  logging.info('check tenant primary zone success')
+
+# 8. 修改永久下线的时间，避免升级过程中缺副本
+def modify_server_permanent_offline_time(cur):
+  set_parameter(cur, 'server_permanent_offline_time', '72h')
+
+# last check of do_check, make sure no function execute after check_fail_list
+def check_fail_list():
+  if len(fail_list) != 0 :
+     error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
+     raise MyError(error_msg)
 
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
@@ -368,8 +400,11 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
       check_rebalance_task(query_cur)
       check_cluster_status(query_cur)
       check_tenant_status(query_cur)
-      modify_server_permanent_offline_time(cur)
       check_restore_job_exist(query_cur)
+      check_tenant_primary_zone(query_cur)
+      # all check func should execute before check_fail_list
+      check_fail_list()
+      #modify_server_permanent_offline_time(cur)
     except Exception, e:
       logging.exception('run error')
       raise e
