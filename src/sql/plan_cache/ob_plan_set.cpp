@@ -386,6 +386,7 @@ int ObPlanSet::match_params_info(
       if (OB_SUCC(ret)) {
         const ParamStore& params = pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
         OC((match_constraint)(params, is_same));
+	OC( (match_cons)(pc_ctx, is_same));
       }
     }
   }
@@ -621,6 +622,41 @@ int ObPlanSet::set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo>& 
       LOG_WARN("failed to push back equal param info", K(ret));
     }
   }
+  return ret;
+}
+
+// match actually constraint
+int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObPCConstParamInfo> *param_cons = pc_ctx.sql_ctx_.all_plan_const_param_constraints_;
+  ObIArray<ObPCConstParamInfo> *possible_param_cons =
+                                        pc_ctx.sql_ctx_.all_possible_const_param_constraints_;
+  ObIArray<ObPCParamEqualInfo> *equal_cons = pc_ctx.sql_ctx_.all_equal_param_constraints_;
+  is_matched = true;
+
+  if (OB_ISNULL(param_cons) ||
+      OB_ISNULL(possible_param_cons) ||
+      OB_ISNULL(equal_cons)) {
+    is_matched = false;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arugment", K(param_cons), K(possible_param_cons), K(equal_cons));
+  } else if (param_cons->count() != all_plan_const_param_constraints_.count() ||
+             possible_param_cons->count() != all_possible_const_param_constraints_.count() ||
+             equal_cons->count() != all_equal_param_constraints_.count()) {
+    is_matched = false;
+  } else {
+    for (int64_t i=0; is_matched && i < all_plan_const_param_constraints_.count(); i++) {
+      is_matched = (all_plan_const_param_constraints_.at(i)==param_cons->at(i));
+    }
+    for (int64_t i=0; is_matched && i < all_possible_const_param_constraints_.count(); i++) {
+      is_matched = (all_possible_const_param_constraints_.at(i)==possible_param_cons->at(i));
+    }
+    for (int64_t i=0; is_matched && i < all_equal_param_constraints_.count(); i++) {
+      is_matched = (all_equal_param_constraints_.at(i)==equal_cons->at(i));
+    }
+  }
+
   return ret;
 }
 

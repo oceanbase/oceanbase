@@ -174,7 +174,8 @@ private:
       common::ObIArray<ObPCConstParamInfo>& const_param_constraint, const bool is_all_constraint);
 
   int set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo>& equal_param_constraint);
-
+  
+  int match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   /**
    * @brief Match const param constraint.
    * If all_plan_const_param_constraints_ is not empty, check wether the constraints is mached and return the result.
