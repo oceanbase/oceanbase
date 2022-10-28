@@ -5023,10 +5023,10 @@ def_table_schema(**all_mock_fk_parent_table_column_def)
 
 def_table_schema(**gen_history_table_def(408, all_mock_fk_parent_table_column_def))
 
-# 409 : __all_log_archive_source
+# 409 : __all_log_restore_source
 def_table_schema(
     owner = 'shuning.tsn',
-    table_name    = '__all_log_archive_source',
+    table_name    = '__all_log_restore_source',
     table_id      = '409',
     table_type = 'SYSTEM_TABLE',
     gm_columns = ['gmt_create', 'gmt_modified'],
@@ -5042,7 +5042,7 @@ def_table_schema(
   normal_columns = [
         ('type', 'varchar:32'),
         ('value', 'longtext'),
-        ('recovery_until_ts', 'int'),
+        ('recovery_until_scn', 'uint'),
   ],
 )
 
@@ -9775,9 +9775,7 @@ def_table_schema(
   ('access_mode', 'varchar:32'),
   ('paxos_member_list', 'varchar:1024'),
   ('paxos_replica_num', 'int'),
-  ('allow_vote', 'bool'),
   ('in_sync', 'bool'),
-  ('replica_type', 'varchar:32'),
   ('base_lsn', 'uint'),
   ('begin_lsn', 'uint'),
   ('begin_scn', 'uint'),
@@ -10600,8 +10598,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12324',
-  table_name = '__all_virtual_log_archive_source',
-  keywords = all_def_keywords['__all_log_archive_source']))
+  table_name = '__all_virtual_log_restore_source',
+  keywords = all_def_keywords['__all_log_restore_source']))
 
 def_table_schema(
   owner = 'wangzelin.wzl',
@@ -22250,15 +22248,10 @@ def_table_schema(
     ACCESS_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
-    CASE allow_vote
-      WHEN 1 THEN 'YES'
-      ELSE 'NO' END
-    AS ALLOW_VOTE,
     CASE in_sync
       WHEN 1 THEN 'YES'
       ELSE 'NO' END
     AS IN_SYNC,
-    REPLICA_TYPE,
     BASE_LSN,
     BEGIN_LSN,
     BEGIN_SCN,
@@ -44485,15 +44478,10 @@ def_table_schema(
     ACCESS_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
-    CASE allow_vote
-      WHEN 1 THEN 'YES'
-      ELSE 'NO' END
-    AS ALLOW_VOTE,
     CASE in_sync
       WHEN 1 THEN 'YES'
       ELSE 'NO' END
     AS IN_SYNC,
-    REPLICA_TYPE,
     BASE_LSN,
     BEGIN_LSN,
     BEGIN_SCN,

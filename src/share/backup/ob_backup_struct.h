@@ -255,7 +255,7 @@ const char *const OB_STR_MAX_FILE_ID = "max_file_id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_ID = "id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_TYPE = "type";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_VALUE = "value";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS = "recovery_until_ts";
+const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN = "recovery_until_scn";
 
 const char *const OB_STR_TENANT = "tenant";
 const char *const OB_STR_DATA = "data";
@@ -500,7 +500,7 @@ struct ObBackupSetDesc {
   bool is_valid() const;
   bool operator==(const ObBackupSetDesc &other) const;
   void reset();
-  
+
   TO_STRING_KV(K_(backup_set_id), K_(backup_type));
   int64_t backup_set_id_;
   ObBackupType backup_type_;  // FULL OR INC
@@ -540,7 +540,7 @@ public:
   int get_backup_set_desc_list_format_str(
       common::ObIAllocator &allocator,
       common::ObString &str) const;
-  
+
   int get_backup_piece_list_format_str(
       common::ObIAllocator &allocator,
       common::ObString &str) const;
@@ -1151,11 +1151,11 @@ public:
     CANCELING= 4,
     CANCELED = 5,
     BACKUP_SYS_META = 6,
-    BACKUP_USER_META = 7, 
-    BACKUP_DATA_SYS = 8, 
+    BACKUP_USER_META = 7,
+    BACKUP_DATA_SYS = 8,
     BACKUP_DATA_MINOR = 9,
     BACKUP_DATA_MAJOR = 10,
-    BACKUP_LOG = 11, 
+    BACKUP_LOG = 11,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1296,8 +1296,8 @@ public:
   bool is_valid() const;
 
   int assign(const ObBackupSetTaskAttr &other);
-  TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts), 
-      K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(status), 
+  TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts),
+      K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(status),
       K_(encryption_mode), K_(passwd), K_(stats), K_(backup_path), K_(retry_cnt), K_(result));
   int64_t task_id_;
   uint64_t tenant_id_;
@@ -1388,7 +1388,7 @@ public:
     MAX,
   };
 
-  enum Compatible : int64_t 
+  enum Compatible : int64_t
   {
     COMPATIBLE_VERSION_1 = 1, // 4.0
     MAX_COMPATIBLE_VERSION,
@@ -1413,9 +1413,9 @@ public:
   int check_passwd(const char *passwd_array) const;
   int assign(const ObBackupSetFileDesc &other);
 
-  TO_STRING_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog), 
-      K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time), 
-      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn), 
+  TO_STRING_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
+      K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
+      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
       K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id));
 
   int64_t backup_set_id_;
@@ -1545,7 +1545,7 @@ struct ObLogArchiveDestState final
   PROPERTY_DECLARE_STATUS(disable, State::DISABLE);
   PROPERTY_DECLARE_STATUS(defer, State::DEFER);
   PROPERTY_DECLARE_STATUS(interrupt, State::INTERRUPT);
-  
+
 #undef PROPERTY_DECLARE_STATUS
 
   TO_STRING_KV(K_(state));

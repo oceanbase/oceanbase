@@ -54,12 +54,6 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   } else if (COMPARE_OUT(compare_fatal_failures_(ret, rhs_impl))) {// 比较致命的异常
     (void) reason.assign("FATAL FAILURE");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from fatal_failures_");
-  } else if (COMPARE_OUT(compare_primary_region_(ret, rhs_impl))) {// 通常Leader不能选出primary region
-    (void) reason.assign("PRIMARY REGION");
-    COORDINATOR_LOG_(TRACE, "compare done! get compared result from primary_region_");
-  } else if (COMPARE_OUT(compare_serious_failures_(ret, rhs_impl))) {// 比较会导致切主的异常
-    (void) reason.assign("SERIOUS FAILURE");
-    COORDINATOR_LOG_(TRACE, "compare done! get compared result from serious_failures_");
   } else if (COMPARE_OUT(compare_log_ts_(ret, rhs_impl))) {// 避免切换至回放位点过小的副本
     (void) reason.assign("LOG TS");
     COORDINATOR_LOG_(TRACE, "compare done! get compared resultfrom log_ts_");
@@ -68,6 +62,12 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   } else if (COMPARE_OUT(compare_manual_leader_flag_(ret, rhs_impl))) {// 比较是否存在用户指定的leader
     (void) reason.assign("MANUAL LEADER");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from manual_leader_flag_");
+  } else if (COMPARE_OUT(compare_primary_region_(ret, rhs_impl))) {// 通常Leader不能选出primary region
+    (void) reason.assign("PRIMARY REGION");
+    COORDINATOR_LOG_(TRACE, "compare done! get compared result from primary_region_");
+  } else if (COMPARE_OUT(compare_serious_failures_(ret, rhs_impl))) {// 比较会导致切主的异常
+    (void) reason.assign("SERIOUS FAILURE");
+    COORDINATOR_LOG_(TRACE, "compare done! get compared result from serious_failures_");
   } else if (COMPARE_OUT(compare_zone_priority_(ret, rhs_impl))) {// 比较RS设置的zone priority
     (void) reason.assign("ZONE PRIORITY");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from zone_priority_");
@@ -148,7 +148,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     is_primary_region_ = election_reference_info.element<6>();
     is_observer_stopped_ = (observer::ObServer::get_instance().is_stopped()
         || observer::ObServer::get_instance().is_prepare_stopped());
-    log_ts_.value_ = log_ts;
+    log_ts_ = log_ts;
   }
   return ret;
   #undef PRINT_WRAPPERd
@@ -312,9 +312,9 @@ int PriorityV1::compare_log_ts_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (std::max(log_ts_.value_, rhs.log_ts_.value_) - std::min(log_ts_.value_, rhs.log_ts_.value_) <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_NS) {
+    if (std::max(log_ts_, rhs.log_ts_) - std::min(log_ts_, rhs.log_ts_) <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_NS) {
       compare_result = 0;
-    } else if (std::max(log_ts_.value_, rhs.log_ts_.value_) == log_ts_.value_) {
+    } else if (std::max(log_ts_, rhs.log_ts_) == log_ts_) {
       compare_result = 1;
     } else {
       compare_result = -1;

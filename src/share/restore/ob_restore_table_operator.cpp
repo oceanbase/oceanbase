@@ -22,6 +22,7 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "ob_log_archive_source.h"
 #include "share/backup/ob_backup_struct.h"
+#include "logservice/palf/log_define.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -63,7 +64,7 @@ int ObTenantRestoreTableOperator::insert_source(const ObLogArchiveSourceItem &it
     LOG_WARN("invalid argument", K(ret), K(item));
   } else if (OB_FAIL(fill_log_archive_source_(item, dml))) {
     LOG_WARN("fill log archive source failed", K(ret), K(item));
-  } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_LOG_ARCHIVE_SOURCE_TNAME, sql))) {
+  } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
     LOG_WARN("splice insert update sql failed", K(ret), K(item));
   } else if (OB_FAIL(proxy_->write(get_exec_tenant_id_(), sql.ptr(), affected_rows))) {
     LOG_WARN("exec sql failed", K(ret), K(item), K(sql), K_(user_tenant_id));
@@ -87,9 +88,9 @@ int ObTenantRestoreTableOperator::update_source_until_ts(const ObLogArchiveSourc
     LOG_WARN("failed to add column", K(ret), K(item.tenant_id_));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_LOG_ARCHIVE_SOURCE_ID, item.id_))) {
     LOG_WARN("failed to add column", K(ret), K(item.id_));
-  } else if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS, item.until_ts_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN, item.until_ts_))) {
     LOG_WARN("failed to add column", K(ret), K(item.until_ts_));
-  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_LOG_ARCHIVE_SOURCE_TNAME, sql))) {
+  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
     LOG_WARN("fill source until_ts failed", K(ret), K(item.id_), K(item.until_ts_));
   } else if (OB_FAIL(proxy_->write(get_exec_tenant_id_(), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(ret), K(sql), K_(user_tenant_id));
@@ -105,7 +106,7 @@ int ObTenantRestoreTableOperator::delete_source()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant restore table operator not init", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("delete from %s", OB_ALL_LOG_ARCHIVE_SOURCE_TNAME))) {
+  } else if (OB_FAIL(sql.append_fmt("delete from %s", OB_ALL_LOG_RESTORE_SOURCE_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
   } else if (OB_FAIL(proxy_->write(get_exec_tenant_id_(), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(ret), K(sql), K_(user_tenant_id));
@@ -160,7 +161,7 @@ int ObTenantRestoreTableOperator::fill_log_archive_source_(const ObLogArchiveSou
     LOG_WARN("failed to add column", K(ret), K(item));
   } else if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_SOURCE_VALUE, item.value_.ptr()))) {
     LOG_WARN("failed to add column", K(ret), K(item));
-  } else if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS, item.until_ts_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN, item.until_ts_))) {
     LOG_WARN("failed to add column", K(ret), K(item));
   }
   return ret;
@@ -177,9 +178,9 @@ int ObTenantRestoreTableOperator::fill_select_source_(common::ObSqlString &sql)
     LOG_WARN("sql append failed", K(ret));
   } else if  (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_ARCHIVE_SOURCE_VALUE))) {
     LOG_WARN("sql append failed", K(ret));
-  } else if  (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS))) {
+  } else if  (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN))) {
     LOG_WARN("sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" from %s", OB_ALL_LOG_ARCHIVE_SOURCE_TNAME))) {
+  } else if (OB_FAIL(sql.append_fmt(" from %s", OB_ALL_LOG_RESTORE_SOURCE_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
   }
   return ret;
@@ -197,7 +198,7 @@ int ObTenantRestoreTableOperator::parse_log_archive_source_(ObMySQLResult &resul
     item_local.type_ = ObLogArchiveSourceItem::get_source_type(type);
   }
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, OB_STR_LOG_ARCHIVE_SOURCE_VALUE, item_local.value_);
-  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS, item_local.until_ts_, int64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN, item_local.until_ts_, uint64_t);
   OZ (item.deep_copy(item_local));
   return ret;
 }
