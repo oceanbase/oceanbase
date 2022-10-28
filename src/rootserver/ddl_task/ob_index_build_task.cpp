@@ -115,9 +115,9 @@ int ObIndexSSTableBuildTask::process()
     DEBUG_SYNC(BEFORE_INDEX_SSTABLE_BUILD_TASK_SEND_SQL);
     ObTimeoutCtx timeout_ctx;
     LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_));
-    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(GCONF.global_index_build_single_replica_timeout.get()))) {
+    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
       LOG_WARN("set trx timeout failed", K(ret));
-    } else if (OB_FAIL(timeout_ctx.set_timeout(GCONF.global_index_build_single_replica_timeout.get()))) {
+    } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
       LOG_WARN("set timeout failed", K(ret));
     } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param))) {
@@ -583,7 +583,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
     ret = OB_NOT_INIT;
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
   } else {
-    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
+    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
     const int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout;
     ObIndexSSTableBuildTask task(
         task_id_,
@@ -634,7 +634,7 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   }
 
   if (OB_SUCC(ret) && !is_end) {
-    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
+    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
     if (sstable_complete_request_time_ + timeout < ObTimeUtility::current_time()) {
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
@@ -777,7 +777,7 @@ int ObIndexBuildTask::verify_checksum()
 
   // send column checksum calculation request and wait finish, then verify column checksum
   if (OB_SUCC(ret) && !state_finished && check_unique_snapshot_ > 0) {
-    static int64_t checksum_wait_timeout = max(GCONF.global_index_build_single_replica_timeout / 50, 3600L * 1000L * 1000L);
+    static int64_t checksum_wait_timeout = max(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT / 50, 3600L * 1000L * 1000L);
     bool is_column_checksum_ready = false;
     bool dummy_equal = false;
     if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(

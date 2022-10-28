@@ -462,10 +462,6 @@ DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "4.0.0.0", "the min observer
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True", "specifies whether DDL operation is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(global_index_build_single_replica_timeout, OB_CLUSTER_PARAMETER, "48h", "[1h,)",
-         "build single replica task timeout "
-         "when rootservice schedule to build global index. Range: [1h,+∞)",
-         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

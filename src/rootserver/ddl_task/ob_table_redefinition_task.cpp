@@ -181,7 +181,7 @@ int ObTableRedefinitionTask::check_build_replica_timeout()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
   } else if (build_replica_request_time_ > 0) {
-    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
+    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
     const int64_t current_time = ObTimeUtility::current_time();
     if (build_replica_request_time_ + timeout < current_time) {
       ret = OB_TIMEOUT;

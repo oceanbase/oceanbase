@@ -2180,7 +2180,7 @@ int ObInnerTableSchema::all_virtual_ddl_checksum_schema(ObTableSchema &table_sch
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("tablet_id", //column_name
+    ADD_COLUMN_SCHEMA("ddl_task_id", //column_name
       ++column_id, //column_id
       4, //rowkey_id
       0, //index_id

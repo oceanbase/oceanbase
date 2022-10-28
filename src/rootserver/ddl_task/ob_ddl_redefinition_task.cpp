@@ -132,9 +132,9 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     }
     LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_));
-    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(GCONF.global_index_build_single_replica_timeout.get()))) {
+    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
       LOG_WARN("set trx timeout failed", K(ret));
-    } else if (OB_FAIL(timeout_ctx.set_timeout(GCONF.global_index_build_single_replica_timeout.get()))) {
+    } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
       LOG_WARN("set timeout failed", K(ret));
     } else {
       if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
