@@ -1460,13 +1460,6 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
     macro_meta.val_.logic_id_.logic_version_ = data_store_desc_->get_logical_version();
     macro_meta.val_.logic_id_.tablet_id_ = data_store_desc_->tablet_id_.id();
     macro_meta.val_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID;
-    if (data_store_desc_->is_major_merge()) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; ++j) {
-        if (OB_FAIL(macro_meta.val_.column_checksums_.push_back(0))) {
-          STORAGE_LOG(WARN, "fail to push back column checksum", K(ret), K(j), K(column_cnt));
-        }
-      }
-    }
     meta_row_.reuse();
     row_allocator_.reuse();
     if (OB_FAIL(ret)) {
@@ -1486,10 +1479,8 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
         STORAGE_LOG(WARN, "unexpected meta block desc", K(ret), K(meta_block_desc));
       } else {
         estimate_meta_block_size = meta_block_desc.buf_size_ + meta_block_desc.header_->header_size_;
-        estimate_meta_block_size =
-            data_store_desc_->encrypt_id_ > static_cast<int64_t>(share::ObAesOpMode::ob_invalid_mode)
-            ? share::ObEncryptionUtil::encrypted_length(estimate_meta_block_size)
-            : estimate_meta_block_size;
+        const int64_t encrypted_size = share::ObEncryptionUtil::encrypted_length(estimate_meta_block_size);
+        estimate_meta_block_size = max(estimate_meta_block_size, encrypted_size);
       }
     }
   }
