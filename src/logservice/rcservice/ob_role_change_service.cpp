@@ -541,11 +541,19 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_(
   //     we must ensure that the 'end_lsn' provid by 'apply_service_' is correctly.
   // just switch_role to follower firstly, avoid sync log failed because palf has changed leader.
   } else if (FALSE_IT(log_handler->switch_role(new_role, curr_proposal_id))) {
+  // apply service will not update end_lsn after switch_to_follower, so wait apply done first here
   } else if (FALSE_IT(time_guard.click("wait_apply_service_apply_done_when_change_leader_"))
       || OB_FAIL(wait_apply_service_apply_done_when_change_leader_(log_handler, curr_proposal_id, ls_id, end_lsn))) {
     CLOG_LOG(WARN, "wait_apply_service_apply_done_when_change_leader_ failed", K(ret),
 				K(new_role), K(new_proposal_id), K(dst_addr));
-  // apply service will not update end_lsn after switch_to_follower, so wait apply done first here
+    // wait apply service done my fail, we need :
+    // 1. switch log handler to origin status.
+    // 2. resume role change handler 
+    log_handler->switch_role(LEADER, curr_proposal_id);
+    if (OB_FAIL(role_change_handler->resume_to_leader())) {
+      CLOG_LOG(WARN, "resume to leader failed", K(ret), KPC(ls));
+    }
+  // NB: the following steps mustn't be failed.
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_follower"))
       || OB_FAIL(apply_service_->switch_to_follower(ls_id))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
@@ -737,6 +745,8 @@ int ObRoleChangeService::wait_apply_service_apply_done_when_change_leader_(
   while (OB_SUCC(ret) && (false == is_done || end_lsn != max_lsn)) {
     if (OB_FAIL(apply_service_->is_apply_done(ls_id, is_done, end_lsn))) {
       CLOG_LOG(WARN, "apply_service_ is_apply_done failed", K(ret), K(is_done), K(end_lsn));
+      // NB: ApplyService execute on_failure only when it's FOLLOWER, therefore ApplyService my not return apply done
+      //     when it's LEADER, we need check the role of palf when has changed.
     } else if (OB_FAIL(log_handler->get_max_lsn(max_lsn))) {
       CLOG_LOG(WARN, "get_end_lsn from palf failed", K(ret), K(ls_id), K(end_lsn));
     } else if (OB_FAIL(log_handler->prepare_switch_role(unused_curr_role, unused_curr_proposal_id,
