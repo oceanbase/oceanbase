@@ -64,6 +64,7 @@ devname
 disk_io_thread_count
 dtl_buffer_size
 enable_async_syslog
+enable_cgroup
 enable_ddl
 enable_early_lock_release
 enable_major_freeze
