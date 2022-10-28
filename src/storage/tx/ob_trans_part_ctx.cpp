@@ -2032,7 +2032,7 @@ int ObPartTransCtx::generate_prepare_version_()
 {
   int ret = OB_SUCCESS;
 
-  if (ObTransVersion::INVALID_TRANS_VERSION == exec_info_.prepare_version_) {
+  if (ObTxState::PREPARE > upstream_state_) {
     int64_t gts = 0;
     int64_t local_max_read_version = 0;
     bool is_gts_ok = false;
@@ -3079,7 +3079,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_PREPARE_LOG)) {
     sub_state_.set_state_log_submitting();
     sub_state_.set_state_log_submitted();
-    exec_info_.prepare_version_ = log_cb->get_log_ts();
+    exec_info_.prepare_version_ = MAX(log_cb->get_log_ts(), exec_info_.prepare_version_);
   }
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_COMMIT_LOG)) {
     sub_state_.set_state_log_submitting();
