@@ -1231,6 +1231,8 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
       } else {
         ret = add_subquery_filter(qual);
       }
+    } else if (qual->is_const_expr()) {
+      ret = add_startup_filter(qual);
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
                qual->has_flag(CNT_USER_VARIABLE) ||
                qual->has_flag(CNT_PL_UDF) ||
@@ -1238,8 +1240,6 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
-    } else if (0 == qual->get_relation_ids().num_members()) {
-      ret = add_startup_filter(qual);
     } else {
       ret = normal_quals.push_back(qual);
     }

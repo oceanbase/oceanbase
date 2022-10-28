@@ -869,10 +869,13 @@ int ObSelectStmt::adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent)
   int ret = OB_SUCCESS;
   int32_t subquery_level = (new_parent != NULL ? new_parent->get_current_level() + 1 : 0);
   ObArray<ObSelectStmt *> view_stmts;
+  ObArray<ObSelectStmt *> subquery_stmts;
   set_parent_namespace_stmt(new_parent);
   set_current_level(subquery_level);
   if (OB_FAIL(get_from_subquery_stmts(view_stmts))) {
     LOG_WARN("get from subquery stmts failed", K(ret));
+  } else if (OB_FAIL(get_subquery_stmts(subquery_stmts))) {
+    LOG_WARN("get subquery stmts failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < view_stmts.count(); ++i) {
     ObSelectStmt *view_stmt = view_stmts.at(i);
@@ -881,6 +884,15 @@ int ObSelectStmt::adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent)
       LOG_WARN("table_item is null", K(i));
     } else if (OB_FAIL(view_stmt->adjust_view_parent_namespace_stmt(new_parent))) {
       LOG_WARN("adjust view parent namespace stmt failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_stmts.count(); ++i) {
+    ObSelectStmt *subquery = subquery_stmts.at(i);
+    if (OB_ISNULL(subquery)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is null", K(i));
+    } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(this))) {
+      LOG_WARN("adjust subquery parent namespace stmt failed", K(ret));
     }
   }
   return ret;
