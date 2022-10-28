@@ -5103,6 +5103,12 @@ def_table_schema(
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
 # 422 : __all_column_group_mapping_history
+# 423 : __all_transfer_task
+# 424 : __all_transfer_task_history
+# 425 : __all_balance_task
+# 426 : __all_balance_task_history
+# 427 : __all_ls_balance_job
+# 428 : __all_ls_balance_job_history
 
 ################################################################################
 # Virtual Table (10000, 20000]
