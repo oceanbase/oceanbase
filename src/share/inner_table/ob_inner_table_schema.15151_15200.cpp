@@ -260,7 +260,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_real_agent_ora_schema(ObTable
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      OB_MAX_SQL_LENGTH, //column_length
+      MAX_ORACLE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable

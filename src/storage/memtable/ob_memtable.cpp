@@ -171,7 +171,11 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   } else {
     ls_ = ls;
     ObMemtableStat::get_instance().register_memtable(this);
-    mode_ = MTL(lib::Worker::CompatMode);
+    if (table_key.get_tablet_id().is_sys_tablet()) {
+      mode_ = lib::Worker::CompatMode::MYSQL;
+    } else {
+      mode_ = MTL(lib::Worker::CompatMode);
+    }
     state_ = ObMemtableState::ACTIVE;
     freeze_state_ = ObMemtableFreezeState::NOT_READY_FOR_FLUSH;
     timestamp_ = ObTimeUtility::current_time();
