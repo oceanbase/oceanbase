@@ -13928,7 +13928,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -13997,7 +13996,6 @@ def_table_schema(
     TENANT_ID,
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -14271,7 +14269,6 @@ def_table_schema(
     SELECT
     TENANT_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -14309,7 +14306,6 @@ def_table_schema(
     SELECT
     TENANT_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -14348,7 +14344,6 @@ def_table_schema(
     TENANT_ID,
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -14399,7 +14394,6 @@ def_table_schema(
     TENANT_ID,
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -19597,7 +19591,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -19632,7 +19625,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -19667,7 +19659,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -19702,7 +19693,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -20450,7 +20440,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -20490,7 +20479,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -20531,7 +20519,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -20584,7 +20571,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -20637,7 +20623,6 @@ def_table_schema(
     SELECT
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -21146,7 +21131,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -21183,7 +21167,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -21220,7 +21203,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -21257,7 +21239,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -21544,7 +21525,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21638,7 +21618,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21717,7 +21696,6 @@ def_table_schema(
 (
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -21739,7 +21717,6 @@ SELECT DEST_ID,
 UNION
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -21776,7 +21753,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21887,7 +21863,6 @@ def_table_schema(
     TENANT_ID,
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21980,7 +21955,6 @@ def_table_schema(
     TENANT_ID,
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -22060,7 +22034,6 @@ def_table_schema(
 SELECT TENANT_ID,
        DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -22083,7 +22056,6 @@ UNION
 SELECT TENANT_ID,
        DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -38387,7 +38359,6 @@ def_table_schema(
   """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -38429,7 +38400,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -38472,7 +38442,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
@@ -38527,7 +38496,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
@@ -38582,7 +38550,6 @@ def_table_schema(
     SELECT
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -38911,7 +38878,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -38950,7 +38916,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -38989,7 +38954,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -39028,7 +38992,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -39256,7 +39219,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -39342,7 +39304,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -39411,7 +39372,6 @@ def_table_schema(
 (
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -39433,7 +39393,6 @@ SELECT DEST_ID,
 UNION
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -39472,7 +39431,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
