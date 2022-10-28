@@ -96,7 +96,7 @@ DEF_TIME(trace_log_sampling_interval, OB_CLUSTER_PARAMETER, "10ms", "[0ms,]",
         "logging info regarding ‘slow query’ and ‘white list’ will be printed out. "
         "Range: [0ms,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "100ms", "[1ms,]",
+DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
         "the threshold of execution time (in milliseconds) of a query beyond "
         "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
