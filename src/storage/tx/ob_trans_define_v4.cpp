@@ -208,6 +208,8 @@ ObTxDesc::ObTxDesc()
     timeout_us_(-1),
     lock_timeout_us_(-1),
     expire_ts_(INT64_MAX),              // never expire by default
+    commit_ts_(-1),
+    finish_ts_(-1),
     active_scn_(-1),
     min_implicit_savepoint_(INT64_MAX),
     parts_(),
