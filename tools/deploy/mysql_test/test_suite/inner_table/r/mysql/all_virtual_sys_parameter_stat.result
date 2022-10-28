@@ -267,7 +267,6 @@ _ob_elr_fast_freeze_threshold
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
 _ob_enable_prepared_statement
-_ob_enable_px_for_inner_sql
 _ob_get_gts_ahead_interval
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval

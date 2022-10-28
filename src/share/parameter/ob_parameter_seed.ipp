@@ -1182,10 +1182,6 @@ DEF_INT(connection_control_max_connection_delay, OB_TENANT_PARAMETER, "214748364
         "The maximum delay in milliseconds for server response to failed connection attempts, "
         "if connection_control_failed_connections_threshold is greater than zero",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
-         "specifies whether inner sql uses px. "
-         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "false",
          "Proxy route policy for readonly sql: whether regard begining read only stmts as in transaction",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
