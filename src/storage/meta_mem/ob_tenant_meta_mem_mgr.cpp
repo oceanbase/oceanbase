@@ -1032,6 +1032,36 @@ int ObTenantMetaMemMgr::set_tablet_pointer_tx_data(
   return ret;
 }
 
+int ObTenantMetaMemMgr::get_tablet_ddl_kv_mgr(
+    const ObTabletMapKey &key,
+    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointerHandle ptr_handle(tablet_map_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
+    LOG_WARN("failed to get ptr handle", K(ret), K(key));
+  } else {
+    ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
+    if (OB_ISNULL(tablet_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
+    } else {
+      tablet_ptr->get_ddl_kv_mgr(ddl_kv_mgr_handle);
+      if (!ddl_kv_mgr_handle.is_valid()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_DEBUG("ddl kv mgr not exist", K(ret), K(ddl_kv_mgr_handle));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const
 {
   int ret = OB_SUCCESS;

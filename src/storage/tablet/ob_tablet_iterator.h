@@ -19,6 +19,7 @@
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
 #include "storage/tablet/ob_tablet_common.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ public:
 public:
   int get_next_tablet(ObTabletHandle &handle);
   int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
+  int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
 
   void reset();
   bool is_valid() const;

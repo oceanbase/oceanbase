@@ -109,6 +109,35 @@ int ObLSTabletIterator::get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr
   return ret;
 }
 
+int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ls_tablet_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls tablet service is nullptr", K(ret), KP(ls_tablet_service_));
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    do {
+      ObTabletMapKey key;
+      key.ls_id_ = ls_tablet_service_->ls_->get_ls_id();
+      if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
+        ret = OB_ITER_END;
+      } else {
+        key.tablet_id_ = tablet_ids_.at(idx_);
+
+        if (OB_FAIL(t3m->get_tablet_ddl_kv_mgr(key, ddl_kv_mgr_handle))
+            && OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get tablet ddl kv mgr", K(ret), K(idx_), K(key));
+        } else {
+          ++idx_;
+        }
+      }
+    } while (OB_ENTRY_NOT_EXIST == ret);
+  }
+  
+  return ret;
+}
+
 
 ObLSTabletIDIterator::ObLSTabletIDIterator(const share::ObLSID &ls_id)
   : ls_id_(ls_id),
