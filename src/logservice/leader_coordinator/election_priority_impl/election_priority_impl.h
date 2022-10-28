@@ -97,7 +97,7 @@ struct PriorityV1 : public AbstractPriority
   OB_UNIS_VERSION(1);
 public:
   PriorityV1() : is_observer_stopped_(false), is_server_stopped_(false), is_zone_stopped_(false),
-                 is_primary_region_(false), is_in_blacklist_(false),  is_manual_leader_(false),
+                 is_primary_region_(false), log_ts_(0), is_in_blacklist_(false),  is_manual_leader_(false),
                  zone_priority_(INT64_MAX) {}
   // 判断该优先级策略是否适用于特定的版本
   virtual uint64_t get_started_version() const override { return CLUSTER_VERSION_4_0_0_0; }
