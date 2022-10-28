@@ -185,7 +185,14 @@ int ObPxSqcAsyncProxy::wait_all() {
         if (phy_plan_ctx_->get_timeout_timestamp() -
           ObTimeUtility::current_time() > 0) {
           error_index_ = idx;
-          ret = OB_RPC_CONNECT_ERROR;
+          bool init_sqc_not_send_out = (callback.get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+              || callback.get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+          if (init_sqc_not_send_out) {
+            // only if it's sure init_sqc msg is not sent to sqc successfully, return OB_RPC_CONNECT_ERROR to retry.
+            ret = OB_RPC_CONNECT_ERROR;
+          } else {
+            ret = OB_PACKET_STATUS_UNKNOWN;
+          }
         } else {
           ret = OB_TIMEOUT;
         }

@@ -433,6 +433,7 @@ constexpr int OB_WAIT_REPLAY_TIMEOUT = -4741;
 constexpr int OB_WAIT_TABLET_READY_TIMEOUT = -4742;
 constexpr int OB_FREEZE_SERVICE_EPOCH_MISMATCH = -4743;
 constexpr int OB_DELETE_SERVER_NOT_ALLOWED = -4745;
+constexpr int OB_PACKET_STATUS_UNKNOWN = -4746;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2126,6 +2127,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FREEZE_SERVICE_EPOCH_MISMATCH__USER_ERROR_MSG "freeze service epoch is not expected"
 #define OB_FROZEN_INFO_ALREADY_EXIST__USER_ERROR_MSG "%s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__USER_ERROR_MSG "%s"
+#define OB_PACKET_STATUS_UNKNOWN__USER_ERROR_MSG "Network error and packet status unknown. Abort auto retry."
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3956,6 +3958,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FREEZE_SERVICE_EPOCH_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4743, freeze service epoch is not expected"
 #define OB_FROZEN_INFO_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4744, %s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4745, %s"
+#define OB_PACKET_STATUS_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"

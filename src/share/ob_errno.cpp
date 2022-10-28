@@ -6357,6 +6357,18 @@ static const _error _error_OB_DELETE_SERVER_NOT_ALLOWED = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4745, delete server not allowed",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4745, %s"
 };
+static const _error _error_OB_PACKET_STATUS_UNKNOWN = {
+      .error_name            = "OB_PACKET_STATUS_UNKNOWN",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Network error and packet status unknown. Abort auto retry.",
+      .str_user_error        = "Network error and packet status unknown. Abort auto retry.",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry.",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
+};
 static const _error _error_OB_ERR_PARSER_INIT = {
       .error_name            = "OB_ERR_PARSER_INIT",
       .error_cause           = "Internal Error",
@@ -22480,6 +22492,7 @@ struct ObStrErrorInit
     _errors[-OB_FREEZE_SERVICE_EPOCH_MISMATCH] = &_error_OB_FREEZE_SERVICE_EPOCH_MISMATCH;
     _errors[-OB_FROZEN_INFO_ALREADY_EXIST] = &_error_OB_FROZEN_INFO_ALREADY_EXIST;
     _errors[-OB_DELETE_SERVER_NOT_ALLOWED] = &_error_OB_DELETE_SERVER_NOT_ALLOWED;
+    _errors[-OB_PACKET_STATUS_UNKNOWN] = &_error_OB_PACKET_STATUS_UNKNOWN;
     _errors[-OB_ERR_PARSER_INIT] = &_error_OB_ERR_PARSER_INIT;
     _errors[-OB_ERR_PARSE_SQL] = &_error_OB_ERR_PARSE_SQL;
     _errors[-OB_ERR_RESOLVE_SQL] = &_error_OB_ERR_RESOLVE_SQL;
