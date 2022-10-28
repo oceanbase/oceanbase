@@ -8208,7 +8208,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("ls_id", //column_name
+    ADD_COLUMN_SCHEMA("round_id", //column_name
       ++column_id, //column_id
       3, //rowkey_id
       0, //index_id
@@ -8223,7 +8223,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("round_id", //column_name
+    ADD_COLUMN_SCHEMA("piece_id", //column_name
       ++column_id, //column_id
       4, //rowkey_id
       0, //index_id
@@ -8238,7 +8238,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("piece_id", //column_name
+    ADD_COLUMN_SCHEMA("ls_id", //column_name
       ++column_id, //column_id
       5, //rowkey_id
       0, //index_id

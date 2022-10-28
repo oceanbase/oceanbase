@@ -3572,9 +3572,9 @@ def_table_schema(
     rowkey_columns = [
         ('tenant_id', 'int'),
         ('dest_id', 'int'),
-        ('ls_id', 'int'),
         ('round_id', 'int'),
         ('piece_id', 'int'),
+        ('ls_id', 'int'),
     ],
 
   in_tenant_space = True,
