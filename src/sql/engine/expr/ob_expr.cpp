@@ -99,7 +99,6 @@ DEF_TO_STRING(ObEvalInfo)
 OB_DEF_SERIALIZE(ObExpr)
 {
   int ret = OB_SUCCESS;
-  bool is_early_registered = ObExprExtraInfoFactory::is_early_registered(type_);
   LST_DO_CODE(OB_UNIS_ENCODE,
               type_,
               datum_meta_,
@@ -114,14 +113,8 @@ OB_DEF_SERIALIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_);
-  if (OB_SUCC(ret)) {
-    if (is_early_registered) {
-      OB_UNIS_ENCODE(*extra_info_);
-    } else {
-      OB_UNIS_ENCODE(extra_)
-    }
-  }
+              expr_ctx_id_,
+              extra_);
 
   LST_DO_CODE(OB_UNIS_ENCODE,
               eval_info_off_,
@@ -132,7 +125,7 @@ OB_DEF_SERIALIZE(ObExpr)
 
   if (OB_SUCC(ret)) {
     ObExprOperatorType type = T_INVALID;
-    if (!is_early_registered && nullptr != extra_info_) {
+    if (nullptr != extra_info_) {
       type = extra_info_->type_;
     }
     // Add a type before extra_info to determine whether extra_info is empty
@@ -164,20 +157,8 @@ OB_DEF_DESERIALIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_);
-  if (OB_SUCC(ret)) {
-    if (ObExprExtraInfoFactory::is_early_registered(type_)) {
-      if (OB_FAIL(ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
-                                                type_,
-                                                extra_info_))) {
-        LOG_WARN("fail to alloc expr extra info", K(ret), K(type_));
-      } else if (OB_NOT_NULL(extra_info_)) {
-        OB_UNIS_DECODE(*extra_info_);
-      }
-    } else {
-      OB_UNIS_DECODE(extra_);
-    }
-  }
+              expr_ctx_id_,
+              extra_);
 
   LST_DO_CODE(OB_UNIS_DECODE,
               eval_info_off_,
@@ -202,6 +183,7 @@ OB_DEF_DESERIALIZE(ObExpr)
       OB_UNIS_DECODE(*extra_info_);
     }
   }
+
   if (OB_SUCC(ret)) {
     basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_);
     CK(NULL != basic_funcs_);
@@ -216,7 +198,6 @@ OB_DEF_DESERIALIZE(ObExpr)
 OB_DEF_SERIALIZE_SIZE(ObExpr)
 {
   int64_t len = 0;
-  bool is_early_registered = ObExprExtraInfoFactory::is_early_registered(type_);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               type_,
               datum_meta_,
@@ -231,12 +212,8 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_);
-  if (is_early_registered) {
-    OB_UNIS_ADD_LEN(*extra_info_);
-  } else {
-    OB_UNIS_ADD_LEN(extra_);
-  }
+              expr_ctx_id_,
+              extra_);
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               eval_info_off_,
@@ -246,12 +223,11 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
               pvt_skip_off_);
 
   ObExprOperatorType type = T_INVALID;
-  if (!is_early_registered && nullptr != extra_info_) {
+  if (nullptr != extra_info_) {
     type = extra_info_->type_;
   }
-  // Add a type before extra_info to determine whether extra_info is empty
   OB_UNIS_ADD_LEN(type);
-  if (!is_early_registered && nullptr != extra_info_) {
+  if (T_INVALID != type) {
     OB_UNIS_ADD_LEN(*extra_info_);
   }
   OB_UNIS_ADD_LEN(dyn_buf_header_offset_);

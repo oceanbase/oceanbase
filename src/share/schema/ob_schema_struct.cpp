@@ -303,15 +303,6 @@ int ObSysTableChecker::check_sys_table_name(
     LOG_WARN("table_name is empty", K(ret));
   } else if (!is_sys_database_id(database_id)) {
     is_system_table = false;
-  } else if (is_mysql_database_id(database_id)
-             && !is_sys_tenant(tenant_id)
-             && (0 == table_name.case_compare(OB_HELP_TOPIC_TNAME)
-                 || 0 == table_name.case_compare(OB_HELP_CATEGORY_TNAME)
-                 || 0 == table_name.case_compare(OB_HELP_KEYWORD_TNAME)
-                 || 0 == table_name.case_compare(OB_HELP_RELATION_TNAME))) {
-    // FIXME:(yanmu.ztl) Actually, we should build sys_table_name_map_ with `in_tenant_space` flag.
-    // bugfix: https://work.aone.alibaba-inc.com/issue/35660182
-    is_system_table = false;
   } else {
     ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
     const TableNameWrapper table(database_id, mode, table_name);

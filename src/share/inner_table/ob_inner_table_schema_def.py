@@ -813,7 +813,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_topic_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -834,7 +834,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_category_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -853,7 +853,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_keyword_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -871,7 +871,7 @@ def_table_schema(
   ('help_topic_id', 'int','false'),
   ('help_keyword_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [],
 )
