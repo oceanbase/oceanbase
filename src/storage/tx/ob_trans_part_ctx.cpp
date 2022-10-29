@@ -1416,6 +1416,11 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
       ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
       try_submit = true;
     }
+    if (try_submit) {
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+                           OB_ID(used), ObTimeUtility::fast_current_time() - start,
+                           OB_ID(ctx_ref), get_ref());
+    }
   } else if (OB_FAIL(lock_.try_lock())) {
     // try lock
     if (OB_EAGAIN == ret) {
@@ -1437,11 +1442,11 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
         try_submit = true;
       }
     }
-  }
-  if (try_submit) {
-    REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
-                         OB_ID(used), ObTimeUtility::fast_current_time() - start,
-                         OB_ID(ctx_ref), get_ref());
+    if (try_submit) {
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+                           OB_ID(used), ObTimeUtility::fast_current_time() - start,
+                           OB_ID(ctx_ref), get_ref());
+    }
   }
   if (OB_BLOCK_FROZEN == ret) {
     ret = OB_SUCCESS;
