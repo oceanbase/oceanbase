@@ -783,6 +783,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
   int ret = OB_SUCCESS;
   const int64_t rebuild_seq = ls_handle_.get_ls()->get_rebuild_seq();
   log_ts_range_ = get_merge_table_result.log_ts_range_;
+  int64_t clog_checkpoint_ts = get_merge_table_result.log_ts_range_.end_log_ts_;
 
   ObTableHandleV2 empty_table_handle;
   ObUpdateTableStoreParam param(
@@ -792,7 +793,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
       schema_ctx_.storage_schema_,
       rebuild_seq,
       param_.is_major_merge(),
-      0/*clog_checkpoint_ts*/);
+      clog_checkpoint_ts);
   ObTabletHandle new_tablet_handle;
   if (OB_FAIL(ls_handle_.get_ls()->update_tablet_table_store(
       param_.tablet_id_, param, new_tablet_handle))) {
