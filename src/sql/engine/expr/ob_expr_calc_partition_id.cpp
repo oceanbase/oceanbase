@@ -433,32 +433,16 @@ int ObExprCalcPartitionId::calc_opt_route_hash_one(const ObExpr& expr, ObEvalCtx
     LOG_WARN("part expr evaluate failed", K(ret));
   } else {
     int64_t value = 0;
+    ObObjType input_type = expr.args_[0]->datum_meta_.type_;
     if (datum->is_null()) {
       // do nothing
+    } else if (OB_UNLIKELY(ObIntTC != ob_obj_type_class(input_type)
+                           && ObUIntTC != ob_obj_type_class(input_type))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("type is wrong", K(ret), K(*datum));
     } else {
-      switch (ob_obj_type_class(expr.args_[0]->datum_meta_.type_)) {
-        case ObIntTC: {
-          value = datum->get_int();
-          break;
-        }
-        case ObUIntTC: {
-          value = static_cast<int64_t>(datum->get_uint());
-          break;
-        }
-        case ObBitTC: {
-          value = static_cast<int64_t>(datum->get_bit());
-          break;
-        }
-        case ObYearTC: {
-          value = static_cast<int64_t>(datum->get_year());
-          break;
-        }
-        default: {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("type is wrong", K(ret), K(expr.args_[0]->datum_meta_.type_));
-          break;
-        }
-      }
+      value = (ObIntTC == ob_obj_type_class(input_type))
+              ? datum->get_int() : static_cast<int64_t>(datum->get_uint64());
       if (OB_SUCC(ret)) {
         if (OB_UNLIKELY(INT64_MIN == value)) {
           value = INT64_MAX;
@@ -466,7 +450,7 @@ int ObExprCalcPartitionId::calc_opt_route_hash_one(const ObExpr& expr, ObEvalCtx
           value = value < 0 ? -value : value;
         }
       } else {
-        LOG_WARN("Failed to get value", K(ret));
+        LOG_WARN("Failed to get value", K(ret), K(*datum));
       }
     }
     if (OB_FAIL(ret)) {
