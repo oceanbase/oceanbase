@@ -2106,13 +2106,11 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
         "ls_id", ctx->arg_.ls_id_.id(),
         "tablet_id", copy_tablet_ctx_.tablet_id_,
         "result", result, "retry_count", retry_count);
-    if (OB_SSTABLE_NOT_EXIST == result) {
-      if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to remove tablet info", K(ret), KPC(ctx), K(copy_tablet_ctx_));
-        }
+    if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to remove tablet info", K(ret), KPC(ctx), K(copy_tablet_ctx_));
       }
     }
 
