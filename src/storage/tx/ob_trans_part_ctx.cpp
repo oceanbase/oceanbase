@@ -358,6 +358,13 @@ int ObPartTransCtx::trans_kill_()
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "trans killed", K(trans_id_));
+
+  if (ctx_tx_data_.get_state() == ObTxData::RUNNING) {
+    if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
+      TRANS_LOG(WARN, "set abort state in ctx_tx_data_ failed", K(ret));
+    }
+  }
+
   mt_ctx_.trans_kill();
   return ret;
 }
@@ -5943,10 +5950,14 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   ObTxBufferNodeArray tmp_array;
 
-  start_us = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(mt_ctx_.trans_end(false, -1 /*unused*/, ctx_tx_data_.get_end_log_ts()))) {
+  if (!has_persisted_log_() && OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
+    TRANS_LOG(WARN, "set abort state failed", K(ret));
+  } else if (OB_FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
+
+  } else if (OB_FAIL(mt_ctx_.trans_end(false, -1 /*unused*/, ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit_version), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
+
   } else if (OB_FAIL(trans_clear_())) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
@@ -5971,7 +5982,6 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   return ret;
 }
-
 int ObPartTransCtx::dump_2_text(FILE *fd)
 {
   int ret = OB_SUCCESS;
