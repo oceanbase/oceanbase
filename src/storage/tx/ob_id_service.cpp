@@ -297,34 +297,35 @@ int64_t ObIDService::get_rec_log_ts()
 
 int ObIDService::switch_to_follower_gracefully()
 {
-  int ret = OB_SUCCESS;
-  const int64_t expire_time = ObTimeUtility::current_time() + 100000;
-  int locked = false;
-  if (OB_SUCC(rwlock_.wrlock(expire_time))) {
-    locked = true;
-  }
-  while (is_logging_ && locked) {
-    rwlock_.unlock();
-    locked = false;
-    ObClockGenerator::usleep(1000);
-    if (ObTimeUtility::current_time() > expire_time) {
-      break;
-    }
-    if (OB_SUCC(rwlock_.wrlock(expire_time))) {
-      locked = true;
-    }
-  }
-  if (locked) {
-    const int64_t last_id = ATOMIC_LOAD(&last_id_);
-    const int64_t limited_id = ATOMIC_LOAD(&limited_id_);
-    // Caution: set limit id before submit log, make sure limit id <= last id
-    ATOMIC_STORE(&limited_id_, last_id);
-    //提交日志但不要求一定成功，防止阻塞卸任
-    submit_log_(ATOMIC_LOAD(&last_id_), limited_id);
-    rwlock_.unlock();
-    locked = false;
-  }
-  TRANS_LOG(INFO, "switch to follower gracefully", K(ret), K(service_type_), K(locked));
+  // int ret = OB_SUCCESS;
+  // const int64_t expire_time = ObTimeUtility::current_time() + 100000;
+  // int locked = false;
+  // if (OB_SUCC(rwlock_.wrlock(expire_time))) {
+  //   locked = true;
+  // }
+  // while (is_logging_ && locked) {
+  //   rwlock_.unlock();
+  //   locked = false;
+  //   ObClockGenerator::usleep(1000);
+  //   if (ObTimeUtility::current_time() > expire_time) {
+  //     break;
+  //   }
+  //   if (OB_SUCC(rwlock_.wrlock(expire_time))) {
+  //     locked = true;
+  //   }
+  // }
+  // if (locked) {
+  //   const int64_t last_id = ATOMIC_LOAD(&last_id_);
+  //   const int64_t limited_id = ATOMIC_LOAD(&limited_id_);
+  //   // Caution: set limit id before submit log, make sure limit id <= last id
+  //   ATOMIC_STORE(&limited_id_, last_id);
+  //   //提交日志但不要求一定成功，防止阻塞卸任
+  //   submit_log_(ATOMIC_LOAD(&last_id_), limited_id);
+  //   rwlock_.unlock();
+  //   locked = false;
+  // }
+  // TRANS_LOG(INFO, "switch to follower gracefully", K(ret), K(service_type_), K(locked));
+  TRANS_LOG(INFO, "switch to follower gracefully", K(last_id_), K(limited_id_), K(service_type_));
   // There is no failure scenario for ObIDService to switch the follower,
   // so return OB_SUCCESS directly.
   return OB_SUCCESS;
