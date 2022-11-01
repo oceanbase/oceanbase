@@ -72,9 +72,9 @@ else()
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION
     -DOCI_LINK_RUNTIME
     -Wall -Wextra -Wformat -Werror
-    -Wno-deprecated 
-    -Wno-sign-compare 
-    -Wno-psabi 
+    -Wno-deprecated
+    -Wno-sign-compare
+    -Wno-psabi
     -Wno-attributes
     -Wno-nonnull-compare
     -Wno-parentheses
@@ -121,7 +121,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
   ${LGPL_DEPS}
-  ${DEP_DIR}/lib/libunwind.a
+  $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib

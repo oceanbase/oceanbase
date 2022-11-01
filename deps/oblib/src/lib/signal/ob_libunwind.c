@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifdef __x86_64__
 #include "lib/signal/ob_libunwind.h"
 #include "lib/signal/safe_snprintf.h"
 #define UNW_LOCAL_ONLY
@@ -106,3 +107,4 @@ int8_t get_frame_info(unw_cursor_t *cursor, uintptr_t *ip)
   *ip = uip - (r == 0);
   return 1;
 }
+#endif
