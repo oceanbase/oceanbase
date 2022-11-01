@@ -1036,6 +1036,9 @@ int ObTabletTableStore::need_remove_old_table(
     LOG_WARN("get invalid arguments", K(ret), K(multi_version_start));
   } else if (minor_tables_.empty() || INT64_MAX == minor_tables_[0]->get_upper_trans_version()) {
     // do nothing
+  } else if (minor_tables_[0]->get_end_log_ts() > tablet_ptr_->get_tablet_meta().clog_checkpoint_ts_) {
+    need_remove = false;
+    //TODO(muwei.ym) remove it later
   } else if (minor_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
     // at least one minor sstable is coverd by major sstable
     // don't need to care about kept_multi_version_start here

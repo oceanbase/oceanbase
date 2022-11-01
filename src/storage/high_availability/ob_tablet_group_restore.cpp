@@ -1688,7 +1688,7 @@ ObTabletRestoreDag::~ObTabletRestoreDag()
   if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
-      LOG_ERROR("failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
+      LOG_WARN("failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
     }
   }
 }
