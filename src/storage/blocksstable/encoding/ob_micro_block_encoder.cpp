@@ -521,15 +521,15 @@ int ObMicroBlockEncoder::store_encoding_meta_and_fix_cols(int64_t &encoding_meta
         if (OB_FAIL(encoders_.at(i)->store_meta(data_buffer_))) {
           LOG_WARN("store encoding meta failed", K(ret));
         } else {
+          ObColumnHeader &ch = encoders_.at(i)->get_column_header();
           if (data_buffer_.pos() > pos_bak) {
-            ObColumnHeader &ch = encoders_.at(i)->get_column_header();
             ch.offset_ = static_cast<uint32_t>(pos_bak - encoding_meta_offset);
             ch.length_ = static_cast<uint32_t>(data_buffer_.pos() - pos_bak);
           } else if (ObColumnHeader::RAW == encoders_.at(i)->get_type()) {
             // column header offset records the start pos of the fix data, if needed
-            ObColumnHeader &ch = encoders_.at(i)->get_column_header();
             ch.offset_ = static_cast<uint32_t>(pos_bak - encoding_meta_offset);
           }
+          ch.obj_type_ = static_cast<uint8_t>(encoders_.at(i)->get_obj_type());
         }
 
         if (OB_SUCC(ret) && !desc.is_var_data_ && desc.need_data_store_) {

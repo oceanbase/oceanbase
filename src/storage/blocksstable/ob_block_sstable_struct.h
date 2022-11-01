@@ -291,7 +291,7 @@ struct ObColumnHeader
   int8_t version_;
   int8_t type_;
   int8_t attr_;
-  int8_t reserved_;
+  uint8_t obj_type_;
   union {
     uint32_t extend_value_offset_; // for var column null-bitmap stored continuously
     uint32_t extend_value_index_;
@@ -299,9 +299,16 @@ struct ObColumnHeader
   uint32_t offset_;
   uint32_t length_;
 
+  static_assert(UINT8_MAX >= ObObjType::ObMaxType, "ObObjType is stored in ObColumnHeader with 1 byte");
   ObColumnHeader() { reuse(); }
   void reuse() { memset(this, 0, sizeof(*this)); }
-  bool is_valid() const { return version_ == OB_COLUMN_HEADER_V1 && type_ >= 0 && type_ < MAX_TYPE; }
+  bool is_valid() const
+  {
+    return version_ == OB_COLUMN_HEADER_V1
+        && type_ >= 0
+        && type_ < MAX_TYPE
+        && obj_type_ < ObObjType::ObMaxType;
+  }
 
   inline bool is_fix_length() const { return attr_ & FIX_LENGTH; }
   inline bool has_extend_value() const { return attr_ & HAS_EXTEND_VALUE; }
@@ -316,6 +323,7 @@ struct ObColumnHeader
   {
     return COLUMN_EQUAL == type || COLUMN_SUBSTR == type;
   }
+  inline ObObjType get_store_obj_type() const { return static_cast<ObObjType>(obj_type_); }
 
   inline void set_fix_lenght_attr() { attr_ |= FIX_LENGTH; }
   inline void set_has_extend_value_attr() { attr_ |= HAS_EXTEND_VALUE; }
@@ -323,7 +331,8 @@ struct ObColumnHeader
   inline void set_last_var_field_attr() { attr_ |= LAST_VAR_FIELD; }
   inline void set_out_row() { attr_ |= OUT_ROW; }
 
-  TO_STRING_KV(K_(version), K_(type), K_(attr), K_(extend_value_offset), K_(offset), K_(length));
+  TO_STRING_KV(K_(version), K_(type), K_(attr), K_(obj_type),
+      K_(extend_value_offset), K_(offset), K_(length));
 } __attribute__((packed));
 
 

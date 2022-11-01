@@ -75,7 +75,7 @@ public:
 
   EncoderDesc &get_desc() { return desc_; }
   ObColumnHeader &get_column_header() { return column_header_; }
-
+  ObObjType get_obj_type() { return column_type_.get_type(); }
   // var data store only
   virtual int set_data_pos(const int64_t offset, const int64_t length)
   {
