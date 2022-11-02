@@ -54,13 +54,13 @@ public:
   enum { WRITE_MASK = 1<<31 };
   struct RLockGuard
   {
-    explicit RLockGuard(TCRWLock& lock): lock_(lock) { lock_.rdlock(); }
+    [[nodiscard]] explicit RLockGuard(TCRWLock& lock): lock_(lock) { lock_.rdlock(); }
     ~RLockGuard() { lock_.rdunlock(); }
     TCRWLock& lock_;
   };
   struct RLockGuardWithTimeout
   {
-    explicit RLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]] explicit RLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
     {
       if (OB_FAIL(lock_.rdlock(abs_timeout_us))) {
         need_unlock_ = false;
@@ -80,13 +80,13 @@ public:
   };
   struct WLockGuard
   {
-    explicit WLockGuard(TCRWLock& lock): lock_(lock) { lock_.wrlock(); }
+    [[nodiscard]] explicit WLockGuard(TCRWLock& lock): lock_(lock) { lock_.wrlock(); }
     ~WLockGuard() { lock_.wrunlock(); }
     TCRWLock& lock_;
   };
   struct WLockGuardWithTimeout
   {
-    explicit WLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]] explicit WLockGuardWithTimeout(TCRWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
     {
       if (OB_FAIL(lock_.wrlock(abs_timeout_us))) {
         need_unlock_ = false;
@@ -106,7 +106,7 @@ public:
   };
   struct WLockGuardWithRetry
   {
-    explicit WLockGuardWithRetry(TCRWLock &lock, const int64_t abs_timeout_us) : lock_(lock)
+    [[nodiscard]] explicit WLockGuardWithRetry(TCRWLock &lock, const int64_t abs_timeout_us) : lock_(lock)
     {
       lock_.wrlock_with_retry(abs_timeout_us);
     }
@@ -115,7 +115,7 @@ public:
   };
   struct WLockGuardWithRetryInterval
   {
-    explicit WLockGuardWithRetryInterval(TCRWLock &lock,
+    [[nodiscard]] explicit WLockGuardWithRetryInterval(TCRWLock &lock,
                                          const int64_t try_thresold_us,
                                          const int64_t retry_interval_us)
       : lock_(lock)
@@ -287,7 +287,7 @@ private:
 class TCWLockGuard
 {
 public:
-  explicit TCWLockGuard(const TCRWLock &lock)
+  [[nodiscard]] explicit TCWLockGuard(const TCRWLock &lock)
       : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
@@ -313,7 +313,7 @@ private:
 class TCRLockGuard
 {
 public:
-  explicit TCRLockGuard(const TCRWLock &lock)
+  [[nodiscard]] explicit TCRLockGuard(const TCRWLock &lock)
       : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS), slot_id_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(INT64_MAX, slot_id_)))) {
@@ -342,7 +342,7 @@ typedef TCRWLock RWLock;
 class RWLock
 {
 public:
-  struct RLockGuard
+  [[nodiscard]]  struct RLockGuard
   {
     explicit RLockGuard(RWLock& lock): lock_(lock) { lock_.rdlock(); }
     ~RLockGuard() { lock_.rdunlock(); }
@@ -350,7 +350,7 @@ public:
   };
   struct RLockGuardWithTimeout
   {
-    explicit RLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]]  explicit RLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
     {
       if (OB_FAIL(lock_.rdlock(abs_timeout_us))) {
         need_unlock_ = false;
@@ -371,13 +371,13 @@ public:
 
   struct WLockGuard
   {
-    explicit WLockGuard(RWLock& lock): lock_(lock) { lock_.wrlock(); }
+    [[nodiscard]] explicit WLockGuard(RWLock& lock): lock_(lock) { lock_.wrlock(); }
     ~WLockGuard() { lock_.wrunlock(); }
     RWLock& lock_;
   };
   struct WLockGuardWithTimeout
   {
-    explicit WLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
+    [[nodiscard]] explicit WLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
     {
       if (OB_FAIL(lock_.wrlock(abs_timeout_us))) {
         need_unlock_ = false;
@@ -397,7 +397,7 @@ public:
   };
   struct WLockGuardWithRetry
   {
-    explicit WLockGuardWithRetry(RWLock &lock, const int64_t abs_timeout_us) : lock_(lock)
+    [[nodiscard]] explicit WLockGuardWithRetry(RWLock &lock, const int64_t abs_timeout_us) : lock_(lock)
     {
       lock_.wrlock_with_retry(abs_timeout_us);
     }
