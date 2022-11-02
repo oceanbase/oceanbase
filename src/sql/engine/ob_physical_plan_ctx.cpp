@@ -681,6 +681,7 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   OB_UNIS_ENCODE(tenant_schema_version_);
   OB_UNIS_ENCODE(cursor_count);
   OB_UNIS_ENCODE(plan_start_time_);
+  OB_UNIS_ENCODE(last_trace_id_);
   return ret;
 }
 
@@ -762,6 +763,7 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   OB_UNIS_ADD_LEN(tenant_schema_version_);
   OB_UNIS_ADD_LEN(cursor_count);
   OB_UNIS_ADD_LEN(plan_start_time_);
+  OB_UNIS_ADD_LEN(last_trace_id_);
   return len;
 }
 
@@ -842,6 +844,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
     (void)ObSQLUtils::adjust_time_by_ntp_offset(plan_start_time_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(ts_timeout_us_);
   }
+  OB_UNIS_DECODE(last_trace_id_);
   return ret;
 }
 

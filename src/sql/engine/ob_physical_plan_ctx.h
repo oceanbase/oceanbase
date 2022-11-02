@@ -419,6 +419,12 @@ public:
   void set_plan_start_time(int64_t t) { plan_start_time_ = t; }
   int64_t get_plan_start_time() const { return plan_start_time_; }
   int replace_batch_param_datum(int64_t cur_group_id);
+  void set_last_trace_id(const common::ObCurTraceId::TraceId &trace_id)
+  {
+    last_trace_id_ = trace_id;
+  }
+  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
+  common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
 
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -481,6 +487,7 @@ private:
   //在存储层，如果table_id是系统表，则会跳过对tenant_schema_version的检查，还是使用原来的办法获取table schema version（见ObRelativeTables::check_schema_version）
   int64_t tenant_schema_version_;
   int64_t orig_question_mark_cnt_;
+  common::ObCurTraceId::TraceId last_trace_id_;
 
 private:
   /**
