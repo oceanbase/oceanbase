@@ -5111,6 +5111,8 @@ def_table_schema(
 # 427 : __all_ls_balance_job
 # 428 : __all_ls_balance_job_history
 
+# 429 : __all_arbitration_service
+# 430 : __all_arbitration_service_replica_task
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
