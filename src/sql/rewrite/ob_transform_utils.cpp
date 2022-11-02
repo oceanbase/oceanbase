@@ -1841,12 +1841,12 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
              T_FUN_SYS_ROWNUM == expr->get_expr_type() ||
              T_LEVEL == expr->get_expr_type()) {
     is_not_null = true;
-  } else if (OB_FAIL(!expr->is_const_raw_expr() && 
-                     is_general_expr_not_null(ctx, expr, is_not_null, constraints))) {
+  } else if (!expr->is_const_raw_expr() && 
+             OB_FAIL(is_general_expr_not_null(ctx, expr, is_not_null, constraints))) {
     LOG_WARN("failed to check compound expr", K(ret));
   } else if (is_not_null) {
     // do nothing
-  } else if (expr->is_static_const_expr()) {
+  } else if (expr->is_static_scalar_const_expr()) {
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
     } else if (is_not_null && !expr->is_const_raw_expr() && 
