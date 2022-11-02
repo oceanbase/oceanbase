@@ -154,6 +154,7 @@ public:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
+  typedef RWLock::WLockGuardWithRetryInterval WLockGuardWithRetryInterval;
 
   ObLSTxCtxMgr()
       : tx_log_adapter_(&log_adapter_def_), rwlock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
@@ -492,6 +493,8 @@ private:
 private:
   static const int64_t OB_TRANS_STATISTICS_INTERVAL = 60 * 1000 * 1000;
   static const int64_t OB_PARTITION_AUDIT_LOCAL_STORAGE_COUNT = 4;
+  static const int64_t TRY_THRESOLD_US = 1 * 1000 *1000;
+  static const int64_t RETRY_INTERVAL_US = 10 *1000;
 
 private:
   int process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const;
