@@ -320,7 +320,12 @@ public:
   int submit_notify_rebuild_req(const ObAddr &server,
                                 const LSN &base_lsn,
                                 const LogInfo &base_prev_log_info);
-
+  int submit_committed_info_req(
+      const ObAddr &server,
+      const int64_t &msg_proposal_id,
+      const int64_t prev_log_id,
+      const int64_t &prev_log_proposal_id,
+      const LSN &committed_end_lsn);
   // @brief: this function used to send committed_info to child replica
   // @param[in] member_list: current paxos member list
   // @param[in] msg_proposal_id: the current proposal_id

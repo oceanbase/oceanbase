@@ -190,6 +190,10 @@ public:
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
   virtual int reset_location_cache_cb();
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn);
+  virtual int try_send_committed_info(const common::ObAddr &server,
+                                      const LSN &log_lsn,
+                                      const LSN &log_end_lsn,
+                                      const int64_t &log_proposal_id);
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
@@ -303,6 +307,9 @@ private:
                                   const char *buf,
                                   const int64_t buf_len,
                                   int64_t &min_log_ts_ns);
+  int leader_get_committed_log_info_(const LSN &committed_end_lsn,
+                                     int64_t &log_id,
+                                     int64_t &log_proposal_id);
   int leader_broadcast_committed_info_(const LSN &committed_end_lsn);
   int submit_push_log_resp_(const common::ObAddr &server, const int64_t &msg_proposal_id, const LSN &lsn);
   inline int try_push_log_to_paxos_follower_(const int64_t curr_proposal_id,

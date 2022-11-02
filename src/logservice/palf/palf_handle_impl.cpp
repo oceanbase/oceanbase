@@ -2760,13 +2760,36 @@ int PalfHandleImpl::fetch_log_from_storage(const common::ObAddr &server,
   return ret;
 }
 
+int PalfHandleImpl::try_send_committed_info_(const ObAddr &server,
+                                             const LSN &log_lsn,
+                                             const LSN &log_end_lsn,
+                                             const int64_t &log_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  AccessMode access_mode;
+  if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(mode_mgr_.get_access_mode(access_mode))) {
+    PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
+  } else if (AccessMode::APPEND == access_mode) {
+    // No need send committed_info in APPEND mode, because leader will genenrate keeapAlive log periodically.
+  } else if (OB_FAIL(sw_.try_send_committed_info(server, log_lsn, log_end_lsn, log_proposal_id))) {
+    PALF_LOG(TRACE, "try_send_committed_info failed", K(ret), K_(palf_id), K_(self),
+      K(server), K(log_lsn), K(log_end_lsn), K(log_proposal_id));
+  } else {
+    PALF_LOG(TRACE, "try_send_committed_info_ success", K(ret), K_(palf_id), K_(self), K(server),
+      K(log_lsn), K(log_end_lsn), K(log_proposal_id));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
-                                           const FetchLogType fetch_type,
-                                           const int64_t &msg_proposal_id,
-                                           const LSN &prev_lsn,
-                                           const LSN &fetch_start_lsn,
-                                           const int64_t fetch_log_size,
-                                           const int64_t fetch_log_count)
+                                            const FetchLogType fetch_type,
+                                            const int64_t &msg_proposal_id,
+                                            const LSN &prev_lsn,
+                                            const LSN &fetch_start_lsn,
+                                            const int64_t fetch_log_size,
+                                            const int64_t fetch_log_count)
 {
   int ret = OB_SUCCESS;
   PalfGroupBufferIterator iterator;
@@ -2822,6 +2845,7 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
     bool is_reach_end = false;
     int64_t fetched_count = 0;
     LSN curr_log_end_lsn = curr_lsn + curr_group_entry.get_group_entry_size();
+    LSN prev_log_end_lsn;
     int64_t prev_log_proposal_id = prev_log_info.log_proposal_id_;
     while (OB_SUCC(ret) && !is_reach_size_limit && !is_reach_count_limit && !is_reach_end
         && OB_SUCC(iterator.next())) {
@@ -2853,11 +2877,17 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
             K(prev_log_proposal_id), K(fetch_end_lsn), K(curr_log_end_lsn), K(is_reach_size_limit),
             K(fetch_log_size), K(fetched_count), K(is_reach_count_limit));
         each_round_prev_lsn = curr_lsn;
+        prev_log_end_lsn = curr_log_end_lsn;
         prev_log_proposal_id = curr_group_entry.get_header().get_log_proposal_id();
       }
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
+    }
+    // try send committed_info to server
+    if (OB_SUCC(ret)) {
+      RLockGuard guard(lock_);
+      (void) try_send_committed_info_(server, each_round_prev_lsn, prev_log_end_lsn, prev_log_proposal_id);
     }
   }
 

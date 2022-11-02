@@ -867,6 +867,10 @@ private:
   int construct_palf_base_info_(const LSN &max_committed_lsn,
                                   PalfBaseInfo &palf_base_info);
   int append_disk_log_to_sw_(const LSN &start_lsn);
+  int try_send_committed_info_(const common::ObAddr &server,
+                               const LSN &log_lsn,
+                               const LSN &log_end_lsn,
+                               const int64_t &log_proposal_id);
   int fetch_log_from_storage_(const common::ObAddr &server,
                               const FetchLogType fetch_type,
                               const int64_t &msg_proposal_id,
