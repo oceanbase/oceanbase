@@ -2089,9 +2089,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
       ret = OB_TIMEOUT;
       LOG_WARN("submit sync tablet seq log timeout", K(ret));
     } else if (cb->is_failed()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("submit sync tablet seq log failed", K(ret));
-    } else if (OB_FAIL(cb->get_ret_code())) {
+      ret = cb->get_ret_code();
       LOG_WARN("submit sync tablet seq log failed", K(ret));
     } else {
       int64_t wait_time = ObTimeUtility::fast_current_time() - start_time;
