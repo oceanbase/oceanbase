@@ -2697,12 +2697,12 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_TENANT,
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES,
                        NULL,
-                       "SELECT `database_name` AS `Database` FROM %s.%s  WHERE tenant_id = %ld and in_recyclebin = 0 and database_name not in('%s', '%s', '%s') and 0 = sys_privilege_check(\'db_acc\', `tenant_id`, `database_name`, \'\')",
+                       "SELECT `database_name` AS `Database` FROM %s.%s  WHERE tenant_id = %ld and in_recyclebin = 0 and database_name not in('%s', '%s', '%s') and 0 = sys_privilege_check(\'db_acc\', `tenant_id`, `database_name`, \'\') order by database_name asc",
                        NULL,
                        "Database");
 DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES_LIKE,
                        "SELECT `Database` AS `Database (%.*s)` ",
-                       "SELECT `database_name` AS `Database` FROM %s.%s  WHERE tenant_id = %ld and in_recyclebin = 0 and database_name not in ('%s', '%s', '%s') and 0 = sys_privilege_check(\'db_acc\', `tenant_id`, `database_name`, \'\')",
+                       "SELECT `database_name` AS `Database` FROM %s.%s  WHERE tenant_id = %ld and in_recyclebin = 0 and database_name not in ('%s', '%s', '%s') and 0 = sys_privilege_check(\'db_acc\', `tenant_id`, `database_name`, \'\') order by database_name asc",
                        NULL,
                        "Database");
 DEFINE_SHOW_CLAUSE_SET(SHOW_DATABASES_STATUS,
