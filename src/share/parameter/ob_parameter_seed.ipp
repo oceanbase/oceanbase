@@ -80,7 +80,7 @@ DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0",
 DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
         "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(system_memory, OB_CLUSTER_PARAMETER, "30G", "[0M,)",
+DEF_CAP(system_memory, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "the memory reserved for internal use which cannot be allocated to any outer-tenant, "
         "and should be determined to guarantee every server functions normally. Range: [0M,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

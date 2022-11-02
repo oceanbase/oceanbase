@@ -95,7 +95,26 @@ int64_t ObServerConfig::get_server_memory_avail()
 
 int64_t ObServerConfig::get_reserved_server_memory()
 {
-  return system_memory;
+  int64_t system_memory_b = system_memory;
+  if (0 == system_memory_b) {
+    int64_t memory_limit_g = get_server_memory_limit() >> 30;
+    if (memory_limit_g < 4) {
+      OB_LOG(ERROR, "memory_limit with unexpected value", K(memory_limit_g));
+    } else if (memory_limit_g <= 8) {
+      system_memory_b = 2LL << 30;
+    } else if (memory_limit_g <= 16) {
+      system_memory_b = 3LL << 30;
+    } else if (memory_limit_g <= 32) {
+      system_memory_b = 5LL << 30;
+    } else if (memory_limit_g <= 48) {
+      system_memory_b = 7LL << 30;
+    } else if (memory_limit_g <= 64) {
+      system_memory_b = 10LL << 30;
+    } else {
+      system_memory_b = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
+    }
+  }
+  return system_memory_b;
 }
 
 int ObServerConfig::read_config()
