@@ -13606,12 +13606,22 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                   } else if (OB_FAIL(generate_tablet_id(index_schema))) {
                     LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(index_schema));
                   } else {
+                    bool is_exist = false;
                     index_schema.set_table_id(new_idx_tid);
                     index_schema.set_data_table_id(new_table_schema.get_table_id());
                     index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
                     // set the hidden attributes of the table
                     index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
                     if (OB_FAIL(ret)) {
+                    } else if (OB_FAIL(schema_guard.check_table_exist(index_schema.get_tenant_id(),
+                                                                      index_schema.get_database_id(),
+                                                                      index_schema.get_table_name_str(),
+                                                                      true/*is_index*/,
+                                                                      ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
+                                                                      is_exist))) {
+                      LOG_WARN("failed to check table exist", K(ret));
+                    } else if (is_exist) {
+                      LOG_INFO("index already rebuilt, skip", K(index_schema.get_table_id()), K(index_schema.get_table_name_str()));
                     } else if (OB_FAIL(new_table_schemas.push_back(index_schema))) {
                       LOG_WARN("failed to add table schema!", K(ret));
                     } else if (OB_FAIL(index_ids.push_back(index_schema.get_table_id()))) {
@@ -13808,6 +13818,7 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
               new_index_schema.set_table_name(new_index_table_name);
               // set the hidden attributes of the table
               new_index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
+              bool is_exist = false;
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(new_table_schemas.push_back(new_index_schema))) {
                 LOG_WARN("failed to add table schema!", K(ret));
