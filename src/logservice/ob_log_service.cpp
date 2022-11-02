@@ -311,7 +311,9 @@ int ObLogService::create_ls(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogService::remove_ls(const ObLSID &id)
+int ObLogService::remove_ls(const ObLSID &id,
+                            ObLogHandler &log_handler,
+                            ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -322,10 +324,14 @@ int ObLogService::remove_ls(const ObLSID &id)
   } else if (OB_FAIL(replay_service_.remove_ls(id))) {
     CLOG_LOG(WARN, "failed to remove from replay_service", K(ret), K(id));
     // NB: remove palf_handle lastly.
-  } else if (OB_FAIL(palf_env_->remove(id.id()))) {
-    CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
   } else {
-    FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
+    log_handler.destroy();
+    restore_handler.destroy();
+    if (OB_FAIL(palf_env_->remove(id.id()))) {
+      CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
+    } else {
+      FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
+    }
   }
 
   return ret;

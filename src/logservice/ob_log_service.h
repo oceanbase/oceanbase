@@ -122,7 +122,9 @@ public:
                 ObLogRestoreHandler &restore_handler);
 
   //删除日志流接口:外层调用create_ls()之后，后续流程失败，需要调用remove_ls()
-  int remove_ls(const share::ObLSID &id);
+  int remove_ls(const share::ObLSID &id, 
+                ObLogHandler &log_handler,
+                ObLogRestoreHandler &restore_handler);
 
   int check_palf_exist(const share::ObLSID &id, bool &exist) const;
   //宕机重启恢复日志流接口，包括生成并初始化对应的ObReplayStatus结构

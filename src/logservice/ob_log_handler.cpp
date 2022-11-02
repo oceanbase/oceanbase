@@ -167,6 +167,9 @@ void ObLogHandler::destroy()
     apply_status_ = NULL;
     apply_service_ = NULL;
     replay_service_ = NULL;
+    if (true == palf_handle_.is_valid()) {
+      palf_env_->close(palf_handle_);
+    }
     lc_cb_ = NULL;
     rpc_proxy_ = NULL;
     palf_env_ = NULL;

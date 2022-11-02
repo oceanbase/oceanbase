@@ -329,7 +329,7 @@ int ObLS::remove_ls()
     if (OB_TMP_FAIL(log_handler_.unregister_rebuild_cb())) {
       LOG_WARN("unregister rebuild cb failed", K(ret), K(ls_meta_));
     }
-    if (OB_FAIL(logservice->remove_ls(ls_meta_.ls_id_))) {
+    if (OB_FAIL(logservice->remove_ls(ls_meta_.ls_id_, log_handler_, restore_handler_))) {
       LOG_ERROR("remove log stream from logservice failed", K(ret), K(ls_meta_.ls_id_));
     }
   }
