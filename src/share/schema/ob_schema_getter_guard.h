@@ -48,6 +48,7 @@ class ObColumnSchemaV2;
 class ObDBPriv;
 class ObDatabaseSchema;
 class ObMultiVersionSchemaService;
+class ObPrivMgr;
 class ObSimpleDatabaseSchema;
 class ObSimplePackageSchema;
 class ObSimpleRoutineSchema;
@@ -71,6 +72,7 @@ struct ObNeedPriv;
 struct ObSessionPrivInfo;
 struct ObStmtNeedPrivs;
 struct ObUserLoginInfo;
+
 
 class ObSchemaMgrInfo
 {
@@ -1087,6 +1089,17 @@ private:
       const ObIArray<uint64_t> &role_id_array);
   bool ignore_tenant_not_exist_error(const uint64_t tenant_id);
 
+  int check_priv_db_or_(const ObSessionPrivInfo &session_priv,
+                        const ObNeedPriv &need_priv,
+                        const ObPrivMgr &priv_mgr,
+                        const uint64_t tenant_id,
+                        const uint64_t user_id,
+                        bool& pass);
+  int check_priv_table_or_(const ObNeedPriv &need_priv,
+                           const ObPrivMgr &priv_mgr,
+                           const uint64_t tenant_id,
+                           const uint64_t user_id,
+                           bool& pass);
 private:
   common::ObArenaAllocator local_allocator_;
   ObMultiVersionSchemaService *schema_service_;

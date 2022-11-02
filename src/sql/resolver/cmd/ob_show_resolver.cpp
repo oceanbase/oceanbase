@@ -135,6 +135,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           show_resv_ctx.condition_node_ = parse_tree.children_[1];
           show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLES;
           ParseNode *condition_node = show_resv_ctx.condition_node_;
+          ObString show_db_name;
           uint64_t show_db_id = OB_INVALID_ID;
           if (OB_FAIL(get_database_info(parse_tree.children_[0],
                                         database_name,
@@ -146,65 +147,76 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("database id is invalid", K(ret), K(show_db_id));
           } else {
-            if (0 == parse_tree.children_[2]->value_) {
-              if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
-                if (OB_UNLIKELY(condition_node->num_child_ != 2
-                                || NULL == condition_node->children_)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("invalid like parse node",
-                      K(ret),
-                      K(condition_node->num_child_),
-                      K(condition_node->children_));
-                } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
-                                       || NULL == condition_node->children_[1])) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("invalid like parse node",
-                      K(ret),
-                      K(condition_node->num_child_),
-                      K(condition_node->children_[0]),
-                      K(condition_node->children_[1]));
-
-                } else {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES_LIKE,
-                                 show_resv_ctx.show_database_name_.length(),
-                                 show_resv_ctx.show_database_name_.ptr(),
-                                 static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
-                                 condition_node->children_[0]->str_value_);
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-                }
+            show_db_name = show_resv_ctx.show_database_name_;
+            if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+              if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+                LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                               show_db_name.length(), show_db_name.ptr());
               } else {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES, show_resv_ctx.show_database_name_.length(),
-                               show_resv_ctx.show_database_name_.ptr());
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-              }
-            } else if (1 == parse_tree.children_[2]->value_) {
-              if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
-                if (OB_UNLIKELY(condition_node->num_child_ != 2
-                                || NULL == condition_node->children_[0]
-                                || NULL == condition_node->children_[1])) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("invalid like parse node",
-                      K(ret),
-                      K(condition_node->num_child_),
-                      K(condition_node->children_[0]),
-                      K(condition_node->children_[1]));
-                } else {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES_LIKE,
-                                 show_resv_ctx.show_database_name_.length(),
-                                 show_resv_ctx.show_database_name_.ptr(),
-                                 static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
-                                 condition_node->children_[0]->str_value_);
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
-                }
-              } else {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES, show_resv_ctx.show_database_name_.length(),
-                               show_resv_ctx.show_database_name_.ptr());
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                LOG_WARN("fail to check priv", K(ret));
               }
             } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("node value unexpected", K(parse_tree.value_));
-              break;
+              if (0 == parse_tree.children_[2]->value_) {
+                if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+                  if (OB_UNLIKELY(condition_node->num_child_ != 2
+                                  || NULL == condition_node->children_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid like parse node",
+                        K(ret),
+                        K(condition_node->num_child_),
+                        K(condition_node->children_));
+                  } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
+                                         || NULL == condition_node->children_[1])) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid like parse node",
+                        K(ret),
+                        K(condition_node->num_child_),
+                        K(condition_node->children_[0]),
+                        K(condition_node->children_[1]));
+
+                  } else {
+                    GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES_LIKE,
+                                   show_resv_ctx.show_database_name_.length(),
+                                   show_resv_ctx.show_database_name_.ptr(),
+                                   static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
+                                   condition_node->children_[0]->str_value_);
+                    GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                  }
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLES, show_resv_ctx.show_database_name_.length(),
+                                 show_resv_ctx.show_database_name_.ptr());
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                }
+              } else if (1 == parse_tree.children_[2]->value_) {
+                if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+                  if (OB_UNLIKELY(condition_node->num_child_ != 2
+                                  || NULL == condition_node->children_[0]
+                                  || NULL == condition_node->children_[1])) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid like parse node",
+                        K(ret),
+                        K(condition_node->num_child_),
+                        K(condition_node->children_[0]),
+                        K(condition_node->children_[1]));
+                  } else {
+                    GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES_LIKE,
+                                   show_resv_ctx.show_database_name_.length(),
+                                   show_resv_ctx.show_database_name_.ptr(),
+                                   static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
+                                   condition_node->children_[0]->str_value_);
+                    GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES_LIKE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                  }
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_TABLES, show_resv_ctx.show_database_name_.length(),
+                                 show_resv_ctx.show_database_name_.ptr());
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
+                }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("node value unexpected", K(parse_tree.value_));
+                break;
+              }
             }
 
             //change where condition :Tables_in_xxx=>table_name
@@ -352,7 +364,41 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                                 show_db_name, show_db_id, show_table_name,
                                                 show_table_id, is_view, synonym_checker))) {
               LOG_WARN("fail to resolve show from table", K(ret));
-            } else {
+            } else if (!is_oracle_mode) {
+              if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
+                LOG_WARN("fail to init need privs array", K(ret));
+              } else {
+                ObNeedPriv need_priv;
+                //Priv check: global select || db select || table acc
+                need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+                need_priv.priv_set_ = OB_PRIV_SELECT;
+                stmt_need_privs.need_privs_.push_back(need_priv);
+
+                need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+                need_priv.priv_set_ = OB_PRIV_SELECT;
+                need_priv.db_ = show_db_name;
+                stmt_need_privs.need_privs_.push_back(need_priv);
+
+                need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+                need_priv.priv_set_ = OB_PRIV_TABLE_ACC;
+                need_priv.db_ = show_db_name;
+                need_priv.table_ = show_table_name;
+                stmt_need_privs.need_privs_.push_back(need_priv);
+
+                if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
+                  if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
+                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                                   show_table_name.length(), show_table_name.ptr());
+                  } else {
+                    LOG_WARN("fail to check priv", K(ret));
+                  }
+                }
+              }
+            }
+
+            if (OB_SUCC(ret)) {
               if (1 == parse_tree.children_[0]->value_) {
                 GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_COLUMNS);
                 GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
@@ -387,13 +433,35 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                                   show_db_id,
                                                   show_db_name))) {
               LOG_WARN("fail to resolve show database", K(ret), K(real_tenant_id));
+            } else if (OB_FAIL(stmt_need_privs.need_privs_.init(2))) {
+              LOG_WARN("fail to init need privs array", K(ret));
             } else {
-              if (NULL != parse_tree.children_[0]) {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS);
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
+              ObNeedPriv need_priv;
+              need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+              need_priv.priv_set_ = OB_PRIV_DB_ACC;
+              stmt_need_privs.need_privs_.push_back(need_priv);
+
+              need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+              need_priv.priv_set_ = OB_PRIV_DB_ACC;
+              need_priv.db_ = show_db_name;
+              stmt_need_privs.need_privs_.push_back(need_priv);
+
+              if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
+                if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+                  LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                 session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                                 show_db_name.length(), show_db_name.ptr());
+                } else {
+                  LOG_WARN("fail to check priv", K(ret));
+                }
               } else {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE);
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
+                if (NULL != parse_tree.children_[0]) {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
+                }
               }
             }
           }
@@ -565,11 +633,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                                 T_SHOW_INDEXES, real_tenant_id, show_db_name, show_db_id,
                                                 show_table_name, show_table_id, is_view, synonym_checker))) {
               LOG_WARN("fail to resolve show from table", K(ret));
-            } else {
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_INDEXES);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_INDEXES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME, show_table_id);
-            }
-            if (OB_SUCC(ret)) {
+            } else if (!is_oracle_mode) {
               if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
                 LOG_WARN("fail to init need privs array", K(ret));
               } else {
@@ -580,6 +644,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 stmt_need_privs.need_privs_.push_back(need_priv);
 
                 need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+                need_priv.priv_set_ = OB_PRIV_SELECT;
+                need_priv.db_ = show_db_name;
                 stmt_need_privs.need_privs_.push_back(need_priv);
 
                 need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
@@ -589,13 +655,21 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 stmt_need_privs.need_privs_.push_back(need_priv);
 
                 if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
-                  ret = OB_ERR_NO_TABLE_PRIVILEGE;
-                  LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
-                                session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                show_table_name.length(), show_table_name.ptr());
+                  if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
+                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                                   show_table_name.length(), show_table_name.ptr());
+                  } else {
+                    LOG_WARN("fail to check priv", K(ret));
+                  }
                 }
               }
+            }
+
+            if (OB_SUCC(ret)) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_INDEXES);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_INDEXES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME, show_table_id);
             }
           }
         }();
