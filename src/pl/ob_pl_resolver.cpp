@@ -10497,6 +10497,13 @@ int ObPLResolver::resolve_sf_clause(
           }
           OX (routine_info->set_pipelined());
         }
+      } else if (T_COMMENT == child->type_) {
+        if (lib::is_mysql_mode()) {
+          ObString routine_comment;
+          CK (OB_NOT_NULL(dynamic_cast<ObRoutineInfo*>(routine_info)));
+          OX (routine_comment = ObString(child->str_len_, child->str_value_));
+          OZ (dynamic_cast<ObRoutineInfo*>(routine_info)->set_comment(routine_comment));
+        }
       }
     }
   }
