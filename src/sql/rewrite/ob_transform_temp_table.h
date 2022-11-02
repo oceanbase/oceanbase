@@ -121,19 +121,20 @@ public:
   
   int extract_common_subquery_as_cte(ObDMLStmt *stmt,
                                      ObIArray<ObSelectStmt*> &stmts,
+                                     hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                                      bool &trans_happened);
 
   int inner_extract_common_subquery_as_cte(ObDMLStmt &root_stmt,
                                            ObIArray<ObSelectStmt*> &stmts,
+                                           hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                                            bool &trans_happened);
 
   int add_materialize_stmts(const ObIArray<ObSelectStmt*> &stms);
 
-  int check_has_stmt(ObSelectStmt *left_stmt, ObSelectStmt *right_stmt, bool &has_stmt);
-
-  int check_has_stmt_in_same_level(ObSelectStmt *left_stmt, ObSelectStmt *right_stmt, bool &has_stmt);
-
-  int check_has_stmt_in_diff_level(ObSelectStmt *left_stmt, ObSelectStmt *right_stmt, bool &has_stmt);
+  int check_has_stmt(ObSelectStmt *left_stmt, 
+                     ObSelectStmt *right_stmt, 
+                     hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                     bool &has_stmt);
 
   bool is_similar_stmt(ObSelectStmt& stmt,
                        const ObStmtMapInfo &map_info,

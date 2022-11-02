@@ -1368,10 +1368,8 @@ public:
                                            ObRawExpr *not_null_expr);
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
-                                 ObIArray<ObSelectStmt*> &child_stmts);
-
-  static int get_all_child_stmts(ObIArray<ObSelectStmt*> &stmts,
-                                 ObIArray<ObSelectStmt*> &child_stmts);
+                                 ObIArray<ObSelectStmt*> &child_stmts,
+                                 hash::ObHashMap<uint64_t, ObDMLStmt *> *parent_map = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
 
