@@ -739,9 +739,7 @@ bool LogStateMgr::follower_active_need_switch_()
   bool state_changed = false;
   common::ObAddr new_leader;
   if (need_update_leader_(new_leader)) {
-    if (new_leader.is_valid() || !leader_.is_valid() || leader_epoch_ == OB_INVALID_TIMESTAMP) {
-      state_changed = true;
-    }
+    state_changed = true;
   } else if (new_leader.is_valid()
              && self_ == new_leader) {
     state_changed = true;
@@ -1020,6 +1018,7 @@ int LogStateMgr::check_and_try_fetch_log_()
     } else {
       last_check_start_id_ = start_id;
       last_check_start_id_time_ns_ = now_ns;
+      PALF_LOG(TRACE, "sw try_fetch_log success", K(ret), K_(palf_id), K(start_id));
     }
   } else if (last_check_start_id_ != start_id) {
     last_check_start_id_ = start_id;

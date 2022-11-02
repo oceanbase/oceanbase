@@ -1948,6 +1948,7 @@ int PalfHandleImpl::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
   } else if (OB_ISNULL(lc_cb)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), KPC(this));
@@ -2288,7 +2289,7 @@ int PalfHandleImpl::do_init_mem_(
     has_set_deleted_ = false;
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
-    PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(log_dir), K(palf_base_info),
+    PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(self), K(log_dir), K(palf_base_info),
         K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc), K(log_io_worker));
   }
   if (OB_FAIL(ret)) {
