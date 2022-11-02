@@ -421,7 +421,12 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
             LOG_WARN("fail to check decalre order", K(ret));
           } else if (OB_FAIL(resolve_declare_handler(parse_tree, static_cast<ObPLDeclareHandlerStmt*>(NULL == stmt ? current_block_->get_eh() : stmt), func))) {
             LOG_WARN("failed to resolve declare handler stmt", K(parse_tree), K(stmt), K(ret));
-          } else {
+          } else if (stmt != NULL && static_cast<ObPLDeclareHandlerStmt*>(stmt)->get_handlers().count() <= 0) {
+            // continue handler will record into handler_analyzer_,
+            // so here handlers may null, do not add null handler to current block.
+            stmt = NULL;
+          }
+          if (OB_SUCC(ret)) {
             func.set_is_all_sql_stmt(false);
           }
         }
@@ -645,7 +650,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
 
       if (OB_SUCC(ret) && handler_analyzer_.in_continue()  && NULL != stmt && !NO_EXCEPTION_STMT(stmt->get_type())) {
-        //如果自己在continue里，那么把栈里的handler都加到block里
+        // for continue handler, should add handler to every stmt, here, make a new block, consturct new block with handler and stmt.
         ObPLStmtBlock *block = NULL;
         if (OB_FAIL(make_block(func, current_block_, block))) {
           LOG_WARN("failed to make block", K(current_block_), K(ret));
@@ -990,10 +995,22 @@ int ObPLResolver::check_declare_order(ObPLStmtType type)
   CK(PL_VAR == type || PL_COND == type || PL_HANDLER == type || PL_CURSOR == type);
   if (is_oracle_mode()) {
     // oracle compatible, do nothing ...
-  } else if (OB_NOT_NULL(current_block_) && current_block_->get_stmts().count() != 0) {
-    ObPLStmtType pre_type =
-      current_block_->get_stmts().at(current_block_->get_stmts().count() - 1)->get_type();
-    if ((PL_VAR == type || PL_COND == type)
+  } else {
+    ObPLStmtType pre_type = INVALID_PL_STMT;
+    if (OB_NOT_NULL(current_block_) && (current_block_->get_stmts().count() != 0)) {
+      pre_type =
+        current_block_->get_stmts().at(current_block_->get_stmts().count() - 1)->get_type();
+    }
+    if (handler_analyzer_.get_stack_depth() > 0) {
+      ObPLDeclareHandlerStmt::DeclareHandler info;
+      if (OB_FAIL(handler_analyzer_.get_handler(handler_analyzer_.get_stack_depth() - 1, info))) {
+        LOG_WARN("failed to get last handler", K(ret));
+      } else if (info.get_level() == current_level_) {
+        pre_type = PL_HANDLER;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if ((PL_VAR == type || PL_COND == type)
         && (PL_HANDLER == pre_type || PL_CURSOR == pre_type)) {
       ret = OB_ER_SP_VARCOND_AFTER_CURSHNDLR;
       LOG_USER_ERROR(OB_ER_SP_VARCOND_AFTER_CURSHNDLR);
@@ -5202,15 +5219,16 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
               ret = OB_ERR_NO_CHOICES;
               LOG_WARN("no choices may appear with choice OTHERS in an exception handler",
                         K(ret));
+            } else if (OB_FAIL(desc->add_condition(value))) {
+              LOG_WARN("failed to add condition for delcare handler desc", K(ret), K(value));
             } else {
-              desc->add_condition(value);
               if (NOT_FOUND == actual_type && !handler_analyzer_.in_notfound()) {
                 handler_analyzer_.set_notfound(current_level_);
                 current_block_->set_notfound();
               } else if (SQL_WARNING == actual_type && !handler_analyzer_.in_warning()) {
                 handler_analyzer_.set_warning(current_level_);
                 current_block_->set_warning();
-              } else { /*do nothing*/ }
+              }
             }
           }
         }
@@ -5235,17 +5253,19 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !desc->is_continue()) {
       ObPLDeclareHandlerStmt::DeclareHandler handler;
       handler.set_desc(desc);
-      OZ (stmt->add_handler(handler));
+      if (OB_FAIL(stmt->add_handler(handler))) {
+        LOG_WARN("failed to add handler", K(ret));
+      }
     }
 
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(current_block_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Symbol table is NULL", K(current_block_), K(ret));
-      } else {
+      } else if (stmt->get_handlers().count() > 0) {
         current_block_->set_eh(stmt);
       }
     }
@@ -12194,7 +12214,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
 {
   int ret = OB_SUCCESS;
   dup = false;
-  for (int64_t i = 0; !dup && i < stmt.get_handlers().count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && !dup && i < stmt.get_handlers().count(); ++i) {
     ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *desc = stmt.get_handler(i).get_desc();
     if (OB_ISNULL(desc)) {
       ret = OB_ERR_UNEXPECTED;
@@ -12208,6 +12228,29 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
           dup = true;
         }
       }
+    }
+  }
+  for (int64_t i = handler_analyzer_.get_stack_depth() - 1; OB_SUCC(ret) && !dup && i >= 0; --i) {
+    ObPLDeclareHandlerStmt::DeclareHandler handler;
+    if (OB_FAIL(handler_analyzer_.get_handler(i, handler))) {
+      LOG_WARN("failed to get handler from handler analyzer", K(ret), K(i));
+    } else if (handler.get_level() == current_level_) {
+      ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *desc = handler.get_desc();
+      if (OB_ISNULL(desc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Handler desc is NULL", K(ret), K(i), K(handler));
+      } else if (desc->is_continue()) {
+        for (int64_t j = 0; !dup && j < desc->get_conditions().count(); ++j) {
+          if (value.type_ == desc->get_condition(j).type_ &&
+              value.error_code_ == desc->get_condition(j).error_code_ &&
+              value.str_len_ == desc->get_condition(j).str_len_ &&
+              0 == STRNCMP(value.sql_state_, desc->get_condition(j).sql_state_, value.str_len_)) {
+            dup = true;
+          }
+        }
+      }
+    } else {
+      break;
     }
   }
   return ret;
@@ -12431,7 +12474,12 @@ int ObPLResolver::HandlerAnalyzer::reset_handlers(int64_t level)
   int ret = OB_SUCCESS;
   for (int64_t i = handler_stack_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     if (handler_stack_.at(i).get_level() == level) {
-      handler_stack_.pop_back();
+      if (i != handler_stack_.count() -1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to reset handlers with level", K(ret), K(level), K(i), K(handler_stack_.at(i)));
+      } else {
+        handler_stack_.pop_back();
+      }
     }
   }
   if (OB_SUCC(ret) && handler_stack_.count() - 1 < top_continue_) {
