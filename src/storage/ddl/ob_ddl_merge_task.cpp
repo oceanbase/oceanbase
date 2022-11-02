@@ -288,7 +288,13 @@ int ObDDLTableMergeTask::init(const ObDDLTableMergeDagParam &ddl_dag_param)
 int ObDDLTableMergeTask::process()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_DDL_SSTABLE = 128;
+  int64_t MAX_DDL_SSTABLE = 128;
+#ifdef ERRSIM
+  if (0 != GCONF.errsim_max_ddl_sstable_count) {
+    MAX_DDL_SSTABLE = GCONF.errsim_max_ddl_sstable_count;
+    LOG_INFO("set max ddl sstable in errsim mode", K(MAX_DDL_SSTABLE));
+  }
+#endif
   LOG_INFO("ddl merge task start process", K(*this));
   ObTabletHandle tablet_handle;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
@@ -312,6 +318,14 @@ int ObDDLTableMergeTask::process()
     LOG_WARN("get ddl sstable handles failed", K(ret));
   } else if (ddl_sstable_handles.get_count() >= MAX_DDL_SSTABLE || merge_param_.is_commit_) {
     DEBUG_SYNC(BEFORE_DDL_TABLE_MERGE_TASK);
+#ifdef ERRSIM
+    static int64_t counter = 0;
+    counter++;
+    if (counter >= 2) {
+      DEBUG_SYNC(BEFORE_MIG_DDL_TABLE_MERGE_TASK);
+    }
+#endif
+
     ObTabletDDLParam ddl_param;
     ObTableHandleV2 table_handle;
     bool is_data_complete = false;

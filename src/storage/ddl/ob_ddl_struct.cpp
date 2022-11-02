@@ -210,6 +210,12 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
   int ret = OB_SUCCESS;
   const int64_t MAX_DDL_BLOCK_COUNT = 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
   int64_t freeze_block_count = MAX_DDL_BLOCK_COUNT;
+#ifdef ERRSIM
+  if (0 != GCONF.errsim_max_ddl_block_count) {
+    freeze_block_count = GCONF.errsim_max_ddl_block_count;
+    LOG_INFO("ddl set macro block count", K(freeze_block_count));
+  }
+#endif
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl kv is not init", K(ret));

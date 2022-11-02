@@ -533,6 +533,15 @@ int ObStorageHATabletsBuilder::build_copy_tablet_sstable_info_arg_(
   ObTablet *tablet = nullptr;
   arg.reset();
 
+#ifdef ERRSIM
+  const int64_t errsim_tablet_id = GCONF.errsim_migration_tablet_id;
+  if (errsim_tablet_id == tablet_id.id()) {
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_copy_ddl_sstable",
+                          "tablet_id", tablet_id);
+    DEBUG_SYNC(BEFORE_COPY_DDL_SSTABLE);
+  }
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
@@ -703,6 +712,14 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
         need_copy_log_ts_range.start_log_ts_ = ddl_start_log_ts;
         need_copy_log_ts_range.end_log_ts_ = ddl_checkpoint_ts;
       }
+#ifdef ERRSIM
+      LOG_INFO("ddl checkpoint pushed", K(ddl_checkpoint_pushed), K(ddl_sstable_array), K(ddl_start_log_ts), K(ddl_checkpoint_ts));
+      SERVER_EVENT_SYNC_ADD("storage_ha", "get_need_copy_ddl_sstable_range",
+                            "tablet_id", tablet->get_tablet_meta().tablet_id_,
+                            "dest_ddl_checkpoint_pushed", ddl_checkpoint_pushed,
+                            "start_log_ts", need_copy_log_ts_range.start_log_ts_,
+                            "end_log_ts", need_copy_log_ts_range.end_log_ts_);
+#endif
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("checkpoint ts should be greater than start ts",
@@ -718,12 +735,15 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_log_ts_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObITable *> sstables;
-  min_start_log_ts = 0;
+  min_start_log_ts = INT64_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tables builder do not init", K(ret));
-  } else if (ddl_sstable_array.count() > 0 && OB_FAIL(ddl_sstable_array.get_all_tables(sstables))) {
+  } else if (ddl_sstable_array.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ddl sstable should not be empty", K(ret));
+  } else if (OB_FAIL(ddl_sstable_array.get_all_tables(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
