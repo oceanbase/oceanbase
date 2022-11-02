@@ -973,6 +973,7 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       }
     }
   }  // end for
+  release_to_pool_ = OB_SUCC(ret);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(gen_sys_var_in_pc_str())) { //将影响plan的系统变量序列化并缓存
@@ -4094,6 +4095,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
       }
     }
   }
+  release_to_pool_ = OB_SUCC(ret);
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
   }
