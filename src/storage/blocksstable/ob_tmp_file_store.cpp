@@ -814,6 +814,7 @@ ObTmpTenantFileStore::ObTmpTenantFileStore()
   : page_cache_(NULL),
     tmp_block_manager_(),
     allocator_(),
+    io_allocator_(),
     tmp_mem_block_manager_(),
     is_inited_(false),
     page_cache_num_(0),
@@ -850,8 +851,10 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
-  } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
+  } else if (OB_FAIL(allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, TOTAL_LIMIT))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
+  } else if (OB_FAIL(io_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, ObModIds::OB_TMP_PAGE_CACHE, tenant_id, IO_LIMIT))) {
+    STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));
@@ -860,7 +863,6 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
   } else if (OB_FAIL(tmp_mem_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init memory block manager", K(ret));
   } else {
-    allocator_.set_label(ObModIds::OB_TMP_BLOCK_MANAGER);
     is_inited_ = true;
   }
   if (!is_inited_) {
@@ -877,6 +879,7 @@ void ObTmpTenantFileStore::destroy()
     page_cache_ = NULL;
   }
   allocator_.destroy();
+  io_allocator_.destroy();
   is_inited_ = false;
   STORAGE_LOG(INFO, "cache num when destroy",
               K(ATOMIC_LOAD(&page_cache_num_)), K(ATOMIC_LOAD(&block_cache_num_)));
@@ -1250,7 +1253,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
           info.offset_ = p_offset + ObTmpMacroBlock::get_header_padding();
           info.size_ = page_nums * ObTmpMacroBlock::get_default_page_size();
           info.macro_block_id_ = block->get_macro_block_id();
-          if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle))) {
+          if (OB_FAIL(page_cache_->prefetch(info, *page_io_infos, mb_handle, io_allocator_))) {
             STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
           } else {
             ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, io_info.buf_,
@@ -1269,7 +1272,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
             info.offset_ += ObTmpMacroBlock::get_header_padding();
             info.size_ = ObTmpMacroBlock::get_default_page_size();
             info.macro_block_id_ = block->get_macro_block_id();
-            if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle))) {
+            if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
               STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
             } else {
               char *buf = io_info.buf_ + ObTmpMacroBlock::calculate_offset(

@@ -262,6 +262,7 @@ private:
   int wait_write_io_finish_if_need();
 
 private:
+  static const uint64_t IO_LIMIT = 4 * 1024L * 1024L * 1024L;
   static const uint64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const uint64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const uint64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
@@ -270,6 +271,7 @@ private:
   ObTmpPageCache *page_cache_;
   ObTmpTenantMacroBlockManager tmp_block_manager_;
   common::ObConcurrentFIFOAllocator allocator_;
+  common::ObConcurrentFIFOAllocator io_allocator_;
   ObTmpTenantMemBlockManager tmp_mem_block_manager_;
   common::SpinRWLock lock_;
   bool is_inited_;
