@@ -232,6 +232,12 @@ int ObKVGlobalCache::init(
     map_once_clean_num_ = min(MAX_MAP_ONCE_CLEAN_NUM, bucket_num / MAP_ONCE_CLEAN_RATIO);
     map_once_replace_num_ = min(MAX_MAP_ONCE_REPLACE_NUM, bucket_num / MAP_ONCE_REPLACE_RATIO);
     inited_ = true;
+#ifdef ENABLE_DEBUG_LOG
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(set_checker_cache_name(GCONF.leak_mod_to_check.str()))) {
+      COMMON_LOG(WARN, "[CACHE-HANDLE-CHECKER] Fail to set check cache name", K(tmp_ret));
+    }
+#endif
   }
 
   if (OB_UNLIKELY(!inited_)) {
@@ -853,10 +859,10 @@ int ObKVGlobalCache::set_checker_cache_name(const char *cache_name)
   int64_t cache_id = INVALID_CACHE_ID;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "The ObKVGlobalCache has not been inited", K(ret));
+    COMMON_LOG(WARN, "[CACHE-HANDLE-CHECKER] The ObKVGlobalCache has not been inited", K(ret));
   } else if (nullptr == cache_name) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), KP(cache_name));
+    COMMON_LOG(WARN, "[CACHE-HANDLE-CHECKER] Invalid argument", K(ret), KP(cache_name));
   } else {
     if (0 == STRNCMP(cache_name, ObKVCacheHandleRefChecker::ALL_CACHE_NAME, MAX_CACHE_NAME_LENGTH)) {
       cache_id = MAX_CACHE_NUM;
