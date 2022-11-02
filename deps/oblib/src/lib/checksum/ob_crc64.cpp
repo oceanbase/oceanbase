@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include "lib/checksum/ob_crc64.h"
 #include "lib/ob_define.h"
+#include "isa-l/crc64.h"
+#include "isa-l/crc.h"
 
 namespace oceanbase
 {
@@ -420,7 +422,7 @@ for RHEL4 support (GCC 3 doesn't support this instruction) */
 #define crc32_sse42_byte crc = __crc32cb(crc, (uint8_t)*buf); len--, buf++
 #endif /* defined(__GNUC__) && defined(__x86_64__) */
 
-inline static uint64_t crc64_sse42(uint64_t uCRC64,
+uint64_t crc64_sse42(uint64_t uCRC64,
                                    const char *buf, int64_t len)
 {
   uint64_t crc = uCRC64;
@@ -1102,6 +1104,14 @@ uint64_t fast_crc64_sse42_manually(uint64_t crc, const char *buf, int64_t len)
   return crc;
 }
 
+//If the CPU is intel, ISA-L library for CRC can be used
+uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
+{
+  if (buf == NULL || cb <= 0){
+    return uCRC64;
+  }
+  return crc32_iscsi((unsigned char*)(buf), cb, uCRC64);
+}
 
 uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
 {
@@ -1110,13 +1120,27 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
   uint32_t b = 0;
   uint32_t c = 0;
   uint32_t d = 0;
-  asm("cpuid": "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
-  if ((c & (1 << 20)) != 0) {
-    ob_crc64_sse42_func = &crc64_sse42;
-    _OB_LOG(INFO, "Use CPU crc32 instructs for crc64 calculate");
-  } else {
-    ob_crc64_sse42_func = &fast_crc64_sse42_manually;
-    _OB_LOG(INFO, "Use manual crc32 table lookup for crc64 calculate");
+
+  uint32_t vendor_info[4];
+  __asm__("mov $0x0, %eax\n\t");
+  __asm__("cpuid\n\t");
+  __asm__("mov %%ebx, %0\n\t":"=r" (vendor_info[0]));
+  __asm__("mov %%edx, %0\n\t":"=r" (vendor_info[1]));
+  __asm__("mov %%ecx, %0\n\t":"=r" (vendor_info[2]));
+  vendor_info[3]='\0';
+
+  if (strcmp((char*)vendor_info, "GenuineIntel") == 0) {
+    ob_crc64_sse42_func = &ob_crc64_isal;
+    _OB_LOG(WARN, "Use ISAL for crc64 calculate");
+  } else{
+    asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
+    if ((c & (1 << 20)) != 0) {
+      ob_crc64_sse42_func = &crc64_sse42;
+      _OB_LOG(WARN, "Use CPU crc32 instructs for crc64 calculate");
+    } else {
+      ob_crc64_sse42_func = &fast_crc64_sse42_manually;
+      _OB_LOG(WARN, "Use manual crc32 table lookup for crc64 calculate");
+    }
   }
   #elif defined(__aarch64__)
     #if 1
