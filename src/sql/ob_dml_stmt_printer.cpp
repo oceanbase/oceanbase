@@ -546,7 +546,8 @@ int ObDMLStmtPrinter::print_fetch()
       }
     }
     //fetch only/with ties
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && 
+        (NULL != stmt_->get_limit_expr() || NULL != stmt_->get_limit_percent_expr()) ) {
       if (stmt_->is_fetch_with_ties()) {
         DATA_PRINTF(" with ties");
       } else {
