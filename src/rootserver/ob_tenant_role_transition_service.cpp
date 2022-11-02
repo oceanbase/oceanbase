@@ -407,7 +407,10 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
           *rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_access_mode);
       obrpc::ObGetLSAccessModeInfoArg arg;
       int64_t rpc_count = 0;
+      ObArray<int> return_code_array;
+      int tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
+        return_code_array.reset();
         const ObLSStatusInfo &info = status_info_array.at(i);
         const int64_t timeout = ctx.get_timeout();
         if (info.ls_is_create_abort()) {
@@ -424,7 +427,6 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
           rpc_count++;
         }
         if (OB_FAIL(ret)) {
-          int tmp_ret = OB_SUCCESS;
           const obrpc::ObGetLSAccessModeInfoArg &arg = proxy.get_args().at(i);
           if (OB_SUCCESS !=(tmp_ret = GCTX.location_service_->nonblock_renew(
                   GCONF.cluster_id, tenant_id_, info.ls_id_))) {
@@ -433,9 +435,12 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
         }
       }//end for
       //get result
-      ObArray<int> return_code_array;
-      if (FAILEDx(proxy.wait_all(return_code_array))) {
-        LOG_WARN("wait all batch result failed", KR(ret));
+      //need to wait all result whether success or fail
+      if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+        LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      } else if (OB_FAIL(ret)) {
+        //no need to process return code
       } else if (rpc_count != return_code_array.count() ||
                  rpc_count != proxy.get_args().count() ||
                  rpc_count != proxy.get_results().count()) {
