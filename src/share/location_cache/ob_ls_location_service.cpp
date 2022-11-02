@@ -789,7 +789,7 @@ int ObLSLocationService::renew_location(
   // get from cache just for printing cache changes log
   if (OB_FAIL(ret)) {
   } else if (OB_SUCCESS != (tmp_ret = get_from_cache(cluster_id, tenant_id, ls_id, old_location))) {
-    if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+    if (OB_CACHE_NOT_HIT == tmp_ret) {
       tmp_ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to get from cache", KR(tmp_ret), K(cluster_id), K(tenant_id), K(ls_id));
@@ -813,7 +813,7 @@ int ObLSLocationService::renew_location(
     LOG_WARN("get empty location from meta table", KR(ret), K(location));
   }
   // print cache changes
-  if (OB_SUCC(ret) && OB_SUCC(tmp_ret) && !location.is_same_with(old_location)) {
+  if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !location.is_same_with(old_location)) {
     FLOG_INFO("[LOCATION_CACHE]ls location cache has changed", KR(ret), K(old_location), "new_location", location);
   }
   return ret;
