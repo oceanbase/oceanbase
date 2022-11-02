@@ -263,6 +263,8 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *top_stmt = parent_stmts.empty() ? stmt : parent_stmts.at(0).stmt_;
   bool is_expected = false;
   bool dummy = false;
+  ObDMLStmt *tmp1 = NULL;
+  ObDMLStmt *tmp2 = NULL;
   cost_based_trans_tried_ = true;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -285,6 +287,8 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   } else if (!trans_happened) {
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
                                       K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+  } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
+    LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
     LOG_TRACE("succeed force accept transform because hint/rule");
     stmt = trans_stmt;
@@ -408,15 +412,15 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                       root_stmt, copied_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
-  } else if (NULL != orig_stmt && &stmt != orig_stmt // reset stmt
-             && OB_FAIL(adjust_transformed_stmt(parent_stmts, orig_stmt, temp, root_stmt))) {
-      LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (OB_FAIL(deep_copy_temp_table(*copied_stmt,
                                           *ctx_->stmt_factory_,
                                           *ctx_->expr_factory_,
                                           old_temp_table_stmts,
                                           new_temp_table_stmts))) {
     LOG_WARN("failed to deep copy temp table", K(ret));
+  } else if (NULL != orig_stmt && &stmt != orig_stmt // reset stmt
+             && OB_FAIL(adjust_transformed_stmt(parent_stmts, orig_stmt, temp, root_stmt))) {
+      LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (!is_trans_stmt) {
     /* do nothing */
   } else if (OB_FAIL(stmt.get_qb_name(cur_qb_name))) {
@@ -430,10 +434,10 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   } else if (skip_adjust_qb_name() || cur_qb_name != ctx_->src_qb_name_) {
     ctx_->src_qb_name_ = cur_qb_name;
   } else if (OB_FAIL(copied_stmt->get_stmt_by_stmt_id(stmt.get_stmt_id(), copied_trans_stmt))) {
-    LOG_WARN("failed to get stmt by stmt id", K(ret));
+    LOG_WARN("failed to get stmt by stmt id", K(ret), K(stmt.get_stmt_id()), K(*copied_stmt));
   } else if(OB_ISNULL(copied_trans_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret), K(copied_trans_stmt));
+    LOG_WARN("unexpect null stmt", K(ret), K(stmt.get_stmt_id()), K(*copied_stmt));
   } else if (OB_FAIL(copied_trans_stmt->adjust_qb_name(ctx_->allocator_,
                                                        ctx_->src_qb_name_,
                                                        ctx_->src_hash_val_))) {
