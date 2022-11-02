@@ -1530,7 +1530,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(pctx)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguement", K(ret));
+    LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(set_timeout_for_pl(session, cur_timeout_us))) {
     LOG_WARN("failed to set timeout for pl", K(ret));
   } else if (OB_FAIL(session.store_query_string(sql))) {
@@ -1550,7 +1550,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema guard is null");
     } else if (OB_FAIL(session.update_query_sensitive_system_variable(*(context.schema_guard_)))) {
-      LOG_WARN("update query affacted system variable failed", K(ret));
+      LOG_WARN("update query affected system variable failed", K(ret));
     } else if (OB_FAIL(result.open())) {
       LOG_WARN("result set open failed", K(ret));
     } else {
@@ -2357,7 +2357,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
           LOG_WARN("fail to handle physical plan", K(ret));
         }
       } else {
-        // we need NOT to de some special operation for remote plan, this because we have swaped
+        // we need NOT to de some special operation for remote plan, this because we have swayed
         // the life cycle of tmp_result's guard with remote_guard, which means plan's life becomes
         // longer and we needn't to do other operation!!!
         guard.swap(tmp_result.get_cache_obj_guard());
@@ -3182,7 +3182,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
                                      stmt_ora_need_privs,
                                      audit_units,
                                      logical_plan, phy_plan))) { //gen phy plan
-      LOG_WARN("Failed to genenrate phy plan", K(ret));
+      LOG_WARN("Failed to generate phy plan", K(ret));
     } else if (OB_FAIL(prepare_outline_for_phy_plan(logical_plan,
                                                     phy_plan))) {
       LOG_WARN("failed to prepare outline for phy plan", K(ret));
@@ -4671,7 +4671,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   ObSpmCacheCtx &spm_ctx = context.spm_ctx_;
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   // record whether needs to do parameterization at this time,
-  // if exact mode is on, not do parameterizaiton
+  // if exact mode is on, not do parameterization
   bool is_enable_transform_tree = !session.get_enable_exact_mode();
   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
   pc_ctx.not_param_index_.reset();
@@ -5571,7 +5571,7 @@ int ObSql::get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_s
 //   bool add_plan_to_pc = false;
 //   ObSQLSessionInfo &session = result.get_session();
 //   // record whether needs to do parameterization at this time,
-//   // if exact mode is on, not do parameterizaiton
+//   // if exact mode is on, not do parameterization
 //   bool is_enable_transform_tree = !session.get_enable_exact_mode();
 //   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
 //   pc_ctx.not_param_index_.reset();

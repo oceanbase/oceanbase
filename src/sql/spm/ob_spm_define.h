@@ -289,7 +289,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     STAT_ADD_EVOLUTION_PLAN,      // add evolution plan to plan cache evolution layer
     STAT_ADD_BASELINE_PLAN,       // add baseline plan to plan cache evolution layer
     STAT_ACCEPT_EVOLUTION_PLAN,   // accept evolution plan as baseline and move it from evolution layer to plan layer 
-    STAT_ACCEPT_BASELINE_PLAN,    // move baeline plan from evolution layer to plan layer 
+    STAT_ACCEPT_BASELINE_PLAN,    // move baseline plan from evolution layer to plan layer 
     STAT_FIRST_EXECUTE_PLAN,
     STAT_FALLBACK_EXECUTE_PLAN,
     STAT_MAX
