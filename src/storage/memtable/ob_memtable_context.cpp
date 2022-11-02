@@ -28,7 +28,6 @@
 #include "storage/tablelock/ob_table_lock_callback.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
-#include "storage/tx/ob_defensive_check_mgr.h"
 
 namespace oceanbase
 {
@@ -64,9 +63,6 @@ ObMemtableCtx::ObMemtableCtx()
       is_master_(true),
       read_elr_data_(false),
       lock_mem_ctx_(ctx_cb_allocator_),
-#ifdef ENABLE_DEBUG_LOG
-      defensive_check_mgr_(NULL),
-#endif
       is_inited_(false)
 {
 }
@@ -93,17 +89,6 @@ int ObMemtableCtx::init(const uint64_t tenant_id)
       TRANS_LOG(ERROR, "ctx_allocator_ init error", K(ret));
     } else if (OB_FAIL(reset_log_generator_())) {
       TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-#ifdef ENABLE_DEBUG_LOG
-    } else if (!GCONF.enable_defensive_check()) {
-      // do nothing
-    } else if (NULL == (defensive_check_mgr_ = op_alloc(ObDefensiveCheckMgr))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(ERROR, "memory alloc failed", K(ret), KP(defensive_check_mgr_));
-    } else if (OB_FAIL(defensive_check_mgr_->init(lib::ObMemAttr(tenant_id, "MemtableCtx")))) {
-      TRANS_LOG(ERROR, "defensive check mgr init failed", K(ret), KP(defensive_check_mgr_));
-      op_free(defensive_check_mgr_);
-      defensive_check_mgr_ = NULL;
-#endif
     } else {
       // do nothing
     }
@@ -173,12 +158,6 @@ void ObMemtableCtx::reset()
     tx_table_guard_.reset();
     //FIXME: ObIMemtableCtx don't have resetfunction,
     //thus ObIMvccCtx::reset is called, so resource_link_is not reset
-#ifdef ENABLE_DEBUG_LOG
-    if (NULL != defensive_check_mgr_) {
-      op_free(defensive_check_mgr_);
-      defensive_check_mgr_ = NULL;
-    }
-#endif
     ObIMemtableCtx::reset();
   }
 }

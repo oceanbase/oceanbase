@@ -184,6 +184,12 @@ void ObPartTransCtx::destroy()
   if (OB_LIKELY(is_inited_)) {
     TRANS_LOG(DEBUG, "part_ctx_destroy", K(*this));
 
+#ifdef ENABLE_DEBUG_LOG
+    if (NULL != trans_service_->get_defensive_check_mgr()) {
+      trans_service_->get_defensive_check_mgr()->del(trans_id_);
+    }
+#endif
+
     // Defensive Check 1 : earse ctx id descriptor
     mt_ctx_.reset();
 

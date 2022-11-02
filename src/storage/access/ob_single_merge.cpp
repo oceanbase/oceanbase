@@ -322,16 +322,17 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 #ifdef ENABLE_DEBUG_LOG
     if (OB_SUCC(ret)) {
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
-      if (NULL != access_ctx_->store_ctx_
-        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()
-        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()) {
-        (void)access_ctx_->store_ctx_
-                         ->mvcc_acc_ctx_
-                         .get_mem_ctx()
-                         ->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
-                                                          row,
-                                                          *rowkey_,
-                                                          access_ctx_->defensive_check_record_);
+      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
+      bool trx_id_valid = (NULL != access_ctx_->store_ctx_
+                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.tx_id_.is_valid());
+      if (OB_NOT_NULL(trx)
+          && trx_id_valid
+          && NULL != trx->get_defensive_check_mgr()) {
+        (void)trx->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
+                                                  access_ctx_->store_ctx_->mvcc_acc_ctx_.tx_id_,
+                                                  row,
+                                                  *rowkey_,
+                                                  access_ctx_->defensive_check_record_);
       }
     }
     access_ctx_->defensive_check_record_.reset();

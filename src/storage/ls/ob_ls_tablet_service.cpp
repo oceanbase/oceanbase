@@ -4707,9 +4707,12 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
     }
 #ifdef ENABLE_DEBUG_LOG
     // print single row check info
-    if (NULL != store_ctx.mvcc_acc_ctx_.get_mem_ctx()
-        && NULL != store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()) {
-      (void)store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()->dump(access_param.iter_param_.tablet_id_);
+    if (store_ctx.mvcc_acc_ctx_.tx_id_.is_valid()) {
+      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
+      if (OB_NOT_NULL(trx)
+          && NULL != trx->get_defensive_check_mgr()) {
+        (void)trx->get_defensive_check_mgr()->dump(store_ctx.mvcc_acc_ctx_.tx_id_);
+      }
     }
 #endif
   }

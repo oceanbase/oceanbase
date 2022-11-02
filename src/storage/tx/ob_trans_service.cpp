@@ -61,6 +61,9 @@ ObTransService::ObTransService()
       server_tracer_(NULL),
       input_queue_count_(0),
       output_queue_count_(0),
+#ifdef ENABLE_DEBUG_LOG
+      defensive_check_mgr_(NULL),
+#endif
       tx_desc_mgr_(*this)
 {
   check_env_();
@@ -158,6 +161,28 @@ int ObTransService::init(const ObAddr &self,
     server_tracer_ = server_tracer;
     is_inited_ = true;
     TRANS_LOG(INFO, "transaction service inited success", KP(this));
+  }
+  if (OB_SUCC(ret)) {
+#ifdef ENABLE_DEBUG_LOG
+    void *p = NULL;
+    if (!GCONF.enable_defensive_check()) {
+      // do nothing
+    } else if (NULL == (p = ob_malloc(sizeof(ObDefensiveCheckMgr),
+                                      lib::ObMemAttr(tenant_id, "ObDefenCheckMgr")))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "memory alloc failed", KR(ret));
+    } else {
+      defensive_check_mgr_ = new(p) ObDefensiveCheckMgr();
+      if (OB_FAIL(defensive_check_mgr_->init(lib::ObMemAttr(tenant_id, "ObDefenCheckMgr")))) {
+        TRANS_LOG(ERROR, "defensive check mgr init failed", K(ret), KP(defensive_check_mgr_));
+        defensive_check_mgr_->destroy();
+        ob_free(defensive_check_mgr_);
+        defensive_check_mgr_ = NULL;
+      } else {
+        // do nothing
+      }
+    }
+#endif
   }
   return ret;
 }
@@ -267,6 +292,13 @@ void ObTransService::destroy()
     tx_ctx_mgr_.destroy();
     tx_desc_mgr_.destroy();
     dup_table_rpc_->destroy();
+#ifdef ENABLE_DEBUG_LOG
+    if (NULL != defensive_check_mgr_) {
+      defensive_check_mgr_->destroy();
+      ob_free(defensive_check_mgr_);
+      defensive_check_mgr_ = NULL;
+    }
+#endif
     is_inited_ = false;
     TRANS_LOG(INFO, "transaction service destroyed", KPC(this));
   }

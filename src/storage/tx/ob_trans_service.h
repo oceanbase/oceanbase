@@ -198,6 +198,9 @@ public:
                        const char *buf,
                        const int64_t buf_len);
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
+#ifdef ENABLE_DEBUG_LOG
+  transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
+#endif
 private:
   void check_env_();
   bool can_create_ctx_(const int64_t trx_start_ts, const common::ObTsWindows &changing_leader_windows);
@@ -266,6 +269,9 @@ private:
   // account task qeuue's inqueue and dequeue
   uint32_t input_queue_count_;
   uint32_t output_queue_count_;
+#ifdef ENABLE_DEBUG_LOG
+  transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
+#endif
   // txDesc's manager
   ObTxDescMgr tx_desc_mgr_;
 
