@@ -57,6 +57,8 @@ PalfHandleImpl::PalfHandleImpl()
     last_check_parent_child_ts_us_(OB_INVALID_TIMESTAMP),
     wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
     append_size_stat_time_us_(OB_INVALID_TIMESTAMP),
+    replace_member_print_time_us_(OB_INVALID_TIMESTAMP),
+    config_change_print_time_us_(OB_INVALID_TIMESTAMP),
     last_rebuild_lsn_(),
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
@@ -611,7 +613,9 @@ int PalfHandleImpl::replace_member(
     } else if (FALSE_IT(args.server_ = removed_member)) {
     } else if (FALSE_IT(args.type_ = REMOVE_MEMBER_AND_NUM)) {
     } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
-      PALF_LOG(WARN, "remove_member in replace_member failed", KR(ret), K(args), KPC(this));
+      if (palf_reach_time_interval(100 * 1000, replace_member_print_time_us_)) {
+        PALF_LOG(WARN, "remove_member in replace_member failed", KR(ret), K(args), KPC(this));
+      }
     } else if (OB_FAIL(config_mgr_.get_curr_member_list(curr_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
     } else {
@@ -1077,12 +1081,16 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(args));
   } else if (OB_FAIL(can_change_config_(args, curr_proposal_id))) {
-    PALF_LOG(WARN, "not active leader, can't change member", KR(ret), KPC(this),
-        "role", state_mgr_.get_role(), "state", state_mgr_.get_state());
+    if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
+      PALF_LOG(WARN, "not active leader, can't change member", KR(ret), KPC(this),
+          "role", state_mgr_.get_role(), "state", state_mgr_.get_state());
+    }
   } else if (OB_FAIL(check_args_and_generate_config_(args, is_already_finished, new_log_sync_memberlist, new_log_sync_replica_num))) {
     PALF_LOG(WARN, "check_args_and_generate_config failed", KR(ret), KPC(this), K(args));
   } else if (is_already_finished) {
-    PALF_LOG(INFO, "one_stage_config_change has already finished", K(ret), KPC(this), K(args));
+    if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
+      PALF_LOG(INFO, "one_stage_config_change has already finished", K(ret), KPC(this), K(args));
+    }
   } else {
     PALF_LOG(INFO, "one_stage_config_change start", KPC(this), K(curr_proposal_id), K(args), K(timeout_ns));
     TimeoutChecker not_timeout(timeout_ns);
@@ -2445,7 +2453,9 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
         // rewrite -4023 to 0
         ret = OB_SUCCESS;
       } else {
-        PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
+        if (REACH_TIME_INTERVAL(100 * 1000)) {
+          PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
+        }
       }
     } else {
       PALF_LOG(TRACE, "receive_log success", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn), K(buf_len));
@@ -2486,7 +2496,9 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sw_.receive_log(server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, buf,
             buf_len, false, truncate_log_info))) {
-      PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
+      }
     } else {
       PALF_LOG(INFO, "receive_log success", K(ret), KPC(this), K(server), K_(self), K(msg_proposal_id), K(prev_lsn),
           K(prev_log_proposal_id), K(lsn), K(truncate_log_info));

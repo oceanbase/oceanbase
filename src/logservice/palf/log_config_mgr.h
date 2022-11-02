@@ -421,6 +421,7 @@ private:
   LogConfigVersion persistent_config_version_;
   mutable int64_t barrier_print_log_time_;
   mutable int64_t last_check_state_ts_us_;
+  mutable int64_t check_config_print_time_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;

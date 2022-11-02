@@ -48,6 +48,7 @@ LogConfigMgr::LogConfigMgr()
       persistent_config_version_(),
       barrier_print_log_time_(OB_INVALID_TIMESTAMP),
       last_check_state_ts_us_(OB_INVALID_TIMESTAMP),
+      check_config_print_time_(OB_INVALID_TIMESTAMP),
       parent_lock_(),
       register_ts_ns_(OB_INVALID_TIMESTAMP),
       parent_(),
@@ -480,7 +481,7 @@ const common::ObAddr &LogConfigMgr::get_parent() const
 
 // 1. switch config change state machine
 // 2. broadcasting leader info periodically
-// 3. resend config log to members and followers who haven't responsed ack 
+// 3. resend config log to members and followers who haven't responsed ack
 // after config change finished.
 int LogConfigMgr::leader_do_loop_work()
 {
@@ -771,8 +772,10 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
           if (args.type_ == ADD_MEMBER_AND_NUM || new_replica_num == paxos_replica_num_) {
             // config change has finished successfully, do not need change again
             is_already_finished = true;
-            PALF_LOG(INFO, "member already exists, don't need add_member/replace_member", KR(ret), K_(palf_id), K_(self),
-                K_(log_ms_meta), K(member), K(new_replica_num), K_(paxos_replica_num));
+            if (palf_reach_time_interval(100 * 1000, check_config_print_time_)) {
+              PALF_LOG(INFO, "member already exists, don't need add_member/replace_member", KR(ret), K_(palf_id), K_(self),
+                  K_(log_ms_meta), K(member), K(new_replica_num), K_(paxos_replica_num));
+            }
           } else {
             ret = OB_INVALID_ARGUMENT;
             PALF_LOG(INFO, "member already exists, but new_replica_num not equal to curr val", KR(ret), K_(palf_id), K_(self),
@@ -929,7 +932,7 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
       }
     }
     // check if reaches majority
-    LogConfigInfo new_config_info; 
+    LogConfigInfo new_config_info;
     common::ObMemberList new_paxos_memberlist;
     int64_t new_paxos_replica_num;
     GlobalLearnerList unused_list;
@@ -1618,7 +1621,7 @@ int LogConfigMgr::handle_register_parent_resp(const LogLearner &server,
       } else if (OB_FAIL(log_engine_->submit_register_parent_req(reg_dst, child_self, false))) {
         PALF_LOG(WARN, "submit_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(reg_dst));
       } else {
-        last_submit_register_req_ts_ns_ = common::ObTimeUtility::current_time_ns();  
+        last_submit_register_req_ts_ns_ = common::ObTimeUtility::current_time_ns();
       }
     } else if (REGISTER_DIFF_REGION == reg_ret) {
       const char *reason = "diff_region";

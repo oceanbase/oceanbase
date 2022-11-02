@@ -1002,6 +1002,8 @@ private:
   int64_t last_check_parent_child_ts_us_;
   int64_t wait_slide_print_time_us_;
   int64_t append_size_stat_time_us_;
+  int64_t replace_member_print_time_us_;
+  int64_t config_change_print_time_us_;
   mutable SpinLock last_rebuild_lsn_lock_;
   LSN last_rebuild_lsn_;
   LSN last_record_append_lsn_;

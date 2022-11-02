@@ -418,6 +418,7 @@ private:
   mutable int64_t cannot_fetch_log_warn_time_;
   mutable int64_t cannot_freeze_log_warn_time_;
   mutable int64_t larger_log_warn_time_;
+  mutable int64_t log_life_long_warn_time_;
   mutable int64_t lc_cb_get_warn_time_;
   mutable int64_t fetch_dst_invalid_warn_time_;
   common::ObThreadLease commit_log_handling_lease_;  // thread lease for handling committed logs

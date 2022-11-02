@@ -598,6 +598,7 @@ private:
   ObReplayFsCb fs_cb_;
   mutable int64_t get_log_info_debug_time_;
   mutable int64_t try_wrlock_debug_time_;
+  mutable int64_t check_enable_debug_time_;
   DISALLOW_COPY_AND_ASSIGN(ObReplayStatus);
 };
 

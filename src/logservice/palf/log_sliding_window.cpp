@@ -69,6 +69,7 @@ LogSlidingWindow::LogSlidingWindow()
     cannot_fetch_log_warn_time_(OB_INVALID_TIMESTAMP),
     cannot_freeze_log_warn_time_(OB_INVALID_TIMESTAMP),
     larger_log_warn_time_(OB_INVALID_TIMESTAMP),
+    log_life_long_warn_time_(OB_INVALID_TIMESTAMP),
     lc_cb_get_warn_time_(OB_INVALID_TIMESTAMP),
     fetch_dst_invalid_warn_time_(OB_INVALID_TIMESTAMP),
     commit_log_handling_lease_(),
@@ -1769,8 +1770,10 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
 
       if (log_life_time > 100 * 1000) {
-        PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
-            K(fs_cb_begin_ts), K(log_life_time));
+        if (palf_reach_time_interval(10 * 1000, log_life_long_warn_time_)) {
+          PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
+              K(fs_cb_begin_ts), K(log_life_time));
+        }
       }
 
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
@@ -2470,7 +2473,9 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         "start_id", get_start_id());
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-      PALF_LOG(WARN, "this log has slide out, no need receive", K(ret), K(log_id), K_(palf_id), K_(self));
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "this log has slide out, no need receive", K(ret), K(log_id), K_(palf_id), K_(self));
+      }
     } else {
       PALF_LOG(ERROR, "get_log_task failed", K(ret), K(log_id), K_(palf_id), K_(self), K(group_entry_header));
     }
