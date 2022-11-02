@@ -196,16 +196,19 @@ private:
                                     const ObIArray<int64_t> &output_map,
                                     ObIArray<ObRawExpr *> &source_exprs,
                                     ObIArray<ObRawExpr *> &target_exprs);
-
+  int extract_semi_left_rel_ids(ObDMLStmt *stmt,
+                                TableItem *table_item,
+                                ObSqlBitSet<> &semi_left_rel_ids);
   int extract_child_conditions(ObDMLStmt *stmt,
                                TableItem *source_table,
                                ObIArray<ObRawExpr *> &join_conditions,
-                               ObSqlBitSet<8, int64_t> &rel_ids);
+                               ObSqlBitSet<8, int64_t> &right_rel_ids);
 
-  int adjust_relation_exprs(const ObSqlBitSet<8, int64_t> &rel_ids,
-                              const ObIArray<ObRawExpr *> &join_conditions,
-                              ObIArray<ObRawExpr *> &relation_exprs,
-                              bool &is_valid);
+  int adjust_relation_exprs(const ObSqlBitSet<> &semi_left_rel_ids,
+                            const ObSqlBitSet<8, int64_t> &right_rel_ids,
+                            const ObIArray<ObRawExpr *> &join_conditions,
+                            ObIArray<ObRawExpr *> &relation_exprs,
+                            bool &is_valid);
 
   int extract_equal_join_columns(const ObIArray<ObRawExpr *> &join_conds,
                                  const TableItem *source_table,
