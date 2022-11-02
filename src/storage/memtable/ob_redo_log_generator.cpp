@@ -74,7 +74,6 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
   } else {
     helper.reset();
     ObMutatorWriter mmw;
-    mmw.get_meta().set_savepoint(0);
     mmw.set_buffer(buf, buf_len - buf_pos);
     RedoDataNode redo;
     TableLockRedoDataNode table_lock_redo;
