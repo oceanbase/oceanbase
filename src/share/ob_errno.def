@@ -997,6 +997,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_OBJECT_STRING_DOES_NOT_EXIST, -5400, -1, "HY000",
 DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED, -5401, -1, "HY000", "resultant data type of virtual column is not supported", 54004, "resultant data type of virtual column is not supported");
 DEFINE_ERROR(OB_ERR_GET_STACKED_DIAGNOSTICS, -5402, ER_GET_STACKED_DIAGNOSTICS_INACTIVE, "0Z002", "GET STACKED DIAGNOSTICS when handler not active");
 DEFINE_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH, -5403, -1, "HY000", "ddl schema version not match");
+DEFINE_ERROR_EXT(OB_ERR_COLUMN_GROUP_DUPLICATE, -5404, ER_DUP_FIELDNAME, "42S21", "Duplicate column group name", "Duplicate column group name '%.*s'");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values 

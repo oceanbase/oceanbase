@@ -2083,6 +2083,13 @@ typedef enum ObItemType
   T_OB_DDL_SCHEMA_VERSION,
   T_TG_ORDER,
   T_ODBC_ESCAPE_SEQUENCES,
+
+  // column group
+  T_COLUMN_GROUP,
+  T_ALL_COLUMN_GROUP,
+  T_SINGLE_COLUMN_GROUP,
+  T_NORMAL_COLUMN_GROUP,
+  
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
