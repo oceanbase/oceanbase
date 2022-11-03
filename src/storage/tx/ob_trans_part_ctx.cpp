@@ -1443,6 +1443,9 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
     if (!is_tx_committing && !final_log_submitting) {
       (void)mt_ctx_.merge_multi_callback_lists_for_immediate_logging();
       ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
+      if (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret) {
+        ret = submit_multi_data_source_();
+      }
       try_submit = true;
     }
     if (try_submit) {
