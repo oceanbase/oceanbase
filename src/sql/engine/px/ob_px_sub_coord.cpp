@@ -885,7 +885,8 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table loc", K(ret));
     } else {
-      FOREACH(tmp_node, table_loc->tablet_locs_) {
+      for (DASTabletLocListIter tmp_node = table_loc->tablet_locs_begin();
+           tmp_node != table_loc->tablet_locs_end(); ++tmp_node) {
         ObDASTabletLoc *tablet_loc = *tmp_node;
         if (tablet_loc->tablet_id_ == location_keys.at(i).tablet_id_) {
           if (OB_FAIL(access_locations.push_back(tablet_loc))) {

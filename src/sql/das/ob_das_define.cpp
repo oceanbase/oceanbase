@@ -164,5 +164,176 @@ int ObDASTableLoc::assign(const ObCandiTableLoc &candi_table_loc)
   LOG_DEBUG("das table loc assign", K(candi_table_loc), KPC_(loc_meta), K(tablet_locs_));
   return ret;
 }
+
+int ObDASTableLoc::get_tablet_loc_by_id(const ObTabletID &tablet_id,
+                                        ObDASTabletLoc *&tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  tablet_loc = NULL;
+  lookup_cnt_++;
+  if (tablet_locs_map_.created()) {
+    if (OB_FAIL(tablet_locs_map_.get(tablet_id, tablet_loc))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("look up from hash map failed", KR(ret), K(tablet_id));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && NULL != tablet_loc) {
+    // found in hash map
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    // key not found
+    ret = OB_SUCCESS;
+  } else {
+    FOREACH(tmp_node, tablet_locs_) {
+      ObDASTabletLoc *tmp_tablet_loc = *tmp_node;
+      if (tmp_tablet_loc->tablet_id_ == tablet_id) {
+        tablet_loc = tmp_tablet_loc;
+        break;
+      }
+    }
+  }
+  if (OB_FAIL(ret) || tablet_locs_map_.created()) {
+    // do nothing
+  } else if (lookup_cnt_ > DAS_TABLET_LOC_LOOKUP_THRESHOLD
+             && tablet_locs_.size() > DAS_TABLET_LOC_SIZE_THRESHOLD
+             && OB_FAIL(create_tablet_locs_map())) {
+    LOG_WARN("create tablet locs hash map failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObDASTableLoc::add_tablet_loc(ObDASTabletLoc *tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet loc is null", KR(ret), KP(tablet_loc));
+  } else if (OB_FAIL(tablet_locs_.push_back(tablet_loc))) {
+    LOG_WARN("push into tablet locs list failed", KR(ret), KPC(tablet_loc));
+  } else if (tablet_locs_map_.created()) {
+    if (OB_FAIL(tablet_locs_map_.set(tablet_loc->tablet_id_, tablet_loc))) {
+      LOG_WARN("insert into tablet locs map failed", KR(ret), KPC(tablet_loc));
+    }
+  }
+  return ret;
+}
+
+int TabletHashMap::create(int64_t bucket_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= bucket_num)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid bucket number", KR(ret), K(bucket_num));
+  } else if (created()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("hash map was already created", KR(ret));
+  } else if (FALSE_IT(bucket_num = hash::cal_next_prime(bucket_num))) {
+  } else if (OB_ISNULL(buckets_ = static_cast<TabletHashNode **>(
+          allocator_.alloc(bucket_num * sizeof(TabletHashNode *))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc buckets failed", KR(ret));
+  } else {
+    MEMSET(buckets_, 0, bucket_num * sizeof(TabletHashNode *));
+    bucket_num_ = bucket_num;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int TabletHashMap::find_node(const ObTabletID key,
+                             TabletHashNode *head,
+                             TabletHashNode *&node) const
+{
+  int ret = OB_SUCCESS;
+  node = NULL;
+  if (!created()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hash map was not created", KR(ret));
+  } else if (NULL == head) {
+    // do nothing
+  } else {
+    TabletHashNode *cur = head;
+    while (NULL != cur && NULL == node) {
+      if (cur->key_ == key) {
+        node = cur;
+      } else {
+        cur = cur->next_;
+      }
+    }
+  }
+  return ret;
+}
+
+int TabletHashMap::set(const ObTabletID key, ObDASTabletLoc *value)
+{
+  int ret = OB_SUCCESS;
+  if (!created()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hash map was not created", KR(ret));
+  } else {
+    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *dst_node = NULL;
+    if (OB_FAIL(find_node(key, bucket, dst_node))) {
+      LOG_WARN("find node failed", KR(ret));
+    } else if (NULL != dst_node) {
+      ret = OB_HASH_EXIST;
+      LOG_WARN("key already exists", KR(ret), K(key), KP(value));
+    } else {
+      TabletHashNode *new_node = static_cast<TabletHashNode *>(
+              allocator_.alloc(sizeof(TabletHashNode)));
+      if (OB_ISNULL(new_node)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc new node failed", KR(ret));
+      } else {
+        new_node->key_ = key;
+        new_node->value_ = value;
+        new_node->next_ = bucket;
+        bucket = new_node;
+      }
+    }
+  }
+  return ret;
+}
+
+int TabletHashMap::get(const ObTabletID key, ObDASTabletLoc *&value)
+{
+  int ret = OB_SUCCESS;
+  if (!created()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("hash map was not created", KR(ret));
+  } else {
+    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *dst_node = NULL;
+    if (OB_FAIL(find_node(key, bucket, dst_node))) {
+      LOG_WARN("find node failed", KR(ret));
+    } else if (NULL == dst_node) {
+      ret = OB_HASH_NOT_EXIST;
+      LOG_WARN("key dost not exist", KR(ret), K(key));
+    } else {
+      value = dst_node->value_;
+    }
+  }
+  return ret;
+}
+
+int ObDASTableLoc::create_tablet_locs_map()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tablet_locs_map_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet locs map was already created", KR(ret), K(tablet_locs_map_.created()));
+  } else if (OB_FAIL(tablet_locs_map_.create(DAS_TABLET_LOC_MAP_BUCKET_SIZE))) {
+    LOG_WARN("create tablet locs map failed", KR(ret));
+  } else {
+    for (DASTabletLocListIter tablet_node = tablet_locs_begin();
+         OB_SUCC(ret) && tablet_node != tablet_locs_end(); ++tablet_node) {
+      ObDASTabletLoc *tablet_loc = *tablet_node;
+      if (OB_FAIL(tablet_locs_map_.set(tablet_loc->tablet_id_, tablet_loc))) {
+        LOG_WARN("insert into tablet locs map failed", KR(ret), KPC(tablet_loc));
+      }
+    }
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase
