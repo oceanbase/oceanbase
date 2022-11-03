@@ -565,14 +565,6 @@ uint32 ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
                   bool trim_incomplete_tail,
                   const ob_wc_t replaced_char, uint *errors);
 
-<<<<<<< HEAD
-void ob_strnxfrm_unicode_v2(const ObCharsetInfo* cs, unsigned char* dst, size_t* dst_len, uint32_t nweights,
-    const unsigned char* src, size_t* src_len, int* is_valid_unicode, int buf_size);
-
-int ob_wildcmp_unicode(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
-    const char* wildend, int escape, int w_one, int w_many, uint32_t** weights);
-    
-=======
 size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo *cs,
                              uchar *dst, size_t dstlen, uint nweights,
                              const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode);
@@ -605,7 +597,6 @@ int ob_wildcmp_unicode(const ObCharsetInfo *cs,
 
 size_t ob_strxfrm_pad(const ObCharsetInfo *cs, uchar *str, uchar *frmend,
                       uchar *strend, uint nweights, uint flags);
->>>>>>> upstream/master
 
 size_t ob_strnxfrmlen_simple(const struct ObCharsetInfo *, size_t);
 
