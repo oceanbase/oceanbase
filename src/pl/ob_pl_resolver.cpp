@@ -5764,7 +5764,7 @@ int ObPLResolver::resolve_cparam_with_assign(ObRawExpr* expr,
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("can not find param in param list", K(ret), K(position), K(name));
     }
-    OZ (resolve_cparam_without_assign(call_expr, position, func, params, expr_idx));
+    OZ (resolve_cparam_without_assign(call_expr->get_expr(), position, func, params, expr_idx));
   }
   return ret;
 }
