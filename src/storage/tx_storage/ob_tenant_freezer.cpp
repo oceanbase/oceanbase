@@ -656,10 +656,19 @@ int ObTenantFreezer::get_tenant_memstore_cond(
     int64_t &total_memstore_used,
     int64_t &memstore_freeze_trigger,
     int64_t &memstore_limit,
-    int64_t &freeze_cnt)
+    int64_t &freeze_cnt,
+    const bool force_refresh)
 {
   int ret = OB_SUCCESS;
   int64_t unused = 0;
+  const int64_t refresh_interval = 100 * 1000; // 100 ms
+  int64_t current_time = OB_TSC_TIMESTAMP.current_time();
+  RLOCAL_INIT(int64_t, last_refresh_timestamp, 0);
+  RLOCAL(int64_t, last_active_memstore_used);
+  RLOCAL(int64_t, last_total_memstore_used);
+  RLOCAL(int64_t, last_memstore_freeze_trigger);
+  RLOCAL(int64_t, last_memstore_limit);
+  RLOCAL(int64_t, last_freeze_cnt);
 
   active_memstore_used = 0;
   total_memstore_used = 0;
@@ -669,6 +678,13 @@ int ObTenantFreezer::get_tenant_memstore_cond(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (!force_refresh &&
+             current_time - last_refresh_timestamp < refresh_interval) {
+    active_memstore_used = last_active_memstore_used;
+    total_memstore_used = last_total_memstore_used;
+    memstore_freeze_trigger = last_memstore_freeze_trigger;
+    memstore_limit = last_memstore_limit;
+    freeze_cnt = last_freeze_cnt;
   } else {
     const uint64_t tenant_id = tenant_info_.tenant_id_;
     SpinRLockGuard guard(lock_);
@@ -679,12 +695,19 @@ int ObTenantFreezer::get_tenant_memstore_cond(
                                              total_memstore_used,
                                              unused))) {
       LOG_WARN("[TenantFreezer] failed to get tenant mem usage", KR(ret), K(tenant_id));
-    } else {
-      if (OB_FAIL(get_freeze_trigger_(memstore_freeze_trigger))) {
+    } else if (OB_FAIL(get_freeze_trigger_(memstore_freeze_trigger))) {
         LOG_WARN("[TenantFreezer] fail to get minor freeze trigger", KR(ret), K(tenant_id));
-      }
+    } else {
       memstore_limit = tenant_info_.mem_memstore_limit_;
       freeze_cnt = tenant_info_.freeze_cnt_;
+
+      // cache the result
+      last_refresh_timestamp = current_time;
+      last_active_memstore_used = active_memstore_used;
+      last_total_memstore_used = total_memstore_used;
+      last_memstore_freeze_trigger = memstore_freeze_trigger;
+      last_memstore_limit = memstore_limit;
+      last_freeze_cnt = freeze_cnt;
     }
   }
   return ret;

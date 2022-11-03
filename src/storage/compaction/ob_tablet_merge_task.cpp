@@ -32,8 +32,10 @@
 
 namespace oceanbase
 {
-using namespace blocksstable;
+using namespace common;
 using namespace storage;
+using namespace memtable;
+using namespace blocksstable;
 namespace compaction
 {
 
@@ -977,7 +979,9 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
     if (ctx.param_.tablet_id_.is_special_merge_tablet()) {
       param.multi_version_start_ = 1;
     }
-    if (OB_FAIL(ret)) {
+    // for mini merge, read all msd from frozen memtable
+    if (ctx.param_.is_mini_merge() && OB_FAIL(read_msd_from_memtable(ctx, param))) {
+      LOG_WARN("failed to read msd from memtable", K(ret), K(ctx));
     } else if (OB_FAIL(ctx.ls_handle_.get_ls()->update_tablet_table_store(
         ctx.param_.tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(param));
@@ -1008,6 +1012,69 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
       ctx.time_guard_.click(ObCompactionTimeGuard::SCHEDULE_OTHER_COMPACTION);
     }
   }
+  return ret;
+}
+
+int ObTabletMergeFinishTask::read_msd_from_memtable(ObTabletMergeCtx &ctx, ObUpdateTableStoreParam &param)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(traverse_all_memtables(ctx, &param.tx_data_, MultiSourceDataUnitType::TABLET_TX_DATA))) {
+    LOG_WARN("failed to read tx data from memtables", K(ret));
+  } else if (OB_FAIL(traverse_all_memtables(ctx, &param.binding_info_, MultiSourceDataUnitType::TABLET_BINDING_INFO))) {
+    LOG_WARN("failed to read tx data from memtables", K(ret));
+  } else if (OB_FAIL(traverse_all_memtables(ctx, &param.auto_inc_seq_, MultiSourceDataUnitType::TABLET_SEQ))) {
+    LOG_WARN("failed to read tx data from memtables", K(ret));
+  } else {
+    LOG_INFO("succeeded to read msd from memtable", K(ret),
+        "ls_id", ctx.param_.ls_id_,
+        "tablet_id", ctx.param_.tablet_id_,
+        "tx_data", param.tx_data_,
+        "binding_info", param.binding_info_,
+        "auto_inc_seq", param.auto_inc_seq_);
+  }
+
+  return ret;
+}
+
+int ObTabletMergeFinishTask::traverse_all_memtables(
+    ObTabletMergeCtx &ctx,
+    ObIMultiSourceDataUnit *msd,
+    const MultiSourceDataUnitType &type)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObITable*> &tables = ctx.tables_handle_.get_tables();
+  ObITable *table = nullptr;
+  ObMemtable *memtable = nullptr;
+
+  if (OB_ISNULL(msd)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret));
+  }
+
+  for (int64_t i = tables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    if (OB_ISNULL(table = tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(tables), KP(table));
+    } else if (OB_UNLIKELY(!table->is_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not memtable", K(ret), K(tables), KPC(table));
+    } else if (OB_UNLIKELY(!table->is_frozen_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is not frozen memtable", K(ret), K(tables), KPC(table));
+    } else if (table->is_data_memtable()) {
+      memtable = static_cast<ObMemtable*>(table);
+      if (memtable->has_multi_source_data_unit(type)) {
+        if (OB_FAIL(memtable->get_multi_source_data_unit(msd, nullptr/*allocator*/))) {
+          LOG_WARN("failed to get msd from memtable", K(ret), K(type));
+        } else {
+          // succeeded to get msd, just break
+          break;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

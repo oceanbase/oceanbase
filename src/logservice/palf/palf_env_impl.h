@@ -252,12 +252,12 @@ private:
     bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
     int64_t id_;
     block_id_t min_block_id_;
-    int64_t min_block_id_ts_;
+    int64_t min_block_max_ts_;
     block_id_t min_using_block_id_;
     int64_t oldest_palf_id_;
     int64_t oldest_block_ts_;
     int ret_code_;
-    TO_STRING_KV(K_(id), K_(min_block_id_ts), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_ts), K_(ret_code));
+    TO_STRING_KV(K_(id), K_(min_block_max_ts), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_ts), K_(ret_code));
   };
   struct GetTotalUsedDiskSpace
   {

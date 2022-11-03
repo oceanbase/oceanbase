@@ -70,7 +70,7 @@ private:
   int update_ls_recovery_stat_();
 
 public:
- static constexpr int64_t IDLE_TIME_US = 500 * 1000;
+ static constexpr int64_t IDLE_TIME_US = 100 * 1000;
  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(tenant_info));
 private:
   bool is_inited_;

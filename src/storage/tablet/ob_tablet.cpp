@@ -239,7 +239,7 @@ int ObTablet::init(
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to init tablet", K(ret), K(param), K(old_tablet), K(tx_data), K(autoinc_seq));
+    LOG_INFO("succeeded to init tablet", K(ret), K(param), K(old_tablet), K(tx_data), K(ddl_data), K(autoinc_seq), KPC(this));
   }
 
   if (OB_SUCC(ret) && param.need_report_ && param.table_handle_.get_table()->is_major_sstable()) {
@@ -257,7 +257,6 @@ int ObTablet::init(
     reset();
   }
 
-  LOG_INFO("Update tablet info", K(ret), K(param), K(old_tablet), KPC(this));
   return ret;
 }
 

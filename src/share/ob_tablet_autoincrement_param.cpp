@@ -82,7 +82,14 @@ void ObTabletAutoincSeq::reset()
 
 bool ObTabletAutoincSeq::is_valid() const
 {
-  return true;
+  bool valid = true;
+
+  if (intervals_.empty()) {
+    valid = false;
+  }
+  // TODO(shuangcan.yjw): verify elemetns in array
+
+  return valid;
 }
 
 int ObTabletAutoincSeq::get_autoinc_seq_value(uint64_t &autoinc_seq)

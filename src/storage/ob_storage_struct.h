@@ -17,11 +17,14 @@
 #include "lib/ob_replica_define.h"
 #include "common/ob_store_range.h"
 #include "common/ob_member_list.h"
+#include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
+#include "storage/tablet/ob_tablet_multi_source_data.h"
+#include "storage/tablet/ob_tablet_binding_helper.h"
 
 namespace oceanbase
 {
@@ -315,7 +318,8 @@ struct ObUpdateTableStoreParam
   bool is_valid() const;
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_ts), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_checkpoint_ts), K_(ddl_start_log_ts), K_(ddl_snapshot_version));
+               K_(need_check_sstable), K_(ddl_checkpoint_ts), K_(ddl_start_log_ts), K_(ddl_snapshot_version),
+               K_(tx_data), K_(binding_info), K_(auto_inc_seq));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
@@ -330,6 +334,11 @@ struct ObUpdateTableStoreParam
   int64_t ddl_checkpoint_ts_;
   int64_t ddl_start_log_ts_;
   int64_t ddl_snapshot_version_;
+
+  // msd
+  ObTabletTxMultiSourceDataUnit tx_data_;
+  ObTabletBindingInfo binding_info_;
+  share::ObTabletAutoincSeq auto_inc_seq_;
 };
 
 struct ObBatchUpdateTableStoreParam final

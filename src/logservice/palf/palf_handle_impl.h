@@ -423,7 +423,7 @@ public:
   virtual int get_begin_ts_ns(int64_t &ts) const = 0;
   virtual int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) = 0;
 
-  virtual int get_min_block_id_min_ts_ns(block_id_t &block_id, int64_t &ts_ns) = 0;
+  virtual int get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns) = 0;
   //begin lsn                          base lsn                                end lsn
   //   │                                │                                         │
   //   │                                │                                         │
@@ -716,7 +716,7 @@ public:
   int get_begin_lsn(LSN &lsn) const;
   int get_begin_ts_ns(int64_t &ts) const;
   int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info);
-  int get_min_block_id_min_ts_ns(block_id_t &block_id, int64_t &ts_ns) override final;
+  int get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns) override final;
   // return the block length which the previous data was committed
   const LSN get_end_lsn() const override final
   {

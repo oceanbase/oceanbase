@@ -1022,19 +1022,15 @@ int ObLSTabletService::update_tablet_table_store(
       time_guard.click("GetOld");
       ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
       ObTablet *old_tablet = old_tablet_handle.get_obj();
-      ObTabletTxMultiSourceDataUnit tx_data;
-      ObTabletBindingInfo ddl_data;
+      const ObTabletTxMultiSourceDataUnit *tx_data = nullptr;
+      const ObTabletBindingInfo *binding_info = nullptr;
+      const ObTabletAutoincSeq *auto_inc_seq = nullptr;
       ObMetaDiskAddr disk_addr;
-      ObTabletAutoincSeq autoinc_seq;
 
-      if (OB_FAIL(old_tablet->get_tx_data(tx_data))) {
-        LOG_WARN("failed to get tx data from old tablet", K(ret), KPC(old_tablet));
-      } else if (OB_FAIL(old_tablet->get_ddl_data(ddl_data))) {
-        LOG_WARN("failed to get ddl data from old tablet", K(ret), KPC(old_tablet));
-      } else if (OB_FAIL(old_tablet->get_latest_autoinc_seq(autoinc_seq))) {
-        LOG_WARN("failed to get autoinc seq from old tablet", K(ret));
-      } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
-        LOG_WARN("failed to init tablet", K(ret), K(param), KPC(old_tablet), K(tx_data), K(ddl_data), K(autoinc_seq));
+      if (OB_FAIL(choose_msd(param, *old_tablet, tx_data, binding_info, auto_inc_seq))) {
+        LOG_WARN("failed to choose msd", K(ret), K(param), KPC(old_tablet));
+      } else if (OB_FAIL(new_tablet->init(param, *old_tablet, *tx_data, *binding_info, *auto_inc_seq))) {
+        LOG_WARN("failed to init tablet", K(ret), K(param), KPC(old_tablet), KPC(tx_data), KPC(binding_info), KPC(auto_inc_seq));
       } else if (FALSE_IT(time_guard.click("InitNew"))) {
       } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(new_tablet_handle, disk_addr))) {
         LOG_WARN("fail to write update tablet slog", K(ret), K(new_tablet_handle), K(disk_addr));
@@ -1050,6 +1046,32 @@ int ObLSTabletService::update_tablet_table_store(
       }
     }
   }
+  return ret;
+}
+
+int ObLSTabletService::choose_msd(
+    const ObUpdateTableStoreParam &param,
+    const ObTablet &old_tablet,
+    const ObTabletTxMultiSourceDataUnit *&tx_data,
+    const ObTabletBindingInfo *&binding_info,
+    const share::ObTabletAutoincSeq *&auto_inc_seq)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletMeta &old_tablet_meta = old_tablet.get_tablet_meta();
+  tx_data = &param.tx_data_;
+  binding_info = &param.binding_info_;
+  auto_inc_seq = &param.auto_inc_seq_;
+
+  if (!tx_data->is_valid()) {
+    tx_data = &old_tablet_meta.tx_data_;
+  }
+  if (!binding_info->is_valid()) {
+    binding_info = &old_tablet_meta.ddl_data_;
+  }
+  if (!auto_inc_seq->is_valid()) {
+    auto_inc_seq = &old_tablet_meta.autoinc_seq_;
+  }
+
   return ret;
 }
 
@@ -1356,12 +1378,15 @@ int ObLSTabletService::try_pin_tablet_if_needed(const ObTabletHandle &tablet_han
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObTablet *tablet = tablet_handle.get_obj();
   ObTabletTxMultiSourceDataUnit tx_data;
+  bool exist_on_memtable = false;
 
   if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tablet is null", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
+  } else if (OB_FAIL(tablet->inner_get_tx_data(tx_data, exist_on_memtable))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet));
+  } else if (!tx_data.is_valid()) {
+    // tablet is not valid, do nothing
   } else if (!tx_data.is_in_tx()) {
     // tablet not in tx, do nothing
   } else {
