@@ -53,7 +53,56 @@ OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, ap
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoRespMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionReqMsg, ObTxMsg);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxRollbackSPMsg, ObTxMsg, savepoint_, op_sn_, can_elr_, session_id_, tx_addr_, tx_expire_ts_);
+
+OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
+{
+  int len = 0;
+  len += ObTxMsg::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, savepoint_, op_sn_, branch_id_);
+  if (OB_NOT_NULL(tx_ptr_)) {
+    OB_UNIS_ADD_LEN(true);
+    OB_UNIS_ADD_LEN(*tx_ptr_);
+  } else {
+    OB_UNIS_ADD_LEN(false);
+  }
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
+{
+  int ret = ObTxMsg::serialize(buf, buf_len, pos);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, savepoint_, op_sn_, branch_id_);
+    if (OB_NOT_NULL(tx_ptr_)) {
+      OB_UNIS_ENCODE(true);
+      OB_UNIS_ENCODE(*tx_ptr_);
+    } else {
+      OB_UNIS_ENCODE(false);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
+{
+  int ret = ObTxMsg::deserialize(buf, data_len, pos);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, savepoint_, op_sn_, branch_id_);
+    bool has_tx_ptr = false;
+    OB_UNIS_DECODE(has_tx_ptr);
+    if (has_tx_ptr) {
+      void *buffer = ob_malloc(sizeof(ObTxDesc));
+      if (OB_ISNULL(buffer)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObTxDesc *tmp = new(buffer)ObTxDesc();
+        OB_UNIS_DECODE(*tmp);
+        tx_ptr_ = tmp;
+      }
+    }
+  }
+  return ret;
+}
 
 bool ObTxMsg::is_valid() const
 {
@@ -159,9 +208,7 @@ bool ObTxRollbackSPMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == ROLLBACK_SAVEPOINT
-      && savepoint_ > -1 && op_sn_ > -1
-      && session_id_ > 0 && tx_addr_.is_valid()
-      && tx_expire_ts_ > 0) {
+      && savepoint_ > -1 && op_sn_ > -1) {
     ret = true;
   }
   return ret;

@@ -173,7 +173,7 @@ int rollback_savepoint_slowpath_(ObTxDesc &tx,
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx);
-int create_tx_ctx_(ObTxRollbackSPMsg &msg, ObPartTransCtx *&ctx);
+
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    ObLS *ls,
                    const ObTxDesc &tx,
@@ -281,7 +281,7 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const int64_t op_sn,
                               const int64_t savepoint,
                               int64_t &ctx_born_epoch,
-                              ObFunction<int(ObPartTransCtx*&)> &func,
+                              const ObTxDesc *tx,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
                               ObTxRollbackSPMsg &msg,

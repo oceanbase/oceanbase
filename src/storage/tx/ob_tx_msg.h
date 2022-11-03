@@ -229,21 +229,26 @@ namespace transaction
           ObTxMsg(ROLLBACK_SAVEPOINT),
           savepoint_(-1),
           op_sn_(-1),
-          can_elr_(false),
-          session_id_(0),
-          tx_addr_(),
-          tx_expire_ts_(-1)
+          //todo:后续branch_id使用方式确定后，需要相应修改
+          branch_id_(-1),
+          tx_ptr_(NULL)
       {}
-      ~ObTxRollbackSPMsg() {}
+      ~ObTxRollbackSPMsg() {
+        if (OB_NOT_NULL(tx_ptr_)) {
+          tx_ptr_->~ObTxDesc();
+          ob_free((void*)tx_ptr_);
+          tx_ptr_ = NULL;
+        }
+      }
       int64_t savepoint_;
       int64_t op_sn_;
-      bool can_elr_;
-      uint32_t session_id_;
-      ObAddr tx_addr_;
-      int64_t tx_expire_ts_;
+      //todo:后期设计中操作编号是否等于branch_id
+      int64_t branch_id_;
+      const ObTxDesc *tx_ptr_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg,
-                           K_(savepoint), K_(op_sn), K_(can_elr), K_(session_id), K_(tx_addr), K_(tx_expire_ts));
+                           K_(savepoint), K_(op_sn), K_(branch_id),
+                           KP_(tx_ptr));
       OB_UNIS_VERSION(1);
     };
 
