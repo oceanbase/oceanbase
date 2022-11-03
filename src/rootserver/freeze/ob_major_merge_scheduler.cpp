@@ -657,6 +657,8 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
       LOG_WARN("not inited", KR(ret));
     } else if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, infos))) {
       LOG_WARN("fail to get zone info", KR(ret));
+    } else if (global_info.is_merge_error()) {
+      LOG_WARN("should not update global merged scn, cuz is_merge_error is true", K(global_info));
     } else {
       if (global_info.last_merged_scn_ != global_info.global_broadcast_scn_) {
         bool merged = true;

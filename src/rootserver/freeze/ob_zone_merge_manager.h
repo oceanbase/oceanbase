@@ -88,6 +88,7 @@ private:
                                        const common::ObIArray<share::ObZoneMergeInfo> &ori_merge_infos,
                                        const common::ObIArray<common::ObZone> &zone_list,
                                        common::ObIArray<share::ObZoneMergeInfo> &to_insert_infos);
+
 protected:
   common::SpinRWLock lock_;
   static int copy_infos(ObZoneMergeManagerBase &dest, const ObZoneMergeManagerBase &src);

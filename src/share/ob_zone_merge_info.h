@@ -111,6 +111,7 @@ public:
   bool is_in_merge() const;
   bool is_valid() const;
   bool is_merge_error() const;
+  bool is_in_verifying_status() const;
   ObGlobalMergeInfo &operator = (const ObGlobalMergeInfo &other) = delete;
   int assign(const ObGlobalMergeInfo &other);
   // differ from assign, only exclude 'need_update_' copy

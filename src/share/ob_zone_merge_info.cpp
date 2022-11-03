@@ -226,6 +226,11 @@ bool ObGlobalMergeInfo::is_merge_error() const
   return (is_merge_error_ > 0);
 }
 
+bool ObGlobalMergeInfo::is_in_verifying_status() const
+{
+  return (ObZoneMergeInfo::MERGE_STATUS_VERIFYING == merge_status_);
+}
+
 bool ObGlobalMergeInfo::is_valid() const
 {
   bool is_valid = true;
