@@ -128,6 +128,7 @@ public:
   ObServerConfig *get_config() { return config_; }
   bool exist_ls_freezing();
 private:
+  int ls_freeze_(ObLS *ls);
   int64_t get_freeze_trigger_percentage_() const;
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);

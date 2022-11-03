@@ -602,8 +602,6 @@ public:
   // ObFreezer interface:
   // logstream freeze
   // @param [in] null
-  // int logstream_freeze();
-  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
   int logstream_freeze();
   // tablet freeze
   // @param [in] tablet_id

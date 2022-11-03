@@ -186,6 +186,24 @@ bool ObTenantFreezer::exist_ls_freezing()
   return exist_ls_freezing_;
 }
 
+int ObTenantFreezer::ls_freeze_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t SLEEP_TS = 1000 * 1000; // 1s
+  int64_t retry_times = 0;
+  // wait if there is a freeze is doing
+  do {
+    retry_times++;
+    if (OB_FAIL(ls->logstream_freeze()) && OB_ENTRY_EXIST == ret) {
+      ob_usleep(SLEEP_TS);
+    }
+    if (retry_times % 10 == 0) {
+      LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
+    }
+  } while (ret == OB_ENTRY_EXIST);
+  return ret;
+}
+
 int ObTenantFreezer::tenant_freeze()
 {
   int ret = OB_SUCCESS;
@@ -203,7 +221,9 @@ int ObTenantFreezer::tenant_freeze()
     ObLS *ls = nullptr;
     int ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_FAIL(ls->logstream_freeze())) {
+      // wait until this ls freeze finished to make sure not freeze frequently because
+      // of this ls freeze stuck.
+      if (OB_FAIL(ls_freeze_(ls))) {
         if (OB_SUCCESS == first_fail_ret) {
           first_fail_ret = ret;
         }
