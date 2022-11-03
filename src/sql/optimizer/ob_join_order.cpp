@@ -5701,16 +5701,19 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
   ObSEArray<ObTablePartitionInfo *, 8> tbl_part_infos;
   uint64_t table_id = table_id_;
   uint64_t ref_table_id = table_meta_info_.ref_table_id_;
-  if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
+  if (!helper.is_inner_path_ && 
+      OB_FAIL(compute_base_table_property(table_id, ref_table_id))) {
+    LOG_WARN("failed to compute base path property", K(ret));
+  } else if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
     LOG_WARN("failed to add table to join order(single)", K(ret));
   } else if (OB_FAIL(compute_table_location_for_paths(access_paths,
                                                       tbl_part_infos))) {
     LOG_WARN("failed to calc table location", K(ret));
-  } else if (OB_FAIL(compute_base_table_property(table_id,
-                                                 ref_table_id,
-                                                 helper,
-                                                 access_paths))) {
-    LOG_WARN("failed to compute base path property", K(ret));
+  } else if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
+    LOG_WARN("failed to estimate_size", K(ret));
+  } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id) &&
+             OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
+    LOG_WARN("failed to compute one row info", K(ret));
   } else if (!access_paths.empty() && // when generate inner path, access_paths may be empty
              OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
@@ -5729,16 +5732,10 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
 }
 
 int ObJoinOrder::compute_base_table_property(uint64_t table_id,
-                                             uint64_t ref_table_id,
-                                             PathHelper &helper,
-                                             ObIArray<AccessPath *> &access_paths)
+                                             uint64_t ref_table_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
-    LOG_WARN("failed to estimate_size", K(ret));
-  } else if (helper.is_inner_path_) {
-    /*do nothing*/
-  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
+  if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
     LOG_WARN("failed to compute const exprs", K(ret));
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_,
                                                         restrict_info_set_,
@@ -5748,16 +5745,13 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
                                                         ref_table_id,
                                                         get_restrict_infos()))) {
     LOG_WARN("failed to extract fd item set", K(ret));
-  } else if (!is_virtual_table(ref_table_id) &&
-             OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
-    LOG_WARN("failed to compute one row info", K(ret));
   } else {
     LOG_TRACE("succeed to compute base table property",
         K(restrict_info_set_), K(output_const_exprs_),
-        K(output_equal_sets_), K(is_at_most_one_row_));
+        K(output_equal_sets_));
   }
   return ret;
-}
+} 
 
 int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
                                               ObIArray<AccessPath *> &access_paths)
