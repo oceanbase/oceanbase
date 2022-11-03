@@ -8609,10 +8609,6 @@ int ObDDLOperator::create_udt(ObUDTTypeInfo &udt_info,
       CK (OB_NOT_NULL(obj_info));
       // set object body id
       OX (obj_info->set_coll_type(new_udt_id));
-      // If it is a create body operation, the function declaration of spec needs to be deleted first
-      if (FAILEDx(del_routines_in_udt(udt_info, trans, schema_guard))) {
-        LOG_WARN("failed to delete object routines", K(ret));
-      }
       // udt_info.set_type_id(new_udt_id);
     }
     udt_info.set_schema_version(new_schema_version);
@@ -8639,11 +8635,7 @@ int ObDDLOperator::create_udt(ObUDTTypeInfo &udt_info,
           int64_t new_schema_version = OB_INVALID_VERSION;
           OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
           OX (routine_info.set_schema_version(new_schema_version));
-          // OZ (schema_service->get_routine_sql_service().update_routine(routine_info, &trans));
-           if (FAILEDx(schema_service->get_routine_sql_service().create_routine(routine_info,
-                                                                        &trans, NULL))) {
-            LOG_WARN("insert routine info failed", K(routine_info), K(ret));
-          }
+          OZ (schema_service->get_routine_sql_service().update_routine(routine_info, &trans));
         }
       }
     }
