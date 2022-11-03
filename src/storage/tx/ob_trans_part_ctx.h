@@ -85,7 +85,6 @@ const static int64_t OB_TX_MAX_LOG_CBS = 32;
 // participant transaction context
 class ObPartTransCtx : public ObTransCtx,
                        public ObTsCbTask,
-                       public ObTxOnePhaseCommitter,
                        public ObTxCycleTwoPhaseCommitter
 {
   friend class ObTransService;

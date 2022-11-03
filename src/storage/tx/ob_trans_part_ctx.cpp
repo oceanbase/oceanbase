@@ -439,6 +439,34 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
         }
       }
 
+      // go to preapre state when recover from redo complete
+      if (!is_follower_() && !exec_info_.is_dup_tx_ && !is_sub2pc()) {
+        if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
+          if (is_local_tx_()) {
+            if (!is_logging_()) {
+              if (OB_FAIL(one_phase_commit_())) {
+                TRANS_LOG(WARN, "two phase commit failed", KR(ret), KPC(this));
+              } else {
+                part_trans_action_ = ObPartTransAction::COMMIT;
+              }
+            }
+          } else {
+            if (ObTxState::PREPARE > get_upstream_state()) {
+              bool unused = false;
+              if (is_2pc_logging()) {
+                TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
+              } else if (OB_FAIL(do_prepare(unused))) {
+                TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
+              } else {
+                set_upstream_state(ObTxState::PREPARE);
+                collected_.reset();
+                part_trans_action_ = ObPartTransAction::COMMIT;
+              }
+            }
+          }
+        }
+      }
+
       // retry commiting for every node
       if (!is_follower_() && is_committing_()) {
         if (is_local_tx_()) {
@@ -1234,6 +1262,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
     trans_id_ = ctx_info.tx_id_;
     ls_id_ = ctx_info.ls_id_;
     exec_info_ = ctx_info.exec_info_;
+    if (ObTxState::REDO_COMPLETE == get_downstream_state()) {
+      sub_state_.set_info_log_submitted();
+    }
     exec_info_.multi_data_source_.reset();
     if (OB_FAIL(ret)) {
       // do nothing

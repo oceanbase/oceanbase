@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 #include <vector>
+#define private public
+#define protected public
 #include "storage/tx/ob_mock_tx_ctx.h"
 
 namespace oceanbase
@@ -105,30 +107,48 @@ TEST_F(TestMockObTxCtx, test_simple_tx_ctx1)
 
   EXPECT_EQ(OB_SUCCESS, build_scheduler_mailbox());
 
-  ObTxCommitMsg tx_commit_msg;
-  MockObTxCtx::mock_tx_commit_msg(trans_id1,
-                                  ls_id1,
-                                  participants,
-                                  tx_commit_msg);
-  ObMail<ObTxMsg> tx_commit_mail;
-  EXPECT_EQ(OB_SUCCESS, tx_commit_mail.init(scheduler_addr_ /*from*/,
-                                            ctx1.get_mailbox_addr() /*to*/,
-                                            sizeof(ObTxCommitMsg),
-                                            tx_commit_msg));
+  ctx1.addr_memo_[ls_id2] = ctx2.addr_;
+  ctx1.ls_memo_[ctx2.addr_] = ls_id2;
+  ctx1.set_trans_type_(TransType::DIST_TRANS);
+  ctx1.upstream_state_ = ObTxState::INIT;
+  ctx1.set_downstream_state(ObTxState::REDO_COMPLETE);
+  ctx1.exec_info_.participants_.push_back(ls_id1);
+  ctx1.exec_info_.participants_.push_back(ls_id2);
+
+  ctx2.addr_memo_[ls_id1] = ctx1.addr_;
+  ctx2.ls_memo_[ctx1.addr_] = ls_id1;
+  ctx2.set_trans_type_(TransType::DIST_TRANS);
+  ctx2.upstream_state_ = ObTxState::PREPARE;
+  ctx2.exec_info_.upstream_ = ls_id1;
+  ctx2.log_queue_.push_back(ObTwoPhaseCommitLogType::OB_LOG_TX_PREPARE);
+  bool unused;
+  EXPECT_EQ(OB_SUCCESS, ctx2.do_prepare(unused));
+  EXPECT_EQ(OB_SUCCESS, ctx2.apply());
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle_timeout(100000));
+
+  EXPECT_EQ(OB_SUCCESS, ctx1.handle());
+  EXPECT_EQ(OB_SUCCESS, ctx1.two_phase_commit());
+
+  EXPECT_EQ(OB_SUCCESS, ctx2.handle());
+
+  EXPECT_EQ(OB_SUCCESS, ctx1.handle());
+  EXPECT_EQ(OB_SUCCESS, ctx1.apply());
+
+  EXPECT_NE(INT64_MAX, ctx1.mt_ctx_.trans_version_);
 
   // ========== Two Phase Commit prepare Phase ==========
   // ctx1 start to commit
-  mailbox_mgr_.send_to_head(tx_commit_mail, tx_commit_mail.to_);
-  EXPECT_EQ(OB_SUCCESS, ctx1.handle());
+  // mailbox_mgr_.send_to_head(tx_commit_mail, tx_commit_mail.to_);
+  // EXPECT_EQ(OB_SUCCESS, ctx1.handle());
 
-    // ctx2 handle prepare request
-  EXPECT_EQ(OB_SUCCESS, ctx2.handle());
-  // ctx2 handle prepare request
-  EXPECT_EQ(OB_SUCCESS, ctx2.apply());
-  // ctx1 handle prepare response
-  EXPECT_EQ(OB_SUCCESS, ctx1.handle());
-  // ctx1 apply prepare log
-  EXPECT_EQ(OB_SUCCESS, ctx1.apply());
+  //   // ctx2 handle prepare request
+  // EXPECT_EQ(OB_SUCCESS, ctx2.handle());
+  // // ctx2 handle prepare request
+  // EXPECT_EQ(OB_SUCCESS, ctx2.apply());
+  // // ctx1 handle prepare response
+  // EXPECT_EQ(OB_SUCCESS, ctx1.handle());
+  // // ctx1 apply prepare log
+  // EXPECT_EQ(OB_SUCCESS, ctx1.apply());
 
   // TODO shanyan.g
   /*
