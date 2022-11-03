@@ -11,26 +11,35 @@
  */
 
 #define USING_LOG_PREFIX LIB_MYSQLC
-#include <mariadb/mysql.h>
+#include "lib/mysqlclient/ob_isql_connection_pool.h"
+#include <mysql.h>
 #include "lib/ob_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "lib/mysqlclient/ob_mysql_prepared_param.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
-ObMySQLPreparedParam::ObMySQLPreparedParam(ObMySQLPreparedStatement& stmt)
-    : stmt_(stmt), alloc_(stmt.get_allocator()), param_count_(0), bind_(NULL)
-{}
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
+ObMySQLPreparedParam::ObMySQLPreparedParam(ObMySQLPreparedStatement &stmt) :
+    stmt_(stmt),
+    alloc_(stmt.get_allocator()),
+    param_count_(0),
+    bind_(NULL)
+{
+}
 
 ObMySQLPreparedParam::~ObMySQLPreparedParam()
-{}
+{
+}
 
 int ObMySQLPreparedParam::init()
 {
   int ret = OB_SUCCESS;
-  MYSQL_STMT* stmt = NULL;
+  MYSQL_STMT *stmt = NULL;
   if (OB_ISNULL(stmt = stmt_.get_stmt_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt handler is null", K(ret));
@@ -40,7 +49,7 @@ int ObMySQLPreparedParam::init()
     ret = OB_ERR_SQL_CLIENT;
   } else if (0 == param_count_) {
     // insert or replace that do not produce result sets
-  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND*>(alloc_.alloc(sizeof(MYSQL_BIND) * param_count_)))) {
+  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND *>(alloc_.alloc(sizeof(MYSQL_BIND) * param_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("out of memory, alloc mem for mysql_bind error", K(ret));
   } else {
@@ -52,7 +61,7 @@ int ObMySQLPreparedParam::init()
 int ObMySQLPreparedParam::bind_param()
 {
   int ret = OB_SUCCESS;
-  MYSQL_STMT* stmt = NULL;
+  MYSQL_STMT *stmt = NULL;
   if (OB_ISNULL(stmt = stmt_.get_stmt_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt handler is null", K(ret));
@@ -71,8 +80,8 @@ void ObMySQLPreparedParam::close()
   }
 }
 
-int ObMySQLPreparedParam::bind_param(
-    const int64_t col_idx, enum_field_types buffer_type, char* out_buf, const int64_t buf_len, unsigned long& res_len)
+int ObMySQLPreparedParam::bind_param(const int64_t col_idx, enum_field_types buffer_type, char *out_buf,
+                                     const int64_t buf_len, unsigned long &res_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(bind_)) {
@@ -91,6 +100,6 @@ int ObMySQLPreparedParam::bind_param(
   return ret;
 }
 
-}  // end namespace sqlclient
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace sqlclient
+} // end namespace common
+} // end namespace oceanbase

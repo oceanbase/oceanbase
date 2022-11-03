@@ -17,20 +17,27 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "lib/encode/ob_base64_encode.h"
+#include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObExprFromBase64::ObExprFromBase64(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1, NOT_ROW_DIMENSION)
-{}
+:ObFuncExprOperator(alloc, T_FUN_SYS_FROM_BASE64, N_FROM_BASE64, 1, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprFromBase64::~ObExprFromBase64()
-{}
+{
+}
 
-int ObExprFromBase64::calc(ObObj &result, const ObObj &obj, ObIAllocator *allocator)
+int ObExprFromBase64::calc(ObObj &result,
+                           const ObObj &obj,
+                           ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -38,7 +45,7 @@ int ObExprFromBase64::calc(ObObj &result, const ObObj &obj, ObIAllocator *alloca
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null allocator", K(ret), K(allocator));
   } else {
-    const ObString &in_raw = obj.get_string();
+    const ObString & in_raw = obj.get_string();
     ObLength in_raw_len = in_raw.length();
     if (OB_UNLIKELY(in_raw_len == 0)) {
       result.set_string(obj.get_type(), nullptr, 0);
@@ -46,12 +53,13 @@ int ObExprFromBase64::calc(ObObj &result, const ObObj &obj, ObIAllocator *alloca
       const char *buf = in_raw.ptr();
       int64_t buf_len = base64_needed_decoded_length(in_raw_len);
       int64_t pos = 0;
-      char *output_buf = static_cast<char *>(allocator->alloc(buf_len));
+      char *output_buf = static_cast<char*>(allocator->alloc(buf_len));
       if (OB_ISNULL(output_buf)) {
         LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
         result.set_null();
-      } else if (OB_FAIL(ObBase64Encoder::decode(
-                     buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
+      } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                                 reinterpret_cast<uint8_t*>(output_buf),
+                                                 buf_len, pos, true))) {
         if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
           ret = OB_SUCCESS;
           result.set_null();
@@ -68,23 +76,9 @@ int ObExprFromBase64::calc(ObObj &result, const ObObj &obj, ObIAllocator *alloca
   return ret;
 }
 
-int ObExprFromBase64::calc_result1(ObObj &result, const ObObj &obj, ObExprCtx &expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(obj.is_null())) {
-    result.set_null();
-  } else if (OB_FAIL(calc(result, obj, expr_ctx.calc_buf_))) {
-    LOG_WARN("fail to calc function from_base64", K(ret), K(obj));
-  } else {
-    result.set_collation_level(obj.get_collation_level());
-    result.set_collation_type(get_result_type().get_collation_type());
-  }
-
-  return ret;
-}
-
-int ObExprFromBase64::calc_result_type1(ObExprResType &type, ObExprResType &str, ObExprTypeCtx &type_ctx) const
+int ObExprFromBase64::calc_result_type1(ObExprResType &type,
+                                        ObExprResType &str,
+                                        ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
@@ -98,12 +92,12 @@ int ObExprFromBase64::calc_result_type1(ObExprResType &type, ObExprResType &str,
     LOG_WARN("fail to get mbmaxlen", K(type.get_collation_type()), K(ret));
   } else {
     max_result_length = base64_needed_decoded_length(str.get_length()) * mbmaxlen;
-    if (max_result_length > MAX_BLOB_WIDTH) {
-      max_result_length = MAX_BLOB_WIDTH;
+    if (max_result_length > OB_MAX_BLOB_WIDTH) {
+      max_result_length = OB_MAX_BLOB_WIDTH;
     }
     int64_t max_l = max_result_length / mbmaxlen;
     int64_t max_deduce_length = max_l * mbmaxlen;
-    if (max_deduce_length < OB_MAX_MONITOR_INFO_LENGTH) {
+    if (max_deduce_length < OB_MAX_MYSQL_VARCHAR_LENGTH) {
       type.set_varbinary();
       type.set_length(max_deduce_length);
       type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -118,18 +112,19 @@ int ObExprFromBase64::calc_result_type1(ObExprResType &type, ObExprResType &str,
   return ret;
 }
 
-int ObExprFromBase64::eval_from_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+int ObExprFromBase64::eval_from_base64(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       ObDatum &res)
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = nullptr;
-  ObExecContext* exec_ctx = &ctx.exec_ctx_;
 
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (OB_UNLIKELY(arg->is_null())) {
     res.set_null();
   } else {
-    const ObString &in_raw = arg->get_string();
+    const ObString & in_raw = arg->get_string();
     ObLength in_raw_len = in_raw.length();
     if (OB_UNLIKELY(in_raw_len == 0)) {
       res.set_string(nullptr, 0);
@@ -138,12 +133,14 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       char *output_buf = nullptr;
       int64_t buf_len = base64_needed_decoded_length(in_raw_len);
       int64_t pos = 0;
-      output_buf = static_cast<char *>(exec_ctx->get_allocator().alloc(buf_len));
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
       if (OB_ISNULL(output_buf)) {
         LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
         res.set_null();
-      } else if (OB_FAIL(ObBase64Encoder::decode(
-                     buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, true))) {
+      } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                                 reinterpret_cast<uint8_t*>(output_buf),
+                                                 buf_len, pos, true))) {
         if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
           ret = OB_SUCCESS;
           res.set_null();
@@ -152,7 +149,8 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         }
       } else {
         res.set_string(output_buf, pos);
-        if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, res, ObString(pos, output_buf)))) {
+        if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+          expr, ctx, res, ObString(pos, output_buf)))) {
           LOG_WARN("set ASCII result failed", K(ret));
         }
       }
@@ -161,14 +159,73 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
-int ObExprFromBase64::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
+int ObExprFromBase64::eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
+                           const ObBitVector &skip,
+                           const int64_t batch_size) {
+  int ret = OB_SUCCESS;
+  ObDatum *res = expr.locate_batch_datums(ctx);
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else {
+    ObDatumVector args = expr.args_[0]->locate_expr_datumvector(ctx);
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+    batch_info_guard.set_batch_size(batch_size);
+    for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+      if (skip.at(j) || eval_flags.at(j)) {
+        continue;
+      }
+      batch_info_guard.set_batch_idx(j);
+      ObDatum *arg = args.at(j);
+      const ObString & in_raw = arg->get_string();
+      ObLength in_raw_len = in_raw.length();
+      if (OB_UNLIKELY(in_raw_len == 0)) {
+        res[j].set_string(nullptr, 0);
+      } else {
+        const char *buf = in_raw.ptr();
+        char *output_buf = nullptr;
+        int64_t buf_len = base64_needed_decoded_length(in_raw_len);
+        int64_t pos = 0;
+        output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
+        if (OB_ISNULL(output_buf)) {
+          LOG_WARN("output_buf is null", K(ret), K(buf_len), K(in_raw_len));
+          res[j].set_null();
+        } else if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                                   reinterpret_cast<uint8_t*>(output_buf),
+                                                   buf_len, pos, true))) {
+          if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
+            ret = OB_SUCCESS;
+            res[j].set_null();
+          } else {
+            LOG_WARN("failed to decode base64", K(ret));
+          }
+        } else {
+          res[j].set_string(output_buf, pos);
+          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res[j], ObString(pos, output_buf)))) {
+            LOG_WARN("set ASCII result failed", K(ret));
+          }
+        }
+      }
+      eval_flags.set(j);
+    } // end for batch
+  }
+  return ret;
+}
+
+int ObExprFromBase64::cg_expr(ObExprCGCtx &expr_cg_ctx,
+                              const ObRawExpr &raw_expr,
+                              ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = ObExprFromBase64::eval_from_base64;
+  rt_expr.eval_batch_func_ = ObExprFromBase64::eval_from_base64_batch;
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase

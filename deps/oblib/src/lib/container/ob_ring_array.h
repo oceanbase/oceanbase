@@ -16,35 +16,35 @@
 #include "lib/allocator/ob_qsync.h"
 #include "lib/container/ob_ring_buffer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 inline ObQSync& get_rb_qs()
 {
   static ObQSync s_rb_qs;
   return s_rb_qs;
 }
-template <typename T>
-class ObRingArray {
+template<typename T>
+class ObRingArray
+{
 public:
   typedef ObLink Link;
-  ObRingArray() : alloc_(NULL)
-  {}
-  ~ObRingArray()
-  {}
+  ObRingArray(): alloc_(NULL) {}
+  ~ObRingArray() {}
 
-  void set_label(const lib::ObLabel& label)
+  void set_label(const lib::ObLabel &label)
   {
     ObMemAttr attr;
     attr.label_ = label;
     alloc_->set_attr(attr);
   }
 
-  void set_mem_attr(const ObMemAttr& attr)
-  {
+  void set_mem_attr(const ObMemAttr &attr) {
     alloc_->set_attr(attr);
   }
 
-  int init(int64_t start, common::ObIAllocator* alloc)
+  int init(int64_t start, common::ObIAllocator *alloc)
   {
     int ret = OB_SUCCESS;
     if (start < 0) {
@@ -71,15 +71,15 @@ public:
   // OB_ERR_OUT_OF_LOWER_BOUND
   // OB_ALLOCATE_MEMORY_FAILED
   // other error return by T.write_to()
-  int set(int64_t idx, T& data)
+  int set(int64_t idx, T &data)
   {
     int ret = OB_EAGAIN;
     while (OB_EAGAIN == ret) {
       CriticalGuard(get_rb_qs());
-      char* buf = NULL;
+      char *buf = NULL;
       bool is_for_write = true;
       if (OB_SUCC(rbuffer_.get(get_end_pos(idx), buf, is_for_write))) {
-        T* p = (T*)(buf - sizeof(T));
+        T *p = (T *)(buf - sizeof(T));
         ret = data.write_to(p);
       } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
         if (OB_SUCC(rbuffer_.extend(get_end_pos(idx)))) {
@@ -95,15 +95,15 @@ public:
   // OB_ERR_OUT_OF_LOWER_BOUND
   // OB_ENTRY_NOT_EXIST
   // other error return by T.read_from()
-  int get(int64_t idx, T& data)
+  int get(int64_t idx, T &data)
   {
     int ret = OB_EAGAIN;
     while (OB_EAGAIN == ret) {
-      CriticalGuard(get_rb_qs());  // ObRingBuffer::get may access a to-be-freed node
-      char* buf = NULL;
+      CriticalGuard(get_rb_qs()); // ObRingBuffer::get may access a to-be-freed node
+      char *buf = NULL;
       bool is_for_write = false;
       if (OB_SUCC(rbuffer_.get(get_end_pos(idx), buf, is_for_write))) {
-        T* p = (T*)(buf - sizeof(T));
+        T *p = (T *)(buf - sizeof(T));
         ret = data.read_from(p);
       }
     }
@@ -123,10 +123,10 @@ public:
 private:
   void try_purge()
   {
-    Link* del_list = NULL;
+    Link *del_list = NULL;
     {
       CriticalGuard(get_rb_qs());
-      while (OB_EAGAIN == rbuffer_.purge(del_list))
+      while(OB_EAGAIN == rbuffer_.purge(del_list))
         ;
     }
     if (NULL != del_list) {
@@ -134,24 +134,16 @@ private:
       rbuffer_.destroy_list(del_list);
     }
   }
-
 private:
-  static int64_t get_start_pos(int64_t idx)
-  {
-    return idx * sizeof(T);
-  }
-  static int64_t get_end_pos(int64_t idx)
-  {
-    return (idx + 1) * sizeof(T);
-  }
-
+  static int64_t get_start_pos(int64_t idx) { return idx * sizeof(T); }
+  static int64_t get_end_pos(int64_t idx) { return (idx + 1) * sizeof(T); }
 private:
-  common::ObIAllocator* alloc_;
+  common::ObIAllocator *alloc_;
   ObRingBuffer rbuffer_;
   DISALLOW_COPY_AND_ASSIGN(ObRingArray);
 };
 
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_CONTAINER_OB_RING_ARRAY_
+#endif // OCEANBASE_LIB_CONTAINER_OB_RING_ARRAY_

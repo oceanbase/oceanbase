@@ -15,17 +15,21 @@
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprRowCount::ObExprRowCount(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ROW_COUNT, N_ROW_COUNT, 0, NOT_ROW_DIMENSION)
-{}
+ObExprRowCount::ObExprRowCount(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ROW_COUNT, N_ROW_COUNT, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprRowCount::~ObExprRowCount()
-{}
+{
+}
 
-int ObExprRowCount::calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const
+int ObExprRowCount::calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_int();
@@ -34,26 +38,12 @@ int ObExprRowCount::calc_result_type0(ObExprResType& type, common::ObExprTypeCtx
   return OB_SUCCESS;
 }
 
-int ObExprRowCount::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "session info is null");
-  } else {
-    int64_t value = session_info->get_affected_rows();
-    SQL_ENG_LOG(DEBUG, "get session info affected row", K(value));
-    result.set_int(value);
-  }
-  return ret;
-}
-
-int ObExprRowCount::eval_row_count(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprRowCount::eval_row_count(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObSQLSessionInfo* session_info = NULL;
+  const ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session info is null", K(ret));
@@ -63,12 +53,14 @@ int ObExprRowCount::eval_row_count(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
   return ret;
 }
 
-int ObExprRowCount::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprRowCount::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
   rt_expr.eval_func_ = ObExprRowCount::eval_row_count;
   return OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+

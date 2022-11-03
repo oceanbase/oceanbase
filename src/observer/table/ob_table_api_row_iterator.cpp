@@ -17,7 +17,6 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_add.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "storage/ob_partition_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -33,10 +32,10 @@ namespace observer {
  * -------------------------------------------------------ObTableApiRowIterator--------------------------------------------------------
  */
 ObTableApiRowIterator::ObTableApiRowIterator()
-  : part_service_(NULL),
+  : access_service_(NULL),
     schema_service_(NULL),
     ctx_(NULL),
-    schema_guard_(),
+    schema_guard_(share::schema::ObSchemaMgrItem::MOD_TABLE_API_ROW_ITER),
     table_schema_(NULL),
     table_id_(0),
     tenant_id_(0),
@@ -69,19 +68,20 @@ ObTableApiRowIterator::~ObTableApiRowIterator()
 }
 
 int ObTableApiRowIterator::init(
-    storage::ObPartitionService &partition_service,
+    storage::ObAccessService &access_service,
     share::schema::ObMultiVersionSchemaService &schema_service,
     ObTableServiceCtx &ctx)
 {
   int ret = OB_SUCCESS;
 
+  const uint64_t tenant_id = MTL_ID();
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The table api row iterator has been inited, ", K(ret));
-  } else if (OB_FAIL(schema_service.get_schema_guard(schema_guard_))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard_.get_table_schema(ctx.param_.table_id_, table_schema_))) {
-    LOG_WARN("get table schema failed", K(ctx.param_.table_id_), K(ret));
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard_))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, ctx.param_.table_id_, table_schema_))) {
+    LOG_WARN("get table schema failed", K(tenant_id), K(ctx.param_.table_id_), K(ret));
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NULL ptr", K(ret), K(table_schema_));
@@ -89,10 +89,10 @@ int ObTableApiRowIterator::init(
     LOG_WARN("check table support failed", K(ret));
   } else {
     table_id_ = ctx.param_.table_id_;
-    tenant_id_ = extract_tenant_id(table_id_);
+    tenant_id_ = tenant_id;
     schema_version_ = table_schema_->get_schema_version();
     rowkey_column_cnt_ = table_schema_->get_rowkey_column_num();
-    part_service_ = &partition_service;
+    access_service_ = &access_service;
     ctx_ = &ctx;
     stmt_allocator_.set_tenant_id(tenant_id_);
     row_allocator_.set_tenant_id(tenant_id_);
@@ -106,7 +106,7 @@ void ObTableApiRowIterator::reset()
   if (has_generate_column_) {
     sql::ObSQLUtils::destruct_default_expr_context(expr_ctx_);
   }
-  part_service_ = NULL;
+  access_service_ = NULL;
   schema_service_ = NULL;
   ctx_ = NULL;
   table_schema_ = NULL;
@@ -175,7 +175,7 @@ int ObTableApiRowIterator::fill_get_param(
     LOG_WARN("Fail to fill range, ", K(ret));
   } else if (OB_FAIL(fill_flag(ctx, scan_param))) {
     LOG_WARN("Fail to fill param flag, ", K(ret));
-  } else if (OB_FAIL(table_param.convert(*table_schema_, *table_schema_, column_ids_, false /*index back*/))) {
+  } else if (OB_FAIL(table_param.convert(*table_schema_, column_ids_))) {
     LOG_WARN("failed to convert table param", K(ret));
   } else {
     if (ObTableOperationType::DEL == op_type
@@ -216,7 +216,7 @@ int ObTableApiRowIterator::fill_multi_get_param(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(fill_flag(ctx, scan_param))) {
       LOG_WARN("Fail to fill param flag, ", K(ret));
-    } else if (OB_FAIL(table_param.convert(*table_schema_, *table_schema_, column_ids_, false /*index back*/))) {
+    } else if (OB_FAIL(table_param.convert(*table_schema_, column_ids_))) {
       LOG_WARN("failed to convert table param", K(ret));
     } else {
       const ObTableOperation &table_operation = batch_operation.at(0);
@@ -237,7 +237,7 @@ int ObTableApiRowIterator::fill_multi_get_param(
 int ObTableApiRowIterator::fill_generate_columns(common::ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-  ObISqlExpression *expr = NULL;
+  ObTempExpr *expr = NULL;
   const int64_t N = generate_column_exprs_.count();
   int64_t col_idx = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -246,13 +246,14 @@ int ObTableApiRowIterator::fill_generate_columns(common::ObNewRow &row)
     } else if (OB_FAIL(generate_column_idxs_.at(i, col_idx))) {
       LOG_WARN("Fail to get generate column idx, ", K(ret), K(i));
     } else if (NULL != expr) {
-      if (OB_FAIL(sql::ObSQLUtils::calc_sql_expression(
+      if (OB_ISNULL(expr_ctx_.exec_ctx_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::calc_sql_expression(
           expr,
-          *table_schema_,
           column_descs_,
           row,
-          row_allocator_,
-          expr_ctx_,
+          *expr_ctx_.exec_ctx_,
           row.cells_[col_idx]))) {
         LOG_WARN("failed to calc expr from str", K(column_descs_), K(ret));
       } else {
@@ -273,7 +274,7 @@ int ObTableApiRowIterator::cons_all_columns(const ObITableEntity &entity, const 
   } else if (OB_FAIL(rowkey_info.get_column_ids(column_ids_))) {
     LOG_WARN("failed to get rowkey column ids", K(ret), K(rowkey_info));
   } else {
-    const schema::ObColumnSchemaV2 *column_schema = NULL;
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
     uint64_t column_id = OB_INVALID_ID;
 
     //add rowkey column
@@ -329,7 +330,7 @@ int ObTableApiRowIterator::cons_missing_columns(const ObITableEntity &entity)
     ObTableSchema::const_column_iterator end = table_schema_->column_end();
     ObObj obj;
     ObExprResType column_type;
-    const schema::ObColumnSchemaV2 *column = NULL;
+    const share::schema::ObColumnSchemaV2 *column = NULL;
     for (iter = begin; OB_SUCC(ret) && iter != end; ++iter) {
       column = *iter;
       // skip all rowkeys
@@ -363,15 +364,14 @@ int ObTableApiRowIterator::cons_missing_columns(const ObITableEntity &entity)
     //fill generate expression
     if (has_generate_column_) {
       generate_column_exprs_.reuse();
-      uint64_t tenant_id = extract_tenant_id(table_schema_->get_table_id());
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, stmt_allocator_, expr_ctx_))) {
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id_, stmt_allocator_, expr_ctx_))) {
         LOG_WARN("failed to make default expr context ", K(ret));
       }
 
       for (iter = begin; OB_SUCC(ret) && iter != end; ++iter) {
         column = *iter;
         if (column->is_generated_column()) {
-          ObISqlExpression *expr = NULL;
+          ObTempExpr *temp_expr = NULL;
           obj = column->get_orig_default_value();
           if (OB_FAIL(sql::ObSQLUtils::make_generated_expression_from_str(
               obj.get_string(),
@@ -379,7 +379,7 @@ int ObTableApiRowIterator::cons_missing_columns(const ObITableEntity &entity)
               *column,
               column_descs_,
               stmt_allocator_,
-              expr))) {
+              temp_expr))) {
             STORAGE_LOG(WARN,
                         "failed to make sql expression",
                         K(obj.get_string()),
@@ -387,7 +387,7 @@ int ObTableApiRowIterator::cons_missing_columns(const ObITableEntity &entity)
                         K(*column),
                         K(column_descs_),
                         K(ret));
-          } else if (OB_FAIL(generate_column_exprs_.push_back(expr))) {
+          } else if (OB_FAIL(generate_column_exprs_.push_back(temp_expr))) {
             STORAGE_LOG(WARN, "push back error", K(ret));
           } else {
             /*do nothing*/
@@ -413,6 +413,7 @@ int ObTableApiRowIterator::add_column_type(const share::schema::ObColumnSchemaV2
   } else {
     column_desc.col_id_ = column_schema.get_column_id();
     column_desc.col_type_ = column_schema.get_meta_type();
+    column_desc.col_order_ = common::ObOrderType::ASC;
     if (OB_FAIL(column_descs_.push_back(column_desc))) {
       LOG_WARN("failed to push back column desc, ", K(ret));
     }
@@ -420,7 +421,7 @@ int ObTableApiRowIterator::add_column_type(const share::schema::ObColumnSchemaV2
   return ret;
 }
 
-int ObTableApiRowIterator::cons_column_type(const schema::ObColumnSchemaV2 &column_schema, ObExprResType &column_type)
+int ObTableApiRowIterator::cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema, ObExprResType &column_type)
 {
   int ret = OB_SUCCESS;
   column_type.set_type(column_schema.get_data_type());
@@ -458,7 +459,8 @@ int ObTableApiRowIterator::check_table_supported(const ObTableSchema *table_sche
 int ObTableApiRowIterator::check_column_type(const ObExprResType &column_type, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const bool is_not_nullable = column_type.has_result_flag(NOT_NULL_FLAG);
+  const bool is_not_nullable = is_read() ? column_type.is_not_null_for_read()
+                               : column_type.is_not_null_for_write();
   const ObCollationType cs_type = column_type.get_collation_type();
   // 1. check nullable
   if (is_not_nullable && obj.is_null()) {
@@ -536,7 +538,6 @@ int ObTableApiRowIterator::fill_flag(ObTableServiceCtx &ctx, storage::ObTableSca
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
   scan_param.timeout_ = ctx.param_.timeout_ts_;
   ObQueryFlag query_flag(ObQueryFlag::KeepOrder, // scan_order KeepOrder!
                          false, // daily_merge
@@ -552,20 +553,20 @@ int ObTableApiRowIterator::fill_flag(ObTableServiceCtx &ctx, storage::ObTableSca
   scan_param.reserved_cell_count_ = column_ids_.count() + 10;
   scan_param.for_update_ = false;
   scan_param.column_ids_.reset();
-  scan_param.pkey_ = part_key;
+  scan_param.tablet_id_ = ctx.param_.tablet_id_;
+  scan_param.ls_id_ = ctx.param_.ls_id_;
   scan_param.schema_version_ = schema_version_;
   if (OB_FAIL(scan_param.column_ids_.assign(column_ids_))) {
     LOG_WARN("fail to assign column id", K(ret));
   } else {
-    scan_param.expr_ctx_.calc_buf_ = NULL;
-    scan_param.expr_ctx_.my_session_ = NULL;
-    scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
-    scan_param.trans_desc_ = &(ctx.param_.processor_->get_trans_desc());
+    scan_param.trans_desc_ = ctx.param_.processor_->get_trans_desc();
+    scan_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+    scan_param.tx_id_ = ctx.param_.processor_->get_trans_desc()->get_tx_id();
     scan_param.index_id_ = table_id_;
     scan_param.sql_mode_ = SMO_DEFAULT;
-    scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());
+    CURRENT_CONTEXT->get_arena_allocator().set_tenant_id(MTL_ID());
   }
   return ret;
 }
@@ -727,11 +728,11 @@ ObTableApiUpdateRowIterator::ObTableApiUpdateRowIterator()
 ObTableApiUpdateRowIterator::~ObTableApiUpdateRowIterator()
 {
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -739,11 +740,11 @@ ObTableApiUpdateRowIterator::~ObTableApiUpdateRowIterator()
 void ObTableApiUpdateRowIterator::reset()
 {
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   scan_param_.destroy();
@@ -769,7 +770,7 @@ int ObTableApiUpdateRowIterator::open(const ObTableOperation &table_operation,
   } else if (OB_FAIL(fill_get_param(*ctx_,
       table_operation.type(), const_cast<ObRowkey &>(rowkey), scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
@@ -936,7 +937,7 @@ int ObTableApiUpdateRowIterator::cons_new_row(const ObTableOperation &table_oper
 int ObTableApiUpdateRowIterator::obj_increment(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType &target_type,
+    const sql::ObExprResType target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
@@ -988,7 +989,7 @@ int ObTableApiUpdateRowIterator::obj_increment(
 int ObTableApiUpdateRowIterator::obj_append(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType &target_type,
+    const sql::ObExprResType target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
@@ -1148,7 +1149,7 @@ int ObTableApiMultiUpdateRowIterator::open(const ObTableBatchOperation &batch_op
     LOG_WARN("Fail to construct update columns, ", K(ret));
   } else if (OB_FAIL(fill_multi_get_param(*ctx_, batch_operation, scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
@@ -1232,11 +1233,11 @@ ObTableApiDeleteRowIterator::ObTableApiDeleteRowIterator()
 ObTableApiDeleteRowIterator::~ObTableApiDeleteRowIterator()
 {
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -1244,11 +1245,11 @@ ObTableApiDeleteRowIterator::~ObTableApiDeleteRowIterator()
 void ObTableApiDeleteRowIterator::reset()
 {
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   scan_param_.destroy();
@@ -1269,7 +1270,7 @@ int ObTableApiDeleteRowIterator::open(const ObTableOperation &table_operation)
   } else if (OB_FAIL(fill_get_param(*ctx_, table_operation.type(), rowkey,
       scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
@@ -1331,7 +1332,7 @@ int ObTableApiMultiDeleteRowIterator::open(const ObTableBatchOperation &batch_op
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(fill_multi_get_param(*ctx_, batch_operation, scan_param_, table_param_))) {
     LOG_WARN("Fail to fill multi get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
@@ -1397,11 +1398,11 @@ ObTableApiGetRowIterator::ObTableApiGetRowIterator()
 ObTableApiGetRowIterator::~ObTableApiGetRowIterator()
 {
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
 }
@@ -1411,11 +1412,11 @@ void ObTableApiGetRowIterator::reset()
   scan_param_.destroy();
   table_param_.reset();
   if (NULL != scan_iter_) {
-    if (NULL != part_service_) {
-      part_service_->revert_scan_iter(scan_iter_);
+    if (NULL != access_service_) {
+      access_service_->revert_scan_iter(scan_iter_);
       scan_iter_ = NULL;
     } else {
-      LOG_ERROR("The part service is NULL, but the scan iter is NOT NULL!");
+      LOG_ERROR("The access service is NULL, but the scan iter is NOT NULL!");
     }
   }
   ObTableApiRowIterator::reset();
@@ -1434,7 +1435,7 @@ int ObTableApiGetRowIterator::open(const ObTableOperation &table_operation)
   } else if (OB_FAIL(fill_get_param(*ctx_, table_operation.type(), rowkey,
       scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
@@ -1479,7 +1480,7 @@ int ObTableApiMultiGetRowIterator::open(const ObTableBatchOperation &batch_opera
     LOG_WARN("Fail to construct all columns, ", K(ret));
   } else if (OB_FAIL(fill_multi_get_param(*ctx_, batch_operation, scan_param_, table_param_))) {
     LOG_WARN("Fail to fill get param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param_, scan_iter_))) {
+  } else if (OB_FAIL(access_service_->table_scan(scan_param_, scan_iter_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }

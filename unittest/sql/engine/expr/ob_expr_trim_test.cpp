@@ -17,42 +17,43 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprTrimTest : public ::testing::Test {
+class ObExprTrimTest : public ::testing::Test
+{
 public:
   ObExprTrimTest();
   virtual ~ObExprTrimTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprTrimTest(const ObExprTrimTest& other);
-  ObExprTrimTest& operator=(const ObExprTrimTest& other);
-
+  ObExprTrimTest(const ObExprTrimTest &other);
+  ObExprTrimTest& operator=(const ObExprTrimTest &other);
 private:
   // data members
 };
 ObExprTrimTest::ObExprTrimTest()
-{}
+{
+}
 
 ObExprTrimTest::~ObExprTrimTest()
-{}
+{
+}
 
 void ObExprTrimTest::SetUp()
-{}
+{
+}
 
 void ObExprTrimTest::TearDown()
-{}
+{
+}
 
 #define LRTRIM 0
 #define LTRIM 1
 #define RTRIM 2
 #define UNKNOWN_TRIM 3
 
-#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
-#define F(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define F(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
 
 TEST_F(ObExprTrimTest, basic_test)
 {
@@ -95,7 +96,8 @@ TEST_F(ObExprTrimTest, fail_test)
   F(trim, int, LRTRIM, int, 101010, varchar, "101010", varchar, "");
   F(trim, int, LRTRIM, int, 1, varchar, "101010", varchar, "01010");
   F(trim, int, LRTRIM, int, 1010100, varchar, "101010", varchar, "101010");
-  F(trim, int, LRTRIM, float, 10.0, varchar, "10.00000000", varchar, "00");  // float have six digit trailing
+  F(trim, int, LRTRIM, float, 10.0, varchar, "10.00000000", varchar, "00"); // float have six digit trailing
+
 
   F(trim, int, LRTRIM, min, 0, min, 0, varchar, "");
   F(trim, int, LRTRIM, min, 0, max, 0, max, 0);
@@ -106,11 +108,13 @@ TEST_F(ObExprTrimTest, fail_test)
   F(trim, int, LRTRIM, min, 0, int, 12, varchar, "12");
   F(trim, int, LRTRIM, int, 10, min, 0, min, 0);
   F(trim, int, LRTRIM, int, 10, max, 0, max, 0);
+
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

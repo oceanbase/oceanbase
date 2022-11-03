@@ -14,13 +14,14 @@
 #include "ob_table_service.h"
 #include "ob_table_api_row_iterator.h"
 #include "observer/ob_service.h"
-#include "storage/ob_partition_service.h"
 #include "ob_table_rpc_processor.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "ob_htable_filter_operator.h"
 #include "sql/engine/expr/ob_expr_add.h"
+#include "share/schema/ob_table_dml_param.h"
+#include "storage/tx_storage/ob_access_service.h"
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -64,12 +65,11 @@ OB_INLINE int get_rowkey_column_ids(
 int ObTableService::init(ObGlobalContext &gctx)
 {
   int ret = OB_SUCCESS;
-  part_service_ = gctx.par_ser_;
   schema_service_ = gctx.schema_service_;
   return ret;
 }
 
-int ObTableService::cons_rowkey_infos(const schema::ObTableSchema &table_schema,
+int ObTableService::cons_rowkey_infos(const share::schema::ObTableSchema &table_schema,
                                       ObIArray<uint64_t> *column_ids,
                                       ObIArray<ObExprResType> *columns_type)
 {
@@ -81,7 +81,7 @@ int ObTableService::cons_rowkey_infos(const schema::ObTableSchema &table_schema,
     }
   }
   if (OB_SUCC(ret) && NULL != columns_type) {
-    const schema::ObColumnSchemaV2 *column_schema = NULL;
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
     uint64_t column_id = OB_INVALID_ID;
     ObExprResType column_type;
     const int64_t N = rowkey_info.get_size();
@@ -102,13 +102,13 @@ int ObTableService::cons_rowkey_infos(const schema::ObTableSchema &table_schema,
   return ret;
 }
 
-int ObTableService::cons_properties_infos(const schema::ObTableSchema &table_schema,
+int ObTableService::cons_properties_infos(const share::schema::ObTableSchema &table_schema,
                                           const ObIArray<ObString> &properties,
                                           ObIArray<uint64_t> &column_ids,
                                           ObIArray<ObExprResType> *columns_type)
 {
   int ret = OB_SUCCESS;
-  const schema::ObColumnSchemaV2 *column_schema = NULL;
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
   ObExprResType column_type;
   const int64_t N = properties.count();
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
@@ -129,7 +129,7 @@ int ObTableService::cons_properties_infos(const schema::ObTableSchema &table_sch
   return ret;
 }
 
-int ObTableService::cons_column_type(const schema::ObColumnSchemaV2 &column_schema, ObExprResType &column_type)
+int ObTableService::cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema, ObExprResType &column_type)
 {
   int ret = OB_SUCCESS;
   column_type.set_type(column_schema.get_data_type());
@@ -155,7 +155,7 @@ int ObTableService::cons_column_type(const schema::ObColumnSchemaV2 &column_sche
 int ObTableService::check_column_type(const ObExprResType &column_type, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const bool is_not_nullable = column_type.has_result_flag(NOT_NULL_FLAG);
+  const bool is_not_nullable = column_type.is_not_null_for_read();
   const ObCollationType cs_type = column_type.get_collation_type();
   // 1. check nullable
   if (is_not_nullable && obj.is_null()) {
@@ -202,15 +202,16 @@ int ObTableService::check_column_type(const ObExprResType &column_type, ObObj &o
 int ObTableService::insert_or_update_can_use_put(ObTableEntityType entity_type, uint64_t table_id, const ObITableEntity &entity, bool &use_put)
 {
   int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
   if (ObTableEntityType::ET_HKV == entity_type) {
     // hbase model table does not have secondary index and always specify all the properties (column V)
     use_put = true;
-  } else if (OB_FAIL(schema_service_->get_schema_guard(schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(table_id), K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(tenant_id), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NULL ptr", K(ret), K(table_schema));
@@ -223,12 +224,12 @@ int ObTableService::insert_or_update_can_use_put(ObTableEntityType entity_type, 
         // all columns are fine
       } else {
         // some columns are missing
-        schema::ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-        schema::ObTableSchema::const_column_iterator end = table_schema->column_end();
+        share::schema::ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+        share::schema::ObTableSchema::const_column_iterator end = table_schema->column_end();
         ObObj obj;
         ObExprResType column_type;
         for (; OB_SUCC(ret) && iter != end; ++iter) {
-          const schema::ObColumnSchemaV2 *column = *iter;
+          const share::schema::ObColumnSchemaV2 *column = *iter;
           if (OB_ISNULL(column)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid column schema", K(column));
@@ -274,38 +275,47 @@ int ObTableService::do_put(ObTableServiceCtx &ctx, const ObTableOperation &table
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
-  ObTableApiInsertRowIterator put_row_iter;
+  const ObTabletID tablet_id = ctx.param_.tablet_id_;
+  ObAccessService *access_service = MTL(ObAccessService *);
+  ObLSID ls_id = ctx.param_.ls_id_;
+  SMART_VAR(ObTableApiInsertRowIterator, put_row_iter) {
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
 
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(put_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init put row iterator, ", K(ret), K(table_id));
-  } else if (OB_FAIL(put_row_iter.open(table_operation))) {
-    LOG_WARN("Fail to open put row iterator, ", K(ret), K(table_id));
-  } else {
-    int64_t affected_rows = 0;
-    // init dml param
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = false; // always false for put
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = put_row_iter.get_schema_version();
-
-    if (OB_FAIL(part_service_->put_rows(
-        ctx.param_.processor_->get_trans_desc(),
-        dml_param,
-        part_key,
-        put_row_iter.get_column_ids(),
-        &put_row_iter,
-        affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to put row", K(ret), K(table_id));
-      }
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(put_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init put row iterator, ", K(ret), K(table_id));
+    } else if (OB_FAIL(put_row_iter.open(table_operation))) {
+      LOG_WARN("Fail to open put row iterator, ", K(ret), K(table_id));
+    } else if (OB_FAIL(build_table_param(table_id, put_row_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
     } else {
-      result.set_affected_rows(1);
+      int64_t affected_rows = 0;
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = false; // always false for put
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = put_row_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      if (OB_FAIL(access_service->put_rows(
+          ls_id,
+          tablet_id,
+          *ctx.param_.processor_->get_trans_desc(),
+          dml_param,
+          put_row_iter.get_column_ids(),
+          &put_row_iter,
+          affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("failed to put row", K(ret), K(table_id));
+        }
+      } else {
+        result.set_affected_rows(1);
+      }
     }
   }
   result.set_errno(ret);
@@ -342,8 +352,8 @@ int ObTableService::do_insert_or_update(ObTableServiceGetCtx &ctx, const ObTable
     }
   }
   if (nullptr != duplicate_row_iter) {
-    ObPartitionKey pkey(ctx.param_.table_id_, ctx.param_.partition_id_, 0);
-    int tmp_ret = part_service_->revert_insert_iter(pkey, duplicate_row_iter);
+    ObAccessService *access_service = MTL(ObAccessService *);
+    int tmp_ret = access_service->revert_insert_iter(duplicate_row_iter);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("fail to revert duplicate_row_iter", K(tmp_ret), KP(duplicate_row_iter));
     } else {
@@ -389,8 +399,8 @@ int ObTableService::multi_insert_or_update(ObTableServiceGetCtx &ctx,
   int ret = OB_SUCCESS;
   const ObTableOperation &one_op = batch_operation.at(0);
   bool can_use_put = true;
-  if (OB_FAIL(insert_or_update_can_use_put(ctx.param_.entity_type_, 
-        ctx.param_.table_id_, one_op.entity(), can_use_put))) {
+  if (OB_FAIL(insert_or_update_can_use_put(ctx.param_.entity_type_,
+                                           ctx.param_.table_id_, one_op.entity(), can_use_put))) {
     LOG_WARN("failed to check", K(ret));
   } else if (can_use_put
              && ctx.param_.binlog_row_image_type_ != ObBinlogRowImageType::FULL) {
@@ -407,47 +417,58 @@ int ObTableService::multi_put(ObTableServiceCtx &ctx,
                               ObTableBatchOperationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableApiMultiInsertRowIterator multi_put_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(multi_put_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init multi put iterator, ", K(ret), K(table_id));
-  } else if (OB_FAIL(multi_put_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open multi put iterator, ", K(ret), K(table_id));
-  } else {
-    int64_t affected_rows = 0;
-    // init dml param
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = false;  // always false for put
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = multi_put_iter.get_schema_version();
+  SMART_VAR(ObTableApiMultiInsertRowIterator, multi_put_iter) {
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
+    const uint64_t table_id = ctx.param_.table_id_;
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
 
-    const int64_t N = batch_operation.count();
-    NG_TRACE_EXT(insertup_calc_new_row, OB_ID(input_count), N);
-    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-      multi_put_iter.continue_iter();
-      if (OB_FAIL(part_service_->put_rows(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          multi_put_iter.get_column_ids(),
-          &multi_put_iter,
-          affected_rows))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to put rows", K(ret), K(table_id));
-        } else {
-          NG_TRACE(locked);
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(multi_put_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init multi put iterator, ", K(ret), K(table_id));
+    } else if (OB_FAIL(multi_put_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open multi put iterator, ", K(ret), K(table_id));
+    } else if (OB_FAIL(build_table_param(table_id, multi_put_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
+    } else {
+      int64_t affected_rows = 0;
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = false;  // always false for put
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = multi_put_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      const int64_t N = batch_operation.count();
+      NG_TRACE_EXT(insertup_calc_new_row, OB_ID(input_count), N);
+      for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
+        multi_put_iter.continue_iter();
+        if (OB_FAIL(access_service->put_rows(
+            ls_id,
+            tablet_id,
+            *ctx.param_.processor_->get_trans_desc(),
+            dml_param,
+            multi_put_iter.get_column_ids(),
+            &multi_put_iter,
+            affected_rows))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+            LOG_WARN("failed to put rows", K(ret), K(table_id));
+          } else {
+            NG_TRACE(locked);
+          }
+        } else if (OB_FAIL(add_one_result(result, ObTableOperationType::INSERT_OR_UPDATE, OB_SUCCESS, affected_rows))) {
+          LOG_WARN("failed to add result", K(ret));
         }
-      } else if (OB_FAIL(add_one_result(result, ObTableOperationType::INSERT_OR_UPDATE, OB_SUCCESS, affected_rows))) {
-        LOG_WARN("failed to add result", K(ret));
-      }
-    } // end for
+      } // end for
+    }
   }
+
   return ret;
 }
 
@@ -493,7 +514,7 @@ int ObTableService::fill_scan_param(ObTableServiceCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
+  const uint64_t tenant_id = MTL_ID();
   scan_param.timeout_ = ctx.param_.timeout_ts_;
   ObQueryFlag query_flag(ObQueryFlag::KeepOrder, // scan_order KeepOrder!
                          false, // daily_merge
@@ -509,21 +530,22 @@ int ObTableService::fill_scan_param(ObTableServiceCtx &ctx,
   scan_param.reserved_cell_count_ = output_column_ids.count() + 10;
   scan_param.for_update_ = false;
   scan_param.column_ids_.reset();
-  scan_param.pkey_ = part_key;
+  scan_param.tablet_id_ = ctx.param_.tablet_id_;
+  // scan_param.index_tablet_id_ = ctx.param_.index_tablet_id_; todo@dazhi: tableapi index back
+  scan_param.ls_id_ = ctx.param_.ls_id_;
   scan_param.schema_version_ = schema_version;
   if (OB_FAIL(scan_param.column_ids_.assign(output_column_ids))) {
     LOG_WARN("fail to assign column id", K(ret));
   } else {
     SQL_ENG_LOG(DEBUG, "set scan param", K(output_column_ids));
-    scan_param.expr_ctx_.calc_buf_ = NULL;
-    scan_param.expr_ctx_.my_session_ = NULL;
-    scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
-    scan_param.trans_desc_ = &ctx.param_.processor_->get_trans_desc();
+    scan_param.trans_desc_ = ctx.param_.processor_->get_trans_desc();
+    scan_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+    scan_param.tx_id_ = ctx.param_.processor_->get_trans_desc()->get_tx_id();
     scan_param.index_id_ = table_id;
     scan_param.sql_mode_ = SMO_DEFAULT;
-    scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());
+    CURRENT_CONTEXT->get_arena_allocator().set_tenant_id(tenant_id);
   }
   return ret;
 }
@@ -578,18 +600,19 @@ int ObTableService::execute_get(ObTableServiceGetCtx &ctx, const ObTableOperatio
 {
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_scan_begin);
-  ObTableApiGetRowIterator get_row_iter;
-  ctx.scan_result_ = NULL;
-  if (OB_FAIL(get_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init get row iterator, ", K(ret));
-  } else if (OB_FAIL(get_row_iter.open(table_operation))) {
-    LOG_WARN("Fail to open get row iterator, ", K(ret));
-  } else if (OB_FAIL(fill_get_result(ctx, get_row_iter.get_properties(), &get_row_iter, result))) {
-    LOG_WARN("failed to send result");
-  } else {
-    LOG_DEBUG("[yzfdebug] execute_get", "prop", get_row_iter.get_properties(), "table_param", *(ctx.table_param_), "scan_param", ctx.scan_param_, "trans_desc", ctx.param_.processor_->get_trans_desc());
+  SMART_VAR(ObTableApiGetRowIterator, get_row_iter) {
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ctx.scan_result_ = NULL;
+    if (OB_FAIL(get_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init get row iterator, ", K(ret));
+    } else if (OB_FAIL(get_row_iter.open(table_operation))) {
+      LOG_WARN("Fail to open get row iterator, ", K(ret));
+    } else if (OB_FAIL(fill_get_result(ctx, get_row_iter.get_properties(), &get_row_iter, result))) {
+      LOG_WARN("failed to send result");
+    } else {
+      LOG_DEBUG("[yzfdebug] execute_get", "prop", get_row_iter.get_properties(), "table_param", *(ctx.table_param_), "scan_param", ctx.scan_param_, "trans_desc", *ctx.param_.processor_->get_trans_desc());
+    }
   }
-
   result.set_type(ObTableOperationType::GET);
   result.set_errno(ret);
   replace_ret_code(ret);
@@ -673,13 +696,15 @@ int ObTableService::fill_multi_get_result(
 int ObTableService::multi_get(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableApiMultiGetRowIterator multi_get_iter;
-  if (OB_FAIL(multi_get_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init multi get iter, ", K(ret));
-  } else if (OB_FAIL(multi_get_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open multi get iter, ", K(ret));
-  } else if (OB_FAIL(fill_multi_get_result(ctx, batch_operation, &multi_get_iter, result))) {
-    LOG_WARN("failed to send result");
+  SMART_VAR(ObTableApiMultiGetRowIterator, multi_get_iter) {
+    ObAccessService *access_service = MTL(ObAccessService *);
+    if (OB_FAIL(multi_get_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init multi get iter, ", K(ret));
+    } else if (OB_FAIL(multi_get_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open multi get iter, ", K(ret));
+    } else if (OB_FAIL(fill_multi_get_result(ctx, batch_operation, &multi_get_iter, result))) {
+      LOG_WARN("failed to send result");
+    }
   }
   return ret;
 }
@@ -689,18 +714,19 @@ int ObTableService::multi_get(ObTableServiceGetCtx &ctx, const ObTableBatchOpera
 // in data schema, and storing columns.
 // for delete, the storing columns might be useless, but still added.
 //
-int ObTableService::add_index_columns_if_missing(schema::ObSchemaGetterGuard &schema_guard,
-                                                 uint64_t data_table_id,
-                                                 const schema::ObTableSchema *index_schema,
+int ObTableService::add_index_columns_if_missing(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                 const uint64_t tenant_id,
+                                                 const uint64_t data_table_id,
+                                                 const share::schema::ObTableSchema *index_schema,
                                                  ObIArray<uint64_t> &column_ids,
                                                  ObIArray<ObExprResType> *columns_type)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
-  const schema::ObColumnSchemaV2 *column_schema = NULL;
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
   ObExprResType column_type;
-  schema::ObTableSchema::const_column_iterator b = index_schema->column_begin();
-  schema::ObTableSchema::const_column_iterator e = index_schema->column_end();
+  share::schema::ObTableSchema::const_column_iterator b = index_schema->column_begin();
+  share::schema::ObTableSchema::const_column_iterator e = index_schema->column_end();
   for (; OB_SUCC(ret) && b != e; ++b) {  // for all columns of the index, include the storing columns
     if (NULL == (*b)) {
       ret = OB_ERR_UNEXPECTED;
@@ -718,8 +744,8 @@ int ObTableService::add_index_columns_if_missing(schema::ObSchemaGetterGuard &sc
         }
       } // end for
       if (!found) {
-        if (OB_FAIL(schema_guard.get_column_schema(data_table_id, column_id, column_schema))) {
-          LOG_WARN("get column schema failed", K(data_table_id), K(column_id));
+        if (OB_FAIL(schema_guard.get_column_schema(tenant_id, data_table_id, column_id, column_schema))) {
+          LOG_WARN("get column schema failed", KR(ret), K(tenant_id), K(data_table_id), K(column_id));
         } else if (NULL == column_schema) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get column schema", K(data_table_id), K(column_id));
@@ -746,15 +772,16 @@ int ObTableService::add_index_columns_if_missing(schema::ObSchemaGetterGuard &sc
 int ObTableService::delete_can_use_put(table::ObTableEntityType entity_type, uint64_t table_id, bool &use_put)
 {
   int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
   if (entity_type == ObTableEntityType::ET_HKV) {
     // hbase model table does not have secondary index
     use_put = true;
-  } else if (OB_FAIL(schema_service_->get_schema_guard(schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(table_id), K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(tenant_id), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NULL ptr", K(ret), K(table_schema));
@@ -769,54 +796,64 @@ int ObTableService::execute_delete(ObTableServiceGetCtx &ctx, const ObTableOpera
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  ObTableApiDeleteRowIterator delete_row_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
+  SMART_VAR(ObTableApiDeleteRowIterator, delete_row_iter) {
+    const uint64_t table_id = ctx.param_.table_id_;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
 
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(delete_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init delete row iterator, ", K(ret));
-  } else if (OB_FAIL(delete_row_iter.open(table_operation))) {
-    LOG_WARN("Fail to open delete row iterator, ", K(ret));
-  } else {
-    // init dml param
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = delete_row_iter.get_schema_version();
-    if (OB_FAIL(part_service_->delete_rows(
-        ctx.param_.processor_->get_trans_desc(),
-        dml_param,
-        part_key,
-        delete_row_iter.get_delete_column_ids(),
-        &delete_row_iter,
-        affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to delete", K(ret), K(table_id));
-      }
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(delete_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init delete row iterator, ", K(ret));
+    } else if (OB_FAIL(delete_row_iter.open(table_operation))) {
+      LOG_WARN("Fail to open delete row iterator, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, delete_row_iter.get_delete_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
     } else {
-      LOG_DEBUG("[yzfdebug] delete rows", K(ret), K(affected_rows));
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = delete_row_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      if (OB_FAIL(access_service->delete_rows(
+          ls_id,
+          tablet_id,
+          *ctx.param_.processor_->get_trans_desc(),
+          dml_param,
+          delete_row_iter.get_delete_column_ids(),
+          &delete_row_iter,
+          affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("failed to delete", K(ret), K(table_id));
+        }
+      } else {
+        LOG_DEBUG("[yzfdebug] delete rows", K(ret), K(affected_rows));
+      }
     }
-  }
 
 
-  if (ctx.param_.returning_affected_rows_) {
-    result.set_affected_rows(affected_rows);
-  } else {
-    result.set_affected_rows(-1);  // always return -1
+    if (ctx.param_.returning_affected_rows_) {
+      result.set_affected_rows(affected_rows);
+    } else {
+      result.set_affected_rows(-1);  // always return -1
+    }
+    result.set_errno(ret);
+    replace_ret_code(ret);
+    result.set_type(ObTableOperationType::DEL);
   }
-  result.set_errno(ret);
-  replace_ret_code(ret);
-  result.set_type(ObTableOperationType::DEL);
   return ret;
 }
 
-int ObTableService::cons_all_index_properties(schema::ObSchemaGetterGuard &schema_guard,
-                                              const schema::ObTableSchema &table_schema,
+int ObTableService::cons_all_index_properties(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const share::schema::ObTableSchema &table_schema,
                                               ObIArray<uint64_t> &column_ids,
                                               ObIArray<ObExprResType> *columns_type)
 {
@@ -824,21 +861,23 @@ int ObTableService::cons_all_index_properties(schema::ObSchemaGetterGuard &schem
   if (table_schema.get_index_tid_count() <= 0) {
     // no index, do nothing
   } else {
-    const schema::ObTableSchema *index_schema = NULL;
+    const share::schema::ObTableSchema *index_schema = NULL;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
     const uint64_t table_id = table_schema.get_table_id();
     uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 1];
     int64_t index_count = ARRAYSIZEOF(index_tids);
     // get all the indexes
-    if (OB_FAIL(schema_guard.get_can_write_index_array(table_id, index_tids, index_count))) {
-      LOG_WARN("fail to get index", K(ret), K(table_id));
+    if (OB_FAIL(schema_guard.get_can_write_index_array(tenant_id, table_id, index_tids, index_count))) {
+      LOG_WARN("fail to get index", K(ret), K(tenant_id), K(table_id));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) { // for each writable index
         const uint64_t index_id = index_tids[i];
         // get index schema
-        if (OB_FAIL(schema_guard.get_table_schema(index_id, index_schema))) {
-          LOG_WARN("get index schema failed", K(index_id));
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_id, index_schema))) {
+          LOG_WARN("get index schema failed", KR(ret), K(tenant_id), K(index_id));
         } else {
-          if (OB_FAIL(add_index_columns_if_missing(schema_guard, table_id, index_schema,
+          if (OB_FAIL(add_index_columns_if_missing(schema_guard, tenant_id,
+                                                   table_id, index_schema,
                                                    column_ids, columns_type))) {
             LOG_WARN("failed to add missing index column", K(ret));
           }
@@ -853,72 +892,81 @@ int ObTableService::multi_delete(ObTableServiceGetCtx &ctx, const ObTableBatchOp
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  ObTableApiMultiDeleteRowIterator delete_row_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
+  SMART_VAR(ObTableApiMultiDeleteRowIterator, delete_row_iter) {
+    const uint64_t table_id = ctx.param_.table_id_;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
 
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(delete_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init delete row iterator, ", K(ret));
-  } else if (OB_FAIL(delete_row_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open delete row iterator, ", K(ret));
-  } else {
-    // init dml param
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = delete_row_iter.get_schema_version();
-
-    int64_t result_idx = 0;
-    while(OB_SUCC(ret) && !delete_row_iter.has_finished()) {
-      affected_rows = 0;
-      delete_row_iter.continue_iter();
-      // get one row
-      if (OB_FAIL(part_service_->delete_rows(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          delete_row_iter.get_delete_column_ids(),
-          &delete_row_iter,
-          affected_rows))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to delete", K(ret), K(table_id));
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(delete_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init delete row iterator, ", K(ret));
+    } else if (OB_FAIL(delete_row_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open delete row iterator, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, delete_row_iter.get_delete_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
+    } else {
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = delete_row_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      int64_t result_idx = 0;
+      while(OB_SUCC(ret) && !delete_row_iter.has_finished()) {
+        affected_rows = 0;
+        delete_row_iter.continue_iter();
+        // get one row
+        if (OB_FAIL(access_service->delete_rows(
+            ls_id,
+            tablet_id,
+            *ctx.param_.processor_->get_trans_desc(),
+            dml_param,
+            delete_row_iter.get_delete_column_ids(),
+            &delete_row_iter,
+            affected_rows))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+            LOG_WARN("failed to delete", K(ret), K(table_id));
+          }
+        } else {
+          // add result for not exist rows
+          const int64_t cur_delete_idx = delete_row_iter.get_cur_delete_idx();
+          for (; OB_SUCC(ret) && result_idx < cur_delete_idx; ++result_idx) {
+            if (OB_FAIL(add_one_result(result, ObTableOperationType::DEL, OB_SUCCESS, 0))) {
+              LOG_WARN("failed to add result", K(ret), K(result_idx));
+            } else {
+              LOG_DEBUG("Success to add delete result, ", K(result_idx), K(cur_delete_idx), K(tablet_id));
+            }
+          } // end for
+          // add result for this row
+          if (OB_SUCC(ret) && result_idx <= cur_delete_idx) {
+            if (OB_FAIL(add_one_result(
+                result,
+                ObTableOperationType::DEL,
+                OB_SUCCESS,
+                ctx.param_.returning_affected_rows_ ? affected_rows : -1))) {
+              LOG_WARN("failed to add result", K(ret));
+            } else {
+              result_idx++;
+              LOG_DEBUG("Success to add delete result, ", K(result_idx), K(cur_delete_idx), K(affected_rows), K(tablet_id));
+            }
+          }
         }
-      } else {
-        // add result for not exist rows
-        const int64_t cur_delete_idx = delete_row_iter.get_cur_delete_idx();
-        for (; OB_SUCC(ret) && result_idx < cur_delete_idx; ++result_idx) {
+      } //end while
+
+      if (OB_SUCC(ret)) {
+        const int64_t N = batch_operation.count();
+        for (; OB_SUCC(ret) && result_idx < N; result_idx++) {
           if (OB_FAIL(add_one_result(result, ObTableOperationType::DEL, OB_SUCCESS, 0))) {
             LOG_WARN("failed to add result", K(ret), K(result_idx));
-          } else {
-            LOG_DEBUG("Success to add delete result, ", K(result_idx), K(cur_delete_idx), K(part_key));
           }
-        } // end for
-        // add result for this row
-        if (OB_SUCC(ret) && result_idx <= cur_delete_idx) {
-          if (OB_FAIL(add_one_result(
-              result,
-              ObTableOperationType::DEL,
-              OB_SUCCESS,
-              ctx.param_.returning_affected_rows_ ? affected_rows : -1))) {
-            LOG_WARN("failed to add result", K(ret));
-          } else {
-            result_idx++;
-            LOG_DEBUG("Success to add delete result, ", K(result_idx), K(cur_delete_idx), K(affected_rows), K(part_key));
-          }
-        }
-      }
-    } //end while
-
-    if (OB_SUCC(ret)) {
-      const int64_t N = batch_operation.count();
-      for (; OB_SUCC(ret) && result_idx < N; result_idx++) {
-        if (OB_FAIL(add_one_result(result, ObTableOperationType::DEL, OB_SUCCESS, 0))) {
-          LOG_WARN("failed to add result", K(ret), K(result_idx));
         }
       }
     }
@@ -935,86 +983,103 @@ int ObTableService::execute_insert(
 {
   int ret = OB_SUCCESS;
   duplicate_row_iter = NULL;
-  ObTableApiInsertRowIterator insert_iter;
-  ObNewRow *row = NULL;
-  const uint64_t table_id = ctx.param_.table_id_;
+  SMART_VAR(ObTableApiInsertRowIterator, insert_iter) {
+    ObNewRow *row = NULL;
+    const uint64_t table_id = ctx.param_.table_id_;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
 
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(insert_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init insert row iterator, ", K(ret));
-  } else if (OB_FAIL(insert_iter.open(table_operation))) {
-    LOG_WARN("Fail to open insert row iterator, ", K(ret));
-  } else if (OB_FAIL(insert_iter.get_next_row(row))) {
-    LOG_WARN("Fail to get next row, ", K(ret));
-  } else {
-    int64_t affected_rows = 0;
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    // init dml param
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = insert_iter.get_schema_version();
-
-    if (ObTableOperationType::INSERT_OR_UPDATE == table_operation.type()) {
-      // use insert row with duplicate rows
-      ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
-      ObIArray<uint64_t> &full_column_ids = insert_iter.get_column_ids();
-      const int64_t rowkey_column_cnt = table_operation.entity().get_rowkey_size();
-      if (OB_FAIL(get_rowkey_column_ids(full_column_ids, rowkey_column_cnt, rowkey_column_ids))) {
-        LOG_WARN("failed to fill rowkey column ids, ", K(ret));
-      } else if (OB_FAIL(part_service_->insert_row(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          full_column_ids,
-          rowkey_column_ids,
-          *row,
-          storage::ObInsertFlag::INSERT_RETURN_ONE_DUP,
-          affected_rows,
-          duplicate_row_iter))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to insert", K(ret), K(table_id));
-        }
-      }
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(insert_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init insert row iterator, ", K(ret));
+    } else if (OB_FAIL(insert_iter.open(table_operation))) {
+      LOG_WARN("Fail to open insert row iterator, ", K(ret));
+    } else if (OB_FAIL(insert_iter.get_next_row(row))) {
+      LOG_WARN("Fail to get next row, ", K(ret));
     } else {
-      // directly insert
-      ObSingleRowIteratorWrapper single_row_iter(row);
-      if (OB_FAIL(part_service_->insert_rows(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          insert_iter.get_column_ids(),
-          &single_row_iter,
-          affected_rows))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to insert", K(ret), K(table_id));
+      int64_t affected_rows = 0;
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = insert_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      if (ObTableOperationType::INSERT_OR_UPDATE == table_operation.type()) {
+        // use insert row with duplicate rows
+        ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
+        ObIArray<uint64_t> &full_column_ids = insert_iter.get_column_ids();
+        const int64_t rowkey_column_cnt = table_operation.entity().get_rowkey_size();
+        if (OB_FAIL(build_table_param(table_id, full_column_ids, table_param))) {
+          LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
+        } else {
+          dml_param.table_param_ = &table_param;
+          if (OB_FAIL(get_rowkey_column_ids(full_column_ids, rowkey_column_cnt, rowkey_column_ids))) {
+            LOG_WARN("failed to fill rowkey column ids, ", K(ret));
+          } else if (OB_FAIL(access_service->insert_row(
+              ls_id,
+              tablet_id,
+              *ctx.param_.processor_->get_trans_desc(),
+              dml_param,
+              full_column_ids,
+              rowkey_column_ids,
+              *row,
+              storage::ObInsertFlag::INSERT_RETURN_ONE_DUP,
+              affected_rows,
+              duplicate_row_iter))) {
+            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+              LOG_WARN("failed to insert", K(ret), K(table_id));
+            }
+          }
+        }
+      } else {
+        // directly insert
+        ObSingleRowIteratorWrapper single_row_iter(row);
+        if (OB_FAIL(build_table_param(table_id, insert_iter.get_column_ids(), table_param))) {
+          LOG_WARN("fail to convert table param", K(ret), K(table_id));
+        } else {
+          dml_param.table_param_ = &table_param;
+          if (OB_FAIL(access_service->insert_rows(
+              ls_id,
+              tablet_id,
+              *ctx.param_.processor_->get_trans_desc(),
+              dml_param,
+              insert_iter.get_column_ids(),
+              &single_row_iter,
+              affected_rows))) {
+            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+              LOG_WARN("failed to insert", K(ret), K(table_id));
+            }
+          }
         }
       }
-    }
 
-    if (OB_SUCC(ret)) {
-      result.set_affected_rows(1);
-      // for execute_increment()
-      if (ObTableOperationType::INSERT != table_operation.type() /*increment/append*/
-          && ctx.param_.returning_affected_entity_) {
-        // need to return the new values to the client
-        ObITableEntity *new_entity = NULL;
-        if (OB_FAIL(result.get_entity(new_entity)) || OB_ISNULL(new_entity)) {
-          LOG_WARN("failed to get entity", K(ret), K(new_entity));
-        } else if (OB_FAIL(fill_new_entity(
-            ctx.param_.returning_rowkey_,
-            *row,
-            table_operation.entity().get_rowkey_size(),
-            insert_iter.get_properties(),
-            *ctx.param_.allocator_,
-            new_entity))) {
-          LOG_WARN("failed to return new entity", K(ret));
-        } else {
-          LOG_DEBUG("[yzfdebug] increment return new entity", K(*new_entity));
+      if (OB_SUCC(ret)) {
+        result.set_affected_rows(1);
+        // for execute_increment()
+        if (ObTableOperationType::INSERT != table_operation.type() /*increment/append*/
+            && ctx.param_.returning_affected_entity_) {
+          // need to return the new values to the client
+          ObITableEntity *new_entity = NULL;
+          if (OB_FAIL(result.get_entity(new_entity)) || OB_ISNULL(new_entity)) {
+            LOG_WARN("failed to get entity", K(ret), K(new_entity));
+          } else if (OB_FAIL(fill_new_entity(
+              ctx.param_.returning_rowkey_,
+              *row,
+              table_operation.entity().get_rowkey_size(),
+              insert_iter.get_properties(),
+              *ctx.param_.allocator_,
+              new_entity))) {
+            LOG_WARN("failed to return new entity", K(ret));
+          } else {
+            LOG_DEBUG("[yzfdebug] increment return new entity", K(*new_entity));
+          }
         }
       }
     }
@@ -1028,47 +1093,57 @@ int ObTableService::execute_insert(
 int ObTableService::multi_insert(ObTableServiceCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableApiMultiInsertRowIterator insert_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(insert_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init multi insert iterator, ", K(ret));
-  } else if (OB_FAIL(insert_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open multi insert iterator, ", K(ret));
-  } else {
-    int64_t affected_rows = 0;
-    // init dml param
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = insert_iter.get_schema_version();
+  SMART_VAR(ObTableApiMultiInsertRowIterator, insert_iter) {
+    const uint64_t table_id = ctx.param_.table_id_;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
 
-    const int64_t N = batch_operation.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      insert_iter.continue_iter();
-      if (OB_FAIL(part_service_->insert_rows(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          insert_iter.get_column_ids(),
-          &insert_iter,
-          affected_rows))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to insert", K(ret), K(table_id));
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(insert_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init multi insert iterator, ", K(ret));
+    } else if (OB_FAIL(insert_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open multi insert iterator, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, insert_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
+    } else {
+      int64_t affected_rows = 0;
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = insert_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      const int64_t N = batch_operation.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+        insert_iter.continue_iter();
+        if (OB_FAIL(access_service->insert_rows(
+            ls_id,
+            tablet_id,
+            *ctx.param_.processor_->get_trans_desc(),
+            dml_param,
+            insert_iter.get_column_ids(),
+            &insert_iter,
+            affected_rows))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+            LOG_WARN("failed to insert", K(ret), K(table_id));
+          }
         }
-      }
-      if (OB_SUCCESS == ret || OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-        // ignore OB_ERR_PRIMARY_KEY_DUPLICATE
-        if (OB_FAIL(add_one_result(result, ObTableOperationType::INSERT, ret, affected_rows))) {
-          LOG_WARN("failed to add result", K(ret));
+        if (OB_SUCCESS == ret || OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+          // ignore OB_ERR_PRIMARY_KEY_DUPLICATE
+          if (OB_FAIL(add_one_result(result, ObTableOperationType::INSERT, ret, affected_rows))) {
+            LOG_WARN("failed to add result", K(ret));
+          }
         }
-      }
-    }  // end for
+      }  // end for
+    }
   }
   return ret;
 }
@@ -1076,7 +1151,6 @@ int ObTableService::multi_insert(ObTableServiceCtx &ctx, const ObTableBatchOpera
 ////////////////////////////////////////////////////////////////
 int ObTableService::do_replace(
     ObTableServiceCtx &ctx,
-    ObPartitionKey &part_key,
     storage::ObDMLBaseParam &dml_param,
     ObIArray<uint64_t> &column_ids,
     ObIArray<uint64_t> &rowkey_column_ids,
@@ -1087,12 +1161,16 @@ int ObTableService::do_replace(
   ObSingleRowIteratorWrapper single_row_iter(&row);
   ObNewRowIterator *duplicated_rows = NULL;
   int64_t del_rows = 0;
+  const uint64_t table_id = ctx.param_.table_id_;
+  const ObTabletID tablet_id = ctx.param_.tablet_id_;
+  ObAccessService *access_service = MTL(ObAccessService *);
+  ObLSID ls_id = ctx.param_.ls_id_;
 
-  // 1. try to insert
-  if (OB_FAIL(part_service_->insert_row(
-      ctx.param_.processor_->get_trans_desc(),
+  if (OB_FAIL(access_service->insert_row( // 1. try to insert
+      ls_id,
+      tablet_id,
+      *ctx.param_.processor_->get_trans_desc(),
       dml_param,
-      part_key,
       column_ids,
       rowkey_column_ids,
       row,
@@ -1103,24 +1181,29 @@ int ObTableService::do_replace(
       // 2. delete the row
       if (OB_FAIL(do_replace_delete(
           ctx,
-          part_key,
           dml_param,
           column_ids,
           duplicated_rows,
           del_rows))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("Fail to delete replace duplicate row, ", K(ret), K(part_key));
+          LOG_WARN("Fail to delete replace duplicate row, ", K(ret), K(tablet_id), K(ls_id));
         }
       } else {
         // 3. insert the row again
         single_row_iter.reset();
-        if (OB_FAIL(part_service_->insert_rows(ctx.param_.processor_->get_trans_desc(), dml_param, part_key,
-                                               column_ids, &single_row_iter, affected_rows))) {
+        if (OB_FAIL(access_service->insert_rows(
+                    ls_id,
+                    tablet_id,
+                    *ctx.param_.processor_->get_trans_desc(),
+                    dml_param,
+                    column_ids,
+                    &single_row_iter,
+                    affected_rows))) {
           if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("we have already delete the rowkey and lock it, maybe have unique index", K(ret), K(row));
           } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-            LOG_WARN("failed to insert", K(ret), K(part_key), K(row));
+            LOG_WARN("failed to insert", K(ret), K(tablet_id), K(ls_id), K(row));
           }
         } else {
           // replace succ.
@@ -1128,14 +1211,14 @@ int ObTableService::do_replace(
         }
       }
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to insert", K(ret), K(part_key));
+      LOG_WARN("failed to insert", K(ret), K(tablet_id));
     }
   } else {
     // insert succ
   }
 
   if (NULL != duplicated_rows) {
-    (void) part_service_->revert_insert_iter(part_key, duplicated_rows);
+    (void) access_service->revert_insert_iter(duplicated_rows);
     duplicated_rows = NULL;
   }
   return ret;
@@ -1143,7 +1226,6 @@ int ObTableService::do_replace(
 
 int ObTableService::do_replace_delete(
     ObTableServiceCtx &ctx,
-    common::ObPartitionKey &part_key,
     storage::ObDMLBaseParam &dml_param,
     common::ObIArray<uint64_t> &column_ids,
     common::ObNewRowIterator *duplicated_rows,
@@ -1153,6 +1235,10 @@ int ObTableService::do_replace_delete(
   storage::ObTableScanParam scan_param;
   ObNewRow *dup_row = NULL;
   common::ObNewRowIterator *scan_iter = NULL;
+  const uint64_t table_id = ctx.param_.table_id_;
+  const ObTabletID tablet_id = ctx.param_.tablet_id_;
+  ObAccessService *access_service = MTL(ObAccessService *);
+  ObLSID ls_id = ctx.param_.ls_id_;
 
   if (NULL == duplicated_rows) {
     ret = OB_INVALID_ARGUMENT;
@@ -1166,8 +1252,8 @@ int ObTableService::do_replace_delete(
       LOG_WARN("fail to deep copy rowkey", K(ret));
     } else {
       common::ObNewRange range;
-      if (OB_FAIL(range.build_range(part_key.table_id_, key))) {
-        LOG_WARN("fail to build key range", K(ret), K(part_key.table_id_), K(key));
+      if (OB_FAIL(range.build_range(table_id, key))) {
+        LOG_WARN("fail to build key range", K(ret), K(table_id), K(key));
       } else if (OB_FAIL(scan_param.key_ranges_.push_back(range))) {
         LOG_WARN("fail to push back key range", K(ret), K(range));
       }
@@ -1183,24 +1269,24 @@ int ObTableService::do_replace_delete(
       column_ids,
       dml_param.schema_version_,
       ObQueryFlag::ScanOrder::Forward,
-      part_key.table_id_,
+      table_id,
       -1, //limit
       0, //offset
       scan_param))) {
     LOG_WARN("fail to fill query scan param, ", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(scan_param, scan_iter))) {
+  } else if (OB_FAIL(access_service->table_scan(scan_param, scan_iter))) {
     LOG_WARN("fail to table scan, ", K(ret));
-  } else if (OB_FAIL(part_service_->delete_rows(ctx.param_.processor_->get_trans_desc(), dml_param, part_key,
+  } else if (OB_FAIL(access_service->delete_rows(ls_id, tablet_id, *ctx.param_.processor_->get_trans_desc(), dml_param,
       column_ids, scan_iter, affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to delete", K(ret), K(part_key));
+      LOG_WARN("failed to delete", K(ret), K(tablet_id));
     }
   } else {
     //delete success
   }
 
   if (NULL != scan_iter) {
-    (void) part_service_->revert_scan_iter(scan_iter);
+    (void) access_service->revert_scan_iter(scan_iter);
     scan_iter = NULL;
   }
   return ret;
@@ -1209,39 +1295,47 @@ int ObTableService::do_replace_delete(
 int ObTableService::execute_replace(ObTableServiceCtx &ctx, const ObTableOperation &table_operation, ObTableOperationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableApiInsertRowIterator replace_iter;
-  ObNewRow *row = NULL;
-  const uint64_t table_id = ctx.param_.table_id_;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(replace_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init replace iter, ", K(ret), K(table_id));
-  } else if (OB_FAIL(replace_iter.open(table_operation))) {
-    LOG_WARN("Fail to open replace iter, ", K(ret), K(table_id));
-  } else {
-    int64_t affected_rows = 0;
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    // init dml param
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = replace_iter.get_schema_version();
-
+  SMART_VAR(ObTableApiInsertRowIterator, replace_iter) {
+    ObNewRow *row = NULL;
+    const uint64_t table_id = ctx.param_.table_id_;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
     ObIArray<uint64_t> &full_column_ids = replace_iter.get_column_ids();
-    const int64_t rowkey_column_cnt = table_operation.entity().get_rowkey_size();
-    ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
-    if (OB_FAIL(get_rowkey_column_ids(full_column_ids, rowkey_column_cnt, rowkey_column_ids))) {
-      LOG_WARN("failed to fill rowkey column ids, ", K(ret));
-    } else if (OB_FAIL(replace_iter.get_next_row(row))) {
-      LOG_WARN("Fail to get replace row, ", K(ret), K(table_id));
-    } else if (OB_FAIL(do_replace(ctx, part_key, dml_param,
-        full_column_ids, rowkey_column_ids, *row, affected_rows))) {
-      LOG_WARN("failed to do replace", K(ret));
+    ObAccessService *access_service = MTL(ObAccessService *);
+
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(replace_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init replace iter, ", K(ret), K(table_id));
+    } else if (OB_FAIL(replace_iter.open(table_operation))) {
+      LOG_WARN("Fail to open replace iter, ", K(ret), K(table_id));
+    } else if (OB_FAIL(build_table_param(table_id, full_column_ids, table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(full_column_ids), K(table_param));
     } else {
-      result.set_affected_rows(affected_rows);
+      int64_t affected_rows = 0;
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = replace_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      ObIArray<uint64_t> &full_column_ids = replace_iter.get_column_ids();
+      const int64_t rowkey_column_cnt = table_operation.entity().get_rowkey_size();
+      ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
+      if (OB_FAIL(get_rowkey_column_ids(full_column_ids, rowkey_column_cnt, rowkey_column_ids))) {
+        LOG_WARN("failed to fill rowkey column ids, ", K(ret));
+      } else if (OB_FAIL(replace_iter.get_next_row(row))) {
+        LOG_WARN("Fail to get replace row, ", K(ret), K(table_id));
+      } else if (OB_FAIL(do_replace(ctx, dml_param,
+          full_column_ids, rowkey_column_ids, *row, affected_rows))) {
+        LOG_WARN("failed to do replace", K(ret));
+      } else {
+        result.set_affected_rows(affected_rows);
+      }
     }
   }
   result.set_errno(ret);
@@ -1254,51 +1348,58 @@ int ObTableService::multi_replace(ObTableServiceCtx &ctx, const ObTableBatchOper
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
-  ObTableApiMultiInsertRowIterator replace_iter;
-  ObNewRow *row = NULL;
-
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("table id is invalid", K(ret), K(table_id));
-  } else if (OB_FAIL(replace_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init insert iter, ", K(ret), K(table_id));
-  } else if (OB_FAIL(replace_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open batch operation, ", K(ret), K(table_id));
-  } else {
-    // init dml param
-    ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = replace_iter.get_schema_version();
-
-    // fill column ids
+  ObAccessService *access_service = MTL(ObAccessService *);
+  SMART_VAR(ObTableApiMultiInsertRowIterator, replace_iter) {
+    ObNewRow *row = NULL;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
     ObIArray<uint64_t> &column_ids = replace_iter.get_column_ids();
-    ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
-    const ObTableOperation &one_operation = batch_operation.at(0);
-    const ObITableEntity &one_entity = one_operation.entity();
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < one_entity.get_rowkey_size(); ++i) {
-      if (OB_FAIL(rowkey_column_ids.push_back(column_ids.at(i)))) {
-        LOG_WARN("failed to fill rowkey column ids, ", K(ret));
-      }
-    }
+    if (OB_INVALID_ID == table_id) {
+      ret = OB_ERR_UNKNOWN_TABLE;
+      LOG_WARN("table id is invalid", K(ret), K(table_id));
+    } else if (OB_FAIL(replace_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init insert iter, ", K(ret), K(table_id));
+    } else if (OB_FAIL(replace_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open batch operation, ", K(ret), K(table_id));
+    } else if (OB_FAIL(build_table_param(table_id, column_ids, table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(column_ids), K(table_param));
+    } else {
+      // init dml param
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = replace_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      // fill column ids
+      ObIArray<uint64_t> &column_ids = replace_iter.get_column_ids();
+      ObSEArray<uint64_t, COMMON_COLUMN_NUM> rowkey_column_ids;
+      const ObTableOperation &one_operation = batch_operation.at(0);
+      const ObITableEntity &one_entity = one_operation.entity();
 
-    if (OB_SUCC(ret)) {
-      int64_t affected_rows = 0;
-      const int64_t N = batch_operation.count();
-      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        replace_iter.continue_iter();
-        if (OB_FAIL(replace_iter.get_next_row(row))) {
-          LOG_WARN("Fail to get next replace row, ", K(ret), K(i));
-        } else if (OB_FAIL(do_replace(ctx, part_key, dml_param, column_ids, rowkey_column_ids, *row, affected_rows))) {
-          LOG_WARN("failed to do replace", K(ret));
-        } else if (OB_FAIL(add_one_result(result, ObTableOperationType::REPLACE, OB_SUCCESS, affected_rows))) {
-          LOG_WARN("failed to add result", K(ret));
+      for (int64_t i = 0; OB_SUCC(ret) && i < one_entity.get_rowkey_size(); ++i) {
+        if (OB_FAIL(rowkey_column_ids.push_back(column_ids.at(i)))) {
+          LOG_WARN("failed to fill rowkey column ids, ", K(ret));
         }
-      } // end for
+      }
+
+      if (OB_SUCC(ret)) {
+        int64_t affected_rows = 0;
+        const int64_t N = batch_operation.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+          replace_iter.continue_iter();
+          if (OB_FAIL(replace_iter.get_next_row(row))) {
+            LOG_WARN("Fail to get next replace row, ", K(ret), K(i));
+          } else if (OB_FAIL(do_replace(ctx, dml_param, column_ids, rowkey_column_ids, *row, affected_rows))) {
+            LOG_WARN("failed to do replace", K(ret));
+          } else if (OB_FAIL(add_one_result(result, ObTableOperationType::REPLACE, OB_SUCCESS, affected_rows))) {
+            LOG_WARN("failed to add result", K(ret));
+          }
+        } // end for
+      }
     }
   }
   return ret;
@@ -1313,50 +1414,59 @@ int ObTableService::execute_update(ObTableServiceGetCtx &ctx,
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-  ObTableApiUpdateRowIterator update_iter;
-  ObRowkey rowkey;
-  if (NULL == target_row) {
-    rowkey = const_cast<ObITableEntity &>(table_operation.entity()).get_rowkey();
-  } else {
-    const int64_t rowkey_cnt = table_operation.entity().get_rowkey_size();
-    if (OB_UNLIKELY(rowkey_cnt > target_row->count_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(rowkey_cnt), K(target_row));
-    } else {
-      rowkey.assign(target_row->cells_, rowkey_cnt);
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(update_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init update row iterator, ", K(ret));
-  } else if (OB_FAIL(update_iter.open(table_operation, rowkey,
-      NULL != target_row/*need_update_rowkey*/))) {
-    LOG_WARN("Fail to open update row iterator, ", K(ret));
-  } else {
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = update_iter.get_schema_version();
+  const ObTabletID tablet_id = ctx.param_.tablet_id_;
+  ObAccessService *access_service = MTL(ObAccessService *);
+  ObLSID ls_id = ctx.param_.ls_id_;
+  SMART_VAR(ObTableApiUpdateRowIterator, update_iter) {
+    ObRowkey rowkey;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
 
-    if (OB_FAIL(part_service_->update_rows(
-        ctx.param_.processor_->get_trans_desc(),
-        dml_param,
-        part_key,
-        update_iter.get_column_ids(),
-        update_iter.get_update_column_ids(),
-        &update_iter,
-        affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to update_rows", K(ret), K(part_key));
+    if (NULL == target_row) {
+      rowkey = const_cast<ObITableEntity &>(table_operation.entity()).get_rowkey();
+    } else {
+      const int64_t rowkey_cnt = table_operation.entity().get_rowkey_size();
+      if (OB_UNLIKELY(rowkey_cnt > target_row->count_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(rowkey_cnt), K(target_row));
+      } else {
+        rowkey.assign(target_row->cells_, rowkey_cnt);
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(update_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init update row iterator, ", K(ret));
+    } else if (OB_FAIL(update_iter.open(table_operation, rowkey,
+        NULL != target_row/*need_update_rowkey*/))) {
+      LOG_WARN("Fail to open update row iterator, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, update_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
     } else {
-      result.set_affected_rows(affected_rows);
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = update_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      if (OB_FAIL(access_service->update_rows(
+          ls_id,
+          tablet_id,
+          *ctx.param_.processor_->get_trans_desc(),
+          dml_param,
+          update_iter.get_column_ids(),
+          update_iter.get_update_column_ids(),
+          &update_iter,
+          affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("failed to update_rows", K(ret), K(tablet_id), K(ls_id));
+        }
+      } else {
+        result.set_affected_rows(affected_rows);
+      }
     }
   }
-
   result.set_errno(ret);
   replace_ret_code(ret);
   result.set_type(ObTableOperationType::UPDATE);
@@ -1415,70 +1525,80 @@ int ObTableService::execute_increment_by_update(
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  ObTableApiUpdateRowIterator increment_row_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-  ObRowkey rowkey = const_cast<ObITableEntity &>(table_operation.entity()).get_rowkey();
-  if (OB_FAIL(increment_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init increment row iter, ", K(ret));
-  } else if (OB_FAIL(increment_row_iter.open(table_operation, rowkey))) {
-    LOG_WARN("Fail to open increment row iter, ", K(ret));
-  } else {
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = increment_row_iter.get_schema_version();
+  SMART_VAR(ObTableApiUpdateRowIterator, increment_row_iter) {
+    const uint64_t table_id = ctx.param_.table_id_;
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
+    ObRowkey rowkey = const_cast<ObITableEntity &>(table_operation.entity()).get_rowkey();
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
 
-    if (OB_FAIL(part_service_->update_rows(
-        ctx.param_.processor_->get_trans_desc(),
-        dml_param,
-        part_key,
-        increment_row_iter.get_column_ids(),
-        increment_row_iter.get_update_column_ids(),
-        &increment_row_iter,
-        affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to update_rows", K(ret), K(part_key));
-      }
+    if (OB_FAIL(increment_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init increment row iter, ", K(ret));
+    } else if (OB_FAIL(increment_row_iter.open(table_operation, rowkey))) {
+      LOG_WARN("Fail to open increment row iter, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, increment_row_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
     } else {
-      if (affected_rows > 0) {
-        affected_rows = 1;
-        if (ctx.param_.returning_affected_entity_) {
-          // need to return the new values to the client
-          ObITableEntity *new_entity = NULL;
-          ObNewRow *new_row = NULL;
-          if (NULL == (new_row = increment_row_iter.get_cur_new_row())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected error, the new row is null, ", K(ret), K(part_key));
-          } else if (OB_FAIL(result.get_entity(new_entity)) || OB_ISNULL(new_entity)) {
-            LOG_WARN("failed to get entity", K(ret), K(new_entity));
-          } else if (OB_FAIL(fill_new_entity(
-              ctx.param_.returning_rowkey_,
-              *new_row,
-              table_operation.entity().get_rowkey_size(),
-              increment_row_iter.get_properties(),
-              *ctx.param_.allocator_,
-              new_entity))) {
-            LOG_WARN("failed to return new entity", K(ret));
-          } else {
-            LOG_DEBUG("[yzfdebug] increment return new entity", K(*new_entity));
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = increment_row_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      if (OB_FAIL(access_service->update_rows(
+          ls_id,
+          tablet_id,
+          *ctx.param_.processor_->get_trans_desc(),
+          dml_param,
+          increment_row_iter.get_column_ids(),
+          increment_row_iter.get_update_column_ids(),
+          &increment_row_iter,
+          affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("failed to update_rows", K(ret), K(tablet_id), K(ls_id));
+        }
+      } else {
+        if (affected_rows > 0) {
+          affected_rows = 1;
+          if (ctx.param_.returning_affected_entity_) {
+            // need to return the new values to the client
+            ObITableEntity *new_entity = NULL;
+            ObNewRow *new_row = NULL;
+            if (NULL == (new_row = increment_row_iter.get_cur_new_row())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Unexpected error, the new row is null, ", K(ret), K(tablet_id));
+            } else if (OB_FAIL(result.get_entity(new_entity)) || OB_ISNULL(new_entity)) {
+              LOG_WARN("failed to get entity", K(ret), K(new_entity));
+            } else if (OB_FAIL(fill_new_entity(
+                ctx.param_.returning_rowkey_,
+                *new_row,
+                table_operation.entity().get_rowkey_size(),
+                increment_row_iter.get_properties(),
+                *ctx.param_.allocator_,
+                new_entity))) {
+              LOG_WARN("failed to return new entity", K(ret));
+            } else {
+              LOG_DEBUG("[yzfdebug] increment return new entity", K(*new_entity));
+            }
           }
         }
-      }
 
-      if (NULL == (increment_row_iter.get_cur_new_row())) {
-        ret = OB_EMPTY_RESULT;
+        if (NULL == (increment_row_iter.get_cur_new_row())) {
+          ret = OB_EMPTY_RESULT;
+        }
       }
     }
-  }
 
-  if (OB_EMPTY_RESULT != ret) {
-    result.set_affected_rows(affected_rows);
-    result.set_errno(ret);
-    replace_ret_code(ret);
-    result.set_type(table_operation.type());
+    if (OB_EMPTY_RESULT != ret) {
+      result.set_affected_rows(affected_rows);
+      result.set_errno(ret);
+      replace_ret_code(ret);
+      result.set_type(table_operation.type());
+    }
   }
   return ret;
 }
@@ -1513,65 +1633,74 @@ int ObTableService::execute_increment(ObTableServiceGetCtx &ctx,
 int ObTableService::multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableApiMultiUpdateRowIterator update_row_iter;
-  const uint64_t table_id = ctx.param_.table_id_;
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-  int64_t affected_rows = 0;
-  int64_t result_idx = 0;
+  SMART_VAR(ObTableApiMultiUpdateRowIterator, update_row_iter) {
+    const uint64_t table_id = ctx.param_.table_id_;
+    const ObTabletID tablet_id = ctx.param_.tablet_id_;
+    ObAccessService *access_service = MTL(ObAccessService *);
+    ObLSID ls_id = ctx.param_.ls_id_;
+    int64_t affected_rows = 0;
+    int64_t result_idx = 0;
+    ObTableDMLParam table_param(*ctx.param_.allocator_);
 
-  if (OB_FAIL(update_row_iter.init(*part_service_, *schema_service_, ctx))) {
-    LOG_WARN("Fail to init multi update row iterator, ", K(ret));
-  } else if (OB_FAIL(update_row_iter.open(batch_operation))) {
-    LOG_WARN("Fail to open multi update row iterator, ", K(ret));
-  } else {
-    storage::ObDMLBaseParam dml_param;
-    dml_param.timeout_ =  ctx.param_.timeout_ts_;
-    dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
-    dml_param.tz_info_ = NULL;
-    dml_param.sql_mode_ = SMO_DEFAULT;
-    dml_param.schema_version_ = update_row_iter.get_schema_version();
-
-    while(OB_SUCC(ret) && !update_row_iter.has_finished()) {
-      affected_rows = 0;
-      update_row_iter.continue_iter();
-      if (OB_FAIL(part_service_->update_rows(
-          ctx.param_.processor_->get_trans_desc(),
-          dml_param,
-          part_key,
-          update_row_iter.get_column_ids(),
-          update_row_iter.get_update_column_ids(),
-          &update_row_iter,
-          affected_rows))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("failed to update_rows", K(ret), K(part_key));
+    if (OB_FAIL(update_row_iter.init(*access_service, *schema_service_, ctx))) {
+      LOG_WARN("Fail to init multi update row iterator, ", K(ret));
+    } else if (OB_FAIL(update_row_iter.open(batch_operation))) {
+      LOG_WARN("Fail to open multi update row iterator, ", K(ret));
+    } else if (OB_FAIL(build_table_param(table_id, update_row_iter.get_column_ids(), table_param))) {
+      LOG_WARN("fail to convert table param", K(ret), K(table_id), K(table_param));
+    } else {
+      storage::ObDMLBaseParam dml_param;
+      dml_param.timeout_ =  ctx.param_.timeout_ts_;
+      dml_param.is_total_quantity_log_ = (ObBinlogRowImageType::FULL == ctx.param_.binlog_row_image_type_);
+      dml_param.tz_info_ = NULL;
+      dml_param.sql_mode_ = SMO_DEFAULT;
+      dml_param.schema_version_ = update_row_iter.get_schema_version();
+      dml_param.encrypt_meta_ = &dml_param.encrypt_meta_legacy_;
+      dml_param.table_param_ = &table_param;
+      dml_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      while(OB_SUCC(ret) && !update_row_iter.has_finished()) {
+        affected_rows = 0;
+        update_row_iter.continue_iter();
+        if (OB_FAIL(access_service->update_rows(
+            ls_id,
+            tablet_id,
+            *ctx.param_.processor_->get_trans_desc(),
+            dml_param,
+            update_row_iter.get_column_ids(),
+            update_row_iter.get_update_column_ids(),
+            &update_row_iter,
+            affected_rows))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+            LOG_WARN("failed to update_rows", K(ret), K(tablet_id), K(ls_id));
+          }
+        } else {
+          // add result for not exist rows
+          const int64_t cur_update_idx = update_row_iter.get_cur_update_idx();
+          for (; OB_SUCC(ret) && result_idx < cur_update_idx; ++result_idx) {
+            if (OB_FAIL(add_one_result(result, ObTableOperationType::UPDATE, OB_SUCCESS, 0))) {
+              LOG_WARN("failed to add result", K(ret), K(result_idx));
+            } else {
+              LOG_DEBUG("Success to add result, ", K(result_idx), K(cur_update_idx), K(tablet_id));
+            }
+          } // end for
+          // add result for this row
+          if (OB_SUCC(ret) && result_idx <= cur_update_idx) {
+            if (OB_FAIL(add_one_result(result, ObTableOperationType::UPDATE, OB_SUCCESS, affected_rows))) {
+              LOG_WARN("failed to add result", K(ret));
+            } else {
+              result_idx++;
+              LOG_DEBUG("Success to add result, ", K(result_idx), K(cur_update_idx), K(tablet_id));
+            }
+          }
         }
-      } else {
-        // add result for not exist rows
-        const int64_t cur_update_idx = update_row_iter.get_cur_update_idx();
-        for (; OB_SUCC(ret) && result_idx < cur_update_idx; ++result_idx) {
+      } // end for
+
+      if (OB_SUCC(ret)) {
+        const int64_t N = batch_operation.count();
+        for (; OB_SUCC(ret) && result_idx < N; result_idx++) {
           if (OB_FAIL(add_one_result(result, ObTableOperationType::UPDATE, OB_SUCCESS, 0))) {
             LOG_WARN("failed to add result", K(ret), K(result_idx));
-          } else {
-            LOG_DEBUG("Success to add result, ", K(result_idx), K(cur_update_idx), K(part_key));
           }
-        } // end for
-        // add result for this row
-        if (OB_SUCC(ret) && result_idx <= cur_update_idx) {
-          if (OB_FAIL(add_one_result(result, ObTableOperationType::UPDATE, OB_SUCCESS, affected_rows))) {
-            LOG_WARN("failed to add result", K(ret));
-          } else {
-            result_idx++;
-            LOG_DEBUG("Success to add result, ", K(result_idx), K(cur_update_idx), K(part_key));
-          }
-        }
-      }
-    } // end for
-
-    if (OB_SUCC(ret)) {
-      const int64_t N = batch_operation.count();
-      for (; OB_SUCC(ret) && result_idx < N; result_idx++) {
-        if (OB_FAIL(add_one_result(result, ObTableOperationType::UPDATE, OB_SUCCESS, 0))) {
-          LOG_WARN("failed to add result", K(ret), K(result_idx));
         }
       }
     }
@@ -1638,21 +1767,22 @@ int ObTableService::batch_execute(ObTableServiceGetCtx &ctx, const ObTableBatchO
 ////////////////////////////////////////////////////////////////
 // execute query
 ////////////////////////////////////////////////////////////////
-int ObTableService::cons_index_key_type(schema::ObSchemaGetterGuard &schema_guard,
+int ObTableService::cons_index_key_type(share::schema::ObSchemaGetterGuard &schema_guard,
                                         const share::schema::ObTableSchema *index_schema,
                                         uint64_t data_table_id,
                                         common::ObIArray<sql::ObExprResType> &columns_type)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
-  const schema::ObColumnSchemaV2 *column_schema = NULL;
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
   ObExprResType column_type;
   const ObIndexInfo &index_key_info = index_schema->get_index_info();
   const int64_t N = index_key_info.get_size();
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
     if (OB_FAIL(index_key_info.get_column_id(i, column_id))) {
       LOG_WARN("failed to get index column", K(ret), K(i));
-    } else if (OB_FAIL(schema_guard.get_column_schema(data_table_id, column_id, column_schema))) {
+    } else if (OB_FAIL(schema_guard.get_column_schema(
+               index_schema->get_tenant_id(), data_table_id, column_id, column_schema))) {
       LOG_WARN("get column schema failed", K(data_table_id), K(column_id));
     } else if (NULL == column_schema) {
       ret = OB_ERR_UNEXPECTED;
@@ -1669,7 +1799,8 @@ int ObTableService::cons_index_key_type(schema::ObSchemaGetterGuard &schema_guar
   return ret;
 }
 
-int ObTableService::get_index_id_by_name(schema::ObSchemaGetterGuard &schema_guard, uint64_t base_table_id,
+int ObTableService::get_index_id_by_name(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id, uint64_t base_table_id,
                                          const ObString &index_name, uint64_t &index_id,
                                          ObIArray<sql::ObExprResType> &columns_type,
                                          const share::schema::ObTableSchema *&index_schema)
@@ -1679,10 +1810,11 @@ int ObTableService::get_index_id_by_name(schema::ObSchemaGetterGuard &schema_gua
   int64_t table_index_count = OB_MAX_INDEX_PER_TABLE;
   index_schema = nullptr;
   if (index_name.empty()
-      || 0 == index_name.case_compare(ObStmtHint::PRIMARY_KEY)) {
+      || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) {
     index_id = base_table_id;
-  } else if (OB_FAIL(schema_guard.get_can_read_index_array(base_table_id, tids, table_index_count, false))) {
-    LOG_WARN("failed to get can read index", K(ret));
+  } else if (OB_FAIL(schema_guard.get_can_read_index_array(
+             tenant_id, base_table_id, tids, table_index_count, false))) {
+    LOG_WARN("failed to get can read index", K(ret), K(tenant_id));
   } else if (table_index_count > OB_MAX_INDEX_PER_TABLE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Table index count is bigger than OB_MAX_INDEX_PER_TABLE", K(ret), K(table_index_count));
@@ -1692,12 +1824,12 @@ int ObTableService::get_index_id_by_name(schema::ObSchemaGetterGuard &schema_gua
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_index_count; ++i) {
       uint64_t this_index_id = tids[i];
       ObString this_index;
-      if (OB_FAIL(schema_guard.get_table_schema(this_index_id, index_schema))
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, this_index_id, index_schema))
           || OB_ISNULL(index_schema)) {
         ret = OB_SCHEMA_ERROR;
-        LOG_WARN("fail to get table schema", K(this_index_id), K(ret));
+        LOG_WARN("fail to get table schema", K(tenant_id), K(this_index_id), K(ret));
       } else if (OB_FAIL(index_schema->get_index_name(this_index))) {
-        LOG_WARN("fail to get index name", K(this_index), K(ret), K(this_index_id));
+        LOG_WARN("fail to get index name", K(tenant_id), K(this_index), K(ret), K(this_index_id));
       } else if (0 != index_name.case_compare(this_index)) {
         //do nothing, just continue
         continue;
@@ -1715,7 +1847,8 @@ int ObTableService::get_index_id_by_name(schema::ObSchemaGetterGuard &schema_gua
   return ret;
 }
 
-int ObTableService::fill_query_table_param(uint64_t table_id,
+int ObTableService::fill_query_table_param(const uint64_t tenant_id,
+                                           const uint64_t table_id,
                                            const ObIArray<ObString> &properties,
                                            const ObString &index_name,
                                            share::schema::ObTableParam &table_param,
@@ -1727,19 +1860,19 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
                                            table::ObHColumnDescriptor *hcolumn_desc)
 {
   int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = NULL;
-  const schema::ObTableSchema *index_schema = NULL;
-  if (OB_FAIL(schema_service_->get_schema_guard(schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(table_id), K(ret));
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const share::schema::ObTableSchema *index_schema = NULL;
+  if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(tenant_id), K(table_id), K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("NULL ptr", K(ret), K(table_schema));
-  } else if (OB_FAIL(get_index_id_by_name(schema_guard, table_id, index_name, index_id,
+    LOG_ERROR("NULL ptr", K(ret), KP(table_schema));
+  } else if (OB_FAIL(get_index_id_by_name(schema_guard, tenant_id, table_id, index_name, index_id,
                                           rowkey_columns_type, index_schema))) {
-    LOG_WARN("failed to get index id", K(ret), K(index_name), K(table_id));
+    LOG_WARN("failed to get index id", K(ret), K(tenant_id), K(index_name), K(table_id));
   } else {
     NG_TRACE_EXT(idx, OB_ID(idx), index_id, OB_ID(tag1), index_name);
     schema_version = table_schema->get_schema_version();
@@ -1747,11 +1880,17 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
     padding_num = (NULL == index_schema) ? -1 : (index_schema->get_rowkey_column_num() - key_column_cnt);
     LOG_DEBUG("[xilin debug]padding", K(padding_num), K(key_column_cnt), K(index_name));
 
+    //@ATTENSION there is no index back in 4.0, need refact
     const bool index_back = (index_id != table_id);
-    if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
+    bool is_index_supported = true;
+    if (index_back && OB_FAIL(check_index_supported(schema_guard, table_schema, index_id, is_index_supported))) {
+      LOG_WARN("fail to check index supported", K(ret), K(index_id));
+    } else if (OB_UNLIKELY(!is_index_supported)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("index type is not supported by table api", K(ret), K(table_id), K(index_id));
+    } else if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
     } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL))) {
-    } else if (OB_FAIL(table_param.convert(*table_schema, ((NULL == index_schema) ? *table_schema: *index_schema),
-                                           output_column_ids, index_back))) {
+    } else if (OB_FAIL(table_param.convert(*table_schema, output_column_ids))) {
       LOG_WARN("failed to convert table param", K(ret));
     } else if (!table_schema->get_comment_str().empty()
                && NULL != hcolumn_desc) {
@@ -1869,43 +2008,64 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx,
                                           uint64_t index_id,
                                           int32_t limit,
                                           int32_t offset,
-                                          storage::ObTableScanParam &scan_param)
+                                          storage::ObTableScanParam &scan_param,
+                                          bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   const uint64_t table_id = ctx.param_.table_id_;
+  const ObTabletID tablet_id = ctx.param_.tablet_id_;
+  const uint64_t tenant_id = MTL_ID();
   const bool index_back = (index_id != table_id);
-  ObPartitionKey part_key(table_id, ctx.param_.partition_id_, 0);
-  scan_param.timeout_ = ctx.param_.timeout_ts_;
-  ObQueryFlag query_flag(scan_order,
-                         false, // daily_merge
-                         false, // optimize
-                         false, // whole_macro_scan
-                         false, // full_row
-                         index_back, // index_back
-                         false, // query_stat
-                         ObQueryFlag::MysqlMode, // sql_mode
-                         true // read_latest
-                         );
-  scan_param.scan_flag_.flag_ = query_flag.flag_;
-  scan_param.reserved_cell_count_ = output_column_ids.count() + 10;
-  scan_param.for_update_ = false;
-  scan_param.column_ids_.reset();
-  scan_param.pkey_ = part_key;
-  scan_param.schema_version_ = schema_version;
-  if (OB_FAIL(scan_param.column_ids_.assign(output_column_ids))) {
-    LOG_WARN("fail to assign column id", K(ret));
-  } else {
-    SQL_ENG_LOG(DEBUG, "set scan param", K(output_column_ids));
-    scan_param.expr_ctx_.calc_buf_ = NULL;
-    scan_param.expr_ctx_.my_session_ = NULL;
-    scan_param.expr_ctx_.phy_plan_ctx_ = NULL;
-    scan_param.limit_param_.limit_ = limit;
-    scan_param.limit_param_.offset_ = offset;
-    scan_param.trans_desc_ = &ctx.param_.processor_->get_trans_desc();
-    scan_param.index_id_ = index_id;
-    scan_param.sql_mode_ = SMO_DEFAULT;
-    scan_param.allocator_->set_tenant_id(scan_param.pkey_.get_tenant_id());
-    LOG_DEBUG("[yzfdebug] scan param", K(scan_param));
+  ObTabletID index_tablet_id;
+
+  if (index_back) {
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *index_schema = NULL;
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(tenant_id), KP(schema_service_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_id, index_schema))) {
+      LOG_WARN("get index schema failed", KR(ret), K(tenant_id), K(index_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index not exist", KR(ret), K(tenant_id), K(index_id));
+    } else {
+      index_tablet_id = index_schema->get_tablet_id();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    scan_param.timeout_ = ctx.param_.timeout_ts_;
+    ObQueryFlag query_flag(scan_order,
+                          false, // daily_merge
+                          false, // optimize
+                          false, // whole_macro_scan
+                          false, // full_row
+                          index_back, // index_back
+                          false, // query_stat
+                          ObQueryFlag::MysqlMode, // sql_mode
+                          true // read_latest
+                          );
+    scan_param.scan_flag_.flag_ = query_flag.flag_;
+    scan_param.reserved_cell_count_ = output_column_ids.count() + 10;
+    scan_param.for_update_ = for_update;
+    scan_param.column_ids_.reset();
+    scan_param.schema_version_ = schema_version;
+    if (OB_FAIL(scan_param.column_ids_.assign(output_column_ids))) {
+      LOG_WARN("fail to assign column id", K(ret));
+    } else {
+      SQL_ENG_LOG(DEBUG, "set scan param", K(output_column_ids));
+      scan_param.ls_id_ = ctx.param_.ls_id_;
+      scan_param.tablet_id_ = tablet_id;
+      // scan_param.index_tablet_id_ = index_tablet_id; todo@dazhi: tableapi index back
+      scan_param.limit_param_.limit_ = limit;
+      scan_param.limit_param_.offset_ = offset;
+      scan_param.trans_desc_ = ctx.param_.processor_->get_trans_desc();
+      scan_param.snapshot_ = ctx.param_.processor_->get_tx_snapshot();
+      scan_param.tx_id_ = ctx.param_.processor_->get_trans_desc()->get_tx_id();
+      scan_param.index_id_ = index_id;
+      scan_param.sql_mode_ = SMO_DEFAULT;
+      CURRENT_CONTEXT->get_arena_allocator().set_tenant_id(tenant_id);
+      LOG_DEBUG("[yzfdebug] scan param", K(scan_param));
+    }
   }
   return ret;
 }
@@ -2005,7 +2165,7 @@ ObHTableFilterOperator *ObTableServiceQueryCtx::get_htable_result_iterator(
   return htable_result_iterator_;
 }
 
-void ObTableServiceQueryCtx::destroy_result_iterator(storage::ObPartitionService *part_service)
+void ObTableServiceQueryCtx::destroy_result_iterator(storage::ObAccessService *access_service)
 {
   if (NULL != normal_result_iterator_) {
     normal_result_iterator_->~ObNormalTableQueryResultIterator();
@@ -2016,10 +2176,10 @@ void ObTableServiceQueryCtx::destroy_result_iterator(storage::ObPartitionService
     htable_result_iterator_ = NULL;
   }
   if (NULL != scan_result_) {
-    if (NULL == part_service) {
-      LOG_ERROR("part_service is NULL, memory leak");
+    if (NULL == access_service) {
+      LOG_ERROR("access service is NULL, memory leak");
     } else {
-      part_service->revert_scan_iter(scan_result_);
+      access_service->revert_scan_iter(scan_result_);
       scan_result_ = NULL;
     }
   }
@@ -2050,8 +2210,7 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
     }
   }
   if (OB_SUCC(ret)) {
-    if (0 != query.get_offset()
-        || -1 != query.get_limit()) {
+    if (0 != query.get_offset()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("htable scan should not set Offset and Limit", K(ret), K(query));
     } else if (ObQueryFlag::Forward != query.get_scan_order() && ObQueryFlag::Reverse != query.get_scan_order()) {
@@ -2064,7 +2223,8 @@ int ObTableService::check_htable_query_args(const ObTableQuery &query)
 
 int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
                                   table::ObTableQueryResult &one_result,
-                                  table::ObTableQueryResultIterator *&query_result)
+                                  table::ObTableQueryResultIterator *&query_result,
+                                  bool for_update /* false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
@@ -2073,9 +2233,10 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
   const uint64_t table_id = ctx.param_.table_id_;
   uint64_t index_id = OB_INVALID_ID;
   int64_t padding_num = 0;
-  
   ObHColumnDescriptor hcolumn_desc;
   ObHColumnDescriptor *p_hcolumn_desc = NULL;
+  ObAccessService *access_service = MTL(ObAccessService *);
+  const uint64_t tenant_id = MTL_ID();
   if (query.get_htable_filter().is_valid()) {
     if (OB_FAIL(check_htable_query_args(query))) {
       LOG_WARN("invalid query request", K(ret));
@@ -2093,9 +2254,9 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
       LOG_WARN("failed to allocate result iterator", K(ret));
     }
   }
-
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(fill_query_table_param(table_id, query.get_select_columns(),
+  } else if (OB_FAIL(fill_query_table_param(tenant_id, table_id,
+                                            query.get_select_columns(),
                                             query.get_index_name(),
                                             *(ctx.table_param_), output_column_ids,
                                             ctx.columns_type_, schema_version,
@@ -2108,23 +2269,73 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
     LOG_WARN("failed to fill range", K(ret));
   } else if (OB_FAIL(fill_query_scan_param(ctx, output_column_ids, schema_version,
                                            query.get_scan_order(), index_id, query.get_limit(),
-                                           query.get_offset(), ctx.scan_param_))) {
+                                           query.get_offset(), ctx.scan_param_, for_update))) {
     LOG_WARN("failed to fill param", K(ret));
-  } else if (OB_FAIL(part_service_->table_scan(ctx.scan_param_, ctx.scan_result_))) {
+  } else if (OB_FAIL(access_service->table_scan(ctx.scan_param_, ctx.scan_result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(ret));
     }
   } else {
     if (query.get_htable_filter().is_valid()) {
       ctx.htable_result_iterator_->set_scan_result(ctx.scan_result_);
-      if (OB_ISNULL(p_hcolumn_desc)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null p_hcolumn_desc", K(ret));
-      } else if (p_hcolumn_desc->get_time_to_live() > 0) {
+      if (p_hcolumn_desc->get_time_to_live() > 0) {
         ctx.htable_result_iterator_->set_ttl(p_hcolumn_desc->get_time_to_live());
       }
     } else {
       ctx.normal_result_iterator_->set_scan_result(ctx.scan_result_);
+    }
+  }
+  return ret;
+}
+
+int ObTableService::build_table_param(
+    const uint64_t table_id,
+    const common::ObIArray<uint64_t> &column_ids,
+    ObTableDMLParam &table_param)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  int64_t schema_version = OB_INVALID_VERSION;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id), KP(schema_service_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id), KP(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), KP(table_schema));
+  } else if (OB_INVALID_VERSION == (schema_version = table_schema->get_schema_version())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema version is invalid", K(ret), K(schema_version));
+  } else if (OB_FAIL(table_param.convert(table_schema, schema_version, column_ids))) {
+    LOG_WARN("fail to convert table param", K(ret), K(table_schema));
+  }
+  return ret;
+}
+
+// check whether index is supported in given table schema by table api
+// global index is not supported by table api. specially, global index in non-partitioned
+// table was optimized to local index, which we can support.
+int ObTableService::check_index_supported(schema::ObSchemaGetterGuard &schema_guard,
+    const schema::ObSimpleTableSchemaV2 *table_schema, uint64_t index_id, bool &is_supported)
+{
+  int ret = OB_SUCCESS;
+  is_supported = true;
+  const schema::ObSimpleTableSchemaV2 *index_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("null table schema", K(ret));
+  } else if (table_schema->is_partitioned_table()) {
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, index_id, index_schema))) {
+      LOG_WARN("fail to get table schmea", K(ret), K(index_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("get null index schema", K(ret), K(index_id));
+    } else if (index_schema->is_global_index_table()) {
+      is_supported = false;
     }
   }
   return ret;

@@ -15,20 +15,25 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprUid : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprUid: public ObFuncExprOperator
+{
 public:
-  explicit ObExprUid(common::ObIAllocator& alloc);
+  explicit  ObExprUid(common::ObIAllocator &alloc);
   virtual ~ObExprUid();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const override;
-  static int eval_uid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type0(ObExprResType &type,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int eval_uid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUid);
+
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_UID_ */

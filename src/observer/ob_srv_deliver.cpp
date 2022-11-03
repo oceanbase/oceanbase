@@ -14,17 +14,22 @@
 
 #include "observer/ob_srv_deliver.h"
 
+#include "util/easy_mod_stat.h"
+#include "util/easy_inet.h"
+#include "easy_define.h"
 #include "lib/stat/ob_session_stat.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
+#include "rpc/frame/ob_net_easy.h"
 #include "share/ob_thread_mgr.h"
 #include "observer/ob_rpc_processor_simple.h"
-#include "observer/mysql/obsm_struct.h"
+#include "rpc/obmysql/obsm_struct.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::common;
+
 using namespace oceanbase::rpc;
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::obrpc;
@@ -32,7 +37,96 @@ using namespace oceanbase::observer;
 using namespace oceanbase::omt;
 using namespace oceanbase::memtable;
 
-ObSrvDeliver::ObSrvDeliver(ObiReqQHandler& qhandler, ObRpcSessionHandler& session_handler, ObGlobalContext& gctx)
+int64_t get_easy_per_src_memory_limit()
+{
+  return GCONF.__easy_memory_limit;
+}
+
+int check_easy_memory_limit(ObRequest &req)
+{
+  int ret = OB_SUCCESS;
+  easy_mod_stat_t *stat = NULL;
+
+  if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_RDMA) {
+    // Todo:
+    return ret;
+  }
+  easy_connection_t *c = req.get_ez_req()->ms->c;
+  if (OB_UNLIKELY(NULL == (stat = c->pool->mod_stat))) {
+    // it's auth request or bug
+  } else {
+    const int64_t easy_server_memory_limit = get_easy_per_src_memory_limit();
+    if (OB_UNLIKELY(0 == easy_server_memory_limit)) {
+      // do-nothing
+    } else if (stat->size > easy_server_memory_limit) {
+      ret = OB_EXCEED_MEM_LIMIT;
+      if (REACH_TIME_INTERVAL(1000000)) {
+        if (ObRequest::OB_RPC == req.get_type()) {
+          char buf[64];
+          easy_inet_addr_to_str(&c->addr, buf, 32);
+          LOG_WARN("too many pending request received", "peer", buf, "size", stat->size,
+                   "limit", easy_server_memory_limit);
+        } else if (ObRequest::OB_MYSQL == req.get_type()) {
+          void *sess = SQL_REQ_OP.get_sql_session(&req);
+          if (NULL != sess) {
+            ObSMConnection *conn = static_cast<ObSMConnection *>(sess);
+            LOG_WARN("too many pending request received", "tenant", conn->tenant_id_, "size", stat->size,
+                     "limit", easy_server_memory_limit);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSrvDeliver::get_mysql_login_thread_count_to_set(int cfg_cnt) 
+{
+  int set_cnt = 0;
+  if (0 < cfg_cnt) {
+    set_cnt = cfg_cnt;
+  } else {
+    if (!lib::is_mini_mode()) {
+      set_cnt = observer::ObSrvDeliver::MYSQL_TASK_THREAD_CNT;
+    } else {
+      set_cnt = observer::ObSrvDeliver::MINI_MODE_MYSQL_TASK_THREAD_CNT;
+    }
+  }
+  return set_cnt;
+}
+
+int ObSrvDeliver::set_mysql_login_thread_count(int cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(TG_SET_THREAD_CNT(lib::TGDefIDs::MysqlQueueTh, cnt))) {
+    SERVER_LOG(WARN, "set thread count for mysql login failed", K(ret));
+  } else {
+    LOG_INFO("set mysql login thread count success", K(cnt));
+  }
+  return ret;
+}
+
+bool is_high_prio_rpc_req(const ObRequest &req)
+{
+  bool bool_ret = false;
+  easy_request_t *r = req.get_ez_req();
+  easy_io_t *eio = NULL;
+  if (OB_ISNULL(r)
+      || OB_ISNULL(r->ms)
+      || OB_ISNULL(r->ms->c)
+      || OB_ISNULL(r->ms->c->ioth)) {
+  } else {
+    eio = r->ms->c->ioth->eio;
+    if ( ObNetEasy::HIGH_PRI_RPC_EIO_MAGIC == eio->magic) {
+      bool_ret = true;
+    }
+  }
+  return bool_ret;
+}
+
+ObSrvDeliver::ObSrvDeliver(ObiReqQHandler &qhandler,
+                           ObRpcSessionHandler &session_handler,
+                           ObGlobalContext &gctx)
     : ObReqQDeliver(qhandler),
       is_inited_(false),
       stop_(true),
@@ -81,7 +175,7 @@ void ObSrvDeliver::stop()
   }
 }
 
-int ObSrvDeliver::create_queue_thread(int tg_id, const char* thread_name, QueueThread*& qthread)
+int ObSrvDeliver::create_queue_thread(int tg_id, const char *thread_name, QueueThread *&qthread)
 {
   int ret = OB_SUCCESS;
   qthread = OB_NEW(QueueThread, ObModIds::OB_RPC, thread_name);
@@ -100,11 +194,13 @@ int ObSrvDeliver::init_queue_threads()
 {
   int ret = OB_SUCCESS;
 
-  // TODO: , make it configurable
+  // TODO: fufeng, make it configurable
   if (OB_FAIL(create_queue_thread(lib::TGDefIDs::LeaseQueueTh, "LeaseQueueTh", lease_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, "DDLQueueTh", ddl_queue_))) {
-  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::MysqlQueueTh, "MysqlQueueTh", mysql_queue_))) {
-  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DiagnoseQueueTh, "DiagnoseQueueTh", diagnose_queue_))) {
+  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::MysqlQueueTh,
+                                         "MysqlQueueTh", mysql_queue_))) {
+  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DiagnoseQueueTh,
+                                         "DiagnoseQueueTh", diagnose_queue_))) {
   } else {
     LOG_INFO("queue thread create successfully", K_(host));
   }
@@ -112,12 +208,13 @@ int ObSrvDeliver::init_queue_threads()
   return ret;
 }
 
-int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
+int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
 {
   int ret = OB_SUCCESS;
-  ObReqQueue* queue = NULL;
-  ObTenant* tenant = NULL;
-  const obrpc::ObRpcPacket& pkt = reinterpret_cast<const obrpc::ObRpcPacket&>(req.get_packet());
+  ObReqQueue *queue = NULL;
+  ObTenant *tenant = NULL;
+  const obrpc::ObRpcPacket &pkt
+      = reinterpret_cast<const obrpc::ObRpcPacket &>(req.get_packet());
   req.set_group_id(pkt.get_group_id());
   const int64_t now = ObTimeUtility::current_time();
 
@@ -126,22 +223,32 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
   ObTenantStatEstGuard guard(pkt.get_tenant_id());
   if (need_update_stat) {
     EVENT_INC(RPC_PACKET_IN);
-    EVENT_ADD(RPC_PACKET_IN_BYTES, pkt.get_encoded_size() + OB_NET_HEADER_LENGTH);
-    EVENT_ADD(RPC_NET_DELAY, req.get_receive_timestamp() - req.get_send_timestamp());
-    EVENT_ADD(RPC_NET_FRAME_DELAY, now - req.get_receive_timestamp());
+    EVENT_ADD(RPC_PACKET_IN_BYTES,
+              pkt.get_encoded_size() + OB_NET_HEADER_LENGTH);
+    EVENT_ADD(RPC_NET_DELAY,
+              req.get_receive_timestamp() - req.get_send_timestamp());
+    EVENT_ADD(RPC_NET_FRAME_DELAY,
+              now - req.get_receive_timestamp());
   }
 
-  if (stop_ || SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_) {
+  if (stop_
+      || SS_STOPPING == GCTX.status_
+      || SS_STOPPED == GCTX.status_) {
     ret = OB_SERVER_IS_STOPPING;
-    LOG_WARN("receive request when server is stopping", K(req), K(ret));
+    LOG_WARN("receive request when server is stopping",
+             K(req),
+             K(ret));
   }
 
+  req.set_trace_point(ObRequest::OB_EASY_REQUEST_RPC_DELIVER);
   if (!OB_SUCC(ret)) {
 
+  } else if (!is_high_prio_rpc_req(req) && OB_FAIL(check_easy_memory_limit(req))) {
   } else if (pkt.is_stream()) {
     if (!session_handler_.wakeup_next_thread(req)) {
       ret = OB_SESSION_NOT_FOUND;
-      LOG_WARN("receive stream rpc packet but session not found", K(pkt), K(req));
+      LOG_WARN("receive stream rpc packet but session not found",
+               K(pkt), K(req));
     }
   } else if (OB_RENEW_LEASE == pkt.get_pcode()) {
     queue = &lease_queue_->queue_;
@@ -173,6 +280,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
     }
   } else if (NULL != tenant) {
     SERVER_LOG(DEBUG, "deliver tenant packet", K(queue), K(tenant->id()));
+    RpcStatPiece piece;
+    piece.is_server_ = true;
+    piece.is_deliver_ = true;
+    RPC_STAT(pkt.get_pcode(), tenant->id(), piece);
     if (OB_FAIL(tenant->recv_request(req))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         LOG_WARN("tenant receive request fail", K(*tenant), K(req));
@@ -190,12 +301,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
   }
 
   if (!OB_SUCC(ret)) {
-    ObErrorP p(ret);
-    char buf[2048] = {};  // just a have rpc result code, 2048 is enough
-    ObDataBuffer dbuf(buf, sizeof(buf));
-    p.set_ob_request(req);
-    p.set_io_thread_mark();
-    p.run();
+    on_translate_fail(&req, ret);
 
     EVENT_INC(RPC_DELIVER_FAIL);
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
@@ -206,15 +312,14 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest& req)
   return ret;
 }
 
-int ObSrvDeliver::deliver_mysql_request(ObRequest& req)
+int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
 {
   int ret = OB_SUCCESS;
-  ObTenant* tenant = NULL;
-
-  void* sess = req.get_session();
-  ObSMConnection* conn = NULL;
+  ObTenant *tenant = NULL;
+  void *sess = SQL_REQ_OP.get_sql_session(&req);
+  ObSMConnection *conn = NULL;
   if (NULL != sess) {
-    conn = static_cast<ObSMConnection*>(sess);
+    conn = static_cast<ObSMConnection *>(sess);
     tenant = conn->tenant_;
     req.set_group_id(conn->group_id_);
   } else {
@@ -222,19 +327,28 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest& req)
     LOG_ERROR("session from request is NULL", K(req), K(ret));
   }
 
+  req.set_trace_point(ObRequest::OB_EASY_REQUEST_MYSQL_DELIVER);
+  if (OB_FAIL(ret)) {
+  } else if (rpc::ObRequest::TRANSPORT_PROTO_EASY == req.get_nio_protocol()) {
+    if (OB_FAIL(check_easy_memory_limit(req))) {
+      LOG_ERROR("check_easy_memory_limit failed", K(ret));
+    }
+  } else if (rpc::ObRequest::TRANSPORT_PROTO_POC == req.get_nio_protocol()) {
+    /* TODO check memory limit for sql nio */
+  }
+
   if (OB_SUCC(ret)) {
-    const bool need_update_stat = !req.is_retry_on_lock();
+    const bool need_update_stat = (ObRequest::OB_MYSQL == req.get_type()) && !req.is_retry_on_lock();
     // auth request
     if (NULL == tenant) {
-      const obmysql::ObMySQLRawPacket& pkt = reinterpret_cast<const obmysql::ObMySQLRawPacket&>(req.get_packet());
+      const obmysql::ObMySQLRawPacket &pkt
+          = reinterpret_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
       ObTenantStatEstGuard guard(OB_SERVER_TENANT_ID);
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
       }
-      easy_request_t* ez_req = req.get_request();
-      if (OB_UNLIKELY(
-              NULL != diagnose_queue_ && NULL != ez_req && NULL != ez_req->ms && ez_req->ms->c->addr.port <= 0)) {
+      if (OB_UNLIKELY((ObRequest::TRANSPORT_PROTO_RDMA != req.get_nio_protocol()) && NULL != diagnose_queue_ && SQL_REQ_OP.get_peer(&req).get_port() <= 0)) {
         LOG_INFO("receive login request from unix domain socket");
         if (!diagnose_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
           ret = OB_QUEUE_OVERFLOW;
@@ -253,14 +367,14 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest& req)
         }
       }
     } else {
-      const obmysql::ObMySQLRawPacket& pkt = reinterpret_cast<const obmysql::ObMySQLRawPacket&>(req.get_packet());
+      const obmysql::ObMySQLRawPacket &pkt
+          = reinterpret_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
       ObTenantStatEstGuard guard(tenant->id());
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
       }
-      // The tenant check has been done in the recv_request method. For performance considerations, the check here is
-      // removed;
+      // The tenant check has been done in the recv_request method. For performance considerations, the check here is removed;
       /*
       const int64_t tenant_id = conn->tenant_id_;
       if (NULL == gctx_.omt_) {
@@ -289,33 +403,28 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest& req)
 
 int ObSrvDeliver::repost(void* p)
 {
-  rpc::ObRequest* req = CONTAINER_OF((const ObLockWaitNode*)p, rpc::ObRequest, lock_wait_node_);
+  rpc::ObRequest* req = CONTAINER_OF((const ObLockWaitNode *)p, rpc::ObRequest, lock_wait_node_);
   return deliver(*req);
 }
 
-int ObSrvDeliver::deliver(rpc::ObRequest& req)
+int ObSrvDeliver::deliver(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
-
+  LOG_DEBUG("deliver ob_request:", K(req));
   if (ObRequest::OB_RPC == req.get_type()) {
     if (OB_FAIL(deliver_rpc_request(req))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         LOG_WARN("deliver rpc request fail", K(req), K(ret));
       }
     }
-    // LOG_INFO("yzfdebug deliver rpc", K(ret), "pkt", req.get_packet());
+    //LOG_INFO("yzfdebug deliver rpc", K(ret), "pkt", req.get_packet());
   } else if (ObRequest::OB_MYSQL == req.get_type()) {
     if (OB_FAIL(deliver_mysql_request(req))) {
       LOG_WARN("deliver mysql request fail", K(req), K(ret));
-      // If it is a lock conflict repost request, if the deliver fails, the link is broken,
-      // Normal requests will break the link at the upper level
+      //If it is a lock conflict repost request, if the deliver fails, the link is broken,
+      //Normal requests will break the link at the upper level
       if (req.is_retry_on_lock()) {
-        easy_request_t* ez_req = req.get_request();
-        if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms)) {
-          // do nothing
-        } else {
-          easy_connection_destroy_dispatch(ez_req->ms->c);
-        }
+        on_translate_fail(&req, ret);
       }
     }
   } else {

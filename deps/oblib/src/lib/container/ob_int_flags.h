@@ -17,32 +17,30 @@
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
-struct ObInt64Flags {
+namespace oceanbase
+{
+namespace common
+{
+struct ObInt64Flags
+{
   ObInt64Flags() : flags_(0)
-  {}
-  ObInt64Flags(int64_t flags) : flags_(flags)
-  {}
+  { }
+  ObInt64Flags(int64_t flags): flags_(flags)
+  { }
   virtual ~ObInt64Flags()
-  {}
+  { }
 
   bool empty() const
-  {
-    return 0 == flags_;
-  }
+  { return 0 == flags_; }
 
   void reset()
-  {
-    flags_ = 0;
-  }
+  { flags_ = 0; }
 
   inline bool add_member(int64_t index);
   inline bool del_member(int64_t index);
   inline bool has_member(int64_t index);
 
   TO_STRING_KV("flags", PHEX(&flags_, sizeof(flags_)));
-
 private:
   int64_t flags_;
 };
@@ -80,6 +78,6 @@ bool ObInt64Flags::has_member(int64_t index)
   return bret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 #endif

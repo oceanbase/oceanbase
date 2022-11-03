@@ -111,7 +111,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObDoubleType,/*uint*/
     ObDoubleType,/*float*/
     ObDoubleType,/*double*/
-    ObNumberType,/*number*/
+    ObDoubleType,/*number*/
     ObVarcharType,/*datetime*/
     ObVarcharType,/*date*/
     ObVarcharType,/*time*/
@@ -135,8 +135,8 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObNumberType,/*null*/
     ObNumberType,/*int*/
     ObNumberType,/*uint*/
-    ObNumberType,/*float*/
-    ObNumberType,/*double*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
     ObNumberType,/*number*/
     ObVarcharType,/*datetime*/
     ObVarcharType,/*date*/
@@ -881,7 +881,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
       ObMaxType,/*time*/
       ObMaxType,/*year*/
       ObMaxType,/*string*/
-      ObMaxType,/*extend*/
+      ObExtendType,/*extend*/
       ObMaxType,/*unknown*/
       ObMaxType,/*text*/
       ObMaxType,/*bit*/

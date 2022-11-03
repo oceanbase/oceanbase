@@ -24,30 +24,41 @@ namespace sql {
 class ObSQLSessionInfo;
 class ObTenantUserKey {
 public:
-  ObTenantUserKey() : id_(0)
+  ObTenantUserKey() : tenant_id_(0), user_id_(0)
   {}
-  ObTenantUserKey(const int64_t id_) : id_(id_)
+  ObTenantUserKey(const uint64_t tenant_id, const uint64_t user_id) :
+    tenant_id_(tenant_id), user_id_(user_id)
   {}
   uint64_t hash() const
   {
-    return common::murmurhash(&id_, sizeof(id_), 0);
+    return common::murmurhash(&user_id_, sizeof(user_id_), tenant_id_);
   };
-  int compare(const ObTenantUserKey& r)
+  int compare(const ObTenantUserKey& r) const
   {
     int cmp = 0;
-    if (id_ < r.id_) {
+    if (tenant_id_ < r.tenant_id_) {
       cmp = -1;
-    } else if (id_ == r.id_) {
-      cmp = 0;
+    } else if (tenant_id_ == r.tenant_id_) {
+      if (user_id_ < r.user_id_) {
+        cmp = -1;
+      } else if (user_id_ == r.user_id_) {
+        cmp = 0;
+      } else {
+        cmp = 1;
+      }
     } else {
       cmp = 1;
     }
     return cmp;
   }
-  TO_STRING_KV(K_(id));
+  bool operator== (const ObTenantUserKey &other) const { return 0 == compare(other); }
+  bool operator!=(const ObTenantUserKey &other) const { return !operator==(other); }
+  bool operator<(const ObTenantUserKey &other) const { return -1 == compare(other); }
+  TO_STRING_KV(K_(tenant_id), K(user_id_));
 
 public:
-  uint64_t id_;
+  uint64_t tenant_id_;
+  uint64_t user_id_;
 };
 
 typedef common::LinkHashNode<ObTenantUserKey> ObConnectResHashNode;
@@ -55,11 +66,16 @@ typedef common::LinkHashValue<ObTenantUserKey> ObConnectResHashValue;
 
 class ObConnectResource : public ObConnectResHashValue {
 public:
-  ObConnectResource() : rwlock_(), cur_connections_(0), history_connections_(0), start_time_(0)
-  {}
+  ObConnectResource()
+      : rwlock_(), cur_connections_(0), history_connections_(0), start_time_(0)
+  {
+  }
   ObConnectResource(uint64_t cur_connections, uint64_t history_connections, int64_t cur_time)
-      : rwlock_(), cur_connections_(cur_connections), history_connections_(history_connections), start_time_(cur_time)
-  {}
+      : rwlock_(), cur_connections_(cur_connections),
+        history_connections_(history_connections),
+        start_time_(cur_time)
+  {
+  }
   virtual ~ObConnectResource()
   {}
   TO_STRING_KV(K_(cur_connections), K_(history_connections), K_(start_time));
@@ -96,57 +112,69 @@ class ObConnectResourceMgr {
 public:
   ObConnectResourceMgr();
   virtual ~ObConnectResourceMgr();
-  int init(share::schema::ObMultiVersionSchemaService& schema_service);
+  int init(share::schema::ObMultiVersionSchemaService &schema_service);
   // ask for tenant connection resource.
-  int apply_for_tenant_conn_resource(
-      const uint64_t tenant_id, const ObPrivSet& priv, const uint64_t max_tenant_connections);
+  int apply_for_tenant_conn_resource(const uint64_t tenant_id, const ObPrivSet &priv,
+                     const uint64_t max_tenant_connections);
   void release_tenant_conn_resource(const uint64_t tenant_id);
-  int get_or_insert_user_resource(const uint64_t user_id, const uint64_t max_user_connections,
-      const uint64_t max_connections_per_hour, ObConnectResource*& user_res, bool& has_insert);
-  int increase_user_connections_count(const uint64_t max_user_connections, const uint64_t max_connections_per_hour,
-      const ObString& user_name, ObConnectResource* user_res);
-  int on_user_connect(const uint64_t tenant_id, const uint64_t user_id, const ObPrivSet& priv,
-      const ObString& user_name, const uint64_t max_connections_per_hour, const uint64_t max_user_connections,
-      const uint64_t max_global_connections, ObSQLSessionInfo& session);
-  int on_user_disconnect(ObSQLSessionInfo& session);
-
+  int get_or_insert_user_resource(
+      const uint64_t tenant_id,
+      const uint64_t user_id,
+      const uint64_t max_user_connections,
+      const uint64_t max_connections_per_hour,
+      ObConnectResource *&user_res, bool &has_insert);
+  int increase_user_connections_count(
+      const uint64_t max_user_connections,
+      const uint64_t max_connections_per_hour,
+      const ObString &user_name,
+      ObConnectResource *user_res);
+  int on_user_connect(const uint64_t tenant_id,
+                      const uint64_t user_id,
+                      const ObPrivSet &priv,
+                      const ObString &user_name,
+                      const uint64_t max_connections_per_hour,
+                      const uint64_t max_user_connections,
+                      const uint64_t max_global_connections,
+                      ObSQLSessionInfo& session);
+  int on_user_disconnect(ObSQLSessionInfo &session);
 private:
-  class CleanUpConnResourceFunc {
+  class CleanUpConnResourceFunc
+  {
   public:
-    CleanUpConnResourceFunc(
-        share::schema::ObSchemaGetterGuard& schema_guard, ObConnResMap& conn_res_map, const bool is_user)
-        : schema_guard_(schema_guard), conn_res_map_(conn_res_map), is_user_(is_user)
+    CleanUpConnResourceFunc(share::schema::ObSchemaGetterGuard &schema_guard,
+      ObConnResMap &conn_res_map, const bool is_user)
+    : schema_guard_(schema_guard), conn_res_map_(conn_res_map), is_user_(is_user)
     {}
-    bool operator()(ObTenantUserKey key, ObConnectResource* user_res);
-
+    bool operator() (ObTenantUserKey key, ObConnectResource *user_res);
   private:
-    share::schema::ObSchemaGetterGuard& schema_guard_;
-    ObConnResMap& conn_res_map_;
+    share::schema::ObSchemaGetterGuard &schema_guard_;
+    ObConnResMap &conn_res_map_;
     const bool is_user_;
   };
-  class ConnResourceCleanUpTask : public common::ObTimerTask {
+  class ConnResourceCleanUpTask : public common::ObTimerTask
+  {
   public:
-    ConnResourceCleanUpTask(ObConnectResourceMgr& conn_res_mgr) : conn_res_mgr_(conn_res_mgr)
-    {}
-    int init(ObConnectResourceMgr* tz_mgr);
-    virtual ~ConnResourceCleanUpTask()
-    {}
+    ConnResourceCleanUpTask(ObConnectResourceMgr &conn_res_mgr)
+      : conn_res_mgr_(conn_res_mgr) {}
+    int init(ObConnectResourceMgr *tz_mgr);
+    virtual ~ConnResourceCleanUpTask() {}
     void runTimerTask(void) override;
 
-    ObConnectResourceMgr& conn_res_mgr_;
+    ObConnectResourceMgr &conn_res_mgr_;
     static const uint64_t SLEEP_USECONDS = 3600000000;  // one hour
   };
   friend class ConnResourceCleanUpTask;
   friend class CleanUpUserResourceFunc;
-
 private:
   bool inited_;
   ObConnResMap user_res_map_;
   ObConnResMap tenant_res_map_;
-  share::schema::ObMultiVersionSchemaService* schema_service_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
   ConnResourceCleanUpTask cleanup_task_;
   DISALLOW_COPY_AND_ASSIGN(ObConnectResourceMgr);
 };
+
+
 
 }  // end namespace sql
 }  // end namespace oceanbase

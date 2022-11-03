@@ -18,44 +18,39 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 
-int ObExprSysOpOpnsize::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprSysOpOpnsize::calc_result_type1(ObExprResType &type,
+                                          ObExprResType &type1,
+                                          ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   UNUSED(type1);
   int ret = OB_SUCCESS;
   if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
-    type.set_uint64();
-    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
-    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
+    type.set_int();
+    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
   }
   return ret;
 }
 
-int ObExprSysOpOpnsize::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int ObExprSysOpOpnsize::calc_sys_op_opnsize_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                                 ObDatum &res)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  uint64_t size = sizeof(ObObj) + obj.get_deep_copy_size();
-  result.set_uint64(size);
-  return ret;
-}
-
-int ObExprSysOpOpnsize::calc_sys_op_opnsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+	int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval param failed", K(ret));
   } else {
-    uint64_t size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
-    res.set_uint(size);
+    int64_t size = sizeof(*arg) + (arg->is_null() ? 0 : arg->len_);
+    res.set_int(size);
   }
-  return ret;
+	return ret;
 }
 
-int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprSysOpOpnsize::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);

@@ -15,134 +15,166 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace common {
-class ObExprTypeCtx;
-class ObExprCtx;
-}  // namespace common
-namespace sql {
-class ObExprTrim : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace common
+{
+  class ObExprTypeCtx;
+  struct ObExprCtx;
+} // common
+namespace sql
+{
+class ObExprTrim : public ObStringExprOperator
+{
 public:
   enum TrimType { TYPE_LRTRIM = 0, TYPE_LTRIM = 1, TYPE_RTRIM = 2 };
 
-  explicit ObExprTrim(common::ObIAllocator& alloc);
-  explicit ObExprTrim(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
+  explicit  ObExprTrim(common::ObIAllocator &alloc);
+  explicit  ObExprTrim(common::ObIAllocator &alloc,
+                       ObExprOperatorType type,
+                       const char *name,
+                       int32_t param_num);
 
   virtual ~ObExprTrim();
-  static int calc(common::ObObj& result, const int64_t trim_type, const common::ObString& trim_pattern,
-      const common::ObString& text, const common::ObObjType& res_type, common::ObExprCtx& expr_ctx);
+  static int trim(common::ObString &result,
+                  const int64_t trim_type,
+                  const common::ObString &trim_pattern,
+                  const common::ObString &text);
 
-  static int trim(common::ObString& result, const int64_t trim_type, const common::ObString& trim_pattern,
-      const common::ObString& text);
+  static  int trim2(common::ObString &result,
+                  const int64_t trim_type,
+                  const common::ObString &trim_pattern,
+                  const common::ObString &text,
+                  const common::ObCollationType &cs_type,
+                  const common::ObFixedArray<size_t, common::ObIAllocator> &,
+                  const common::ObFixedArray<size_t, common::ObIAllocator> &);
 
-  static int trim2(common::ObString& result, const int64_t trim_type, const common::ObString& trim_pattern,
-      const common::ObString& text, const common::ObCollationType& cs_type,
-      const common::ObFixedArray<size_t, common::ObIAllocator>&,
-      const common::ObFixedArray<size_t, common::ObIAllocator>&);
-
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const
   {
     return deduce_result_type(type, types, param_num, type_ctx);
   }
 
-  static int deduce_result_type(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx);
+  static int deduce_result_type(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx);
 
-  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
-      common::ObExprCtx& expr_ctx) const override;
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
-  static int eval_trim(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
   // fill ' ' to %buf with specified charset.
-  static int fill_default_pattern(char* buf, const int64_t in_len, common::ObCollationType cs_type, int64_t& out_len);
-
+  static int fill_default_pattern(char *buf, const int64_t in_len,
+                                  common::ObCollationType cs_type, int64_t &out_len);
 private:
   // helper func
-  static int lrtrim(const common::ObString src, const common::ObString pattern, int32_t& start, int32_t& end);
-  static int ltrim(const common::ObString src, const common::ObString pattern, int32_t& start);
-  static int rtrim(const common::ObString src, const common::ObString pattern, int32_t& end);
+  static int lrtrim(const common::ObString src,
+                    const common::ObString pattern,
+                    int32_t &start, int32_t &end);
+  static int ltrim(const common::ObString src,
+                   const common::ObString pattern,
+                   int32_t &start);
+  static int rtrim(const common::ObString src, const common::ObString pattern, int32_t &end);
 
-  static int lrtrim2(const common::ObString src, const common::ObString pattern, int32_t& start, int32_t& end);
-  static int ltrim2(const common::ObString src, const common::ObString pattern, int32_t& start,
-      const common::ObCollationType& cs_type, const common::ObFixedArray<size_t, common::ObIAllocator>&,
-      const common::ObFixedArray<size_t, common::ObIAllocator>&);
-  static int rtrim2(const common::ObString src, const common::ObString pattern, int32_t& end,
-      const common::ObCollationType& cs_type, const common::ObFixedArray<size_t, common::ObIAllocator>&,
-      const common::ObFixedArray<size_t, common::ObIAllocator>&);
+  static int lrtrim2(const common::ObString src,
+                    const common::ObString pattern,
+                    int32_t &start, int32_t &end);
+  static int ltrim2(const common::ObString src,
+                   const common::ObString pattern,
+                   int32_t &start,
+                   const common::ObCollationType &cs_type,
+                   const common::ObFixedArray<size_t, common::ObIAllocator> &,
+                   const common::ObFixedArray<size_t, common::ObIAllocator> &);
+  static int rtrim2(const common::ObString src,
+                    const common::ObString pattern,
+                    int32_t &end,
+                    const common::ObCollationType &cs_type,
+                    const common::ObFixedArray<size_t, common::ObIAllocator> &,
+                    const common::ObFixedArray<size_t, common::ObIAllocator> &);
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTrim);
+
 };
 
 // Ltrim can use ObExprTrim's calc
-class ObExprLtrim : public ObExprTrim {
+class ObExprLtrim : public ObExprTrim
+{
 public:
-  explicit ObExprLtrim(common::ObIAllocator& alloc);
-  explicit ObExprLtrim(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
+  explicit  ObExprLtrim(common::ObIAllocator &alloc);
+  explicit  ObExprLtrim(common::ObIAllocator &alloc,
+                        ObExprOperatorType type,
+                        const char *name,
+                        int32_t param_num);
   virtual ~ObExprLtrim();
 
-  virtual int calc_result_type1(
-      ObExprResType& res_type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result_type1(ObExprResType &res_type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const
   {
     return deduce_result_type(type, types, param_num, type_ctx);
   }
 
-  static int deduce_result_type(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx);
+  static int deduce_result_type(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx);
 
-  virtual int calc_result1(
-      common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
-  int calc(common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx, int64_t trim_type_val) const;
-
-  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
-      common::ObExprCtx& expr_ctx) const override;
-
-  static int calc_oracle_mode(common::ObObj& result, const int64_t trim_type, const common::ObString& pattern,
-      const common::ObString& text, const common::ObObjType& res_type, common::ObExprCtx& expr_ctx,
-      const int64_t param_num, const common::ObCollationType& cs_type);
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLtrim);
+
 };
 // Rtrim can use ObExprTrim's calc
-class ObExprRtrim : public ObExprLtrim {
+class ObExprRtrim : public ObExprLtrim
+{
 public:
-  explicit ObExprRtrim(common::ObIAllocator& alloc);
+  explicit  ObExprRtrim(common::ObIAllocator &alloc);
   virtual ~ObExprRtrim();
 
-  virtual int calc_result1(common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(ObExprResType &res_type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-
-  virtual int calc_result_type1(ObExprResType& res_type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const
   {
     return ObExprLtrim::deduce_result_type(type, types, param_num, type_ctx);
   }
 
-  static int deduce_result_type(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx);
+  static int deduce_result_type(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx);
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const
   {
     return ObExprLtrim::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRtrim);
+
 };
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // oceanbase
 #endif /* _OB_SQL_EXPR_TRIM_H_ */

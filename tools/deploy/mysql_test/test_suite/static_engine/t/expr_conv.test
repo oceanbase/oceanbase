@@ -1,0 +1,22 @@
+# owner: xiaoyi.xy
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (sys, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select conv('a',16,2) from dual;
+select conv('6E',18,8) from dual;
+select conv(-17,10,-18) from dual;
+select conv(10+'10'+'10'+X'0a',10,10) from dual;
+select conv(null, 16, 2) from dual;
+select conv('6E',null,8) from dual;
+select conv('6E',18, null) from dual;
+
+connection sys;
+
+--sleep 2

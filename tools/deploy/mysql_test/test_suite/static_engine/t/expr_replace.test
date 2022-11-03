@@ -1,0 +1,42 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(100) CHARACTER SET  utf8, c2 varchar(100) CHARACTER SET  utf8, c3 varchar(100) CHARACTER set  utf16, c4 varchar(100) CHARACTER set  utf16);
+insert into t1 (c1, c2, c3, c4) values ('abcdef', 'b', 'xybkkbdedess', 'de');
+--enable_warnings
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select replace('abcdbf', 'b', 'cc');
+select replace('abcdbf', 'b');
+select replace('abcdbf', 'b', '');
+select replace('abcdbf', '', 'cc');
+select replace('', 'b', 'cc');
+select replace(NULL, 'b', 'cc');
+select replace('abcdbf', NULL, 'cc');
+select replace('abcdbf', 'b', NULL);
+select replace('abc', 'abc', '');
+
+select replace(c1, c2, c4) from t1;
+select replace(c1, c4, c2) from t1;
+select replace(c1, c4, c3) from t1;
+select replace(c3, c4, c2) from t1;
+select replace(c3, c2, c4) from t1;
+select replace(c3, c2, c3) from t1;
+
+connection syscon;
+--sleep 2

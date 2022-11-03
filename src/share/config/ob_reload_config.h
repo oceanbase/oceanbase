@@ -17,17 +17,19 @@
 #include "share/cache/ob_kv_storecache.h"
 #include "share/config/ob_server_config.h"
 
-namespace oceanbase {
-namespace common {
-class ObReloadConfig {
+namespace oceanbase
+{
+namespace common
+{
+class ObReloadConfig
+{
 public:
-  explicit ObReloadConfig(ObServerConfig* conf) : conf_(conf){};
-  virtual ~ObReloadConfig()
-  {}
+  explicit ObReloadConfig(ObServerConfig *conf): conf_(conf) {};
+  virtual ~ObReloadConfig() {}
   virtual int operator()();
 
 protected:
-  ObServerConfig* conf_;
+  ObServerConfig *conf_;
 
 private:
   int reload_ob_logger_set();
@@ -43,7 +45,7 @@ inline int ObReloadConfig::operator()()
   return ret;
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_CONFIG_OB_RELOAD_CONFIG_H_
+#endif // OCEANBASE_SHARE_CONFIG_OB_RELOAD_CONFIG_H_

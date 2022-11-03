@@ -1,0 +1,13 @@
+alter system flush plan cache global;
+
+// test multi query hit plan
+drop table if exists t1;
+create table t1(c1 int);
+begin;
+select * from t1 where c1 = 1;select * from t1 where c1 = 1;select * from t1 where c1 = 1;//
+commit;
+// expected hit_count 2
+select  hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where c1 = ?;";
+hit_count
+2
+drop table t1;

@@ -14,16 +14,18 @@
 
 #include "sql/resolver/prepare/ob_prepare_resolver.h"
 #include "sql/resolver/ob_resolver_utils.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-int ObPrepareResolver::resolve(const ParseNode& parse_tree)
+int ObPrepareResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObPrepareStmt* prepare_stmt = NULL;
-  const ParseNode* name_node = parse_tree.children_[0];
-  const ParseNode* stmt_node = parse_tree.children_[1];
+  ObPrepareStmt *prepare_stmt = NULL;
+  const ParseNode *name_node = parse_tree.children_[0];
+  const ParseNode *stmt_node = parse_tree.children_[1];
   if (OB_ISNULL(name_node) || OB_ISNULL(stmt_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid prepare node", K(name_node), K(stmt_node), K(ret));
@@ -45,7 +47,7 @@ int ObPrepareResolver::resolve(const ParseNode& parse_tree)
 
   if (OB_SUCC(ret)) {
     if (T_VARCHAR == stmt_node->type_ || T_HEX_STRING == stmt_node->type_ || T_OP_GET_USER_VAR == stmt_node->type_) {
-      ObRawExpr* stmt_expr = NULL;
+      ObRawExpr *stmt_expr = NULL;
       if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *stmt_node, stmt_expr, NULL))) {
         LOG_WARN("failed to resolve const expr", K(ret));
       } else {
@@ -59,5 +61,7 @@ int ObPrepareResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+

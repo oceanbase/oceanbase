@@ -11,13 +11,18 @@
  */
 
 #include "ob_lib_config.h"
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 
-ObLibConfig::ObLibConfig() : enable_diagnose_info_(true), enable_trace_log_(true)
-{}
+ObLibConfig::ObLibConfig()
+  : enable_diagnose_info_(true),
+    enable_trace_log_(true)
+{
+}
 
-ObLibConfig& ObLibConfig::get_instance()
+ObLibConfig &ObLibConfig::get_instance()
 {
   static ObLibConfig instance_;
   return instance_;
@@ -33,5 +38,5 @@ void ObLibConfig::reload_trace_log_config(const bool enable_trace_log)
   ATOMIC_SET(&enable_trace_log_, enable_trace_log);
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+} //lib
+} //oceanbase

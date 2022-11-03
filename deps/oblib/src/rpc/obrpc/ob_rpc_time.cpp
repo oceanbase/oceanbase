@@ -19,8 +19,10 @@
 #include "lib/oblog/ob_log.h"
 #include "ob_rpc_time.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
 using namespace common;
 using namespace common::serialization;
@@ -30,7 +32,7 @@ DEFINE_SERIALIZE(ObRpcCostTime)
   int ret = OB_SUCCESS;
 
   if (buf_len - pos >= get_encoded_size()) {
-    if (OB_FAIL(encode_i32(buf, buf_len, pos, static_cast<int32_t>(get_encoded_size())))) {
+    if (OB_FAIL(encode_i32(buf, buf_len, pos, static_cast<int32_t> (get_encoded_size())))) {
       LOG_WARN("Encode error", K(ret));
     } else if (OB_FAIL(encode_i32(buf, buf_len, pos, arrival_push_diff_))) {
       LOG_WARN("Encode error", K(ret));
@@ -59,7 +61,7 @@ DEFINE_SERIALIZE(ObRpcCostTime)
 DEFINE_DESERIALIZE(ObRpcCostTime)
 {
   int ret = OB_SUCCESS;
-
+  
   if (data_len - pos >= get_encoded_size()) {
     if (OB_FAIL(decode_i32(buf, data_len, pos, reinterpret_cast<int32_t*>(&len_)))) {
       LOG_WARN("Decode error", K(ret));
@@ -92,5 +94,5 @@ DEFINE_GET_SERIALIZE_SIZE(ObRpcCostTime)
   return get_encoded_size();
 }
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace rpc
+} // end of namespace oceanbase

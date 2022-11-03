@@ -15,23 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprPad : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprPad : public ObStringExprOperator
+{
 public:
-  explicit ObExprPad(common::ObIAllocator& alloc);
+  explicit  ObExprPad(common::ObIAllocator &alloc);
   virtual ~ObExprPad();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& source, ObExprResType& padding_str,
-      ObExprResType& length, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& source, const common::ObObj& padding_str,
-      const common::ObObj& length, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_pad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-
+  virtual int calc_result_type3(ObExprResType &type, ObExprResType &source,
+                                ObExprResType &padding_str,
+                                ObExprResType &length,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const;
+  static int calc_pad_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprPad);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_PAD_H_ */

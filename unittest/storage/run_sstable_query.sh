@@ -1,0 +1,7 @@
+make test_sstable_single_exist test_sstable_single_scan test_sstable_single_get test_sstable_multi_get test_sstable_multi_scan test_sstable_multi_exist -j6
+./test_sstable_single_exist
+./test_sstable_single_scan
+./test_sstable_single_get
+./test_sstable_multi_get
+./test_sstable_multi_scan
+./test_sstable_multi_exist

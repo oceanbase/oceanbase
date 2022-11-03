@@ -1,4 +1,0 @@
-[submodule "logmessage"]
-	path = deps/logmessage
-	url = https://github.com/oceanbase/oblogmsg.git
-	branch = master

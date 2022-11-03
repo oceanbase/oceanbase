@@ -15,40 +15,76 @@
 
 #include <gmock/gmock.h>
 
-namespace oceanbase {
-namespace storage {
+namespace oceanbase
+{
+namespace storage
+{
 
-class MockObMemStore : public ObIStore {
+class MockObMemStore : public ObIStore
+{
 public:
   MOCK_METHOD0(destroy, void());
-  MOCK_METHOD6(get, int(const ObStoreCtx& ctx, const ObQueryFlag query_flag, const uint64_t table_id,
-                        const common::ObStoreRowkey& rowkey, const common::ObIArray<share::schema::ObColDesc>& columns,
-                        const ObStoreRow*& row));
-  MOCK_METHOD6(scan, int(const ObStoreCtx& ctx, const ObQueryFlag query_flag, const uint64_t table_id,
-                         const common::ObStoreRange& key_range,
-                         const common::ObIArray<share::schema::ObColDesc>& columns, ObStoreRowIterator*& row_iter));
-  MOCK_METHOD6(
-      multi_get, int(const ObStoreCtx& ctx, const ObQueryFlag query_flag, const uint64_t table_id,
-                     const common::ObIArray<common::ObStoreRowkey>& rowkeys,
-                     const common::ObIArray<share::schema::ObColDesc>& columns, ObStoreRowIterator*& row_iter));
-  MOCK_METHOD5(set, int(const ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_size,
-                        const common::ObIArray<share::schema::ObColDesc>& columns, ObStoreRowIterator& row_iter));
-  MOCK_METHOD5(set, int(const ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_size,
-                        const common::ObIArray<share::schema::ObColDesc>& columns, const ObStoreRow& row));
-  MOCK_METHOD4(
-      lock, int(const ObStoreCtx& ctx, const uint64_t table_id,
-                const common::ObIArray<share::schema::ObColDesc>& columns, common::ObNewRowIterator& row_iter));
-  MOCK_METHOD4(lock, int(const ObStoreCtx& ctx, const uint64_t table_id,
-                         const common::ObIArray<share::schema::ObColDesc>& columns, const common::ObNewRow& row));
-  MOCK_METHOD1(revert_iter, int(ObStoreRowIterator* iter));
-  MOCK_METHOD1(revert_row, int(const ObStoreRow* row));
-  MOCK_METHOD3(replay, int(const ObStoreCtx& ctx, const char* data, const int64_t data_len));
+  MOCK_METHOD6(get,
+               int(const ObStoreCtx &ctx,
+                   const ObQueryFlag query_flag,
+                   const uint64_t table_id,
+                   const common::ObStoreRowkey &rowkey,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   const ObStoreRow *&row));
+  MOCK_METHOD6(scan,
+               int(const ObStoreCtx &ctx,
+                   const ObQueryFlag query_flag,
+                   const uint64_t table_id,
+                   const common::ObStoreRange &key_range,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   ObStoreRowIterator *&row_iter));
+  MOCK_METHOD6(multi_get,
+               int(const ObStoreCtx &ctx,
+                   const ObQueryFlag query_flag,
+                   const uint64_t table_id,
+                   const common::ObIArray<common::ObStoreRowkey> &rowkeys,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   ObStoreRowIterator *&row_iter));
+  MOCK_METHOD5(set,
+               int(const ObStoreCtx &ctx,
+                   const uint64_t table_id,
+                   const int64_t rowkey_size,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   ObStoreRowIterator &row_iter));
+  MOCK_METHOD5(set,
+               int(const ObStoreCtx &ctx,
+                   const uint64_t table_id,
+                   const int64_t rowkey_size,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   const ObStoreRow &row));
+  MOCK_METHOD4(lock,
+               int(const ObStoreCtx &ctx,
+                   const uint64_t table_id,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   common::ObNewRowIterator &row_iter));
+  MOCK_METHOD4(lock,
+               int(const ObStoreCtx &ctx,
+                   const uint64_t table_id,
+                   const common::ObIArray<share::schema::ObColDesc> &columns,
+                   const common::ObNewRow &row));
+  MOCK_METHOD1(revert_iter,
+               int(ObStoreRowIterator *iter));
+  MOCK_METHOD1(revert_row,
+               int(const ObStoreRow *row));
+  MOCK_METHOD3(replay,
+               int(const ObStoreCtx &ctx, const char *data, const int64_t data_len));
   MOCK_METHOD5(estimate_get_cost,
-      int(const ObQueryFlag query_flag, const uint64_t table_id, const common::ObIArray<common::ObStoreRowkey>& rowkeys,
-          const common::ObIArray<share::schema::ObColDesc>& columns, ObPartitionEst& cost_metrics));
+               int(const ObQueryFlag query_flag,
+                       const uint64_t table_id,
+                       const common::ObIArray<common::ObStoreRowkey> &rowkeys,
+                       const common::ObIArray<share::schema::ObColDesc> &columns,
+                       ObPartitionEst &cost_metrics));
   MOCK_METHOD5(estimate_scan_cost,
-      int(const ObQueryFlag query_flag, const uint64_t table_id, const common::ObStoreRange& key_range,
-          const common::ObIArray<share::schema::ObColDesc>& columns, ObPartitionEst& cost_metrics));
+              int(const ObQueryFlag query_flag,
+                     const uint64_t table_id,
+                     const common::ObStoreRange &key_range,
+                     const common::ObIArray<share::schema::ObColDesc> &columns,
+                     ObPartitionEst &cost_metrics));
 
   enum ObStoreType get_store_type() const
   {
@@ -58,5 +94,6 @@ public:
 
 }  // namespace storage
 }  // namespace oceanbase
+
 
 #endif

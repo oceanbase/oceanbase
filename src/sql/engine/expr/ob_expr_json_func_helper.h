@@ -10,16 +10,16 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for define of func json expr helper
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
+#include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
 
 using namespace oceanbase::common;
@@ -115,7 +115,7 @@ public:
   static ObJsonPathCache* get_path_cache_ctx(const uint64_t& id, ObExecContext *exec_ctx);
 
   static int is_json_zero(const ObString& data, int& result);
-
+  
   /*
   try to transfrom scalar data to jsonBase
   @param[in]  datum          the input datum

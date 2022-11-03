@@ -12,8 +12,10 @@
 
 #ifndef OCEANBASE_COMMON_OB_PROFILE_TYPE_H
 #define OCEANBASE_COMMON_OB_PROFILE_TYPE_H
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /* common */
 #define PCODE " pcode=[%d]"
 // Comment SELF since it conflicts with other macro utils.
@@ -47,17 +49,14 @@ namespace common {
 #define WAIT_TIME_US_IN_RW_QUEUE " wait_time_us_in_rw_queue=[%ld]"
 /*Write transaction waiting time in the commit queue, unit: microsecond*/
 #define WAIT_TIME_US_IN_COMMIT_QUEUE " wait_time_us_in_commit_queue=[%ld]"
-/*The start time of UPS processing a request, that is, the entire process from the network thread receiving the request
- * packet to replying to the result*/
+/*The start time of UPS processing a request, that is, the entire process from the network thread receiving the request packet to replying to the result*/
 #define UPS_REQ_START_TIME " req_start_time=[%ld]"
-/*The end time of UPS processing a request, this time minus the above time is the total time it takes UPS to process a
- * request*/
+/*The end time of UPS processing a request, this time minus the above time is the total time it takes UPS to process a request*/
 #define UPS_REQ_END_TIME " req_end_time=[%ld]"
 /*The size of the ObScanner response from UPS, in bytes*/
 #define SCANNER_SIZE_BYTES " scanner_size_bytes=[%ld]"
 
-/*The time it takes for the parser to parse the sql statement to generate the logical execution plan, unit:
- * microsecond*/
+/*The time it takes for the parser to parse the sql statement to generate the logical execution plan, unit: microsecond*/
 #define SQL_TO_LOGICALPLAN_TIME_US " sql_to_logicalplan_time_us=[%ld]"
 /*The time for the logical execution plan to generate the physical execution plan, unit: microsecond*/
 #define LOGICALPLAN_TO_PHYSICALPLAN_TIME_US " logicalplan_to_physicalplan_time_us=[%ld]"
@@ -87,7 +86,7 @@ namespace common {
 /*Start time and end time of scan root table*/
 #define SCAN_ROOT_TABLE_START_TIME " scan_root_table_start_time=[%ld]"
 #define SCAN_ROOT_TABLE_END_TIME " scan_root_table_end_time=[%ld]"
-}  // namespace common
-}  // namespace oceanbase
+}// common
+}// oceanbase
 
 #endif

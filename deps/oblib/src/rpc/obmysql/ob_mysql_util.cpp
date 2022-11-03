@@ -12,11 +12,13 @@
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
+#include <math.h>
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "lib/charset/ob_dtoa.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/rowid/ob_urowid.h"
 #include "common/object/ob_object.h"
@@ -25,22 +27,24 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace obmysql {
+namespace oceanbase
+{
+namespace obmysql
+{
 const uint64_t ObMySQLUtil::NULL_ = UINT64_MAX;
 // @todo
-// TODO avoid coredump if field_index is too large
-// http://dev.mysql.com/doc/internals/en/prepared-statements.html#null-bitmap
-// offset is 2
-void ObMySQLUtil::update_null_bitmap(char*& bitmap, int64_t field_index)
+//TODO avoid coredump if field_index is too large
+//http://dev.mysql.com/doc/internals/en/prepared-statements.html#null-bitmap
+//offset is 2
+void ObMySQLUtil::update_null_bitmap(char *&bitmap, int64_t field_index)
 {
   int byte_pos = static_cast<int>((field_index + 2) / 8);
-  int bit_pos = static_cast<int>((field_index + 2) % 8);
+  int bit_pos  = static_cast<int>((field_index + 2) % 8);
   bitmap[byte_pos] |= static_cast<char>(1 << bit_pos);
 }
 
-// called by handle OB_MYSQL_COM_STMT_EXECUTE offset is 0
-int ObMySQLUtil::store_length(char* buf, int64_t len, uint64_t length, int64_t& pos)
+//called by handle COM_STMT_EXECUTE offset is 0
+int ObMySQLUtil::store_length(char *buf, int64_t len, uint64_t length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (len < 0 || pos < 0 || len <= pos) {
@@ -51,30 +55,30 @@ int ObMySQLUtil::store_length(char* buf, int64_t len, uint64_t length, int64_t& 
   } else {
     int64_t remain = len - pos;
     if (OB_SUCC(ret)) {
-      if (length < (uint64_t)251 && remain >= 1) {
-        ret = store_int1(buf, len, (uint8_t)length, pos);
+      if (length < (uint64_t) 251 && remain >= 1) {
+        ret = store_int1(buf, len, (uint8_t) length, pos);
       }
       /* 251 is reserved for NULL */
-      else if (length < (uint64_t)0X10000 && remain >= 3) {
+      else if (length < (uint64_t) 0X10000 && remain >= 3) {
         ret = store_int1(buf, len, static_cast<int8_t>(252), pos);
         if (OB_SUCC(ret)) {
-          ret = store_int2(buf, len, (uint16_t)length, pos);
+          ret = store_int2(buf, len, (uint16_t) length, pos);
           if (OB_FAIL(ret)) {
             pos--;
           }
         }
-      } else if (length < (uint64_t)0X1000000 && remain >= 4) {
-        ret = store_int1(buf, len, (uint8_t)253, pos);
+      } else if (length < (uint64_t) 0X1000000 && remain >= 4) {
+        ret = store_int1(buf, len, (uint8_t) 253, pos);
         if (OB_SUCC(ret)) {
-          ret = store_int3(buf, len, (uint32_t)length, pos);
+          ret = store_int3(buf, len, (uint32_t) length, pos);
           if (OB_FAIL(ret)) {
             pos--;
           }
         }
       } else if (length < UINT64_MAX && remain >= 9) {
-        ret = store_int1(buf, len, (uint8_t)254, pos);
+        ret = store_int1(buf, len, (uint8_t) 254, pos);
         if (OB_SUCC(ret)) {
-          ret = store_int8(buf, len, (uint64_t)length, pos);
+          ret = store_int8(buf, len, (uint64_t) length, pos);
           if (OB_FAIL(ret)) {
             pos--;
           }
@@ -89,7 +93,7 @@ int ObMySQLUtil::store_length(char* buf, int64_t len, uint64_t length, int64_t& 
   return ret;
 }
 
-int ObMySQLUtil::get_length(const char*& pos, uint64_t& length)
+int ObMySQLUtil::get_length(const char *&pos, uint64_t &length)
 {
   uint8_t sentinel = 0;
   uint16_t s2 = 0;
@@ -97,7 +101,7 @@ int ObMySQLUtil::get_length(const char*& pos, uint64_t& length)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pos)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input buf", K(pos), K(ret));
+    LOG_WARN("invalid input buf", KP(pos), K(ret));
   } else {
     get_uint1(pos, sentinel);
     if (sentinel < 251) {
@@ -114,17 +118,17 @@ int ObMySQLUtil::get_length(const char*& pos, uint64_t& length)
       get_uint8(pos, length);
     } else {
       // 255??? won't get here.
-      pos--;  // roll back
+      pos--;                  // roll back
       ret = OB_INVALID_DATA;
     }
   }
   return ret;
 }
 
-int ObMySQLUtil::get_length(const char*& pos, uint64_t& length, uint64_t& pos_inc_len)
+int ObMySQLUtil::get_length(const char *&pos, uint64_t &length, uint64_t &pos_inc_len)
 {
   int ret = OB_SUCCESS;
-  const char* tmp_pos = pos;
+  const char *tmp_pos = pos;
   if (OB_FAIL(get_length(pos, length))) {
     LOG_WARN("fail to get length", K(ret));
   } else {
@@ -146,30 +150,31 @@ uint64_t ObMySQLUtil::get_number_store_len(const uint64_t num)
     len = 9;
   } else if (num == UINT64_MAX) {
     // NULL_ == UINT64_MAX
-    // it is represents a NULL in a ProtocolText::ResultsetRow.
+    //it is represents a NULL in a ProtocolText::ResultsetRow.
     len = 1;
   }
   return len;
 }
 
-int ObMySQLUtil::store_str(char* buf, int64_t len, const char* str, int64_t& pos)
+int ObMySQLUtil::store_str(char *buf, int64_t len, const char *str, int64_t &pos)
 {
   uint64_t length = strlen(str);
   return store_str_v(buf, len, str, length, pos);
 }
 
-int ObMySQLUtil::store_str_v(char* buf, int64_t len, const char* str, const uint64_t length, int64_t& pos)
+int ObMySQLUtil::store_str_v(char *buf, int64_t len, const char *str,
+                             const uint64_t length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t pos_bk = pos;
 
-  if (OB_ISNULL(buf)) {  // str could be null
+  if (OB_ISNULL(buf)) { // str could be null
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input args", KP(buf), K(ret));
   } else {
     if (OB_FAIL(store_length(buf, len, length, pos))) {
     } else if (len >= pos && length <= static_cast<uint64_t>(len - pos)) {
-      if ((0 == length) || (length > 0 && NULL != str)) {
+      if ((0 == length ) || (length > 0 && NULL != str)) {
         MEMCPY(buf + pos, str, length);
         pos += length;
       } else {
@@ -177,23 +182,24 @@ int ObMySQLUtil::store_str_v(char* buf, int64_t len, const char* str, const uint
         LOG_WARN("invalid args", "str", ObString(length, str), K(length));
       }
     } else {
-      pos = pos_bk;  // roll back
+      LOG_INFO("=========== store_str_v ====", K(len), K(length), K(pos), K(pos_bk));
+      pos = pos_bk;        // roll back
       ret = OB_SIZE_OVERFLOW;
     }
   }
   return ret;
 }
 
-int ObMySQLUtil::store_obstr(char* buf, int64_t len, ObString str, int64_t& pos)
+int ObMySQLUtil::store_obstr(char *buf, int64_t len, ObString str, int64_t &pos)
 {
   return store_str_v(buf, len, str.ptr(), str.length(), pos);
 }
 
-int ObMySQLUtil::store_obstr_with_pre_space(char* buf, int64_t len, ObString str, int64_t& pos)
+int ObMySQLUtil::store_obstr_with_pre_space(char *buf, int64_t len, ObString str, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t pos_bk = pos;
-  if (OB_ISNULL(buf)) {  // str could be null
+  if (OB_ISNULL(buf)) { // str could be null
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input args", KP(buf), K(ret));
   } else if (str.empty()) {
@@ -206,25 +212,25 @@ int ObMySQLUtil::store_obstr_with_pre_space(char* buf, int64_t len, ObString str
       MEMCPY(buf + pos + 1, str.ptr(), str.length());
       pos += length;
     } else {
-      pos = pos_bk;  // roll back
+      pos = pos_bk;        // roll back
       ret = OB_SIZE_OVERFLOW;
     }
   }
   return ret;
 }
 
-int ObMySQLUtil::store_str_zt(char* buf, int64_t len, const char* str, int64_t& pos)
+int ObMySQLUtil::store_str_zt(char *buf, int64_t len, const char *str, int64_t &pos)
 {
   uint64_t length = strlen(str);
   return store_str_vzt(buf, len, str, length, pos);
 }
 
-int ObMySQLUtil::store_str_nzt(char* buf, int64_t len, const char* str, int64_t& pos)
+int ObMySQLUtil::store_str_nzt(char *buf, int64_t len, const char *str, int64_t &pos)
 {
   return store_str_vnzt(buf, len, str, strlen(str), pos);
 }
 
-int ObMySQLUtil::store_str_vnzt(char* buf, int64_t len, const char* str, int64_t length, int64_t& pos)
+int ObMySQLUtil::store_str_vnzt(char *buf, int64_t len, const char *str, int64_t length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -251,10 +257,12 @@ int ObMySQLUtil::store_str_vnzt(char* buf, int64_t len, const char* str, int64_t
   return ret;
 }
 
-int ObMySQLUtil::store_str_vzt(char* buf, int64_t len, const char* str, const uint64_t length, int64_t& pos)
+
+int ObMySQLUtil::store_str_vzt(char *buf, int64_t len, const char *str,
+                               const uint64_t length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf)) {
+  if (OB_ISNULL(buf))  {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input args", K(ret), KP(buf));
   } else {
@@ -269,23 +277,23 @@ int ObMySQLUtil::store_str_vzt(char* buf, int64_t len, const char* str, const ui
       }
     } else {
       ret = OB_SIZE_OVERFLOW;
-      // LOG_WARN("Store string fail, buffer over flow!", K(len), K(pos), K(length), K(ret));
+      //LOG_WARN("Store string fail, buffer over flow!", K(len), K(pos), K(length), K(ret));
     }
   }
   return ret;
 }
 
-int ObMySQLUtil::store_obstr_zt(char* buf, int64_t len, ObString str, int64_t& pos)
+int ObMySQLUtil::store_obstr_zt(char *buf, int64_t len, ObString str, int64_t &pos)
 {
   return store_str_vzt(buf, len, str.ptr(), str.length(), pos);
 }
 
-int ObMySQLUtil::store_obstr_nzt(char* buf, int64_t len, ObString str, int64_t& pos)
+int ObMySQLUtil::store_obstr_nzt(char *buf, int64_t len, ObString str, int64_t &pos)
 {
   return store_str_vnzt(buf, len, str.ptr(), str.length(), pos);
 }
 
-int ObMySQLUtil::store_obstr_nzt_with_pre_space(char* buf, int64_t len, ObString str, int64_t& pos)
+int ObMySQLUtil::store_obstr_nzt_with_pre_space(char *buf, int64_t len, ObString str, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t length = str.length() + 1;
@@ -303,16 +311,17 @@ int ObMySQLUtil::store_obstr_nzt_with_pre_space(char* buf, int64_t len, ObString
     pos += length;
   }
   return ret;
+
 }
 
-void ObMySQLUtil::prepend_zeros(char* buf, int64_t org_char_size, int64_t offset)
-{
+
+void ObMySQLUtil::prepend_zeros(char *buf, int64_t org_char_size, int64_t offset) {
   // memmove(buf + offset, buf, org_char_size);
   if (OB_ISNULL(buf)) {
     LOG_WARN("invalid buf input", KP(buf));
   } else {
-    char* src_last = buf + org_char_size;
-    char* dst_last = src_last + offset;
+    char *src_last = buf + org_char_size;
+    char *dst_last = src_last + offset;
     while (org_char_size-- > 0) {
       *--dst_last = *--src_last;
     }
@@ -322,8 +331,12 @@ void ObMySQLUtil::prepend_zeros(char* buf, int64_t org_char_size, int64_t offset
   }
 }
 
-int ObMySQLUtil::int_cell_str(char* buf, const int64_t len, int64_t val, const ObObjType obj_type, bool is_unsigned,
-    MYSQL_PROTOCOL_TYPE type, int64_t& pos, bool zerofill, int32_t zflength)
+
+int ObMySQLUtil::int_cell_str(
+    char *buf, const int64_t len, int64_t val, const ObObjType obj_type,
+    bool is_unsigned,
+    MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+    bool zerofill, int32_t zflength)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -335,8 +348,8 @@ int ObMySQLUtil::int_cell_str(char* buf, const int64_t len, int64_t val, const O
     ret = OB_SIZE_OVERFLOW;
   } else {
     if (TEXT == type) {
-      //      char tmp_buff[OB_LTOA10_CHAR_LEN];
-      //      int64_t len_raw = ltoa10(static_cast<int64_t>(val), tmp_buff, is_unsigned ? false : true) - tmp_buff;
+//      char tmp_buff[OB_LTOA10_CHAR_LEN];
+//      int64_t len_raw = ltoa10(static_cast<int64_t>(val), tmp_buff, is_unsigned ? false : true) - tmp_buff;
       uint64_t length = 0;
       int64_t zero_cnt = 0;
       ObFastFormatInt ffi(val, is_unsigned);
@@ -391,8 +404,8 @@ int ObMySQLUtil::int_cell_str(char* buf, const int64_t len, int64_t val, const O
   return ret;
 }
 
-int ObMySQLUtil::null_cell_str(
-    char* buf, const int64_t len, MYSQL_PROTOCOL_TYPE type, int64_t& pos, int64_t cell_index, char* bitmap)
+int ObMySQLUtil::null_cell_str(char *buf, const int64_t len, MYSQL_PROTOCOL_TYPE type,
+                               int64_t &pos, int64_t cell_index, char *bitmap)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -412,7 +425,8 @@ int ObMySQLUtil::null_cell_str(
   return ret;
 }
 
-int ObMySQLUtil::number_cell_str(char* buf, const int64_t len, const number::ObNumber& val, int64_t& pos, int16_t scale,
+int ObMySQLUtil::number_cell_str(
+    char *buf, const int64_t len, const number::ObNumber &val, int64_t &pos, int16_t scale,
     bool zerofill, int32_t zflength)
 {
   int ret = OB_SUCCESS;
@@ -439,8 +453,10 @@ int ObMySQLUtil::number_cell_str(char* buf, const int64_t len, const number::ObN
   return ret;
 }
 
-int ObMySQLUtil::datetime_cell_str(char* buf, const int64_t len, int64_t val, MYSQL_PROTOCOL_TYPE type, int64_t& pos,
-    const ObTimeZoneInfo* tz_info, int16_t scale)
+int ObMySQLUtil::datetime_cell_str(
+    char *buf, const int64_t len,
+    int64_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+    const ObTimeZoneInfo *tz_info, int16_t scale)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -456,19 +472,26 @@ int ObMySQLUtil::datetime_cell_str(char* buf, const int64_t len, int64_t val, MY
         timelen = 11;
         if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
+        } else if (OB_FAIL(
+            ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
         }
       }
@@ -492,7 +515,7 @@ int ObMySQLUtil::datetime_cell_str(char* buf, const int64_t len, int64_t val, MY
   return ret;
 }
 
-int ObMySQLUtil::write_segment_str(char* buf, const int64_t len, int64_t& pos, const ObString& str)
+int ObMySQLUtil::write_segment_str(char *buf, const int64_t len, int64_t &pos, const ObString &str)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -512,9 +535,11 @@ int ObMySQLUtil::write_segment_str(char* buf, const int64_t len, int64_t& pos, c
   return ret;
 }
 
-int ObMySQLUtil::otimestamp_cell_str(char* buf, const int64_t len, const ObOTimestampData& ot_data,
-    MYSQL_PROTOCOL_TYPE type, int64_t& pos, const ObDataTypeCastParams& dtc_params, const int16_t scale,
-    const ObObjType obj_type)
+
+int ObMySQLUtil::otimestamp_cell_str(
+    char *buf, const int64_t len,
+    const ObOTimestampData &ot_data, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+    const ObDataTypeCastParams &dtc_params, const int16_t scale, const ObObjType obj_type)
 {
   int ret = OB_SUCCESS;
   UNUSED(type);
@@ -528,9 +553,8 @@ int ObMySQLUtil::otimestamp_cell_str(char* buf, const int64_t len, const ObOTime
     /* skip 1 byte to store length */
     int64_t pos_begin = pos++;
     if (ot_data.is_null_value()) {
-      // do nothing
-    } else if (OB_FAIL(ObTimeConverter::encode_otimestamp(
-                   obj_type, buf, len, pos, dtc_params.tz_info_, ot_data, static_cast<int8_t>(scale)))) {
+      //do nothing
+    } else if (OB_FAIL(ObTimeConverter::encode_otimestamp(obj_type, buf, len, pos, dtc_params.tz_info_, ot_data, static_cast<int8_t>(scale)))) {
       LOG_WARN("failed to encode_otimestamp", K(ret));
     }
 
@@ -543,9 +567,10 @@ int ObMySQLUtil::otimestamp_cell_str(char* buf, const int64_t len, const ObOTime
   return ret;
 }
 
-int ObMySQLUtil::otimestamp_cell_str2(char* buf, const int64_t len, const ObOTimestampData& ot_data,
-    MYSQL_PROTOCOL_TYPE type, int64_t& pos, const ObDataTypeCastParams& dtc_params, const int16_t scale,
-    const ObObjType obj_type)
+int ObMySQLUtil::otimestamp_cell_str2(
+    char *buf, const int64_t len,
+    const ObOTimestampData &ot_data, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+    const ObDataTypeCastParams &dtc_params, const int16_t scale, const ObObjType obj_type)
 {
   int ret = OB_SUCCESS;
   UNUSED(type);
@@ -559,8 +584,8 @@ int ObMySQLUtil::otimestamp_cell_str2(char* buf, const int64_t len, const ObOTim
     /* skip 1 byte to store length */
     int64_t pos_begin = pos++;
     if (ot_data.is_null_value()) {
-      // do nothing
-    } else {
+      //do nothing
+    }  else {
       if (OB_FAIL(ObTimeConverter::otimestamp_to_str(ot_data, dtc_params, scale, obj_type, buf, len, pos))) {
         LOG_WARN("failed to convert timestamp_tz to str", K(ret));
         pos = pos_begin + 1;
@@ -576,7 +601,9 @@ int ObMySQLUtil::otimestamp_cell_str2(char* buf, const int64_t len, const ObOTim
   return ret;
 }
 
-int ObMySQLUtil::date_cell_str(char* buf, const int64_t len, int32_t val, MYSQL_PROTOCOL_TYPE type, int64_t& pos)
+int ObMySQLUtil::date_cell_str(
+    char *buf, const int64_t len,
+    int32_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -593,16 +620,16 @@ int ObMySQLUtil::date_cell_str(char* buf, const int64_t len, int32_t val, MYSQL_
         ret = ObMySQLUtil::store_int1(buf, len, timelen, pos);
       } else {
         timelen = 4;
-        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {  // length(1)
+        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {//length(1)
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int2(
-                       buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {  // year(2)
+        } else if (OB_FAIL(
+                       ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {//year(2)
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {  // mouth(1)
+        } else if (OB_FAIL(
+                       ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {//mouth(1)
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {  // day(1)
+        } else if (OB_FAIL(
+                       ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {//day(1)
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
         }
       }
@@ -626,7 +653,8 @@ int ObMySQLUtil::date_cell_str(char* buf, const int64_t len, int32_t val, MYSQL_
 }
 
 int ObMySQLUtil::time_cell_str(
-    char* buf, const int64_t len, int64_t val, MYSQL_PROTOCOL_TYPE type, int64_t& pos, int16_t scale)
+    char *buf, const int64_t len,
+    int64_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos, int16_t scale)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -640,25 +668,19 @@ int ObMySQLUtil::time_cell_str(
         LOG_WARN("convert usec to timestamp failed", K(ret));
       } else {
         timelen = 12;
-        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {  // length
+        if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {//length
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(DT_MODE_NEG & ob_time.mode_), pos))) {  // is_negative(1)
+        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(DT_MODE_NEG & ob_time.mode_), pos))) {//is_negative(1)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(
-                       buf, len, static_cast<int32_t>(ob_time.parts_[DT_DATE]), pos))) {  // days(4)
+        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_DATE]), pos))) {//days(4)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {  // hour(1)
+        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {//hour(1)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {  // minute(1)
+        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {//minute(1)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(
-                       buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {  // second(1)
+        } else if ( OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {//second(1)
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(
-                       buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {  // micro-second(4)
+        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {//micro-second(4)
           LOG_WARN("fail to store int", K(ret));
         }
       }
@@ -681,7 +703,9 @@ int ObMySQLUtil::time_cell_str(
   return ret;
 }
 
-int ObMySQLUtil::year_cell_str(char* buf, const int64_t len, uint8_t val, MYSQL_PROTOCOL_TYPE type, int64_t& pos)
+int ObMySQLUtil::year_cell_str(
+    char *buf, const int64_t len,
+    uint8_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -716,8 +740,8 @@ int ObMySQLUtil::year_cell_str(char* buf, const int64_t len, uint8_t val, MYSQL_
   return ret;
 }
 
-int ObMySQLUtil::varchar_cell_str(
-    char* buf, const int64_t len, const ObString& val, const bool is_oracle_raw, int64_t& pos)
+int ObMySQLUtil::varchar_cell_str(char *buf, const int64_t len, const ObString &val,
+    const bool is_oracle_raw, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -731,7 +755,7 @@ int ObMySQLUtil::varchar_cell_str(
       if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
       } else {
         if (OB_LIKELY(length <= len - pos)) {
-          // TODO delete it latter after obclient/obj support RAW
+          //TODO::@xiaofeng, delete it latter after obclient/obj support RAW
           if (is_oracle_raw) {
             if (OB_FAIL(hex_print(val.ptr(), val.length(), buf, len, pos))) {
               pos = pos_bk;
@@ -753,11 +777,12 @@ int ObMySQLUtil::varchar_cell_str(
   return ret;
 }
 
-int ObMySQLUtil::float_cell_str(char* buf, const int64_t len, float val, MYSQL_PROTOCOL_TYPE type, int64_t& pos,
-    int16_t scale, bool zerofill, int32_t zflength)
+int ObMySQLUtil::float_cell_str(char *buf, const int64_t len, float val,
+                                MYSQL_PROTOCOL_TYPE type, int64_t &pos, int16_t scale,
+                                bool zerofill, int32_t zflength)
 {
-  static const int FLT_LEN = FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE;
-  static const int FLT_SIZE = sizeof(float);
+  static const int FLT_LEN =  FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE;
+  static const int FLT_SIZE = sizeof (float);
 
   int ret = OB_SUCCESS;
 
@@ -780,10 +805,22 @@ int ObMySQLUtil::float_cell_str(char* buf, const int64_t len, float val, MYSQL_P
         ret = OB_SIZE_OVERFLOW;
       } else if (len - pos > FLT_LEN) {
         int64_t length;
-        if (0 <= scale) {
-          length = ob_fcvt(val, scale, FLT_LEN - 1, buf + pos + 1, NULL);
+        if (val == INFINITY && is_oracle) {  // only show inf in oracle mode
+          length = strlen("Inf");
+          strncpy(buf + pos + 1, "Inf", length);
+        } else if (val == -INFINITY && is_oracle) {
+          length = strlen("-Inf");
+          strncpy(buf + pos + 1, "-Inf", length);
+        } else if (isnan(val) && is_oracle) {
+          length = strlen("Nan");
+          strncpy(buf + pos + 1, "Nan", length);
         } else {
-          length = ob_gcvt_opt(val, OB_GCVT_ARG_FLOAT, FLT_LEN - 1, buf + pos + 1, NULL, lib::is_oracle_mode());
+          if (0 <= scale) {
+            length = ob_fcvt(val, scale, FLT_LEN - 1, buf + pos + 1, NULL);
+          } else {
+            length = ob_gcvt_opt(val, OB_GCVT_ARG_FLOAT, FLT_LEN - 1, buf + pos + 1,
+                                 NULL, is_oracle, TRUE);
+          }
         }
         ObString tmp_str(0, length, buf + pos + 1);
         LOG_DEBUG("float_cell_str", K(val), K(scale), K(zerofill), K(zflength), K(tmp_str));
@@ -797,7 +834,7 @@ int ObMySQLUtil::float_cell_str(char* buf, const int64_t len, float val, MYSQL_P
           pos += length;
         } else {
           ret = OB_INVALID_ARGUMENT;
-          LOG_ERROR("invalid length", K(length), K(ret));  // OB_ASSERT(length < 251);
+          LOG_ERROR("invalid length", K(length), K(ret)); //OB_ASSERT(length < 251);
         }
       }
     }
@@ -806,11 +843,12 @@ int ObMySQLUtil::float_cell_str(char* buf, const int64_t len, float val, MYSQL_P
   return ret;
 }
 
-int ObMySQLUtil::double_cell_str(char* buf, const int64_t len, double val, MYSQL_PROTOCOL_TYPE type, int64_t& pos,
-    int16_t scale, bool zerofill, int32_t zflength)
+int ObMySQLUtil::double_cell_str(char *buf, const int64_t len, double val,
+                                 MYSQL_PROTOCOL_TYPE type, int64_t &pos, int16_t scale,
+                                 bool zerofill, int32_t zflength)
 {
-  static const int DBL_LEN = DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
-  static const int DBL_SIZE = sizeof(double);
+  static const int DBL_LEN =  DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
+  static const int DBL_SIZE = sizeof (double);
 
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -834,23 +872,34 @@ int ObMySQLUtil::double_cell_str(char* buf, const int64_t len, double val, MYSQL
       } else {
         // we skip 1 bytes to store length for most cases
         int64_t length;
-        if (0 <= scale) {
-          length = ob_fcvt(val, scale, DBL_LEN - 1, buf + pos + 1, NULL);
+        if (val == INFINITY && is_oracle) { // only show inf in oracle mode
+          length = strlen("Inf");
+          strncpy(buf + pos + 1, "Inf", length);
+        } else if (val == -INFINITY && is_oracle) {
+          length = strlen("-Inf");
+          strncpy(buf + pos + 1, "-Inf", length);
+        } else if (isnan(val) && is_oracle) {
+          length = strlen("Nan");
+          strncpy(buf + pos + 1, "Nan", length);
         } else {
-          length = ob_gcvt_opt(val, OB_GCVT_ARG_DOUBLE, DBL_LEN - 1, buf + pos + 1, NULL, lib::is_oracle_mode());
+          if (0 <= scale) {
+            length = ob_fcvt(val, scale, DBL_LEN - 1, buf + pos + 1, NULL);
+          } else {
+            length = ob_gcvt_opt(val, OB_GCVT_ARG_DOUBLE, DBL_LEN - 1, buf + pos + 1,
+                                 NULL, is_oracle, TRUE);
+          }
         }
         ObString tmp_str(0, length, buf + pos + 1);
         LOG_DEBUG("double_cell_str", K(val), K(scale), K(zerofill), K(zflength), K(tmp_str));
 
-        if (length <= DBL_LEN) {  // OB_ASSERT(length <= DBL_LEN);
+        if (length <= DBL_LEN) { //OB_ASSERT(length <= DBL_LEN);
           int64_t zero_cnt = 0;
           if (zerofill && (zero_cnt = zflength - length) > 0) {
             ObMySQLUtil::prepend_zeros(buf + pos + 1, length, zero_cnt);
             length = zflength;
           }
 
-          // According to the agreement: If the length of the double is less than 251 bytes, the length header only
-          // needs 1 byte, otherwise the length header needs 3 bytes
+          // 按照协议: 如果double的长度小于251字节，长度头只需要1个字节，否则长度头需要3个字节
           if (length < 251) {
             ret = ObMySQLUtil::store_length(buf, len, length, pos);
             pos += length;
@@ -870,7 +919,8 @@ int ObMySQLUtil::double_cell_str(char* buf, const int64_t len, double val, MYSQL
   return ret;
 }
 int ObMySQLUtil::bit_cell_str(
-    char* buf, const int64_t len, uint64_t val, int32_t bit_len, MYSQL_PROTOCOL_TYPE type, int64_t& pos)
+    char *buf, const int64_t len, uint64_t val, int32_t bit_len,
+    MYSQL_PROTOCOL_TYPE type, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t length = 0;
@@ -882,24 +932,21 @@ int ObMySQLUtil::bit_cell_str(
     if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
       LOG_WARN("fail to store length", K(ret), KP(buf), K(len), K(length), K(pos));
     } else if (OB_FAIL(bit_to_char_array(val, bit_len, buf, len, pos))) {
-      LOG_WARN("fail to trans bit to str", K(ret), KP(buf), K(len), K(val), K(pos), K(bit_len), K(lbt()));
-    } else { /*do nothing*/
-    }
+      LOG_WARN("fail to trans bit to str", K(ret), KP(buf), K(len), K(val), K(pos), K(bit_len), KCSTRING(lbt()));
+    } else {/*do nothing*/}
   } else if (BINARY == type) {
     length = (bit_len + 7) / 8;
     if (OB_FAIL(ObMySQLUtil::store_length(buf, len, length, pos))) {
       LOG_WARN("fail to store length", K(ret), KP(buf), K(len), K(length), K(pos));
     } else if (OB_FAIL(bit_to_char_array(val, bit_len, buf, len, pos))) {
-      LOG_WARN("fail to trans bit to str", K(ret), KP(buf), K(len), K(val), K(pos), K(bit_len), K(lbt()));
-    } else { /*do nothing*/
-    }
-  } else { /*do nothing*/
-  }
+      LOG_WARN("fail to trans bit to str", K(ret), KP(buf), K(len), K(val), K(pos), K(bit_len), KCSTRING(lbt()));
+    } else {/*do nothing*/}
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObMySQLUtil::interval_ym_cell_str(
-    char* buf, const int64_t len, ObIntervalYMValue val, MYSQL_PROTOCOL_TYPE type, int64_t& pos, const ObScale scale)
+int ObMySQLUtil::interval_ym_cell_str(char *buf, const int64_t len, ObIntervalYMValue val,
+                                      MYSQL_PROTOCOL_TYPE type, int64_t &pos, const ObScale scale)
 {
   int ret = OB_SUCCESS;
   UNUSED(type);
@@ -923,8 +970,8 @@ int ObMySQLUtil::interval_ym_cell_str(
   return ret;
 }
 
-int ObMySQLUtil::interval_ds_cell_str(
-    char* buf, const int64_t len, ObIntervalDSValue val, MYSQL_PROTOCOL_TYPE type, int64_t& pos, const ObScale scale)
+int ObMySQLUtil::interval_ds_cell_str(char *buf, const int64_t len, ObIntervalDSValue val,
+                                      MYSQL_PROTOCOL_TYPE type, int64_t &pos, const ObScale scale)
 {
 
   int ret = OB_SUCCESS;
@@ -951,7 +998,8 @@ int ObMySQLUtil::interval_ds_cell_str(
   return ret;
 }
 
-int ObMySQLUtil::urowid_cell_str(char* buf, const int64_t len, const ObURowIDData& urowid_data, int64_t& pos)
+int ObMySQLUtil::urowid_cell_str(char *buf, const int64_t len, const ObURowIDData &urowid_data,
+                                 int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -1027,5 +1075,5 @@ int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val
   return ret;
 }
 
-}  // namespace obmysql
-}  // namespace oceanbase
+} // namespace obmysql
+} // namespace oceanbase

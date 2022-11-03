@@ -15,19 +15,18 @@
 #include "lib/container/ob_array_helper.h"
 #include "lib/container/ob_array.h"
 
-namespace oceanbase {
-namespace common {
-class TestArrayHelper : public ::testing::Test {
+namespace oceanbase
+{
+namespace common
+{
+class TestArrayHelper : public ::testing::Test
+{
 public:
-  TestArrayHelper()
-  {}
-  virtual ~TestArrayHelper()
-  {}
+  TestArrayHelper() {}
+  virtual ~TestArrayHelper() {}
 
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
 };
 
 TEST_F(TestArrayHelper, common)
@@ -105,10 +104,10 @@ TEST_F(TestArrayHelper, common)
   ASSERT_EQ(OB_ARRAY_OUT_OF_RANGE, array.pop_back(temp));
   ASSERT_EQ(0, array.count());
 }
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

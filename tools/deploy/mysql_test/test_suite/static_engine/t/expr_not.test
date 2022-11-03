@@ -1,0 +1,73 @@
+#owner: dachuan.sdc
+
+--disable_abort_on_error
+--result_format 4
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+--sleep 2
+alter system flush plan cache global;
+
+connection default;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+
+connection conn_admin;
+
+--sleep 2
+alter system flush plan cache global;
+
+connection default;
+
+set ob_enable_plan_cache = false;
+select not 1 from dual;
+select not 1.0 from dual;
+select not null from dual;
+select not 'hello' from dual;
+
+let $cnt = 1;
+while ($cnt <= 29)
+{
+  eval select not t$cnt from t;
+  inc $cnt;
+}
+
+--sleep 2

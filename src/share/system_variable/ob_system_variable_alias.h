@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
-/* OB specific system vaiables will start with ob_,
- * all system vaiables which not start with ob_ should be compatible with mysql
-*/
 #ifndef OCEANBASE_SHARE_SYSTEM_VARIABLE_OB_SYSTEM_VARIABLE_ALIAS_
 #define OCEANBASE_SHARE_SYSTEM_VARIABLE_OB_SYSTEM_VARIABLE_ALIAS_
 namespace oceanbase
@@ -104,11 +100,19 @@ namespace share
   static const char* const OB_SV_SESSION_TRACK_SCHEMA = "session_track_schema";
   static const char* const OB_SV_SESSION_TRACK_SYSTEM_VARIABLES = "session_track_system_variables";
   static const char* const OB_SV_SESSION_TRACK_STATE_CHANGE = "session_track_state_change";
-  static const char* const OB_SV_DEFAULT_REPLICA_NUM = "ob_default_replica_num";
+  static const char* const OB_SV_HAVE_QUERY_CACHE = "have_query_cache";
+  static const char* const OB_SV_QUERY_CACHE_LIMIT = "query_cache_limit";
+  static const char* const OB_SV_QUERY_CACHE_MIN_RES_UNIT = "query_cache_min_res_unit";
+  static const char* const OB_SV_QUERY_CACHE_WLOCK_INVALIDATE = "query_cache_wlock_invalidate";
+  static const char* const OB_SV_BINLOG_FORMAT = "binlog_format";
+  static const char* const OB_SV_BINLOG_CHECKSUM = "binlog_checksum";
+  static const char* const OB_SV_BINLOG_ROWS_QUERY_LOG_EVENTS = "binlog_rows_query_log_events";
+  static const char* const OB_SV_LOG_BIN = "log_bin";
+  static const char* const OB_SV_SERVER_UUID = "server_uuid";
+  static const char* const OB_SV_DEFAULT_STORAGE_ENGINE = "default_storage_engine";
   static const char* const OB_SV_INTERM_RESULT_MEM_LIMIT = "ob_interm_result_mem_limit";
   static const char* const OB_SV_PROXY_PARTITION_HIT = "ob_proxy_partition_hit";
   static const char* const OB_SV_LOG_LEVEL = "ob_log_level";
-  static const char* const OB_SV_MAX_PARALLEL_DEGREE = "ob_max_parallel_degree";
   static const char* const OB_SV_QUERY_TIMEOUT = "ob_query_timeout";
   static const char* const OB_SV_READ_CONSISTENCY = "ob_read_consistency";
   static const char* const OB_SV_ENABLE_TRANSFORMATION = "ob_enable_transformation";
@@ -120,9 +124,7 @@ namespace share
   static const char* const OB_SV_LAST_SCHEMA_VERSION = "ob_last_schema_version";
   static const char* const OB_SV_GLOBAL_DEBUG_SYNC = "ob_global_debug_sync";
   static const char* const OB_SV_PROXY_GLOBAL_VARIABLES_VERSION = "ob_proxy_global_variables_version";
-  static const char* const OB_SV_ENABLE_TRACE_LOG = "ob_enable_trace_log";
-  static const char* const OB_SV_ENABLE_HASH_GROUP_BY = "ob_enable_hash_group_by";
-  static const char* const OB_SV_ENABLE_BLK_NESTEDLOOP_JOIN = "ob_enable_blk_nestedloop_join";
+  static const char* const OB_SV_ENABLE_SHOW_TRACE = "ob_enable_show_trace";
   static const char* const OB_SV_BNL_JOIN_CACHE_SIZE = "ob_bnl_join_cache_size";
   static const char* const OB_SV_PROXY_USER_PRIVILEGE = "ob_proxy_user_privilege";
   static const char* const OB_SV_ORG_CLUSTER_ID = "ob_org_cluster_id";
@@ -131,11 +133,9 @@ namespace share
   static const char* const OB_SV_PLAN_CACHE_EVICT_LOW_PERCENTAGE = "ob_plan_cache_evict_low_percentage";
   static const char* const OB_SV_RECYCLEBIN = "recyclebin";
   static const char* const OB_SV_CAPABILITY_FLAG = "ob_capability_flag";
-  static const char* const OB_SV_STMT_PARALLEL_DEGREE = "ob_stmt_parallel_degree";
   static const char* const OB_SV_IS_RESULT_ACCURATE = "is_result_accurate";
   static const char* const OB_SV_ERROR_ON_OVERLAP_TIME = "error_on_overlap_time";
   static const char* const OB_SV_COMPATIBILITY_MODE = "ob_compatibility_mode";
-  static const char* const OB_SV_CREATE_TABLE_STRICT_MODE = "ob_create_table_strict_mode";
   static const char* const OB_SV_SQL_WORK_AREA_PERCENTAGE = "ob_sql_work_area_percentage";
   static const char* const OB_SV_SAFE_WEAK_READ_SNAPSHOT = "ob_safe_weak_read_snapshot";
   static const char* const OB_SV_ROUTE_POLICY = "ob_route_policy";
@@ -154,16 +154,11 @@ namespace share
   static const char* const OB_SV_AUTO_INCREMENT_CACHE_SIZE = "auto_increment_cache_size";
   static const char* const OB_SV_ENABLE_JIT = "ob_enable_jit";
   static const char* const OB_SV_TEMP_TABLESPACE_SIZE_PERCENTAGE = "ob_temp_tablespace_size_percentage";
-  static const char* const OB_SV__OPTIMIZER_ADAPTIVE_CURSOR_SHARING = "_optimizer_adaptive_cursor_sharing";
-  static const char* const OB_SV_TIMESTAMP_SERVICE = "ob_timestamp_service";
   static const char* const OB_SV_PLUGIN_DIR = "plugin_dir";
-  static const char* const OB_SV_UNDO_RETENTION = "undo_retention";
-  static const char* const OB_SV__OB_USE_PARALLEL_EXECUTION = "_ob_use_parallel_execution";
   static const char* const OB_SV_SQL_AUDIT_PERCENTAGE = "ob_sql_audit_percentage";
   static const char* const OB_SV_ENABLE_SQL_AUDIT = "ob_enable_sql_audit";
   static const char* const OB_SV_OPTIMIZER_USE_SQL_PLAN_BASELINES = "optimizer_use_sql_plan_baselines";
   static const char* const OB_SV_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES = "optimizer_capture_sql_plan_baselines";
-  static const char* const OB_SV_PARALLEL_MAX_SERVERS = "parallel_max_servers";
   static const char* const OB_SV_PARALLEL_SERVERS_TARGET = "parallel_servers_target";
   static const char* const OB_SV_EARLY_LOCK_RELEASE = "ob_early_lock_release";
   static const char* const OB_SV_TRX_IDLE_TIMEOUT = "ob_trx_idle_timeout";
@@ -188,7 +183,6 @@ namespace share
   static const char* const OB_SV_TRACEFILE_IDENTIFIER = "tracefile_identifier";
   static const char* const OB_SV__GROUPBY_NOPUSHDOWN_CUT_RATIO = "_groupby_nopushdown_cut_ratio";
   static const char* const OB_SV__PX_BROADCAST_FUDGE_FACTOR = "_px_broadcast_fudge_factor";
-  static const char* const OB_SV__PRIMARY_ZONE_ENTITY_COUNT = "_primary_zone_entity_count";
   static const char* const OB_SV_TRANSACTION_ISOLATION = "transaction_isolation";
   static const char* const OB_SV_TRX_LOCK_TIMEOUT = "ob_trx_lock_timeout";
   static const char* const OB_SV_VALIDATE_PASSWORD_CHECK_USER_NAME = "validate_password_check_user_name";
@@ -198,8 +192,8 @@ namespace share
   static const char* const OB_SV_VALIDATE_PASSWORD_POLICY = "validate_password_policy";
   static const char* const OB_SV_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT = "validate_password_special_char_count";
   static const char* const OB_SV_DEFAULT_PASSWORD_LIFETIME = "default_password_lifetime";
+  static const char* const OB_SV__OB_OLS_POLICY_SESSION_LABELS = "_ob_ols_policy_session_labels";
   static const char* const OB_SV_TRACE_INFO = "ob_trace_info";
-  static const char* const OB_SV_ENABLE_BATCHED_MULTI_STATEMENT = "ob_enable_batched_multi_statement";
   static const char* const OB_SV__PX_PARTITION_SCAN_THRESHOLD = "_px_partition_scan_threshold";
   static const char* const OB_SV__OB_PX_BCAST_OPTIMIZATION = "_ob_px_bcast_optimization";
   static const char* const OB_SV__OB_PX_SLAVE_MAPPING_THRESHOLD = "_ob_px_slave_mapping_threshold";
@@ -217,7 +211,26 @@ namespace share
   static const char* const OB_SV_NLS_CURRENCY = "nls_currency";
   static const char* const OB_SV_NLS_ISO_CURRENCY = "nls_iso_currency";
   static const char* const OB_SV_NLS_DUAL_CURRENCY = "nls_dual_currency";
+  static const char* const OB_SV_PLSQL_CCFLAGS = "plsql_ccflags";
   static const char* const OB_SV__OB_PROXY_SESSION_TEMPORARY_TABLE_USED = "_ob_proxy_session_temporary_table_used";
+  static const char* const OB_SV__ENABLE_PARALLEL_DDL = "_enable_parallel_ddl";
+  static const char* const OB_SV__FORCE_PARALLEL_DDL_DOP = "_force_parallel_ddl_dop";
+  static const char* const OB_SV_CURSOR_SHARING = "cursor_sharing";
+  static const char* const OB_SV__OPTIMIZER_NULL_AWARE_ANTIJOIN = "_optimizer_null_aware_antijoin";
+  static const char* const OB_SV__PX_PARTIAL_ROLLUP_PUSHDOWN = "_px_partial_rollup_pushdown";
+  static const char* const OB_SV__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN = "_px_dist_agg_partial_rollup_pushdown";
+  static const char* const OB_SV__CREATE_AUDIT_PURGE_JOB = "_create_audit_purge_job";
+  static const char* const OB_SV__DROP_AUDIT_PURGE_JOB = "_drop_audit_purge_job";
+  static const char* const OB_SV__SET_PURGE_JOB_INTERVAL = "_set_purge_job_interval";
+  static const char* const OB_SV__SET_PURGE_JOB_STATUS = "_set_purge_job_status";
+  static const char* const OB_SV__SET_LAST_ARCHIVE_TIMESTAMP = "_set_last_archive_timestamp";
+  static const char* const OB_SV__CLEAR_LAST_ARCHIVE_TIMESTAMP = "_clear_last_archive_timestamp";
+  static const char* const OB_SV__AGGREGATION_OPTIMIZATION_SETTINGS = "_aggregation_optimization_settings";
+  static const char* const OB_SV__PX_SHARED_HASH_JOIN = "_px_shared_hash_join";
+  static const char* const OB_SV_SQL_NOTES = "sql_notes";
+  static const char* const OB_SV_INNODB_STRICT_MODE = "innodb_strict_mode";
+  static const char* const OB_SV__WINDOWFUNC_OPTIMIZATION_SETTINGS = "_windowfunc_optimization_settings";
+  static const char* const OB_SV_ENABLE_RICH_ERROR_MSG = "ob_enable_rich_error_msg";
 
 }
 }

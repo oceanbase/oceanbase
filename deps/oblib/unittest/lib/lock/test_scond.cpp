@@ -18,18 +18,14 @@ TEST(TestScond, Basic)
 {
   TIME_LESS(200000l, [] {
     SCond cond;
-    cotesting::FlexPool(
-        [&cond] {
-          cond.prepare();
-          cond.wait(100000l);
-        },
-        1,
-        10)
-        .start();
+    cotesting::FlexPool([&cond] {
+      cond.prepare();
+      cond.wait(100000l);
+    }, 1, 10).start();
   });
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

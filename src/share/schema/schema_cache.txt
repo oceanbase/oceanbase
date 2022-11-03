@@ -1,0 +1,114 @@
+
+* 解决的问题
+－schema mgr使用超过2小时会因内存回收而core
+－schema内存回收周期内不可控
+－解决表量大导致的刷不出schema的问题
+－简化锁而提高性能 (提高40%)
+- 简化代码 (移除50%代码)
+
+* 思路
+对schema的使用，分为两层：
+－ resolver层 通过check_schema_exist/get_schema_id接口，完成将name->id/version的转换
+－ executor/storage层 通过get_schema接口，完成id/version->schema的转换
+单条语句的整个执行过程，使用一个版本的schema镜像。
+
+* 数据结构及类
+ObSchemaNameIdMap
+每种schema_type用一个map
+维护<NAME, id/version>的映射,每个NAME缓存Ｎ个版本的的id/version.
+此map set为全集，用refreshed_version表示已经刷到的版本。
+对于不同类型的NAME, 其内容不同，但均以id为前缀，以name结尾。
+倒如，对于TABLE, NAME为tenant_id/db_id/tbl_name。
+
+查找时，根据NAME找到id/version的列表，找到max(version<=V)对应的id. 如果没找到，则需要从内部表构造。
+更新时，将NAME的id/version最小version替换
+
+map的内存采用arena allocator来管理，定期整理碎片。整理线程定时触发，当总占用内存超过预期值，将最新
+版本的全量，即将__all_table 记录捞回本地，构造新的map, 完成后进行指针替换，将新map替换老map.
+此处不用加锁，但必须是violate修饰，完成即等待一个map查询周期即可将老map内存释放。
+
+ObSchemaIdVersionMap
+每种schema_type用一个map
+维护<id, version>的映射,每个id缓存Ｎ个版本的的version.
+此map set为全集，在更新ObSchemaNameIdMap时，更新此map.
+此map的目的是解决仅通过id来获取schema的场景，例如 index_id -> index_schema / tenant_id -> tenant_schema 等。
+
+
+ObMultiVersionSchemaCache
+维护<schema_type/schema_id/schema_version, schema>的映射，为KVCache
+
+查找时，根据key查找到value后, 需要guard记住handle及次数，以语句执行完后revert;
+如果没有命中，则需要从内部表构造此schema作为value, 放入cache中, 然后再通过key取value.
+更新时，根据key直接更新value.
+
+KVCache的set/get接口，调用者不用关心内存问题。
+
+
+ObSchemaMgrGuard
+维护一次查询过程使用schema的某个snapshot.  重要成员：
+- snapshot_version，
+使得某个查询语句使用同一个版本的schema，支持多版本schema的语义
+//- cache_name_map, 为name->id/version的映射。记录当前语句在ObSchemaNameIdMap中查询成功的记录.
+//- trace_name_map, 为id/version->name的映射，就是将cache_name_map倒过来的映射。
+- id_version_map, 为id->version的映射，为合并专用。
+
+ObMultiVersionSchemaCache (后述与ObMultiVersionSchemaService合并)
+新增各增加map set及KVCache
+
+* 流程
+－resolver层通过schema_mgr_guard的get_xxx_id接口来获取NAME对应的id. 如果存在，则返回id，不存在，则返回无效id.
+倒如：
+get_table_id(t_id, db_id, tbl_name)
+get_table_id(t_id, db_name, tbl_name) ==> 通过t_id/db_name 查hash转换成db_id, 再调用上面的接口。
+
+- engine层通过schema_mgr_guard的get_schema接口来获取type/id/version对应的schema.
+
+- storage层在合并时，会根据老版本号来获取schema。此时，需要先将大版本号从内部表中将schema的id/version构造出来，
+然后get_schema时，通过id能确定version。
+
+* 内部表的访问
+－ ddl后更新map
+以TABLE为例，
+select tenant_id, table_id, table_name, database_id from __all_table_history where xxx;
+
+- 根据name访问map
+map miss时 (此时snapshot已经设置)  version < 缓存的min_version, 需要根据 t_id/db_id/tbl_name/version更新
+以TABLE为例，
+select tenant_id, table_id, schema_version, table_name, database_id from __all_table_history where t_id/tbl_name/max(schema_version<version)/db_id;
+
+- 根据snapshot_ver批量更新id_version_map
+以TABLE为例，
+select max(v), tenant_id, table_id __all_table_history where version <= snapshot_ver group by t_id/tbl_id;
+将此结果替换__all_table中的id/version，得到snapshot的版本集。
+
+- 根据id/ver访问cache
+以TABLE为例，
+cache miss时，根据tenant_id/database_id/table_id/schema_version来构造schema
+具体sql可参考老逻辑, 要老sql不同之处，只需要捞特写的一个表
+select xxx from __all_table_history;
+select yyy from __all_column_history;
+
+* 接口变动
+
+schema_mgr被废除，用guard替代，整条语句执行过程用一个guard.
+
+schema_checker被废除，用guard替换
+
+schema_mgr内的各种映射用map set替代，提供统一的接口及逻辑。
+
+之前的各种schema_mgr slots及相应的lock，全部被废除。
+
+schema_mgr->get_xxx_schema(xxx,yyy,zzz)的接口统一为guard.get_schema(id, version).
+
+schema_service中为RS接供的各种接口废除
+
+简化刷schem过程，提高刷schema的性能，以应对集群的扩展
+刷schema时，只会更新map set, 因而，只会使用table_history中记录，并不需要column_history中记录，性能会大大提提升。
+当schema cache miss时，也只会刷所需版本的某个schema.
+
+内存重整代码废除，相应的内存分配库后续会被废除。
+
+* 性能风险
+
+- eof -
+

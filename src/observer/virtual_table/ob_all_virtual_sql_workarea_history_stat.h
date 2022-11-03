@@ -18,26 +18,23 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/row/ob_row.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObSqlWorkareaHistoryStatIterator {
+class ObSqlWorkareaHistoryStatIterator
+{
 public:
   ObSqlWorkareaHistoryStatIterator();
-  ~ObSqlWorkareaHistoryStatIterator()
-  {
-    destroy();
-  }
-
+  ~ObSqlWorkareaHistoryStatIterator() { destroy(); }
 public:
   void destroy();
   void reset();
-  int init();
-  int get_next_wa_stat(sql::ObSqlWorkAreaStat*& wa_stat, uint64_t& tenant_id);
-
+  int init(const uint64_t effective_tenant_id);
+  int get_next_wa_stat(sql::ObSqlWorkAreaStat *&wa_stat, uint64_t &tenant_id);
 private:
   int get_next_batch_wa_stats();
-
 private:
   common::ObSEArray<sql::ObSqlWorkAreaStat, 32> wa_stats_;
   common::ObSEArray<uint64_t, 16> tenant_ids_;
@@ -45,50 +42,52 @@ private:
   int64_t cur_nth_tenant_;
 };
 
-class ObSqlWorkareaHistoryStat : public common::ObVirtualTableScannerIterator {
+class ObSqlWorkareaHistoryStat : public common::ObVirtualTableScannerIterator
+{
 public:
   ObSqlWorkareaHistoryStat();
-  virtual ~ObSqlWorkareaHistoryStat()
-  {
-    destroy();
-  }
+  virtual ~ObSqlWorkareaHistoryStat() { destroy(); }
 
 public:
   void destroy();
   void reset();
-  int inner_get_next_row(common::ObNewRow*& row);
+  int inner_get_next_row(common::ObNewRow *&row);
 
 private:
-  enum STORAGE_COLUMN {
+  enum STORAGE_COLUMN
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     PLAN_ID,
     SQL_ID,
     OPERATION_TYPE,
-    OPERATION_ID,  // OB_APP_MIN_COLUMN_ID + 5
+    OPERATION_ID, // OB_APP_MIN_COLUMN_ID + 5
     ESTIMATED_OPTIMAL_SIZE,
     ESTIMATED_ONEPASS_SIZE,
     LAST_MEMORY_USED,
     LAST_EXECUTION,
-    LAST_DEGREE,  // OB_APP_MIN_COLUMN_ID + 10
+    LAST_DEGREE,      // OB_APP_MIN_COLUMN_ID + 10
     TOTAL_EXECUTIONS,
     OPTIMAL_EXECUTIONS,
     ONEPASS_EXECUTIONS,
     MULTIPASSES_EXECUTIONS,
-    ACTIVE_TIME,  // OB_APP_MIN_COLUMN_ID + 15
+    ACTIVE_TIME,       // OB_APP_MIN_COLUMN_ID + 15
     MAX_TEMPSEG_SIZE,
     LAST_TEMPSEG_SIZE,
-    TENAND_ID,  // OB_APP_MIN_COLUMN_ID + 18
+    TENAND_ID,         // OB_APP_MIN_COLUMN_ID + 18
     POLICY,
   };
-  int fill_row(uint64_t tenant_id, sql::ObSqlWorkAreaStat& wa_stat, common::ObNewRow*& row);
+  int fill_row(
+    uint64_t tenant_id,
+    sql::ObSqlWorkAreaStat &wa_stat,
+    common::ObNewRow *&row);
   int get_server_ip_and_port();
-
 private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaHistoryStatIterator iter_;
 };
+
 
 } /* namespace observer */
 } /* namespace oceanbase */

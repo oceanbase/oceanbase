@@ -14,19 +14,21 @@
 
 #include "sql/engine/expr/ob_expr_bool.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
-
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 using namespace oceanbase::common;
 
-ObExprBool::ObExprBool(ObIAllocator& alloc) : ObLogicalExprOperator(alloc, T_OP_BOOL, N_BOOL, 1, NOT_ROW_DIMENSION)
-{}
+ObExprBool::ObExprBool(ObIAllocator &alloc)
+  : ObLogicalExprOperator(alloc, T_OP_BOOL, N_BOOL, 1, NOT_ROW_DIMENSION) {}
 
-ObExprBool::~ObExprBool()
-{}
+ObExprBool::~ObExprBool() {}
 
-int ObExprBool::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+int ObExprBool::calc_result_type1(ObExprResType &type,
+                                  ObExprResType &type1,
+                                  ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
@@ -40,12 +42,12 @@ int ObExprBool::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObE
       type1.set_calc_type(type1.get_type());      
     }
   } else {
-    const ObObjType& calc_type = ObDoubleType;
+    const ObObjType &calc_type = ObDoubleType;
     type1.set_calc_type(calc_type);
-    const ObAccuracy& calc_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][calc_type];
+    const ObAccuracy &calc_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][calc_type];
     type1.set_calc_accuracy(calc_acc);
   }
-  const ObAccuracy& res_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObInt32Type];
+  const ObAccuracy &res_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObInt32Type];
   type.set_type(ObInt32Type);
   type.set_accuracy(res_acc);
   ObExprOperator::calc_result_flag1(type, type1);
@@ -53,12 +55,17 @@ int ObExprBool::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObE
   return ret;
 }
 
-#define CHECK_IS_TRUE_FUNC_NAME(type) \
-  int calc_bool_expr_for_##type(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+#define CHECK_IS_TRUE_FUNC_NAME(type)                               \
+  int calc_bool_expr_for_##type(const ObExpr &expr, ObEvalCtx &ctx, \
+      ObDatum &res_datum)
 
+// ObObjEvaluator::is_true()里面，如果输入obj是null，结果是false
+// 但是我们这里需要设置为null
+// eg: expr1 and null -> null
+// 如果bool expr设置为false，上面结果会变成false
 #define EVAL_ARG()                                      \
   int ret = OB_SUCCESS;                                 \
-  ObDatum* child_datum = NULL;                          \
+  ObDatum *child_datum = NULL;                          \
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_datum))) { \
     LOG_WARN("eval arg 0 failed", K(ret));              \
   } else if (child_datum->is_null()) {                  \
@@ -79,6 +86,7 @@ CHECK_IS_TRUE_FUNC_NAME(float_type)
 {
   EVAL_ARG()
   {
+    // 不考虑浮点数和0比较的问题, see ObObj::is_zero()
     int32_t res = (0 == child_datum->get_float()) ? 0 : 1;
     res_datum.set_int32(res);
   }
@@ -89,6 +97,7 @@ CHECK_IS_TRUE_FUNC_NAME(double_type)
 {
   EVAL_ARG()
   {
+    // 不考虑浮点数和0比较的问题, see ObObj::is_zero()
     int32_t res = (0 == child_datum->get_double()) ? 0 : 1;
     res_datum.set_int32(res);
   }
@@ -101,9 +110,7 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
   {
     if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {
       int cmp_result = 0;
-      if (child_datum->is_null()) {
-        res_datum.set_int32(1);;
-      } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
+      if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
         LOG_WARN("failed: compare json", K(ret));
       } else {
         res_datum.set_int32(cmp_result);
@@ -117,9 +124,13 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
   return ret;
 }
 
-int ObExprBool::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprBool::cg_expr(ObExprCGCtx &expr_cg_ctx,
+                        const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
+  // 布尔表达式只会在MySQL模式下出现, Oracle模式下中如果AND表达式两边不是布尔语义的
+  // 在语法解析阶段会报错, 所以resolve时,不会在Oracle模式下增加bool expr
   OB_ASSERT(false == lib::is_oracle_mode());
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
@@ -140,32 +151,38 @@ int ObExprBool::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObE
       case ObUInt32Type:
       case ObUInt64Type:
       case ObBitType: {
-        rt_expr.eval_func_ = calc_bool_expr_for_integer_type;
-        break;
+          rt_expr.eval_func_ = calc_bool_expr_for_integer_type;
+          break;
       }
       case ObFloatType:
-      case ObUFloatType: {
-        rt_expr.eval_func_ = calc_bool_expr_for_float_type;
-        break;
+      case ObUFloatType:{
+          rt_expr.eval_func_ = calc_bool_expr_for_float_type;
+          break;
       }
       case ObDoubleType:
       case ObUDoubleType: {
-        rt_expr.eval_func_ = calc_bool_expr_for_double_type;
-        break;
+          rt_expr.eval_func_ = calc_bool_expr_for_double_type;
+          break;
+      }
+      case ObJsonType: {
+          rt_expr.eval_func_ = calc_bool_expr_for_other_type;
+          break;
       }
       case ObMaxType: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("bool expr got unexpected type", K(ret), K(child_res_meta));
-        break;
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("bool expr got unexpected type", K(ret), K(child_res_meta));
+          break;
       }
       default: {
-        rt_expr.eval_func_ = calc_bool_expr_for_other_type;
-        break;
+          rt_expr.eval_func_ = calc_bool_expr_for_other_type;
+          break;
       }
     }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
+
+#undef EVAL_ARG

@@ -33,97 +33,110 @@
  * Notes:
  * Only (selected) functions in _this_ file should treat chr* as non-constant.
  */
-
+
 /*
  - newcvec - allocate a new cvec
  ^ static struct cvec *newcvec(int, int);
  */
-static struct cvec* newcvec(int nchrs, /* to hold this many chrs... */
-    int nranges)                       /* ... and this many ranges... */
+static struct cvec *
+newcvec(
+    int nchrs,			/* to hold this many chrs... */
+    int nranges)		/* ... and this many ranges... */
 {
-  size_t nc = (size_t)nchrs + (size_t)nranges * 2;
-  size_t n = sizeof(struct cvec) + nc * sizeof(chr);
-  struct cvec* cv = (struct cvec*)MALLOC(n);
+    size_t nc = (size_t)nchrs + (size_t)nranges*2;
+    size_t n = sizeof(struct cvec) + nc*sizeof(chr);
+    struct cvec *cv = (struct cvec *) MALLOC(n);
 
-  if (cv == NULL) {
-    return NULL;
-  }
-  cv->chrspace = nchrs;
-  cv->chrs = (chr*)(((char*)cv) + sizeof(struct cvec));
-  cv->ranges = cv->chrs + nchrs;
-  cv->rangespace = nranges;
-  return clearcvec(cv);
+    if (cv == NULL) {
+	return NULL;
+    }
+    cv->chrspace = nchrs;
+    cv->chrs = (chr *)(((char *)cv)+sizeof(struct cvec));
+    cv->ranges = cv->chrs + nchrs;
+    cv->rangespace = nranges;
+    return clearcvec(cv);
 }
-
+
 /*
  - clearcvec - clear a possibly-new cvec
  * Returns pointer as convenience.
  ^ static struct cvec *clearcvec(struct cvec *);
  */
-static struct cvec* clearcvec(struct cvec* cv) /* character vector */
+static struct cvec *
+clearcvec(
+    struct cvec *cv)		/* character vector */
 {
-  assert(cv != NULL);
-  cv->nchrs = 0;
-  cv->nranges = 0;
-  return cv;
+    assert(cv != NULL);
+    cv->nchrs = 0;
+    cv->nranges = 0;
+    return cv;
 }
-
+
 /*
  - addchr - add a chr to a cvec
  ^ static void addchr(struct cvec *, pchr);
  */
-static void addchr(struct cvec* cv, /* character vector */
-    pchr c)                         /* character to add */
+static void
+addchr(
+    struct cvec *cv,		/* character vector */
+    pchr c)			/* character to add */
 {
-  cv->chrs[cv->nchrs++] = (chr)c;
+    cv->chrs[cv->nchrs++] = (chr)c;
 }
-
+
 /*
  - addrange - add a range to a cvec
  ^ static void addrange(struct cvec *, pchr, pchr);
  */
-static void addrange(struct cvec* cv, /* character vector */
-    pchr from,                        /* first character of range */
-    pchr to)                          /* last character of range */
+static void
+addrange(
+    struct cvec *cv,		/* character vector */
+    pchr from,			/* first character of range */
+    pchr to)			/* last character of range */
 {
-  assert(cv->nranges < cv->rangespace);
-  cv->ranges[cv->nranges * 2] = (chr)from;
-  cv->ranges[cv->nranges * 2 + 1] = (chr)to;
-  cv->nranges++;
+    assert(cv->nranges < cv->rangespace);
+    cv->ranges[cv->nranges*2] = (chr)from;
+    cv->ranges[cv->nranges*2 + 1] = (chr)to;
+    cv->nranges++;
 }
-
+
 /*
  - getcvec - get a cvec, remembering it as v->cv
  ^ static struct cvec *getcvec(struct vars *, int, int);
  */
-static struct cvec* getcvec(struct vars* v, /* context */
-    int nchrs,                              /* to hold this many chrs... */
-    int nranges)                            /* ... and this many ranges... */
+static struct cvec *
+getcvec(
+    struct vars *v,		/* context */
+    int nchrs,			/* to hold this many chrs... */
+    int nranges)		/* ... and this many ranges... */
 {
-  if ((v->cv != NULL) && (nchrs <= v->cv->chrspace) && (nranges <= v->cv->rangespace)) {
-    return clearcvec(v->cv);
-  }
+    if ((v->cv != NULL) && (nchrs <= v->cv->chrspace) &&
+	    (nranges <= v->cv->rangespace)) {
+	return clearcvec(v->cv);
+    }
 
-  if (v->cv != NULL) {
-    freecvec(v->cv);
-  }
-  v->cv = newcvec(nchrs, nranges);
-  if (v->cv == NULL) {
-    ERR(OB_REG_ESPACE);
-  }
+    if (v->cv != NULL) {
+	freecvec(v->cv);
+    }
+    v->cv = newcvec(nchrs, nranges);
+    if (v->cv == NULL) {
+	ERR(OB_REG_ESPACE);
+    }
 
-  return v->cv;
+    return v->cv;
 }
-
+
 /*
  - freecvec - free a cvec
  ^ static void freecvec(struct cvec *);
  */
-static void freecvec(struct cvec* cv) /* character vector */
+static void
+freecvec(
+    struct cvec *cv)		/* character vector */
 {
-  FREE(cv);
+    FREE(cv);
 }
-
+
 /*
  * Local Variables:
  * mode: c

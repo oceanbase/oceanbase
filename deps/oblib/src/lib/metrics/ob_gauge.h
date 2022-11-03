@@ -13,16 +13,19 @@
 #ifndef _OB_GAUGE_H
 #define _OB_GAUGE_H 1
 #include <stdint.h>
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // A gauge just returns a value.
-class ObGauge {
+class ObGauge
+{
 public:
-  virtual ~ObGauge(){};
+  virtual ~ObGauge() {};
   virtual int64_t get_value() const = 0;
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
 #endif /* _OB_GAUGE_H */

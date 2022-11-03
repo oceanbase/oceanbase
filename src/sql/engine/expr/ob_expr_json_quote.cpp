@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implementation of func json_quote
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_quote.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -94,41 +93,11 @@ int ObExprJsonQuote::calc(const T &data, ObObjType type, ObCollationType cs_type
   return ret;
 }
 
-// for old sql engine
-int ObExprJsonQuote::calc_result1(common::ObObj &result, const common::ObObj &obj,
-                                  common::ObExprCtx &expr_ctx) const
-{ 
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  ObJsonBuffer j_buf(allocator);
-  bool is_null= false;
-
-  if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("allcator not init", K(ret));
-  } else if (OB_FAIL(calc(obj, obj.get_type(), obj.get_collation_type(), j_buf, is_null))) {
-    LOG_WARN("fail to calc json quote result in old engine", K(ret), K(obj.get_type()));
-  } else if (is_null) {
-    result.set_null();
-  } else {
-    char *buf = static_cast<char*>(allocator->alloc(j_buf.length()));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for json quote result", K(ret), K(j_buf.length()));
-    } else {
-      MEMCPY(buf, j_buf.ptr(), j_buf.length());
-      result.set_collation_type(result_type_.get_collation_type());
-      result.set_string(ObLongTextType, buf, j_buf.length());
-    }
-  }
-
-  return ret;
-}
-
 int ObExprJsonQuote::eval_json_quote(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObJsonBuffer j_buf(&temp_allocator);
   ObExpr *arg = expr.args_[0];
   ObObjType type = arg->datum_meta_.type_;

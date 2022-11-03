@@ -16,18 +16,20 @@
 #include "lib/net/ob_addr.h"
 #include "share/config/ob_config.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObInitConfigContainer {
+class ObInitConfigContainer
+{
 public:
-  const ObConfigContainer& get_container();
+  const ObConfigContainer &get_container();
 
 protected:
   ObInitConfigContainer();
-  virtual ~ObInitConfigContainer()
-  {}
-  static ObConfigContainer*& local_container();
+  virtual ~ObInitConfigContainer() {}
+  static ObConfigContainer *&local_container();
   ObConfigContainer container_;
 
 private:
@@ -35,7 +37,8 @@ private:
 };
 
 // derive from ObInitConfigContainer to make sure config container inited before config item.
-class ObCommonConfig : public ObInitConfigContainer {
+class ObCommonConfig : public ObInitConfigContainer
+{
 public:
   ObCommonConfig();
   virtual ~ObCommonConfig();
@@ -44,11 +47,10 @@ public:
   virtual void print() const = 0;
   virtual void print_need_reboot_config() const {/*do nothing*/};
   virtual ObServerRole get_server_type() const = 0;
-  virtual int add_extra_config(const char* config_str, const int64_t version = 0, const bool check_name = false);
-  virtual bool is_debug_sync_enabled() const
-  {
-    return false;
-  }
+  virtual int add_extra_config(const char *config_str,
+                               const int64_t version = 0,
+                               const bool check_name = false);
+  virtual bool is_debug_sync_enabled() const { return false; }
 
   OB_UNIS_VERSION_V(1);
 
@@ -59,7 +61,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCommonConfig);
 };
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} //end of namespace common
+} //end of namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_CONFIG_OB_COMMON_CONFIG_H_
+#endif // OCEANBASE_SHARE_CONFIG_OB_COMMON_CONFIG_H_

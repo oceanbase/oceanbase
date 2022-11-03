@@ -19,55 +19,55 @@
 #include "share/ob_lease_struct.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 class ObServerSchemaUpdater;
 
-class ObHeartBeatProcess : public observer::IHeartBeatProcess {
+class ObHeartBeatProcess: public observer::IHeartBeatProcess
+{
 public:
-  ObHeartBeatProcess(
-      const ObGlobalContext& gctx, ObServerSchemaUpdater& schema_updater, ObLeaseStateMgr& lease_state_mgr);
+  ObHeartBeatProcess(const ObGlobalContext &gctx,
+                     ObServerSchemaUpdater &schema_updater,
+                     ObLeaseStateMgr &lease_state_mgr);
   virtual ~ObHeartBeatProcess();
 
   int init();
-  virtual int init_lease_request(share::ObLeaseRequest& lease_request);
-  virtual int do_heartbeat_event(const share::ObLeaseResponse& lease_response);
+  virtual int init_lease_request(share::ObLeaseRequest &lease_request);
+  virtual int do_heartbeat_event(const share::ObLeaseResponse &lease_response);
 
   int update_lease_info();
   int try_update_infos();
-
 private:
-  class ObZoneLeaseInfoUpdateTask : public common::ObTimerTask {
+  class ObZoneLeaseInfoUpdateTask : public common::ObTimerTask
+  {
   public:
-    explicit ObZoneLeaseInfoUpdateTask(ObHeartBeatProcess& hb_process);
+    explicit ObZoneLeaseInfoUpdateTask(ObHeartBeatProcess &hb_process);
     virtual ~ObZoneLeaseInfoUpdateTask();
 
     virtual void runTimerTask();
-
   private:
-    ObHeartBeatProcess& hb_process_;
+    ObHeartBeatProcess &hb_process_;
   };
 
-  int try_start_merge(const int64_t broadcast_version);
   int try_reload_config(const int64_t config_version);
   int try_reload_time_zone_info(const int64_t time_zone_info_version);
-
 private:
   bool inited_;
   ObZoneLeaseInfoUpdateTask update_task_;
   share::ObZoneLeaseInfo zone_lease_info_;
   int64_t newest_lease_info_version_;
 
-  const ObGlobalContext& gctx_;
-  ObServerSchemaUpdater& schema_updater_;
-  ObLeaseStateMgr& lease_state_mgr_;
-
+  const ObGlobalContext &gctx_;
+  ObServerSchemaUpdater &schema_updater_;
+  ObLeaseStateMgr &lease_state_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHeartBeatProcess);
 };
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif

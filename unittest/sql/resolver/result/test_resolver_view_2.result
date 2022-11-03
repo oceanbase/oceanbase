@@ -2020,7 +2020,7 @@ select c1 from v where c2 = 1;
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -2096,9 +2096,9 @@ select c1 from v where c2 = 1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -2734,7 +2734,7 @@ select c1 from v where (select c2) = 1;
       },
       "expr_info": [
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_SUB_QUERY"
       ],
       "rel_id": [
@@ -2823,9 +2823,9 @@ select c1 from v where (select c2) = 1;
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -7029,10 +7029,10 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -7924,9 +7924,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -7956,9 +7956,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -7988,9 +7988,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8020,9 +8020,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8052,9 +8052,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8084,9 +8084,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -8674,10 +8674,10 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9569,9 +9569,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9601,9 +9601,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9633,9 +9633,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9665,9 +9665,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9697,9 +9697,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -9729,9 +9729,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -11130,10 +11130,10 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12025,9 +12025,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12057,9 +12057,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12089,9 +12089,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12121,9 +12121,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12153,9 +12153,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -12185,9 +12185,9 @@ insert into t1 values(1,2),(2,3),(3,4);
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM"
+        "CNT_STATIC_PARAM"
       ],
       "rel_id": [
       ],

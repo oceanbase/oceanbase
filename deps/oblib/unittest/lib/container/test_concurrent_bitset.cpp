@@ -15,40 +15,42 @@
 #include "lib/random/ob_random.h"
 #include "lib/atomic/ob_atomic.h"
 using namespace oceanbase::common;
-class TestConcurrentBitset : public ::testing::Test {
+class TestConcurrentBitset : public ::testing::Test
+{
 public:
   virtual void SetUp()
-  {}
+  {
+  }
   virtual void TearDown()
-  {}
-  template <typename bitset_type>
-  void test_set(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_reset(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_concurrent(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_concurrent_set_if_not_exist(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_set_if_not_exist(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_set_find_first_zero_bit_no_reset(bitset_type& bitset);
-  template <typename bitset_type>
-  void test_set_find_first_zero_bit_with_reset(bitset_type& bitset);
-  template <typename bitset_type>
-  void concurrent_set_find_first_zero_bit_without_reset(bitset_type& bitset);
-  template <typename bitset_type>
-  void concurrent_set_find_first_zero_bit_with_reset(bitset_type& bitset);
-  template <typename bitset_type>
-  void concurrent_set_find_first_zero_bit(bitset_type& bitset);
-
+  {
+  }
+  template<typename bitset_type>
+  void test_set(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_reset(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_concurrent(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_concurrent_set_if_not_exist(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_set_if_not_exist(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_set_find_first_zero_bit_no_reset(bitset_type &bitset);
+  template<typename bitset_type>
+  void test_set_find_first_zero_bit_with_reset(bitset_type &bitset);
+  template<typename bitset_type>
+  void concurrent_set_find_first_zero_bit_without_reset(bitset_type &bitset);
+  template<typename bitset_type>
+  void concurrent_set_find_first_zero_bit_with_reset(bitset_type &bitset);
+  template<typename bitset_type>
+  void concurrent_set_find_first_zero_bit(bitset_type &bitset);
 protected:
   ObConcurrentBitset<UINT16_MAX> bitset_;
   ObConcurrentBitset<UINT16_MAX, true> bitset_lock_;
 };
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_set(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_set(bitset_type &bitset)
 {
   const uint64_t test_count = 10000;
   for (uint64_t i = 0; i < test_count; ++i) {
@@ -59,6 +61,7 @@ void TestConcurrentBitset::test_set(bitset_type& bitset)
     EXPECT_EQ(OB_SUCCESS, bitset.test(i, is_exist));
     EXPECT_EQ(true, is_exist);
   }
+
 }
 
 TEST_F(TestConcurrentBitset, test_set)
@@ -67,8 +70,8 @@ TEST_F(TestConcurrentBitset, test_set)
   test_set(bitset_lock_);
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_reset(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_reset(bitset_type &bitset)
 {
   const uint64_t test_count = 10000;
   for (uint64_t i = 0; i < test_count; ++i) {
@@ -83,6 +86,7 @@ void TestConcurrentBitset::test_reset(bitset_type& bitset)
   for (uint64_t i = 0; i < test_count; ++i) {
     EXPECT_EQ(OB_SUCCESS, bitset.test(i, is_exist));
     EXPECT_EQ(true, false == is_exist);
+
   }
 }
 
@@ -92,8 +96,8 @@ TEST_F(TestConcurrentBitset, test_reset)
   test_reset(bitset_lock_);
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_set_if_not_exist(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_set_if_not_exist(bitset_type &bitset)
 {
   const uint64_t test_count = 10000;
   for (uint64_t i = 0; i < test_count; ++i) {
@@ -112,6 +116,7 @@ void TestConcurrentBitset::test_set_if_not_exist(bitset_type& bitset)
   for (uint64_t i = 0; i < test_count; ++i) {
     EXPECT_EQ(OB_SUCCESS, bitset.test(i, is_exist));
     EXPECT_EQ(true, is_exist);
+
   }
 }
 
@@ -122,11 +127,11 @@ TEST_F(TestConcurrentBitset, test_set_if_not_exist)
 }
 
 static uint16_t base_sessid = 0;
-void* thread_func_test_bitset(void* args)
+void *thread_func_test_bitset(void *args)
 {
   const uint test_count = 1000;
   uint16_t id_array[test_count];
-  ObConcurrentBitset<UINT16_MAX>* bitset = static_cast<ObConcurrentBitset<UINT16_MAX>*>(args);
+  ObConcurrentBitset<UINT16_MAX> *bitset = static_cast<ObConcurrentBitset<UINT16_MAX> *>(args);
   for (uint64_t i = 0; i < test_count; ++i) {
     id_array[i] = static_cast<uint16_t>(ATOMIC_AAF(&base_sessid, 1));
     EXPECT_EQ(OB_SUCCESS, bitset->set(id_array[i]));
@@ -144,8 +149,8 @@ void* thread_func_test_bitset(void* args)
   return NULL;
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_concurrent(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_concurrent(bitset_type &bitset)
 {
   const uint64_t THREAD_NUM = 64;
   pthread_t thread_create_arr[THREAD_NUM];
@@ -165,16 +170,16 @@ TEST_F(TestConcurrentBitset, concurrent)
   test_concurrent(bitset_lock_);
 }
 
-void* thread_func_test_set_if_not_exist(void* args)
+void *thread_func_test_set_if_not_exist(void *args)
 {
   const uint test_count = 1000;
   uint16_t id_array[test_count];
-  ObConcurrentBitset<UINT16_MAX>* bitset = static_cast<ObConcurrentBitset<UINT16_MAX>*>(args);
+  ObConcurrentBitset<UINT16_MAX> *bitset = static_cast<ObConcurrentBitset<UINT16_MAX> *>(args);
   for (uint64_t i = 0; i < test_count; ++i) {
     int ret = OB_SUCCESS;
     id_array[i] = static_cast<uint16_t>(ATOMIC_AAF(&base_sessid, 1));
     ret = bitset->set_if_not_exist(id_array[i]);
-    (void)ret;
+    (void) ret;
   }
   bool is_exist = false;
   for (uint64_t i = 0; i < test_count; ++i) {
@@ -189,8 +194,8 @@ void* thread_func_test_set_if_not_exist(void* args)
   return NULL;
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_concurrent_set_if_not_exist(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_concurrent_set_if_not_exist(bitset_type &bitset)
 {
   const uint64_t THREAD_NUM = 64;
   pthread_t thread_create_arr[THREAD_NUM];
@@ -210,10 +215,11 @@ TEST_F(TestConcurrentBitset, concurrent_set_if_not_exist)
   test_concurrent_set_if_not_exist(bitset_lock_);
 }
 
+
 /**********************find zero pos test case************************************/
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_set_find_first_zero_bit_no_reset(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_set_find_first_zero_bit_no_reset(bitset_type &bitset)
 {
   const uint64_t test_count = UINT16_MAX;
   uint64_t value = 0;
@@ -226,12 +232,12 @@ void TestConcurrentBitset::test_set_find_first_zero_bit_no_reset(bitset_type& bi
   }
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, bitset.find_and_set_first_zero(value));
 
-  // clear bitset
+  //clear bitset
   for (uint64_t i = 0; i <= test_count; i++) {
     EXPECT_EQ(OB_SUCCESS, bitset.reset(i));
   }
 
-  // start_pos starts from UINT16_MAX, increasing value is right.
+  //start_pos starts from UINT16_MAX, increasing value is right.
   bitset.set_start_pos(UINT16_MAX);
   for (uint64_t i = 0; i <= test_count; i++) {
     EXPECT_EQ(OB_SUCCESS, bitset.find_and_set_first_zero(value));
@@ -246,8 +252,8 @@ TEST_F(TestConcurrentBitset, test_set_find_first_zero_bit_no_reset)
   test_set_find_first_zero_bit_no_reset(bitset_lock_);
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::test_set_find_first_zero_bit_with_reset(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::test_set_find_first_zero_bit_with_reset(bitset_type &bitset)
 {
   const uint64_t test_count = UINT16_MAX;
   uint64_t value = 0;
@@ -276,9 +282,9 @@ TEST_F(TestConcurrentBitset, test_set_find_first_zero_bit_with_reset)
   test_set_find_first_zero_bit_with_reset(bitset_lock_);
 }
 
-void* thread_func_find_first_bit_set_without_reset(void* args)
+void *thread_func_find_first_bit_set_without_reset(void *args)
 {
-  ObConcurrentBitset<UINT16_MAX>* bitset = static_cast<ObConcurrentBitset<UINT16_MAX>*>(args);
+  ObConcurrentBitset<UINT16_MAX> *bitset = static_cast<ObConcurrentBitset<UINT16_MAX> *>(args);
   const uint64_t test_count = 1000;
   uint64_t value = 0;
   for (uint64_t i = 0; i < test_count; i++) {
@@ -288,8 +294,8 @@ void* thread_func_find_first_bit_set_without_reset(void* args)
   return NULL;
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::concurrent_set_find_first_zero_bit_without_reset(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::concurrent_set_find_first_zero_bit_without_reset(bitset_type &bitset)
 {
   // test of parallel execution:
   // 64 threads, every threads get 1000 values.
@@ -319,9 +325,9 @@ TEST_F(TestConcurrentBitset, concurrent_set_find_first_zero_bit_without_reset)
   concurrent_set_find_first_zero_bit_without_reset(bitset_lock_);
 }
 
-void* thread_func_find_first_bit_set_with_reset(void* args)
+void *thread_func_find_first_bit_set_with_reset(void *args)
 {
-  ObConcurrentBitset<UINT16_MAX>* bitset = static_cast<ObConcurrentBitset<UINT16_MAX>*>(args);
+  ObConcurrentBitset<UINT16_MAX> *bitset = static_cast<ObConcurrentBitset<UINT16_MAX> *>(args);
   const uint64_t test_count = 1000;
   uint64_t value = 0;
   for (uint64_t i = 0; i < test_count; i++) {
@@ -332,8 +338,8 @@ void* thread_func_find_first_bit_set_with_reset(void* args)
   return NULL;
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::concurrent_set_find_first_zero_bit_with_reset(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::concurrent_set_find_first_zero_bit_with_reset(bitset_type &bitset)
 {
   // test of parallel execution:
   // 64 threads, every threads get 1000 values.
@@ -341,7 +347,7 @@ void TestConcurrentBitset::concurrent_set_find_first_zero_bit_with_reset(bitset_
   const uint64_t THREAD_NUM = 64;
   pthread_t thread_create_arr[THREAD_NUM];
 
-  // start_pos starts from UINT16_MAX, increasing value is right.
+  //start_pos starts from UINT16_MAX, increasing value is right.
   bitset.set_start_pos(UINT16_MAX);
   for (uint64_t i = 0; i < THREAD_NUM; ++i) {
     EXPECT_EQ(0, pthread_create(&thread_create_arr[i], NULL, thread_func_find_first_bit_set_with_reset, &bitset));
@@ -364,8 +370,8 @@ TEST_F(TestConcurrentBitset, concurrent_set_find_first_zero_bit_with_reset)
   concurrent_set_find_first_zero_bit_with_reset(bitset_lock_);
 }
 
-template <typename bitset_type>
-void TestConcurrentBitset::concurrent_set_find_first_zero_bit(bitset_type& bitset)
+template<typename bitset_type>
+void TestConcurrentBitset::concurrent_set_find_first_zero_bit(bitset_type &bitset)
 {
   // test of parallel execution:
   // 64 threads, every threads get 1000 values.
@@ -374,7 +380,7 @@ void TestConcurrentBitset::concurrent_set_find_first_zero_bit(bitset_type& bitse
   pthread_t thread_create_arr_1[THREAD_NUM];
   pthread_t thread_create_arr_2[THREAD_NUM];
 
-  // start_pos starts from UINT16_MAX, increasing value is right.8
+  //start_pos starts from UINT16_MAX, increasing value is right.8
   bitset.set_start_pos(UINT16_MAX);
   for (uint64_t i = 0; i < THREAD_NUM / 2; ++i) {
     EXPECT_EQ(0, pthread_create(&thread_create_arr_1[i], NULL, thread_func_find_first_bit_set_with_reset, &bitset));
@@ -416,6 +422,7 @@ TEST_F(TestConcurrentBitset, test_increment)
     EXPECT_EQ(i + 64, value);
     EXPECT_EQ(OB_SUCCESS, bitset_lock_.reset(value));
   }
+
 }
 
 TEST_F(TestConcurrentBitset, test_only_one_zero)
@@ -431,6 +438,7 @@ TEST_F(TestConcurrentBitset, test_only_one_zero)
     EXPECT_EQ(OB_SUCCESS, bitset_lock_.reset(value));
     EXPECT_EQ(255, value);
   }
+
 }
 
 // void *thread_func_only(void *args)
@@ -462,7 +470,7 @@ TEST_F(TestConcurrentBitset, test_only_one_zero)
 
 // }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   srand((unsigned)time(NULL));
   OB_LOGGER.set_log_level("ERROR");

@@ -16,22 +16,24 @@
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace common::sqlclient;
 using namespace share;
 using namespace share::schema;
 
-namespace rootserver {
+namespace rootserver
+{
 
 int64_t ObUpgradeTask::get_deep_copy_size() const
 {
   return sizeof(*this);
 }
 
-ObAsyncTask* ObUpgradeTask::deep_copy(char* buf, const int64_t buf_size) const
+ObAsyncTask *ObUpgradeTask::deep_copy(char *buf, const int64_t buf_size) const
 {
-  ObAsyncTask* task = NULL;
+  ObAsyncTask *task = NULL;
   int ret = OB_SUCCESS;
   const int64_t need_size = get_deep_copy_size();
   if (NULL == buf) {
@@ -41,7 +43,7 @@ ObAsyncTask* ObUpgradeTask::deep_copy(char* buf, const int64_t buf_size) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buf is not long enough", K(need_size), K(buf_size), KR(ret));
   } else {
-    task = new (buf) ObUpgradeTask(*upgrade_executor_, version_);
+    task = new(buf) ObUpgradeTask(*upgrade_executor_, version_);
   }
   return task;
 }
@@ -57,31 +59,30 @@ int ObUpgradeTask::process()
   } else if (OB_FAIL(upgrade_executor_->execute(version_))) {
     LOG_WARN("fail to execute upgrade task", KR(ret));
   }
-  LOG_INFO(
-      "[UPGRADE] finish execute upgrade task", KR(ret), K_(version), "cost_us", ObTimeUtility::current_time() - start);
+  LOG_INFO("[UPGRADE] finish execute upgrade task",
+           KR(ret), K_(version), "cost_us", ObTimeUtility::current_time() - start);
   return ret;
 }
 
 ObUpgradeExecutor::ObUpgradeExecutor()
-    : inited_(false),
-      stopped_(false),
-      execute_(false),
-      rwlock_(),
-      sql_proxy_(NULL),
-      rpc_proxy_(NULL),
-      schema_service_(NULL),
+    : inited_(false), stopped_(false), execute_(false), rwlock_(),
+      sql_proxy_(NULL), rpc_proxy_(NULL), schema_service_(NULL),
       upgrade_processors_()
 {}
 
-int ObUpgradeExecutor::init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
-    obrpc::ObSrvRpcProxy& rpc_proxy)
+int ObUpgradeExecutor::init(
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    obrpc::ObCommonRpcProxy &common_proxy)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("can't init twice", KR(ret));
   } else if (OB_FAIL(upgrade_processors_.init(
-                 ObBaseUpgradeProcessor::UPGRADE_MODE_OB, sql_proxy, rpc_proxy, schema_service, *this))) {
+                     ObBaseUpgradeProcessor::UPGRADE_MODE_OB,
+                     sql_proxy, rpc_proxy, common_proxy, schema_service, *this))) {
     LOG_WARN("fail to init upgrade processors", KR(ret));
   } else {
     schema_service_ = &schema_service;
@@ -103,8 +104,8 @@ void ObUpgradeExecutor::start()
 int ObUpgradeExecutor::stop()
 {
   int ret = OB_SUCCESS;
-  const uint64_t WAIT_US = 100 * 1000L;            // 100ms
-  const uint64_t MAX_WAIT_US = 10 * 1000 * 1000L;  // 10s
+  const uint64_t WAIT_US = 100 * 1000L; //100ms
+  const uint64_t MAX_WAIT_US = 10 * 1000 * 1000L; //10s
   const int64_t start = ObTimeUtility::current_time();
   {
     SpinWLockGuard guard(rwlock_);
@@ -117,7 +118,7 @@ int ObUpgradeExecutor::stop()
     } else if (!check_execute()) {
       break;
     } else {
-      usleep(WAIT_US);
+      ob_usleep(WAIT_US);
     }
   }
   return ret;
@@ -169,8 +170,9 @@ int ObUpgradeExecutor::can_execute()
     LOG_WARN("not init", KR(ret));
   } else if (stopped_ || execute_) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN(
-        "status not matched", KR(ret), "stopped", stopped_ ? "true" : "false", "build", execute_ ? "true" : "false");
+    LOG_WARN("status not matched", KR(ret),
+             "stopped", stopped_ ? "true" : "false",
+             "build", execute_ ? "true" : "false");
   }
   return ret;
 }
@@ -190,7 +192,7 @@ int ObUpgradeExecutor::check_schema_sync()
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ddl should disable now", KR(ret), K(enable_ddl), K(enable_sys_table_ddl));
   } else {
-    const int64_t WAIT_US = 1000 * 1000L;  // 1 second
+    const int64_t WAIT_US = 1000 * 1000L; // 1 second
     bool is_sync = false;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_stop())) {
@@ -201,15 +203,59 @@ int ObUpgradeExecutor::check_schema_sync()
         break;
       } else {
         LOG_INFO("schema not sync, should wait", KR(ret));
-        usleep(static_cast<useconds_t>((WAIT_US)));
+        ob_usleep(static_cast<useconds_t>((WAIT_US)));
       }
     }
   }
-  LOG_INFO("[UPGRADE] check schema sync finish", KR(ret), "cost_us", ObTimeUtility::current_time() - start);
+  LOG_INFO("[UPGRADE] check schema sync finish", KR(ret),
+           "cost_us", ObTimeUtility::current_time() - start);
   return ret;
 }
 
-int ObUpgradeExecutor::get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids)
+// Ensure primary cluster's schema_version is not greator than standby clusters'.
+int ObUpgradeExecutor::check_schema_sync(
+    obrpc::ObTenantSchemaVersions &primary_schema_versions,
+    obrpc::ObTenantSchemaVersions &standby_schema_versions,
+    bool &schema_sync)
+{
+  int ret = OB_SUCCESS;
+  int64_t primary_cnt = primary_schema_versions.tenant_schema_versions_.count();
+  int64_t standby_cnt = standby_schema_versions.tenant_schema_versions_.count();
+  if (primary_cnt <= 0 || standby_cnt <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid cnt", KR(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("executor should stopped", KR(ret));
+  } else {
+    schema_sync = true;
+    for (int64_t i = 0; schema_sync && OB_SUCC(ret) && i < primary_cnt; i++) {
+      bool find = false;
+      TenantIdAndSchemaVersion &primary = primary_schema_versions.tenant_schema_versions_.at(i);
+      // check normal tenant only
+      if (OB_SYS_TENANT_ID == primary.tenant_id_) {
+        continue;
+      } else {
+        for (int64_t j = 0; !find && OB_SUCC(ret) && j < standby_cnt; j++) {
+          TenantIdAndSchemaVersion &standby = standby_schema_versions.tenant_schema_versions_.at(j);
+          if (OB_FAIL(check_stop())) {
+            LOG_WARN("executor should stopped", KR(ret));
+          } else if (primary.tenant_id_ == standby.tenant_id_) {
+            find = true;
+            schema_sync = (primary.schema_version_ <= standby.schema_version_);
+            LOG_INFO("check if tenant schema is sync",
+                     KR(ret), K(primary), K(standby), K(schema_sync));
+          }
+        }
+        if (OB_SUCC(ret) && !find) {
+          schema_sync = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeExecutor::get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
@@ -221,7 +267,8 @@ int ObUpgradeExecutor::get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(
+                     OB_SYS_TENANT_ID, guard))) {
     LOG_WARN("fail to get schema guard", KR(ret));
   } else if (OB_FAIL(guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get tenant_ids", KR(ret));
@@ -241,15 +288,16 @@ int ObUpgradeExecutor::execute(const int64_t version)
   } else {
     int64_t job_id = OB_INVALID_ID;
     ObRsJobType job_type = ObRsJobType::JOB_TYPE_RUN_UPGRADE_POST_JOB;
-    char version_str[common::ObClusterVersion::MAX_VERSION_ITEM] = {0};
-    int64_t len = ObClusterVersion::print_version_str(version_str, common::ObClusterVersion::MAX_VERSION_ITEM, version);
+    char version_str[common::OB_CLUSTER_VERSION_LENGTH] = {0};
+    int64_t len = ObClusterVersion::print_version_str(
+                  version_str, common::OB_CLUSTER_VERSION_LENGTH, version);
     if (OB_ISNULL(sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql_proxy_ is null", KR(ret));
     } else if (OB_FAIL(check_stop())) {
       LOG_WARN("executor should stopped", KR(ret));
-    } else if (OB_FAIL(
-                   RS_JOB_CREATE_WITH_RET(job_id, job_type, *sql_proxy_, "extra_info", ObString(len, version_str)))) {
+    } else if (OB_FAIL(RS_JOB_CREATE_WITH_RET(job_id, job_type, *sql_proxy_,
+                                              "extra_info", ObString(len, version_str)))) {
       LOG_WARN("fail to create rs job", KR(ret));
     } else if (job_id <= 0) {
       ret = OB_ERR_UNEXPECTED;
@@ -274,18 +322,20 @@ int ObUpgradeExecutor::run_upgrade_job(const int64_t version)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
-  ObBaseUpgradeProcessor* processor = NULL;
+  ObBaseUpgradeProcessor *processor = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("executor should stopped", KR(ret));
-  } else if (version < CLUSTER_VERSION_2270 || !ObUpgradeChecker::check_cluster_version_exist(version)) {
+  } else if (version < CLUSTER_VERSION_2270
+             || !ObUpgradeChecker::check_cluster_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
   } else if (OB_FAIL(get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get tenant_ids", KR(ret), K(version));
-  } else if (OB_FAIL(upgrade_processors_.get_processor_by_version(version, processor))) {
+  } else if (OB_FAIL(upgrade_processors_.get_processor_by_version(
+                     version, processor))) {
     LOG_WARN("fail to get processor by version", KR(ret), K(version));
   } else {
     // 1. Run upgrade jobs(by tenant_id desc) in primary cluster.
@@ -296,21 +346,20 @@ int ObUpgradeExecutor::run_upgrade_job(const int64_t version)
         int64_t start_ts = ObTimeUtility::current_time();
         int64_t current_version = processor->get_version();
         processor->set_tenant_id(tenant_id);
-        LOG_INFO("[UPGRADE] start to run post upgrade job by version", K(tenant_id), K(current_version));
+        LOG_INFO("[UPGRADE] start to run post upgrade job by version",
+                 K(tenant_id), K(current_version));
         if (OB_FAIL(processor->post_upgrade())) {
-          LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), K(current_version));
+          LOG_WARN("run post upgrade by version failed",
+                   KR(ret), K(tenant_id), K(current_version));
         }
         LOG_INFO("[UPGRADE] finish post upgrade job by version",
-            KR(ret),
-            K(tenant_id),
-            K(current_version),
-            "cost",
-            ObTimeUtility::current_time() - start_ts);
+                 KR(ret), K(tenant_id), K(current_version),
+                 "cost", ObTimeUtility::current_time() - start_ts);
       }
     }
   }
   return ret;
 }
 
-}  // namespace rootserver
-}  // namespace oceanbase
+}//end rootserver
+}//end oceanbase

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implementation of func json_set
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_func_helper.h"
 #include "ob_expr_json_set.h"
@@ -55,83 +54,10 @@ int ObExprJsonSet::calc_result_typeN(ObExprResType& type,
       }
     }
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   }
   return ret;
 }                   
-
-int ObExprJsonSet::calc_resultN(common::ObObj &result,
-                                const common::ObObj *params,
-                                int64_t param_num,
-                                common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  ObIJsonBase *json_doc = NULL;
-  bool is_null_result = false;
-  
-  if (result_type_.get_collation_type() != CS_TYPE_UTF8MB4_BIN) {
-    ret = OB_ERR_INVALID_JSON_CHARSET;
-    LOG_WARN("invalid out put charset", K(ret), K(result_type_));
-  } else if (OB_ISNULL(params)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(params), K(param_num));
-  } else if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("allocator not init", K(ret));
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(params, allocator, 0,
-                                                    json_doc, is_null_result))){
-    LOG_WARN("get_json_doc failed", K(ret));
-  }
-
-  for (int64_t i = 1; OB_SUCC(ret) && !is_null_result && i < param_num; i+=2) {
-    if (params[i].get_type() == ObNullType || params[i].is_null()) {
-      is_null_result = true;
-      break;
-    }
-
-    ObString path_val = params[i].get_string();
-    ObJsonPath json_path(path_val, allocator);
-    ObJsonBaseVector hit;
-    if (OB_FAIL(json_path.parse_path())) {
-      LOG_WARN("parse text to path failed", K(path_val), K(ret));
-      break;
-    } else if (json_path.can_match_many()) {
-      ret = OB_ERR_INVALID_JSON_PATH_WILDCARD;
-      LOG_WARN("invalid json path wildcard", K(path_val), K(ret));
-      LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH_WILDCARD);
-    } else if (OB_FAIL(json_doc->seek(json_path, json_path.path_node_cnt(), true, false, hit))) {
-      LOG_WARN("json seek failed", K(path_val), K(ret));
-    }
-
-    if (OB_SUCC(ret) && !is_null_result) {
-      ObIJsonBase *json_val = NULL;
-      bool is_bool = false;
-      if (OB_FAIL(get_param_is_boolean(expr_ctx, params[i+1], is_bool))) {
-        LOG_WARN("get_param_is_boolean failed", K(ret));
-      } else if (OB_FAIL(ObJsonExprHelper::get_json_val(params[i+1], expr_ctx, is_bool, allocator, json_val))) {
-        LOG_WARN("get_json_val failed", K(ret));
-      } else if (OB_FAIL(set_value(hit, json_doc, json_val, &json_path, allocator))) {
-        LOG_WARN("set_json_value failed", K(ret));
-      }
-    }
-  }
-
-  // set result
-  if (OB_UNLIKELY(OB_FAIL(ret))) {
-    LOG_WARN("Json parse and seek failed", K(ret));
-  } else if (is_null_result) {
-    result.set_null();
-  } else {
-    ObString raw_bin;
-    if (OB_FAIL(json_doc->get_raw_binary(raw_bin, allocator))) {
-      LOG_WARN("json_set result to binary failed", K(ret));
-    } else {
-      result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-      result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
-    }
-  }
-  return ret;  
-}
 
 int ObExprJsonSet::set_value(ObJsonBaseVector &hit, ObIJsonBase *&json_doc, ObIJsonBase* json_val,
                              ObJsonPath *json_path, ObIAllocator *allocator)
@@ -199,7 +125,8 @@ int ObExprJsonSet::eval_json_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   INIT_SUCC(ret);
   ObIJsonBase *json_doc = NULL;
   bool is_null_result = false;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));

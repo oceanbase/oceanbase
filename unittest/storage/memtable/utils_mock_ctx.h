@@ -10,20 +10,23 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
-#define OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
+#ifndef  OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
+#define  OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
 
 #include "storage/memtable/ob_memtable_interface.h"
 #include "lib/allocator/page_arena.h"
 #include "common/object/ob_object.h"
 #include "common/rowkey/ob_rowkey.h"
 
-namespace oceanbase {
-namespace unittest {
+namespace oceanbase
+{
+namespace unittest
+{
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
 
-struct ObMtCtxMembers {
+struct ObMtCtxMembers
+{
   char trace_log_buffer_[65536];
   int64_t tlb_pos_;
   CharArena allocator_;
@@ -31,39 +34,42 @@ struct ObMtCtxMembers {
   ObSEArray<ObIMvccCallback*, 64> tcbs_;
 };
 
-class ObMtCtx : public ObIMemtableCtx, public ObMtCtxMembers {
+class ObMtCtx : public ObIMemtableCtx, public ObMtCtxMembers
+{
 public:
   ObMtCtx()
-  {}
+  {
+  }
   ~ObMtCtx()
-  {}
-
+  {
+  }
 public:
-  void fill_trace_log(const char* fmt, ...)
+  void fill_trace_log(const char *fmt, ...)
   {
     va_list args;
     va_start(args, fmt);
     tlb_pos_ += vsnprintf(&trace_log_buffer_[tlb_pos_], sizeof(trace_log_buffer_) - tlb_pos_, fmt, args);
     va_end(args);
   }
-  void* alloc(const int64_t size)
-  {
-    return allocator_.alloc(size);
-  }
-  int register_sub_callback(ObIMvccCallback* callback)
+  void *alloc(const int64_t size) { return allocator_.alloc(size); }
+  int register_sub_callback(ObIMvccCallback *callback)
   {
     int ret = OB_SUCCESS;
     scbs_.push_back(callback);
     return ret;
   }
-  int register_end_callback(ObIMvccCallback* callback)
+  int register_end_callback(ObIMvccCallback *callback)
   {
     int ret = OB_SUCCESS;
     tcbs_.push_back(callback);
     return ret;
   }
-  int fill_redo_log(const uint64_t table_id, const uint64_t index_id, const int64_t rowkey_len,
-      const common::ObIArray<uint64_t>& column_ids, const storage::ObStoreRow& row)
+  int fill_redo_log(
+      const uint64_t table_id,
+      const uint64_t index_id,
+      const int64_t rowkey_len,
+      const common::ObIArray<uint64_t> &column_ids,
+      const storage::ObStoreRow &row)
   {
     int ret = OB_SUCCESS;
     UNUSED(table_id);
@@ -73,7 +79,6 @@ public:
     UNUSED(row);
     return ret;
   }
-
 public:
   int trans_begin()
   {
@@ -114,13 +119,14 @@ public:
     tcbs_.reset();
   }
   void trans_publish()
-  {}
+  {
+  }
   void replay_end(const bool commit, const int64_t redo_log_id)
   {
     UNUSED(commit);
     UNUSED(redo_log_id);
   }
-  int fill_redo_log(char* buf, const int64_t buf_len, const int64_t& buf_pos)
+  int fill_redo_log(char *buf, const int64_t buf_len, const int64_t &buf_pos)
   {
     UNUSED(buf);
     UNUSED(buf_len);
@@ -129,7 +135,9 @@ public:
   }
 };
 
-}  // namespace unittest
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
+#endif //OCEANBASE_UNITTEST_MEMTABLE_MOCK_CTX_H_
+
+

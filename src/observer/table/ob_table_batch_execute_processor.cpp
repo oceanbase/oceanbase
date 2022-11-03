@@ -14,7 +14,6 @@
 #include "ob_table_batch_execute_processor.h"
 #include "ob_table_rpc_processor_util.h"
 #include "observer/ob_service.h"
-#include "storage/ob_partition_service.h"
 #include "ob_table_end_trans_cb.h"
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_diagnose_info.h"
@@ -150,9 +149,18 @@ int ObTableBatchExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  uint64_t table_id = OB_INVALID_ID;
+  bool is_index_supported = true;
   if (batch_operation.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("no operation in the batch", K(ret));
+  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+    LOG_WARN("fail to check index supported", K(ret), K(table_id));
+  } else if (OB_UNLIKELY(!is_index_supported)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("index type is not supported by table api", K(ret));
   } else {
     if (batch_operation.is_readonly()) {
       if (batch_operation.is_same_properties_names()) {
@@ -267,20 +275,19 @@ int ObTableBatchExecuteP::get_rowkeys(ObIArray<ObRowkey> &rowkeys)
   return ret;
 }
 
-int ObTableBatchExecuteP::get_partition_ids(uint64_t table_id, ObIArray<int64_t> &part_ids)
+int ObTableBatchExecuteP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  uint64_t partition_id = arg_.partition_id_;
-  if (OB_INVALID_ID == partition_id) {
-    ObSEArray<sql::RowkeyArray, 3> rowkeys_per_part;
+  ObTabletID tablet_id = arg_.tablet_id_;
+  if (!tablet_id.is_valid()) {
     ObSEArray<ObRowkey, 3> rowkeys;
     if (OB_FAIL(get_rowkeys(rowkeys))) {
       LOG_WARN("failed to get rowkeys", K(ret));
-    } else if (OB_FAIL(get_partition_by_rowkey(table_id, rowkeys, part_ids, rowkeys_per_part))) {
+    } else if (OB_FAIL(get_tablet_by_rowkey(table_id, rowkeys, tablet_ids))) {
       LOG_WARN("failed to get partition", K(ret), K(rowkeys));
     }
   } else {
-    if (OB_FAIL(part_ids.push_back(partition_id))) {
+    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
@@ -292,22 +299,26 @@ int ObTableBatchExecuteP::multi_insert_or_update()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, consistency_level, 
+                                 table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_insert_or_update(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -324,32 +335,38 @@ int ObTableBatchExecuteP::multi_insert_or_update()
 
 int ObTableBatchExecuteP::htable_put()
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_NOT_SUPPORTED;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t table_id = OB_INVALID_ID;
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObLSID ls_id;
 
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, consistency_level, 
+                                 table_id, ls_id, get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else {
     int64_t affected_rows = 0;
-    ObHTablePutExecutor put_executor(allocator_,
+    SMART_VAR(ObHTablePutExecutor, put_executor, allocator_,
                                      table_id,
-                                     part_ids.at(0),
+                                     tablet_ids.at(0),
+                                     ls_id,
                                      get_timeout_ts(),
                                      this,
-                                     table_service_,
-                                     part_service_);
-    ret = put_executor.htable_put(batch_operation, affected_rows);
+                                     table_service_) {
+      ret = put_executor.htable_put(batch_operation, affected_rows);
+    }
     if (OB_SUCC(ret)) {
       ObTableOperationResult single_op_result;
       single_op_result.set_entity(result_entity_);
@@ -362,7 +379,6 @@ int ObTableBatchExecuteP::htable_put()
       }
     }
   }
-  
   int tmp_ret = ret;
   if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
     LOG_WARN("failed to end trans");
@@ -380,19 +396,22 @@ int ObTableBatchExecuteP::multi_get()
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   const bool is_readonly = true;
   const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id,
+                                 table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_get(table_service_ctx_, arg_.batch_operation_, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -413,22 +432,26 @@ int ObTableBatchExecuteP::multi_delete()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, consistency_level,
+                                 table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_delete(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -443,34 +466,43 @@ int ObTableBatchExecuteP::multi_delete()
   return ret;
 }
 
+
 int ObTableBatchExecuteP::htable_delete()
 {
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t table_id = OB_INVALID_ID;
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObLSID ls_id;
 
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, consistency_level,
+                                 table_id, ls_id, get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else {
     int64_t affected_rows = 0;
-    ObHTableDeleteExecutor delete_executor(allocator_,
+    SMART_VAR(ObHTableDeleteExecutor, delete_executor, allocator_,
                                            table_id,
-                                           part_ids.at(0),
+                                           tablet_ids.at(0),
+                                           ls_id,
                                            get_timeout_ts(),
                                            this,
                                            table_service_,
-                                           part_service_);
-    ret = delete_executor.htable_delete(batch_operation, affected_rows);
+                                           access_service_) {
+      ret = delete_executor.htable_delete(batch_operation, affected_rows);
+    }
+
     if (OB_SUCC(ret)) {
       ObTableOperationResult single_op_result;
       single_op_result.set_entity(result_entity_);
@@ -496,22 +528,26 @@ int ObTableBatchExecuteP::multi_insert()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, consistency_level,
+                                 table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_insert(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -531,22 +567,26 @@ int ObTableBatchExecuteP::multi_replace()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_REPLACE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));    
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_REPLACE, consistency_level,
+                                 table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_replace(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -566,22 +606,26 @@ int ObTableBatchExecuteP::multi_update()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
                                 arg_.returning_affected_rows_,
                                 arg_.entity_type_,
                                 arg_.binlog_row_image_type_/*important*/);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, consistency_level,
+                                 table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_update(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -599,6 +643,7 @@ int ObTableBatchExecuteP::multi_update()
 int ObTableBatchExecuteP::batch_execute(bool is_readonly)
 {
   int ret = OB_SUCCESS;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   uint64_t &table_id = table_service_ctx_.param_table_id();
   table_service_ctx_.init_param(get_timeout_ts(), this, &allocator_,
@@ -607,18 +652,19 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
                                 arg_.binlog_row_image_type_,
                                 arg_.returning_affected_entity_,
                                 arg_.returning_rowkey_);
-  ObSEArray<int64_t, 1> part_ids;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
   } else if (OB_FAIL(start_trans(is_readonly, (is_readonly ? sql::stmt::T_SELECT : sql::stmt::T_UPDATE),
-                                 consistency_level, table_id, part_ids, get_timeout_ts()))) {
+                                 consistency_level, table_id, table_service_ctx_.param_ls_id(), get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->batch_execute(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -638,18 +684,23 @@ int ObTableBatchExecuteP::htable_mutate_row()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   const bool is_readonly = false;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   uint64_t table_id = OB_INVALID_ID;
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObLSID ls_id;
   int64_t now_ms = -ObHTableUtils::current_time_millis();
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, consistency_level,
+                                 table_id, ls_id, get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else {
     int64_t N = batch_operation.count();
@@ -666,27 +717,30 @@ int ObTableBatchExecuteP::htable_mutate_row()
         case ObTableOperationType::INSERT_OR_UPDATE:
           {
             int64_t affected_rows = 0;
-            ObHTablePutExecutor put_executor(allocator_,
+            SMART_VAR(ObHTablePutExecutor, put_executor, allocator_,
                                              table_id,
-                                             part_ids.at(0),
+                                             tablet_ids.at(0),
+                                             ls_id,
                                              get_timeout_ts(),
                                              this,
-                                             table_service_,
-                                             part_service_);
-            ret = put_executor.htable_put(batch_ops, affected_rows, now_ms);
+                                             table_service_) {
+              ret = put_executor.htable_put(batch_ops, affected_rows, now_ms);
+            }
           }
           break;
         case ObTableOperationType::DEL:
           {
             int64_t affected_rows = 0;
-            ObHTableDeleteExecutor delete_executor(allocator_,
+            SMART_VAR(ObHTableDeleteExecutor, delete_executor, allocator_,
                                                    table_id,
-                                                   part_ids.at(0),
+                                                   tablet_ids.at(0),
+                                                   ls_id,
                                                    get_timeout_ts(),
                                                    this,
                                                    table_service_,
-                                                   part_service_);
-            ret = delete_executor.htable_delete(batch_ops, affected_rows);
+                                                   access_service_) {
+              ret = delete_executor.htable_delete(batch_ops, affected_rows);
+            }
           }
           break;
         default:

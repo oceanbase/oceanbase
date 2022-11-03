@@ -29,9 +29,9 @@ class ObTableAPITransCb;
 } // end namespace table
 namespace observer
 {
-using namespace oceanbase::table;
+using oceanbase::table::ObTableConsistencyLevel;
 
-class ObGlobalContext;
+struct ObGlobalContext;
 class ObTableService;
 
 struct ObTableApiCredential final
@@ -129,17 +129,14 @@ public:
   int check_user_access(const ObString &credential_str);
   // transaction control
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type, 
-                  const ObTableConsistencyLevel consistency_level, uint64_t table_id,
-                  const common::ObIArray<int64_t> &part_ids, int64_t timeout_ts);
-  int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type, uint64_t table_id,
-                  const common::ObIArray<int64_t> &part_ids, int64_t timeout_ts);
+                  const table::ObTableConsistencyLevel consistency_level, uint64_t table_id,
+                  const share::ObLSID &ls_id, int64_t timeout_ts);
   int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts, bool use_sync = false);
   inline bool did_async_end_trans() const { return did_async_end_trans_; }
-  inline transaction::ObTransDesc& get_trans_desc() { return *trans_desc_ptr_; }
-  int get_partition_by_rowkey(uint64_t table_id, const ObIArray<common::ObRowkey> &rowkeys,
-                              common::ObIArray<int64_t> &part_ids,
-                              common::ObIArray<sql::RowkeyArray> &rowkeys_per_part);
-
+  inline transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
+  int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
+                           ObIArray<ObTabletID> &tablet_ids);
+  inline transaction::ObTxReadSnapshot &get_tx_snapshot() { return tx_snapshot_; }
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
 protected:
   virtual int check_arg() = 0;
@@ -147,6 +144,7 @@ protected:
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) = 0;
   virtual void set_req_has_wokenup() = 0;
   virtual void reset_ctx();
+  int get_ls_id(const ObTabletID &tablet_id, share::ObLSID &ls_id);
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
 
   // audit
@@ -156,29 +154,17 @@ protected:
   virtual void audit_on_finish() {}
   virtual void save_request_string() = 0;
   virtual void generate_sql_id() = 0;
-
-  // set trans consistency level
-  void set_consistency_level(const ObTableConsistencyLevel consistency_level) { consistency_level_ = consistency_level; }
-  ObTableConsistencyLevel consistency_level() const { return consistency_level_; }
+  virtual int check_table_index_supported(uint64_t table_id, bool &is_supported);
 
 private:
-  int get_participants(uint64_t table_id, const common::ObIArray<int64_t> &part_ids,
-                       common::ObPartitionLeaderArray &partition_leaders);
-  int get_participants_from_lc(uint64_t table_id, const common::ObIArray<int64_t> &part_ids,
-                               common::ObPartitionLeaderArray &partition_leaders);
-  int get_participants_optimistic(uint64_t table_id, const common::ObIArray<int64_t> &part_ids,
-                                  common::ObPartitionLeaderArray &partition_leaders);
-
+  int setup_tx_snapshot_(transaction::ObTxDesc &trans_desc, const bool strong_read, const share::ObLSID &ls_id, const int64_t timeout_ts);
   int async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts);
   int sync_end_trans(bool is_rollback, int64_t timeout_ts);
-  int generate_schema_info_arr(const uint64_t table_id,
-                               const common::ObPartitionArray &participants,
-                               transaction::ObPartitionSchemaInfoArray &schema_info_arr);
-  //@}
 protected:
   const ObGlobalContext &gctx_;
-  storage::ObPartitionService *part_service_;
   ObTableService *table_service_;
+  storage::ObAccessService *access_service_;
+  share::ObLocationService *location_service_;
   ObTableApiCredential credential_;
   int32_t stat_event_type_;
   int64_t audit_row_count_;
@@ -192,18 +178,11 @@ protected:
   int32_t retry_count_;
 protected:
   // trans control
-  ObPartitionLeaderArray participants_;
   sql::TransState trans_state_;
-  transaction::ObTransDesc trans_desc_;
-  //part_epoch_list_ record the epoch id of response_partitions_
-  //when start_participants executed in the leader replica
-  transaction::ObPartitionEpochArray part_epoch_list_;
+  transaction::ObTxDesc *trans_desc_;
   bool did_async_end_trans_;
-  ObTableConsistencyLevel consistency_level_;
-  ObPartitionLeaderArray *participants_ptr_;
   sql::TransState *trans_state_ptr_;
-  transaction::ObTransDesc *trans_desc_ptr_;
-  transaction::ObPartitionEpochArray *part_epoch_list_ptr_;
+  transaction::ObTxReadSnapshot tx_snapshot_;
 };
 
 template<class T>
@@ -216,29 +195,29 @@ public:
   virtual int deserialize() override;
   virtual int before_process() override;
   virtual int process() override;
-  virtual int before_response() override;
+  virtual int before_response(int error_code) override;
   virtual int response(const int retcode) override;
-  virtual int after_process() override;
+  virtual int after_process(int error_code) override;
 
 protected:
   virtual void set_req_has_wokenup() override;
-  virtual int64_t get_timeout_ts() const;
+  int64_t get_timeout_ts() const;
   virtual void save_request_string() override;
   virtual void generate_sql_id() override;
   virtual uint64_t get_request_checksum() = 0;
 };
-
 
 class ObHTableDeleteExecutor final
 {
 public:
   ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
                          uint64_t table_id,
-                         uint64_t partition_id,
+                         common::ObTabletID tablet_id,
+                         share::ObLSID ls_id,
                          int64_t timeout_ts,
                          ObTableApiProcessorBase *processor,
                          ObTableService *table_service,
-                         storage::ObPartitionService *part_service);
+                         ObAccessService *access_service);
   ~ObHTableDeleteExecutor() {}
   // @param affected_rows [out] deleted number of htable cells
   int htable_delete(const table::ObTableBatchOperation &delete_op, int64_t &affected_rows);
@@ -253,7 +232,7 @@ private:
                        table::ObTableBatchOperationResult &mutations_result);
 private:
   ObTableService *table_service_;
-  storage::ObPartitionService *part_service_;
+  storage::ObAccessService *access_service_;
   ObTableServiceQueryCtx query_ctx_;
   table::ObTableQuery query_;
   table::ObTableQueryResult one_result_;
@@ -270,17 +249,16 @@ class ObHTablePutExecutor final
 public:
   ObHTablePutExecutor(common::ObArenaAllocator &alloc,
                       uint64_t table_id,
-                      uint64_t partition_id,
+                      common::ObTabletID tablet_id,
+                      share::ObLSID ls_id,
                       int64_t timeout_ts,
                       ObTableApiProcessorBase *processor,
-                      ObTableService *table_service,
-                      storage::ObPartitionService *part_service);
+                      ObTableService *table_service);
   ~ObHTablePutExecutor() {}
 
   int htable_put(const ObTableBatchOperation &put_op, int64_t &affected_rows, int64_t now_ms = 0);
 private:
   ObTableService *table_service_;
-  storage::ObPartitionService *part_service_;
   table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
   table::ObTableBatchOperationResult mutations_result_;
   ObTableServiceGetCtx mutate_ctx_;
@@ -295,11 +273,11 @@ public:
   ObHTableIncrementExecutor(table::ObTableOperationType::Type type,
                             common::ObArenaAllocator &alloc,
                             uint64_t table_id,
-                            uint64_t partition_id,
+                            common::ObTabletID tablet_id,
+                            share::ObLSID ls_id,
                             int64_t timeout_ts,
                             ObTableApiProcessorBase *processor,
-                            ObTableService *table_service,
-                            storage::ObPartitionService *part_service);
+                            ObTableService *table_service);
   ~ObHTableIncrementExecutor() {}
 
   int htable_increment(ObTableQueryResult &row_cells,
@@ -317,7 +295,6 @@ private:
 private:
   table::ObTableOperationType::Type type_;
   ObTableService *table_service_;
-  storage::ObPartitionService *part_service_;
   table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
   table::ObTableBatchOperation mutations_;
   table::ObTableBatchOperationResult mutations_result_;
@@ -337,8 +314,7 @@ int64_t ObTableRpcProcessor<T>::get_timeout_ts() const
   }
   return ts;
 }
-
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
 #endif /* _OB_TABLE_RPC_PROCESSOR_H */

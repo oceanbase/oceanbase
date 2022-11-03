@@ -1,0 +1,31 @@
+## log config
+log:
+  level: info
+  filename: ./log/ob-configserver.log
+  maxsize: 30
+  maxage: 7
+  maxbackups: 10
+  localtime: true
+  compress: true
+
+## server config
+server:
+  address: "0.0.0.0:8080"
+  run_dir: run
+
+## vip config, configserver will generate url with vip address and port and return it to the client
+## if you don't hava a vip, use the server address and port is ok, but do not use some random value that can't be connected
+vip:
+  address: "127.0.0.1"
+  port: 8080
+
+## storage config
+storage:
+  ## database type, support sqlite3 or mysql
+  database_type: mysql
+  # database_type: sqlite3
+
+  ## database connection config, should match database_type above
+  connection_url: "user:password@tcp(127.0.0.1:3306)/oceanbase?parseTime=true"
+  # connection_url: "/tmp/data.db?cache=shared&_fk=1"
+  # connection_url: "file:ent?mode=memory&cache=shared&_fk=1"

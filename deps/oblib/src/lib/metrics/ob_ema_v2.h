@@ -14,15 +14,20 @@
 #define _OB_EMA_V2_H 1
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/atomic/ob_atomic.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // See https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
-class ObExponentialMovingAverageV2 {
+class ObExponentialMovingAverageV2
+{
 public:
-  ObExponentialMovingAverageV2(const double alpha) : inited_(false), ema_(0.0), alpha_(alpha)
+  ObExponentialMovingAverageV2(const double alpha)
+      :inited_(false),
+       ema_(0.0),
+       alpha_(alpha)
   {}
-  ~ObExponentialMovingAverageV2()
-  {}
+  ~ObExponentialMovingAverageV2() {}
 
   void update(uint64_t value)
   {
@@ -43,15 +48,15 @@ public:
   }
 
 private:
-  bool inited_;         // atomic
-  double ema_;          // atomic
-  const double alpha_;  // const
+  bool inited_;  // atomic
+  double ema_;  // atomic
+  const double alpha_; // const
   DISALLOW_COPY_AND_ASSIGN(ObExponentialMovingAverageV2);
 };
 
 typedef ObExponentialMovingAverageV2 ObEMA;
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
 #endif /* _OB_EMA_V2_H */

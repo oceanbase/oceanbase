@@ -13,10 +13,13 @@
 #ifndef OCEANBASE_COMMON_LINK_H_
 #define OCEANBASE_COMMON_LINK_H_
 #include <stddef.h>
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /// @class  single link item
-class ObSLink {
+class ObSLink
+{
 public:
   /// @fn constructor
   inline ObSLink()
@@ -37,21 +40,20 @@ public:
   }
 
   /// @fn get next item in single list
-  inline ObSLink* next()
+  inline ObSLink *next()
   {
     return next_;
   }
 
   /// @fn extract the item after this
-  inline ObSLink* extract_next()
+  inline ObSLink *extract_next()
   {
-    ObSLink* result = next_;
+    ObSLink *result = next_;
     if (result != NULL) {
       next_ = result->next_;
     }
     return result;
   }
-
 private:
   /// @fn initialize
   inline void initialize()
@@ -59,11 +61,12 @@ private:
     next_ = NULL;
   }
   /// @property pointer to next obj in single list
-  ObSLink* next_;
+  ObSLink *next_;
 };
 
 /// @class  double link list item
-class ObDLink {
+class ObDLink
+{
 public:
   /// @fn constructor
   inline ObDLink()
@@ -71,22 +74,26 @@ public:
     initialize();
   }
 
+
+
   /// @fn check if double list is empty
   inline bool is_empty()
   {
     if (next_ == NULL || prev_ == NULL) {
-      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]", this, next_, prev_);
+      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]",
+                this, next_, prev_);
       return true;
     }
     return next_ == this;
   }
 
   /// @fn insert an item after this ObDLink
-  inline void insert_next(ObDLink& link)
+  inline void insert_next(ObDLink &link)
   {
     // next_ and prev_ can not be null.
     if (next_ == NULL || prev_ == NULL) {
-      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]", this, next_, prev_);
+      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]",
+                this, next_, prev_);
     } else {
       link.next_ = next_;
       link.prev_ = this;
@@ -96,10 +103,11 @@ public:
   }
 
   /// @fn insert an item before this ObDLink
-  inline void insert_prev(ObDLink& link)
+  inline void insert_prev(ObDLink &link)
   {
     if (next_ == NULL || prev_ == NULL) {
-      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]", this, next_, prev_);
+      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]",
+                this, next_, prev_);
     } else {
       link.prev_ = prev_;
       link.next_ = this;
@@ -112,7 +120,8 @@ public:
   inline void remove()
   {
     if (next_ == NULL || prev_ == NULL) {
-      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]", this, next_, prev_);
+      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]",
+                this, next_, prev_);
     } else {
       prev_->next_ = next_;
       next_->prev_ = prev_;
@@ -121,9 +130,9 @@ public:
   }
 
   /// @fn remove and return the item after self if exist
-  inline ObDLink* extract_next()
+  inline ObDLink *extract_next()
   {
-    ObDLink* result = NULL;
+    ObDLink *result = NULL;
     if (!is_empty()) {
       result = next_;
       result->remove();
@@ -132,9 +141,9 @@ public:
   }
 
   /// @fn remove and return the item before self if exist
-  inline ObDLink* extract_prev()
+  inline ObDLink *extract_prev()
   {
-    ObDLink* result = NULL;
+    ObDLink *result = NULL;
     if (!is_empty()) {
       result = prev_;
       result->remove();
@@ -143,10 +152,11 @@ public:
   }
 
   /// @fn replace self with link
-  inline void replace(ObDLink& link)
+  inline void replace(ObDLink &link)
   {
     if (next_ == NULL || prev_ == NULL) {
-      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]", this, next_, prev_);
+      _OB_LOG(ERROR, "dlink item corrupt [link_addr:%p,next:%p,prev:%p]",
+                this, next_, prev_);
     } else {
       next_->prev_ = &link;
       prev_->next_ = &link;
@@ -157,17 +167,16 @@ public:
   }
 
   /// @fn get next item
-  inline ObDLink* next()
+  inline ObDLink *next()
   {
     return next_;
   }
 
   /// @fn get preivous item
-  inline ObDLink* prev()
+  inline ObDLink *prev()
   {
     return prev_;
   }
-
 private:
   /// @fn initialize
   inline void initialize()
@@ -176,16 +185,18 @@ private:
     prev_ = this;
   }
   /// @property point to next item in double list
-  ObDLink* next_;
+  ObDLink *next_;
   /// @property point to previous item in double list
-  ObDLink* prev_;
+  ObDLink *prev_;
 };
 
 /// @def get the object of type "type" that contains the field
 /// "field" stating in address "address"
 #ifndef CONTAINING_RECORD
-#define CONTAINING_RECORD(address, type, field) ((type*)((char*)(address) - (long)(&((type*)1)->field) + 1))
+#define CONTAINING_RECORD(address, type, field) ((type *)(                    \
+                                                                              (char*)(address) -             \
+                                                                              (long)(&((type *)1)->field) + 1))
 #endif
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 #endif

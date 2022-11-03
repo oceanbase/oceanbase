@@ -22,29 +22,30 @@
 #define private public
 #include "lib/worker.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 int k = 0;
 const int max_cnt = 1000;
 
 template <class MUTEX>
-class TestLatchContend : public lib::ThreadPool {
+class TestLatchContend: public lib::ThreadPool
+{
 public:
-  TestLatchContend()
-  {}
-  virtual ~TestLatchContend()
-  {}
+  TestLatchContend() {}
+  virtual ~TestLatchContend() {}
   void run1() final
   {
     int i = 0;
-    while (1) {
+    while(1) {
       {
         mutex_.lock();
         for (int j = 0; j < 10; ++j) {
           ObRandom::rand(1, 1000);
         }
-        if (i == max_cnt) {
+        if (i ==  max_cnt) {
           break;
         }
         ++i;
@@ -70,14 +71,28 @@ TEST(ObLatch, ob_mutex_contend)
   ASSERT_TRUE(k == MUTEX_THR * max_cnt);
 }
 
-struct RWLockTestParam {
-  RWLockTestParam() : cycle_(0), ratio_(0), r_load_(0), w_load_(0), w2r_ratio_(INT64_MAX)
+struct RWLockTestParam
+{
+  RWLockTestParam()
+      : cycle_(0),
+        ratio_(0),
+        r_load_(0),
+        w_load_(0),
+        w2r_ratio_(INT64_MAX)
   {}
 
-  RWLockTestParam(const int32_t cycle, const int32_t ratio, const int32_t r_load, const int32_t w_load,
+  RWLockTestParam(const int32_t cycle,
+      const int32_t ratio,
+      const int32_t r_load,
+      const int32_t w_load,
       const int64_t w2r_ratio = INT64_MAX)
-      : cycle_(cycle), ratio_(ratio), r_load_(r_load), w_load_(w_load), w2r_ratio_(w2r_ratio)
-  {}
+      : cycle_(cycle),
+        ratio_(ratio),
+        r_load_(r_load),
+        w_load_(w_load),
+        w2r_ratio_(w2r_ratio)
+  {
+  }
   int32_t cycle_;
   int32_t ratio_;
   int32_t r_load_;
@@ -85,68 +100,60 @@ struct RWLockTestParam {
   int64_t w2r_ratio_;
 };
 
-class RWLockWithTimeout {
-public:
-  RWLockWithTimeout(bool has_timeout, uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK)
-      : latch_(), has_timeout_(has_timeout), latch_id_(latch_id)
-  {}
-  ~RWLockWithTimeout()
-  {}
-
-public:
-  int rdlock()
-  {
-    return latch_.rdlock(latch_id_);
-  }
-  int wrlock()
-  {
-    // timeout 100us
-    int64_t abs_lock_timeout = has_timeout_ ? common::ObTimeUtility::current_time() + 100 : INT64_MAX;
-    return latch_.wrlock(latch_id_, abs_lock_timeout);
-  }
-  int wr2rdlock()
-  {
-    return latch_.wr2rdlock();
-  }
-  int unlock()
-  {
-    return latch_.unlock();
-  }
-
-private:
-  ObLatch latch_;
-  bool has_timeout_;
-  uint32_t latch_id_;
+class RWLockWithTimeout
+{
+  public:
+    RWLockWithTimeout(bool has_timeout,
+        uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK)
+        : latch_(), has_timeout_(has_timeout), latch_id_(latch_id)
+    {
+    }
+    ~RWLockWithTimeout()
+    {
+    }
+  public:
+    int rdlock() { return latch_.rdlock(latch_id_); }
+    int wrlock()
+    {
+      // timeout 100us
+      int64_t abs_lock_timeout = has_timeout_ ? common::ObTimeUtility::current_time() + 100 : INT64_MAX;
+      return latch_.wrlock(latch_id_, abs_lock_timeout);
+    }
+    int wr2rdlock() { return latch_.wr2rdlock(); }
+    int unlock() { return latch_.unlock(); }
+  private:
+    ObLatch latch_;
+    bool has_timeout_;
+    uint32_t latch_id_;
 };
 
 DEFINE_HAS_MEMBER(wr2rdlock)
 
 int64_t k_rd = 0;
 template <class RWLOCK>
-class TestRWLockContend : public lib::ThreadPool {
+class TestRWLockContend: public lib::ThreadPool
+{
 public:
-  explicit TestRWLockContend(const bool has_timeout = false) : lock_(has_timeout)
-  {}
-  virtual ~TestRWLockContend()
-  {}
+  explicit TestRWLockContend(const bool has_timeout = false) : lock_(has_timeout) {}
+  virtual ~TestRWLockContend() {}
 
   void run1() final
   {
     int ret = OB_SUCCESS;
     int i = 0;
-    while (i < param_.cycle_) {
-      if (i % param_.ratio_ != 0) {  // read
+    while(i < param_.cycle_) {
+      if (i % param_.ratio_ != 0) { // read
         if (OB_SUCC(lock_.rdlock())) {
           for (int j = 0; j < param_.r_load_; j++) {
-            ObRandom::rand(1, 1000);
+            ObRandom::rand(1,1000);
           }
           lock_.unlock();
         }
-      } else {  // write
+      } else { // write
         if (OB_SUCC(lock_.wrlock())) {
           k_rd++;
           for (int j = 0; j < param_.w_load_; j++) {
-            ObRandom::rand(1, 1000);
+            ObRandom::rand(1,1000);
           }
           if (0 == i % param_.w2r_ratio_) {
             ASSERT_EQ(OB_SUCCESS, wr2rdlock_wrap(lock_, BoolType<HAS_MEMBER(RWLOCK, wr2rdlock)>()));
@@ -158,13 +165,13 @@ public:
     }
   }
 
-  inline int wr2rdlock_wrap(RWLOCK& lock, FalseType)
+  inline int wr2rdlock_wrap(RWLOCK &lock, FalseType)
   {
     UNUSED(lock);
     return OB_SUCCESS;
   }
 
-  inline int wr2rdlock_wrap(RWLOCK& lock, TrueType)
+  inline int wr2rdlock_wrap(RWLOCK &lock, TrueType)
   {
     return lock.wr2rdlock();
   }
@@ -197,47 +204,38 @@ TEST(ObLatch, ob_latch_rw_contend)
   ASSERT_TRUE(k_rd == cycles * MAX_RW_TH / ratios[0]);
 }
 
-struct CriticalSec {
-  CriticalSec()
-  {}
-  ~CriticalSec()
-  {}
+struct CriticalSec
+{
+  CriticalSec() {}
+  ~CriticalSec() {}
   union {
     SpinRWLock lock_;
-    char* data_;
+    char *data_;
   };
   int64_t ref_cnt_;
 };
 
 static const int64_t core_test_th_cnt = 4;
 
-class ObLatchTestRun : public lib::ThreadPool {
+class ObLatchTestRun : public lib::ThreadPool
+{
 public:
   ObLatchTestRun()
   {
-    buf_ = (char*)malloc(sizeof(CriticalSec) * 2);
+    buf_ = (char *)malloc(sizeof(CriticalSec) * 2);
     memset(buf_, 0, sizeof(CriticalSec) * 2);
     cs_ = new (buf_) CriticalSec();
     pthread_barrier_init(&start_, NULL, core_test_th_cnt);
   }
-  virtual ~ObLatchTestRun()
-  {
-    free(buf_);
-  }
+  virtual ~ObLatchTestRun() { free(buf_); }
   void run1() final;
   void set_ref_cnt(const int64_t ref_cnt);
-  CriticalSec* get_sec() const
-  {
-    return cs_;
-  }
-  char* get_addr()
-  {
-    return out_;
-  }
+  CriticalSec *get_sec() const { return cs_; }
+  char *get_addr() { return out_; }
 
 private:
-  char* buf_;
-  CriticalSec* cs_;
+  char *buf_;
+  CriticalSec *cs_;
   char out_[10] = "Great!";
   pthread_barrier_t start_;
 };
@@ -286,7 +284,7 @@ TEST(ObLatch, timeout)
   stress.wait();
 }
 
-TEST(ObLatch, wr2rdlock)
+TEST(ObLatch,wr2rdlock)
 {
   TestRWLockContend<RWLockWithTimeout> stress;
   stress.set_thread_count(10);
@@ -305,9 +303,9 @@ TEST(ObLatch, invaid_unlock)
 }
 
 #ifdef ENABLE_LATCH_DIAGNOSE
-void* run(void* arg)
+void *run(void *arg)
 {
-  ObLockDiagnose& ld = *(ObLockDiagnose*)arg;
+  ObLockDiagnose &ld = *(ObLockDiagnose*)arg;
   ObLDHandle handle;
   ld.lock(ObLDLockType::rdlock, handle);
   ld.print();
@@ -341,13 +339,14 @@ TEST(ObLatch, diagnose)
   ld.print();
 
   std::cout << "done" << std::endl;
+
 }
 #endif
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

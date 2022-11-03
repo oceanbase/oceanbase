@@ -12,18 +12,15 @@
 
 #include "common/ob_record_header.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ObRecordHeader::ObRecordHeader()
-    : magic_(0),
-      header_length_(0),
-      version_(0),
-      header_checksum_(0),
-      timestamp_(0),
-      data_length_(0),
-      data_zlength_(0),
-      data_checksum_(0)
-{}
+    : magic_(0), header_length_(0), version_(0), header_checksum_(0)
+    , timestamp_(0), data_length_(0), data_zlength_(0), data_checksum_(0)
+{
+}
 
 void ObRecordHeader::set_header_checksum()
 {
@@ -43,8 +40,8 @@ void ObRecordHeader::set_header_checksum()
 
 int ObRecordHeader::check_header_checksum() const
 {
-  int ret = OB_SUCCESS;
-  int16_t checksum = 0;
+  int ret           = OB_SUCCESS;
+  int16_t checksum  = 0;
 
   format_i64(magic_, checksum);
   checksum = checksum ^ header_length_;
@@ -62,7 +59,7 @@ int ObRecordHeader::check_header_checksum() const
   return ret;
 }
 
-int ObRecordHeader::check_payload_checksum(const char* buf, const int64_t len) const
+int ObRecordHeader::check_payload_checksum(const char *buf, const int64_t len) const
 {
   int ret = OB_SUCCESS;
 
@@ -76,23 +73,28 @@ int ObRecordHeader::check_payload_checksum(const char* buf, const int64_t len) c
     COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(len), K(ret));
   } else if (0 == len && (0 != data_zlength_ || 0 != data_length_ || 0 != data_checksum_)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(
-        WARN, "invalid arguments.", KP(buf), K(len), K_(data_zlength), K_(data_length), K_(data_checksum), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(buf), K(len),
+               K_(data_zlength), K_(data_length),
+               K_(data_checksum), K(ret));
   } else if ((data_zlength_ != len)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "data length is not correct.", K_(data_zlength), K(len), K(ret));
+    COMMON_LOG(WARN, "data length is not correct.",
+               K_(data_zlength), K(len), K(ret));
   } else {
     int64_t crc_check_sum = ob_crc64(buf, len);
     if (crc_check_sum != data_checksum_) {
       ret = OB_CHECKSUM_ERROR;
-      COMMON_LOG(WARN, "checksum error.", K(crc_check_sum), K_(data_checksum), K(ret));
+      COMMON_LOG(WARN, "checksum error.",
+                 K(crc_check_sum), K_(data_checksum), K(ret));
     }
   }
 
   return ret;
 }
 
-int ObRecordHeader::check_record(const char* buf, const int64_t len, const int16_t magic)
+
+int ObRecordHeader::check_record(const char *buf, const int64_t len, const int16_t magic)
 {
   int ret = OB_SUCCESS;
   ObRecordHeader record_header;
@@ -102,78 +104,103 @@ int ObRecordHeader::check_record(const char* buf, const int64_t len, const int16
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP(buf), K(len), K(ret));
   } else if (OB_FAIL(record_header.deserialize(buf, len, pos))) {
-    COMMON_LOG(WARN, "deserialize record header failed.", KP(buf), K(len), K(pos), K(ret));
+    COMMON_LOG(WARN, "deserialize record header failed.",
+               KP(buf), K(len), K(pos), K(ret));
   } else if (OB_UNLIKELY(record_header.magic_ != magic)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header magic is not match", K(record_header), K(magic), K(ret));
+    COMMON_LOG(WARN, "record header magic is not match",
+               K(record_header), K(magic), K(ret));
   } else if (OB_UNLIKELY(record_header.data_zlength_ != len - pos)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header length is not match", K(record_header), "data length", (len - pos), K(ret));
+    COMMON_LOG(WARN, "record header length is not match",
+               K(record_header), "data length", (len - pos), K(ret));
   } else if (OB_FAIL(record_header.check_header_checksum())) {
-    COMMON_LOG(WARN, "check header checksum failed.", K(record_header), "data length", (len - pos), K(ret));
+    COMMON_LOG(WARN, "check header checksum failed.",
+               K(record_header), "data length", (len - pos), K(ret));
   } else if (OB_FAIL(record_header.check_payload_checksum(buf + pos, len - pos))) {
-    COMMON_LOG(WARN, "check data checksum failed.", K(record_header), "data length", (len - pos), K(ret));
+    COMMON_LOG(WARN, "check data checksum failed.",
+               K(record_header), "data length", (len - pos), K(ret));
   }
 
   return ret;
 }
 
-int ObRecordHeader::check_record(
-    const ObRecordHeader& record_header, const char* payload_buf, const int64_t payload_len, const int16_t magic)
+int ObRecordHeader::check_record(const ObRecordHeader &record_header,
+                                 const char *payload_buf,
+                                 const int64_t payload_len,
+                                 const int16_t magic)
 {
   int ret = OB_SUCCESS;
   if (NULL == payload_buf || payload_len < 0) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(payload_buf), K(payload_len), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(payload_buf), K(payload_len), K(ret));
   } else if (OB_UNLIKELY(record_header.magic_ != magic)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header magic is not match", K(record_header), K(magic), K(ret));
+    COMMON_LOG(WARN, "record header magic is not match",
+               K(record_header), K(magic), K(ret));
   } else if (OB_UNLIKELY(record_header.data_zlength_ != payload_len)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header length is not match", K(record_header), K(payload_len), K(ret));
+    COMMON_LOG(WARN, "record header length is not match",
+               K(record_header), K(payload_len), K(ret));
   } else if (OB_FAIL(record_header.check_header_checksum())) {
-    COMMON_LOG(WARN, "check header checksum failed.", K(record_header), K(payload_len), K(ret));
+    COMMON_LOG(WARN, "check header checksum failed.",
+               K(record_header), K(payload_len), K(ret));
   } else if (OB_FAIL(record_header.check_payload_checksum(payload_buf, payload_len))) {
-    COMMON_LOG(WARN, "check data checksum failed.", K(record_header), K(payload_len), K(ret));
+    COMMON_LOG(WARN, "check data checksum failed.",
+               K(record_header), K(payload_len), K(ret));
   }
 
   return ret;
 }
 
-int ObRecordHeader::check_record(const char* ptr, const int64_t size, const int16_t magic, ObRecordHeader& header,
-    const char*& payload_ptr, int64_t& payload_size)
+int ObRecordHeader::check_record(const char *ptr, const int64_t size,
+                                 const int16_t magic, ObRecordHeader &header,
+                                 const char *&payload_ptr, int64_t &payload_size)
 {
   int ret = OB_SUCCESS;
   int64_t payload_pos = 0;
 
   if (NULL == ptr || size < OB_RECORD_HEADER_LENGTH) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(ptr), K(size), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.",
+               KP(ptr), K(size), K(ret));
   } else if (OB_FAIL(header.deserialize(ptr, size, payload_pos))) {
-    COMMON_LOG(WARN, "deserialize header failed ", KP(ptr), K(size), K(payload_pos), K(ret));
+    COMMON_LOG(WARN, "deserialize header failed ",
+               KP(ptr), K(size), K(payload_pos), K(ret));
   } else if (header.header_length_ != payload_pos) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "header length is not match.", K(header), K(payload_pos), K(ret));
-  } else if (NULL == (payload_ptr = ptr + payload_pos) || (payload_size = (size - payload_pos)) <= 0) {
+    COMMON_LOG(WARN, "header length is not match.",
+               K(header), K(payload_pos), K(ret));
+  } else if (NULL == (payload_ptr = ptr + payload_pos)
+             || (payload_size = (size - payload_pos)) <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "payload buffer size over flow", K(header), K(payload_pos), K(payload_size), K(ret));
+    COMMON_LOG(WARN, "payload buffer size over flow",
+               K(header), K(payload_pos), K(payload_size), K(ret));
   } else if (OB_UNLIKELY(header.magic_ != magic)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header magic is not match", K(header), K(magic), K(ret));
+    COMMON_LOG(WARN, "record header magic is not match",
+               K(header), K(magic), K(ret));
   } else if (OB_UNLIKELY(header.data_zlength_ != payload_size)) {
     ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "record header length is not match", K(header), K(payload_size), K(ret));
-  } else if (OB_FAIL(header.check_header_checksum())) {
-    COMMON_LOG(WARN, "check header checksum failed.", K(header), K(payload_size), K(ret));
+    COMMON_LOG(WARN, "record header length is not match",
+               K(header), K(payload_size), K(ret));
+  }  else if (OB_FAIL(header.check_header_checksum())) {
+    COMMON_LOG(WARN, "check header checksum failed.",
+               K(header), K(payload_size), K(ret));
   } else if (OB_FAIL(header.check_payload_checksum(payload_ptr, payload_size))) {
-    COMMON_LOG(WARN, "check payload checksum failed.", K(header), K(payload_size), K(ret));
+    COMMON_LOG(WARN, "check payload checksum failed.",
+               K(header), K(payload_size), K(ret));
   }
 
   return ret;
 }
 
-int ObRecordHeader::get_record_header(
-    const char* ptr, const int64_t size, ObRecordHeader& header, const char*& payload_ptr, int64_t& payload_size)
+int ObRecordHeader::get_record_header(const char *ptr,
+                                      const int64_t size,
+                                      ObRecordHeader &header,
+                                      const char *&payload_ptr,
+                                      int64_t &payload_size)
 {
   int ret = OB_SUCCESS;
   int64_t payload_pos = 0;
@@ -182,13 +209,15 @@ int ObRecordHeader::get_record_header(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments.", KP(ptr), K(size), K(ret));
   } else if (OB_FAIL(header.deserialize(ptr, size, payload_pos))) {
-    COMMON_LOG(WARN, "deserialize header failed ", KP(ptr), K(size), K(payload_pos), K(ret));
+    COMMON_LOG(WARN, "deserialize header failed ",
+               KP(ptr), K(size), K(payload_pos), K(ret));
   } else {
     payload_ptr = ptr + payload_pos;
     payload_size = size - payload_pos;
     if (header.header_length_ != payload_pos) {
       ret = OB_INVALID_DATA;
-      COMMON_LOG(WARN, "record header length is not match", K(header), K(payload_size), K(ret));
+      COMMON_LOG(WARN, "record header length is not match",
+                 K(header), K(payload_size), K(ret));
     }
   }
 
@@ -234,7 +263,7 @@ DEFINE_DESERIALIZE(ObRecordHeader)
     COMMON_LOG(WARN, "encode data failed..", KP(buf), K_(magic), K(ret));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &header_length_))) {
     COMMON_LOG(WARN, "encode data failed..", KP(buf), K_(header_length), K(ret));
-  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
+  }  else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
     COMMON_LOG(WARN, "encode data failed..", KP(buf), K_(version), K(ret));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &header_checksum_))) {
     COMMON_LOG(WARN, "encode data failed..", KP(buf), K_(header_checksum), K(ret));
@@ -253,11 +282,15 @@ DEFINE_DESERIALIZE(ObRecordHeader)
 
 DEFINE_GET_SERIALIZE_SIZE(ObRecordHeader)
 {
-  return (serialization::encoded_length_i16(magic_) + serialization::encoded_length_i16(header_length_) +
-          serialization::encoded_length_i16(version_) + serialization::encoded_length_i16(header_checksum_) +
-          serialization::encoded_length_i64(timestamp_) + serialization::encoded_length_i32(data_length_) +
-          serialization::encoded_length_i32(data_zlength_) + serialization::encoded_length_i64(data_checksum_));
+  return (serialization::encoded_length_i16(magic_)
+          + serialization::encoded_length_i16(header_length_)
+          + serialization::encoded_length_i16(version_)
+          + serialization::encoded_length_i16(header_checksum_)
+          + serialization::encoded_length_i64(timestamp_)
+          + serialization::encoded_length_i32(data_length_)
+          + serialization::encoded_length_i32(data_zlength_)
+          + serialization::encoded_length_i64(data_checksum_));
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

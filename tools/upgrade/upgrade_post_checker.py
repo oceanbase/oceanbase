@@ -12,7 +12,7 @@ import time
 
 class UpgradeParams:
   log_filename = 'upgrade_post_checker.log'
-  new_version = '3.1.3'
+  new_version = '4.0.0.0'
 #### --------------start : my_error.py --------------
 class MyError(Exception):
   def __init__(self, value):
@@ -103,7 +103,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
-sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 
 version_str = """version 1.0.0"""
 
@@ -288,7 +288,7 @@ def config_logging_module(log_filenamme):
 def check_cluster_version(query_cur):
   # 一方面配置项生效是个异步生效任务,另一方面是2.2.0之后新增租户级配置项刷新，和系统级配置项刷新复用同一个timer，这里暂且等一下。
   times = 30
-  sql="select distinct value = '{0}' from oceanbase.__all_virtual_sys_parameter_stat where name='min_observer_version'".format(upgrade_params.new_version)
+  sql="select distinct value = '{0}' from oceanbase.GV$OB_PARAMETERS  where name='min_observer_version'".format(upgrade_params.new_version)
   while times > 0 :
     (desc, results) = query_cur.exec_query(sql)
     if len(results) == 1 and results[0][0] == 1:
@@ -300,61 +300,6 @@ def check_cluster_version(query_cur):
     raise e
   else:
     logging.info("check_cluster_version success")
-
-def check_storage_format_version(query_cur):
-  # Specified expected version each time want to upgrade (see OB_STORAGE_FORMAT_VERSION_MAX)
-  expect_version = 4;
-  sql = "select value from oceanbase.__all_zone where zone = '' and name = 'storage_format_version'"
-  times = 180
-  while times > 0 :
-    (desc, results) = query_cur.exec_query(sql)
-    if len(results) == 1 and results[0][0] == expect_version:
-      break
-    time.sleep(10)
-    times -= 1
-  if times == 0:
-    logging.warn("check storage format version timeout! Expected version {0}".format(expect_version))
-    raise e
-  else:
-    logging.info("check expected storage format version '{0}' success".format(expect_version))
-
-def upgrade_table_schema_version(conn, cur):
-  try:
-    sql = """SELECT * FROM v$ob_cluster
-             WHERE cluster_role = "PRIMARY"
-             AND cluster_status = "VALID"
-             AND (switchover_status = "NOT ALLOWED" OR switchover_status = "TO STANDBY") """
-    (desc, results) = cur.exec_query(sql)
-    is_primary = len(results) > 0
-    if is_primary:
-      sql = "set @@session.ob_query_timeout = 60000000;"
-      logging.info(sql)
-      cur.exec_sql(sql)
-
-      sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-      logging.info(sql)
-      cur.exec_sql(sql)
-    else:
-      logging.info("standby cluster no need to run job update_table_schema_ersion")
-  except Exception, e:
-    logging.warn("update table schema failed")
-    raise MyError("update table schema failed")
-  logging.info("update table schema finish")
-
-def upgrade_storage_format_version(conn, cur):
-  try:
-    # enable_ddl
-    set_parameter(cur, 'enable_ddl', 'True')
-
-    # run job
-    sql = "alter system run job 'UPGRADE_STORAGE_FORMAT_VERSION';"
-    logging.info(sql)
-    cur.execute(sql)
-
-  except Exception, e:
-    logging.warn("upgrade storage format version failed")
-    raise e
-  logging.info("upgrade storage format version finish")
 
 # 2 检查内部表自检是否成功
 def check_root_inspection(query_cur):
@@ -386,108 +331,6 @@ def enable_rereplication(cur):
 # 7 打开major freeze
 def enable_major_freeze(cur):
   set_parameter(cur, 'enable_major_freeze', 'True')
-  
-# 8 打开sql走px
-def enable_px_inner_sql(query_cur, cur):
-  cur.execute("alter system set _ob_enable_px_for_inner_sql = True")
-  (desc, results) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
-  if (len(results) != 1) :
-    raise MyError('cluster role results is not valid')
-  elif (cmp(results[0][0], "PRIMARY") == 0):
-    tenant_id_list = fetch_tenant_ids(query_cur)
-    for tenant_id in tenant_id_list:
-      cur.execute("alter system change tenant tenant_id = {0}".format(tenant_id))
-      sql = """set global _ob_use_parallel_execution = true"""
-      logging.info("tenant_id : %d , %s", tenant_id, sql)
-      cur.execute(sql)
-  elif (cmp(results[0][0], "PHYSICAL STANDBY") == 0):
-    sql = """set global _ob_use_parallel_execution = true"""
-    cur.execute(sql)
-    logging.info("execute sql in standby: %s", sql)
-
-def execute_schema_split_v2(conn, cur, query_cur, user, pwd):
-  try:
-    # check local cluster finish schema split
-    done = check_schema_split_v2_finish(query_cur)
-    if not done:
-      ###### disable ddl
-      set_parameter(cur, 'enable_ddl', 'False')
-
-      # run job
-      sql = """alter system run job 'SCHEMA_SPLIT_V2'"""
-      logging.info("""run job 'SCHEMA_SPLIT_V2'""")
-      query_cur.exec_sql(sql)
-      # check schema split v2 finish
-      check_schema_split_v2_finish_until_timeout(query_cur, 360)
-
-    # primary cluster should wait standby clusters' schema split results
-    is_primary = check_current_cluster_is_primary(query_cur)
-    if is_primary:
-      standby_cluster_list = fetch_standby_cluster_infos(conn, query_cur, user, pwd)
-      for standby_cluster in standby_cluster_list:
-        # connect
-        logging.info("start to check schema split result by cluster: cluster_id = {0}"
-                     .format(standby_cluster['cluster_id']))
-        logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
-                     .format(standby_cluster['cluster_id'],
-                             standby_cluster['ip'],
-                             standby_cluster['port']))
-        tmp_conn = mysql.connector.connect(user     =  standby_cluster['user'],
-                                           password =  standby_cluster['pwd'],
-                                           host     =  standby_cluster['ip'],
-                                           port     =  standby_cluster['port'],
-                                           database =  'oceanbase')
-        tmp_cur = tmp_conn.cursor(buffered=True)
-        tmp_conn.autocommit = True
-        tmp_query_cur = Cursor(tmp_cur)
-        # check if stanby cluster
-        is_primary = check_current_cluster_is_primary(tmp_query_cur)
-        if is_primary:
-          logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-                            .format(standby_cluster['cluster_id'],
-                                    standby_cluster['ip'],
-                                    standby_cluster['port']))
-          raise e
-        # check schema split finish
-        check_schema_split_v2_finish_until_timeout(tmp_query_cur, 180)
-        # close
-        tmp_cur.close()
-        tmp_conn.close()
-        logging.info("""check schema split result success : cluster_id = {0}, ip = {1}, port = {2}"""
-                        .format(standby_cluster['cluster_id'],
-                                standby_cluster['ip'],
-                                standby_cluster['port']))
-  except Exception, e:
-    logging.warn("execute schema_split_v2 failed")
-    raise e
-  logging.info("execute schema_split_v2 success")
-
-def check_schema_split_v2_finish(query_cur):
-  done = False;
-  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where name = 'SCHEMA_SPLIT_V2' and info = 'succeed'"
-  logging.info(sql)
-  (desc, results) = query_cur.exec_query(sql)
-  if 1 != len(results) or 1 != len(results[0]):
-    logging.warn("should has one record")
-    raise e
-  elif 1 == results[0][0]:
-    done = True
-  else:
-    done = False
-  return done
-
-def check_schema_split_v2_finish_until_timeout(query_cur, times):
-  while times > 0:
-    done = check_schema_split_v2_finish(query_cur)
-    if done:
-      break;
-    else:
-      times -= 1
-      time.sleep(10)
-    if 0 == times:
-      logging.warn('check schema split v2 timeout!')
-      raise e
-  logging.info("check schema split v2 success")
 
 def fetch_tenant_ids(query_cur):
   try:
@@ -498,82 +341,6 @@ def fetch_tenant_ids(query_cur):
     return tenant_id_list
   except Exception, e:
     logging.exception('fail to fetch distinct tenant ids')
-    raise e
-
-def check_current_cluster_is_primary(query_cur):
-  try:
-    sql = """SELECT * FROM v$ob_cluster
-             WHERE cluster_role = "PRIMARY"
-             AND cluster_status = "VALID"
-             AND (switchover_status = "NOT ALLOWED" OR switchover_status = "TO STANDBY") """
-    (desc, results) = query_cur.exec_query(sql)
-    is_primary = len(results) > 0
-    return is_primary
-  except Exception, e:
-    logging.exception("""fail to check current is primary""")
-    raise e
-
-def fetch_standby_cluster_infos(conn, query_cur, user, pwd):
-  try:
-    is_primary = check_current_cluster_is_primary(query_cur)
-    if not is_primary:
-      logging.exception("""should be primary cluster""")
-      raise e
-
-    standby_cluster_infos = []
-    sql = """SELECT cluster_id, rootservice_list from v$ob_standby_status"""
-    (desc, results) = query_cur.exec_query(sql)
-
-    for r in results:
-      standby_cluster_info = {}
-      if 2 != len(r):
-        logging.exception("length not match")
-        raise e
-      standby_cluster_info['cluster_id'] = r[0]
-      standby_cluster_info['user'] = user
-      standby_cluster_info['pwd'] = pwd
-      # construct ip/port
-      address = r[1].split(";")[0] # choose first address in rs_list
-      standby_cluster_info['ip'] = str(address.split(":")[0])
-      standby_cluster_info['port'] = address.split(":")[2]
-      # append
-      standby_cluster_infos.append(standby_cluster_info)
-      logging.info("""cluster_info :  cluster_id = {0}, ip = {1}, port = {2}"""
-                   .format(standby_cluster_info['cluster_id'],
-                           standby_cluster_info['ip'],
-                           standby_cluster_info['port']))
-    conn.commit()
-    # check standby cluster
-    for standby_cluster_info in standby_cluster_infos:
-      # connect
-      logging.info("""create connection : cluster_id = {0}, ip = {1}, port = {2}"""
-                   .format(standby_cluster_info['cluster_id'],
-                           standby_cluster_info['ip'],
-                           standby_cluster_info['port']))
-
-      tmp_conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
-                                         password =  standby_cluster_info['pwd'],
-                                         host     =  standby_cluster_info['ip'],
-                                         port     =  standby_cluster_info['port'],
-                                         database =  'oceanbase')
-
-      tmp_cur = tmp_conn.cursor(buffered=True)
-      tmp_conn.autocommit = True
-      tmp_query_cur = Cursor(tmp_cur)
-      is_primary = check_current_cluster_is_primary(tmp_query_cur)
-      if is_primary:
-        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-                          .format(standby_cluster_info['cluster_id'],
-                                  standby_cluster_info['ip'],
-                                  standby_cluster_info['port']))
-        raise e
-      # close
-      tmp_cur.close()
-      tmp_conn.close()
-
-    return standby_cluster_infos
-  except Exception, e:
-    logging.exception('fail to fetch standby cluster info')
     raise e
 
 def check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_ids):
@@ -621,6 +388,50 @@ def check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_ids):
 
   except Exception, e:
     logging.exception("fail to check ddl and dml sync")
+    raise e
+
+def check_ddl_and_dml_sync_by_cluster(standby_cluster_info, sys_infos):
+  try:
+    # connect
+    logging.info("start to check ddl and dml sync by cluster: cluster_id = {0}"
+                 .format(standby_cluster_info['cluster_id']))
+    logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+                 .format(standby_cluster_info['cluster_id'],
+                         standby_cluster_info['ip'],
+                         standby_cluster_info['port']))
+    tmp_conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+                                       password =  standby_cluster_info['pwd'],
+                                       host     =  standby_cluster_info['ip'],
+                                       port     =  standby_cluster_info['port'],
+                                       database =  'oceanbase',
+                                       raise_on_warnings = True)
+    tmp_cur = tmp_conn.cursor(buffered=True)
+    tmp_conn.autocommit = True
+    tmp_query_cur = Cursor(tmp_cur)
+    is_primary = check_current_cluster_is_primary(tmp_query_cur)
+    if is_primary:
+      logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+                        .format(standby_cluster_info['cluster_id'],
+                                standby_cluster_info['ip'],
+                                standby_cluster_info['port']))
+      raise e
+
+    for sys_info in sys_infos:
+      check_ddl_and_dml_sync_by_tenant(tmp_query_cur, sys_info)
+
+    # close
+    tmp_cur.close()
+    tmp_conn.close()
+    logging.info("""check_ddl_and_dml_sync_by_cluster success : cluster_id = {0}, ip = {1}, port = {2}"""
+                    .format(standby_cluster_info['cluster_id'],
+                            standby_cluster_info['ip'],
+                            standby_cluster_info['port']))
+
+  except Exception, e:
+    logging.exception("""fail to check ddl and dml sync : cluster_id = {0}, ip = {1}, port = {2}"""
+                         .format(standby_cluster_info['cluster_id'],
+                                 standby_cluster_info['ip'],
+                                 standby_cluster_info['port']))
     raise e
 
 def check_ddl_and_dml_sync_by_tenant(query_cur, sys_info):
@@ -681,13 +492,11 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
       query_cur = Cursor(cur)
       try:
         check_cluster_version(query_cur)
-        upgrade_table_schema_version(conn, query_cur)
         check_root_inspection(query_cur)
         enable_ddl(cur)
         enable_rebalance(cur)
         enable_rereplication(cur)
         enable_major_freeze(cur)
-        enable_px_inner_sql(query_cur, cur)
       except Exception, e:
         logging.exception('run error')
         raise e

@@ -1,0 +1,77 @@
+drop table if exists t1,t2,t3,t4,t5;
+CREATE TABLE t1 (
+c1 int primary key,
+c2 int, c3 int
+) partition by hash(c1) partitions 4;
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+create table t2 (
+c1 int primary key,
+c2 int, c3 int
+) partition by hash(c1) partitions 5;
+INSERT INTO t2 VALUES (1,1,1);
+INSERT INTO t2 VALUES (2,2,2);
+INSERT INTO t2 VALUES (3,3,3);
+create table t3 (
+c1 int primary key,
+c2 int, c3 int
+) partition by hash(c1) partitions 6;
+INSERT INTO t3 VALUES (1,1,1);
+INSERT INTO t3 VALUES (2,2,2);
+INSERT INTO t3 VALUES (3,3,3);
+create table t4 (
+c1 int primary key,
+c2 int, c3 int
+);
+INSERT INTO t4 VALUES (1,1,1);
+INSERT INTO t4 VALUES (2,2,2);
+INSERT INTO t4 VALUES (3,3,3);
+create table t5 (
+c1 int primary key,
+c2 int, c3 int
+) partition by hash(c1) partitions 8;
+INSERT INTO t5 VALUES (1,1,1);
+select * from t1 order by c1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t1 order by c1,(select c1 from t2 limit 1);
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t1 order by c1,(select c1 from t2 where t1.c1=t2.c1);
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t1 order by c1,(select c1 from t4 where t1.c1=t4.c1);
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t1 order by c1,(select c1 from t2 where t1.c1=t2.c1 order by c1,(select c1 from t3 where t1.c1=t3.c1));
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t1 order by c1,(select c1 from t2);
+ERROR 21000: Subquery returns more than 1 row
+select * from t1 order by c1,(select c1 from t2 limit 2);
+ERROR 21000: Subquery returns more than 1 row
+select * from t1 order by c1,(select c1 from t2 where t1.c1<t2.c1);
+ERROR 21000: Subquery returns more than 1 row
+select * from t1 order by c1,(select c1 from t2 where 1=t2.c1 order by c1,(select c1 from t3));
+ERROR 21000: Subquery returns more than 1 row
+select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3));
+ERROR 21000: Subquery returns more than 1 row
+(select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3))) intersect (select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3)));
+ERROR 21000: Subquery returns more than 1 row
+(select * from t1 order by c1,(select c1 from t5 order by c1)) intersect (select * from t1 order by c1,(select c1 from t5 order by c1));
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+DROP TABLE t1,t2,t3,t4,t5;

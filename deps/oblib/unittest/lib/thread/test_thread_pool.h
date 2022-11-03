@@ -19,7 +19,8 @@ using namespace std;
 
 TEST(TestThreadPool, Submit)
 {
-  class : public ThreadPool {
+  class : public ThreadPool
+  {
     void run1() override()
     {
       cout << "ok" << endl;
@@ -29,7 +30,7 @@ TEST(TestThreadPool, Submit)
   tp.start();
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

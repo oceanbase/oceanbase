@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implementation of func json_merge_preserve
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_merge_preserve.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -53,6 +52,7 @@ int ObExprJsonMergePreserve::calc_result_typeN(ObExprResType& type,
   UNUSED(type_ctx);
   INIT_SUCC(ret);
   type.set_json();
+  type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   bool is_result_null = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_result_null && i < param_num; i++) {
     if (types_stack[0].get_type() == ObNullType) {
@@ -64,61 +64,12 @@ int ObExprJsonMergePreserve::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprJsonMergePreserve::calc_resultN(ObObj &result, const ObObj *objs, int64_t param_num, ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-
-  if (result_type_.get_collation_type() != CS_TYPE_UTF8MB4_BIN) {
-    ret = OB_ERR_INVALID_JSON_CHARSET;
-    LOG_WARN("invalid out put charset", K(ret), K(result_type_));
-  } if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("allcator not init", K(ret));
-  } else {
-    ObIJsonBase *j_base = NULL;
-    ObIJsonBase *j_patch_node = NULL;
-    bool has_null = false;
-    for (int32 i = 0; OB_SUCC(ret) && i < param_num && !has_null; i++) {
-      if (OB_FAIL(ObJsonExprHelper::get_json_doc(objs, allocator, i, j_patch_node, has_null))) {
-        LOG_WARN("get_json_doc failed", K(ret));
-      } else if (has_null) {
-        // do nothing
-      } else {
-        if (i == 0) {
-          j_base = j_patch_node;
-        } else {
-          ObIJsonBase *j_res = NULL;
-          if (OB_FAIL(j_base->merge_tree(allocator, j_patch_node, j_res))) {
-            LOG_WARN("error, merge tree failed", K(ret), K(i));
-          } else {
-            j_base = j_res;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      ObString raw_bin;
-      if (has_null) {
-        result.set_null();
-      } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, allocator))) {
-        LOG_WARN("fail to get json raw binary", K(ret));
-      } else {
-        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObExprJsonMergePreserve::eval_json_merge_preserve(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObDatum *json_datum = NULL;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObIJsonBase *j_base = NULL;
   ObIJsonBase *j_patch_node = NULL;
   bool has_null = false;

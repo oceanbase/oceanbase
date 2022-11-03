@@ -18,23 +18,24 @@
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/atomic/ob_atomic.h"
-#include "lib/lock/Monitor.h"
-#include "lib/lock/Mutex.h"
+#include "lib/lock/ob_monitor.h"
+#include "lib/lock/mutex.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/thread/thread_pool.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObClockGenerator : public lib::ThreadPool {
+class ObClockGenerator
+    : public lib::ThreadPool
+{
 private:
-  ObClockGenerator() : inited_(false), ready_(false), cur_ts_(0), last_used_time_(0)
+  ObClockGenerator()
+      : inited_(false), ready_(false), cur_ts_(0), last_used_time_(0)
   {}
-  ~ObClockGenerator()
-  {
-    destroy();
-  }
-
+  ~ObClockGenerator() { destroy(); }
 public:
   static int init();
   static void destroy();
@@ -61,7 +62,7 @@ inline int64_t ObClockGenerator::getClock()
 {
   int64_t ts = 0;
 
-  if (!clock_generator_.inited_) {
+  if (OB_UNLIKELY(!clock_generator_.inited_)) {
     TRANS_LOG(WARN, "clock generator not inited");
     ts = clock_generator_.get_us();
   } else {
@@ -98,16 +99,16 @@ inline int64_t ObClockGenerator::getCurrentTime()
 inline void ObClockGenerator::msleep(const int64_t ms)
 {
   if (ms > 0) {
-    tbutil::Monitor<tbutil::Mutex> monitor_;
-    (void)monitor_.timedWait(tbutil::Time(ms * 1000));
+    obutil::ObMonitor<obutil::Mutex> monitor_;
+    (void)monitor_.timed_wait(obutil::ObSysTime(ms * 1000));
   }
 }
 
 inline void ObClockGenerator::usleep(const int64_t us)
 {
   if (us > 0) {
-    tbutil::Monitor<tbutil::Mutex> monitor_;
-    (void)monitor_.timedWait(tbutil::Time(us));
+    obutil::ObMonitor<obutil::Mutex> monitor_;
+    (void)monitor_.timed_wait(obutil::ObSysTime(us));
   }
 }
 
@@ -129,7 +130,7 @@ OB_INLINE int64_t ObClockGenerator::get_us()
   return common::ObTimeUtility::current_time();
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // oceanbase
+} // common
 
-#endif  // OCEANBASE_COMMON_OB_CLOCK_GENERATOR_
+#endif //OCEANBASE_COMMON_OB_CLOCK_GENERATOR_

@@ -1,0 +1,35 @@
+#owner: peihan.dph
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn_admin;
+--sleep 2
+
+set @@ob_enable_plan_cache = 0;
+
+--echo // res type is string
+select @@ob_log_level;
+set @@ob_log_level='debug';
+select @@ob_log_level;
+set @@ob_log_level='info';
+
+--echo // res type is bool
+set @@ob_enable_plan_cache = 1;
+select @@ob_enable_plan_cache = 0;
+set @@ob_enable_plan_cache = 0;
+select @@ob_enable_plan_cache = 0;
+
+--echo // res type is int
+select @@ob_plan_cache_percentage;
+
+--echo // test null
+set character_set_results=NULL;
+select @@character_set_results;
+
+--sleep 2

@@ -20,6 +20,11 @@
 
 namespace oceanbase
 {
+
+namespace storage
+{
+class ObPartitionService;
+}
 namespace observer
 {
 
@@ -28,10 +33,13 @@ namespace observer
  */
 class ObTableQuerySyncSession final
 {
+  friend class ObQuerySyncMgr;
+
 public:
   explicit ObTableQuerySyncSession()
     : in_use_(true),
-      timestamp_(0),
+      timeout_ts_(10000000),
+      tenant_id_(MTL_ID()),
       query_(),
       result_iterator_(nullptr),
       allocator_(ObModIds::TABLE_PROC),
@@ -39,28 +47,28 @@ public:
       iterator_mementity_(nullptr)
   {}
   ~ObTableQuerySyncSession();
-  
-  void set_timestamp(int64_t timestamp) { timestamp_ = timestamp; }
+
   void set_result_iterator(ObNormalTableQueryResultIterator* iter);
   int deep_copy_select_columns(const ObTableQuery &query);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
 
-  int64_t get_timestamp() { return timestamp_; }
+  void set_timout_ts(uint64_t timeout_ts) { timeout_ts_ = timeout_ts; }
   ObTableServiceQueryCtx *get_table_service_ctx() {return &table_service_ctx_;}
   ObNormalTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
+  common::ObObjectID get_tenant_id() { return tenant_id_; }
 
 public:
-  ObPartitionLeaderArray* get_part_leader_list() {return &participants_;}
   sql::TransState* get_trans_state() {return &trans_state_;}
-  transaction::ObTransDesc* get_trans_desc() {return &trans_desc_;}
-  transaction::ObPartitionEpochArray* get_part_epoch_list() {return &part_epoch_list_;}
+  transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
+  void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
 
 private:
   bool in_use_;
-  uint64_t timestamp_;
+  uint64_t timeout_ts_;
+  common::ObObjectID tenant_id_;
   ObTableQuery query_; // only select_columns is correct
   ObNormalTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
@@ -69,10 +77,8 @@ private:
 
 private:
   // txn control
-  ObPartitionLeaderArray participants_;
   sql::TransState trans_state_;
-  transaction::ObTransDesc trans_desc_;
-  transaction::ObPartitionEpochArray part_epoch_list_;
+  transaction::ObTxDesc *trans_desc_;
 };
 
 /**
@@ -98,9 +104,9 @@ class ObQuerySyncMgr final
   friend class ObTableQuerySyncP;
 
 public:
-  using ObQueryHashMap = 
+  using ObQueryHashMap =
     common::hash::ObHashMap<uint64_t, ObTableQuerySyncSession *, common::hash::SpinReadWriteDefendMode>;
-  using QuerySessionPair = common::hash::HashMapPair<uint64_t, ObTableQuerySyncSession*>; 
+  using QuerySessionPair = common::hash::HashMapPair<uint64_t, ObTableQuerySyncSession*>;
   ~ObQuerySyncMgr() {}
   static ObQuerySyncMgr &get_instance();
 
@@ -121,36 +127,36 @@ public:
   ObTableQuerySyncSession *alloc_query_session();
   uint64_t generate_query_sessid();
   lib::ObMutex& get_locker(uint64_t sessid) { return locker_arr_[sessid % DEFAULT_LOCK_ARR_SIZE];}
-  
+
 private:
-  int init();  
+  int init();
+  int rollback_trans(ObTableQuerySyncSession &query_session);
   ObQuerySyncMgr();
   DISALLOW_COPY_AND_ASSIGN(ObQuerySyncMgr);
 
-private: 
+private:
   static const uint64_t INVALID_SESSION_ID = 0;
   static const uint64_t DEFAULT_LOCK_ARR_SIZE = 2000;
   static const uint64_t QUERY_SESSION_MAX_SIZE = 1000;
-  static const uint64_t QUERY_SESSION_TIMEOUT = 120 * 1000 * 1000; // 120s
   static const uint64_t QUERY_SESSION_CLEAN_DELAY = 180 * 1000 * 1000; // 180s
 
 private:
   static int64_t once_;  // for creating singleton instance
   static ObQuerySyncMgr *instance_;
-  int64_t session_id_; 
+  int64_t session_id_;
   ObQueryHashMap query_session_map_;
   lib::ObMutex locker_arr_[DEFAULT_LOCK_ARR_SIZE];
-  ObQuerySyncSessionRecycle query_session_recycle_; 
+  ObQuerySyncSessionRecycle query_session_recycle_;
   common::ObTimer timer_;
 };
 
 /**
  * -------------------------------------- ObTableQuerySyncP ----------------------------------------
 */
-class ObTableQuerySyncP : 
+class ObTableQuerySyncP :
   public ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC> >
 {
-  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC>> 
+  typedef ObTableRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC>>
     ParentType;
 public:
   explicit ObTableQuerySyncP(const ObGlobalContext &gctx);
@@ -173,13 +179,13 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTableQuerySyncP);
 
 private:
-  int get_partition_ids(uint64_t table_id, ObIArray<int64_t> &part_ids);
+  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int get_session_id(uint64_t &real_sessid, uint64_t arg_sessid);
   int get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_session);
   int query_scan_with_init();
   int query_scan_without_init();
   int query_scan_with_old_context(const int64_t timeout);
-  int query_scan_with_new_context(ObTableQuerySyncSession * session_ctx, table::ObTableQueryResultIterator *result_iterator, 
+  int query_scan_with_new_context(ObTableQuerySyncSession * session_ctx, table::ObTableQueryResultIterator *result_iterator,
     const int64_t timeout);
 
 private:

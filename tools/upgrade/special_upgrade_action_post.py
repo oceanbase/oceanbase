@@ -11,96 +11,66 @@ import mysql.connector
 from mysql.connector import errorcode
 import actions
 
+def do_special_upgrade_in_standy_cluster(standby_cluster_infos, user, passwd):
+  try:
+    for standby_cluster_info in standby_cluster_infos:
+      logging.info("do_special_upgrade_in_standy_cluster: cluster_id = {0}, ip = {1}, port = {2}"
+                   .format(standby_cluster_info['cluster_id'],
+                           standby_cluster_info['ip'],
+                           standby_cluster_info['port']))
+      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
+                   .format(standby_cluster_info['cluster_id'],
+                           standby_cluster_info['ip'],
+                           standby_cluster_info['port']))
+      conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
+                                     password =  standby_cluster_info['pwd'],
+                                     host     =  standby_cluster_info['ip'],
+                                     port     =  standby_cluster_info['port'],
+                                     database =  'oceanbase',
+                                     raise_on_warnings = True)
+
+      cur = conn.cursor(buffered=True)
+      conn.autocommit = True
+      query_cur = QueryCursor(cur)
+      is_primary = check_current_cluster_is_primary(query_cur)
+      if is_primary:
+        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
+                          .format(standby_cluster_info['cluster_id'],
+                                  standby_cluster_info['ip'],
+                                  standby_cluster_info['port']))
+        raise e
+
+      ## process
+      do_special_upgrade_for_standby_cluster(conn, cur, user, passwd)
+
+      cur.close()
+      conn.close()
+  except Exception, e:
+    logging.exception("""do_special_upgrade_for_standby_cluster failed""")
+    raise e
+
+# 备库需要执行的升级动作，且备库仅系统租户可写
+def do_special_upgrade_for_standby_cluster(conn, cur, user, passwd):
+#升级语句对应的action要写在下面的actions begin和actions end这两行之间，
+#因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
+#这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+  tenant_id_list = [1]
+  upgrade_system_package(conn, cur)
+####========******####======== actions begin ========####******========####
+  run_upgrade_job(conn, cur, "4.0.0.0")
+  return
+####========******####========= actions end =========####******========####
+
 def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
   # special upgrade action
 #升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 #因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
+  upgrade_system_package(conn, cur)
 ####========******####======== actions begin ========####******========####
-  run_upgrade_job(conn, cur, "3.1.3")
+  run_upgrade_job(conn, cur, "4.0.0.0")
   return
 ####========******####========= actions end =========####******========####
-
-def trigger_schema_split_job(conn, cur, user, pwd):
-  try:
-    query_cur = actions.QueryCursor(cur)
-    is_primary = actions.check_current_cluster_is_primary(query_cur)
-    if not is_primary:
-      logging.warn("current cluster should by primary")
-      raise e
-
-    # primary cluster
-    trigger_schema_split_job_by_cluster(conn, cur)
-
-    # stanby cluster
-    standby_cluster_list = actions.fetch_standby_cluster_infos(conn, query_cur, user, pwd)
-    for standby_cluster in standby_cluster_list:
-      # connect
-      logging.info("start to trigger schema split by cluster: cluster_id = {0}"
-                   .format(standby_cluster['cluster_id']))
-      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
-                   .format(standby_cluster['cluster_id'],
-                           standby_cluster['ip'],
-                           standby_cluster['port']))
-      tmp_conn = mysql.connector.connect(user     =  standby_cluster['user'],
-                                         password =  standby_cluster['pwd'],
-                                         host     =  standby_cluster['ip'],
-                                         port     =  standby_cluster['port'],
-                                         database =  'oceanbase')
-      tmp_cur = tmp_conn.cursor(buffered=True)
-      tmp_conn.autocommit = True
-      tmp_query_cur = actions.QueryCursor(tmp_cur)
-      # check if stanby cluster
-      is_primary = actions.check_current_cluster_is_primary(tmp_query_cur)
-      if is_primary:
-        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-                          .format(standby_cluster['cluster_id'],
-                                  standby_cluster['ip'],
-                                  standby_cluster['port']))
-        raise e
-      # trigger schema split
-      trigger_schema_split_job_by_cluster(tmp_conn, tmp_cur)
-      # close
-      tmp_cur.close()
-      tmp_conn.close()
-      logging.info("""trigger schema split success : cluster_id = {0}, ip = {1}, port = {2}"""
-                      .format(standby_cluster['cluster_id'],
-                              standby_cluster['ip'],
-                              standby_cluster['port']))
-
-  except Exception, e:
-    logging.warn("trigger schema split failed")
-    raise e
-  logging.info("trigger schema split success")
-
-def trigger_schema_split_job_by_cluster(conn, cur):
-  try:
-    # check record in rs_job
-    sql = "select count(*) from oceanbase.__all_rootservice_job where job_type = 'SCHEMA_SPLIT_V2';"
-    logging.info(sql)
-    cur.execute(sql)
-    result = cur.fetchall()
-    if 1 != len(result) or 1 != len(result[0]):
-      logging.warn("unexpected result cnt")
-      raise e
-    elif 0 == result[0][0]:
-      # insert fail record to start job
-      sql = "replace into oceanbase.__all_rootservice_job(job_id, job_type, job_status, progress, rs_svr_ip, rs_svr_port) values (0, 'SCHEMA_SPLIT_V2', 'FAILED', 100, '0.0.0.0', '0');"
-      logging.info(sql)
-      cur.execute(sql)
-      # check record in rs_job
-      sql = "select count(*) from oceanbase.__all_rootservice_job where job_type = 'SCHEMA_SPLIT_V2' and job_status = 'FAILED';"
-      logging.info(sql)
-      cur.execute(sql)
-      result = cur.fetchall()
-      if 1 != len(result) or 1 != len(result[0]) or 1 != result[0][0]:
-        logging.warn("schema split record should be 1")
-        raise e
-
-  except Exception, e:
-    logging.warn("start schema split task failed")
-    raise e
-  logging.info("start schema split task success")
 
 def query(cur, sql):
   cur.execute(sql)
@@ -109,21 +79,6 @@ def query(cur, sql):
 
 def get_tenant_names(cur):
   return [_[0] for _ in query(cur, 'select tenant_name from oceanbase.__all_tenant')]
-
-def update_cluster_update_table_schema_version(conn, cur):
-  time.sleep(30)
-  try:
-    query_timeout_sql = "set ob_query_timeout = 30000000;"
-    logging.info(query_timeout_sql)
-    cur.execute(query_timeout_sql)
-    sql = "alter system run job 'UPDATE_TABLE_SCHEMA_VERSION';"
-    logging.info(sql)
-    cur.execute(sql)
-  except Exception, e:
-    logging.warn("run update table schema version job failed")
-    raise e
-  logging.info("run update table schema version job success")
-
 
 def run_create_inner_schema_job(conn, cur):
   try:
@@ -206,87 +161,6 @@ def run_create_inner_schema_job(conn, cur):
     logging.warn("run create_inner_schema job failed")
     raise e
   logging.info("run create_inner_schema job success")
-
-def statistic_primary_zone_count(conn, cur):
-  try:
-    ###### disable ddl
-    ori_enable_ddl = actions.get_ori_enable_ddl(cur)
-    if ori_enable_ddl == 1:
-      actions.set_parameter(cur, 'enable_ddl', 'False')
-
-    # check record in rs_job
-    count_sql = """select count(*) from oceanbase.__all_rootservice_job
-            where job_type = 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT';"""
-    result = query(cur, count_sql)
-    job_count = 0
-    if (1 != len(result)) :
-      logging.warn("unexpected sql output")
-      raise e
-    else :
-      job_count = result[0][0]
-      # run job
-      sql = "alter system run job 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT';"
-      logging.info(sql)
-      cur.execute(sql)
-      # wait job finish
-      times = 180
-      ## 先检查job count变化
-      count_check = False
-      while times > 0:
-        result = query(cur, count_sql)
-        if (1 != len(result)):
-          logging.warn("unexpected sql output")
-          raise e
-        elif (result[0][0] > job_count):
-          count_check = True
-          logging.info('statistic_primary_zone_entity_count job detected')
-          break
-        time.sleep(10)
-        times -= 1
-        if times == 0:
-          raise MyError('statistic_primary_zone_entity_count job failed!')
-
-      ## 继续检查job status状态
-      status_sql = """select job_status from oceanbase.__all_rootservice_job
-                      where job_type = 'STATISTIC_PRIMARY_ZONE_ENTITY_COUNT' order by job_id desc limit 1;"""
-      status_check = False
-      while times > 0 and count_check == True:
-        result = query(cur, status_sql)
-        if (0 == len(result)):
-          logging.warn("unexpected sql output")
-          raise e
-        elif (1 != len(result) or 1 != len(result[0])):
-          logging.warn("result len not match")
-          raise e
-        elif result[0][0] == "FAILED":
-          logging.warn("run statistic_primary_zone_entity_count job faild")
-          raise e
-        elif result[0][0] == "INPROGRESS":
-          logging.info('statistic_primary_zone_entity_count job is still running')
-        elif result[0][0] == "SUCCESS":
-          status_check = True
-          break;
-        else:
-          logging.warn("invalid result: {0}" % (result[0][0]))
-          raise e
-        time.sleep(10)
-        times -= 1
-        if times == 0:
-          raise MyError('check statistic_primary_zone_entity_count job failed!')
-
-      if (status_check == True and count_check == True):
-        logging.info('check statistic_primary_zone_entity_count job success')
-      else:
-        logging.warn("run statistic_primary_zone_entity_count job faild")
-        raise e
-
-    # enable ddl
-    if ori_enable_ddl == 1:
-      actions.set_parameter(cur, 'enable_ddl', 'True')
-  except Exception, e:
-    logging.warn("run statistic_primary_zone_entity_count job failed")
-    raise e
-  logging.info("run statistic_primary_zone_entity_count job success")
 
 def disable_major_freeze(conn, cur):
   try:
@@ -408,3 +282,91 @@ def run_upgrade_job(conn, cur, version):
     logging.warn("run upgrade job failed, version:{0}".format(version))
     raise e
   logging.info("run upgrade job success, version:{0}".format(version))
+
+
+def upgrade_system_package(conn, cur):
+  try:
+    ori_enable_ddl = actions.get_ori_enable_ddl(cur)
+    if ori_enable_ddl == 0:
+      actions.set_parameter(cur, 'enable_ddl', 'True')
+
+    sql = "set ob_query_timeout = 300000000;"
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = """
+      CREATE OR REPLACE PACKAGE __DBMS_UPGRADE
+        PROCEDURE UPGRADE(package_name VARCHAR(1024));
+        PROCEDURE UPGRADE_ALL();
+      END;
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = """
+      CREATE OR REPLACE PACKAGE BODY __DBMS_UPGRADE
+        PROCEDURE UPGRADE(package_name VARCHAR(1024));
+          PRAGMA INTERFACE(c, UPGRADE_SINGLE);
+        PROCEDURE UPGRADE_ALL();
+          PRAGMA INTERFACE(c, UPGRADE_ALL);
+      END;
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = """
+      CALL __DBMS_UPGRADE.UPGRADE_ALL();
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    ###### alter session compatibility mode
+    sql = "set ob_compatibility_mode='oracle';"
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = "set ob_query_timeout = 300000000;"
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = """
+      CREATE OR REPLACE PACKAGE "__DBMS_UPGRADE" IS
+        PROCEDURE UPGRADE(package_name VARCHAR2);
+        PROCEDURE UPGRADE_ALL;
+      END;
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    sql = """
+      CREATE OR REPLACE PACKAGE BODY "__DBMS_UPGRADE" IS
+        PROCEDURE UPGRADE(package_name VARCHAR2);
+          PRAGMA INTERFACE(c, UPGRADE_SINGLE);
+        PROCEDURE UPGRADE_ALL;
+          PRAGMA INTERFACE(c, UPGRADE_ALL);
+      END;
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    ########## update system package ##########
+    sql = """
+      CALL "__DBMS_UPGRADE".UPGRADE_ALL();
+    """
+    logging.info(sql)
+    cur.execute(sql)
+
+    ###### alter session compatibility mode
+    sql = "set ob_compatibility_mode='mysql';"
+    logging.info(sql)
+    cur.execute(sql)
+    time.sleep(10)
+
+    if ori_enable_ddl == 0:
+      actions.set_parameter(cur, 'enable_ddl', 'False')
+
+    logging.info("upgrade package finished!")
+  except Exception, e:
+    logging.warn("upgrade package failed!")
+    raise e
+

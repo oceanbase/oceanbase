@@ -21,14 +21,15 @@ using namespace share;
 using namespace sql;
 
 ObBackupSetEncryptionStmt::ObBackupSetEncryptionStmt()
-    : ObSystemCmdStmt(stmt::T_BACKUP_SET_ENCRYPTION),
-      mode_(share::ObBackupEncryptionMode::MAX_MODE),
-      encrypted_passwd_()
+  :ObSystemCmdStmt(stmt::T_BACKUP_SET_ENCRYPTION),
+    mode_(share::ObBackupEncryptionMode::MAX_MODE),
+    encrypted_passwd_()
 {
   passwd_buf_[0] = '\0';
 }
 
-int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObString& passwd)
+
+int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObString &passwd)
 {
   int ret = common::OB_SUCCESS;
   mode_ = static_cast<const share::ObBackupEncryptionMode::EncryptionMode>(mode);
@@ -44,13 +45,16 @@ int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObStr
   return ret;
 }
 
-ObBackupSetDecryptionStmt::ObBackupSetDecryptionStmt() : ObSystemCmdStmt(stmt::T_BACKUP_SET_DECRYPTION)
+
+ObBackupSetDecryptionStmt::ObBackupSetDecryptionStmt()
+  : ObSystemCmdStmt(stmt::T_BACKUP_SET_DECRYPTION)
 {
   passwd_array_[0] = '\0';
   pos_ = 0;
 }
 
-int ObBackupSetDecryptionStmt::add_passwd(const ObString& passwd)
+
+int ObBackupSetDecryptionStmt::add_passwd(const ObString &passwd)
 {
   int ret = OB_SUCCESS;
   char passwd_buf[OB_MAX_PASSWORD_LENGTH];
@@ -65,12 +69,8 @@ int ObBackupSetDecryptionStmt::add_passwd(const ObString& passwd)
 
   if (FAILEDx(ObEncryptedHelper::encrypt_passwd_to_stage2(passwd, encrypted_passwd))) {
     COMMON_LOG(WARN, "failed to encrypted passwd", K(ret), K(passwd));
-  } else if (OB_FAIL(databuff_printf(passwd_array_,
-                 sizeof(passwd_array_),
-                 pos_,
-                 "%.*s",
-                 encrypted_passwd.length(),
-                 encrypted_passwd.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(passwd_array_, sizeof(passwd_array_), pos_, "%.*s",
+      encrypted_passwd.length(), encrypted_passwd.ptr()))) {
     COMMON_LOG(WARN, "failed to add passwd", K(ret), K_(pos), K_(passwd_array));
   }
 
@@ -79,13 +79,29 @@ int ObBackupSetDecryptionStmt::add_passwd(const ObString& passwd)
   return ret;
 }
 
-ObAddRestoreSourceStmt::ObAddRestoreSourceStmt() : ObSystemCmdStmt(stmt::T_ADD_RESTORE_SOURCE)
+ObSetRegionBandwidthStmt::ObSetRegionBandwidthStmt()
+  : ObSystemCmdStmt(stmt::T_SET_REGION_NETWORK_BANDWIDTH)
+{
+  max_bw_ = -1;
+}
+
+int ObSetRegionBandwidthStmt::set_param(const char *src_region, const char *dst_region, const int64_t max_bw)
+{
+  int ret = common::OB_SUCCESS;
+  snprintf(src_region_, MAX_REGION_LENGTH, "%s", src_region);
+  snprintf(dst_region_, MAX_REGION_LENGTH, "%s", dst_region);
+  max_bw_ = max_bw;
+  return ret;
+}
+
+ObAddRestoreSourceStmt::ObAddRestoreSourceStmt()
+  : ObSystemCmdStmt(stmt::T_ADD_RESTORE_SOURCE)
 {
   restore_source_array_[0] = '\0';
   pos_ = 0;
 }
 
-int ObAddRestoreSourceStmt::add_restore_source(const common::ObString& source)
+int ObAddRestoreSourceStmt::add_restore_source(const common::ObString &source)
 {
   int ret = OB_SUCCESS;
   if (pos_ != 0) {
@@ -95,8 +111,8 @@ int ObAddRestoreSourceStmt::add_restore_source(const common::ObString& source)
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(databuff_printf(
-                 restore_source_array_, sizeof(restore_source_array_), pos_, "%.*s", source.length(), source.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(restore_source_array_, sizeof(restore_source_array_),
+    pos_, "%.*s", source.length(), source.ptr()))) {
     COMMON_LOG(WARN, "failed to add restore source", KR(ret), K(pos_), K(restore_source_array_));
   }
   COMMON_LOG(INFO, "add restore source", KR(ret), K(source), K(restore_source_array_));

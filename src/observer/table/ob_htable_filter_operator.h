@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #ifndef _OB_HTABLE_FILTER_OPERATOR_H
 #define _OB_HTABLE_FILTER_OPERATOR_H 1
 #include "lib/string/ob_string.h"
@@ -66,8 +66,7 @@ public:
   ObHTableColumnTracker()
       :max_versions_(1),
        min_versions_(0),
-       oldest_stamp_(0),
-       tracker_scan_order_(common::ObQueryFlag::ScanOrder::ImplementedOrder)
+       oldest_stamp_(0)
   {}
   virtual ~ObHTableColumnTracker() {}
   virtual int init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order) = 0;

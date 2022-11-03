@@ -16,13 +16,13 @@
 
 using namespace oceanbase::sql;
 
-int ObSqcCtx::add_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider& provider)
+int ObSqcCtx::add_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider &provider)
 {
   provider.op_id_ = op_id;
   return whole_msg_provider_list_.push_back(&provider);
 }
 
-int ObSqcCtx::get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider*& provider)
+int ObSqcCtx::get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider *&provider)
 {
   int ret = OB_SUCCESS;
   provider = nullptr;
@@ -35,7 +35,7 @@ int ObSqcCtx::get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider*& p
       break;
     }
   }
-  // EXPECTED: traversal operators and register provider when sqc is starting
+  // 预期在 sqc 启动时就要遍历算子并注册好 provider
   if (nullptr == provider) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should have a whole msg provider for op", K(op_id), K(ret));

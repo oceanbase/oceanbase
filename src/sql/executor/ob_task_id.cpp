@@ -15,10 +15,12 @@
 #include "sql/executor/ob_task_id.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 OB_SERIALIZE_MEMBER(ObTaskID, ob_job_id_, task_id_, task_cnt_);
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns */
+}/* ns oceanbase */

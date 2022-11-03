@@ -12,8 +12,10 @@
 
 #include "observer/virtual_table/ob_all_virtual_server_blacklist.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 using namespace storage;
 using namespace common;
 using namespace share;
@@ -54,10 +56,10 @@ int ObAllVirtualServerBlacklist::prepare_to_read_()
   return ret;
 }
 
-int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   ObBlacklistInfo bl_info;
   ObDstServerInfo dst_info;
 
@@ -76,9 +78,9 @@ int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow*& row)
     if (OB_SUCC(ret)) {
       for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; ++cell_idx) {
         uint64_t col_id = output_column_ids_.at(cell_idx);
-        switch (col_id) {
+        switch(col_id) {
           case SVR_IP: {
-            (void)self_addr_.ip_to_string(self_ip_buf_, common::OB_IP_STR_BUFF);
+            (void) self_addr_.ip_to_string(self_ip_buf_, common::OB_IP_STR_BUFF);
             cells[cell_idx].set_varchar(self_ip_buf_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
@@ -88,7 +90,7 @@ int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow*& row)
             break;
           }
           case DST_IP: {
-            (void)bl_info.get_addr().ip_to_string(dst_ip_buf_, common::OB_IP_STR_BUFF);
+            (void) bl_info.get_addr().ip_to_string(dst_ip_buf_, common::OB_IP_STR_BUFF);
             cells[cell_idx].set_varchar(dst_ip_buf_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
@@ -101,13 +103,10 @@ int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow*& row)
             cells[cell_idx].set_bool(dst_info.is_in_blacklist_);
             break;
           }
-          case IS_CLOCKDIFF_ERROR: {
-            cells[cell_idx].set_bool(dst_info.is_clockdiff_error_);
-            break;
-          }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
             break;
           }
         }
@@ -120,5 +119,5 @@ int ObAllVirtualServerBlacklist::inner_get_next_row(ObNewRow*& row)
   }
   return ret;
 }
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

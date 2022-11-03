@@ -20,21 +20,25 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/schema/ob_schema_mem_mgr.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace share::schema;
 
-namespace common {
+namespace common
+{
 
-class TestSchemaMemMgr : public ::testing::Test {};
+class TestSchemaMemMgr: public ::testing::Test
+{
+};
 
 TEST_F(TestSchemaMemMgr, basic_test)
 {
   int ret = OB_SUCCESS;
-  ObSchemaMgr* mgr = NULL;
+  ObSchemaMgr *mgr = NULL;
   int pos = -1;
 
-  void* ptr = NULL;
-  ObIAllocator* allocator = NULL;
+  void *ptr = NULL;
+  ObIAllocator *allocator = NULL;
   ObSchemaMemMgr mem_mgr;
   // not init when alloc
   ret = mem_mgr.alloc(sizeof(ObSchemaMgr), ptr, &allocator);
@@ -60,21 +64,21 @@ TEST_F(TestSchemaMemMgr, basic_test)
 
   // not init when free
   mem_mgr.is_inited_ = false;
-  ret = mem_mgr.free(static_cast<void*>(mgr));
+  ret = mem_mgr.free(static_cast<void *>(mgr));
   ASSERT_EQ(OB_INNER_STAT_ERROR, ret);
   mem_mgr.is_inited_ = true;
   // invalid arg when free
   ret = mem_mgr.free(NULL);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
 
-  ret = mem_mgr.free(static_cast<void*>(mgr));
+  ret = mem_mgr.free(static_cast<void *>(mgr));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, mem_mgr.ptrs_[pos].count());
   int64_t alloc_cnt = 0;
   ret = mem_mgr.get_cur_alloc_cnt(alloc_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, alloc_cnt);
-  ret = mem_mgr.free(static_cast<void*>(mgr));
+  ret = mem_mgr.free(static_cast<void *>(mgr));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, mem_mgr.ptrs_[pos].count());
   ret = mem_mgr.get_cur_alloc_cnt(alloc_cnt);
@@ -105,14 +109,14 @@ TEST_F(TestSchemaMemMgr, NULL_ptr)
 
   // free when ptrs array contains NULL ptr.
   mem_mgr.ptrs_[0].push_back(NULL);
-  ret = mem_mgr.free(static_cast<void*>(this));
+  ret = mem_mgr.free(static_cast<void *>(this));
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
   mem_mgr.ptrs_[0].reset();
 
   // free when two ptrs array have the same ptr.
-  mem_mgr.ptrs_[0].push_back(static_cast<void*>(this));
-  mem_mgr.ptrs_[1].push_back(static_cast<void*>(this));
-  ret = mem_mgr.free(static_cast<void*>(this));
+  mem_mgr.ptrs_[0].push_back(static_cast<void *>(this));
+  mem_mgr.ptrs_[1].push_back(static_cast<void *>(this));
+  ret = mem_mgr.free(static_cast<void *>(this));
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 }
 
@@ -132,10 +136,11 @@ TEST_F(TestSchemaMemMgr, check_can_switch_allocer)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(can_switch);
   // cannot switch
-  mem_mgr.ptrs_[1].push_back(static_cast<void*>(this));
+  mem_mgr.ptrs_[1].push_back(static_cast<void *>(this));
   ret = mem_mgr.check_can_switch_allocer(can_switch);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_FALSE(can_switch);
+
 }
 
 TEST_F(TestSchemaMemMgr, switch_allocer)
@@ -149,8 +154,8 @@ TEST_F(TestSchemaMemMgr, switch_allocer)
   ret = mem_mgr.init(ObModIds::OB_SCHEMA_MGR);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  mem_mgr.ptrs_[1].push_back(static_cast<void*>(this));
-  mem_mgr.all_ptrs_[1].push_back(static_cast<void*>(this));
+  mem_mgr.ptrs_[1].push_back(static_cast<void *>(this));
+  mem_mgr.all_ptrs_[1].push_back(static_cast<void *>(this));
   ret = mem_mgr.switch_allocer();
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
   mem_mgr.ptrs_[1].reset();
@@ -159,9 +164,9 @@ TEST_F(TestSchemaMemMgr, switch_allocer)
   ASSERT_EQ(0, mem_mgr.all_ptrs_[1].count());
 
   // free when two ptrs array have the same ptr.
-  mem_mgr.ptrs_[0].push_back(static_cast<void*>(this));
-  mem_mgr.ptrs_[1].push_back(static_cast<void*>(this));
-  ret = mem_mgr.free(static_cast<void*>(this));
+  mem_mgr.ptrs_[0].push_back(static_cast<void *>(this));
+  mem_mgr.ptrs_[1].push_back(static_cast<void *>(this));
+  ret = mem_mgr.free(static_cast<void *>(this));
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 }
 
@@ -173,17 +178,17 @@ TEST_F(TestSchemaMemMgr, simulate_increment_refresh_schema)
 
   static const int min_switch_alloc_cnt = 32;
   static const int cache_size = 8;
-  ObSchemaMgr* schema_mgr_for_cache = NULL;
-  ObSchemaMgr* mgr_cache[cache_size];
+  ObSchemaMgr *schema_mgr_for_cache = NULL;
+  ObSchemaMgr *mgr_cache[cache_size];
   memset(mgr_cache, 0, sizeof(ObSchemaMgr*) * cache_size);
   ObSchemaMemMgr mem_mgr;
   ret = mem_mgr.init(ObModIds::OB_SCHEMA_MGR);
   ASSERT_EQ(OB_SUCCESS, ret);
   const int alloc_size = sizeof(ObSchemaMgr);
-  ObSchemaMgr* mgr = NULL;
+  ObSchemaMgr *mgr = NULL;
   // init schema_mgr_for_cache
-  void* tmp_ptr = NULL;
-  ObIAllocator* allocator = NULL;
+  void *tmp_ptr = NULL;
+  ObIAllocator *allocator = NULL;
   ret = mem_mgr.alloc(alloc_size, tmp_ptr, &allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
   schema_mgr_for_cache = new (tmp_ptr) ObSchemaMgr(*allocator);
@@ -194,7 +199,7 @@ TEST_F(TestSchemaMemMgr, simulate_increment_refresh_schema)
     schema_mgr_for_cache->set_schema_version(1);
     // eliminate randomly
     int64_t eli_pos = ObRandom::rand(0, cache_size - 1);
-    void* eli_ptr = static_cast<void*>(mgr_cache[eli_pos]);
+    void *eli_ptr = static_cast<void *>(mgr_cache[eli_pos]);
     ret = mem_mgr.alloc(alloc_size, tmp_ptr);
     ASSERT_EQ(OB_SUCCESS, ret);
     mgr = new (tmp_ptr) ObSchemaMgr;
@@ -209,28 +214,23 @@ TEST_F(TestSchemaMemMgr, simulate_increment_refresh_schema)
       ASSERT_EQ(OB_SUCCESS, ret);
       ret = mem_mgr.get_cur_alloc_cnt(alloc_cnt);
       ASSERT_EQ(OB_SUCCESS, ret);
-      LOG_INFO("debug",
-          K(tmp_ptr),
-          K(eli_pos),
-          K(eli_ptr),
-          K(alloc_cnt),
-          K(mem_mgr.ptrs_[0].count()),
-          K(mem_mgr.ptrs_[1].count()));
+      LOG_INFO("debug", K(tmp_ptr), K(eli_pos), K(eli_ptr), K(alloc_cnt),
+               K(mem_mgr.ptrs_[0].count()), K(mem_mgr.ptrs_[1].count()));
       if (can_switch && alloc_cnt > min_switch_alloc_cnt) {
         LOG_INFO("switch allocator");
         ++switch_cnt;
         // overwrite schema_mgr_for_cache
-        void* tmp_ptr = NULL;
-        ObIAllocator* allocator = NULL;
-        ObSchemaMgr* old_mgr = schema_mgr_for_cache;
-        ObSchemaMgr* new_mgr = NULL;
+        void *tmp_ptr = NULL;
+        ObIAllocator *allocator = NULL;
+        ObSchemaMgr *old_mgr = schema_mgr_for_cache;
+        ObSchemaMgr *new_mgr = NULL;
         ret = mem_mgr.switch_allocer();
         ASSERT_EQ(OB_SUCCESS, ret);
         ret = mem_mgr.alloc(alloc_size, tmp_ptr, &allocator);
         ASSERT_EQ(OB_SUCCESS, ret);
         new_mgr = new (tmp_ptr) ObSchemaMgr(*allocator);
         new_mgr->deep_copy(*old_mgr);
-        ret = mem_mgr.free(static_cast<void*>(old_mgr));
+        ret = mem_mgr.free(static_cast<void *> (old_mgr));
         ASSERT_EQ(OB_SUCCESS, ret);
         schema_mgr_for_cache = new_mgr;
         // expect no core
@@ -240,7 +240,7 @@ TEST_F(TestSchemaMemMgr, simulate_increment_refresh_schema)
   }
   // check
   for (int64_t i = 0; i < cache_size; ++i) {
-    ObSchemaMgr* mgr = mgr_cache[i];
+    ObSchemaMgr *mgr = mgr_cache[i];
     bool exist = false;
     for (int64_t j = 0; j < mem_mgr.ptrs_[0].count() && !exist; ++j) {
       exist = mgr == mem_mgr.ptrs_[0].at(j);
@@ -261,8 +261,8 @@ TEST_F(TestSchemaMemMgr, simulate_increment_refresh_schema)
   ASSERT_TRUE(switch_cnt > 10);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase
 
 int main(int argc, char** argv)
 {

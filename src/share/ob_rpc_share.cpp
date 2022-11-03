@@ -15,7 +15,7 @@
 namespace oceanbase {
 namespace share {
 
-rpc::frame::ObReqTransport* g_obrpc_transport = nullptr;
+rpc::frame::ObReqTransport *g_obrpc_transport = nullptr;
 
-}  // namespace share
-}  // namespace oceanbase
+}  // share
+}  // oceanbase

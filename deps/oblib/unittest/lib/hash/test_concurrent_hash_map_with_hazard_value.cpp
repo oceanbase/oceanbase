@@ -19,56 +19,35 @@
 using namespace oceanbase;
 using namespace common;
 
-struct Key {
+struct Key
+{
   int64_t key;
-  Key() : key(0)
-  {}
-  Key(int64_t k) : key(k)
-  {}
-  uint64_t hash()
-  {
-    return murmurhash(&key, sizeof(key), 0);
-  };
-  int compare(const Key& r)
-  {
-    return key < r.key ? -1 : key == r.key ? 0 : 1;
-  }
+  Key() : key(0) { }
+  Key(int64_t k) : key(k) { }
+  uint64_t hash() { return murmurhash(&key, sizeof(key), 0); };
+  int compare(const Key & r) { return key < r.key ? -1 : key == r.key ? 0 : 1; }
 };
 
-struct Adder {
+struct Adder
+{
   int64_t sum;
-  Adder() : sum(0)
-  {}
-  void operator()(Key k, int64_t* v)
-  {
-    UNUSED(k);
-    UNUSED(v);
-    sum++;
-  }
+  Adder() : sum(0) { }
+  void operator()(Key k, int64_t* v) { UNUSED(k); UNUSED(v); sum++; }
 };
 
 typedef ObConcurrentHashMapWithHazardValue<Key, int64_t*> HashMap;
 
-class ValueAlloc : public HashMap::IValueAlloc {
+class ValueAlloc : public HashMap::IValueAlloc
+{
 public:
-  int64_t* alloc()
-  {
-    return op_alloc(int64_t);
-  }
-  void free(int64_t* value)
-  {
-    op_free(value);
-  }
+  int64_t* alloc() { return op_alloc(int64_t); }
+  void free(int64_t* value) { op_free(value); }
 };
-class ValueReclaim : public HashMap::IValueReclaimCallback {
+class ValueReclaim : public HashMap::IValueReclaimCallback
+{
 public:
-  ValueReclaim() : reclaimed_num(0)
-  {}
-  void reclaim_value(int64_t* value)
-  {
-    op_free(value);
-    ATOMIC_AAF(&reclaimed_num, 1);
-  }
+  ValueReclaim() : reclaimed_num(0) { }
+  void reclaim_value(int64_t* value) { op_free(value); ATOMIC_AAF(&reclaimed_num, 1); }
   int64_t reclaimed_num;
 };
 
@@ -92,6 +71,7 @@ TEST(TestObConcurrentHashMapWithHazardValue, init)
   ASSERT_EQ(OB_SUCCESS, hashmap.for_each(adder2));
   ASSERT_EQ(0, adder2.sum);
 }
+
 
 TEST(TestObConcurrentHashMapWithHazardValue, hazard_value)
 {
@@ -125,10 +105,10 @@ TEST(TestObConcurrentHashMapWithHazardValue, hazard_value)
 }
 
 int64_t create_num = 0;
-class ObStressThread : public cotesting::DefaultRunnable {
+class ObStressThread : public cotesting::DefaultRunnable
+{
 public:
-  ObStressThread() : finished_count(0)
-  {}
+  ObStressThread() : finished_count(0) { }
   void run1() final
   {
     int64_t* v = NULL;
@@ -153,8 +133,7 @@ public:
       hashmap->remove_refactored(Key(i));
     }
     ATOMIC_AAF(&finished_count, 1);
-    while (ATOMIC_LOAD(&finished_count) != _threadCount)
-      ;
+    while (ATOMIC_LOAD(&finished_count) != _threadCount) ;
     /*
      * In case of concurrent running of multiple threads,
      * ob_hash.h cannot purge completely due to concurrent interference.
@@ -166,16 +145,15 @@ public:
     mutex.lock();
     err = hashmap->create_refactored(Key(N), v);
     if (OB_SUCCESS == err) {
-      // ATOMIC_AAF(&create_num, 1);
+      //ATOMIC_AAF(&create_num, 1);
       hashmap->revert_value(v);
     }
     hashmap->remove_refactored(Key(N));
     mutex.unlock();
   }
   HashMap* hashmap;
-
 private:
-  obsys::CThreadMutex mutex;
+  obsys::ThreadMutex mutex;
   int finished_count;
 };
 
@@ -193,10 +171,10 @@ TEST(TestObConcurrentHashMapWithHazardValue, concurrent)
   ASSERT_EQ(create_num, value_reclaim.reclaimed_num);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level(2);
-  // OB_LOGGER.set_file_name("test_concurrent_hash_map_with_hazard_value.log", false, true);
+  //OB_LOGGER.set_file_name("test_concurrent_hash_map_with_hazard_value.log", false, true);
   return RUN_ALL_TESTS();
 }

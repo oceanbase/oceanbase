@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : nijia.nj
+#owner group : sql2
+#description : test information_schema.character_sets
+
+use information_schema;
+
+#basic
+select * from character_sets;
+select character_set_name, default_collate_name, description, maxlen from character_sets;
+select maxlen from character_sets;
+select * from character_sets where character_set_name like '%binary%';
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table character_sets;
+desc character_sets;

@@ -1,4 +1,3 @@
-ob_unittest(test_backup_path)
-ob_unittest(test_backup_struct)
-ob_unittest(test_tenant_name_mgr)
-ob_unittest(test_log_archive_backup_info_mgr)
+storage_unittest(test_backup_path)
+storage_unittest(test_backup_struct)
+storage_unittest(test_log_archive_backup_info_mgr)

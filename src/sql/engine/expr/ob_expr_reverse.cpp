@@ -15,45 +15,33 @@
 #include <string.h>
 #include "lib/charset/ob_charset.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
-using namespace common;
-namespace sql {
-
-ObExprReverse::ObExprReverse(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_REVERSE, "reverse", 1)
-{}
-
-ObExprReverse::~ObExprReverse()
-{}
-
-int ObExprReverse::calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  int ret = OB_SUCCESS;
-  if (obj1.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(obj1, ObVarcharType);
-    ObString res_str;
-    if (OB_FAIL(do_reverse(obj1.get_string(), obj1.get_collation_type(), expr_ctx.calc_buf_, res_str))) {
-      LOG_WARN("Failed to calc", K(ret));
-    } else {
-      result.set_varchar(res_str);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
+using namespace common;
+namespace sql
+{
+
+ObExprReverse::ObExprReverse(ObIAllocator &alloc) :
+    ObStringExprOperator(alloc, T_FUN_SYS_REVERSE, "reverse", 1)
+{
 }
 
-int ObExprReverse::do_reverse(const ObString& input_str, const ObCollationType& cs_type,
-    ObIAllocator* allocator,  // make sure alloc() is called once
-    ObString& res_str)
+ObExprReverse::~ObExprReverse()
+{
+}
+
+int ObExprReverse::do_reverse(const ObString &input_str,
+                              const ObCollationType &cs_type,
+                              ObIAllocator *allocator, // make sure alloc() is called once
+                              ObString &res_str)
 {
   int ret = OB_SUCCESS;
-  const char* input_start = input_str.ptr();
+  const char * input_start = input_str.ptr();
   int64_t input_length = input_str.length();
-  char* buf = NULL;
+  char *buf = NULL;
   if (OB_ISNULL(allocator)) {
     LOG_WARN("nullptr allocator.", K(allocator));
   } else if (OB_UNLIKELY(input_length == 0)) {
@@ -61,18 +49,22 @@ int ObExprReverse::do_reverse(const ObString& input_str, const ObCollationType& 
   } else if (OB_ISNULL(input_start)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid string, buf is null", K(ret));
-  } else if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(input_length)))) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(input_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed. ", "size", input_length);
   } else {
     int64_t converted_length = 0;
     int64_t char_begin = 0;
     int64_t char_length = 0;
-    char* buf_tail = buf + input_length;
+    char *buf_tail = buf + input_length;
     while (OB_SUCC(ret) && (converted_length < input_length)) {
-      if (OB_FAIL(ObCharset::first_valid_char(
-              cs_type, input_start + char_begin, input_length - converted_length, char_length))) {
+      if (lib::is_mysql_mode() && OB_FAIL(ObCharset::first_valid_char(cs_type,
+          input_start + char_begin,
+          input_length - converted_length,
+          char_length))) {
         LOG_WARN("Get first valid char failed ", K(ret));
+      } else if (lib::is_oracle_mode() && FALSE_IT(char_length = 1)) {
+        // Oracle reverse string by single byte
       } else {
         MEMCPY(buf_tail - char_length, input_start + char_begin, char_length);
         buf_tail -= char_length;
@@ -87,17 +79,17 @@ int ObExprReverse::do_reverse(const ObString& input_str, const ObCollationType& 
   return ret;
 }
 
-int calc_reverse_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_reverse_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
     res_datum.set_null();
   } else {
-    const ObString& arg_str = arg->get_string();
-    const ObCollationType& arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    const ObString &arg_str = arg->get_string();
+    const ObCollationType &arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
     ObString res_str;
     ObExprStrResAlloc res_alloc(expr, ctx);
     if (OB_FAIL(ObExprReverse::do_reverse(arg_str, arg_cs_type, &res_alloc, res_str))) {
@@ -110,7 +102,8 @@ int calc_reverse_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprReverse::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprReverse::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                               ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -118,5 +111,5 @@ int ObExprReverse::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, 
   rt_expr.eval_func_ = calc_reverse_expr;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

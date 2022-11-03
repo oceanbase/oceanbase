@@ -17,35 +17,41 @@
 #include <vector>
 #include <stdint.h>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 #ifndef S_IRWXUGO
-#define S_IRWXUGO (S_IRWXU | S_IRWXG | S_IRWXO)
+# define S_IRWXUGO (S_IRWXU | S_IRWXG | S_IRWXO)
 #endif
 
-class FileDirectoryUtils {
+class FileDirectoryUtils
+{
 public:
   static const int MAX_PATH = 512;
-  static int is_exists(const char* file_path, bool& result);
-  static int is_accessible(const char* file_path, bool& result);
-  static int is_directory(const char* directory_path, bool& result);
-  static int is_link(const char* link_path, bool& result);
-  static int create_directory(const char* directory_path);
-  static int create_full_path(const char* fullpath);
-  static int delete_file(const char* filename);
-  static int delete_directory(const char* dirname);
-  static int get_file_size(const char* filename, int64_t& size);
-  static int is_valid_path(const char* path, const bool print_error);
-  static int is_empty_directory(const char* directory_path, bool& result);
-  static int open(const char* directory_path, int flags, mode_t mode, int& fd);
+  static int is_exists(const char *file_path, bool &result);
+  static int is_accessible(const char *file_path, bool &result);
+  static int is_directory(const char *directory_path, bool &result);
+  static int is_link(const char *link_path, bool &result);
+  static int create_directory(const char *directory_path);
+  static int create_full_path(const char *fullpath);
+  static int delete_file(const char *filename);
+  static int delete_directory(const char *dirname);
+  static int get_file_size(const char *filename, int64_t &size);
+  static int is_valid_path(const char *path, const bool print_error);
+  static int is_empty_directory(const char *directory_path, bool &result);
+  static int open(const char *directory_path, int flags, mode_t mode, int &fd);
   static int close(const int fd);
-  static int symlink(const char* oldpath, const char* newpath);
-  static int unlink_symlink(const char* link_path);
-  static int dup_fd(const int fd, int& dup_fd);
-  static int get_disk_space(const char* path, int64_t& total_space, int64_t& free_space);
+  static int symlink(const char *oldpath, const char *newpath);
+  static int unlink_symlink(const char *link_path);
+  static int dup_fd(const int fd, int &dup_fd);
+  static int get_disk_space(const char *path, int64_t &total_space, int64_t &free_space);
+  static int delete_directory_rec(const char *path);
+  static int delete_tmp_file_or_directory_at(const char *path);
+  static int fsync_dir(const char *dir_path);
 };
 
 typedef FileDirectoryUtils FSU;
-}  // end namespace common
-}  // end namespace oceanbase
+}       //end namespace common
+}       //end namespace oceanbase
 #endif

@@ -15,12 +15,15 @@
 #include "share/ob_define.h"
 #include "share/ob_locality_priority.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
 // calculate the region and region priority of primary zone
-int ObLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
-    const ObIArray<ObLocalityRegion>& locality_region_array, ObIArray<ObLocalityRegion>& tenant_region_array)
+int ObLocalityPriority::get_primary_region_prioriry(const char *primary_zone,
+    const ObIArray<ObLocalityRegion> &locality_region_array,
+    ObIArray<ObLocalityRegion> &tenant_region_array)
 {
   int ret = OB_SUCCESS;
 
@@ -32,41 +35,41 @@ int ObLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
     char *token, *subtoken;
     char tmp_primary_zone[MAX_ZONE_LENGTH];
 
-    size_t size = strlen(primary_zone) > (MAX_ZONE_LENGTH - 1) ? (MAX_ZONE_LENGTH - 1) : strlen(primary_zone);
+    size_t size = strlen(primary_zone) > (MAX_ZONE_LENGTH - 1) ? (MAX_ZONE_LENGTH - 1): strlen(primary_zone);
     memcpy(tmp_primary_zone, primary_zone, size);
     tmp_primary_zone[size] = '\0';
     str1 = tmp_primary_zone;
 
     for (uint64_t index = 0; OB_SUCC(ret); index++, str1 = NULL) {
       token = strtok_r(str1, ";", &saveptr1);
-      if (OB_ISNULL(token)) {
+      if (OB_ISNULL(token))  {
         break;
       } else {
         ObRegion tmp_region;
-        // tenant_region_array.at(index).region_priority_ = index * MAX_ZONE_NUM;
+        //tenant_region_array.at(index).region_priority_ = index * MAX_ZONE_NUM;
         for (str2 = token; OB_SUCC(ret); str2 = NULL) {
           subtoken = strtok_r(str2, ",", &saveptr2);
-          char* p = NULL;
-          char* saveptr3 = NULL;
+          char *p = NULL;
+          char *saveptr3 = NULL;
           if (OB_ISNULL(subtoken)) {
             break;
           } else if (NULL == (p = strtok_r(subtoken, " ", &saveptr3))) {
             SHARE_LOG(WARN, "zone is empty", K(ret), K(subtoken));
           } else {
             tmp_region.reset();
-            // 1. get the region of this zone
+            //1. get the region of this zone
             for (int64_t i = 0; tmp_region.is_empty() && i < locality_region_array.count(); i++) {
               for (int64_t j = 0; j < locality_region_array.at(i).zone_array_.count(); j++) {
-                const char* zone = locality_region_array.at(i).zone_array_.at(j).ptr();
+                const char *zone = locality_region_array.at(i).zone_array_.at(j).ptr();
                 if (strlen(zone) == strlen(zone) && (0 == strncmp(p, zone, strlen(zone)))) {
-                  // locality_region.region_ = locality_region_array.at(i).region_;
+                  //locality_region.region_ = locality_region_array.at(i).region_;
                   tmp_region = locality_region_array.at(i).region_;
                   break;
                 }
-              }  // for
-            }    // for
+              } // for
+            } // for
 
-            // 2. check if tenant_region_array contains this region, if so, push the zone back to array
+            //2. check if tenant_region_array contains this region, if so, push the zone back to array
             if (tmp_region.is_empty()) {
               ret = OB_ERR_UNEXPECTED;
               SHARE_LOG(WARN, "zone is not in locality_region", K(ret), K(p), K(locality_region_array));
@@ -80,7 +83,7 @@ int ObLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
                   break;
                 }
               }
-              // 3. check if tenant_region_array contains this region, if not, push an ObLocalityRegion back to array
+              //3. check if tenant_region_array contains this region, if not, push an ObLocalityRegion back to array
               if (OB_SUCC(ret)) {
                 if (k == tenant_region_array.count()) {
                   ObLocalityRegion locality_region;
@@ -98,32 +101,33 @@ int ObLocalityPriority::get_primary_region_prioriry(const char* primary_zone,
               }
             }
           }
-        }  // for
+        } //for
       }
-    }  // for
+    } // for
   }
 
   return ret;
 }
 
-int ObLocalityPriority::get_region_priority(const ObLocalityInfo& locality_info,
-    const ObIArray<ObLocalityRegion>& tenant_locality_region, uint64_t& region_priority)
+int ObLocalityPriority::get_region_priority(const ObLocalityInfo &locality_info,
+    const ObIArray<ObLocalityRegion> &tenant_locality_region, uint64_t &region_priority)
 {
   int ret = OB_SUCCESS;
   region_priority = UINT64_MAX;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_locality_region.count(); i++) {
     if (tenant_locality_region.at(i).region_ == locality_info.local_region_) {
-      region_priority = tenant_locality_region.at(i).region_priority_;
-      break;
+        region_priority = tenant_locality_region.at(i).region_priority_;
+        break;
     }
   }
 
   return ret;
 }
 
-int ObLocalityPriority::get_zone_priority(const ObLocalityInfo& locality_info,
-    const ObIArray<ObLocalityRegion>& tenant_locality_region, uint64_t& zone_priority)
+
+int ObLocalityPriority::get_zone_priority(const ObLocalityInfo &locality_info,
+    const ObIArray<ObLocalityRegion> &tenant_locality_region, uint64_t &zone_priority)
 {
   int ret = OB_SUCCESS;
   zone_priority = UINT64_MAX;
@@ -142,12 +146,13 @@ int ObLocalityPriority::get_zone_priority(const ObLocalityInfo& locality_info,
       } else {
         zone_priority = tenant_locality_region.at(i).region_priority_;
       }
-      SHARE_LOG(INFO, "get_zone_priority", K(zone_priority), K(i), K(j), K(locality_info), K(tenant_locality_region));
+      SHARE_LOG(INFO, "get_zone_priority", K(zone_priority), K(i), K(j), K(locality_info),
+          K(tenant_locality_region));
       break;
     }
   }
 
   return ret;
 }
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase

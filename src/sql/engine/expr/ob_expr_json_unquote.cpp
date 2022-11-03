@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implement of func json_unquote
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_unquote.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -107,45 +106,13 @@ int ObExprJsonUnquote::calc(const T &data, ObObjType type, ObCollationType cs_ty
   return ret;
 }
 
-int ObExprJsonUnquote::calc_result1(common::ObObj &result, const common::ObObj &obj,
-                                    common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  ObJsonBuffer j_buf(allocator);
-  bool is_null = false; 
-
-  if (result_type_.get_collation_type() != CS_TYPE_UTF8MB4_BIN) {
-    ret = OB_ERR_INVALID_JSON_CHARSET;
-    LOG_WARN("invalid out put charset", K(ret), K(result_type_));
-  } else if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("allcator not init", K(ret));
-  } else if (OB_FAIL(calc(obj, obj.get_type(), obj.get_collation_type(), allocator, j_buf, is_null))) {
-    LOG_WARN("fail to calc json unquote result in old engine", K(ret), K(obj.get_type()));
-  } else if (is_null) {
-    result.set_null();
-  } else {
-    // allocate length() + 1; as for alloc(0) will return null result
-    char *buf = static_cast<char*>(allocator->alloc(j_buf.length() + 1));
-    if (buf) {
-      MEMCPY(buf, j_buf.ptr(), j_buf.length());
-      result.set_collation_type(result_type_.get_collation_type());
-      result.set_string(ObLongTextType, buf, j_buf.length());
-    } else {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for json unquote result", K(ret), K(j_buf.length()));
-    }
-  }
-  return ret;
-}
-
 int ObExprJsonUnquote::eval_json_unquote(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObExpr *arg = expr.args_[0];
   ObDatum* json_datum = NULL;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObObjType val_type = arg->datum_meta_.type_;
   ObCollationType cs_type = arg->datum_meta_.cs_type_;
   ObJsonBuffer j_buf(&temp_allocator);

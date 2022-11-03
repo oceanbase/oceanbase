@@ -19,10 +19,10 @@ using namespace std;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
-void* ptrs[10240];
+void *ptrs[10240];
 enum { ALLOC = 1, FREE = 2 };
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   if (argc < 2) {
     cout << "USAGE: ./alloc_trace trace_file" << endl;
@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
     cout << "line: " << line << endl;
     line++;
     if (type == ALLOC) {
-      void* ptr = NULL;
+      void *ptr = NULL;
       if (fh >> size) {
         ptr = ob_malloc(size);
         if (idx >= 0) {

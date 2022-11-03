@@ -15,33 +15,27 @@
 
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/optimizer/ob_logical_operator.h"
-#include "sql/optimizer/ob_log_plan.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogTempTableTransformation : public ObLogicalOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObLogTempTableTransformation : public ObLogicalOperator
+{
 public:
-  ObLogTempTableTransformation(ObLogPlan& plan);
+  ObLogTempTableTransformation(ObLogPlan &plan);
   virtual ~ObLogTempTableTransformation();
-
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int transmit_op_ordering() override;
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
   virtual int compute_op_ordering() override;
-  virtual int transmit_local_ordering() override;
-  virtual bool is_consume_child_1by1() const override
-  {
-    return true;
-  }
+  virtual bool is_consume_child_1by1() const { return true; }
   virtual int compute_fd_item_set() override;
   virtual int est_cost() override;
-
-  int get_temp_table_exprs(ObIArray<ObRawExpr*>& set_exprs) const;
+  virtual int est_width() override;
+  virtual bool is_block_op() const override { return true; }
+  int get_temp_table_exprs(ObIArray<ObRawExpr *> &set_exprs) const;
   int allocate_startup_expr_post() override;
 };
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} // end of namespace sql
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_LOG_TEMP_TABLE_TRANSFORMATION_H
+#endif // OCEANBASE_SQL_OB_LOG_TEMP_TABLE_TRANSFORMATION_H

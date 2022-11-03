@@ -25,7 +25,8 @@ using namespace oceanbase::share;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
-class TestExpr : public ::testing::Test, public ObExprTestKit {
+class TestExpr : public ::testing::Test, public ObExprTestKit
+{
   virtual void SetUp() override
   {
     ASSERT_EQ(OB_SUCCESS, init());
@@ -37,11 +38,11 @@ class TestExpr : public ::testing::Test, public ObExprTestKit {
   }
 };
 
-int eval_num_add(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
+int eval_num_add(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* l = NULL;
-  ObDatum* r = NULL;
+  ObDatum *l = NULL;
+  ObDatum *r = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, l))) {
     LOG_WARN("left eval failed", K(ret));
   } else if (l->null_) {
@@ -51,10 +52,10 @@ int eval_num_add(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   } else if (r->null_) {
     datum.set_null();
   } else {
-    ObNumber lnum(l->num_->desc_.desc_, (uint32_t*)l->num_->digits_);
-    ObNumber rnum(r->num_->desc_.desc_, (uint32_t*)r->num_->digits_);
+    ObNumber lnum(l->num_->desc_.desc_, (uint32_t *)l->num_->digits_);
+    ObNumber rnum(r->num_->desc_.desc_, (uint32_t *)r->num_->digits_);
     ObNumber add;
-    ObNumStackOnceAlloc tmp_alloc;
+	ObNumStackOnceAlloc tmp_alloc;
     if (OB_FAIL(lnum.add(rnum, add, tmp_alloc))) {
       LOG_WARN("add number failed", K(ret));
     } else {
@@ -64,11 +65,11 @@ int eval_num_add(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   return ret;
 }
 
-int eval_int_less(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
+int eval_int_less(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* l = NULL;
-  ObDatum* r = NULL;
+  ObDatum *l = NULL;
+  ObDatum *r = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, l))) {
     LOG_WARN("left eval failed", K(ret));
   } else if (l->null_) {
@@ -95,9 +96,9 @@ TEST(Expr, test_print_func_ptr)
 
 TEST_F(TestExpr, number_add)
 {
-  ObRawExpr* raw_expr = NULL;
+  ObRawExpr *raw_expr = NULL;
   ObSqlExpression old_expr(allocator_);
-  ObExpr* expr;
+  ObExpr *expr;
   ObNumber add_nums[2];
   ASSERT_EQ(OB_SUCCESS, add_nums[0].from("3.5", 3, allocator_));
   ASSERT_EQ(OB_SUCCESS, add_nums[1].from("2.8", 3, allocator_));
@@ -114,27 +115,31 @@ TEST_F(TestExpr, number_add)
   LOG_INFO("old expr result", K(result));
 
   int64_t TEST_CNT = 1000000;
-  ASSERT_EQ(OB_SUCCESS, timed_execute("old add expr", TEST_CNT, [&] {
-    // calc_buf_.reset_remain_one_page();
-    return old_expr.calc(expr_ctx_, row, result);
-  }));
+  ASSERT_EQ(OB_SUCCESS, timed_execute( "old add expr", TEST_CNT,
+          [&] {
+            // calc_buf_.reset_remain_one_page();
+            return old_expr.calc(expr_ctx_, row, result);
+          }));
 
-  ObDatum* datum = NULL;
+
+  ObDatum *datum  = NULL;
   ASSERT_EQ(OB_SUCCESS, expr->eval(eval_ctx_, datum));
   LOG_INFO("new get result", K(*datum), K(DATUM2STR(*expr, *datum)));
 
-  ASSERT_EQ(OB_SUCCESS, timed_execute("new add expr", TEST_CNT, [&] {
-    // calc_buf_.reset_remain_one_page();
-    expr->get_eval_info(eval_ctx_).evaluated_ = false;
-    return expr->eval(eval_ctx_, datum);
-  }));
+  ASSERT_EQ(OB_SUCCESS, timed_execute(
+          "new add expr", TEST_CNT,
+          [&] {
+            // calc_buf_.reset_remain_one_page();
+            expr->get_eval_info(eval_ctx_).evaluated_ = false;
+            return expr->eval(eval_ctx_, datum);
+          }));
 }
 
 TEST_F(TestExpr, int_less)
 {
-  ObRawExpr* raw_expr = NULL;
+  ObRawExpr *raw_expr = NULL;
   ObSqlExpression old_expr(allocator_);
-  ObExpr* expr;
+  ObExpr *expr;
   ObObj add_args[2];
   add_args[0].set_int(512);
   add_args[1].set_int(1024);
@@ -148,24 +153,30 @@ TEST_F(TestExpr, int_less)
   LOG_INFO("old expr result", K(result));
 
   int64_t TEST_CNT = 1000000;
-  ASSERT_EQ(
-      OB_SUCCESS, timed_execute("old less expr", TEST_CNT, [&] { return old_expr.calc(expr_ctx_, row, result); }));
+  ASSERT_EQ(OB_SUCCESS, timed_execute( "old less expr", TEST_CNT,
+          [&] {
+            return old_expr.calc(expr_ctx_, row, result);
+          }));
 
-  ObDatum* datum = NULL;
+
+  ObDatum *datum  = NULL;
   ASSERT_EQ(OB_SUCCESS, expr->eval(eval_ctx_, datum));
   LOG_INFO("new get result", K(*datum), K(DATUM2STR(*expr, *datum)));
 
-  ASSERT_EQ(OB_SUCCESS, timed_execute("new less expr", TEST_CNT, [&] {
-    expr->get_eval_info(eval_ctx_).evaluated_ = false;
-    return expr->eval(eval_ctx_, datum);
-  }));
+  ASSERT_EQ(OB_SUCCESS, timed_execute(
+          "new less expr", TEST_CNT,
+          [&] {
+            expr->get_eval_info(eval_ctx_).evaluated_ = false;
+            return expr->eval(eval_ctx_, datum);
+          }));
 }
+
 
 // TODO bin.lb: test serialize && deserialize
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_expr.log", true);
   return RUN_ALL_TESTS();

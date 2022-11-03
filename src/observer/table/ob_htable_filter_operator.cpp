@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_filter_operator.h"
 #include "ob_htable_utils.h"
@@ -94,8 +94,7 @@ bool ObHTableColumnTracker::is_done(int64_t timestamp) const
 ObHTableExplicitColumnTracker::ObHTableExplicitColumnTracker()
     :columns_(),
      curr_column_idx_(0),
-     curr_column_(NULL),
-     current_count_(0)
+     curr_column_(NULL)
 {}
 
 int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order)

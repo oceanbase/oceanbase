@@ -18,9 +18,10 @@
 using namespace oceanbase;
 using namespace common;
 
+
 TEST(ObTenantManager, Simple1)
 {
-  ObTenantManager& tm = ObTenantManager::get_instance();
+  ObTenantManager &tm = ObTenantManager::get_instance();
 
   ObAddr self;
   self.set_ip_addr("127.0.0.1", 8088);
@@ -59,7 +60,7 @@ TEST(ObTenantManager, Simple1)
 
 int init_tenant_mgr()
 {
-  ObTenantManager& tm = ObTenantManager::get_instance();
+  ObTenantManager &tm = ObTenantManager::get_instance();
   ObAddr self;
   self.set_ip_addr("127.0.0.1", 8086);
   rpc::frame::ObReqTransport req_transport(NULL, NULL);
@@ -75,28 +76,31 @@ int init_tenant_mgr()
   return OB_SUCCESS;
 }
 
-class TestTenantStress : public share::ObThreadPool {
+class TestTenantStress: public share::ObThreadPool
+{
 public:
   TestTenantStress();
   virtual ~TestTenantStress();
   virtual void run1();
 };
 
-TestTenantStress::TestTenantStress() : alloc_()
+TestTenantStress::TestTenantStress()
+  : alloc_()
 {
   alloc_.init(OB_SYS_TENANT_ID, 0);
 }
 
 TestTenantStress::~TestTenantStress()
-{}
+{
+}
 
-void TestTenantStress::run(obsys::CThread* thread, void* arg)
+void TestTenantStress::run(obsys::CThread *thread, void *arg)
 {
 
   UNUSED(arg);
   const int64_t loop_cnt = 1000;
-  for (int64_t loop = 0; loop < loop_cnt; ++loop) {
-    void* ptr = malloc(65536);
+  for (int64_t loop = 0; loop < loop_cnt ; ++loop) {
+    void *ptr = malloc(65536);
     EXPECT_NE((void*)NULL, ptr);
   }
 }
@@ -116,13 +120,17 @@ TEST(ObTenantManager, multithread)
   int64_t major_freeze_trigger = 0;
   int64_t memstore_limit = 0;
   int64_t freeze_cnt = 0;
-  ObTenantManager::get_instance().get_tenant_memstore_cond(
-      OB_SYS_TENANT_ID, active_memstore_used, total_memstore_used, major_freeze_trigger, memstore_limit, freeze_cnt);
-  // EXPECT_TRUE(active_memstore_used, 65560*32*1000LL);
+  ObTenantManager::get_instance().get_tenant_memstore_cond(OB_SYS_TENANT_ID,
+                                                           active_memstore_used,
+                                                           total_memstore_used,
+                                                           major_freeze_trigger,
+                                                           memstore_limit,
+                                                           freeze_cnt);
+  //EXPECT_TRUE(active_memstore_used, 65560*32*1000LL);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

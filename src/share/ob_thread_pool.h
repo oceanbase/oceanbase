@@ -13,24 +13,14 @@
 #ifndef OB_THREAD_POOL_H
 #define OB_THREAD_POOL_H
 
-#include "lib/coro/co_user_thread.h"
-#include "lib/thread/thread_pool.h"
-#include "share/ob_worker.h"
+#include "lib/thread/threads.h"
 
 namespace oceanbase {
 namespace share {
 
-class ObThreadPool : public lib::ThreadPool {
-public:
-  void run0() override
-  {
-    // Create worker for current thread.
-    ObWorker worker;
-    run1();
-  }
-};
+using ObThreadPool = lib::Threads;
 
-}  // namespace share
-}  // namespace oceanbase
+}  // share
+}  // oceanbase
 
 #endif /* OB_THREAD_POOL_H */

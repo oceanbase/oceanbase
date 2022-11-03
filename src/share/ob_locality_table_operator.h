@@ -16,14 +16,18 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_locality_info.h"
 #include "share/ob_server_locality_cache.h"
-namespace oceanbase {
-namespace share {
-class ObLocalityTableOperator {
+namespace oceanbase
+{
+namespace share
+{
+class ObLocalityTableOperator
+{
 public:
-  int load_region(const common::ObAddr& addr, const bool& is_self_cluster, common::ObISQLClient& sql_client,
-      ObLocalityInfo& locality_info, ObServerLocalityCache& server_locality_cache);
-  int load_zone(const common::ObAddr& addr, common::ObISQLClient& sql_client, ObLocalityInfo& locality_info);
+  int load_region(const common::ObAddr &addr, const bool &is_self_cluster,
+                  common::ObISQLClient &sql_client,
+                  ObLocalityInfo &locality_info, 
+                  ObServerLocalityCache &server_locality_cache);
 };
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 #endif

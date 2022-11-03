@@ -19,9 +19,11 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
-namespace oceanbase {
-namespace rootserver {
-int ObSnapshotInfoManager::init(const ObAddr& self_addr)
+namespace oceanbase
+{
+namespace rootserver
+{
+int ObSnapshotInfoManager::init(const ObAddr &self_addr)
 {
   int ret = OB_SUCCESS;
   if (!self_addr.is_valid()) {
@@ -33,49 +35,10 @@ int ObSnapshotInfoManager::init(const ObAddr& self_addr)
   return ret;
 }
 
-int ObSnapshotInfoManager::set_index_building_snapshot(
-    common::ObMySQLTransaction& trans, const int64_t index_table_id, const int64_t snapshot_ts)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  int64_t tenant_id = extract_tenant_id(index_table_id);
-  if (OB_INVALID_ID == index_table_id || snapshot_ts <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(index_table_id), K(snapshot_ts));
-  } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET BUILDING_SNAPSHOT = %ld WHERE TABLE_ID = %lu AND TENANT_ID = %ld",
-                 OB_ALL_ORI_SCHEMA_VERSION_TNAME,
-                 snapshot_ts,
-                 ObSchemaUtils::get_extract_schema_id(tenant_id, index_table_id),
-                 ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
-    LOG_WARN("fail to update index building snapshot", KR(ret), K(index_table_id), K(snapshot_ts));
-  } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to write sql", KR(ret), K(sql));
-  } else if (1 != affected_rows && 0 != affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("update get invalid affected_rows, should be one or zero", KR(ret), K(affected_rows));
-  }
-  return ret;
-}
-
-int ObSnapshotInfoManager::acquire_snapshot_for_building_index(
-    common::ObMySQLTransaction& trans, const ObSnapshotInfo& snapshot, const int64_t index_table_id)
-{
-  int ret = OB_SUCCESS;
-  ObSnapshotTableProxy snapshot_proxy;
-  if (!snapshot.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(snapshot));
-  } else if (OB_FAIL(set_index_building_snapshot(trans, index_table_id, snapshot.snapshot_ts_))) {
-    LOG_WARN("fail to set index building snapshot", KR(ret), K(snapshot));
-  } else if (OB_FAIL(snapshot_proxy.add_snapshot(trans, snapshot))) {
-    LOG_WARN("fail to add snapshot", K(ret));
-  }
-  ROOTSERVICE_EVENT_ADD("snapshot", "acquire_snapshot", K(ret), K(snapshot), K(index_table_id), "rs_addr", self_addr_);
-  return ret;
-}
-
-int ObSnapshotInfoManager::acquire_snapshot(common::ObMySQLTransaction& trans, const ObSnapshotInfo& snapshot)
+int ObSnapshotInfoManager::acquire_snapshot(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const ObSnapshotInfo &snapshot)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
@@ -83,28 +46,105 @@ int ObSnapshotInfoManager::acquire_snapshot(common::ObMySQLTransaction& trans, c
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot));
   } else if (OB_FAIL(snapshot_proxy.add_snapshot(trans, snapshot))) {
-    LOG_WARN("fail to add snapshot", K(ret));
+    LOG_WARN("fail to add snapshot", K(ret), K(tenant_id), K(snapshot));
   }
   ROOTSERVICE_EVENT_ADD("snapshot", "acquire_snapshot", K(ret), K(snapshot), "rs_addr", self_addr_);
   return ret;
 }
 
-int ObSnapshotInfoManager::release_snapshot(common::ObMySQLTransaction& trans, const ObSnapshotInfo& snapshot)
+int ObSnapshotInfoManager::batch_acquire_snapshot(
+    common::ObMySQLProxy &proxy,
+    share::ObSnapShotType snapshot_type,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const int64_t snapshot_version,
+    const char *comment,
+    const common::ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObSnapshotTableProxy snapshot_proxy;
+  ObSnapshotInfo snapshot;
+  snapshot.snapshot_type_ = snapshot_type;
+  snapshot.tenant_id_ = tenant_id;
+  snapshot.snapshot_ts_ = snapshot_version;
+  snapshot.schema_version_ = schema_version;
+  snapshot.comment_ = comment;
+  if (OB_UNLIKELY(!snapshot.is_valid() || tablet_ids.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_ids.count()));
+  } else {
+    if (OB_FAIL(trans.start(&proxy, tenant_id))) {
+      LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+    } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
+        tenant_id, schema_version, snapshot_version, comment, tablet_ids))) {
+      LOG_WARN("batch add snapshot failed", K(ret));
+    } else {
+      bool need_commit = (ret == OB_SUCCESS);
+      int tmp_ret = trans.end(need_commit);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to end trans", K(tmp_ret), K(need_commit));
+      }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    ROOTSERVICE_EVENT_ADD("snapshot", "batch_acquire_snapshot", K(ret), K(snapshot), "rs_addr", self_addr_);
+  }
+  
+  return ret;
+}
+
+int ObSnapshotInfoManager::release_snapshot(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const ObSnapshotInfo &snapshot)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
   if (!snapshot.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(snapshot));
-  } else if (OB_FAIL(snapshot_proxy.remove_snapshot(trans, snapshot))) {
-    LOG_WARN("fail to remove snapshot", K(ret), K(snapshot));
+     ret = OB_INVALID_ARGUMENT;
+     LOG_WARN("invalid argument", K(ret), K(snapshot));
+  } else if (OB_FAIL(snapshot_proxy.remove_snapshot(trans, tenant_id, snapshot))) {
+    LOG_WARN("fail to remove snapshot", K(ret), K(tenant_id), K(snapshot));
   }
   ROOTSERVICE_EVENT_ADD("snapshot", "release_snapshot", K(ret), K(snapshot), "rs_addr", self_addr_);
   return ret;
 }
 
-int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy& proxy, const int64_t tenant_id,
-    share::ObSnapShotType snapshot_type, const char* extra_info, ObSnapshotInfo& snapshot_info)
+int ObSnapshotInfoManager::batch_release_snapshot_in_trans(
+    common::ObMySQLTransaction &trans,
+    share::ObSnapShotType snapshot_type,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const int64_t snapshot_version,
+    const common::ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSnapshotTableProxy snapshot_proxy;
+  ObSnapshotInfo snapshot;
+  snapshot.snapshot_type_ = snapshot_type;
+  snapshot.tenant_id_ = tenant_id;
+  snapshot.snapshot_ts_ = snapshot_version;
+  snapshot.schema_version_ = schema_version;
+  if (OB_UNLIKELY(tablet_ids.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_ids.count()));
+  } else if (OB_FAIL(snapshot_proxy.batch_remove_snapshots(trans,
+                                                           snapshot_type,
+                                                           tenant_id,
+                                                           schema_version,
+                                                           snapshot_version,
+                                                           tablet_ids))) {
+    LOG_WARN("fail to batch remove snapshots", K(ret));
+  }
+  ROOTSERVICE_EVENT_ADD("snapshot", "batch_release_snapshot", K(ret), K(snapshot), "rs_addr", self_addr_);
+  return ret;
+}
+
+int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
+                                        const uint64_t tenant_id,
+                                        share::ObSnapShotType snapshot_type,
+                                        const char *extra_info,
+                                        ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
@@ -118,8 +158,11 @@ int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy& proxy, const int64
   return ret;
 }
 
-int ObSnapshotInfoManager::get_snapshot(common::ObISQLClient &proxy, const int64_t tenant_id,
-    share::ObSnapShotType snapshot_type, const int64_t snapshot_ts, share::ObSnapshotInfo &snapshot_info)
+int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
+                                        const uint64_t tenant_id,
+                                        share::ObSnapShotType snapshot_type,
+                                        const int64_t snapshot_ts,
+                                        share::ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
@@ -132,22 +175,25 @@ int ObSnapshotInfoManager::get_snapshot(common::ObISQLClient &proxy, const int64
   return ret;
 }
 
-int ObSnapshotInfoManager::check_restore_point(
-    common::ObMySQLProxy& proxy, const int64_t tenant_id, const int64_t table_id, bool& is_exist)
+int ObSnapshotInfoManager::check_restore_point(common::ObMySQLProxy &proxy,
+                                               const uint64_t tenant_id,
+                                               const int64_t table_id,
+                                               bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
   ObSnapshotTableProxy snapshot_proxy;
-  if (OB_FAIL(snapshot_proxy.check_snapshot_exist(
-          proxy, tenant_id, table_id, share::SNAPSHOT_FOR_RESTORE_POINT, is_exist))) {
+  if (OB_FAIL(snapshot_proxy.check_snapshot_exist(proxy, tenant_id, table_id,
+      share::SNAPSHOT_FOR_RESTORE_POINT, is_exist))) {
     LOG_WARN("fail to check snapshot exist", K(ret), K(tenant_id), K(table_id));
   }
-
   return ret;
 }
 
-int ObSnapshotInfoManager::get_snapshot_count(
-    common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t& count)
+int ObSnapshotInfoManager::get_snapshot_count(common::ObMySQLProxy &proxy,
+                                              const uint64_t tenant_id,
+                                              share::ObSnapShotType snapshot_type,
+                                              int64_t &count)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
@@ -157,5 +203,6 @@ int ObSnapshotInfoManager::get_snapshot_count(
   return ret;
 }
 
-}  // namespace rootserver
-}  // namespace oceanbase
+} //end rootserver
+} //end oceanbase
+

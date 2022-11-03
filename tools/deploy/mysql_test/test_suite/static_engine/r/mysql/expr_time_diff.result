@@ -1,0 +1,185 @@
+alter system flush plan cache global;
+drop table if exists t1;
+create table t1(c1 datetime, c2 timestamp, c3 date, c4 time);
+insert into t1 values('1234-12-12 01:23:45', '2020-01-01 01:23:45', '1234-12-12', '01:23:45');
+insert into t1 values('2000-2-29 01:23:45.678', '2000-2-29 01:23:45.678', '2000-2-29', '01:23:45.678');
+insert into t1 values('2001-12-31 12:00:00', '2001-12-31 12:00:00', '2001-12-31', '12:00:00');
+insert into t1 values(null, null, null, null);
+select a.c1, b.c1, timediff(a.c1, b.c1) from t1 a, t1 b;
+c1	c1	timediff(a.c1, b.c1)
+1234-12-12 01:23:45	1234-12-12 01:23:45	00:00:00
+1234-12-12 01:23:45	2000-02-29 01:23:46	-838:59:59
+1234-12-12 01:23:45	2001-12-31 12:00:00	-838:59:59
+1234-12-12 01:23:45	NULL	NULL
+2000-02-29 01:23:46	1234-12-12 01:23:45	838:59:59
+2000-02-29 01:23:46	2000-02-29 01:23:46	00:00:00
+2000-02-29 01:23:46	2001-12-31 12:00:00	-838:59:59
+2000-02-29 01:23:46	NULL	NULL
+2001-12-31 12:00:00	1234-12-12 01:23:45	838:59:59
+2001-12-31 12:00:00	2000-02-29 01:23:46	838:59:59
+2001-12-31 12:00:00	2001-12-31 12:00:00	00:00:00
+2001-12-31 12:00:00	NULL	NULL
+NULL	1234-12-12 01:23:45	NULL
+NULL	2000-02-29 01:23:46	NULL
+NULL	2001-12-31 12:00:00	NULL
+NULL	NULL	NULL
+select a.c2, b.c2, timediff(a.c2, b.c2) from t1 a, t1 b;
+c2	c2	timediff(a.c2, b.c2)
+2020-01-01 01:23:45	2020-01-01 01:23:45	00:00:00
+2020-01-01 01:23:45	2000-02-29 01:23:46	838:59:59
+2020-01-01 01:23:45	2001-12-31 12:00:00	838:59:59
+2020-01-01 01:23:45	NULL	NULL
+2000-02-29 01:23:46	2020-01-01 01:23:45	-838:59:59
+2000-02-29 01:23:46	2000-02-29 01:23:46	00:00:00
+2000-02-29 01:23:46	2001-12-31 12:00:00	-838:59:59
+2000-02-29 01:23:46	NULL	NULL
+2001-12-31 12:00:00	2020-01-01 01:23:45	-838:59:59
+2001-12-31 12:00:00	2000-02-29 01:23:46	838:59:59
+2001-12-31 12:00:00	2001-12-31 12:00:00	00:00:00
+2001-12-31 12:00:00	NULL	NULL
+NULL	2020-01-01 01:23:45	NULL
+NULL	2000-02-29 01:23:46	NULL
+NULL	2001-12-31 12:00:00	NULL
+NULL	NULL	NULL
+select a.c3, b.c3, timediff(a.c3, b.c3) from t1 a, t1 b;
+c3	c3	timediff(a.c3, b.c3)
+1234-12-12	1234-12-12	00:00:00
+1234-12-12	2000-02-29	-838:59:59
+1234-12-12	2001-12-31	-838:59:59
+1234-12-12	NULL	NULL
+2000-02-29	1234-12-12	838:59:59
+2000-02-29	2000-02-29	00:00:00
+2000-02-29	2001-12-31	-838:59:59
+2000-02-29	NULL	NULL
+2001-12-31	1234-12-12	838:59:59
+2001-12-31	2000-02-29	838:59:59
+2001-12-31	2001-12-31	00:00:00
+2001-12-31	NULL	NULL
+NULL	1234-12-12	NULL
+NULL	2000-02-29	NULL
+NULL	2001-12-31	NULL
+NULL	NULL	NULL
+select a.c4, b.c4, timediff(a.c4, b.c4) from t1 a, t1 b;
+c4	c4	timediff(a.c4, b.c4)
+01:23:45	01:23:45	00:00:00
+01:23:45	01:23:46	-00:00:01
+01:23:45	12:00:00	-10:36:15
+01:23:45	NULL	NULL
+01:23:46	01:23:45	00:00:01
+01:23:46	01:23:46	00:00:00
+01:23:46	12:00:00	-10:36:14
+01:23:46	NULL	NULL
+12:00:00	01:23:45	10:36:15
+12:00:00	01:23:46	10:36:14
+12:00:00	12:00:00	00:00:00
+12:00:00	NULL	NULL
+NULL	01:23:45	NULL
+NULL	01:23:46	NULL
+NULL	12:00:00	NULL
+NULL	NULL	NULL
+select timediff(c1, c1) from t1;
+timediff(c1, c1)
+00:00:00
+00:00:00
+00:00:00
+NULL
+select timediff(c1, c2) from t1;
+timediff(c1, c2)
+-838:59:59
+00:00:00
+00:00:00
+NULL
+select timediff(c1, c3) from t1;
+timediff(c1, c3)
+01:23:45
+01:23:46
+12:00:00
+NULL
+select timediff(c1, c4) from t1;
+timediff(c1, c4)
+NULL
+NULL
+NULL
+NULL
+select timediff(c2, c1) from t1;
+timediff(c2, c1)
+838:59:59
+00:00:00
+00:00:00
+NULL
+select timediff(c2, c2) from t1;
+timediff(c2, c2)
+00:00:00
+00:00:00
+00:00:00
+NULL
+select timediff(c2, c3) from t1;
+timediff(c2, c3)
+838:59:59
+01:23:46
+12:00:00
+NULL
+select timediff(c2, c4) from t1;
+timediff(c2, c4)
+NULL
+NULL
+NULL
+NULL
+select timediff(c3, c1) from t1;
+timediff(c3, c1)
+-01:23:45
+-01:23:46
+-12:00:00
+NULL
+select timediff(c3, c2) from t1;
+timediff(c3, c2)
+-838:59:59
+-01:23:46
+-12:00:00
+NULL
+select timediff(c3, c3) from t1;
+timediff(c3, c3)
+00:00:00
+00:00:00
+00:00:00
+NULL
+select timediff(c3, c4) from t1;
+timediff(c3, c4)
+NULL
+NULL
+NULL
+NULL
+select timediff(c4, c1) from t1;
+timediff(c4, c1)
+NULL
+NULL
+NULL
+NULL
+select timediff(c4, c2) from t1;
+timediff(c4, c2)
+NULL
+NULL
+NULL
+NULL
+select timediff(c4, c3) from t1;
+timediff(c4, c3)
+NULL
+NULL
+NULL
+NULL
+select timediff(c4, c4) from t1;
+timediff(c4, c4)
+00:00:00
+00:00:00
+00:00:00
+NULL
+bugfix: https://github.com/oceanbase/oceanbase/issues/177
+select timediff("12:34:56.123", "13:33:22.34567");
+timediff("12:34:56.123", "13:33:22.34567")
+-00:58:26.222670
+select timediff("13:34:23.01","13:34:23.002");
+timediff("13:34:23.01","13:34:23.002")
+00:00:00.008000
+select timediff("13:34:23.01","13:34:23.02");
+timediff("13:34:23.01","13:34:23.02")
+-00:00:00.010000

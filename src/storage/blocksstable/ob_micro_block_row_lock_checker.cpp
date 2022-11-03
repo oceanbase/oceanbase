@@ -12,42 +12,79 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_row_lock_checker.h"
+#include "storage/memtable/ob_memtable_interface.h"
+#include "storage/tx_table/ob_tx_table.h"
 
 namespace oceanbase {
 namespace blocksstable {
 
-ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker()
-{}
+ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &allocator) :
+    ObMicroBlockRowScanner(allocator),
+    lock_state_(nullptr)
+
+{
+}
 
 ObMicroBlockRowLockChecker::~ObMicroBlockRowLockChecker()
-{}
+{
+}
 
-int ObMicroBlockRowLockChecker::check_row_locked(const transaction::ObTransStateTableGuard& trans_table_guard,
-    const transaction::ObTransID& read_trans_id, const common::ObStoreRowkey& rowkey,
-    const ObFullMacroBlockMeta& full_meta, const ObMicroBlockData& block_data,
-    const storage::ObSSTableRowkeyHelper* rowkey_helper, storage::ObStoreRowLockState& lock_state)
+int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("the micro block row lock checker has not been inited, ", K(ret));
-  } else if (OB_ISNULL(context_) || OB_ISNULL(context_->store_ctx_) || OB_ISNULL(context_->store_ctx_->mem_ctx_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mem ctx is NULL", K(ret));
-  } else if (OB_FAIL(prepare_reader(full_meta))) {
-    LOG_WARN("failed to prepare reader", K(ret));
+  if (OB_UNLIKELY(nullptr == read_info_ || nullptr == lock_state_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null param", K(ret), KP_(read_info), KP_(lock_state));
   } else {
-    ret = reader_->check_row_locked(*context_->store_ctx_->mem_ctx_,
-        trans_table_guard,
-        read_trans_id,
-        block_data,
-        rowkey,
-        full_meta,
-        rowkey_helper,
-        lock_state);
+    transaction::ObTransID trans_id;
+    int64_t sql_sequence = 0;
+    ObMultiVersionRowFlag flag;
+    const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
+    memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
+    const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
+    row = &row_;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(end_of_block())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Fail to check row lock", K(ret), K_(macro_id));
+        }
+      } else if (OB_FAIL(reader_->get_multi_version_info(
+                  current_,
+                  rowkey_cnt,
+                  flag,
+                  trans_id,
+                  lock_state_->trans_version_,
+                  sql_sequence))) {
+        LOG_WARN("failed to get multi version info", K(ret), K_(current), K(flag), K(trans_id),
+                 KPC_(lock_state), K(sql_sequence), K_(macro_id));
+      } else if (flag.is_uncommitted_row()) {
+        ObTxTableGuard tx_table_guard = ctx.get_tx_table_guard();
+        ObTxTable *tx_table = nullptr;
+        int64 read_epoch = ObTxTable::INVALID_READ_EPOCH;
+        if (!tx_table_guard.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
+        } else if (FALSE_IT(tx_table = tx_table_guard.get_tx_table())) {
+        } else if (FALSE_IT(read_epoch = tx_table_guard.epoch())) {
+        } else if (OB_FAIL(
+                       tx_table->check_row_locked(read_trans_id, trans_id, sql_sequence, read_epoch, *lock_state_))) {
+        }
+
+        STORAGE_LOG(DEBUG, "check row lock", K(ret), KPC_(range), K(read_trans_id), K(trans_id),
+                    K(sql_sequence), KPC_(lock_state));
+        if (0 != lock_state_->trans_version_ || // trans is commit
+            lock_state_->is_locked_) {
+          break;
+        }
+      } else { // committed row
+        break;
+      }
+      current_++;
+    }
   }
+
   return ret;
 }
 
-}  // namespace blocksstable
-}  // namespace oceanbase
+}
+}

@@ -16,32 +16,29 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/ob_server_blacklist.h"
 
-namespace oceanbase {
-namespace observer {
-class ObAllVirtualServerBlacklist : public common::ObVirtualTableScannerIterator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualServerBlacklist : public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualServerBlacklist();
   virtual ~ObAllVirtualServerBlacklist();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_addr(common::ObAddr& addr)
-  {
-    self_addr_ = addr;
-  }
-
+  inline void set_addr(common::ObAddr &addr) {self_addr_ = addr;}
 private:
   int prepare_to_read_();
-
 private:
-  enum TBL_COLUMN {
+  enum TBL_COLUMN
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     DST_IP,
     DST_PORT,
-    IS_IN_BLACKLIST,
-    IS_CLOCKDIFF_ERROR
+    IS_IN_BLACKLIST
   };
-
 private:
   bool ready_to_read_;
   common::ObAddr self_addr_;
@@ -51,7 +48,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServerBlacklist);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase
 
-#endif  // OCEANBASE_OB_ALL_VIRTUAL_SERVER_BLACKLIST_H_
+#endif // OCEANBASE_OB_ALL_VIRTUAL_SERVER_BLACKLIST_H_

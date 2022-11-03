@@ -395,6 +395,7 @@ class ObNoRetry : public ObIRetryPolicy
 {};
 
 /// consistency levels
+/// @see https://www.atatech.org/articles/102030
 enum class ObTableConsistencyLevel
 {
   STRONG = 0,
@@ -576,6 +577,7 @@ public:
   int set_row_offset_per_column_family(int32_t offset);
   /// Apply the specified server-side filter when performing the Query.
   /// @param filter - a file string using the hbase filter language
+  /// @see the filter language at https://issues.apache.org/jira/browse/HBASE-4176
   int set_filter(const ObString &filter);
 
   const ObIArray<ObString> &get_columns() const { return select_column_qualifier_; }

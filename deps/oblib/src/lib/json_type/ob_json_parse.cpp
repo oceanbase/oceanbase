@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation support for the json parse abstraction.
 #define USING_LOG_PREFIX SQL
 #include "ob_json_parse.h"
 
@@ -25,7 +24,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
   uint64_t offset = 0;
 
   if (OB_FAIL(parse_json_text(allocator, text.ptr(), text.length(), syntaxerr, &offset, j_tree))) {
-    LOG_WARN("fail to parse json text", K(ret), K(text), K(syntaxerr));
+    LOG_WARN("fail to parse json text", K(ret), K(text), KCSTRING(syntaxerr));
   }
 
   return ret;
@@ -40,7 +39,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
   uint64_t offset = 0;
 
   if (OB_FAIL(parse_json_text(allocator, text, length, syntaxerr, &offset, j_tree))) {
-    LOG_WARN("fail to parse json text", K(ret), K(length), K(syntaxerr));
+    LOG_WARN("fail to parse json text", K(ret), K(length), KCSTRING(syntaxerr));
   }
 
   return ret;
@@ -60,10 +59,10 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
   char *buf = NULL;
   if (OB_ISNULL(allocator) || OB_ISNULL(text) || length == 0) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("param is null or json text length is 0", K(allocator), K(text), K(length));
+    LOG_WARN("param is null or json text length is 0", K(allocator), KP(text), K(length));
   } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator->alloc(length + 1)))) { // for '\0'
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory for json text", K(ret), K(text), K(length));
+    LOG_WARN("fail to alloc memory for json text", K(ret), KCSTRING(text), K(length));
   } else {
     MEMCPY(buf, text, length);
     buf[length] = '\0';
@@ -143,7 +142,7 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
       }
       offset = reader.GetErrorOffset();
       syntaxerr = rapidjson::GetParseError_En(reader.GetParseErrorCode());
-      LOG_WARN("fail to parse json text", K(ret), K(r.Code()), K(syntaxerr), K(offset));
+      LOG_WARN("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
     }
   }
 

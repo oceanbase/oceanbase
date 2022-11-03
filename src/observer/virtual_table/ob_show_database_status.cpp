@@ -15,13 +15,18 @@
 #include "lib/string/ob_string.h"
 #include "observer/ob_server.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace observer {
+namespace observer
+{
 
-ObShowDatabaseStatus::ObShowDatabaseStatus() : ObVirtualTableScannerIterator(), tenant_id_(OB_INVALID_ID)
-{}
+ObShowDatabaseStatus::ObShowDatabaseStatus()
+    : ObVirtualTableScannerIterator(),
+      tenant_id_(OB_INVALID_ID)
+{
+}
 
 ObShowDatabaseStatus::~ObShowDatabaseStatus()
 {
@@ -34,8 +39,11 @@ void ObShowDatabaseStatus::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObShowDatabaseStatus::add_database_status(
-    const ObAddr& server_addr, const ObDatabaseSchema& database_schema, ObObj* cells, const int64_t col_count)
+
+int ObShowDatabaseStatus::add_database_status(const ObAddr &server_addr,
+                                              const ObDatabaseSchema &database_schema,
+                                              ObObj *cells,
+                                              const int64_t col_count)
 {
   int ret = OB_SUCCESS;
   char ip_buf[common::OB_IP_STR_BUFF];
@@ -46,9 +54,9 @@ int ObShowDatabaseStatus::add_database_status(
   }
   for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
     int64_t col_id = output_column_ids_.at(j);
-    switch (col_id) {
+    switch(col_id) {
       case DATABASE_NAME: {
-        cells[cell_idx].set_varchar(database_schema.get_database_name());  // db_name
+        cells[cell_idx].set_varchar(database_schema.get_database_name());//db_name
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
@@ -57,7 +65,7 @@ int ObShowDatabaseStatus::add_database_status(
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "failed to convert ip to string", K(server_addr), K(ret));
         } else {
-          cells[cell_idx].set_varchar(ObString::make_string(ip_buf));  // host
+          cells[cell_idx].set_varchar(ObString::make_string(ip_buf));//host
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
         break;
@@ -71,12 +79,13 @@ int ObShowDatabaseStatus::add_database_status(
         break;
       }
       case PORT: {
-        cells[cell_idx].set_int(server_addr.get_port());  // port
+        cells[cell_idx].set_int(server_addr.get_port());//port
         break;
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(j), K(output_column_ids_), K(col_id));
+        SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                   K(j), K(output_column_ids_), K(col_id));
         break;
       }
     }
@@ -95,7 +104,7 @@ int ObShowDatabaseStatus::add_database_status(
 int ObShowDatabaseStatus::add_all_database_status()
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = NULL;
+  ObObj *cells = NULL;
   const int64_t col_count = output_column_ids_.count();
   if (0 > col_count || col_count > DATABASE_STATUS_COLUMN_COUNT) {
     ret = OB_ERR_UNEXPECTED;
@@ -104,14 +113,15 @@ int ObShowDatabaseStatus::add_all_database_status()
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
   } else {
-    ObSArray<const ObDatabaseSchema*> database_schemas;
+    ObSArray<const ObDatabaseSchema *> database_schemas;
     if (OB_ISNULL(schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "schema manager should not be null", K(ret));
-    } else if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_, database_schemas))) {
+    } else if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_,
+                                                                     database_schemas))) {
       SERVER_LOG(WARN, "failed to get database schema of tenant", K_(tenant_id));
     } else {
-      ObServer& server = ObServer::get_instance();
+      ObServer &server = ObServer::get_instance();
       const ObAddr server_ip = server.get_self();
       const bool is_oracle_mode = lib::is_oracle_mode();
       for (int64_t i = 0; OB_SUCC(ret) && i < database_schemas.count(); ++i) {
@@ -120,10 +130,9 @@ int ObShowDatabaseStatus::add_all_database_status()
         if (OB_ISNULL(database_schema)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "database not exist", K(ret));
-        } else if (database_schema->is_in_recyclebin() || database_schema->is_hidden() ||
-                   database_schema->is_dropped_schema()) {
+        } else if (database_schema->is_in_recyclebin() || database_schema->is_hidden()) {
           continue;
-        } else if (is_oracle_mode && (OB_SYS_DATABASE_ID == extract_pure_id(database_schema->get_database_id()))) {
+        } else if (is_oracle_mode && is_oceanbase_sys_database_id(database_schema->get_database_id())) {
           // To skip for oceanbase in Oracle mode
           continue;
         } else if (OB_FAIL(add_database_status(server_ip, *database_schema, cells, col_count))) {
@@ -135,7 +144,7 @@ int ObShowDatabaseStatus::add_all_database_status()
   return ret;
 }
 
-int ObShowDatabaseStatus::inner_get_next_row(ObNewRow*& row)
+int ObShowDatabaseStatus::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_)) {
@@ -169,5 +178,5 @@ int ObShowDatabaseStatus::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

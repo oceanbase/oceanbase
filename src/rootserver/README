@@ -1,0 +1,71 @@
+-*- mode:org -*-
+
+* rootserver module for oceanbase 1.0.
+
+** thread model
+
+*** independent thread
+rootservice has indenpendent threads
+
+2. ObRootBalancer: Load balancing
+3. ObLeaderCoordinator: Leader coordinating
+4. ObHeartbeatChecker: Heartbeat detection, high time precision, independent thread work
+6. ObEventHistoryTableOperator::ObDedupQueue: event_history asynchronous update task queue
+7. ObRootService::task_queue.task_queue: Asynchronous task queue, the number of threads can be configured, the default is 4
+8. ObRootService::task_queue.timer_: timer thread
+9. ObMajorFreezeLauncher: Major freeze
+10. ObDailyMergeScheduler: Daily merge
+
+*** Timer and asynchronous tasks
+
+Timer and asynchronous tasks are performed by the ObRootService::task_queue_.
+
+
+**** Timertask
+
+All timed tasks are AsyncTimerTask. When triggered, an asynchronous task is generated, which can be executed quickly without blocking the timer thread.
+
+
+1. ObRestartTask : async task after restart
+2. ObRefreshServerTask : refresh server list after startup
+4. ObEventTableClearTask : regular cleaning event_table
+5. ObCheckServerTask : regular check server_status in memory are same with __all_server table, if not, a ObAllServerTask will be generated
+6. ObInnerTableMonitorTask : regular cleaning schema_table 
+
+
+**** asynchronous tasks
+
+Rootservice has the following asynchronous tasks, which are executed by the ObRootService::ObAsyncTaskQueue.
+Asynchronous task supports retrying when execution fails.
+
+1. ObUpdateRsListTask : Update rslist metadata asynchronously and will retry until success
+2. ObAllServerTask : check and update server status in memory, ensure it is same with __all_server
+
+** ObRootBalancer
+The load balancing module performs background tasks such as load balancing and replica supplement in the whole cluster. It includes the following components:
+
+*** ObRootBalancer (ob_root_balancer.h)
+Background thread, entry class, drive the operation of other policy modules.
+
+*** TenantBalanceInfo (ob_balance_info.h)
+The data structure class records all kinds of cross reference decoupling among zone, server, unit, partition and replica, and provides query interface for algorithm implementation of each policy module of load balancing.
+The gather_stat method is used to initialize the data structure
+
+*** ObUnitBalance (ob_unit_balancer.h)
+Load balancing main policy class.
+
+
+*** ObPartitionGroupCoordinator (ob_partition_group_coordinator.h)
+Implementation of partition group and unit group scheduling strategy
+
+*** ObRereplication (ob_rereplication.h)
+
+1. if the replica num of partition less than define, it will generate add_replica task
+
+*** ObServerChecker (ob_server_checker.h)
+It has nothing to do with load balancing
+1. The delete server function needs to migrate the replicas in the background. This class is responsible for checking whether the server can be safely deleted and marked in the background.
+2. If the machine is offline, drive EmptyServerChecker to check
+
+
+

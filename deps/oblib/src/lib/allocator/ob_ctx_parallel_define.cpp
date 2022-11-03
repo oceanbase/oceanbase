@@ -12,12 +12,14 @@
 
 #include "lib/allocator/ob_ctx_parallel_define.h"
 
-namespace oceanbase {
-namespace common {
-ObCtxParallel& ObCtxParallel::instance()
+namespace oceanbase
+{
+namespace common
+{
+ObCtxParallel &ObCtxParallel::instance()
 {
   static ObCtxParallel instance;
   return instance;
 }
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

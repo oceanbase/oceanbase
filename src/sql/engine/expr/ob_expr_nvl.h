@@ -15,79 +15,100 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprNvlUtil {
+
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprNvlUtil
+{
 public:
-  static int calc_result_type(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx);
-  static int calc_nvl_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
+  static int calc_result_type(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx);
+  static int calc_nvl_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                           ObDatum &res_datum);
+  static int calc_nvl_expr_batch(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const int64_t batch_size);
   // for nvl2()
-  static int calc_nvl_expr2(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
+  static int calc_nvl_expr2(const ObExpr &expr, ObEvalCtx &ctx,
+                            ObDatum &res_datum);
 };
 
-class ObExprNvl : public ObFuncExprOperator {
+class ObExprNvl: public ObFuncExprOperator
+{
 public:
-  explicit ObExprNvl(common::ObIAllocator& alloc);
+
+  explicit  ObExprNvl(common::ObIAllocator &alloc);
   virtual ~ObExprNvl();
 
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
 private:
   // disallow copy
-  ObExprNvl(const ObExprNvl& other);
-  ObExprNvl& operator=(const ObExprNvl& other);
-
+  ObExprNvl(const ObExprNvl &other);
+  ObExprNvl &operator=(const ObExprNvl &other);
 protected:
   // data members
 };
 
-class ObExprOracleNvl : public ObFuncExprOperator {
+class ObExprOracleNvl: public ObFuncExprOperator
+{
 public:
-  // ObExprNvl();
-  explicit ObExprOracleNvl(common::ObIAllocator& alloc);
+ // ObExprNvl();
+  explicit  ObExprOracleNvl(common::ObIAllocator &alloc);
   virtual ~ObExprOracleNvl();
 
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  static int calc_nvl_oralce_result_type(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx);
+  static int calc_nvl_oralce_result_type(ObExprResType &type,
+                                         ObExprResType &type1,
+                                         ObExprResType &type2,
+                                         common::ObExprTypeCtx &type_ctx);
 
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleNvl);
-
 protected:
   // data members
 };
 
-class ObExprNaNvl : public ObFuncExprOperator {
+class ObExprNaNvl: public ObFuncExprOperator
+{
 public:
-  explicit ObExprNaNvl(common::ObIAllocator& alloc);
+  explicit  ObExprNaNvl(common::ObIAllocator &alloc);
   virtual ~ObExprNaNvl();
 
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-private:
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
+  static int eval_nanvl(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_nanvl_batch(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const int64_t batch_size);
+  static int eval_nanvl_util(const ObExpr &expr, ObDatum &expr_datum, ObDatum *param1, ObDatum *param2, bool &ret_bool);
+  private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNaNvl);
-
 protected:
   // data members
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}
+}
 #endif

@@ -3,11 +3,13 @@ $ob_error 1
 Oracle:
 	Oracle Error Code: ORA-00001
 	Message: unique constraint violated
+	Message: PL/SQL common error
 	Related OceanBase Error Code:
 		OB_ERR_PRIMARY_KEY_DUPLICATE(-5024)
 		OB_ER_DUPLICATED_VALUE_IN_TYPE(-5334)
 		OB_ERR_CONSTRAINT_DUPLICATE(-5562)
 		OB_ERR_DUP_KEY(-5595)
+		OB_ERR_PL_COMMON(-9656)
 $ob_error 13
 
 Operating System:
@@ -23,6 +25,7 @@ Oracle:
 	Oracle Error Code: ORA-00600
 	Message: auto increment service busy
 	Message: rowid type mismatch
+	Message: rowid num mismatch
 	Related OceanBase Error Code:
 		OB_AUTOINC_SERVICE_BUSY(-5794)
 		OB_ROWID_TYPE_MISMATCH(-5870)
@@ -168,8 +171,13 @@ Use 'ob_error ora 600 -a ARG'.
 Use 'ob_error --help' for help.
 $ob_error my 6000
 
-MySQL:
-	Error Code 6000 not found.
+OceanBase:
+	OceanBase Error Code: OB_ERR_TABLE_IS_ALREADY_A_RANGE_PARTITIONED_TABLE(-6000)
+	Message: Table is already a range partitioned table
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		Oracle: ORA-14757
 $ob_error my 4000
 
 OceanBase:

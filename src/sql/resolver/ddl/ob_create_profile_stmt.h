@@ -17,31 +17,26 @@
 #include "lib/string/ob_strings.h"
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
-class ObUserProfileStmt : public ObDDLStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObUserProfileStmt: public ObDDLStmt
+{
 public:
-  explicit ObUserProfileStmt(common::ObIAllocator* name_pool);
+  explicit ObUserProfileStmt(common::ObIAllocator *name_pool);
   ObUserProfileStmt();
   virtual ~ObUserProfileStmt();
 
-  virtual bool cause_implicit_commit() const
-  {
-    return true;
-  }
-  virtual obrpc::ObProfileDDLArg& get_ddl_arg()
-  {
-    return create_profile_arg_;
-  }
+  virtual bool cause_implicit_commit() const { return true; }
+  virtual obrpc::ObProfileDDLArg &get_ddl_arg() { return create_profile_arg_; }
   TO_STRING_KV(K_(create_profile_arg));
-
 private:
   // data members
   obrpc::ObProfileDDLArg create_profile_arg_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserProfileStmt);
 };
-}  // end namespace sql
-}  // end namespace oceanbase
-#endif  // OCEANBASE_SQL_RESOLVER_DCL_OB_CREATE_PROFILE_STMT_
+} // end namespace sql
+} // end namespace oceanbase
+#endif //OCEANBASE_SQL_RESOLVER_DCL_OB_CREATE_PROFILE_STMT_

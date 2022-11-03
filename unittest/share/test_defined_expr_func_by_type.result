@@ -1352,7 +1352,7 @@
 <UNKNOWN, CHAR> : not defined
 <UNKNOWN, HEX_STRING> : not defined
 <UNKNOWN, EXT> : defined
-<UNKNOWN, UNKNOWN> : defined
+<UNKNOWN, UNKNOWN> : not defined
 <UNKNOWN, TINYTEXT> : not defined
 <UNKNOWN, TEXT> : not defined
 <UNKNOWN, MEDIUMTEXT> : not defined

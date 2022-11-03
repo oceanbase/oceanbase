@@ -17,20 +17,20 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-bool ObHashPartCols::equal(const ObHashPartCols& other, const ObIArray<ObSortFieldCollation>* sort_collations,
-    const ObIArray<ObCmpFunc>* cmp_funcs) const
+bool ObHashPartCols::equal(
+  const ObHashPartCols &other,
+  const ObIArray<ObSortFieldCollation> *sort_collations,
+  const ObIArray<ObCmpFunc> *cmp_funcs) const
 {
   bool result = true;
-  const ObObj* lcell = NULL;
-  const ObObj* rcell = NULL;
   if (OB_ISNULL(sort_collations) || OB_ISNULL(cmp_funcs)) {
     result = false;
-  } else if (nullptr == store_row_ || nullptr == other.store_row_) {
+  } else if (use_expr_ || other.use_expr_) {
     result = false;
   } else {
     int cmp_result = 0;
-    ObDatum* l_cells = store_row_->cells();
-    ObDatum* r_cells = other.store_row_->cells();
+    ObDatum *l_cells = store_row_->cells();
+    ObDatum *r_cells = other.store_row_->cells();
     for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
       cmp_result = cmp_funcs->at(i).cmp_func_(l_cells[idx], r_cells[idx]);
@@ -40,30 +40,49 @@ bool ObHashPartCols::equal(const ObHashPartCols& other, const ObIArray<ObSortFie
   return result;
 }
 
-int ObHashPartCols::equal_temp(const ObTempHashPartCols& other, const ObIArray<ObSortFieldCollation>* sort_collations,
-    const ObIArray<ObCmpFunc>* cmp_funcs, ObEvalCtx* eval_ctx, bool& result) const
+int ObHashPartCols::equal_distinct(
+  const common::ObIArray<ObExpr*> *exprs,
+  const ObHashPartCols &other,
+  const ObIArray<ObSortFieldCollation> *sort_collations,
+  const ObIArray<ObCmpFunc> *cmp_funcs,
+  ObEvalCtx *eval_ctx,
+  bool &result, ObEvalCtx::BatchInfoScopeGuard &batch_info_guard) const
 {
+  UNUSED(other);
   int ret = OB_SUCCESS;
   result = true;
-  const ObObj* lcell = NULL;
-  const ObObj* rcell = NULL;
-  if (OB_ISNULL(sort_collations) || OB_ISNULL(cmp_funcs) || OB_ISNULL(eval_ctx)) {
+  int cmp_result = 0;
+  if (OB_ISNULL(sort_collations) || OB_ISNULL(cmp_funcs)
+      || OB_ISNULL(eval_ctx) || OB_ISNULL(exprs)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status: compare info is null", K(sort_collations), K(cmp_funcs), K(eval_ctx), K(ret));
-  } else if (nullptr == store_row_ || nullptr == other.exprs_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status: row is null", K(store_row_), K(other.exprs_), K(ret));
-  } else {
-    int cmp_result = 0;
-    ObDatum* l_cells = store_row_->cells();
-    ObDatum* r_cell = nullptr;
+    LOG_WARN("unexpected status: compare info is null",
+      K(sort_collations), K(cmp_funcs), K(eval_ctx), K(exprs), K(ret));
+  } else if (use_expr_) {
+    //for this situation, must be crash in a batch, need to get datum from expr
+    ObDatum *l_cell = nullptr;
+    ObDatum *r_cell = nullptr;
+    const int64_t right_batch_idx = eval_ctx->get_batch_idx();
+    const int64_t left_batch_idx = batch_idx_;
     for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
-      if (OB_FAIL(other.exprs_->at(idx)->eval(*eval_ctx, r_cell))) {
-        LOG_WARN("failed to eval datum", K(ret), K(i));
-      } else {
-        cmp_result = cmp_funcs->at(i).cmp_func_(l_cells[idx], *r_cell);
-      }
+      batch_info_guard.set_batch_idx(left_batch_idx);
+      //be careful left && right exprs are evaled in calc_hash_values
+      l_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
+      batch_info_guard.set_batch_idx(right_batch_idx);
+      r_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
+      cmp_result = cmp_funcs->at(i).cmp_func_(*l_cell, *r_cell);
+    }
+    //reset batch_idx before return 
+    batch_info_guard.set_batch_idx(right_batch_idx);
+    result = (0 == cmp_result);
+  } else {
+    ObDatum *l_cells = store_row_->cells();
+    ObDatum *r_cell = nullptr;
+    // must evaled in calc_hash_values
+    for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
+      int64_t idx = sort_collations->at(i).field_idx_;
+      r_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
+      cmp_result = cmp_funcs->at(i).cmp_func_(l_cells[idx], *r_cell);
     }
     result = (0 == cmp_result);
   }

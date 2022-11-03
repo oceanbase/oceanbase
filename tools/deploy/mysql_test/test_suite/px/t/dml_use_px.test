@@ -1,0 +1,289 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaochu.yh
+# owner group: sql2
+# 测试 dml 查询部分打开px
+# tags: dml, px, optimizer
+# dml查询部分打开px，必须使用 USE_PX hint
+--result_format 4
+--disable_warnings
+drop table if exists t_s,t_p,t_p4,t_no_p,t_temp_s,t_temp_p,t_temp_p4,t_temp_p5;
+
+create table t_s(c1 int primary key, c2 int ,c3 int);
+create table t_p(c1 int primary key, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table t_p4(c1 int primary key, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table t_no_p(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table t_temp_s(c1 int, c2 int, c3 int);
+create table t_temp_p(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table t_temp_p4(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table t_temp_p5(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 5;
+
+## delete测试
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+# 非分区表，parallel不大于1，不启用px
+explain basic delete /*+no_use_px*/ from t_s;
+explain basic delete /*+use_px*/ from t_s;
+delete /*+use_px*/ from t_s;
+select * from t_s order by c1;
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+# 非分区表，parallel大于1，启用px
+explain basic delete /*+use_px, parallel(10)*/ from t_s;
+delete /*+use_px, parallel(10)*/ from t_s;
+select * from t_s order by c1;
+
+# 分区表测试
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic delete /*+no_use_px,parallel(10)*/ from t_p;
+explain basic delete /*+use_px,parallel(10)*/ from t_p;
+delete /*+use_px,parallel(10)*/ from t_p;
+select * from t_p order by c1;
+
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic delete /*+no_use_px,parallel(10)*/ from t_p where c1 >= 5;
+explain basic delete /*+use_px,parallel(10)*/ from t_p where c1 >= 5;
+delete /*+use_px,parallel(10)*/ from t_p where c1 >= 5;
+select * from t_p order by c1;
+delete from t_p;
+
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic delete /*+use_px*/ from t_p where c1 = 5;
+explain basic delete /*+use_px,parallel(10)*/ from t_p where c1 = 5;
+explain basic delete /*+no_use_px,parallel(10)*/ from t_p where c1 = 5;
+delete /*+use_px,parallel(10)*/ from t_p where c1 = 5;
+select * from t_p order by c1;
+delete from t_p;
+
+# partition wise join
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_p4(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+call dbms_stats.gather_table_stats('test','t_p4');
+explain basic delete /*+no_use_px, use_nl(t_p,t_p4), parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
+explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
+delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
+select * from t_p order by c1;
+delete from t_p;
+
+# 非 partition wise join，会经过pkey，形成回退的multi part计划
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+# 存在pkey，计划回退成multi part
+explain basic delete /*+no_use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
+explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
+delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
+select * from t_p order by c1;
+delete from t_p;
+
+# 多表删除
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+no_use_px,parallel(10) LEADING(t_s t_p) USE_NL(t_p) PQ_DISTRIBUTE(t_p NONE BROADCAST ) */ t_s,t_p from t_s,t_p;
+explain basic delete /*+use_px,parallel(10) LEADING(t_s t_p) USE_NL(t_p) PQ_DISTRIBUTE(t_p NONE BROADCAST ) */ t_s,t_p from t_s,t_p;
+delete /*+use_px,parallel(10)*/ t_s,t_p from t_s,t_p;
+select * from t_p order by c1;
+select * from t_s order by c1;
+
+# 删除非分区表或者单分区（开启分区内并行，但是DML仍然是非multi part）
+# 删除非分区表
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+no_use_px, parallel(10)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
+explain basic delete /*+use_px, parallel(10),leading(t_s,t_p),pq_distribute(t_p,none,broadcast)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
+delete /*+use_px, parallel(10),leading(t_s,t_p),pq_distribute(t_p,none,broadcast)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
+select * from t_s order by c1;
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+use_px, parallel(10)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
+delete /*+use_px, parallel(10)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
+select * from t_s order by c1;
+
+# 删除分区表的一个分区
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic delete /*+no_use_px, parallel(10)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
+# dop小于2，单分区，不会产生非PX计划
+explain basic delete /*+use_px, parallel(1)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
+explain basic delete /*+use_px, parallel(10)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
+delete /*+use_px, parallel(10)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
+select * from t_p order by c1;
+delete from t_p;
+delete from t_s;
+
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+no_use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
+# dop = 1， 针对单分区，不会启用分区内并行，所有t_p所对应的分区location是local（c模式），remote（slave模式）
+# 在c模式下会产生local+local的计划，在slave模式下remote+remote，并且分配了EX，变为multi part计划
+explain basic delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
+delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
+select * from t_p order by c1;
+delete from t_p;
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
+delete /*+use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
+select * from t_p order by c1;
+delete from t_p;
+delete from t_p4;
+
+
+## update测试
+# 非分区表，parallel大于1，启用px
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic update /*+no_use_px, parallel(10)*/ t_s set t_s.c2 = 20 where t_s.c1 >= 5;
+explain basic update /*+use_px, parallel(10)*/ t_s set t_s.c2 = 20 where t_s.c1 >= 5;
+update /*+use_px, parallel(10)*/ t_s set t_s.c2 = 20 where t_s.c1 >=5;
+select * from t_s order by c1;
+delete from t_s;
+
+# 更新主键
+insert into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic update /*+no_use_px, parallel(10)*/ t_s set t_s.c1 = 20 where t_s.c2 = 5;
+explain basic update /*+use_px, parallel(10)*/ t_s set t_s.c1 = 20 where t_s.c2 = 5;
+update /*+use_px, parallel(10)*/ t_s set t_s.c1 = 20 where t_s.c2 = 5;
+select * from t_s order by c1;
+delete from t_s;
+
+# 分区表
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic update /*+no_use_px, parallel(10)*/ t_p set t_p.c3 = 20 where t_p.c1 >= 5;
+explain basic update /*+use_px, parallel(10)*/ t_p set t_p.c3 = 20 where t_p.c1 >= 5;
+update /*+use_px, parallel(10)*/ t_p set t_p.c3 = 20 where t_p.c1 >= 5;
+select * from t_p order by c1;
+delete from t_p;
+
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic update /*+no_use_px, parallel(10)*/ t_p set t_p.c1 = 20 where t_p.c1 = 5;
+explain basic update /*+use_px, parallel(10)*/ t_p set t_p.c1 = 20 where t_p.c1 = 5;
+update /*+use_px, parallel(10)*/ t_p set t_p.c1 = 20 where t_p.c1 = 5;
+select * from t_p order by c1;
+delete from t_p;
+
+insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic update /*+no_use_px, parallel(10)*/ t_p as pp set pp.c3 = 20 where pp.c1 >= 5;
+explain basic update /*+use_px, parallel(10)*/ t_p as pp set pp.c3 = 20 where pp.c1 >= 5;
+update /*+use_px, parallel(10)*/ t_p as pp set pp.c3 = 20 where pp.c1 >= 5;
+select * from t_p order by c1;
+delete from t_p;
+
+# 跟新无主键表
+insert into t_no_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_no_p');
+explain basic update /*+no_use_px, parallel(10)*/ t_no_p set t_no_p.c1 = 20 where t_no_p.c1 >= 5;
+explain basic update /*+use_px, parallel(10)*/ t_no_p set t_no_p.c1 = 20 where t_no_p.c1 >= 5;
+update /*+use_px, parallel(10)*/ t_no_p set t_no_p.c1 = 20 where t_no_p.c1 >= 5;
+select * from t_no_p order by c2;
+delete from t_no_p;
+
+## insert测试：insert插入的表是local的非分区表/单分区的计划是非multi part，其他都是multi part计划
+## insert不会出现GI算子在insert算子头上的计划
+insert into t_temp_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_temp_s(c1,c3) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_temp_p4(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into t_temp_p5(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+
+explain basic insert /*+no_use_px*/ into t_s select * from t_temp_s;
+explain basic insert /*+use_px*/ into t_s select * from t_temp_s;
+insert /*+use_px*/ into t_s select * from t_temp_s;
+select * from t_s order by c1;
+delete from t_s;
+
+call dbms_stats.gather_table_stats('test','t_temp_p');
+call dbms_stats.gather_table_stats('test','t_temp_s');
+call dbms_stats.gather_table_stats('test','t_temp_p4');
+call dbms_stats.gather_table_stats('test','t_temp_p5');
+explain basic insert /*+no_use_px,parallel(10)*/ into t_s select * from t_temp_s;
+explain basic insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_s;
+insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_s;
+select * from t_s order by c1;
+delete from t_s;
+
+call dbms_stats.gather_table_stats('test','t_temp_p');
+call dbms_stats.gather_table_stats('test','t_temp_s');
+call dbms_stats.gather_table_stats('test','t_temp_p4');
+call dbms_stats.gather_table_stats('test','t_temp_p5');
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic insert /*+no_use_px,parallel(10)*/ into t_s select * from t_temp_p where t_temp_p.c2 >= 5;
+explain basic insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_p where t_temp_p.c2 >= 5;
+insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_p where t_temp_p.c2 >= 5;
+select * from t_s order by c1;
+delete from t_s;
+
+
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic insert /*+no_use_px,parallel(10)*/ into t_s select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+explain basic insert /*+use_px,parallel(10)*/ into t_s select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+insert /*+use_px,parallel(10)*/ into t_s select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+select * from t_s order by c1;
+delete from t_s;
+
+call dbms_stats.gather_table_stats('test','t_p');
+# 插入多分区表
+explain basic insert /*+no_use_px,parallel(10)*/ into t_p select * from t_temp_s;
+explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_s;
+insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_s;
+select * from t_p order by c1;
+delete from t_p;
+
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic insert /*+no_use_px,parallel(10)*/ into t_p select * from t_temp_p;
+explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p;
+insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p;
+select * from t_p order by c1;
+delete from t_p;
+
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic insert /*+no_use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
+explain basic insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
+insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
+select * from t_p order by c1;
+delete from t_p;
+
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1 and t_temp_p.c1 = 3;
+insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1 and t_temp_p.c1 = 3;
+select * from t_p order by c1;
+delete from t_p;
+
+call dbms_stats.gather_table_stats('test','t_p');
+# full partition wise join insert
+explain basic insert /*+use_px, parallel(10)*/ into t_p select  t_temp_p.c1, t_temp_p.c2, t_temp_p.c3 from t_temp_p, t_temp_p4 where t_temp_p.c1 = t_temp_p4.c1;
+insert /*+use_px, parallel(10)*/ into t_p select  t_temp_p.c1, t_temp_p.c2, t_temp_p.c3 from t_temp_p, t_temp_p4 where t_temp_p.c1 = t_temp_p4.c1;
+select * from t_p order by c1;
+delete from t_p;
+
+call dbms_stats.gather_table_stats('test','t_p');
+explain basic insert /*+no_use_px,parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+explain basic insert /*+use_px,parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+insert /*+use_px,parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
+select * from t_p order by c1;
+delete from t_p;
+call dbms_stats.gather_table_stats('test','t_p');
+
+## replace / insert on duplicate 计划
+## 目前replace / insert on duplicate计划是不支持PX
+explain basic replace /*+use_px,parallel(10)*/ into t_p select * from t_temp_p;
+explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p on duplicate key update c3 = 2;
+
+
+# 清理测试
+drop table if exists t_s,t_p,t_p4,t_no_p,t_temp_s,t_temp_p,t_temp_p4,t_temp_p5;

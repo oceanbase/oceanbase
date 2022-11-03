@@ -13,17 +13,16 @@
 #include "sql/executor/ob_executor_rpc_proxy.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-OB_SERIALIZE_MEMBER(ObBKGDDistExecuteArg, return_addr_, tenant_id_, task_id_, scheduler_id_, serialized_task_);
+OB_SERIALIZE_MEMBER(ObEraseDtlIntermResultArg, interm_result_ids_);
 
-OB_SERIALIZE_MEMBER(ObBKGDTaskCompleteArg, task_id_, scheduler_id_, return_code_, event_);
+}
+namespace obrpc
+{
 
-OB_SERIALIZE_MEMBER(ObFetchIntermResultItemArg, slice_id_, index_);
-
-OB_SERIALIZE_MEMBER(ObFetchIntermResultItemRes, result_item_, total_item_cnt_);
-
-}  // namespace sql
-namespace obrpc {}  // namespace obrpc
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

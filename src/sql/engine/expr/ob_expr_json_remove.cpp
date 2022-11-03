@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_remove.
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_remove.h"
 #include "ob_expr_json_func_helper.h"
@@ -49,6 +48,7 @@ int ObExprJsonRemove::calc_result_typeN(ObExprResType& type,
     }
   }
   type.set_json();
+  type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
   return ret;
 }
 
@@ -76,87 +76,14 @@ static int remove_from_json(ObJsonPath *path_node, ObIJsonBase *parent)
   return ret;
 }
 
-int ObExprJsonRemove::calc_resultN(common::ObObj &result,
-                                   const common::ObObj *params,
-                                   int64_t param_num,
-                                   common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  
-  if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (result_type_.get_collation_type() != CS_TYPE_UTF8MB4_BIN) {
-    ret = OB_ERR_INVALID_JSON_CHARSET;
-    LOG_WARN("invalid out put charset", K(ret), K(result_type_));
-  } else {
-    ObIJsonBase *json_doc = NULL;
-    bool is_null_result = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(params, allocator, 0,
-                                               json_doc, is_null_result))) {
-      LOG_WARN("get_json_doc failed", K(ret));
-    }
-
-    ObJsonPathCache ctx_cache(allocator);
-    ObJsonPathCache* path_cache = &ctx_cache;
-    ObJsonBaseVector hits;
-    if (!is_null_result && OB_SUCC(ret)) {
-      for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i++) {
-        hits.clear();
-        ObObjType val_type = params[i].get_type();
-        if (val_type == ObNullType || params[i].is_null()) {
-          is_null_result = true;
-          break;
-        } else {
-          ObString path_val = params[i].get_string();
-          ObJsonPath *json_path;
-          if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
-            LOG_WARN("json parse failed or path illegal", K(path_val), K(ret));
-          } else if (json_path->path_node_cnt() == 0) {
-            ret = OB_ERR_JSON_VACUOUS_PATH;
-            LOG_USER_ERROR(OB_ERR_JSON_VACUOUS_PATH); 
-          } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt() - 1, true, false, hits))) {
-            LOG_WARN("json seek failed", K(path_val), K(ret));
-          } else if (hits.size() == 0){
-            continue;
-          } else if (hits.size() > 1){
-            ret = OB_INVALID_ERROR;
-            LOG_WARN("Expect only one result", K(ret));
-          } else {
-            if (OB_FAIL(remove_from_json(json_path, hits[0]))) {
-              LOG_WARN("remove_from_json failed", K(ret));
-            } 
-          }
-        }
-      }
-    }
-
-    // set result
-    if (OB_UNLIKELY(OB_FAIL(ret))) {
-      LOG_WARN("json_remove failed", K(ret));
-    } else if (is_null_result) {
-      result.set_null();
-    } else {
-      ObString raw_bin;
-      if (OB_FAIL(json_doc->get_raw_binary(raw_bin, allocator))) {
-        LOG_WARN("json_remove get result binary failed", K(ret));
-      } else {
-        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
-      }
-    }
-  }
-  return ret;
-}
-
 int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
   ObIJsonBase *json_doc = NULL;
 
   bool is_null_result = false;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));

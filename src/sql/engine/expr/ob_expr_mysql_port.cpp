@@ -17,17 +17,22 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprMySQLPort::ObExprMySQLPort(ObIAllocator& alloc)
+
+ObExprMySQLPort::ObExprMySQLPort(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_MYSQL_PORT, N_MYSQL_PORT, 0, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprMySQLPort::~ObExprMySQLPort()
-{}
+{
+}
 
-int ObExprMySQLPort::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprMySQLPort::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
@@ -37,26 +42,13 @@ int ObExprMySQLPort::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_
   return ret;
 }
 
-int ObExprMySQLPort::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  common::ObServerConfig* config = GCTX.config_;
-  if (OB_UNLIKELY(NULL == config)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "server config is null, get mysql port failed", K(ret));
-  } else {
-    result.set_int(config->mysql_port);
-  }
-  return ret;
-}
-
-int ObExprMySQLPort::eval_mysql_port(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprMySQLPort::eval_mysql_port(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
   UNUSED(ctx);
-  common::ObServerConfig* config = GCTX.config_;
+  common::ObServerConfig *config = GCTX.config_;
   if (OB_ISNULL(config)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "server config is null, get mysql port failed", K(ret));
@@ -66,12 +58,13 @@ int ObExprMySQLPort::eval_mysql_port(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   return ret;
 }
 
-int ObExprMySQLPort::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprMySQLPort::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
   rt_expr.eval_func_ = ObExprMySQLPort::eval_mysql_port;
   return OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

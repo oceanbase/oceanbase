@@ -1,0 +1,87 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select regexp_like('abc', 'a.*') from dual;
+select regexp_like('abc', 'a.* ') from dual;
+select regexp_like('abc', 'a.* ', NULL) from dual;
+select regexp_like('abc', 'a.* ', 'x') from dual;
+select regexp_like('abc', NULL) from dual;
+select regexp_like(NULL, 'a.*') from dual;
+
+select regexp_like(123, 123) from dual;
+select regexp_like('我是好人', '.是.*') from dual;
+
+
+select regexp_instr('abcadef', 'a.') from dual;
+select regexp_instr('abcadef', 'a.', 1, 2) from dual;
+select regexp_instr('abcadef', 'a.', 1, 2, 0) from dual;
+select regexp_instr('abcadef', 'a.', 1, 2, 1) from dual;
+select regexp_instr('abcadef', 'a.', 0, 2, 1) from dual;
+select regexp_instr('abcadef', 'a.', 1, 0, 1) from dual;
+select regexp_instr('abcadef', 'a.', 1, 2, -1) from dual;
+select regexp_instr('abcadef', 'a.', 100, 2) from dual;
+select regexp_instr('abcadef', 'a.', 1, 200) from dual;
+select regexp_instr('abcadef', 'a. ', 1, 2, 1, 'x') from dual;
+select regexp_instr('', 'a. ', 1, 2, 1, 'x') from dual;
+select regexp_instr('abcadef', '', 1, 2, 1, 'x') from dual;
+select regexp_instr('abcadef', 'a. ', NULL, 2, 1, 'x') from dual;
+select regexp_instr('abcadef', 'a. ', 1, NULL, 1, 'x') from dual;
+select regexp_instr('abcadef', 'a. ', 1, 2, NULL, 'x') from dual;
+select regexp_instr('abcadef', 'a. ', 1, 2, 1, NULL) from dual;
+
+select regexp_instr(12341834, 1.3, '1', '2', 1) from dual;
+select regexp_instr('我是好人', '是.') from dual;
+
+
+select regexp_substr('abcadef', 'a.', 1) from dual;
+select regexp_substr('abcadef', 'a.', 1, 2) from dual;
+select regexp_substr('abcadef', 'a.', 0, 2) from dual;
+select regexp_substr('abcadef', 'a.', 1, 0) from dual;
+select regexp_substr('abcadef', 'a.', 10, 2) from dual;
+select regexp_substr('abcadef', 'a.', 1, 10) from dual;
+select regexp_substr('abcadef', 'a. ', 1, 2, 'x') from dual;
+select regexp_substr('', 'a. ', 1, 2, 'x') from dual;
+select regexp_substr('abcadef', '', 1, 2, 'x') from dual;
+select regexp_substr('abcadef', 'a. ', NULL, 2, 'x') from dual;
+select regexp_substr('abcadef', 'a. ', 1, NULL, 'x') from dual;
+select regexp_substr('abcadef', 'a. ', 1, 2, NULL) from dual;
+
+select regexp_substr(12341834, 1.3, '1.9', '2') from dual;
+select regexp_replace('我是好人', '是.') from dual;
+
+
+select regexp_replace('abcadef', 'a.') from dual;
+select regexp_replace('abcadef', 'a.*') from dual;
+select regexp_replace('abcadef', 'a.', 'X') from dual;
+select regexp_replace('abcadef', 'a.', 'X', 1) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 1, 2) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 2, 1) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 2, 2) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 1, 0) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 1, -1) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 10, 2) from dual;
+select regexp_replace('abcadef', 'a.', 'X', 1, 100) from dual;
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2) from dual;
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2, 'x') from dual;
+select regexp_replace('', 'a. ', 'X', 1, 2, 'x') from dual;
+select regexp_replace('abcadef', '', 'X', 1, 2, 'x') from dual;
+select regexp_replace('abcadef', 'a. ', NULL, 1, 2, 'x') from dual;
+select regexp_replace('abcadef', 'a. ', 'X', NULL, 2, 'x') from dual;
+select regexp_replace('abcadef', 'a. ', 'X', 1, NULL, 'x') from dual;
+select regexp_replace('abcadef', 'a. ', 'X', 1, 2, NULL) from dual;
+
+select regexp_replace(12341834, 1.3, 99, '1', '2') from dual;
+select regexp_replace('我是好人', '是.', '.....') from dual;
+
+connection syscon;
+--sleep 2

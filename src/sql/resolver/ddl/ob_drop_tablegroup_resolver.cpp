@@ -18,19 +18,24 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-ObDropTablegroupResolver::ObDropTablegroupResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObDropTablegroupResolver::ObDropTablegroupResolver(ObResolverParams &params)
+    : ObDDLResolver(params)
+{
+}
 
 ObDropTablegroupResolver::~ObDropTablegroupResolver()
-{}
+{
+}
 
-int ObDropTablegroupResolver::resolve(const ParseNode& parse_tree)
+int ObDropTablegroupResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ParseNode* node = const_cast<ParseNode*>(&parse_tree);
-  ObDropTablegroupStmt* drop_tablegroup_stmt = NULL;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(node) || T_DROP_TABLEGROUP != node->type_ ||
-      TG_NODE_COUNT != node->num_child_ || OB_ISNULL(node->children_)) {
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObDropTablegroupStmt *drop_tablegroup_stmt = NULL;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(node) ||
+      T_DROP_TABLEGROUP != node->type_ ||
+      TG_NODE_COUNT != node->num_child_ ||
+      OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null or parser error", K(ret));
   }
@@ -43,7 +48,7 @@ int ObDropTablegroupResolver::resolve(const ParseNode& parse_tree)
       stmt_ = drop_tablegroup_stmt;
     }
 
-    if (OB_SUCC(ret)) {
+    if(OB_SUCC(ret)) {
       if (NULL != node->children_[IF_NOT_EXIST]) {
         if (T_IF_EXISTS == node->children_[IF_NOT_EXIST]->type_) {
           drop_tablegroup_stmt->set_if_exist(true);
@@ -56,8 +61,8 @@ int ObDropTablegroupResolver::resolve(const ParseNode& parse_tree)
       }
       if (OB_SUCC(ret)) {
         if (NULL != node->children_[TG_NAME] && T_IDENT == node->children_[TG_NAME]->type_) {
-          tablegroup_name.assign_ptr(
-              (char*)(node->children_[TG_NAME]->str_value_), static_cast<int32_t>(node->children_[TG_NAME]->str_len_));
+          tablegroup_name.assign_ptr((char *)(node->children_[TG_NAME]->str_value_),
+                                    static_cast<int32_t>(node->children_[TG_NAME]->str_len_));
           drop_tablegroup_stmt->set_tablegroup_name(tablegroup_name);
           drop_tablegroup_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
         } else {
@@ -70,3 +75,4 @@ int ObDropTablegroupResolver::resolve(const ParseNode& parse_tree)
 
   return ret;
 }
+

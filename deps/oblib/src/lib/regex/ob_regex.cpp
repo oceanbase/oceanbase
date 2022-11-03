@@ -16,10 +16,17 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/regex/ob_regex.h"
 
-namespace oceanbase {
-namespace common {
-ObRegex::ObRegex() : init_(false), match_(NULL), reg_(), nmatch_(0)
-{}
+namespace oceanbase
+{
+namespace common
+{
+ObRegex::ObRegex()
+  : init_(false),
+    match_(NULL),
+    reg_(),
+    nmatch_(0)
+{
+}
 
 ObRegex::~ObRegex()
 {
@@ -36,7 +43,7 @@ int ObRegex::init(const char* pattern, int flags)
     LOG_WARN("already inited", K(ret), K(this));
   } else if (OB_ISNULL(pattern)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid param pattern", K(ret), K(pattern));
+    LOG_WARN("invalid param pattern", K(ret), KP(pattern));
   } else {
     int tmp_ret = regcomp(&reg_, pattern, flags);
     if (OB_UNLIKELY(0 != tmp_ret)) {
@@ -59,7 +66,7 @@ int ObRegex::init(const char* pattern, int flags)
   return ret;
 }
 
-int ObRegex::match(const char* text, int flags, bool& is_match)
+int ObRegex::match(const char* text, int flags, bool &is_match)
 {
   int ret = OB_SUCCESS;
   is_match = false;
@@ -68,7 +75,7 @@ int ObRegex::match(const char* text, int flags, bool& is_match)
     LOG_WARN("not inited", K(ret), K(this));
   } else if (OB_ISNULL(text)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid param text", K(ret), K(text));
+    LOG_WARN("invalid param text", K(ret), KP(text));
   } else {
     int tmp_ret = regexec(&reg_, text, nmatch_, match_, flags);
     if (REG_NOMATCH == tmp_ret) {
@@ -80,7 +87,8 @@ int ObRegex::match(const char* text, int flags, bool& is_match)
       const static int64_t REG_ERR_MSG_BUF_LEN = 512;
       char reg_err_msg[REG_ERR_MSG_BUF_LEN];
       size_t err_msg_len = regerror(tmp_ret, &reg_, reg_err_msg, REG_ERR_MSG_BUF_LEN);
-      LOG_WARN("fail to run match func: regexec", K(ret), K(tmp_ret), K(err_msg_len), K(reg_err_msg));
+      LOG_WARN("fail to run match func: regexec", K(ret),
+               K(tmp_ret), K(err_msg_len), KCSTRING(reg_err_msg));
     }
   }
   return ret;
@@ -98,5 +106,5 @@ void ObRegex::destroy()
     init_ = false;
   }
 }
-}  // namespace common
-}  // namespace oceanbase
+}
+}

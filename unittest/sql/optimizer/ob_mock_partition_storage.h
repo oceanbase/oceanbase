@@ -13,41 +13,24 @@
 #ifndef _OB_MOCK_PARTITION_STORAGE_H_
 #define _OB_MOCK_PARTITION_STORAGE_H_
 
-#include "storage/ob_partition_storage.h"
-#include "storage/ob_range_iterator.h"
 
-namespace test {
-class MockPartitionStorage : public oceanbase::storage::ObPartitionStorage {
+namespace test
+{
+class MockPartitionStorage
+{
 public:
-  MockPartitionStorage() : is_default_stat_(false)
-  {}
-  virtual ~MockPartitionStorage()
-  {}
-  virtual int get_batch_rows(const oceanbase::storage::ObTableScanParam& param,
-      const oceanbase::storage::ObBatch& batch, int64_t& rows, int64_t& rows_unreliable,
-      oceanbase::common::ObIArray<oceanbase::common::ObEstRowCountRecord>& est_records) override
-  {
-    UNUSED(param);
-    UNUSED(batch);
-    UNUSED(est_records);
-    if (is_default_stat_) {
-      rows = 0;
-    } else if (batch.type_ == oceanbase::storage::ObBatch::T_MULTI_SCAN) {
-      rows = 100 * batch.ranges_->count();
-    } else {
-      rows = 100;
-    }
-    rows_unreliable = rows;
-    return oceanbase::common::OB_SUCCESS;
-  }
+  MockPartitionStorage()
+      : is_default_stat_(false)
+  { }
+  virtual ~MockPartitionStorage() { }
   void set_default_stat(const bool is_default_stat)
   {
     is_default_stat_ = is_default_stat;
   }
-
 private:
   bool is_default_stat_;
 };
-}  // namespace test
+}
+
 
 #endif

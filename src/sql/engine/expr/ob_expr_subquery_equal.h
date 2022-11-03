@@ -14,25 +14,26 @@
 #define OCEANBASE_SQL_OB_EXPR_SUBQUERY_EQUAL_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
-class ObExprSubQueryEqual : public ObSubQueryRelationalExpr {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprSubQueryEqual : public ObSubQueryRelationalExpr
+{
 public:
-  explicit ObExprSubQueryEqual(common::ObIAllocator& alloc);
+  explicit  ObExprSubQueryEqual(common::ObIAllocator &alloc);
   virtual ~ObExprSubQueryEqual();
 
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override
   {
     return ObSubQueryRelationalExpr::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
-
-private:
-  virtual int compare_single_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row,
-      common::ObExprCtx& expr_ctx, common::ObObj& result) const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryEqual);
 };
 }  // namespace sql
 }  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_SUBQUERY_EQUAL_H_
+#endif //OCEANBASE_SQL_OB_EXPR_SUBQUERY_EQUAL_H_

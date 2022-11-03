@@ -15,13 +15,17 @@
 
 #include <stdint.h>
 
-namespace oceanbase {
-namespace common {
-struct ObModItem;
-}  // end of namespace common
+namespace oceanbase
+{
+namespace common
+{
+struct ObLabelItem;
+} // end of namespace common
 
-namespace lib {
+namespace lib
+{
 // statistic relating
+struct ObLabel;
 void set_memory_limit(int64_t bytes);
 int64_t get_memory_limit();
 int64_t get_memory_hold();
@@ -33,7 +37,8 @@ int64_t get_tenant_memory_limit(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(const uint64_t tenant_id, const uint64_t ctx_id);
 int64_t get_tenant_memory_remain(uint64_t tenant_id);
-void get_tenant_mod_memory(uint64_t tenant_id, int mod_id, common::ObModItem& ObModItem);
+void get_tenant_label_memory(
+  uint64_t tenant_id, ObLabel &label, common::ObLabelItem &item);
 void ob_set_reserved_memory(const int64_t bytes);
 void ob_set_urgent_memory(const int64_t bytes);
 int64_t ob_get_reserved_urgent_memory();
@@ -42,10 +47,13 @@ int64_t ob_get_reserved_urgent_memory();
 // ms_pctg: percentage limitation of tenant memory can be used by MemStore
 // pc_pctg: percentage limitation of tenant memory can be used by Plan Cache
 // wa_pctg: percentage limitation of tenant memory can be used by Work Area
-int set_wa_limit(uint64_t tenand_id, int64_t ms_pctg, int64_t pc_pctg, int64_t wa_pctg);
+
 int set_wa_limit(uint64_t tenand_id, int64_t wa_pctg);
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+// set meta object memory limit for specified tenant.
+// - meta_obj_pct_lmt: percentage limitation of tenant memory can be used for meta object.
+int set_meta_obj_limit(uint64_t tenant_id, int64_t meta_obj_pct_lmt);
+} // end of namespace lib
+} // end of namespace oceanbase
 
 #endif /* _ALLOC_FUNC_H_ */

@@ -14,39 +14,43 @@
 #define OCEANBASE_ROOTSERVER_OB_CORE_META_TABLE_H_
 
 #include "share/ob_virtual_table_projector.h"
-#include "share/partition_table/ob_partition_table_proxy.h"
 
-namespace oceanbase {
-namespace share {
-class ObPartitionReplica;
-class ObPartitionTableOperator;
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+class ObLSReplica;
+class ObLSTableOperator;
+namespace schema
+{
 class ObTableSchema;
 class ObColumnSchemaV2;
-}  // namespace schema
-}  // namespace share
-namespace rootserver {
-class ObCoreMetaTable : public common::ObVirtualTableProjector {
+}
+}
+namespace rootserver
+{
+class ObCoreMetaTable : public common::ObVirtualTableProjector
+{
 public:
   ObCoreMetaTable();
   virtual ~ObCoreMetaTable();
 
-  int init(share::ObPartitionTableOperator& pt_operator, share::schema::ObSchemaGetterGuard* schema_guard);
+  int init(share::ObLSTableOperator &lst_operator,
+           share::schema::ObSchemaGetterGuard *schema_guard);
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  int get_full_row(const share::schema::ObTableSchema* table, const share::ObPartitionReplica& replica,
-      common::ObIArray<Column>& columns);
+  int get_full_row(const share::schema::ObTableSchema *table,
+                   const share::ObLSReplica &replica,
+                   common::ObIArray<Column> &columns);
   bool inited_;
-  share::ObPartitionTableOperator* pt_operator_;
-  share::schema::ObSchemaGetterGuard* schema_guard_;
-
+  share::ObLSTableOperator *lst_operator_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCoreMetaTable);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+}//end namespace rootserver
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_CORE_META_TABLE_H_
+#endif //OCEANBASE_ROOTSERVER_OB_CORE_META_TABLE_H_

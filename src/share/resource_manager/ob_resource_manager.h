@@ -17,29 +17,25 @@
 #include "share/resource_manager/ob_resource_plan_manager.h"
 #include "share/resource_manager/ob_resource_mapping_rule_manager.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 }
-namespace share {
+namespace share
+{
 
-class ObResourceManager {
+class ObResourceManager
+{
 public:
-  static ObResourceManager& get_instance();
+  static ObResourceManager &get_instance();
   int init();
-  ObResourcePlanManager& get_plan_mgr()
-  {
-    return res_plan_mgr_;
-  }
-  ObResourceMappingRuleManager& get_mapping_rule_mgr()
-  {
-    return res_mapping_rule_mgr_;
-  }
-
+  ObResourcePlanManager &get_plan_mgr() { return res_plan_mgr_; }
+  ObResourceMappingRuleManager &get_mapping_rule_mgr() { return res_mapping_rule_mgr_; }
 private:
   ObResourceManager() = default;
   virtual ~ObResourceManager() = default;
-
 private:
   /* variables */
   ObResourcePlanManager res_plan_mgr_;
@@ -49,7 +45,8 @@ private:
 
 #define G_RES_MGR (::oceanbase::share::ObResourceManager::get_instance())
 
-}  // namespace share
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SHARE_RESOURCE_OB_RESOURCE_MANAGER_H_ */
 //// end of header file
+

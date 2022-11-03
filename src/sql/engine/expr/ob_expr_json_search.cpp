@@ -218,6 +218,7 @@ int ObExprJsonSearch::calc_result_typeN(ObExprResType& type,
     LOG_WARN("invalid param number", K(ret), K(param_num));
   } else {
     type.set_json();
+    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
     
     // json doc
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, "json_search"))) {
@@ -241,238 +242,6 @@ int ObExprJsonSearch::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-// for old sql engine
-int ObExprJsonSearch::calc_resultN(ObObj& result,
-                                   const ObObj *params,
-                                   int64_t params_count,
-                                   ObExprCtx& expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-
-  if (OB_ISNULL(params) || OB_UNLIKELY(params_count < 3)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(params), K(params_count));
-  } else if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (result_type_.get_collation_type() != CS_TYPE_UTF8MB4_BIN) {
-    ret = OB_ERR_INVALID_JSON_CHARSET;
-    LOG_WARN("invalid out put charset", K(ret), K(result_type_));
-  }
-
-  ObIJsonBase *j_base = NULL;
-  bool is_null = false;
-  if (OB_FAIL(ObJsonExprHelper::get_json_doc(params, allocator, 0, j_base, is_null, false))) {
-    LOG_WARN("failed to get json doc.", K(ret));
-  }
-
-  // check one_or_all flag
-  bool one_flag = false;
-  if (OB_SUCC(ret) && !is_null) {
-    ObObjType val_type = params[1].get_type();
-    if (val_type == ObNullType || params[1].is_null()) {
-      is_null = true;
-    } else if (!ob_is_string_type(val_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("input type error", K(val_type));
-    } else {
-      ObString target_str = params[1].get_string();
-      if (0 == target_str.case_compare("one")) {
-        one_flag = true;
-      } else if (0 == target_str.case_compare("all")) {
-        one_flag = false;
-      } else {
-        ret = OB_ERR_JSON_BAD_ONE_OR_ALL_ARG;
-        LOG_USER_ERROR(OB_ERR_JSON_BAD_ONE_OR_ALL_ARG);
-      }
-    }
-  }
-
-  // check escape if exist
-  int32_t escape_wc = static_cast<int32_t>('\\'); // use \ for default escape
-  if (OB_SUCC(ret) && params_count >= 4 && !is_null) {
-    ObObjType val_type = params[3].get_type();
-    if (val_type == ObNullType || params[3].is_null()) {
-      // do nothing, null type use default escape
-    } else if (!ob_is_string_type(val_type)) {
-      LOG_WARN("input type error", K(val_type));
-    } else {
-        ObString escape = params[3].get_string();
-        if (escape.length() > 0) {
-          const ObCollationType escape_coll = params[3].get_collation_type();
-          size_t length = ObCharset::strlen_char(escape_coll, escape.ptr(), escape.length());
-          if (length != 1) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument to ESCAPE", K(escape), K(length), K(ret));
-          } else if (OB_FAIL(ObCharset::mb_wc(escape_coll, escape, escape_wc))) {
-            LOG_WARN("failed to convert escape to wc", K(ret), K(escape),
-                    K(escape_coll), K(escape_wc));
-            ret = OB_INVALID_ARGUMENT;
-        }
-      }
-    }
-  }
-
-  // get target string
-  ObString target;
-  if (OB_SUCC(ret) && !is_null) {
-    ObObjType val_type = params[2].get_type();
-    if (val_type == ObNullType || params[2].is_null()) {
-      is_null = true;
-    } else if (!ob_is_string_type(val_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("input type error", K(val_type));
-    } else {
-      target = params[2].get_string();
-    }
-  }
-
-  ObJsonBuffer path_str(allocator);
-  ObJsonBufferVector hits;
-  ObJsonBufferSortedVector duplicates;
-  if (OB_SUCC(ret) && !is_null) {
-    if (params_count < 5) {
-      if (OB_FAIL(path_str.append("$"))) {
-        LOG_WARN("faild to append '$' to path str.", K(ret));
-      } else if (OB_FAIL(find_matches(allocator, j_base, path_str, hits, duplicates, target,
-          one_flag, escape_wc))) {
-        LOG_WARN("failed to find matches for path.", K(ret), K(one_flag), K(escape_wc));
-      }
-    } else {
-      // read all JsonPath from arg
-      ObVector<ObJsonPath*> json_paths;
-      ObJsonPathCache ctx_cache(allocator);
-      ObJsonPathCache* path_cache = &ctx_cache;
-
-      for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < params_count; i++) {
-        ObObjType val_type = params[i].get_type();
-        if (val_type == ObNullType || params[i].is_null()) {
-          is_null = true;
-        } else if (!ob_is_string_type(val_type)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("input type error", K(val_type));
-        } else {
-          ObString j_path_text = params[i].get_string();
-          ObJsonPath *j_path;
-          if (j_path_text.length() == 0) {
-            is_null = true;
-          } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path,
-              j_path_text, i, true))) {
-            LOG_WARN("parse text to path failed", K(j_path_text), K(ret));
-          } else if (OB_FAIL(json_paths.push_back(j_path))) {
-            LOG_WARN("push new path to vector failed", K(i), K(ret));
-          }
-        }
-      }
-
-      bool is_finish = false;
-      for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < params_count && !is_finish; i++) {
-        ObJsonPath *path_ptr = json_paths[i - 4];
-        ObJsonBaseVector base_hits;
-        if (one_flag && hits.size() > 0) {
-          is_finish = true;
-        } else if (path_ptr->can_match_many()) {
-          ObIJsonBase *j_temp = NULL;
-          if (OB_FAIL(ObJsonBaseFactory::transform(allocator, j_base, ObJsonInType::JSON_TREE,
-              j_temp))) {
-            LOG_WARN("failed to transform to tree", K(ret), K(*j_base));
-          } else {
-            j_base = j_temp;
-          }
-        } 
-        
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(j_base->seek(*path_ptr, path_ptr->path_node_cnt(),
-              false, false, base_hits))) {
-            LOG_WARN("failed to seek path", K(ret), K(i));
-          } else {
-            bool is_finish_inner = false;
-            for (uint64_t j = 0; OB_SUCC(ret) && !is_null && j < base_hits.size()
-                && !is_finish_inner; j++) {
-              if (one_flag && hits.size() > 0) {
-                is_finish_inner = true;
-              } else {
-                path_str.reuse();
-                if (path_ptr->can_match_many()) {
-                  if (OB_FAIL(base_hits[j]->get_location(path_str))) {
-                    LOG_WARN("falied to get loaction.", K(ret));
-                  }
-                } else if (OB_FAIL(path_ptr->to_string(path_str))) {
-                  LOG_WARN("falied to get string for path.", K(ret));
-                }
-
-                if (OB_SUCC(ret)) {
-                  if (OB_FAIL(find_matches(allocator, base_hits[j], path_str, hits, duplicates,
-                      target, one_flag, escape_wc))) {
-                    LOG_WARN("failed to find matches.", K(ret), K(j), K(one_flag), K(escape_wc));
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // packed string to return
-  ObIJsonBase *j_res = NULL;
-  if (OB_UNLIKELY(OB_FAIL(ret))) {
-    LOG_WARN("json_search failed", K(ret));
-  } else if (hits.size() == 0) {
-    is_null = true;
-  } else if (hits.size() == 1) {
-    void *buf = allocator->alloc(sizeof(ObJsonString));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("json_search alloc ObJsonString failed", K(ret));
-    } else {
-      ObJsonString *j_str = new (buf) ObJsonString(hits[0]->ptr(), hits[0]->length());
-      j_res = j_str;
-    }
-  } else {
-    void *buf = allocator->alloc(sizeof(ObJsonArray));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("json_search alloc ObJsonArray failed", K(ret));
-    } else {
-      ObJsonArray *j_arr = new (buf) ObJsonArray(allocator);
-      for (int32_t i = 0; OB_SUCC(ret) && i < hits.size(); i++) {
-        buf = allocator->alloc(sizeof(ObJsonString));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("json_search alloc jsonString failed", K(ret));
-        } else {
-          ObJsonString *j_str = new (buf) ObJsonString(hits[i]->ptr(), hits[i]->length());
-          if (OB_FAIL(j_arr->append(j_str))) {
-            LOG_WARN("failed to append path to array.", K(ret), K(i), K(*j_str));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        j_res = j_arr;
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (is_null) {
-      result.set_null();
-    } else {
-      ObString raw_bin;
-      if (OB_FAIL(j_res->get_raw_binary(raw_bin, allocator))) {
-        LOG_WARN("json_keys get result binary failed", K(ret));
-      } else {
-        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -482,7 +251,8 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObIJsonBase *j_base = NULL;
   bool is_null = false;
 
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -492,7 +262,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   }
 
   // check one_or_all flag
-  bool one_flag;
+  bool one_flag = false;
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[1];
     val_type = json_arg->datum_meta_.type_;

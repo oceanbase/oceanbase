@@ -13,11 +13,13 @@
 #define USING_LOG_PREFIX SQL
 #include "sql/ob_delete_stmt_printer.h"
 #include "sql/ob_sql_context.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-void ObDeleteStmtPrinter::init(char* buf, int64_t buf_len, int64_t* pos, ObDeleteStmt* stmt)
+void ObDeleteStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDeleteStmt *stmt)
 {
   ObDMLStmtPrinter::init(buf, buf_len, pos, stmt);
 }
@@ -42,6 +44,7 @@ int ObDeleteStmtPrinter::do_print()
   return ret;
 }
 
+
 int ObDeleteStmtPrinter::print()
 {
   int ret = OB_SUCCESS;
@@ -51,8 +54,7 @@ int ObDeleteStmtPrinter::print()
     LOG_WARN("stmt_ should not be NULL", K(ret));
   } else if (OB_FAIL(print_basic_stmt())) {
     LOG_WARN("fail to print basic stmt", K(ret), K(*stmt_));
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
 
   return ret;
 }
@@ -96,7 +98,7 @@ int ObDeleteStmtPrinter::print_delete()
   } else {
     DATA_PRINTF("delete ");
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(print_hint())) {  // hint
+      if (OB_FAIL(print_hint())) { // hint
         LOG_WARN("fail to print hint", K(ret), K(*stmt_));
       }
     }
@@ -104,5 +106,8 @@ int ObDeleteStmtPrinter::print_delete()
   return ret;
 }
 
-}  // end of namespace sql
-}  // end of namespace oceanbase
+} //end of namespace sql
+} //end of namespace oceanbase
+
+
+

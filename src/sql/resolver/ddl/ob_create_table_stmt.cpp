@@ -20,17 +20,20 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObCreateTableStmt::ObCreateTableStmt(ObIAllocator* name_pool)
+ObCreateTableStmt::ObCreateTableStmt(ObIAllocator *name_pool)
     : ObTableStmt(name_pool, stmt::T_CREATE_TABLE),
       create_table_arg_(),
       is_view_stmt_(false),
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL)
-{}
+{
+}
 
 ObCreateTableStmt::ObCreateTableStmt()
     : ObTableStmt(stmt::T_CREATE_TABLE),
@@ -39,12 +42,14 @@ ObCreateTableStmt::ObCreateTableStmt()
       view_need_privs_(),
       sub_select_stmt_(NULL),
       view_define_(NULL)
-{}
+{
+}
 
 ObCreateTableStmt::~ObCreateTableStmt()
-{}
+{
+}
 
-int ObCreateTableStmt::set_table_id(ObStmtResolver& ctx, const uint64_t table_id)
+int ObCreateTableStmt::set_table_id(ObStmtResolver &ctx, const uint64_t table_id)
 {
   UNUSED(ctx);
   int ret = OB_SUCCESS;
@@ -59,15 +64,15 @@ int ObCreateTableStmt::invalidate_backup_table_id()
   return ret;
 }
 
-int ObCreateTableStmt::add_column_schema(const ObColumnSchemaV2& column)
+int ObCreateTableStmt::add_column_schema(const ObColumnSchemaV2 &column)
 {
   return create_table_arg_.schema_.add_column(column);
 }
 
-const ObColumnSchemaV2* ObCreateTableStmt::get_column_schema(const ObString& column_name) const
+const ObColumnSchemaV2 *ObCreateTableStmt::get_column_schema(const ObString &column_name) const
 {
   return create_table_arg_.schema_.get_column_schema(column_name);
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

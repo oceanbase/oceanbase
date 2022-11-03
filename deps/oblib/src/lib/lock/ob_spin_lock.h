@@ -19,14 +19,17 @@
 #include "lib/lock/ob_lock_guard.h"
 #include "lib/lock/ob_latch.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using lib::ObLockGuard;
-namespace common {
+namespace common
+{
 /**
  * A simple wrapper of pthread spin lock
  *
  */
-class ObSpinLock {
+class ObSpinLock
+{
 public:
   explicit ObSpinLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_LOCK);
   ~ObSpinLock();
@@ -34,21 +37,24 @@ public:
   int lock(const int64_t timeout_us);
   int trylock();
   int unlock();
-
+  uint32_t get_wid();
+  bool self_locked();
 private:
   // data members
   ObLatchMutex latch_;
   uint32_t latch_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSpinLock);
 };
 
-inline ObSpinLock::ObSpinLock(uint32_t latch_id) : latch_id_(latch_id)
-{}
+inline ObSpinLock::ObSpinLock(uint32_t latch_id)
+    : latch_id_(latch_id)
+{
+}
 
 inline ObSpinLock::~ObSpinLock()
-{}
+{
+}
 
 inline int ObSpinLock::lock()
 {
@@ -70,28 +76,31 @@ inline int ObSpinLock::unlock()
   return latch_.unlock();
 }
 
+inline uint32_t ObSpinLock::get_wid()
+{
+  return latch_.get_wid();
+}
+
+inline bool ObSpinLock::self_locked()
+{
+  return latch_.get_wid() == static_cast<uint32_t>(GETTID());
+}
 ////////////////////////////////////////////////////////////////
 // A lock class that do nothing, used as template argument
-class ObNullLock {
+class ObNullLock
+{
 public:
-  ObNullLock(){};
-  ~ObNullLock(){};
-  int lock()
-  {
-    return OB_SUCCESS;
-  }
-  int unlock()
-  {
-    return OB_SUCCESS;
-  }
-
+  ObNullLock() {};
+  ~ObNullLock() {};
+  int lock() { return OB_SUCCESS; }
+  int unlock() { return OB_SUCCESS; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNullLock);
 };
 
 typedef lib::ObLockGuard<common::ObSpinLock> ObSpinLockGuard;
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
 #endif /* _OB_SPIN_LOCK_H */
