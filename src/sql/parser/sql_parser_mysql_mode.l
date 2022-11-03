@@ -264,7 +264,7 @@ FALSE {
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
   yylval->node->str_len_ = 0;
-  p->last_well_formed_len_ = 0;
+  p->last_escape_check_pos_ = 0;
   yylval->node->str_value_ = NULL;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
@@ -327,6 +327,7 @@ FALSE {
   } else {
     HANDLE_ESCAPE(p);
   }
+  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
   }
@@ -408,7 +409,7 @@ FALSE {
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
     yylval->node->str_len_ = 0;
-    p->last_well_formed_len_ = 0;
+    p->last_escape_check_pos_ = 0;
     if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
       return OUTLINE_DEFAULT_TOKEN;
     }
@@ -476,6 +477,7 @@ FALSE {
   } else {
     HANDLE_ESCAPE(p);
   }
+  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     return OUTLINE_DEFAULT_TOKEN;
   }
@@ -1059,7 +1061,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
   yylval->node->str_len_ = 0;
-  p->last_well_formed_len_ = 0;
+  p->last_escape_check_pos_ = 0;
   yylval->node->str_value_ = NULL;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE && !p->is_ignore_token_) {
     COPY_WRITE();
