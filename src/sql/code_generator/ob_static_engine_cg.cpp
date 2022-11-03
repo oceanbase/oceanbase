@@ -4969,8 +4969,12 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
   }
 
   //4.add aggr columns
+  spec.support_fast_single_row_agg_ = true;
   for (int64_t i = 0; OB_SUCC(ret) && i < all_aggr_exprs.count(); ++i) {
     ObAggrInfo &aggr_info = spec.aggr_infos_.at(i);
+    if (!is_simple_aggr_expr(aggr_exprs.at(i)->get_expr_type())) {
+      spec.support_fast_single_row_agg_ = false;
+    }
     if (OB_FAIL(fill_aggr_info(*static_cast<ObAggFunRawExpr *>(aggr_exprs.at(i)),
                                *all_aggr_exprs.at(i),
                                aggr_info,

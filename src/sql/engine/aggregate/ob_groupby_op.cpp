@@ -32,7 +32,8 @@ OB_SERIALIZE_MEMBER((ObGroupBySpec, ObOpSpec),
                     dist_aggr_group_idxes_,
                     aggr_code_idx_,
                     aggr_code_expr_,
-                    by_pass_enabled_);
+                    by_pass_enabled_,
+                    support_fast_single_row_agg_);
 
 DEF_TO_STRING(ObGroupBySpec)
 {

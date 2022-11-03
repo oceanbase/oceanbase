@@ -457,6 +457,10 @@ private:
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
+  bool is_simple_aggr_expr(const ObItemType &expr_type) { return T_FUN_COUNT == expr_type
+                                                                 || T_FUN_SUM == expr_type
+                                                                 || T_FUN_MAX == expr_type
+                                                                 || T_FUN_MIN == expr_type; }
 private:
   ObPhysicalPlan *phy_plan_;
   ObOptimizerContext *opt_ctx_;
