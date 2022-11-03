@@ -1271,7 +1271,8 @@ int ObBasicSessionInfo::load_sys_variable(ObIAllocator &calc_buf,
     LOG_WARN("fail to init sys var", K(ret), K(sys_var->get_type()),
              K(real_val), K(name), K(value));
   } else if (OB_FAIL(process_session_variable(var_id, real_val,
-                                              false /*check_timezone_valid*/))) {
+                                              false /*check_timezone_valid*/,
+                                              false /*is_update_sys_var*/))) {
     LOG_WARN("process system variable error",  K(name), K(type), K(real_val), K(value), K(ret));
   } else {
     variables_last_modify_time_ = ObTimeUtility::current_time();
@@ -1578,7 +1579,8 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
   }
   // 更新变量
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(process_session_variable(sys_var_id, val, false /*check_timezone_valid*/))) {
+    if (OB_FAIL(process_session_variable(sys_var_id, val, false /*check_timezone_valid*/,
+                                        true /*is_update_sys_var*/))) {
       LOG_WARN("process system variable error",  K(sys_var_id), K(val), K(ret));
     } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
       LOG_WARN("add sys var id error",  K(sys_var_id), K(ret));
@@ -2039,7 +2041,7 @@ ObObjType ObBasicSessionInfo::get_sys_variable_meta_type(const ObString &var_nam
     } while(0)
 
 OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var, const ObObj &val,
-    const bool check_timezone_valid/*true*/)
+    const bool check_timezone_valid/*true*/, const bool is_update_sys_var/*false*/)
 {
   int ret = OB_SUCCESS;
   switch (var) {
@@ -2070,12 +2072,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
     }
     case SYS_VAR_DEBUG_SYNC: {
       const bool is_global = false;
-      ret = process_session_debug_sync(val, is_global);
+      ret = process_session_debug_sync(val, is_global, is_update_sys_var);
       break;
     }
     case SYS_VAR_OB_GLOBAL_DEBUG_SYNC: {
       const bool is_global = true;
-      ret = process_session_debug_sync(val, is_global);
+      ret = process_session_debug_sync(val, is_global, is_update_sys_var);
       break;
     }
     case SYS_VAR_OB_READ_CONSISTENCY: {
@@ -2848,11 +2850,11 @@ int ObBasicSessionInfo::process_session_variable_fast()
   // SYS_VAR_DEBUG_SYNC
   OZ (ObSysVarFactory::calc_sys_var_store_idx(SYS_VAR_DEBUG_SYNC, store_idx));
   OV (ObSysVarFactory::is_valid_sys_var_store_idx(store_idx));
-  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), false));
+  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), false, false));
   // SYS_VAR_OB_GLOBAL_DEBUG_SYNC
   OZ (ObSysVarFactory::calc_sys_var_store_idx(SYS_VAR_OB_GLOBAL_DEBUG_SYNC, store_idx));
   OV (ObSysVarFactory::is_valid_sys_var_store_idx(store_idx));
-  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), true));
+  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), true, false));
   // SYS_VAR_OB_READ_CONSISTENCY
   // 这个系统变量对应consistency_level_，该属性只能通过常规途径修改，所以适合加入sys_vars_cache_，
   // 但这样涉及到的相关修改比较大，稳妥起见保留现有的序列化操作，只在本接口里执行，保证主线程正确初始化。
@@ -2996,7 +2998,8 @@ int ObBasicSessionInfo::process_session_log_level(const ObObj &val)
 }
 
 int ObBasicSessionInfo::process_session_debug_sync(const ObObj &val,
-                                                   const bool is_global)
+                                                   const bool is_global,
+                                                   const bool is_update_sys_var)
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID == tenant_id_ && GCONF.is_debug_sync_enabled()) {
@@ -3009,6 +3012,12 @@ int ObBasicSessionInfo::process_session_debug_sync(const ObObj &val,
           LOG_WARN("set debug sync string failed", K(debug_sync), K(ret));
         }
       }
+    }
+  } else {
+    if (is_update_sys_var) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                    "Non-system tenant or debug_sync is turned off, set debug_sync is");
     }
   }
   return ret;
@@ -3874,8 +3883,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
         } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
           LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
         } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                    check_timezone_valid))) {
-          LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
+                                                    check_timezone_valid,
+                                                    false /*is_update_sys_var*/))) {
+          LOG_WARN("process system variable error",  K(ret), K(*sys_var));
         }
       }
     }

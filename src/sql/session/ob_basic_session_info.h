@@ -1251,7 +1251,8 @@ public:
   common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
-                               const bool check_timezone_valid = true);
+                               const bool check_timezone_valid = true,
+                               const bool is_update_sys_var = false);
   int process_session_variable_fast();
   //@brief process session log_level setting like 'all.*:info, sql.*:debug'.
   //int process_session_ob_binlog_row_image(const common::ObObj &value);
@@ -1261,7 +1262,8 @@ protected:
   int process_session_time_zone_value(const common::ObObj &value, const bool check_timezone_valid);
   int process_session_overlap_time_value(const ObObj &value);
   int process_session_autocommit_value(const common::ObObj &val);
-  int process_session_debug_sync(const common::ObObj &val, const bool is_global);
+  int process_session_debug_sync(const common::ObObj &val, const bool is_global,
+                                const bool is_update_sys_var);
   // session切换接口
   int base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables = false);
   int base_restore_session(BaseSavedValue &saved_value);
