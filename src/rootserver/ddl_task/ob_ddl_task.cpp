@@ -320,6 +320,8 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
       // task failed marked by user
       real_new_status = FAIL;
       ret_code_ = OB_CANCELED;
+    } else if (table_task_status == SUCCESS && old_status != table_task_status) {
+      real_new_status = SUCCESS;
     } else if (old_status == new_status) {
       // do nothing.
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
