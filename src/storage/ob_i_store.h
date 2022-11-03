@@ -263,32 +263,10 @@ struct ObStoreRow
   OB_UNIS_VERSION(1);
 public:
   ObStoreRow()
-<<<<<<< HEAD
-      : flag_(-1),
-        capacity_(0),
-        scan_index_(0),
-        dml_(T_DML_UNKNOWN),
-        row_type_flag_(),
-        is_get_(false),
-        from_base_(false),
-        row_pos_flag_(),
-        first_dml_(T_DML_UNKNOWN),
-        is_sparse_row_(false),
-        column_ids_(NULL),
-        row_val_(),
-        snapshot_version_(0),
-        range_array_idx_(0),
-        trans_id_ptr_(NULL),
-        fast_filter_skipped_(false),
-        last_purge_ts_(0),
-        next_ids_(0), 
-        offset_(0)
-=======
       : flag_(), capacity_(0), scan_index_(0), row_type_flag_(),
       is_get_(false), from_base_(false),
       is_sparse_row_(false), column_ids_(NULL), row_val_(), snapshot_version_(0), group_idx_(0),
       trans_id_(), fast_filter_skipped_(false), last_purge_ts_(0)
->>>>>>> upstream/master
   {}
   void reset();
   inline bool is_valid() const;
@@ -361,7 +339,7 @@ public:
   {
     return next_ids_ >= row_val_.count_;
   }
-  
+
   blocksstable::ObDmlRowFlag flag_;
   int64_t capacity_;
   int64_t scan_index_;
