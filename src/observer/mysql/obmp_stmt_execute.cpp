@@ -2171,7 +2171,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               if (is_oracle_mode() && !is_complex_element) {
                 param.set_char(dst);
               } else {
-                param.set_varchar(dst);
+                if (is_complex_element && dst.length()== 0) {
+                  param.set_null();
+                } else {
+                  param.set_varchar(dst);
+                }
               }
             }
           }
