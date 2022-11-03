@@ -18,7 +18,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/container/ob_rbtree.h"
 #include "common/storage/ob_io_device.h"
-#include "lib/queue/ob_fixed_queue.h"
+#include "lib/list/ob_list.h"
 #include "lib/container/ob_heap.h"
 
 namespace oceanbase
@@ -207,7 +207,7 @@ class ObIOChannel;
 class ObIOSender;
 class ObIOUsage;
 
-class ObIORequest
+class ObIORequest : public common::ObDLinkBase<ObIORequest>
 {
 public:
   ObIORequest();
@@ -272,10 +272,9 @@ public:
   void reset_time_info();
   void reset_queue_info();
 public:
+  typedef common::ObDList<ObIORequest> IOReqList;
   TO_STRING_KV(K_(reservation_ts), K_(category_limitation_ts), K_(tenant_limitation_ts));
   bool is_inited_;
-  ObFixedQueue<ObIORequest> phy_queue_;  
-  static const int32_t SINGLE_QUEUE_DEPTH = 10000;
   int64_t reservation_ts_;
   int64_t category_limitation_ts_;
   int64_t tenant_limitation_ts_;
@@ -287,6 +286,7 @@ public:
   int64_t category_limitation_pos_;
   int64_t tenant_limitation_pos_;
   int64_t proportion_pos_;
+  IOReqList req_list_;  
 };
 
 class ObIOHandle final

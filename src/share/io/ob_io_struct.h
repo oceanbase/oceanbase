@@ -187,11 +187,14 @@ private:
   ObIOScheduler &io_scheduler_;
 };
 
-struct ObTenantPhyQueues final {
+struct ObIOCategoryQueues final {
 public:
-  ObTenantPhyQueues();
-  ~ObTenantPhyQueues();
-public:  
+  ObIOCategoryQueues();
+  ~ObIOCategoryQueues();
+  int init();
+  void destroy();
+public:
+  bool is_inited_;
   ObPhyQueue phy_queues_[static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1];
 };
 
@@ -212,7 +215,7 @@ public:
 
   int alloc_mclock_queue(ObIAllocator &allocator, ObMClockQueue *&io_queue);
   int enqueue_request(ObIORequest &req);
-  int enqueue_phy_queue(ObPhyQueue *phyqueue);
+  int enqueue_phy_queue(ObPhyQueue &phyqueue);
   int dequeue_request(ObIORequest *&req);
   int remove_phy_queue(const uint64_t tenant_id);
   int notify();
@@ -229,7 +232,7 @@ public:
   int tg_id_; // thread group id
   ObMClockQueue *io_queue_;
   ObThreadCond queue_cond_;
-  hash::ObHashMap<uint64_t, ObTenantPhyQueues *> tenant_map_;
+  hash::ObHashMap<uint64_t, ObIOCategoryQueues *> tenant_map_;
   int64_t sender_req_count_;
 };
 

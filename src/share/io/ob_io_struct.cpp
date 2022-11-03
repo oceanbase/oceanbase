@@ -634,12 +634,40 @@ void ObIOTuner::print_io_status()
   }
 }
 
-/******************             ObPhyQueue              **********************/
-ObTenantPhyQueues::ObTenantPhyQueues()
+/******************             ObIOCategoryQueues              **********************/
+ObIOCategoryQueues::ObIOCategoryQueues()
+  : is_inited_(false)
 {
 
 }
 
+ObIOCategoryQueues::~ObIOCategoryQueues()
+{
+  destroy();
+}
+
+int ObIOCategoryQueues::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("phy queue init twice", K(ret), K(is_inited_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; ++i) {
+      if (OB_FAIL(phy_queues_[i].init(i))){
+        LOG_WARN("phy queue init failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  }
+  return ret;
+}
+void ObIOCategoryQueues::destroy()
+{
+  is_inited_ = false;
+}
 /******************             IOScheduleQueue              **********************/
 ObIOSender::ObIOSender(ObIAllocator &allocator)
   : is_inited_(false),
@@ -693,11 +721,9 @@ struct DestroyPhyqueueMapFn
 {
 public:
   DestroyPhyqueueMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
-  int operator () (hash::HashMapPair<uint64_t, ObTenantPhyQueues *> &entry) {
+  int operator () (hash::HashMapPair<uint64_t, ObIOCategoryQueues *> &entry) {
     if (nullptr != entry.second) {
-      for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; ++i) {
-        entry.second->phy_queues_[i].destroy();
-      }
+      entry.second->~ObIOCategoryQueues();
       allocator_.free(entry.second);
     }
     return OB_SUCCESS;
@@ -797,7 +823,7 @@ int ObIOSender::alloc_mclock_queue(ObIAllocator &allocator, ObMClockQueue *&io_q
 int ObIOSender::enqueue_request(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
-  ObTenantPhyQueues *tenant_phy_queues = nullptr;
+  ObIOCategoryQueues *io_category_queues = nullptr;
   ObIORequest *tmp_req = &req;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -807,18 +833,19 @@ int ObIOSender::enqueue_request(ObIORequest &req)
     if (OB_FAIL(cond_guard.get_ret())) {
       LOG_ERROR("guard queue condition failed", K(ret));
     } else {
-      if (OB_FAIL(tenant_map_.get_refactored(tmp_req->io_info_.tenant_id_, tenant_phy_queues))) {
+      if (OB_FAIL(tenant_map_.get_refactored(tmp_req->io_info_.tenant_id_, io_category_queues))) {
         LOG_WARN("get_refactored tenant_map failed", K(ret), K(req));
       } else {
         const int index = static_cast<int>(tmp_req->get_category());
-        ObPhyQueue *tmp_phy_queue = &(tenant_phy_queues->phy_queues_[index]);
-        if (tmp_phy_queue->phy_queue_.get_total() <= 0) {
+        ObPhyQueue *tmp_phy_queue = &(io_category_queues->phy_queues_[index]);
+        if (tmp_phy_queue->req_list_.is_empty()) {
           //new request        
           if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
             LOG_WARN("remove phy queue from heap failed", K(ret), K(index));
           } else {
-            req.inc_ref("phyqueue_inc"); //ref for phy_queue            
-            if (OB_FAIL(tmp_phy_queue->phy_queue_.push(tmp_req))) {
+            req.inc_ref("phyqueue_inc"); //ref for phy_queue
+            if (OB_UNLIKELY(!tmp_phy_queue->req_list_.add_last(tmp_req))) {
+              ret = OB_ERR_UNEXPECTED;
               req.dec_ref("phyqueue_dec"); //ref for phy_queue
               tmp_phy_queue->reset_time_info();
               LOG_WARN("push new req into phy queue failed", K(ret));
@@ -846,7 +873,8 @@ int ObIOSender::enqueue_request(ObIORequest &req)
         } else {
           //not new req, into phy_queue and line up
           req.inc_ref("phyqueue_inc"); //ref for phy_queue
-          if (OB_FAIL(tmp_phy_queue->phy_queue_.push(tmp_req))) {
+          if (OB_UNLIKELY(!tmp_phy_queue->req_list_.add_last(tmp_req))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("req line up failed", K(req));
             req.dec_ref("phyqueue_dec"); //ref for phy_queue
           } else {
@@ -865,7 +893,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
   return ret;
 }
 
-int ObIOSender::enqueue_phy_queue(ObPhyQueue *phyqueue)
+int ObIOSender::enqueue_phy_queue(ObPhyQueue &phyqueue)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -876,7 +904,7 @@ int ObIOSender::enqueue_phy_queue(ObPhyQueue *phyqueue)
     if (OB_FAIL(cond_guard.get_ret())) {
       LOG_ERROR("guard queue condition failed", K(ret));
     } else {
-      if (OB_FAIL(io_queue_->push_phyqueue(phyqueue))) {
+      if (OB_FAIL(io_queue_->push_phyqueue(&phyqueue))) {
         LOG_WARN("push phyqueue into queue failed", K(ret));
       } else {
         if (OB_FAIL(queue_cond_.signal())) {
@@ -930,20 +958,19 @@ int ObIOSender::remove_phy_queue(const uint64_t tenant_id)
     if (OB_FAIL(cond_guard.get_ret())) {
       LOG_ERROR("guard queue condition failed", K(ret));
     } else {
-      ObTenantPhyQueues *tenant_phy_queues = nullptr;
-      if (OB_FAIL(tenant_map_.erase_refactored(tenant_id, &tenant_phy_queues))) {
+      ObIOCategoryQueues *io_category_queues = nullptr;
+      if (OB_FAIL(tenant_map_.erase_refactored(tenant_id, &io_category_queues))) {
         LOG_WARN("erase phy_queues failed", K(ret), K(tenant_id));
-      } else if (nullptr != tenant_phy_queues) {
+      } else if (nullptr != io_category_queues) {
         for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; ++j) {
-          ObPhyQueue *tmp_phy_queue = &(tenant_phy_queues->phy_queues_[j]);
+          ObPhyQueue *tmp_phy_queue = &(io_category_queues->phy_queues_[j]);
           if (OB_FAIL(io_queue_->remove_from_heap(tmp_phy_queue))) {
             LOG_WARN("remove phy queue from heap failed", K(ret));
-          } else {
-            tmp_phy_queue->~ObPhyQueue();
           }
         }
         if (OB_SUCC(ret)) {
-          allocator_.free(tenant_phy_queues);
+          io_category_queues->~ObIOCategoryQueues();
+          allocator_.free(io_category_queues);
         }
       }
     }
@@ -1202,29 +1229,29 @@ int ObIOScheduler::add_tenant_map(uint64_t tenant_id)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < senders_.count(); ++i) {
     ObIOSender *cur_sender = senders_.at(i);
-    ObTenantPhyQueues *tenant_phy_queues = nullptr;
+    ObIOCategoryQueues *io_category_queues = nullptr;
     void *buf_queues = nullptr;
-    if (OB_ISNULL(buf_queues = cur_sender->allocator_.alloc(sizeof(ObTenantPhyQueues)))) {
+    if (OB_ISNULL(buf_queues = cur_sender->allocator_.alloc(sizeof(ObIOCategoryQueues)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate tenant phyqueues memory failed", K(ret));
+      LOG_WARN("allocate phyqueues memory failed", K(ret));
     } else {
-      tenant_phy_queues = new (buf_queues) ObTenantPhyQueues;
-      for(int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; j++) {
-        if (OB_FAIL(tenant_phy_queues->phy_queues_[j].init(j))){
-          LOG_WARN("phy queue init failed", K(ret));
-        } else if (OB_FAIL(cur_sender->enqueue_phy_queue(&(tenant_phy_queues->phy_queues_[j])))) {
-          LOG_WARN("new phy_queue into send_queue failed", K(ret));
+      io_category_queues = new (buf_queues) ObIOCategoryQueues();
+      if (OB_FAIL(io_category_queues->init())) {
+        LOG_WARN("init phyqueues failed", K(ret));
+      } else {
+        for(int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; j++) {
+          if (OB_FAIL(cur_sender->enqueue_phy_queue(io_category_queues->phy_queues_[j]))) {
+            LOG_WARN("new phy_queue into send_queue failed", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(cur_sender->tenant_map_.set_refactored(tenant_id, tenant_phy_queues))) {
+        if (OB_FAIL(cur_sender->tenant_map_.set_refactored(tenant_id, io_category_queues))) {
           LOG_WARN("init tenant map failed", K(ret), K(i));
         }
       } else {
-        for(int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1; j++) {
-          tenant_phy_queues->phy_queues_[j].~ObPhyQueue();
-        }
-        cur_sender->allocator_.free(tenant_phy_queues);
+        io_category_queues->~ObIOCategoryQueues();
+        cur_sender->allocator_.free(io_category_queues);
       }
     }
   }
