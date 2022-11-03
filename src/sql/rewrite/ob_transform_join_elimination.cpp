@@ -1090,11 +1090,18 @@ int ObTransformJoinElimination::do_eliminate_left_outer_join(ObDMLStmt *stmt,
                                                              0,    /* result_flag */
                                                              ctx_->session_info_, cm))) {
           LOG_WARN("fail to get default cast mode", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_, 
+        } else if (is_mysql_mode() &&
+                   OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_, 
                                                             to_expr, 
                                                             from_expr->get_result_type(), 
                                                             cast_expr, ctx_->session_info_,
                                                             false, cm))) {
+          LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
+        } else if (is_oracle_mode() &&
+                   OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_, 
+                                                            to_expr, 
+                                                            from_expr->get_result_type(), 
+                                                            cast_expr, ctx_->session_info_))) {
           LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
         } else if (OB_ISNULL(cast_expr)) {
           ret = OB_ERR_UNEXPECTED;
