@@ -1462,7 +1462,7 @@ private:
       const bool is_oracle_mode,
       const share::schema::ObTableSchema &table_schema,
       common::ObIAllocator &allocator,
-      share::schema::AlterColumnSchema &alter_column_schema);
+      share::schema::ObColumnSchemaV2 &alter_column_schema);
   int resolve_orig_default_value(share::schema::ObColumnSchemaV2 &column_schema,
                                  const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                  const common::ObString *nls_formats,

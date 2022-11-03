@@ -3540,39 +3540,52 @@ int ObDDLService::convert_to_character(
   int ret = OB_SUCCESS;
   const bool bind_tablets = false;
   bool can_convert = false;
+  const ObSQLMode sql_mode = alter_table_arg.alter_table_schema_.get_sql_mode();
+  bool is_oracle_mode = false;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   ObCollationType collation_type = alter_table_schema.get_collation_type();
   new_table_schema.set_collation_type(collation_type);
   new_table_schema.set_charset_type(ObCharset::charset_type_by_coll(collation_type));
   ObTableSchema::const_column_iterator tmp_begin = orig_table_schema.column_begin();
   ObTableSchema::const_column_iterator tmp_end = orig_table_schema.column_end();
-  for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
-    ObColumnSchemaV2 *orig_col = (*tmp_begin);
-    if (OB_ISNULL(orig_col)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("col is NULL", K(ret));
-    } else if (OB_FAIL(check_can_convert_to_character(*orig_col, can_convert))) {
-      LOG_WARN("check can convert to character", K(ret));
-    } else if (can_convert) {
-      ObColumnSchemaV2 *col = new_table_schema.get_column_schema(orig_col->get_column_name());
-      if (OB_ISNULL(col)) {
+  if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to get oracle mode", K(ret));
+  } else {
+    for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+      ObColumnSchemaV2 *orig_col = (*tmp_begin);
+      if (OB_ISNULL(orig_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col is NULL", K(ret));
-      } else {
-        col->set_collation_type(collation_type);
-        col->set_charset_type(ObCharset::charset_type_by_coll(collation_type));
+      } else if (OB_FAIL(check_can_convert_to_character(*orig_col, can_convert))) {
+        LOG_WARN("check can convert to character", K(ret));
+      } else if (can_convert) {
+        ObColumnSchemaV2 *col = new_table_schema.get_column_schema(orig_col->get_column_name());
+        if (OB_ISNULL(col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("col is NULL", K(ret));
+        } else {
+          col->set_collation_type(collation_type);
+          col->set_charset_type(ObCharset::charset_type_by_coll(collation_type));
+          if (OB_FAIL(fill_column_collation(sql_mode,
+                                            is_oracle_mode,
+                                            new_table_schema,
+                                            alter_table_arg.allocator_,
+                                            *col))) {
+            LOG_WARN("failed to fill column collation", K(ret));
+          }
+        }
       }
     }
+    OZ (create_user_hidden_table(orig_table_schema,
+                                new_table_schema,
+                                &alter_table_arg.sequence_ddl_arg_,
+                                bind_tablets,
+                                schema_guard,
+                                frozen_version,
+                                ddl_operator,
+                                trans,
+                                alter_table_arg.allocator_));
   }
-  OZ (create_user_hidden_table(orig_table_schema,
-                              new_table_schema,
-                              &alter_table_arg.sequence_ddl_arg_,
-                              bind_tablets,
-                              schema_guard,
-                              frozen_version,
-                              ddl_operator,
-                              trans,
-                              alter_table_arg.allocator_));
   return ret;
 }
 
@@ -5762,47 +5775,47 @@ int ObDDLService::fill_column_collation(
     const bool is_oracle_mode,
     const ObTableSchema &table_schema,
     common::ObIAllocator &allocator,
-    AlterColumnSchema &alter_column_schema)
+    ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  ObObjTypeClass col_tc = alter_column_schema.get_data_type_class();
+  ObObjTypeClass col_tc = column_schema.get_data_type_class();
   ObCollationType collation_type = table_schema.get_collation_type();
   ObCharsetType charset_type = table_schema.get_charset_type();
   const ObCollationType cur_extended_type_info_collation = ObCharset::get_system_collation();
   if (ObStringTC == col_tc) {
     if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(
-                alter_column_schema, charset_type, collation_type))) {
+                column_schema, charset_type, collation_type))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_string_column_length(
-                       alter_column_schema, is_oracle_mode))) {
+                       column_schema, is_oracle_mode))) {
       RS_LOG(WARN, "failed to check string column length", K(ret));
     }
   } else if (ObRawTC == col_tc) {
-    if (OB_FAIL(ObDDLResolver::check_raw_column_length(alter_column_schema))) {
-      RS_LOG(WARN, "failed to check raw column length", K(ret), K(alter_column_schema));
+    if (OB_FAIL(ObDDLResolver::check_raw_column_length(column_schema))) {
+      RS_LOG(WARN, "failed to check raw column length", K(ret), K(column_schema));
     }
-  } else if (ob_is_text_tc(alter_column_schema.get_data_type())) {
+  } else if (ob_is_text_tc(column_schema.get_data_type())) {
     if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(
-        alter_column_schema, table_schema.get_charset_type(), table_schema.get_collation_type()))) {
+        column_schema, table_schema.get_charset_type(), table_schema.get_collation_type()))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
-    } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(alter_column_schema,
+    } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(column_schema,
                        table_schema.get_table_id()))) {
       RS_LOG(WARN, "failed to check text or blob column length", K(ret));
     }
   } else if (ObEnumSetTC == col_tc) {
-    if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(alter_column_schema, charset_type, collation_type))) {
-      LOG_WARN("fail to check and fill column charset info", K(ret), K(alter_column_schema));
+    if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(column_schema, charset_type, collation_type))) {
+      LOG_WARN("fail to check and fill column charset info", K(ret), K(column_schema));
     } else if (OB_FAIL(ObResolverUtils::check_extended_type_info(
                 allocator,
-                alter_column_schema.get_extended_type_info(),
+                column_schema.get_extended_type_info(),
                 cur_extended_type_info_collation,
-                alter_column_schema.get_column_name_str(),
-                alter_column_schema.get_data_type(),
-                alter_column_schema.get_collation_type(),
+                column_schema.get_column_name_str(),
+                column_schema.get_data_type(),
+                column_schema.get_collation_type(),
                 sql_mode))) {
-      LOG_WARN("fail to fill extended type info", K(ret), K(alter_column_schema));
-    } else if (OB_FAIL(ObDDLResolver::calc_enum_or_set_data_length(alter_column_schema))) {
-      LOG_WARN("fail to calc data length", K(ret), K(alter_column_schema));
+      LOG_WARN("fail to fill extended type info", K(ret), K(column_schema));
+    } else if (OB_FAIL(ObDDLResolver::calc_enum_or_set_data_length(column_schema))) {
+      LOG_WARN("fail to calc data length", K(ret), K(column_schema));
     }
   }
   return ret;
