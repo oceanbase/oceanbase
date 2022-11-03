@@ -86,6 +86,18 @@ void ObTxDataMemtableMgr::destroy()
   is_inited_ = false;
 }
 
+int ObTxDataMemtableMgr::offline()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(release_memtables())) {
+    STORAGE_LOG(WARN, "release tx data memtables failed", KR(ret));
+  } else {
+    memtable_head_ = 0;
+    memtable_tail_ = 0;
+  }
+  return ret;
+}
+
 int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
                                                 const bool force)
 {

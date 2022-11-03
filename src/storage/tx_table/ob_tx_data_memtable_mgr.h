@@ -48,6 +48,10 @@ public:  // ObTxDataMemtableMgr
            ObFreezer *freezer,
            ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
+
+  int offline();
+
+
   /**
    * @brief This function do the following operations:
    * 1. check some parameters which is required by freeze;

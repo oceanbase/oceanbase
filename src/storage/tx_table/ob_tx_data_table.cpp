@@ -200,12 +200,14 @@ int ObTxDataTable::offline()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table is not inited", KR(ret), KPC(this));
-  } else if (get_memtable_mgr_()->release_memtables()) {
+  } else if (get_memtable_mgr_()->offline()) {
     STORAGE_LOG(WARN, "release memtables failed", KR(ret));
   } else if (OB_FAIL(clean_memtables_cache_())) {
     STORAGE_LOG(WARN, "clean memtables cache failed", KR(ret), KPC(this));
   } else {
+    min_start_log_ts_in_ctx_ = 0;
     last_update_min_start_log_ts_ = 0;
+    calc_upper_trans_version_cache_.reset();
   }
   return ret;  
 }
