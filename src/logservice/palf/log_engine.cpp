@@ -38,7 +38,7 @@ namespace palf
 
 // ===================== LogEngine start =======================
 LogEngine::LogEngine() :
-    min_block_ts_ns_(OB_INVALID_TIMESTAMP),
+    min_block_max_ts_ns_(OB_INVALID_TIMESTAMP),
     min_block_id_(LOG_INVALID_BLOCK_ID),
     base_lsn_for_block_gc_(PALF_INITIAL_LSN_VAL),
     log_meta_lock_(),
@@ -158,7 +158,7 @@ void LogEngine::destroy()
     log_storage_.destroy();
     base_lsn_for_block_gc_.reset();
     min_block_id_ = LOG_INVALID_BLOCK_ID;
-    min_block_ts_ns_ = OB_INVALID_TIMESTAMP;
+    min_block_max_ts_ns_ = OB_INVALID_TIMESTAMP;
   }
 }
 
@@ -537,8 +537,7 @@ int LogEngine::truncate_prefix_blocks(const LSN &lsn)
   } else if (OB_FAIL(log_storage_.truncate_prefix_blocks(lsn))) {
     PALF_LOG(WARN, "truncate_prefix_blocks failed", K(ret), K_(palf_id), K_(is_inited), K(lsn));
   } else {
-    PALF_LOG(INFO, "truncate_prefix_blocks success", K(ret), K_(palf_id), K_(is_inited), K(lsn));
-  }
+    PALF_LOG(INFO, "truncate_prefix_blocks success", K(ret), K_(palf_id), K_(is_inited), K(lsn)); }
   return ret;
 }
 
@@ -551,7 +550,7 @@ int LogEngine::delete_block(const block_id_t &block_id)
 {
   int ret = OB_SUCCESS;
   block_id_t next_block_id = block_id + 1;
-  int64_t next_block_min_ts_ns = OB_INVALID_TIMESTAMP;
+  int64_t next_block_max_ts_ns = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret), K_(palf_id), K_(is_inited));
@@ -566,12 +565,12 @@ int LogEngine::delete_block(const block_id_t &block_id)
   } else {
     PALF_LOG(INFO, "delete success", K(block_id), K_(palf_id), K_(is_inited));
   }
-
-  if (OB_SUCC(ret) && OB_FAIL(get_block_min_ts_ns(next_block_id , next_block_min_ts_ns))) {
-    PALF_LOG(WARN, "get the min ts of next block failed", K(ret), K(next_block_id));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_SUCCESS != (tmp_ret = get_block_min_ts_ns(next_block_id+1, next_block_max_ts_ns))) { 
+    PALF_LOG(WARN, "get the max ts of next block failed", K(tmp_ret), K(next_block_id));
   }
   // If 'delete_block' or 'get_block_min_ts_ns' failed, need reset 'min_block_ts_ns_' to be invalid.
-  reset_min_block_info_guarded_by_lock_(next_block_id, next_block_min_ts_ns);
+  reset_min_block_info_guarded_by_lock_(next_block_id, next_block_max_ts_ns);
   return ret;
 }
 
@@ -587,30 +586,50 @@ int LogEngine::get_block_id_range(block_id_t &min_block_id, block_id_t &max_bloc
   return log_storage_.get_block_id_range(min_block_id, max_block_id);
 }
 
-int LogEngine::get_min_block_id_and_min_ts_ns(block_id_t &block_id, int64_t &ts_ns) const
+int LogEngine::get_min_block_info_for_gc(block_id_t &block_id, int64_t &max_ts_ns) const
 {
   int ret = OB_SUCCESS;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
-  int64_t min_block_ts_ns = OB_INVALID_TIMESTAMP;
+  int64_t min_block_max_ts_ns = OB_INVALID_TIMESTAMP;
 
   do {
     ObSpinLockGuard guard(block_gc_lock_);
     min_block_id = min_block_id_;
-    min_block_ts_ns = min_block_ts_ns_;
+    min_block_max_ts_ns = min_block_max_ts_ns_;
   } while (0);
 
-  if (OB_INVALID_TIMESTAMP != min_block_ts_ns) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
+  } else if (OB_INVALID_TIMESTAMP != min_block_max_ts_ns) {
     block_id = min_block_id;
-    ts_ns = min_block_ts_ns;
+    max_ts_ns = min_block_max_ts_ns;
   } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret));
-  } else if (OB_FAIL(get_block_min_ts_ns(min_block_id, min_block_ts_ns))) {
+    // NB: used next block min_block_ts as the max_ts_ns of current block
+  } else if (OB_FAIL(get_block_min_ts_ns(min_block_id+1, min_block_max_ts_ns))) {
     PALF_LOG(WARN, "get_block_min_ts_ns failed", K(ret));
   } else {
-    reset_min_block_info_guarded_by_lock_(min_block_id, min_block_ts_ns);
+    reset_min_block_info_guarded_by_lock_(min_block_id, min_block_max_ts_ns);
     block_id = min_block_id;
-    ts_ns = min_block_ts_ns;
+    max_ts_ns = min_block_max_ts_ns;
+  }
+  return ret;
+}
+
+int LogEngine::get_min_block_info(block_id_t &min_block_id, int64_t &min_block_ts_ns) const
+{
+  int ret = OB_SUCCESS;
+  block_id_t max_block_id;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;    
+    PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
+    PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
+  } else if (OB_FAIL(get_block_min_ts_ns(min_block_id, min_block_ts_ns))) {
+    PALF_LOG(WARN, "get_block_min_ts_ns failed", K(ret), KPC(this));
+  } else {
   }
   return ret;
 }
@@ -1255,11 +1274,11 @@ bool LogEngine::check_last_block_whether_is_integrity_(const block_id_t expected
          || expected_next_block_id < max_block_id;
 }
 
-void LogEngine::reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id, const int64_t min_block_ts_ns) const
+void LogEngine::reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id, const int64_t min_block_max_ts_ns) const
 {
   ObSpinLockGuard guard(block_gc_lock_);
   min_block_id_ = min_block_id;
-  min_block_ts_ns_ = min_block_ts_ns;
+  min_block_max_ts_ns_ = min_block_max_ts_ns;
 }
 } // end namespace palf
 } // end namespace oceanbase

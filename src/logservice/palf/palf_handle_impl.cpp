@@ -301,8 +301,8 @@ int PalfHandleImpl::get_begin_ts_ns(int64_t &ts) const
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", K(ret), KPC(this));
-  } else if (OB_FAIL(log_engine_.get_min_block_id_and_min_ts_ns(unused_block_id, ts))) {
-    PALF_LOG(WARN, "LogEngine get_min_block_id_and_min_ts_ns failed", K(ret), KPC(this));
+  } else if (OB_FAIL(log_engine_.get_min_block_info(unused_block_id, ts))) {
+    PALF_LOG(WARN, "LogEngine get_min_block_info failed", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1595,16 +1595,16 @@ int PalfHandleImpl::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns
   return ret;
 }
 
-int PalfHandleImpl::get_min_block_id_min_ts_ns(block_id_t &block_id, int64_t &ts_ns)
+int PalfHandleImpl::get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns)
 {
   int ret = OB_SUCCESS;
 //  if (false == end_lsn.is_valid()) {
 //    ret = OB_ENTRY_NOT_EXIST;
 //  }
-  if (OB_FAIL(log_engine_.get_min_block_id_and_min_ts_ns(block_id, ts_ns))) {
-    PALF_LOG(WARN, "get_min_block_id_and_min_ts_ns failed", K(ret), KPC(this));
+  if (OB_FAIL(log_engine_.get_min_block_info_for_gc(min_block_id, max_ts_ns))) {
+    PALF_LOG(WARN, "get_min_block_info_for_gc failed", K(ret), KPC(this));
   } else {
-    PALF_LOG(TRACE, "get_min_block_id_and_min_ts_ns success", K(ret), KPC(this), K(block_id), K(ts_ns));
+    PALF_LOG(TRACE, "get_min_block_info_for_gc success", K(ret), KPC(this), K(min_block_id), K(max_ts_ns));
   }
   return ret;
 }
@@ -3485,7 +3485,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.allow_vote_ = state_mgr_.is_allow_vote();
     palf_stat.replica_type_ = state_mgr_.get_replica_type();
     palf_stat.base_lsn_ = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-    (void)log_engine_.get_min_block_id_and_min_ts_ns(min_block_id, min_block_min_ts);
+    (void)log_engine_.get_min_block_info(min_block_id, min_block_min_ts);
     palf_stat.begin_lsn_ = LSN(min_block_id * PALF_BLOCK_SIZE);
     palf_stat.begin_ts_ns_ = min_block_min_ts;
     palf_stat.end_lsn_ = get_end_lsn();
