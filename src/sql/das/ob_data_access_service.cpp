@@ -179,19 +179,51 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
   while (is_master_changed_error(ret) ||
          is_partition_change_error(ret) ||
          OB_REPLICA_NOT_READABLE == ret) {
-    task_op.in_part_retry_ = true;
-    das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
-    if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
-      LOG_WARN("clear task execution environment", K(ret));
-    } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
-      LOG_WARN("query is timeout, terminate retry", K(ret));
-    } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
-      LOG_WARN("refresh partition location failed", K(ret));
-    } else if (OB_FAIL(execute_dist_das_task(das_ref, task_op))) {
-      LOG_WARN("execute dist das task failed", K(ret));
+    if (!can_fast_fail(task_op)) {
+      task_op.in_part_retry_ = true;
+      das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
+      if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
+        LOG_WARN("clear task execution environment", K(ret));
+      } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
+        LOG_WARN("query is timeout, terminate retry", K(ret));
+      } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
+        LOG_WARN("refresh partition location failed", K(ret));
+      } else if (OB_FAIL(execute_dist_das_task(das_ref, task_op))) {
+        LOG_WARN("execute dist das task failed", K(ret));
+      }
     }
   }
   return ret;
+}
+
+
+bool ObDataAccessService::can_fast_fail(const ObIDASTaskOp &task_op) const
+{
+  bool bret = false;
+  int ret = OB_SUCCESS;  // no need to pass ret outside.
+  const common::ObTableID &table_id = IS_DAS_DML_OP(task_op)
+      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->table_id_
+      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->ref_table_id_;
+  int64_t schema_version = IS_DAS_DML_OP(task_op)
+      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->schema_version_
+      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->schema_version_;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    LOG_ERROR("invalid schema service", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+    LOG_WARN("get tenant schema guard fail", KR(ret), K(MTL_ID()));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    bret = true;
+    LOG_WARN("table not exist, fast fail das task");
+  } else if (table_schema->get_schema_version() != schema_version) {
+    bret = true;
+    LOG_WARN("schema version changed, fast fail das task", "current schema version",
+             table_schema->get_schema_version(), "query schema version", schema_version);
+  }
+  return bret;
 }
 
 int ObDataAccessService::end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)

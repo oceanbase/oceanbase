@@ -58,6 +58,7 @@ private:
                          ObIDASTaskOp *task_op,
                          ObDASExtraData *&extra_result);
   int collect_das_task_info(ObDASTaskArg &task_arg, ObDASRemoteInfo &remote_info);
+  bool can_fast_fail(const ObIDASTaskOp &task_op) const;
 private:
   obrpc::ObDASRpcProxy das_rpc_proxy_;
   common::ObAddr ctrl_addr_;
