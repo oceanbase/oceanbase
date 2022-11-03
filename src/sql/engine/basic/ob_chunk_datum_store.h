@@ -1203,7 +1203,7 @@ int ObChunkDatumStore::Iterator::get_next_row_skip_const(ObEvalCtx &ctx,
     // logical operator, we can not add expr in CG.
     for (int64_t i = 0; i < sr->cnt_; i++) {
       const ObExpr *expr = exprs.at(i);
-      if (expr->is_dynamic_const_) { // T_QUESTIONMARK is included in is_dynamic_const
+      if (expr->is_const_expr()) { // T_QUESTIONMARK is included in is_dynamic_const
         continue;
       } else {
         const ObDatum &src = sr->cells()[i];
@@ -1270,7 +1270,7 @@ void ObChunkDatumStore::Iterator::attach_rows(
   if (NULL != srows) {
     for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
       ObExpr *e = exprs.at(col_idx);
-      if (skip_const && e->is_dynamic_const_) {
+      if (skip_const && e->is_const_expr()) {
         continue;
       }
       if (OB_LIKELY(!fill_invariable_res_buf || e->is_variable_res_buf())) {
