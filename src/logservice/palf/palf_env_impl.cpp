@@ -621,14 +621,17 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
     int64_t min_block_max_ts = OB_INVALID_TIMESTAMP;
-
+    // OB_ENTRY_EXIST means there is not any block;
+    // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
+    // OB_ERR_OUT_OF_UPPER_BOUND means there is one block
+    auto need_skip_by_ret = [](const int ret ){
+      return OB_ENTRY_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret 
+          || OB_ERR_OUT_OF_UPPER_BOUND == ret;
+    };
     if (false == base_lsn.is_valid()) {
       PALF_LOG(WARN, "base_lsn is invalid", K(base_lsn), KPC(palf_handle_impl));
-      // OB_ENTRY_EXIST means there is not any block;
-      // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
     } else if (OB_FAIL(palf_handle_impl->get_min_block_info_for_gc(min_block_id, min_block_max_ts))
-               && OB_ENTRY_NOT_EXIST != ret
-               && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
+               && !need_skip_by_ret(ret)) {
       ret_code_ = ret;
       bool_ret = false;
       PALF_LOG(WARN, "LogGetRecycableFileCandidate get_min_block_id_min_ts_ns failed", K(ret), K(palf_id));
@@ -637,8 +640,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
       // 2. current palf_handle_impl must have older blocks(at least two blocks).
       // Always keep there are at least two blocks in range [begin_lsn, base_lsn], because for restart, we will read
       // first uncommitted log before base_lsn.
-    } else if (OB_ENTRY_NOT_EXIST == ret
-               || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+    } else if (need_skip_by_ret(ret)
                || min_using_block_id < min_block_id
                || min_using_block_id - min_block_id < 2) {
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"

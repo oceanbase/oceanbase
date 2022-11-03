@@ -609,7 +609,7 @@ int LogEngine::get_min_block_info_for_gc(block_id_t &block_id, int64_t &max_ts_n
     PALF_LOG(WARN, "get_block_id_range failed", K(ret));
     // NB: used next block min_block_ts as the max_ts_ns of current block
   } else if (OB_FAIL(get_block_min_ts_ns(min_block_id+1, min_block_max_ts_ns))) {
-    PALF_LOG(WARN, "get_block_min_ts_ns failed", K(ret));
+    PALF_LOG(TRACE, "get_block_min_ts_ns failed", K(ret));
   } else {
     reset_min_block_info_guarded_by_lock_(min_block_id, min_block_max_ts_ns);
     block_id = min_block_id;
