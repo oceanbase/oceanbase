@@ -61,7 +61,7 @@ public:
 
   virtual int deep_copy(const memtable::ObIMultiSourceDataUnit *src, ObIAllocator *allocator = nullptr) override;
   virtual void reset() override;
-  virtual bool is_valid() const override { return true; }
+  virtual bool is_valid() const override;
   virtual int64_t get_data_size() const override { return sizeof(ObTabletBindingInfo); }
   virtual memtable::MultiSourceDataUnitType type() const override { return memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO; }
 

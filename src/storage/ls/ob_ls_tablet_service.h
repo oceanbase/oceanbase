@@ -497,6 +497,12 @@ private:
       const ObMigrationTabletParam &mig_tablet_param,
       ObTabletHandle &handle);
   int delete_all_tablets();
+  int choose_msd(
+      const ObUpdateTableStoreParam &param,
+      const ObTablet &old_tablet,
+      const ObTabletTxMultiSourceDataUnit *&tx_data,
+      const ObTabletBindingInfo *&binding_info,
+      const share::ObTabletAutoincSeq *&auto_inc_seq);
   static int build_create_sstable_param_for_migration(
       const blocksstable::ObMigrationSSTableParam &migrate_sstable_param,
       ObTabletCreateSSTableParam &create_sstable_param);

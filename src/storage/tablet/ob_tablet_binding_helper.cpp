@@ -39,19 +39,38 @@ namespace storage
 {
 
 ObTabletBindingInfo::ObTabletBindingInfo()
+  : redefined_(false),
+    snapshot_version_(INT64_MAX),
+    schema_version_(INT64_MAX),
+    data_tablet_id_(),
+    hidden_tablet_ids_(),
+    lob_meta_tablet_id_(),
+    lob_piece_tablet_id_()
 {
-  reset();
 }
 
 void ObTabletBindingInfo::reset()
 {
   redefined_ = false;
-  snapshot_version_ = OB_INVALID_VERSION;
-  schema_version_ = OB_INVALID_VERSION;
+  snapshot_version_ = INT64_MAX;
+  schema_version_ = INT64_MAX;
   data_tablet_id_.reset();
   hidden_tablet_ids_.reset();
   lob_meta_tablet_id_.reset();
   lob_piece_tablet_id_.reset();
+}
+
+bool ObTabletBindingInfo::is_valid() const
+{
+  bool valid = true;
+
+  if (INT64_MAX == snapshot_version_) {
+    valid = false;
+  } else if (INT64_MAX == schema_version_) {
+    valid = false;
+  }
+
+  return valid;
 }
 
 int ObTabletBindingInfo::assign(const ObTabletBindingInfo &other)

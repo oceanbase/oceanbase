@@ -997,11 +997,6 @@ int ObTabletCreateDeleteHelper::prepare_remove_tablets(
 
         if (OB_FAIL(ObTabletBindingHelper::lock_and_set_tx_data(tablet_handle, tx_data, trans_flags.for_replay_))) {
           LOG_WARN("failed to lock tablet binding", K(ret), K(key), K(tx_data));
-          // TODO(bowen.gbw): temproarily swallow 4200 error while prepare remove tablets
-          if (trans_flags.for_replay_ && OB_HASH_EXIST == ret) {
-            ret = OB_SUCCESS;
-            LOG_INFO("swallow 4200 error", K(ret), K(key), K(tx_data), K(trans_flags));
-          }
         }
       }
     }
