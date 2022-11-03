@@ -1358,7 +1358,11 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote)
     flush_meta_cb_ctx.allow_vote_ = allow_vote;
     LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
     replica_property_meta.allow_vote_ = allow_vote;
-    if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
+    if (false == allow_vote
+        && LEADER == state_mgr_.get_role()
+        && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))) {
+      PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
+    } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
       PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
     }
   }
@@ -2219,31 +2223,26 @@ int PalfHandleImpl::ack_mode_meta(const common::ObAddr &server,
 
 int PalfHandleImpl::handle_election_message(const election::ElectionPrepareRequestMsg &msg)
 {
-  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionPrepareResponseMsg &msg)
 {
-  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionAcceptRequestMsg &msg)
 {
-  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionAcceptResponseMsg &msg)
 {
-  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionChangeLeaderMsg &msg)
 {
-  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
@@ -3454,7 +3453,7 @@ int PalfHandleImpl::revoke_leader(const int64_t proposal_id)
   } else if (false == state_mgr_.can_revoke(proposal_id)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "revoke_leader failed, not master", K(ret), K_(palf_id), K(proposal_id));
-  } else if (OB_FAIL(election_.revoke())) {
+  } else if (OB_FAIL(election_.revoke(RoleChangeReason::AskToRevoke))) {
     PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id));
   } else {
     PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id));

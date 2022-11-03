@@ -64,7 +64,7 @@ public:
                      const int64_t restart_counter,
                      const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
                      const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &role_change_cb = DefaultRoleChangeCallBack());
-  int revoke();
+  int revoke(const RoleChangeReason &reason) override;
   virtual void stop() override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
   virtual int change_leader_to(const common::ObAddr &dest_addr) override final;

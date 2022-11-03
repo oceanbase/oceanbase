@@ -217,9 +217,9 @@ bool LogStateMgr::is_state_changed()
       state_changed = follower_need_update_role_(new_leader, new_leader_epoch);
     }
   } else if (is_leader_reconfirm_()) {
-    state_changed = leader_reconfirm_need_switch_();
+    state_changed = (leader_reconfirm_need_switch_() || false == is_allow_vote());
   } else if (is_leader_active_()) {
-    state_changed = leader_active_need_switch_(is_error);
+    state_changed = (leader_active_need_switch_(is_error) || false == is_allow_vote());
   } else {}
   return state_changed;
 }
@@ -292,6 +292,10 @@ int LogStateMgr::switch_state()
         need_next_loop = true; // 1) drive reconfirm or 2) fetch log from leader
       }
     } else if (is_leader_reconfirm_()) {
+      if (false == is_allow_vote()
+          && OB_FAIL(election_->revoke(election::RoleChangeReason::PalfDisableVoteToRevoke))) {
+        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
+      }
       if (is_reconfirm_need_start_()) {
         ret = reconfirm_->reconfirm();
         if (OB_EAGAIN == ret) {
@@ -313,12 +317,12 @@ int LogStateMgr::switch_state()
         // do nothing
       }
     } else if (is_leader_active_()) {
+      if (false == is_allow_vote()
+          && OB_FAIL(election_->revoke(election::RoleChangeReason::PalfDisableVoteToRevoke))) {
+        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
+      }
       bool is_error = false;
       if (leader_active_need_switch_(is_error)) {
-        if (is_error) {
-          // const uint32_t revoke_type = RevokeType::CLOG_SW_TIMEOUT;
-          // revoke_leader_(revoke_type);
-        }
         ret = leader_active_to_follower_pending_();
         need_next_loop = true;
       }
@@ -578,7 +582,8 @@ int LogStateMgr::follower_pending_to_reconfirm_(const int64_t new_leader_epoch)
 
 int LogStateMgr::reconfirm_to_follower_pending_()
 {
-  PALF_EVENT("reconfirm_to_follower_pending", palf_id_, K_(self), K_(leader), K(lbt()));
+  PALF_EVENT("reconfirm_to_follower_pending", palf_id_, K_(self), K_(leader), "is_allow_vote",
+      is_allow_vote(), K(lbt()));
   int ret = OB_SUCCESS;
   if (OB_FAIL(to_follower_pending_())) {
     PALF_LOG(WARN, "to_follower_pending_ failed, try again", K(ret), K_(palf_id));
@@ -900,7 +905,8 @@ bool LogStateMgr::follower_need_update_role_(common::ObAddr &new_leader,
     new_leader_epoch = OB_INVALID_TIMESTAMP;
   } else {
     bool_ret = (self_ == new_leader);
-    PALF_LOG(TRACE, "follower_need_update_role_", K(new_leader), K(new_leader_epoch));
+    PALF_LOG(TRACE, "follower_need_update_role_", K(bool_ret), K(new_leader), K(new_leader_epoch),
+        "is_allow_vote", is_allow_vote());
   }
   return bool_ret;
 }
@@ -910,14 +916,6 @@ void LogStateMgr::set_leader_and_epoch_(const common::ObAddr &new_leader, const 
   leader_ = new_leader;
   leader_epoch_ = new_leader_epoch;
   PALF_LOG(INFO, "set_leader_and_epoch_", K_(palf_id), K_(self), K(leader_), K(leader_epoch_), K(new_leader));
-}
-
-int LogStateMgr::revoke_leader_(const uint32_t revoke_type)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(revoke_type);
-  // election_->leader_revoke(revoke_type);
-  return ret;
 }
 
 int LogStateMgr::get_elect_leader_(common::ObAddr &leader,

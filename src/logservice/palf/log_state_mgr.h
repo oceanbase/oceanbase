@@ -97,7 +97,7 @@ public:
   TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_),                         \
       "state", replica_state_to_string(state_), K_(prepare_meta), K_(leader), K_(leader_epoch),        \
       K_(is_sync_enabled), K_(pending_end_lsn), K_(scan_disk_log_finished), K_(last_check_start_id),   \
-      K_(reconfirm_start_time_ns), KP_(palf_role_change_cb));
+      K_(reconfirm_start_time_ns), KP_(palf_role_change_cb), K_(allow_vote));
 private:
   bool check_role_and_state_(const common::ObRole &role, const ObReplicaState &state) const;
   void update_role_and_state_(const common::ObRole &new_role, const ObReplicaState &new_state);
@@ -139,7 +139,6 @@ private:
   bool need_update_leader_(common::ObAddr &new_leader);
   bool follower_need_update_role_(common::ObAddr &new_leader, int64_t &new_leader_epoch);
   void set_leader_and_epoch_(const common::ObAddr &new_leader, const int64_t new_leader_epoch);
-  int revoke_leader_(const uint32_t revoke_type);
   int get_elect_leader_(common::ObAddr &leader, int64_t &leader_epoch) const;
   bool check_leader_log_sync_state_();
   bool need_fetch_log_() const;
