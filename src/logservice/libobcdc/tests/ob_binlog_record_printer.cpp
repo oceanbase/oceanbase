@@ -520,6 +520,9 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   const char *is_not_null = col_meta ? (col_meta->isNotNull() ? "true" : "false") : "NULL";
 //  const char *default_val = col_meta ? col_meta->getDefault() : "NULL";
   const char *is_signed = col_meta ? (col_meta->isSigned() ? "true" : "false") : "NULL";
+  const long scale = col_meta ? col_meta->getScale(): 0;
+  const long precision = col_meta ? col_meta->getPrecision(): 0;
+  const long col_data_length = col_meta ? col_meta->getLength(): 0;
   bool is_generated_column = col_meta ? col_meta->isGenerated() : false;
   bool is_hidden_row_key_column = col_meta ? col_meta->isHiddenRowKey() : false;
   bool is_lob = is_lob_type(ctype);
@@ -533,23 +536,40 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_signed:%s", column_index, is_signed);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_encoding:%s", column_index, encoding);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_not_null:%s", column_index, is_not_null);
-  if (enable_print_detail && is_hidden_row_key_column) {
-    ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
+  if (enable_print_detail) {
+    if (is_hidden_row_key_column) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
+    }
+    //  print the length of varchar only in print detail mode, 
+    //  because there have been many test cases with varchar type before the varchar length info is added into column meta
+    if (oceanbase::obmysql::MYSQL_TYPE_VAR_STRING == ctype || oceanbase::obmysql::MYSQL_TYPE_BIT == ctype) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_define_length:%ld", column_index, col_data_length);
+    } 
+    else if ((oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype) || (oceanbase::obmysql::MYSQL_TYPE_SET == ctype)) {
+      const std::string delim = ",";
+      for (int i = 0; i < values_of_enum_set->size(); i++) {
+        enum_set_values_str += (*values_of_enum_set)[i];
+        if (i != values_of_enum_set->size() - 1) {
+          enum_set_values_str += delim;
+        }
+      }
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
+    } 
+    //  print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL) 
+    //  whose precision is 38 and scale is 0, more importantly, the default precision(-1, PRECISION_UNKNOWN_YET) 
+    //  and scale(-85, ORA_NUMBER_SCALE_UNKNOWN_YET) of NUMBER in oracle mode is confusing, so we decide not to 
+    //  modify test results for oracle mode temporarily for convenience and efficiency.
+    //  TODO
+    else if ((oceanbase::obmysql::MYSQL_TYPE_DECIMAL == ctype) || (oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL == ctype)) {
+      // Not sure if MYSQL_TYPE_DECIMAL is deprecated, DECIMAL in mysql & oracle mode should be MYSQL_TYPE_NEWDECIMAL
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);
+      ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_scale:%ld", column_index, scale);
+    } else { }
   }
   if (is_generated_column) {
     ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_generated_column:%d", column_index, is_generated_column);
   }
 
-  if ((oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype) || (oceanbase::obmysql::MYSQL_TYPE_SET == ctype)) {
-    const std::string delim = ",";
-    for (int i = 0; i < values_of_enum_set->size(); i++) {
-      enum_set_values_str += (*values_of_enum_set)[i];
-      if (i != values_of_enum_set->size() - 1) {
-        enum_set_values_str += delim;
-      }
-    }
-    ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
-  }
   // FIXME: does not check the value of the field until the length of the default value can be obtained
   //  ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_default_value:%s", column_index, default_val);
 
