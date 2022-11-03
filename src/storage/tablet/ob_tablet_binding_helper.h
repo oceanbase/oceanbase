@@ -155,6 +155,7 @@ public:
 
   // common
   static bool has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info);
+  static int check_need_dec_cnt_for_abort(const ObTabletTxMultiSourceDataUnit &tx_data, bool &need_dec);
   static int lock_and_set_tx_data(ObTabletHandle &handle, ObTabletTxMultiSourceDataUnit &tx_data, const bool for_replay);
   static int lock_tablet_binding(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int set_log_ts(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);

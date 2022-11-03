@@ -1003,6 +1003,21 @@ int ObTabletBindingHelper::set_log_ts(const ObIArray<ObTabletID> &tablet_ids) co
   return ret;
 }
 
+int ObTabletBindingHelper::check_need_dec_cnt_for_abort(const ObTabletTxMultiSourceDataUnit &tx_data, bool &need_dec)
+{
+  int ret = OB_SUCCESS;
+  const int cnt = tx_data.get_unsync_cnt_for_multi_data(); 
+  need_dec = false;
+  if ((tx_data.is_tx_end() && cnt == 2) || (!tx_data.is_tx_end() && cnt == 1)) {
+    need_dec = true;
+  } else if ((tx_data.is_tx_end() && cnt == 1) || (!tx_data.is_tx_end() && cnt == 0)) {
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cnt", K(ret), K(tx_data));
+  }
+  return ret;
+}
+
 /// for commit or abort, reentrant for replay
 int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const ObMulSourceDataNotifyArg &trans_flags)
 {
@@ -1034,8 +1049,12 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
         tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
         tx_data.tx_log_ts_ = abort_without_redo ? old_log_ts : log_ts;
         const int64_t memtable_log_ts = (OB_INVALID_TIMESTAMP == log_ts) ? ObLogTsRange::MAX_TS: log_ts;
-        MemtableRefOp ref_op = (abort_without_redo ? MemtableRefOp::DEC_REF : MemtableRefOp::NONE);
-        if (OB_FAIL(tablet->set_tablet_final_status(tx_data, memtable_log_ts, for_replay, ref_op))) {
+        bool need_dec = false;
+        MemtableRefOp ref_op = MemtableRefOp::NONE;
+        if (OB_FAIL(check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+          LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(log_ts), K(for_replay));
+        } else if (FALSE_IT(ref_op = (need_dec ? MemtableRefOp::DEC_REF : MemtableRefOp::NONE))) {
+        } else if (OB_FAIL(tablet->set_tablet_final_status(tx_data, memtable_log_ts, for_replay, ref_op))) {
           LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(log_ts), K(for_replay), K(ref_op));
         }
       }

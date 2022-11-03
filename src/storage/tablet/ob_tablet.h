@@ -620,7 +620,7 @@ int ObTablet::set_multi_data_for_commit(
   int ret = OB_SUCCESS;
 
   bool is_callback = true;
-  TRANS_LOG(INFO, "set_multi_data_for_commit", K(multi_source_data_unit));
+  TRANS_LOG(INFO, "set_multi_data_for_commit", K(multi_source_data_unit), K(ref_op));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));

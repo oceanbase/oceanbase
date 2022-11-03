@@ -849,12 +849,11 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id));
     }
-  } else if (trans_flags.for_replay_) {
-    // for replay, no need to dec ref for memtable
   } else {
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletMemtableMgr *memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr());
     ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handle_array;
+    bool need_dec = false;
     if (OB_FAIL(memtable_mgr->get_all_memtables(memtable_handle_array))) {
       LOG_WARN("failed to get all memtables", K(ret), K(ls_id), K(tablet_id));
     } else if (memtable_handle_array.empty()) {
@@ -874,7 +873,9 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
         LOG_INFO("last memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id), K(cnt));
-      } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObLogTsRange::MAX_TS,
+      } else if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+        LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
+      } else if (need_dec && OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObLogTsRange::MAX_TS,
           trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
         LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else {
@@ -1255,11 +1256,10 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
     is_valid = false;
     LOG_INFO("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    if (trans_flags.for_replay_) {
-    } else if (trans_flags.is_redo_synced()) {
-      // on redo cb has been called
-      // do nothing(on redo cb has already done DEC_REF)
-    } else {
+    bool need_dec = false;
+    if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+      LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
+    } else if (need_dec) {
       ref_op = MemtableRefOp::DEC_REF;
     }
   }
