@@ -1792,6 +1792,10 @@ int ObTransService::handle_tx_batch_req(int msg_type,
     } else if (!leader) {                                               \
       ret = OB_NOT_MASTER;                                              \
       TRANS_LOG(WARN, "ls not master", K(ret), K(msg));                 \
+    } else if (ctx->is_exiting()) {                                     \
+      ret = OB_TRANS_CTX_NOT_EXIST;                                     \
+      TRANS_LOG(INFO, "tx context is exiting",K(ret),K(msg));           \
+      handle_orphan_2pc_msg_(msg, false);                               \
     } else if (OB_FAIL(ctx->msg_handler__(msg))) {                      \
         TRANS_LOG(WARN, "handle 2pc request fail", K(ret), K(msg));     \
     }                                                                   \
