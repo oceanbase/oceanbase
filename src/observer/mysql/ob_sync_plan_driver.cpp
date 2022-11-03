@@ -72,7 +72,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                                           ctx_,
                                           result,
                                           ret,
-                                          cli_ret);
+                                          cli_ret,
+                                          is_prexecute_);
     if (OB_TRANSACTION_SET_VIOLATION != ret && OB_REPLICA_NOT_READABLE != ret) {
       if (OB_TRY_LOCK_ROW_CONFLICT == ret && retry_ctrl_.need_retry()) {
         //锁冲突重试不打印日志，避免刷屏
@@ -107,7 +108,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                                               ctx_,
                                               result,
                                               ret,
-                                              cli_ret);
+                                              cli_ret,
+                                              is_prexecute_);
         LOG_WARN("result response failed, check if need retry",
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
