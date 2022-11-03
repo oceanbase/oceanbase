@@ -68,12 +68,12 @@ public:
 
   TO_STRING_KV(KP(ctx_mgr_), KPC(tx_data_), K(tx_commit_data_), K(read_only_));
 public:
-  class Guard {
+  class Guard { // TODO(yunxing.cyx): remove it
     friend class ObCtxTxData;
-    Guard(ObCtxTxData &host) : host_(host) { host_.lock_.rdlock(); }
+    Guard(ObCtxTxData &host) : host_(host) { }
     ObCtxTxData &host_;
   public:
-    ~Guard() { host_.lock_.unlock(); }
+    ~Guard() { }
     int get_tx_data(const storage::ObTxData *&tx_data) const;
   };
   Guard get_tx_data() { return Guard(*this); }
