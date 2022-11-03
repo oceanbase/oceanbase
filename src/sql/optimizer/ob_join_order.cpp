@@ -11385,10 +11385,10 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexplected null", K(qual), K(ret));
     // can not push down expr with subquery
-    } else if (qual->has_flag(CNT_ONETIME) ||
-               qual->has_flag(CNT_PSEUDO_COLUMN) ||
-               qual->has_flag(CNT_PRIOR) ||
-               qual->has_flag(CNT_ROWNUM)) {
+    } else if (qual->has_flag(CNT_SUB_QUERY) && 
+               (qual->has_flag(CNT_PSEUDO_COLUMN) ||
+                qual->has_flag(CNT_PRIOR) ||
+                qual->has_flag(CNT_ROWNUM))) {
       if (force_inner_nl) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("can not push down special qual", KPC(qual), K(ret));

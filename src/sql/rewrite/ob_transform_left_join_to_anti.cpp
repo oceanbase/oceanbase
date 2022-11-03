@@ -180,7 +180,8 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), target_exprs))) {
     LOG_WARN("failed to remove condition exprs", K(ret));
   } else if (is_root_table) {
-    if (right_table->is_joined_table() &&
+    if ((right_table->is_joined_table() || 
+        (lib::is_mysql_mode() && right_table->has_for_update())) &&
         OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          right_table,
@@ -194,7 +195,14 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else {
     TableItem *table = joined_table;
     ObDMLStmt *ref_query = NULL;
-    if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
+    TableItem *view_table_for_update = NULL;
+    if (lib::is_mysql_mode() && right_table->has_for_update() &&
+        OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
+                                                         ctx_,
+                                                         right_table,
+                                                         view_table_for_update))) {
+      LOG_WARN("failed to create semi view", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          table,
                                                          view_table))) {

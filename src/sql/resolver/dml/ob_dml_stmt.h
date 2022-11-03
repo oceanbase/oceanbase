@@ -266,6 +266,7 @@ struct TableItem
     return (is_generated_table() || is_temp_table()) && view_base_item_ != NULL
         ? view_base_item_->get_base_table_item() : *this;
   }
+  virtual bool has_for_update() const { return for_update_; }
   // if real table id, it is valid for all threads,
   // else if generated id, it is unique just during the thread session
   uint64_t    table_id_;
@@ -443,6 +444,11 @@ struct JoinedTable : public TableItem
   bool is_left_join() const { return LEFT_OUTER_JOIN == joined_type_; }
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
   bool is_full_join() const { return FULL_OUTER_JOIN == joined_type_; }
+  virtual bool has_for_update() const 
+  {
+    return (left_table_ != NULL &&  left_table_->has_for_update())
+            || (right_table_ != NULL &&  right_table_->has_for_update());
+  }
   common::ObIArray<ObRawExpr*> &get_join_conditions() { return join_conditions_; }
   const common::ObIArray<ObRawExpr*> &get_join_conditions() const { return join_conditions_; }
   TO_STRING_KV(N_TID, table_id_,
