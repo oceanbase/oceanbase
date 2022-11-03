@@ -110,6 +110,8 @@ int ObTabletMeta::init(
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
 
+    ddl_data_.snapshot_version_ = OB_INVALID_VERSION;
+    ddl_data_.schema_version_ = OB_INVALID_VERSION;
     ddl_data_.lob_meta_tablet_id_ = lob_meta_tablet_id;
     ddl_data_.lob_piece_tablet_id_ = lob_piece_tablet_id;
 

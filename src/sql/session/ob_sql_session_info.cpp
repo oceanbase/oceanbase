@@ -865,6 +865,9 @@ ObPlanCache *ObSQLSessionInfo::get_plan_cache()
         if (tenant_id > OB_SYS_TENANT_ID && tenant_id <= OB_MAX_RESERVED_TENANT_ID) {
           // all virtual tenants use sys tenant's plan cache
           tenant_id = OB_SYS_TENANT_ID;
+        } else if (OB_INVALID_TENANT_ID == tenant_id) {
+          // When it is used by threads regardless of tenants, it switches to the system tenant for execution.
+          tenant_id = OB_SYS_TENANT_ID;
         }
         plan_cache_ = plan_cache_manager_->get_or_create_plan_cache(tenant_id,
                                                                     pc_mem_conf);

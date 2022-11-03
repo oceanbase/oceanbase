@@ -591,7 +591,7 @@ int PalfEnvImpl::try_freeze_log_for_all()
 PalfEnvImpl::LogGetRecycableFileCandidate::LogGetRecycableFileCandidate()
   : id_(-1),
     min_block_id_(LOG_INVALID_BLOCK_ID),
-    min_block_id_ts_(OB_INVALID_TIMESTAMP),
+    min_block_max_ts_(OB_INVALID_TIMESTAMP),
     min_using_block_id_(LOG_INVALID_BLOCK_ID),
     oldest_palf_id_(INVALID_PALF_ID),
     oldest_block_ts_(OB_INVALID_TIMESTAMP),
@@ -602,7 +602,7 @@ PalfEnvImpl::LogGetRecycableFileCandidate::~LogGetRecycableFileCandidate()
 {
   ret_code_ = OB_SUCCESS;
   min_using_block_id_ = LOG_INVALID_BLOCK_ID;
-  min_block_id_ts_ = OB_INVALID_TIMESTAMP;
+  min_block_max_ts_ = OB_INVALID_TIMESTAMP;
   min_block_id_ = LOG_INVALID_BLOCK_ID;
   oldest_palf_id_ = INVALID_PALF_ID;
   oldest_block_ts_ = OB_INVALID_TIMESTAMP;
@@ -620,13 +620,13 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const LSN base_lsn = palf_handle_impl->get_base_lsn_used_for_block_gc();
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
-    int64_t min_block_id_ts = OB_INVALID_TIMESTAMP;
+    int64_t min_block_max_ts = OB_INVALID_TIMESTAMP;
 
     if (false == base_lsn.is_valid()) {
       PALF_LOG(WARN, "base_lsn is invalid", K(base_lsn), KPC(palf_handle_impl));
       // OB_ENTRY_EXIST means there is not any block;
       // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
-    } else if (OB_FAIL(palf_handle_impl->get_min_block_id_min_ts_ns(min_block_id, min_block_id_ts))
+    } else if (OB_FAIL(palf_handle_impl->get_min_block_info_for_gc(min_block_id, min_block_max_ts))
                && OB_ENTRY_NOT_EXIST != ret
                && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       ret_code_ = ret;
@@ -644,20 +644,20 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"
           " with rebuild, skip it",
           K(ret), KPC(palf_handle_impl), K(min_block_id), K(min_using_block_id));
-    } else if (OB_INVALID_TIMESTAMP != min_block_id_ts_ && min_block_id_ts_ < min_block_id_ts) {
-      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_id_ts),
-          K(min_block_id_ts_), KPC(palf_handle_impl), K(min_block_id));
+    } else if (OB_INVALID_TIMESTAMP != min_block_max_ts_ && min_block_max_ts_ < min_block_max_ts) {
+      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_max_ts),
+          K(min_block_max_ts_), KPC(palf_handle_impl), K(min_block_id));
     } else {
       id_ = palf_id.id_;
       min_block_id_ = min_block_id;
-      min_block_id_ts_ = min_block_id_ts;
+      min_block_max_ts_ = min_block_max_ts;
       min_using_block_id_ = min_using_block_id;
       PALF_LOG(TRACE, "can be recycable palf_handle_impl", K(id_), K(min_block_id_), K(min_using_block_id_),
-          K(min_block_id_ts_), K(base_lsn));
+          K(min_block_max_ts_), K(base_lsn));
     }
-    if (OB_INVALID_TIMESTAMP != min_block_id_ts
-        && (OB_INVALID_TIMESTAMP == oldest_block_ts_ || oldest_block_ts_ > min_block_id_ts)) {
-      oldest_block_ts_ = min_block_id_ts;
+    if (OB_INVALID_TIMESTAMP != min_block_max_ts
+        && (OB_INVALID_TIMESTAMP == oldest_block_ts_ || oldest_block_ts_ > min_block_max_ts)) {
+      oldest_block_ts_ = min_block_max_ts;
       oldest_palf_id_ = palf_id.id_;
     }
   }
