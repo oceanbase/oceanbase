@@ -130,15 +130,12 @@ function do_build
 
     TYPE=$1; shift
     prepare_build_dir $TYPE || return
-<<<<<<< HEAD
     ${CMAKE_COMMAND} -DENABLE_AVX512F=$ENABLE_AVX512F ${TOPDIR} "$@"
-=======
     ${CMAKE_COMMAND} ${TOPDIR} "$@"
     if [ $? -ne 0 ]; then
       echo_err "Failed to generate Makefile"
       exit 1
     fi
->>>>>>> upstream/master
 }
 
 # clean build directories
