@@ -4084,7 +4084,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
     OZ (load_sys_variable(calc_buf, sys_var->get_name(), sys_var->get_data_type(),
                           sys_var->get_value(), sys_var->get_min_val(),
                           sys_var->get_max_val(), sys_var->get_flags(), true));
-    if (OB_NOT_NULL(sys_vars_[i])) {
+    if (OB_NOT_NULL(sys_vars_[i]) && OB_SUCC(ret)) {
       if (sys_vars_[i]->is_influence_plan()) {
         OZ (influence_plan_var_indexs_.push_back(i));
       }
