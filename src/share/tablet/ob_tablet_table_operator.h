@@ -102,12 +102,24 @@ public:
   int batch_update(
       const uint64_t tenant_id,
       const ObIArray<ObTabletReplica> &replicas);
+  // batch update replicas into __all_tablet_meta_table
+  // differ from above batch_update(), it will use @sql_client to commit, not inner sql_proxy_.
+  int batch_update(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObIArray<ObTabletReplica> &replicas);
   // batch remove replicas from __all_tablet_meta_table
   //
   // @param [in] tenant_id, target tenant_id
   // @param [in] replicas, ObTabletReplicas for removing(should belong to the same tenant!)
   //             (only tenant_id, tablet_id, ls_id, server are used in this interface)
   int batch_remove(
+      const uint64_t tenant_id,
+      const ObIArray<ObTabletReplica> &replicas);
+  // batch remove replicas from __all_tablet_meta_table
+  // differ from above batch_remove(), it will use @sql_client to commit, not inner sql_proxy_.
+  int batch_remove(
+      common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const ObIArray<ObTabletReplica> &replicas);
   // remove residual tablet in __all_tablet_meta_table for ObServerMetaTableChecker

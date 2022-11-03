@@ -18,7 +18,6 @@
 #include "share/ob_all_server_tracer.h"
 #include "observer/ob_lease_state_mgr.h"
 #include "observer/ob_heartbeat.h"
-#include "observer/ob_tablet_checksum_updater.h"
 #include "observer/ob_server_schema_updater.h"
 #include "observer/ob_rpc_processor_simple.h"
 #include "observer/ob_uniq_task_queue.h"
@@ -92,18 +91,17 @@ public:
   // @params[in] ls_id: tablet belongs to which log stream
   // @params[in] tablet_id: the tablet to build
   // @params[out] tablet_replica: infos about this tablet replica
+  // @params[out] tablet_checksum: infos about this tablet data/column checksum
+  // @params[in] need_checksum: whether to fill tablet_checksum
   // ATTENTION: If ls not exist, then OB_LS_NOT_EXIST
   //            If tablet not exist on that ls, then OB_TABLET_NOT_EXIST
-  int fill_tablet_replica(
+  int fill_tablet_report_info(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
-      share::ObTabletReplica &tablet_replica);
-  int fill_tablet_replica_checksum_item(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      share::ObTabletReplicaChecksumItem &item);
+      share::ObTabletReplica &tablet_replica,
+      share::ObTabletReplicaChecksumItem &tablet_checksum,
+      const bool need_checksum = true);
 
   int detect_master_rs_ls(const obrpc::ObDetectMasterRsArg &arg,
                        obrpc::ObDetectMasterRsLSResult &result);
@@ -120,10 +118,6 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id) override;
-  virtual int submit_tablet_checksums_task(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id) override;
 
   ////////////////////////////////////////////////////////////////
   int check_frozen_version(const obrpc::ObCheckFrozenVersionArg &arg);
@@ -227,16 +221,13 @@ public:
   int renew_in_zone_hb(const share::ObInZoneHbRequest &arg,
                        share::ObInZoneHbResponse &result);
 private:
-  int inner_fill_tablet_replica_(
+  int inner_fill_tablet_info_(
       const int64_t tenant_id,
       const ObTabletID &tablet_id,
       storage::ObLS *ls,
-      share::ObTabletReplica &tablet_replica);
-  int inner_fill_tablet_replica_checksum_item_(
-      const int64_t tenant_id,
-      const ObTabletID &tablet_id,
-      storage::ObLS *ls,
-      share::ObTabletReplicaChecksumItem &item);
+      share::ObTabletReplica &tablet_replica,
+      share::ObTabletReplicaChecksumItem &tablet_checksum,
+      const bool need_checksum);
 
   int register_self();
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &server_empty);
@@ -262,7 +253,6 @@ private:
   // report
   ObLSTableUpdater ls_table_updater_;
   ObTabletTableUpdater tablet_table_updater_;
-  ObTabletChecksumUpdater tablet_checksum_updater_;
   ObServerMetaTableChecker meta_table_checker_;
 };
 

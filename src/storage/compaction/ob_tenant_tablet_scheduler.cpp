@@ -658,9 +658,7 @@ int ObTenantTabletScheduler::schedule_tablet_major_merge(
   }
 
   if (OB_SUCC(ret) && tablet_merge_finish && tablet.get_tablet_meta().report_status_.need_report()) {
-    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_checksums_task(MTL_ID(), ls_id, tablet_id))) {
-      LOG_WARN("failed to submit tablet checksums task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
-    } else if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
+    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
       LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
     } else if (OB_TMP_FAIL(ls.get_tablet_svr()->update_tablet_report_status(tablet_id))) {
       LOG_WARN("failed to update tablet report status", K(tmp_ret), K(MTL_ID()), K(tablet_id));

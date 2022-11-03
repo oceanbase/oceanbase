@@ -396,35 +396,49 @@ int ObTabletTableOperator::batch_update(
     const ObIArray<ObTabletReplica> &replicas)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
+  
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || replicas.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
   } else {
+    common::ObMySQLTransaction trans;
     const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_FAIL(trans.start(sql_proxy_, sql_tenant_id))) {
       LOG_WARN("start transaction failed", KR(ret), K(sql_tenant_id));
-    } else {
-      int64_t start_idx = 0;
-      int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
-      while (OB_SUCC(ret) && (start_idx < end_idx)) {
-        if (OB_FAIL(inner_batch_update_by_sql_(tenant_id, replicas, start_idx, end_idx, trans))) {
-          LOG_WARN("fail to inner batch update", KR(ret), K(tenant_id), K(replicas), K(start_idx));
-        } else {
-          start_idx = end_idx;
-          end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
-        }
+    } else if (OB_FAIL(batch_update(trans, tenant_id, replicas))) {
+      LOG_WARN("fail to batch update", KR(ret), K(tenant_id));
+    }
+
+    if (trans.is_started()) {
+      int trans_ret = trans.end(OB_SUCCESS == ret);
+      if (OB_SUCCESS != trans_ret) {
+        LOG_WARN("end transaction failed", KR(trans_ret));
+        ret = OB_SUCCESS == ret ? trans_ret : ret;
       }
     }
   }
-  if (trans.is_started()) {
-    int trans_ret = trans.end(OB_SUCCESS == ret);
-    if (OB_SUCCESS != trans_ret) {
-      LOG_WARN("end transaction failed", KR(trans_ret));
-      ret = OB_SUCCESS == ret ? trans_ret : ret;
+  return ret;
+}
+
+int ObTabletTableOperator::batch_update(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletReplica> &replicas)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || replicas.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      if (OB_FAIL(inner_batch_update_by_sql_(tenant_id, replicas, start_idx, end_idx, sql_client))) {
+        LOG_WARN("fail to inner batch update", KR(ret), K(tenant_id), K(replicas), K(start_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
+      }
     }
   }
   return ret;
@@ -549,40 +563,52 @@ int ObTabletTableOperator::batch_remove(
     const ObIArray<ObTabletReplica> &replicas)
 {
   int ret = OB_SUCCESS;
-  common::ObMySQLTransaction trans;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || replicas.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
   } else {
+    common::ObMySQLTransaction trans;
     const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_FAIL(trans.start(sql_proxy_, sql_tenant_id))) {
       LOG_WARN("start transaction failed", KR(ret), K(sql_tenant_id));
-    } else {
-      int64_t start_idx = 0;
-      int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
-      while (OB_SUCC(ret) && (start_idx < end_idx)) {
-        if (OB_FAIL(inner_batch_remove_by_sql_(tenant_id, replicas, start_idx, end_idx, trans))) {
-          LOG_WARN("fail to inner batch remove", KR(ret), K(tenant_id), K(replicas), K(start_idx));
-        } else {
-          start_idx = end_idx;
-          end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
-        }
-      }
+    } else if (OB_FAIL(batch_remove(trans, tenant_id, replicas))) {
+      LOG_WARN("fail to batch remove", KR(ret));
     }
-  }
-  if (trans.is_started()) {
-    int trans_ret = trans.end(OB_SUCCESS == ret);
-    if (OB_SUCCESS != trans_ret) {
-      LOG_WARN("end transaction failed", KR(trans_ret));
-      ret = OB_SUCCESS == ret ? trans_ret : ret;
+
+    if (trans.is_started()) {
+      int trans_ret = trans.end(OB_SUCCESS == ret);
+      if (OB_SUCCESS != trans_ret) {
+        LOG_WARN("end transaction failed", KR(trans_ret));
+        ret = OB_SUCCESS == ret ? trans_ret : ret;
+      }
     }
   }
   return ret;
 }
 
+int ObTabletTableOperator::batch_remove(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObIArray<ObTabletReplica> &replicas)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || replicas.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "replicas count", replicas.count());
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, replicas.count());
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      if (OB_FAIL(inner_batch_remove_by_sql_(tenant_id, replicas, start_idx, end_idx, sql_client))) {
+        LOG_WARN("fail to inner batch remove", KR(ret), K(tenant_id), K(replicas), K(start_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, replicas.count());
+      }
+    }
+  }
+  return ret;
+}
 
 int ObTabletTableOperator::inner_batch_remove_by_sql_(
     const uint64_t tenant_id,

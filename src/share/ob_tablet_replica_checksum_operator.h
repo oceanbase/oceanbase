@@ -30,6 +30,7 @@ namespace common
 class ObISQLClient;
 class ObAddr;
 class ObTabletID;
+class ObMySQLTransaction;
 namespace sqlclient
 {
 class ObMySQLResult;
@@ -37,6 +38,7 @@ class ObMySQLResult;
 }
 namespace share
 {
+class ObTabletReplica;
 
 struct ObTabletReplicaReportColumnMeta
 {
@@ -117,19 +119,14 @@ public:
       const common::ObSqlString &sql,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
-  static int batch_insert(
+  static int batch_update_with_trans(
+      common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy);
-  static int batch_update(
+      const common::ObIArray<ObTabletReplicaChecksumItem> &item);
+  static int batch_remove_with_trans(
+      common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy);
-  static int batch_remove(
-      const uint64_t tenant_id,
-      const common::ObIArray<share::ObLSID> &ls_ids,
-      const common::ObIArray<common::ObTabletID> &tablet_ids,
-      common::ObISQLClient &sql_proxy);
+      const common::ObIArray<share::ObTabletReplica> &tablet_replicas);
 
   static int check_column_checksum(
       const uint64_t tenant_id,
@@ -153,10 +150,10 @@ public:
       common::ObString &column_meta_hex_str);
 
 private:
-  static int batch_insert_or_update_(
+  static int batch_insert_or_update_with_trans_(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy,
+      common::ObMySQLTransaction &trans,
       const bool is_update);
 
   static int inner_batch_insert_or_update_by_sql_(
@@ -166,6 +163,13 @@ private:
       const int64_t end_idx,
       common::ObISQLClient &sql_client,
       const bool is_update);
+
+  static int inner_batch_remove_by_sql_(
+      const uint64_t tenant_id,
+      const common::ObIArray<share::ObTabletReplica> &tablet_replicas,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      common::ObMySQLTransaction &trans);
 
   static int inner_batch_get_by_sql_(
       const uint64_t tenant_id,

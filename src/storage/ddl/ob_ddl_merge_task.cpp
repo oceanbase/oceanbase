@@ -381,8 +381,6 @@ int ObDDLTableMergeTask::process()
                                                           merge_param_.ddl_task_id_,
                                                           sstable->get_meta().get_col_checksum()))) {
         LOG_WARN("report ddl column checksum failed", K(ret), K(merge_param_));
-      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_checksums_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
-        LOG_WARN("fail to submit tablet checksums task", K(ret), K(tenant_id), K(merge_param_));
       } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
       }

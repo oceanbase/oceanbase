@@ -22,6 +22,7 @@
 #include "share/tablet/ob_tablet_table_iterator.h" // ObTenantTabletTableIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService, ObLSIterator
 #include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
+#include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
 
 namespace oceanbase
 {
@@ -621,6 +622,8 @@ int ObTenantMetaChecker::check_report_replicas_(
         ObTabletID tablet_id;
         ObTabletReplica local_replica; // replica from local
         ObTabletReplica table_replica; // replica from meta table
+        share::ObTabletReplicaChecksumItem tablet_checksum; // TODO(@donglou.zl) check tablet_replica_checksum
+        const bool need_checksum = false;
         const ObLSID &ls_id = ls->get_ls_id();
         while (OB_SUCC(ret)) {
           if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
@@ -650,11 +653,13 @@ int ObTenantMetaChecker::check_report_replicas_(
               LOG_WARN("get replica from hashmap failed",
                   KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
             }
-          } else if (OB_FAIL(GCTX.ob_service_->fill_tablet_replica(
+          } else if (OB_FAIL(GCTX.ob_service_->fill_tablet_report_info(
               tenant_id_,
               ls_id,
               tablet_id,
-              local_replica))) {
+              local_replica,
+              tablet_checksum,
+              need_checksum))) {
             LOG_WARN("fail to fill tablet replica", KR(ret), K_(tenant_id), K(ls_id), K(tablet_id));
           } else if (table_replica.is_equal_for_report(local_replica)) {
             continue;

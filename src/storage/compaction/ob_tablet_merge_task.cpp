@@ -881,9 +881,7 @@ int ObTabletMergeFinishTask::process()
     }
     if (OB_SUCC(ret) && ctx.param_.is_major_merge() && NULL != ctx.param_.report_) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ctx.param_.report_->submit_tablet_checksums_task(MTL_ID(), ctx.param_.ls_id_, tablet_id))) {
-        LOG_WARN("failed to submit tablet checksums task to report", K(tmp_ret), K(MTL_ID()), K(ctx.param_.ls_id_), K(tablet_id));
-      } else if (OB_TMP_FAIL(ctx.param_.report_->submit_tablet_update_task(MTL_ID(), ctx.param_.ls_id_, tablet_id))) {
+      if (OB_TMP_FAIL(ctx.param_.report_->submit_tablet_update_task(MTL_ID(), ctx.param_.ls_id_, tablet_id))) {
         LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(ctx.param_.ls_id_), K(tablet_id));
       } else if (OB_TMP_FAIL(ctx.ls_handle_.get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id))) {
         LOG_WARN("failed to update tablet report status", K(tmp_ret), K(MTL_ID()), K(tablet_id));

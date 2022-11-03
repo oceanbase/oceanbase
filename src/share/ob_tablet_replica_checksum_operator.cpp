@@ -20,6 +20,8 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_column_schema.h"
+#include "share/tablet/ob_tablet_info.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -346,14 +348,77 @@ ObTabletReplicaChecksumItem &ObTabletReplicaChecksumItem::operator=(const ObTabl
 
 /****************************** ObTabletReplicaChecksumOperator ******************************/
 
-int ObTabletReplicaChecksumOperator::batch_remove(
+int ObTabletReplicaChecksumOperator::batch_remove_with_trans(
+    ObMySQLTransaction &trans,
     const uint64_t tenant_id,
-    const ObIArray<ObLSID> &ls_ids,
-    const ObIArray<ObTabletID> &tablet_ids,
-    ObISQLClient &sql_proxy)
+    const common::ObIArray<share::ObTabletReplica> &tablet_replicas)
 {
-  int ret = OB_NOT_IMPLEMENT;
-  UNUSEDx(tenant_id, ls_ids, tablet_ids, sql_proxy);
+  int ret = OB_SUCCESS;
+  const int64_t replicas_count = tablet_replicas.count();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || replicas_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), "tablet_replica cnt", replicas_count);
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, replicas_count);
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      if (OB_FAIL(inner_batch_remove_by_sql_(tenant_id, tablet_replicas, start_idx, end_idx, trans))) {
+        LOG_WARN("fail to inner batch remove", KR(ret), K(tenant_id), K(start_idx), K(end_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, replicas_count);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::inner_batch_remove_by_sql_(
+    const uint64_t tenant_id,
+    const common::ObIArray<share::ObTabletReplica> &tablet_replicas,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) 
+      || (tablet_replicas.count() <= 0)
+      || (start_idx < 0)
+      || (start_idx > end_idx)
+      || (end_idx > tablet_replicas.count()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(start_idx), K(end_idx),
+             "tablet_replica cnt", tablet_replicas.count());
+  } else {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = '%lu' AND (tablet_id, svr_ip, svr_port, ls_id) IN(",
+                OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+    } else {
+      char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+      for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+        if (OB_UNLIKELY(!tablet_replicas.at(idx).get_server().ip_to_string(ip, sizeof(ip)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("convert server ip to string failed", KR(ret), "server", tablet_replicas.at(idx).get_server());
+        } else if (OB_FAIL(sql.append_fmt("('%lu', '%s', %d, %ld)%s",
+            tablet_replicas.at(idx).get_tablet_id().id(),
+            ip,
+            tablet_replicas.at(idx).get_server().get_port(),
+            tablet_replicas.at(idx).get_ls_id().id(),
+            ((idx == end_idx - 1) ? ")" : ", ")))) {
+          LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(idx), K(start_idx), K(end_idx));
+        }
+      }
+
+      const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+      if (FAILEDx(trans.write(meta_tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(meta_tenant_id), K(sql));
+      } else {
+        LOG_INFO("will batch delete tablet replica checksum", K(affected_rows));
+      }
+    }
+  }
   return ret;
 }
 
@@ -687,56 +752,36 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
   return ret;
 }
 
-int ObTabletReplicaChecksumOperator::batch_update(
+
+int ObTabletReplicaChecksumOperator::batch_update_with_trans(
+    common::ObMySQLTransaction &trans,
     const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    ObISQLClient &sql_proxy)
+    const common::ObIArray<ObTabletReplicaChecksumItem> &items)
 {
-  return batch_insert_or_update_(tenant_id, items, sql_proxy, true);
+  return batch_insert_or_update_with_trans_(tenant_id, items, trans, true);
 }
 
-int ObTabletReplicaChecksumOperator::batch_insert(
+int ObTabletReplicaChecksumOperator::batch_insert_or_update_with_trans_(
     const uint64_t tenant_id,
     const ObIArray<ObTabletReplicaChecksumItem> &items,
-    ObISQLClient &sql_proxy)
-{
-  return batch_insert_or_update_(tenant_id, items, sql_proxy, false);
-}
-
-int ObTabletReplicaChecksumOperator::batch_insert_or_update_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    ObISQLClient &sql_proxy,
+    common::ObMySQLTransaction &trans,
     const bool is_update)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
   if (OB_UNLIKELY((OB_INVALID_TENANT_ID == tenant_id) || (items.count() <= 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), "items count", items.count());
   } else {
-    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-    if (OB_FAIL(trans.start(&sql_proxy, meta_tenant_id))) {
-      LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
-    } else {
-      int64_t start_idx = 0;
-      int64_t end_idx = min(MAX_BATCH_COUNT, items.count());
-      while (OB_SUCC(ret) && (start_idx < end_idx)) {
-        if (OB_FAIL(inner_batch_insert_or_update_by_sql_(tenant_id, items, start_idx, 
-            end_idx, trans, is_update))) {
-          LOG_WARN("fail to inner batch insert", KR(ret), K(tenant_id), K(start_idx), K(is_update));
-        } else {
-          start_idx = end_idx;
-          end_idx = min(start_idx + MAX_BATCH_COUNT, items.count());
-        }
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, items.count());
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      if (OB_FAIL(inner_batch_insert_or_update_by_sql_(tenant_id, items, start_idx, 
+          end_idx, trans, is_update))) {
+        LOG_WARN("fail to inner batch insert", KR(ret), K(tenant_id), K(start_idx), K(is_update));
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, items.count());
       }
-    }
-  }
-  if (trans.is_started()) {
-    int trans_ret = trans.end(OB_SUCCESS == ret);
-    if (OB_SUCCESS != trans_ret) {
-      LOG_WARN("fail to end transaction", KR(trans_ret));
-      ret = ((OB_SUCCESS == ret) ? trans_ret : ret);
     }
   }
   return ret;
