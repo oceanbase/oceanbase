@@ -49,6 +49,8 @@ public:
 
 class ObQueryEngine
 {
+#define NOT_PLACE_HOLDER(ptr) OB_UNLIKELY(PLACE_HOLDER != ptr)
+
 public:
   enum {
     INIT_TABLE_INDEX_COUNT = (1 << 10),
@@ -198,15 +200,37 @@ public:
   int estimate_row_count(const ObMemtableKey *start_key, const int start_exclude,
                          const ObMemtableKey *end_key, const int end_exclude,
                          int64_t &logical_row_count, int64_t &physical_row_count);
-  int dump_keyhash(FILE *fd) const { return OB_NOT_NULL(index_) ? index_->dump_keyhash(fd) : OB_SUCCESS; }
-  int64_t hash_size() const { return OB_NOT_NULL(index_) ? index_->hash_size() : 0; }
-  int64_t hash_alloc_memory() const { return OB_NOT_NULL(index_) ? index_->hash_alloc_memory() : 0; }
-  int dump_keybtree(FILE* fd) { return OB_NOT_NULL(index_) ? index_->dump_keybtree(fd) : OB_SUCCESS; }
-  int64_t btree_size() const { return OB_NOT_NULL(index_) ? index_->btree_size() : 0; }
+  int dump_keyhash(FILE *fd) const
+  {
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->dump_keyhash(fd) : OB_SUCCESS;
+  }
+  int64_t hash_size() const
+  {
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->hash_size() : 0;
+  }
+  int64_t hash_alloc_memory() const
+  {
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->hash_alloc_memory() : 0;
+  }
+  int dump_keybtree(FILE *fd)
+  {
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->dump_keybtree(fd) : OB_SUCCESS;
+  }
+  int64_t btree_size() const
+  {
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->btree_size() : 0;
+  }
   int64_t btree_alloc_memory() const
   {
-    return OB_NOT_NULL(index_) ? 
-           index_->btree_alloc_memory() + btree_allocator_.get_allocated() : 0;
+    TableIndex *index = ATOMIC_LOAD(&index_);
+    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index)
+               ? index->btree_alloc_memory() + btree_allocator_.get_allocated()
+               : 0;
   }
   void dump2text(FILE *fd);
   int get_table_index(TableIndex *&return_ptr) const;
