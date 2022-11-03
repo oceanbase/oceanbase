@@ -5437,7 +5437,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                        table_name, synonym_name,
                                                        synonym_db_name, db_name,
                                                        is_db_explicit, synonym_checker))) {
-        LOG_WARN("resolve table relation factor failed", K(ret));
+        LOG_WARN("resolve table relation factor failed", K(ret), K(table_name));
         // table_name may be dblink table, here to test is,
         if (OB_ERR_SYNONYM_TRANSLATION_INVALID == ret ||
             OB_TABLE_NOT_EXIST == ret) {
@@ -5489,7 +5489,7 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
   int ret = OB_SUCCESS;
    // dblink name must be something like 'db_name.tbl_name@dblink', or 'tbl_name@dblink'
   ObString tmp_table_name;
-  ObString tmp_db_name;
+  ObString dblink_user_name;
   CK (OB_NOT_NULL(allocator_));
   OZ (ob_write_string(*allocator_, table_name, tmp_table_name));
   ObString tbl_sch_name = tmp_table_name.split_on('@');
@@ -5497,13 +5497,16 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
     // do nothing; not a valid dblink name format
   } else if (tmp_table_name.empty()) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tmp_table_name is empty", K(ret));
   } else {
     OZ (schema_checker_->get_dblink_id(tenant_id, tmp_table_name, dblink_id));
-    OZ (schema_checker_->get_dblink_user(tenant_id, tmp_table_name, tmp_db_name, *allocator_));
+    OZ (schema_checker_->get_dblink_user(tenant_id, tmp_table_name, dblink_user_name, *allocator_));
     if (OB_FAIL(ret)) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
     } else if (OB_INVALID_ID == dblink_id) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalide dblink_id", K(ret));
     } else {
       OZ (ob_write_string(*allocator_, tmp_table_name, dblink_name));
       ObString remote_schema_name;
@@ -5511,11 +5514,11 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
       OX (remote_schema_name = tbl_sch_name.split_on('.'));
       if (OB_FAIL(ret)) {
         ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
       } else {
-        if (!remote_schema_name.empty()) {
-          if (0 != tmp_db_name.case_compare(remote_schema_name)) {
-            ret = OB_ERR_UNEXPECTED;
-          } else { /*do nothing*/ }
+        ObString &tmp_db_name = dblink_user_name;
+        if (!remote_schema_name.empty() && (0 != dblink_user_name.case_compare(remote_schema_name))) {
+          tmp_db_name = remote_schema_name;
         }
         // convert db_name to upper, for the field in all_object is upper
         if (OB_SUCC(ret)) {
