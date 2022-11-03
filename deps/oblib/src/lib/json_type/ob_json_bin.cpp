@@ -1322,11 +1322,16 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
       } else {
         // TODO if with key dict, read key from dict
         // to consider, add option to controll need alloc or not
-        void *key_buf = allocator_->alloc(key_len);
-        if (key_buf == NULL) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory for data buf", K(ret));
-        } else {
+        void *key_buf = nullptr;
+        if (key_len > 0) { 
+          key_buf = allocator_->alloc(key_len);
+          if (key_buf == NULL) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory for data buf", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
           MEMCPY(key_buf, data + key_offset, key_len);
           ObString key(key_len, reinterpret_cast<const char*>(key_buf));
           const char *val = data + value_offset;

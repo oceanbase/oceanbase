@@ -1151,7 +1151,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     case ObMediumIntType:
     case ObInt32Type:
     case ObIntType: {
-      int64_t val;
+      int64_t val = 0;
       ret = cast_to_int(j_base, dst_type, val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "SIGNED")) {
         res.set_int(val);
@@ -1163,7 +1163,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     case ObUMediumIntType:
     case ObUInt32Type:
     case ObUInt64Type: {
-      uint64_t val;
+      uint64_t val = 0;
       ret = cast_to_uint(j_base, dst_type, val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "UNSIGNED")) {
         res.set_uint(val);
@@ -1171,7 +1171,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       break;
     }
     case ObDateTimeType: {
-      int64_t val;
+      int64_t val = 0;
       ret = cast_to_datetime(j_base, accuracy, val);
       if (ret == OB_ERR_NULL_VALUE) {
         res.set_null();
@@ -1192,7 +1192,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       break;
     }
     case ObDateType: {
-      int32_t val;
+      int32_t val = 0;
       ret = cast_to_date(j_base, val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "DATE")) {
         res.set_date(val);
@@ -1200,7 +1200,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       break;
     }
     case ObTimeType: {
-      int64_t val;
+      int64_t val = 0;
       ret = cast_to_time(j_base, accuracy, val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "TIME")) {
         res.set_time(val);
@@ -1208,7 +1208,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       break;
     }
     case ObYearType: {
-      uint8_t val;
+      uint8_t val = 0;
       ret = cast_to_year(j_base, val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "YEAR")) {
         res.set_year(val);
@@ -1217,7 +1217,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     }
     case ObFloatType:
     case ObUFloatType: {
-      float out_val;
+      float out_val = 0;
       ret = cast_to_float(j_base, dst_type, out_val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "FLOAT")) {
         res.set_float(out_val);
@@ -1226,7 +1226,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     }
     case ObDoubleType:
     case ObUDoubleType: {
-      double out_val;
+      double out_val = 0;
       ret = cast_to_double(j_base, dst_type, out_val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "DOUBLE")) {
         res.set_double(out_val);
@@ -1268,7 +1268,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       break;
     }
     case ObBitType: {
-      uint64_t out_val;
+      uint64_t out_val = 0;
       ret = cast_to_bit(j_base, out_val);
       if (!try_set_error_val<ObDatum>(res, ret, error_type, error_val, "BIT")) {
         res.set_bit(out_val);
