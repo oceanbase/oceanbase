@@ -709,7 +709,6 @@ void ObIORequest::dec_out_ref()
 
 ObPhyQueue::ObPhyQueue()
   : is_inited_(false),
-    phy_queue_(),
     reservation_ts_(INT_MAX64),
     category_limitation_ts_(INT_MAX64),
     tenant_limitation_ts_(INT_MAX64),
@@ -720,7 +719,8 @@ ObPhyQueue::ObPhyQueue()
     reservation_pos_(-1),
     category_limitation_pos_(-1),
     tenant_limitation_pos_(-1),
-    proportion_pos_(-1)
+    proportion_pos_(-1),
+    req_list_()
 {
 
 }
@@ -736,8 +736,6 @@ int ObPhyQueue::init(const int index)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("phy queue init twice", K(ret), K(is_inited_));
-  } else if (OB_FAIL(phy_queue_.init(SINGLE_QUEUE_DEPTH))) {
-    LOG_WARN("phy queue init failed", K(ret));
   } else if (index < 0 || index > static_cast<int>(ObIOCategory::MAX_CATEGORY)){
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("index out of boundary", K(ret), K(index));
@@ -754,7 +752,6 @@ int ObPhyQueue::init(const int index)
 void ObPhyQueue::destroy()
 {
   is_inited_ = false;
-  phy_queue_.destroy();
   reservation_ts_ = INT_MAX64;
   category_limitation_ts_ = INT_MAX64;
   tenant_limitation_ts_ = INT_MAX64;
@@ -1293,32 +1290,29 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
     if (OB_ISNULL(tmp_phy_queue)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("phy_queue is null", K(ret), KP(tmp_phy_queue));
-    } else if (tmp_phy_queue->phy_queue_.get_total() <= 0) {
+    } else if (tmp_phy_queue->req_list_.is_empty()) {
       ret = OB_ENTRY_NOT_EXIST;
     } else if (tmp_phy_queue->reservation_ts_ <= current_ts) {
       //R schedule
       if(OB_FAIL(remove_from_heap(tmp_phy_queue))) {
         LOG_WARN("remove phy queue from heap failed(R schedule)", K(ret));
       } else {
-        if (OB_FAIL(tmp_phy_queue->phy_queue_.pop(req))) {
-          LOG_WARN("pop req from r_heap failed", K(ret));
-        } else if (OB_ISNULL(req)) {
+        req = tmp_phy_queue->req_list_.remove_first();
+        if (OB_ISNULL(req)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("request is null", K(ret), KP(req));
         } else {
           req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
-          if (tmp_phy_queue->phy_queue_.get_total() <= 0) {
+          if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
           } else if (OB_NOT_NULL(req->tenant_io_mgr_.get_ptr())) {
             ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req->tenant_io_mgr_.get_ptr()->get_io_clock());       
-            ObIORequest *next_req = nullptr;
-            if (OB_FAIL(tmp_phy_queue->phy_queue_.head_unsafe(next_req))) {
-              LOG_WARN("get next req failed", K(ret), KP(next_req));
-            } else if (OB_ISNULL(next_req)) {
+            ObIORequest *next_req = tmp_phy_queue->req_list_.get_first();
+            if (OB_ISNULL(next_req)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get null next_req", KP(next_req));
             } else if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req))) {
-              LOG_WARN("calc phyqueue clock failed", K(ret));
+              LOG_WARN("calc phyqueue clock failed", K(ret), KPC(next_req));
             }
           }
         }
@@ -1372,7 +1366,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   int64_t iter_count = 0;
   ObPhyQueue *tmp_phy_queue = nullptr;
   req = nullptr;
-  while (OB_SUCC(ret) && !cl_heap_.empty() && cl_heap_.top()->phy_queue_.get_total() > 0) {
+  while (OB_SUCC(ret) && !cl_heap_.empty() && !cl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = cl_heap_.top();
     deadline_ts = 0 == iter_count ? tmp_phy_queue->tenant_limitation_ts_ : deadline_ts;
     ++iter_count;
@@ -1395,7 +1389,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
     }
   }
   iter_count = 0;
-  while (OB_SUCC(ret) && !tl_heap_.empty() && tl_heap_.top()->phy_queue_.get_total() > 0) {
+  while (OB_SUCC(ret) && !tl_heap_.empty() && !tl_heap_.top()->req_list_.is_empty()) {
     tmp_phy_queue = tl_heap_.top();
     if (0 == iter_count) {
       if (0 == deadline_ts) {
@@ -1421,26 +1415,23 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
     if (OB_ISNULL(tmp_phy_queue)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("phy_queue is null", K(ret));
-    } else if (tmp_phy_queue->phy_queue_.get_total() > 0) {
+    } else if (!tmp_phy_queue->req_list_.is_empty()) {
       if (OB_FAIL(remove_from_heap(tmp_phy_queue))) {
         LOG_WARN("remove phy queue from heap failed(P schedule)", K(ret));
       } else {
-        if (OB_FAIL(tmp_phy_queue->phy_queue_.pop(req))) {
-          LOG_WARN("pop req from ready_heap failed");
-        } else if (OB_ISNULL(req)) {
+        req = tmp_phy_queue->req_list_.remove_first();
+        if (OB_ISNULL(req)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("req is null", K(ret), KP(req));
         } else {
           req->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time();
           LOG_DEBUG("req pop from phy queue succcess(P schedule)", KP(req), K(iter_count), "time_cost", ObTimeUtility::fast_current_time() - current_ts, K(ready_heap_.count()), K(current_ts));
-          if (tmp_phy_queue->phy_queue_.get_total() <= 0) {
+          if (tmp_phy_queue->req_list_.is_empty()) {
             tmp_phy_queue->reset_time_info();
           } else if (OB_NOT_NULL(req->tenant_io_mgr_.get_ptr())) {
             ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req->tenant_io_mgr_.get_ptr()->get_io_clock());
-            ObIORequest *next_req = nullptr;
-            if (OB_FAIL(tmp_phy_queue->phy_queue_.head_unsafe(next_req))) {
-              LOG_WARN("get next req failed", K(ret), K(next_req));
-            } else if (OB_ISNULL(next_req)) {
+            ObIORequest *next_req = tmp_phy_queue->req_list_.get_first();
+            if (OB_ISNULL(next_req)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get null next_req", KP(next_req));
             } else {
@@ -1462,7 +1453,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
     }
   } else {
     ret = OB_EAGAIN;
-    if (!r_heap_.empty() && r_heap_.top()->phy_queue_.get_total() > 0) {
+    if (!r_heap_.empty() && !r_heap_.top()->req_list_.is_empty()) {
       ObPhyQueue *next_tmp_phy_queue = r_heap_.top();
       if (0 == deadline_ts) {
         deadline_ts = next_tmp_phy_queue->reservation_ts_;

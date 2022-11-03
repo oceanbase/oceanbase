@@ -27,6 +27,14 @@
     (::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
         nullptr : static_cast<::oceanbase::sql::ObDASGroupScanOp*>(_task_op))
 
+#define IS_DAS_DML_OP(_task_op)                         \
+  ({                                                    \
+    DAS_OP_TABLE_INSERT == (_task_op).get_type() ||     \
+        DAS_OP_TABLE_UPDATE == (_task_op).get_type() || \
+        DAS_OP_TABLE_LOCK == (_task_op).get_type() ||   \
+        DAS_OP_TABLE_DELETE == (_task_op).get_type();   \
+  })
+
 namespace oceanbase
 {
 namespace sql

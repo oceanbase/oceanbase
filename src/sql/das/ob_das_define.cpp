@@ -29,6 +29,7 @@ using namespace share;
 using namespace share::schema;
 namespace sql
 {
+
 //not assign array member
 void ObDASTableLocMeta::light_assign(const ObDASTableLocMeta &other)
 {
