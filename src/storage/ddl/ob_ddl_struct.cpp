@@ -242,6 +242,7 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
+    param.start_log_ts_ = ddl_start_log_ts_;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ",

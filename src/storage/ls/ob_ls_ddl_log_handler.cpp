@@ -235,10 +235,13 @@ int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
           ObDDLTableMergeDagParam param;
           param.ls_id_ = ls_->get_ls_id();
           param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
+          param.start_log_ts_ = ddl_kv_mgr_handle.get_obj()->get_start_log_ts();
           param.rec_log_ts_ = rec_log_ts;
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
+            } else {
+              ret = OB_SUCCESS;
             }
           }
         }

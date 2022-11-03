@@ -922,12 +922,12 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
   return ret;
 }
 
-int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key)
+int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObDDLStartLog log;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ddl_kv_mgr_handle.reset();
   int64_t tmp_log_ts = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1067,9 +1067,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ts))) {
-      if (OB_TASK_EXPIRED == ret) {
-        ret = OB_SUCCESS;
-      } else {
+      if (OB_TASK_EXPIRED != ret) {
         LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
       }
     } else {

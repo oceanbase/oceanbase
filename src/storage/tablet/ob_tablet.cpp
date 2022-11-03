@@ -2138,64 +2138,6 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const int64_
   return ret;
 }
 
-int ObTablet::get_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ddl_kvs_handle);
-  return ret;
-}
-
-int ObTablet::get_or_create_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ddl_kvs_handle);
-  return ret;
-}
-
-int ObTablet::check_has_effective_ddl_kv(bool &has_ddl_kv)
-{
-  int ret = OB_SUCCESS;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get ddl kv mgr", K(ret));
-    } else {
-      has_ddl_kv = false;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
-    LOG_WARN("fail to check has effective ddl kv", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTablet::get_ddl_kv_min_log_ts(int64_t &min_log_ts)
-{
-  int ret = OB_SUCCESS;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get ddl kv mgr", K(ret));
-    } else {
-      min_log_ts = INT64_MAX;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_log_ts(min_log_ts))) {
-    LOG_WARN("fail to get ddl kv min log ts", K(ret));
-  }
-
-  return ret;
-}
-
 int ObTablet::start_ddl_if_need()
 {
   int ret = OB_SUCCESS;

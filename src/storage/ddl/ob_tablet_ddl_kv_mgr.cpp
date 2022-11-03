@@ -145,6 +145,7 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
   } else if (start_log_ts < start_log_ts_) {
+    ret = OB_TASK_EXPIRED;
     LOG_INFO("skip ddl prepare log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(freeze_ddl_kv(prepare_log_ts))) {
     LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_log_ts));
@@ -158,6 +159,7 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
     param.tablet_id_ = tablet_id_;
     param.rec_log_ts_ = prepare_log_ts;
     param.is_commit_ = true;
+    param.start_log_ts_ = start_log_ts;
     param.table_id_ = table_id;
     param.execution_id_ = execution_id_;
     param.ddl_task_id_ = ddl_task_id_;
@@ -193,6 +195,7 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
   } else if (is_commit_success_) {
     LOG_INFO("ddl commit already succeed", K(ls_id_), K(tablet_id_), K(table_id_));
   } else if (start_log_ts < start_log_ts_) {
+    ret = OB_TASK_EXPIRED;
     LOG_INFO("skip ddl commit log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
@@ -202,6 +205,7 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
     param.tablet_id_ = tablet_id_;
     param.rec_log_ts_ = prepare_log_ts;
     param.is_commit_ = true;
+    param.start_log_ts_ = start_log_ts;
     param.table_id_ = table_id_;
     param.execution_id_ = execution_id_;
     param.ddl_task_id_ = ddl_task_id_;
@@ -215,15 +219,15 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
     } else {
       ret = OB_EAGAIN; // until major sstable is ready
     }
-    if (OB_FAIL(ret) && is_replay)  {
-      if (OB_TABLET_NOT_EXIST == ret) {
-        ret = OB_SUCCESS; // think as succcess for replay
-      } else {
-        if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-          LOG_INFO("replay ddl commit", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(prepare_log_ts), K(max_freeze_log_ts_));
-        }
-        ret = OB_EAGAIN; // retry by replay service
+  }
+  if (OB_FAIL(ret) && is_replay)  {
+    if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
+      ret = OB_SUCCESS; // think as succcess for replay
+    } else {
+      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+        LOG_INFO("replay ddl commit", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts), K(prepare_log_ts), K(max_freeze_log_ts_));
       }
+      ret = OB_EAGAIN; // retry by replay service
     }
   }
   return ret;
@@ -241,9 +245,6 @@ int ObTabletDDLKvMgr::wait_ddl_commit(const int64_t start_log_ts, const int64_t 
   } else if (!is_started()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
-  } else if (start_log_ts < start_log_ts_) {
-    ret = OB_TASK_EXPIRED;
-    LOG_INFO("task expired, skip ddl commit log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
   } else if (start_log_ts > start_log_ts_) {
     ret = OB_ERR_SYS;
     LOG_WARN("start log ts not match", K(ret), K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));

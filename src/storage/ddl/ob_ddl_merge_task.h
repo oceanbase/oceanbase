@@ -42,21 +42,23 @@ public:
       tablet_id_(),
       rec_log_ts_(0),
       is_commit_(false),
+      start_log_ts_(0),
       table_id_(0),
       execution_id_(0),
       ddl_task_id_(0)
   {}
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid();
+    return ls_id_.is_valid() && tablet_id_.is_valid() && start_log_ts_ > 0;
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(table_id), K_(execution_id), K_(ddl_task_id));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(start_log_ts), K_(table_id), K_(execution_id), K_(ddl_task_id));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t rec_log_ts_;
   bool is_commit_;
+  int64_t start_log_ts_; // start log ts at schedule, for skipping expired task
   uint64_t table_id_; // used for report ddl checksum
   int64_t execution_id_; // used for report ddl checksum
   int64_t ddl_task_id_; // used for report ddl checksum

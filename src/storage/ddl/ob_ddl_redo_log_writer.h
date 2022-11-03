@@ -235,7 +235,7 @@ public:
   ObDDLSSTableRedoWriter();
   ~ObDDLSSTableRedoWriter();
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
-  int start_ddl_redo(const ObITable::TableKey &table_key);
+  int start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,

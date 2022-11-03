@@ -121,6 +121,7 @@ public:
   int64_t concurrent_cnt_;
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
 };
 
 class ObComplementPrepareTask;

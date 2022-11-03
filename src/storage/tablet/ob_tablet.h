@@ -286,10 +286,6 @@ public:
   int check_has_sstable(bool &has_sstable) const;
 
   // ddl kv
-  int get_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
-  int get_or_create_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
-  int check_has_effective_ddl_kv(bool &has_ddl_kv);
-  int get_ddl_kv_min_log_ts(int64_t &min_log_ts);
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
   void remove_ddl_kv_mgr();
   int start_ddl_if_need();

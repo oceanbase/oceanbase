@@ -106,6 +106,9 @@ int ObDDLTableMergeDag::create_first_task()
     LOG_WARN("get tablet failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+  } else if (ddl_param_.start_log_ts_ < ddl_kv_mgr_handle.get_obj()->get_start_log_ts()) {
+    ret = OB_TASK_EXPIRED;
+    LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv())) {
     LOG_WARN("ddl kv manager try freeze failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(true/*frozen_only*/, ddl_kvs_handle))) {
@@ -340,6 +343,8 @@ int ObDDLTableMergeTask::process()
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
+    } else if (merge_param_.start_log_ts_ > 0 && merge_param_.start_log_ts_ < ddl_param.start_log_ts_) {
+      LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_log_ts", ddl_param.start_log_ts_);
     } else if (merge_param_.is_commit_ && OB_FAIL(check_data_integrity(ddl_sstable_handles,
                                                                        ddl_param.start_log_ts_,
                                                                        merge_param_.rec_log_ts_,
