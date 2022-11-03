@@ -288,18 +288,21 @@ public:
         blk_ref_[ObBlockSlicer::hash((uint64_t)old_blk) % MAX_REF_NUM].sync();
         if (old_blk->release()) {
           blk_list_.add(&old_blk->dlink_);
-          if (old_blk->recycle()) {
-            destroy_block(old_blk);
-          } else {
-            _LIB_LOG(ERROR, "there was memory leak, stock=%d, remain=%d", old_blk->stock(), old_blk->remain());
-          }
         }
       }
     }
     ObDLink* dlink = nullptr;
-    if (OB_NOT_NULL(dlink = blk_list_.top())) {
+    dlink = blk_list_.top();
+    while (OB_NOT_NULL(dlink)) {
       Block* blk = CONTAINER_OF(dlink, Block, dlink_);
-      _LIB_LOG(ERROR, "there was memory leak, stock=%d, remain=%d", blk->stock(), blk->remain());
+      if (blk->recycle()) {
+        destroy_block(blk);
+        dlink = blk_list_.top();
+      } else {
+        _LIB_LOG(ERROR, "there was memory leak, stock=%d, total=%d, remain=%d"
+            , blk->stock(), blk->total(), blk->remain());
+        dlink = nullptr; // break
+      }
     }
     tmallocator_ = NULL;
     bsize_ = 0;
