@@ -355,14 +355,15 @@ int ObRawDecoder::batch_decode(
     LOG_WARN("Raw decoder not inited", K(ret));
   } else if (fast_decode_valid(ctx)) {
     // Optimized decode for byte-packing data
-    const ObObjTypeStoreClass store_class = get_store_class_map()[ctx.obj_meta_.get_type_class()];
+    const ObObjType store_type = ctx.col_header_->get_store_obj_type();
+    const ObObjTypeStoreClass store_class = get_store_class_map()[ob_obj_type_class(store_type)];
     if (ctx.is_fix_length()) {
-      const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type());
+      const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(store_type);
       // Only need store_len for UIntSC/IntSC
       uint32_t store_len = ctx.col_header_->length_ > 8 ? 0 : ctx.col_header_->length_;
       raw_fix_batch_decode_func decode_func = raw_fix_batch_decode_funcs
           [ObIntSC == store_class
-              && ctx.col_header_->length_ == get_type_size_map()[ctx.obj_meta_.get_type()]]
+              && ctx.col_header_->length_ == get_type_size_map()[store_type]]
           [get_value_len_tag_map()[store_len]]
           [get_value_len_tag_map()[get_datum_store_len(map_type)]]
           [get_store_class_tag_map()[store_class]];
@@ -396,7 +397,8 @@ bool ObRawDecoder::fast_decode_valid(const ObColumnDecoderCtx &ctx) const
   bool valid = false;
   const ObColumnHeader *col_header = ctx.col_header_;
   const ObMicroBlockHeader *block_header = ctx.micro_block_header_;
-  const ObObjTypeStoreClass store_class = get_store_class_map()[ctx.obj_meta_.get_type_class()];
+  const ObObjTypeStoreClass store_class =
+      get_store_class_map()[ob_obj_type_class(ctx.col_header_->get_store_obj_type())];
   if (col_header->is_fix_length()) {
     valid = !col_header->is_bit_packing()
         && !col_header->has_extend_value()
@@ -452,7 +454,7 @@ int ObRawDecoder::batch_decode_general(
     uint32_t datum_len = 0;
     uint64_t value = 0;
     if (OB_FAIL(get_uint_data_datum_len(
-        ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type()),
+        ObDatum::get_obj_datum_map_type(ctx.col_header_->get_store_obj_type()),
         datum_len))) {
       LOG_WARN("Failed to get datum len for int data", K(ret));
     }
@@ -498,7 +500,7 @@ int ObRawDecoder::batch_decode_general(
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(batch_load_data_to_datum(
-        ctx.obj_meta_.get_type(),
+        ctx.col_header_->get_store_obj_type(),
         cell_datas,
         row_cap,
         integer_mask_,
@@ -612,7 +614,7 @@ bool ObRawDecoder::fast_filter_valid(
     }
   }
   if (valid) {
-    switch (ctx.obj_meta_.get_type_class()) {
+    switch (ob_obj_type_class(ctx.col_header_->get_store_obj_type())) {
     case ObIntTC:
     case ObDateTimeTC:
     case ObDateTC:
@@ -730,7 +732,7 @@ int ObRawDecoder::fast_comparison_operator(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Filter pushdown operator: Invalid argument", K(ret), K(col_ctx), K(fix_len_tag));
   } else {
-    const int64_t type_store_size = get_type_size_map()[col_ctx.obj_meta_.get_type()];
+    const int64_t type_store_size = get_type_size_map()[col_ctx.col_header_->get_store_obj_type()];
     const uint64_t node_value = filter.get_objs().at(0).v_.uint64_;
     const sql::ObWhiteFilterOperatorType &op_type = filter.get_op_type();
     bool exceed_stored_value_range = ~INTEGER_MASK_TABLE[col_ctx.col_header_->length_]

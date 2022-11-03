@@ -3826,11 +3826,6 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
            || (src_meta.is_varbinary() && dst_meta.is_blob())
            || (src_meta.is_text() && (dst_meta.is_text() || dst_meta.is_varchar()))
            || (src_meta.is_blob() && (dst_meta.is_blob() || dst_meta.is_varbinary())))) {
-          if (src_meta.is_integer_type() && dst_meta.is_integer_type()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("Type increment of integer type is not supported", K(ret), K(src_meta), K(dst_meta));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Type increment of integer type is");
-          }
           // online, do nothing
         } else {
           is_offline = true;

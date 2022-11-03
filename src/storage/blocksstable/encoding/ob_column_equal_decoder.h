@@ -34,9 +34,10 @@ public:
   ObColumnEqualDecoder();
   virtual ~ObColumnEqualDecoder();
 
-  OB_INLINE int init(const common::ObObjMeta &obj_meta,
+  OB_INLINE int init(
       const ObMicroBlockHeader &micro_block_header,
-      const ObColumnHeader &column_header, const char *block_data);
+      const ObColumnHeader &column_header,
+      const char *block_data);
   void reset();
   OB_INLINE void reuse();
   virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
@@ -58,12 +59,12 @@ private:
   const ObColumnEqualMetaHeader *meta_header_;
 };
 
-OB_INLINE int ObColumnEqualDecoder::init(const common::ObObjMeta &obj_meta,
+OB_INLINE int ObColumnEqualDecoder::init(
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *block_data)
 {
-  UNUSEDx(obj_meta, micro_block_header, column_header);
+  UNUSEDx(micro_block_header, column_header);
   int ret = common::OB_SUCCESS;
   // performance critical, don't check params
   if (inited_) {
