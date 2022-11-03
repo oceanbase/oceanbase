@@ -4529,7 +4529,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
 int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &cb_array)
 {
   int ret = OB_SUCCESS;
-  bool need_switch = false;
+  bool need_submit_log = false;
   ObTxLogType log_type = ObTxLogType::TX_ACTIVE_INFO_LOG;
   common::ObTimeGuard timeguard("switch_to_follower_gracefully", 10 * 1000);
   CtxLockGuard guard(lock_);
@@ -4547,9 +4547,9 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
     if (pending_write_) {
       TRANS_LOG(INFO, "current tx is executing stmt", K(*this));
       mt_ctx_.set_replay();
-      need_switch = true;
+      need_submit_log = true;
     } else if (!is_committing_()) {
-      need_switch = true;
+      need_submit_log = true;
     } else if (ObPartTransAction::COMMIT == part_trans_action_) {
       /* NOTE:
        * - If commitInfoLog has submitted, txn can continue on the new Leader
@@ -4562,7 +4562,7 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
        *   - detect commit timeout
        */
       if (exec_info_.state_ < ObTxState::REDO_COMPLETE && !sub_state_.is_info_log_submitted()) {
-        need_switch = true;
+        need_submit_log = true;
         log_type = ObTxLogType::TX_COMMIT_INFO_LOG;
       }
       if (need_callback_scheduler_()) {
@@ -4575,7 +4575,7 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
       }
     }
     timeguard.click();
-    if (OB_SUCC(ret) && need_switch) {
+    if (OB_SUCC(ret) && need_submit_log) {
       // We need merge all callbacklists before submitting active info
       (void)mt_ctx_.merge_multi_callback_lists_for_changing_leader();
       if (OB_FAIL(submit_log_impl_(log_type))) {
@@ -4583,12 +4583,17 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
         // and resume leader would be called.
         // TODO dingxi, improve this logic
         TRANS_LOG(WARN, "submit active/commit info log failed", KR(ret), K(*this));
-      } else if (OB_FAIL(mt_ctx_.commit_to_replay())) {
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(mt_ctx_.commit_to_replay())) {
         TRANS_LOG(WARN, "commit to replay failed", KR(ret), K(*this));
       } else if (OB_FAIL(unregister_timeout_task_())) {
         TRANS_LOG(WARN, "unregister timeout handler error", KR(ret), KPC(this));
       }
     }
+
     timeguard.click();
     if (OB_FAIL(ret)) {
       state_helper.restore_state();
