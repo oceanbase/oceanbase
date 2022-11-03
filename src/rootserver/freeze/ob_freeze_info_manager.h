@@ -128,8 +128,8 @@ public:
   static const int64_t ORIGIN_FROZEN_SCN = 1;
   static const int64_t ORIGIN_SCHEMA_VERSION = 1;
 
-  static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL;
-  static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL;
+  static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL * 1000LL; // ns
+  static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL * 1000LL; // ns
 
 private:
   bool is_inited_;

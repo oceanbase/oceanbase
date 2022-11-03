@@ -471,6 +471,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_ts()
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
+  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency() * 1000;
   
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
@@ -480,8 +481,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_ts()
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(get_gts(cur_gts))) {
     LOG_WARN("fail to get_gts", KR(ret));
-  } else if (FALSE_IT(new_snapshot_gc_scn = 
-        (cur_gts - transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency()))) {
+  } else if (FALSE_IT(new_snapshot_gc_scn = (cur_gts - max_stale_time_ns))) {
     LOG_WARN("fail to calc new snapshot_gc_scn", KR(ret), K(cur_gts));
   } else if ((new_snapshot_gc_scn <= freeze_info_.latest_snapshot_gc_ts_)
              || (cur_snapshot_gc_scn >= new_snapshot_gc_scn)) {
@@ -547,17 +547,20 @@ int ObFreezeInfoManager::try_gc_freeze_info()
   ObRecursiveMutexGuard guard(lock_);
   int ret = OB_SUCCESS;
 
-  const int64_t MAX_KEEP_INTERVAL_US =  30 * 24 * 60 * 60 * 1000L * 1000L; // 30 day
+  const int64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
   const int64_t MIN_REMAINED_VERSION_COUNT = 32;
-  int64_t now = ObTimeUtility::current_time();
-  int64_t min_frozen_scn = (now - MAX_KEEP_INTERVAL_US) * 1000L; // frozen_scn is nano_second
+  int64_t cur_gts = 0;
+  if (OB_FAIL(get_gts(cur_gts))) {
+    LOG_WARN("fail to get_gts", KR(ret));
+  }
+  int64_t min_frozen_scn = cur_gts - MAX_KEEP_INTERVAL_NS; // frozen_scn is nano_second
 
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   ObMySQLTransaction trans;
   ObArray<ObSimpleFrozenStatus> all_frozen_status;
   int64_t cur_snapshot_gc_scn = 0;
 
-  if (OB_FAIL(check_inner_stat())) {
+  if (FAILEDx(check_inner_stat())) {
     LOG_WARN("inner stat error", K(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
     LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
@@ -608,22 +611,31 @@ int ObFreezeInfoManager::try_update_zone_info(const int64_t expected_epoch)
 int ObFreezeInfoManager::check_snapshot_gc_ts()
 {
   int ret = OB_SUCCESS;
+  int64_t cur_gts = 0;
   int64_t snapshot_gc_ts = 0;
   int64_t delay = 0;
 
   ObRecursiveMutexGuard guard(lock_);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(get_gts(cur_gts))) {
+    LOG_WARN("fail to get_gts", KR(ret));
   } else {
     snapshot_gc_ts = freeze_info_.latest_snapshot_gc_ts_;
-    delay = ((snapshot_gc_ts == 0) ? 0 : (ObTimeUtility::current_time() - snapshot_gc_ts));
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      if (delay > SNAPSHOT_GC_TS_ERROR) {
-        LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
+    if (snapshot_gc_ts > cur_gts) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to check snapshot_gc_ts, snapshot_gc_ts is larger than cur_gts",
+               KR(ret), K(snapshot_gc_ts), K(cur_gts), K_(tenant_id));
+    } else {
+      delay = ((snapshot_gc_ts == 0) ? 0 : (cur_gts - snapshot_gc_ts));
+      if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (delay > SNAPSHOT_GC_TS_ERROR) {
+          LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
+                    K(snapshot_gc_ts), K(delay), K_(tenant_id));
+        } else if (delay > SNAPSHOT_GC_TS_WARN) {
+          LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
                   K(snapshot_gc_ts), K(delay), K_(tenant_id));
-      } else if (delay > SNAPSHOT_GC_TS_WARN) {
-        LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                 K(snapshot_gc_ts), K(delay), K_(tenant_id));
+        }
       }
     }
   }
