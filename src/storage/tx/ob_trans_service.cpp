@@ -680,8 +680,8 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), K(type), KP(buf),
               K(buf_len));
   } else if (!tx_desc.is_tx_active()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "txn must in active for register", K(ret));
+    ret = OB_TRANS_IS_EXITING;
+    TRANS_LOG(WARN, "txn must in active for register", K(ret));
   } else if (OB_ISNULL(rpc_proxy_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "rpc proxy not inited", KR(ret), K(tx_desc), K(ls_id), K(type));
