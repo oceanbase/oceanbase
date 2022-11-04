@@ -10490,7 +10490,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_backup_delete_policy']))
 
 def_table_schema(
-  owner = 'shuangcan.yjw',
+  owner = 'lihongqin.lhq',
   table_name     = '__all_virtual_tablet_ddl_kv_info',
   table_id       = '12315',
   table_type = 'VIRTUAL_TABLE',
