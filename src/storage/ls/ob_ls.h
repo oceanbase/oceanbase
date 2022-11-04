@@ -162,6 +162,7 @@ public:
   void destroy();
   int offline();
   int online();
+  bool is_offline() const { return false; } // mock function, TODO(@yanyuan)
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }

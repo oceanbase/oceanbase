@@ -2811,6 +2811,9 @@ int ObTablet::check_max_sync_schema_version() const
     if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
       LOG_WARN("failed to get memtable mgr", K(ret));
     } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
+    } else if (OB_UNLIKELY(!data_memtable_mgr->get_storage_schema_recorder().is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema recorder is invalid", K(ret), K_(tablet_meta), KPC(data_memtable_mgr));
     } else if (OB_FAIL(data_memtable_mgr->get_multi_source_data_unit(&storage_schema, &tmp_allocator))) {
       LOG_ERROR("failed to storage schema from memtable, max_sync_schema_version is invalid", K(ret),
           K(max_sync_schema_version), KPC(data_memtable_mgr));

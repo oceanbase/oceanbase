@@ -112,6 +112,7 @@ public:
   int merge_all();
   int schedule_merge(const int64_t broadcast_version);
   int update_upper_trans_version_and_gc_sstable();
+  int wait_ls_compaction_finish(const share::ObLSID &ls_id);
 
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.

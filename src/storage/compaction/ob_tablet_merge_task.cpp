@@ -604,6 +604,9 @@ int ObTabletMergePrepareTask::process()
                          && !MTL(ObTenantTabletScheduler *)->could_major_merge_start())) {
     ret = OB_CANCELED;
     LOG_INFO("Merge has been paused", K(ret), K(ctx));
+  } else if (ctx->ls_handle_.get_ls()->is_offline()) {
+    ret = OB_CANCELED;
+    LOG_INFO("ls offline, skip merge", K(ret), K(ctx));
   } else if (FALSE_IT(ctx->time_guard_.click(ObCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
   } else if (OB_FAIL(ctx->ls_handle_.get_ls()->get_tablet(ctx->param_.tablet_id_,
                                                           ctx->tablet_handle_,
@@ -890,6 +893,10 @@ int ObTabletMergeFinishTask::process()
 
     if (OB_SUCC(ret) && OB_NOT_NULL(ctx.merge_progress_)) {
       int tmp_ret = OB_SUCCESS;
+      // update merge info
+      if (OB_TMP_FAIL(ctx.merge_progress_->update_merge_info(ctx.merge_info_.get_sstable_merge_info()))) {
+        STORAGE_LOG(WARN, "fail to update update merge info", K(tmp_ret));
+      }
       if (OB_TMP_FAIL(compaction::ObCompactionSuggestionMgr::get_instance().analyze_merge_info(
               ctx.merge_info_,
               *ctx.merge_progress_))) {

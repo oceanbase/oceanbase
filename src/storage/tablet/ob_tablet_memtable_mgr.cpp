@@ -796,6 +796,7 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
         J_COMMA();
       }
     }
+    J_KV("schema_recorder", schema_recorder_);
     J_ARRAY_END();
     J_OBJ_END();
     J_OBJ_END();

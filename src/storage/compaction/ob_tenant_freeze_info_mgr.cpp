@@ -152,6 +152,7 @@ int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(FreezeInfo &freeze_info
     idx = info_list.count() - MIN_DEPENDENT_FREEZE_INFO_GAP;
   }
   ret = get_info_nolock(idx, freeze_info);
+  LOG_INFO("get min dependent freeze info", K(ret), K(freeze_info)); // diagnose code for issue 45841468
   return ret;
 }
 

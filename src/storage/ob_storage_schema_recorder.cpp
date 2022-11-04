@@ -36,16 +36,9 @@ using namespace share::schema;
 namespace storage
 {
 
-int ObStorageSchemaRecorder::ObStorageSchemaLogCb::set_table_version(const int64_t table_version)
+void ObStorageSchemaRecorder::ObStorageSchemaLogCb::set_table_version(const int64_t table_version)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!ATOMIC_BCAS(&table_version_, OB_INVALID_VERSION, table_version))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("double set table_version", K(ret), K(table_version_), K(table_version));
-  }
-
-  return ret;
+  ATOMIC_SET(&table_version_, table_version);
 }
 
 int ObStorageSchemaRecorder::ObStorageSchemaLogCb::on_success()
@@ -490,24 +483,25 @@ int ObStorageSchemaRecorder::submit_schema_log(const int64_t table_id)
       logcb_ptr_ = new(buf) ObStorageSchemaLogCb(*this);
     }
   }
-  if (FAILEDx(logcb_ptr_->set_table_version(storage_schema_->get_schema_version()))) {
-    LOG_ERROR("fail to set table version", K(ret), K_(tablet_id));
-  } else if (FALSE_IT(ATOMIC_STORE(&logcb_finish_flag_, false))) {
-  } else if (FALSE_IT(storage_schema_->set_sync_finish(false))) {
-  } else if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(storage_schema_,
-      ObLogTsRange::MAX_TS, false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
-    if (OB_BLOCK_FROZEN != ret) {
-      LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
+  if (OB_SUCC(ret)) {
+    logcb_ptr_->set_table_version(storage_schema_->get_schema_version());
+    ATOMIC_STORE(&logcb_finish_flag_, false);
+    storage_schema_->set_sync_finish(false);
+    if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(storage_schema_,
+        ObLogTsRange::MAX_TS, false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
+      if (OB_BLOCK_FROZEN != ret) {
+        LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
+      }
+    } else if (OB_FAIL(log_handler_->append(clog_buf_, clog_len_, ref_ts_ns, need_nonblock, logcb_ptr_, lsn, clog_ts_))) {
+      LOG_WARN("fail to submit log", K(ret), K_(tablet_id));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(dec_ref_on_memtable(false))) {
+        LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
+      }
+    } else {
+      LOG_INFO("submit schema log succeed", K(ret), K_(ls_id), K_(tablet_id), K_(clog_ts), K_(clog_len),
+          "schema_version", storage_schema_->get_schema_version());
     }
-  } else if (OB_FAIL(log_handler_->append(clog_buf_, clog_len_, ref_ts_ns, need_nonblock, logcb_ptr_, lsn, clog_ts_))) {
-    LOG_WARN("fail to submit log", K(ret), K_(tablet_id));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(dec_ref_on_memtable(false))) {
-      LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
-    }
-  } else {
-    LOG_INFO("submit schema log succeed", K(ret), K_(ls_id), K_(tablet_id), K_(clog_ts), K_(clog_len),
-        "schema_version", storage_schema_->get_schema_version());
   }
 
   return ret;
