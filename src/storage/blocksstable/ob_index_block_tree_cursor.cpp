@@ -352,17 +352,20 @@ int ObIndexBlockTreeCursor::drill_down(
   int ret = OB_SUCCESS;
   equal = false;
   ObDatumRowkey tmp_endkey;
+  bool compare_schema_rowkey = false;
   int cmp_ret = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Tree cursor not inited", K(ret));
   } else if (OB_FAIL(drill_down(rowkey, depth, is_beyond_the_range))) {
     LOG_WARN("Fail to do lower bound drill down", K(ret));
+  } else if (FALSE_IT(
+      compare_schema_rowkey = rowkey.datum_cnt_ == sstable_->get_meta().get_schema_rowkey_column_count())) {
   } else if (is_lower_bound || rowkey.is_min_rowkey() || rowkey.is_max_rowkey()) {
   } else {
     // move to upper bound
     while (OB_SUCC(ret) && 0 == cmp_ret) {
-      if (OB_FAIL(get_current_endkey(tmp_endkey))) {
+      if (OB_FAIL(get_current_endkey(tmp_endkey, compare_schema_rowkey))) {
         LOG_WARN("Fail to get current endkey", K(ret));
       } else if (OB_FAIL(tmp_endkey.compare(
           rowkey,
@@ -389,7 +392,7 @@ int ObIndexBlockTreeCursor::drill_down(
   if (OB_FAIL(ret)) {
   } else if (rowkey.is_min_rowkey() || rowkey.is_max_rowkey()) {
     equal = false;
-  } else if (OB_FAIL(get_current_endkey(tmp_endkey))) {
+  } else if (OB_FAIL(get_current_endkey(tmp_endkey, compare_schema_rowkey))) {
     LOG_WARN("Fail to get current endkey", K(ret));
   } else if (OB_FAIL(tmp_endkey.compare(
       rowkey,
@@ -874,9 +877,11 @@ int ObIndexBlockTreeCursor::release_held_path_item(ObIndexBlockTreePathItem &hel
   return ret;
 }
 
-int ObIndexBlockTreeCursor::get_current_endkey(ObDatumRowkey &endkey)
+int ObIndexBlockTreeCursor::get_current_endkey(ObDatumRowkey &endkey, const bool get_schema_rowkey)
 {
   int ret = OB_SUCCESS;
+  const int64_t rowkey_datum_cnt = get_schema_rowkey ?
+      sstable_->get_meta().get_schema_rowkey_column_count() : rowkey_column_cnt_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Fail to get current endkey", K(ret));
@@ -884,11 +889,12 @@ int ObIndexBlockTreeCursor::get_current_endkey(ObDatumRowkey &endkey)
     const ObIndexBlockDataHeader *idx_data_header = nullptr;
     if (OB_FAIL(get_transformed_data_header(*curr_path_item_, idx_data_header))) {
       LOG_WARN("Fail to get transformed data header", K(ret));
-    } else {
-      endkey = idx_data_header->rowkey_array_[curr_path_item_->curr_row_idx_];
+    } else if (OB_FAIL(endkey.assign(
+        idx_data_header->rowkey_array_[curr_path_item_->curr_row_idx_].datums_, rowkey_datum_cnt))) {
+      LOG_WARN("Failed to assign endkey", K(ret), K(rowkey_datum_cnt), KPC(idx_data_header));
     }
-  } else if (OB_FAIL(endkey.assign(row_.storage_datums_, rowkey_column_cnt_))) {
-    STORAGE_LOG(WARN, "Failed to assign endkey", K(ret), K(rowkey_column_cnt_), K(row_));
+  } else if (OB_FAIL(endkey.assign(row_.storage_datums_, rowkey_datum_cnt))) {
+    LOG_WARN("Failed to assign endkey", K(ret), K(rowkey_datum_cnt), K(row_));
   }
   return ret;
 }
