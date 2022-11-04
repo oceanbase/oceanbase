@@ -1738,7 +1738,6 @@ int ObServer::init_autoincrement_service()
                                                          &sql_proxy_,
                                                          &srv_rpc_proxy_,
                                                          &schema_service_,
-                                                         location_service_,
                                                          net_frame_.get_req_transport()))) {
     LOG_ERROR("init autoincrement_service_ fail", KR(ret));
   }
