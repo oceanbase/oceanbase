@@ -286,6 +286,21 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
   return ret;
 }
 
+int ObLSPrepareMigrationDagNet::deal_with_cancel()
+{
+  int ret = OB_SUCCESS;
+  const int32_t result = OB_CANCELED;
+  const bool need_retry = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls prepare migration dag net do not init", K(ret));
+  } else if (OB_FAIL(ctx_.set_result(result, need_retry))) {
+    LOG_WARN("failed to set result", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 /******************ObPrepareMigrationDag*********************/
 ObPrepareMigrationDag::ObPrepareMigrationDag(const ObStorageHADagType sub_type)
   : ObStorageHADag(ObDagType::DAG_TYPE_MIGRATE, sub_type)
@@ -837,7 +852,10 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
     while (OB_SUCC(ret) && !wait_log_replay_success) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "group task has error, cancel subtask", K(ret));
+        STORAGE_LOG(WARN, "migration task has error, cancel subtask", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {
@@ -1028,6 +1046,9 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "ls migration task is failed, cancel wait ls check point ts push", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {

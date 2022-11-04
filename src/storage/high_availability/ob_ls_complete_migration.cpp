@@ -326,7 +326,11 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
 
-      if (scheduler->has_set_stop()) {
+      if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
+        break;
+      } else if (scheduler->has_set_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
         break;
@@ -366,6 +370,21 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         ob_usleep(UPDATE_MIGRATION_STATUS_INTERVAL_MS);
       }
     }
+  }
+  return ret;
+}
+
+int ObLSCompleteMigrationDagNet::deal_with_cancel()
+{
+  int ret = OB_SUCCESS;
+  const int32_t result = OB_CANCELED;
+  const bool need_retry = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls complete migration dag net do not init", K(ret));
+  } else if (OB_FAIL(ctx_.set_result(result, need_retry))) {
+    LOG_WARN("failed to set result", K(ret), KPC(this));
   }
   return ret;
 }
@@ -905,6 +924,9 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "group task has error, cancel subtask", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {
@@ -1003,6 +1025,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "group task has error, cancel subtask", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {
@@ -1239,7 +1264,10 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
     while (OB_SUCC(ret)) {
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
-      if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
+      if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
+      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {
         ret = OB_CANCELED;
@@ -1321,6 +1349,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "ls migration task is failed, cancel wait ls check point ts push", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
       } else if (is_cancel) {

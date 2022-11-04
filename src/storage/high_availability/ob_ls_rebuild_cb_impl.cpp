@@ -175,7 +175,7 @@ void ObLSRebuildCbImpl::wakeup_ha_service_()
   int ret = OB_SUCCESS;
   ObStorageHAService *ha_service = nullptr;
 
-  if (OB_ISNULL(ha_service =  (MTL(ObStorageHAService *)))) {
+  if (OB_ISNULL(ha_service = (MTL(ObStorageHAService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ha_service));
   } else {

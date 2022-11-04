@@ -489,6 +489,21 @@ int ObTabletGroupRestoreDagNet::report_result_()
   return ret;
 }
 
+int ObTabletGroupRestoreDagNet::deal_with_cancel()
+{
+  int ret = OB_SUCCESS;
+  const int32_t result = OB_CANCELED;
+  const bool need_retry = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet group restore dag net do not init", K(ret));
+  } else if (OB_FAIL(ctx_->set_result(result, need_retry))) {
+    LOG_WARN("failed to set result", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 /******************ObTabletGroupRestoreDag*********************/
 ObTabletGroupRestoreDag::ObTabletGroupRestoreDag(const ObStorageHADagType sub_type)
   : ObStorageHADag(ObDagType::DAG_TYPE_RESTORE, sub_type)

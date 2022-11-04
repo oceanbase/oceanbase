@@ -274,6 +274,7 @@ public:
                         ObTabletHandle &handle) const;
 
   int flush_if_need(const bool need_flush);
+  bool is_stopped() const { return is_stopped_; }
 
   TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler));
 private:

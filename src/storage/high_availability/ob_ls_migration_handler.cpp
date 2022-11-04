@@ -161,7 +161,8 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     task_list_(),
     lock_(),
     status_(ObLSMigrationHandlerStatus::INIT),
-    result_(OB_SUCCESS)
+    result_(OB_SUCCESS),
+    is_stop_(false)
 {
 }
 
@@ -396,6 +397,9 @@ int ObLSMigrationHandler::add_ls_migration_task(
     if (!task_list_.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls already has migration task", K(ret), K(task_list_), K(arg), K(task_id));
+    } else if (is_stop_) {
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("ls migration handler is int stop status", K(ret), K(task_id), K(arg));
     } else {
       ObLSMigrationTask task;
       task.task_id_ = task_id;
@@ -1151,6 +1155,51 @@ int ObLSMigrationHandler::get_ls_info_(
   }
   return ret;
 }
+
+void ObLSMigrationHandler::stop()
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = nullptr;
+
+  common::SpinWLockGuard guard(lock_);
+  is_stop_ = true;
+  result_ = OB_SUCCESS != result_ ? result_ : OB_IN_STOP_STATE;
+  if (task_list_.empty()) {
+  } else if (task_list_.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls migration task count is unexpected", K(ret), K(task_list_));
+  } else {
+    ObLSMigrationTask &task = task_list_.at(0);
+    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to get ObTenantDagScheduler from MTL", K(ret), KPC(ls_));
+    } else if (OB_FAIL(scheduler->cancel_dag_net(task.task_id_))) {
+      LOG_ERROR("failed to cancel dag net", K(ret), K(task), KPC(ls_));
+    }
+  }
+}
+
+int ObLSMigrationHandler::safe_to_destroy(
+    bool &is_safe_to_destroy)
+{
+  int ret = OB_SUCCESS;
+  is_safe_to_destroy = false;
+  ObLSMigrationTask task;
+
+  if (OB_FAIL(get_ls_migration_task_(task))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      is_safe_to_destroy = true;
+    } else {
+      LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+    }
+  } else {
+    is_safe_to_destroy = false;
+    wakeup_();
+  }
+  return ret;
+}
+
 
 }
 }

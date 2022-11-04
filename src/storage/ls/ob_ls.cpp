@@ -421,6 +421,7 @@ int ObLS::stop()
     if (OB_FAIL(log_handler_.stop())) {
       LOG_WARN("stop log handler failed", K(ret), KPC(this));
     }
+    ls_migration_handler_.stop();
     is_stopped_ = true;
 
     if (OB_SUCC(ret)) {
@@ -457,6 +458,7 @@ bool ObLS::safe_to_destroy()
   bool is_safe = false;
   bool is_ls_restore_handler_safe = false;
   bool is_tablet_service_safe = false;
+  bool is_ls_migration_handler_safe = false;
 
   if (OB_FAIL(ls_tablet_svr_.safe_to_destroy(is_tablet_service_safe))) {
     LOG_WARN("ls tablet service check safe to destroy failed", K(ret), KPC(this));
@@ -467,6 +469,9 @@ bool ObLS::safe_to_destroy()
   } else if (!is_ls_restore_handler_safe) {
   } else if (OB_FAIL(log_handler_.safe_to_destroy())) {
     LOG_WARN("log_handler_ check safe to destroy failed", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_migration_handler_.safe_to_destroy(is_ls_migration_handler_safe))) {
+    LOG_WARN("ls migration handler check safe to destroy failed", K(ret), KPC(this));
+  } else if (!is_ls_migration_handler_safe) {
   } else if (is_tablet_service_safe) {
     if (1 == ref_mgr_.get_total_ref_cnt()) { // only has one ref at the safe destroy task
       is_safe = true;
@@ -478,7 +483,8 @@ bool ObLS::safe_to_destroy()
     if (!is_safe) {
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
         LOG_WARN("this ls is not safe to destroy", K(is_safe), "ls_ref", ref_mgr_.get_total_ref_cnt(),
-                 K(is_tablet_service_safe), K(is_ls_restore_handler_safe), K(ret), KP(this), KPC(this));
+                 K(is_tablet_service_safe), K(is_ls_restore_handler_safe), K(is_ls_migration_handler_safe),
+                 K(ret), KP(this), KPC(this));
         ref_mgr_.print();
         PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_LS_HANDLE);
       }

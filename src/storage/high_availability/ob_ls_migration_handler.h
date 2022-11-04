@@ -82,6 +82,8 @@ public:
   int switch_next_stage(const int32_t result);
   int check_task_exist(const share::ObTaskId &task_id, bool &is_exist);
   void destroy();
+  void stop();
+  int safe_to_destroy(bool &is_safe_to_destroy);
 
 private:
   void reuse_();
@@ -144,6 +146,7 @@ private:
   common::SpinRWLock lock_;
   ObLSMigrationHandlerStatus status_;
   int32_t result_;
+  bool is_stop_;
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 
