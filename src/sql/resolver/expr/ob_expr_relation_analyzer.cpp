@@ -90,8 +90,7 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr, int32_t stmt_level)
       LOG_WARN("param expr is null", K(ret), K(param), K(i), K(expr));
     } else if (OB_FAIL(SMART_CALL(visit_expr(*param, stmt_level)))) {
       LOG_WARN("failed to visit param", K(ret));
-    } else if (!expr.is_query_ref_expr() &&
-               OB_FAIL(expr.get_expr_levels().add_members(param->get_expr_levels()))) {
+    } else if (OB_FAIL(expr.get_expr_levels().add_members(param->get_expr_levels()))) {
       LOG_WARN("failed to add expr levels", K(ret));
     } else if (!param->get_expr_levels().has_member(stmt_level)) {
       // skip

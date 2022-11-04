@@ -194,7 +194,12 @@ private:
   int pushdown_semi_info_right_filter(ObDMLStmt *stmt,
                                       ObTransformerCtx *ctx,
                                       SemiInfo *semi_info);
-
+  
+  int check_has_shared_query_ref(ObRawExpr *expr, bool &has);
+  
+  int extract_semi_right_table_filter(ObDMLStmt *stmt,
+                                      SemiInfo *semi_info,
+                                      ObIArray<ObRawExpr *> &right_filters);
   int pushdown_into_table(ObDMLStmt *stmt,
                           TableItem *table,
                           ObIArray<ObRawExpr *> &pullup_preds,
