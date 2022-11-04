@@ -877,7 +877,8 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
               (void) set_last_submit_log_info_(begin_lsn, log_end_lsn, tmp_log_id, \
                   group_entry_header.get_log_proposal_id());
               if (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm()) {
-                try_update_committed_lsn_for_fetch_(log_end_lsn, tmp_log_id);
+                try_update_committed_lsn_for_fetch_(log_end_lsn, tmp_log_id, \
+                    group_entry_header.get_committed_end_lsn());
                 // Advance committed_end_lsn_, follower/reconfirm leader needs
                 // the order with try_update_committed_lsn_for_fetch_() is important,
                 // this exec order can avoid trigger failure of next round fetch by sliding_cb()
@@ -1461,7 +1462,9 @@ void LogSlidingWindow::try_reset_last_fetch_log_info_(const LSN &expected_end_ls
   }
 }
 
-void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_lsn, const int64_t &log_id)
+void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_lsn,
+    const int64_t &log_id,
+    const LSN &log_committed_end_lsn)
 {
   bool need_update = false;
   LSN last_fetch_end_lsn;
@@ -1492,9 +1495,9 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_ls
                || log_id == last_fetch_max_log_id_) {
       LSN committed_end_lsn;
       get_committed_end_lsn_(committed_end_lsn);
-      ATOMIC_STORE(&last_fetch_committed_end_lsn_.val_, committed_end_lsn.val_);
+      ATOMIC_STORE(&last_fetch_committed_end_lsn_.val_, log_committed_end_lsn.val_);
       PALF_LOG(INFO, "update last fetch log info", K_(palf_id), K_(self), K(last_fetch_end_lsn), K(log_id),
-          K_(last_fetch_end_lsn), K_(last_fetch_committed_end_lsn));
+          K_(last_fetch_end_lsn), K_(last_fetch_committed_end_lsn), K(committed_end_lsn));
     } else {
       PALF_LOG(INFO, "last_fetch_max_log_id_ has changed, skip update", K_(palf_id), K_(self),
           K(last_fetch_end_lsn), K(log_id), K_(last_fetch_max_log_id), K_(last_fetch_end_lsn),
