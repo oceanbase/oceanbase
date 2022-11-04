@@ -85,7 +85,7 @@ private:
 
 };
 
-// TODO(wangxiaohui.wxh): move functions in ObBackupInfoOperator into ObTenantBackupInfoOperation.
+  // TODO: merge ObBackupInfoOperator into ObTenantBackupInfoOperation.
 class ObBackupInfoOperator final
 {
 public:

@@ -309,7 +309,7 @@ int ObArchiveSchedulerService::start_tenant_archive_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler archive_handler;
-  // TODO: wangxiaohui.wxh, start specific dest archive.
+  // Only one dest is supported.
   const int64_t dest_no = 0;
   if (OB_FAIL(archive_handler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret));
@@ -326,7 +326,7 @@ int ObArchiveSchedulerService::stop_tenant_archive_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler archive_handler;
-  // TODO: wangxiaohui.wxh, stop specific dest archive.
+  // Only one dest is supported.
   const int64_t dest_no = 0;
   if (OB_FAIL(archive_handler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret), K(tenant_id));

@@ -38,7 +38,7 @@ public:
 
 
 // Wrapper backup serialize data with common backup header.
-// TODO: wangxiaohui.wxh, support deserialize according to different version.
+  // TODO: support deserialize according to different version.
 class ObBackupSerializeHeaderWrapper final : public ObIBackupSerializeProvider
 {
 public:
