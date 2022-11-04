@@ -19,14 +19,16 @@ namespace common {
 
 #define _ENUM_EXP(arg) arg
 
-#define DECL_ATTR(ATTR_CLS, args...)                    \
-  typedef struct ATTR_CLS {                             \
-    enum ATTR_CLS##Info{LST_DO(_ENUM_EXP, (, ), args)}; \
-    static const char* VALUES[];                        \
-  } ATTR_CLS;
+#define DECL_ATTR(ATTR_CLS, args...)                                           \
+typedef struct ATTR_CLS {                                                      \
+  enum ATTR_CLS ## Info {                                                      \
+    LST_DO(_ENUM_EXP, (,), args)                                               \
+  };                                                                           \
+  static const char *VALUES[];                                                 \
+} ATTR_CLS;
 
-DECL_ATTR(Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE, SSTABLE, CLOG, CACHE, TRANS, TENANT, RPC,
-    OBPROXY, OBSERVER);
+DECL_ATTR(Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE,
+         SSTABLE, LOGSERVICE, CACHE, TRANS, TENANT, RPC, OBPROXY, OBSERVER);
 DECL_ATTR(Scope, CLUSTER, TENANT);
 DECL_ATTR(Source, DEFAULT, FILE, OBADMIN, CMDLINE, CLUSTER, TENANT);
 DECL_ATTR(Session, NO, YES);
@@ -38,63 +40,36 @@ DECL_ATTR(CompatMode, MYSQL, ORACLE, COMMON);
 struct InfluencePlan {};
 struct NeedSerialize {};
 
-class ObParameterAttr {
+class ObParameterAttr
+{
 public:
-  ObParameterAttr()
-      : section_(Section::OBSERVER),
-        scope_(Scope::CLUSTER),
-        source_(Source::DEFAULT),
-        session_(Session::NO),
-        visible_level_(VisibleLevel::COMMON),
-        edit_level_(EditLevel::DYNAMIC_EFFECTIVE),
-        compat_mode_(CompatMode::COMMON)
-  {}
+  ObParameterAttr() : section_(Section::OBSERVER),
+                      scope_(Scope::CLUSTER),
+                      source_(Source::DEFAULT),
+                      session_(Session::NO),
+                      visible_level_(VisibleLevel::COMMON),
+                      edit_level_(EditLevel::DYNAMIC_EFFECTIVE),
+                      compat_mode_(CompatMode::COMMON) {}
 
   // constructor without scope, session, visible_level and compat_mode
-  ObParameterAttr(
-      Section::SectionInfo section_info, Source::SourceInfo source_info, EditLevel::EditLevelInfo edit_level_info)
-      : section_(section_info),
-        scope_(Scope::CLUSTER),
-        source_(source_info),
-        session_(Session::NO),
-        visible_level_(VisibleLevel::COMMON),
-        edit_level_(edit_level_info),
-        compat_mode_(CompatMode::COMMON)
-  {}
+  ObParameterAttr(Section::SectionInfo section_info,
+                  Source::SourceInfo source_info,
+                  EditLevel::EditLevelInfo edit_level_info)
+                : section_(section_info), scope_(Scope::CLUSTER),
+                  source_(source_info), session_(Session::NO),
+                  visible_level_(VisibleLevel::COMMON),
+                  edit_level_(edit_level_info),
+                  compat_mode_(CompatMode::COMMON) {}
 
-  void set_scope(Scope::ScopeInfo scope_info)
-  {
-    scope_ = scope_info;
-  }
+  void set_scope(Scope::ScopeInfo scope_info) { scope_ = scope_info; }
 
-  const char* get_section() const
-  {
-    return Section::VALUES[section_];
-  }
-  const char* get_scope() const
-  {
-    return Scope::VALUES[scope_];
-  }
-  const char* get_source() const
-  {
-    return Source::VALUES[source_];
-  }
-  const char* get_session() const
-  {
-    return Session::VALUES[session_];
-  }
-  const char* get_visible_level() const
-  {
-    return VisibleLevel::VALUES[visible_level_];
-  }
-  const char* get_edit_level() const
-  {
-    return EditLevel::VALUES[edit_level_];
-  }
-  const char* get_compat_mode() const
-  {
-    return CompatMode::VALUES[compat_mode_];
-  }
+  const char *get_section() const { return Section::VALUES[section_]; }
+  const char *get_scope() const { return Scope::VALUES[scope_]; }
+  const char *get_source() const { return Source::VALUES[source_]; }
+  const char *get_session() const { return Session::VALUES[session_]; }
+  const char *get_visible_level() const { return VisibleLevel::VALUES[visible_level_]; }
+  const char *get_edit_level() const { return EditLevel::VALUES[edit_level_]; }
+  const char *get_compat_mode() const { return CompatMode::VALUES[compat_mode_]; }
   bool is_static() const;
   bool is_readonly() const;
   bool is_invisible() const;
@@ -109,7 +84,7 @@ private:
   CompatMode::CompatModeInfo compat_mode_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase
 
 #endif

@@ -16,17 +16,18 @@
 #include "ob_bit_set.h"
 #include "ob_iarray.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-template <typename T>
-class ObMaskSet2 {
+template<typename T>
+class ObMaskSet2
+{
 public:
-  ObMaskSet2() : is_inited_(false), array_(NULL), bitset_()
-  {}
-  ~ObMaskSet2()
-  {}
-  int init(const ObIArray<T>* array)
+  ObMaskSet2() : is_inited_(false), array_(NULL), bitset_() {}
+  ~ObMaskSet2() {}
+  int init(const ObIArray<T> *array)
   {
     int ret = OB_SUCCESS;
     if (NULL == array) {
@@ -48,19 +49,19 @@ public:
   {
     bitset_.reuse();
   }
-
 public:
-  int mask(const T& key)
+  int mask(const T &key)
   {
     int ret = OB_SUCCESS;
     if (!is_inited_) {
       ret = OB_NOT_INIT;
     } else {
       bool hit = false;
-      for (int64_t i = 0; OB_SUCCESS == ret && i < array_->count(); i++) {
+      for (int64_t i = 0 ; OB_SUCCESS == ret && i < array_->count(); i++) {
         if (array_->at(i) == key) {
           hit = true;
-          if (OB_FAIL(bitset_.add_member(i))) {}
+          if (OB_FAIL(bitset_.add_member(i))) {
+          }
           break;
         }
       }
@@ -72,7 +73,7 @@ public:
     }
     return ret;
   }
-  int mask(const T& key, bool& is_new_mask)
+  int mask(const T &key, bool &is_new_mask)
   {
     int ret = OB_SUCCESS;
     bool tmp_new_mask = false;
@@ -80,7 +81,7 @@ public:
       ret = OB_NOT_INIT;
     } else {
       bool hit = false;
-      for (int64_t i = 0; OB_SUCCESS == ret && i < array_->count(); i++) {
+      for (int64_t i = 0 ; OB_SUCCESS == ret && i < array_->count(); i++) {
         if (array_->at(i) == key) {
           hit = true;
           if (bitset_.has_member(i)) {
@@ -110,7 +111,7 @@ public:
     }
     return bool_ret;
   }
-  int get_not_mask(ObIArray<T>& array) const
+  int get_not_mask(ObIArray<T> &array) const
   {
     int ret = OB_SUCCESS;
     if (!is_inited_) {
@@ -119,13 +120,14 @@ public:
       array.reset();
       for (int64_t i = 0; OB_SUCC(ret) && i < array_->count(); ++i) {
         if (!bitset_.has_member(i)) {
-          if (OB_FAIL(array.push_back(array_->at(i)))) {}
+          if (OB_FAIL(array.push_back(array_->at(i)))) {
+          }
         }
       }
     }
     return ret;
   }
-  bool is_mask(const T& key)
+  bool is_mask(const T &key)
   {
     bool bool_ret = false;
     if (is_inited_) {
@@ -138,13 +140,12 @@ public:
     }
     return bool_ret;
   }
-
 private:
   bool is_inited_;
-  const ObIArray<T>* array_;
+  const ObIArray<T> *array_;
   ObBitSet<> bitset_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_COMMON_OB_MASK_SET_
+} // common
+} // oceanbase
+#endif // OCEANBASE_COMMON_OB_MASK_SET_

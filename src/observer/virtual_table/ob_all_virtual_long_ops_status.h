@@ -17,19 +17,20 @@
 #include "observer/ob_server_struct.h"
 #include "storage/ob_long_ops_monitor.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualLongOpsStatus : public common::ObVirtualTableScannerIterator {
+class ObAllVirtualLongOpsStatus : public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualLongOpsStatus();
   virtual ~ObAllVirtualLongOpsStatus() = default;
   int init();
-  virtual int inner_get_next_row(common::ObNewRow*& row) override;
-
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
 private:
-  int convert_stat_to_row(const storage::ObILongOpsStat& stat, common::ObNewRow*& row);
-
+  int convert_stat_to_row(const storage::ObILongOpsStat &stat, common::ObNewRow *&row);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLongOpsStatus);
   bool is_inited_;

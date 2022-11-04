@@ -13,24 +13,26 @@
 #ifndef SRC_SQL_ENGINE_EXPR_OB_EXPR_BIT_LENGTH_H_
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_BIT_LENGTH_H_
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExprBitLength : public ObFuncExprOperator {
 public:
   ObExprBitLength();
   explicit ObExprBitLength(common::ObIAllocator& alloc);
   virtual ~ObExprBitLength();
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result1(
-      common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int calc_bit_length(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObExprBitLength);
+  virtual int calc_result_type1(ObExprResType& type, 
+                                ObExprResType& text,
+                                common::ObExprTypeCtx& type_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_bit_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObExprBitLength);                         
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR_BIT_LENGTH_H_ */

@@ -19,18 +19,23 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObCreateFuncResolver : public ObDDLResolver {
+class ObCreateFuncResolver : public ObDDLResolver
+{
 public:
-  explicit ObCreateFuncResolver(ObResolverParams& params);
+  explicit ObCreateFuncResolver(ObResolverParams &params);
   virtual ~ObCreateFuncResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
+  virtual int resolve(const ParseNode &parse_tree);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_CREATE_FUNC_RESOLVER_H */
+
+

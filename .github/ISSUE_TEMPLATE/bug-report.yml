@@ -9,7 +9,9 @@ body:
     attributes:
       label: Please check the issue list for the same bug 
       options:
-        - label: I have checked issue list and this bug is encountered for the first time.
+        - label: Please checked issue list and confirm this bug is encountered for the first time.
+          required: true
+        - label: Please try full text in English and attach precise description.
           required: true
   - type: textarea
     attributes:

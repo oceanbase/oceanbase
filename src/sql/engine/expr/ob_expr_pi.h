@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implementation of func pi
-
 #ifndef OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_PI_
 #define OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_PI_
 
@@ -27,7 +25,6 @@ public:
   explicit ObExprPi(common::ObIAllocator &alloc);
   virtual ~ObExprPi();
   virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
-  virtual int calc_result0(common::ObObj &result, common::ObExprCtx &expr_ctx) const;
   static int eval_pi(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,

@@ -1,10 +1,5 @@
 system sleep 5;
 alter system set balancer_idle_time = '10s';
-alter system set enable_auto_refresh_location_cache = "False";
-alter system set merger_warm_up_duration_time = '0s';
-alter system set zone_merge_concurrency = 2;
-alter system set merger_check_interval = '10s';
-alter system set enable_syslog_wf=False;
 create user if not exists 'admin' IDENTIFIED BY 'admin';
 use oceanbase;
 create database if not exists test;
@@ -14,29 +9,28 @@ grant all on *.* to 'admin' WITH GRANT OPTION;
 
 
 
-set @@session.ob_query_timeout = 40000000;
-create resource unit box1 max_cpu 2, max_memory 4073741824, max_iops 128, max_disk_size '5G', max_session_num 64, MIN_CPU=1, MIN_MEMORY=4073741824, MIN_IOPS=128;
-create resource pool pool2 unit = 'box1', unit_num = 1;
-create tenant mysql replica_num = 1, resource_pool_list=('pool2') set ob_tcp_invited_nodes='%', ob_compatibility_mode='mysql', parallel_max_servers=10, parallel_servers_target=10, secure_file_priv = "";
+alter system set enable_syslog_wf=false;
+set @@session.ob_query_timeout = 200000000;
+
+source init_create_tenant_routines.sql;
+
+call adjust_sys_resource();
+call create_tenant_by_memory_resource('oracle', 'oracle');
+call create_tenant_by_memory_resource('mysql', 'mysql');
+
 set @@session.ob_query_timeout = 10000000;
 system sleep 5;
 alter tenant sys set variables recyclebin = 'on';
 alter tenant sys set variables ob_enable_truncate_flashback = 'on';
+alter tenant oracle set variables ob_tcp_invited_nodes='%';
+alter tenant oracle set variables autocommit='on';
+alter tenant oracle set variables nls_date_format='YYYY-MM-DD HH24:MI:SS';
+alter tenant oracle set variables nls_timestamp_format='YYYY-MM-DD HH24:MI:SS.FF';
+alter tenant oracle set variables nls_timestamp_tz_format='YYYY-MM-DD HH24:MI:SS.FF TZR TZD';
+alter tenant oracle set variables recyclebin = 'on';
+alter tenant oracle set variables ob_enable_truncate_flashback = 'on';
 alter tenant mysql set variables ob_tcp_invited_nodes='%';
 alter tenant mysql set variables recyclebin = 'on';
 alter tenant mysql set variables ob_enable_truncate_flashback = 'on';
-
-select count(*) from oceanbase.__all_server group by zone limit 1 into @num;
-set @sql_text = concat('alter resource pool pool1', ' unit_num = ', @num);
-prepare stmt from @sql_text;
-execute stmt;
-deallocate prepare stmt;
-set @sql_text = concat('alter resource pool pool2', ' unit_num = ', @num);
-prepare stmt from @sql_text;
-execute stmt;
-deallocate prepare stmt;
-
-select primary_zone from oceanbase.__all_tenant where tenant_id = 1 into @zone_name;
-alter tenant oracle primary_zone = @zone_name;
-alter tenant mysql primary_zone = @zone_name;
-
+alter system set ob_compaction_schedule_interval = '10s' tenant all;
+alter system set merger_check_interval = '10s' tenant all;

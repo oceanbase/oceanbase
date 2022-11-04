@@ -1,5 +1,6 @@
 # owner: dachuan.sdc
 # owner group: SQL2
+# tags: optimizer
 
 --result_format 4
 --explain_protocol 0

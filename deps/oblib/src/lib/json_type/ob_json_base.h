@@ -10,16 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains interface support for the json base abstraction.
-
 #ifndef OCEANBASE_SQL_OB_JSON_BASE
 #define OCEANBASE_SQL_OB_JSON_BASE
 
 #include "ob_json_path.h"
 #include "lib/number/ob_number_v2.h" // for number::ObNumber
 #include "lib/timezone/ob_time_convert.h" // for ObTime
-
-typedef unsigned char uchar;
 
 namespace oceanbase {
 namespace common {
@@ -606,6 +602,14 @@ public:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int compare_decimal_uint(const number::ObNumber &a, uint64_t b, int &res);
 
+  // Compare int with json.
+  //
+  // @param [in]  a       The first value with double to be compared.
+  // @param [in]  other   The decond value with json type to be compared.
+  // @param [out] result  Less than returns -1, greater than 1, equal returns 0.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  static int compare_int_json(int a, ObIJsonBase* other, int& result);
+
   // Compare json decimal with int64_t.
   //
   // @param [in]  a       The first value with ObNumber to be compared.
@@ -629,14 +633,6 @@ public:
   // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int compare_double_int(double a, int64_t b, int &res);
-
-    // Compare int with json.
-  //
-  // @param [in]  a       The first value with double to be compared.
-  // @param [in]  other   The decond value with json type to be compared.
-  // @param [out] result  Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_int_json(int a, ObIJsonBase* other, int& result);
 
   // Compare double with uint.
   //

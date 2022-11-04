@@ -17,8 +17,10 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 // ObSqlString only used to concatenate SQL strings, for example:
 //
@@ -27,49 +29,35 @@ namespace common {
 //
 // ObSqlString add '\0' to the end of data, it's safe to use ptr() as C string.
 //
-class ObSqlString {
+class ObSqlString
+{
 
 public:
-  explicit ObSqlString(const lib::ObLabel& label = ObModIds::OB_SQL_STRING);
+  explicit ObSqlString(const lib::ObLabel &label = ObModIds::OB_SQL_STRING);
   virtual ~ObSqlString();
 
   bool is_valid() const;
-  void set_label(const lib::ObLabel& label)
-  {
-    allocator_.set_label(label);
-  }
+  void set_label(const lib::ObLabel &label) { allocator_.set_label(label); }
   void reset();
   void reuse();
   int reserve(const int64_t size);
 
-  int append(const char* str);
-  int append(const char* str, const int64_t len);
-  int append(const ObString& str);
-  int append_fmt(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+  int append(const char *str);
+  int append(const char *str, const int64_t len);
+  int append(const ObString &str);
+  int append_fmt(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
-  int assign(const char* str);
-  int assign(const char* str, const int64_t len);
-  int assign(const ObString& str);
-  int assign(const ObSqlString& sql);
-  int assign_fmt(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+  int assign(const char *str);
+  int assign(const char *str, const int64_t len);
+  int assign(const ObString &str);
+  int assign(const ObSqlString &sql);
+  int assign_fmt(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
   const ObString string() const;
-  const char* ptr() const
-  {
-    return data_;
-  }
-  int64_t length() const
-  {
-    return len_;
-  }
-  int64_t capacity() const
-  {
-    return data_size_ > 0 ? data_size_ - 1 : 0;
-  }
-  bool empty() const
-  {
-    return 0 == length();
-  }
+  const char *ptr() const { return data_; }
+  int64_t length() const { return len_; }
+  int64_t capacity() const { return data_size_ > 0 ? data_size_ - 1 : 0; }
+  bool empty() const { return 0 == length(); }
 
   // Splice sql out of ObSqlString. example:
   //
@@ -80,29 +68,25 @@ public:
   //
   // Dangerous api, caller's responsibility to ensure that modification occurs in [0, capacity())
   // and ptr() stable (no appendxxx(), assignxxx(), reset() called before set_length()).
-  char* ptr()
-  {
-    return data_;
-  }
+  char *ptr() { return data_; }
   int set_length(const int64_t len);
 
-  int64_t to_string(char* buf, const int64_t buf_len) const;
-
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  
   int extend(const int64_t size);
-
 private:
-  int vappend(const char* fmt, va_list ap);
+  int vappend(const char *fmt, va_list ap);
 
 private:
   static const int64_t MAX_SQL_STRING_LEN = 512;
-  char* data_;
+  char *data_;
   int64_t data_size_;
   int64_t len_;
   ObMalloc allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObSqlString);
 };
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_SQL_STRING_H_
+#endif // OCEANBASE_COMMON_OB_SQL_STRING_H_

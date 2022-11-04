@@ -26,26 +26,25 @@ namespace lib {
   In the duration time unit, if acquire count exceeds initial number,
   it will be allowed every thereafter number
 */
-class ObSampleRateLimiter : public lib::ObRateLimiter {
+class ObSampleRateLimiter : public lib::ObRateLimiter
+{
 public:
-  ObSampleRateLimiter() : ObSampleRateLimiter(0, 0)
+  ObSampleRateLimiter()
+    : ObSampleRateLimiter(0, 0) {}
+  ObSampleRateLimiter(int64_t initial, int64_t thereafter,
+                      int64_t duration=1000L * 1000L/*1s*/)
+    : initial_(initial), thereafter_(thereafter), duration_(duration),
+      reset_ts_(current_time()), count_(0)
   {}
-  ObSampleRateLimiter(int64_t initial, int64_t thereafter, int64_t duration = 1000L * 1000L /*1s*/)
-      : initial_(initial), thereafter_(thereafter), duration_(duration), reset_ts_(current_time()), count_(0)
-  {}
-  bool is_force_allows() const override
-  {
-    return false;
-  }
-  void reset_force_allows() override{};
-  int acquire(int64_t permits = 1) override;
-  int try_acquire(int64_t permits = 1) override;
+  bool is_force_allows() const override { return false; }
+  void reset_force_allows() override { };
+  int acquire(int64_t permits=1) override;
+  int try_acquire(int64_t permits=1) override;
 
 public:
   // This is a copy of ObTimeUtility::current_time() that depends on
   // nothing other than system library.
   static int64_t current_time();
-
 private:
   int64_t initial_;
   int64_t thereafter_;
@@ -88,12 +87,14 @@ inline int64_t ObSampleRateLimiter::current_time()
   int64_t time = 0;
   struct timeval t;
   if (gettimeofday(&t, nullptr) >= 0) {
-    time = (static_cast<int64_t>(t.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(t.tv_usec));
+    time = (static_cast<int64_t>(t.tv_sec)
+            * static_cast<int64_t>(1000000)
+            + static_cast<int64_t>(t.tv_usec));
   }
   return time;
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+}  // lib
+}  // oceanbase
 
 #endif /* OB_SAMPLE_RATE_LIMITER_H */

@@ -13,20 +13,26 @@
 #ifndef MOCK_OB_STORE_ROW_ITERATOR_H_
 #define MOCK_OB_STORE_ROW_ITERATOR_H_
 
-namespace oceanbase {
-namespace storage {
+#include "storage/access/ob_store_row_iterator.h"
 
-class MockObStoreRowIterator : public ObStoreRowIterator {
+namespace oceanbase
+{
+namespace storage
+{
+
+class MockObStoreRowIterator : public ObStoreRowIterator
+{
 public:
-  MockObStoreRowIterator()
-  {}
-  virtual ~MockObStoreRowIterator()
-  {}
-  MOCK_METHOD1(get_next_row, int(const ObStoreRow*& row));
+  MockObStoreRowIterator() {}
+  virtual ~MockObStoreRowIterator() {}
+  MOCK_METHOD1(get_next_row, int(const ObStoreRow *&row));
   MOCK_METHOD0(reset, void());
 };
 
-}  // namespace storage
-}  // namespace oceanbase
+}
+}
+
+
 
 #endif /* MOCK_OB_STORE_ROW_ITERATOR_H_ */
+

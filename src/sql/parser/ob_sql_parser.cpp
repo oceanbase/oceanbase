@@ -17,32 +17,48 @@
 #include "sql/parser/parse_malloc.h"
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
+#ifndef SQL_PARSER_COMPILATION
+#include "lib/ash/ob_active_session_guard.h"
+#endif
 #include "sql/parser/parser_utility.h"
 #include <openssl/md5.h>
 
-namespace oceanbase {
+
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-int ObSQLParser::parse(const char* str_ptr, const int64_t str_len, ParseResult& result)
+namespace sql
+{
+int ObSQLParser::parse(const char * str_ptr, const int64_t str_len, ParseResult &result)
 {
   int ret = OB_SUCCESS;
+#ifndef SQL_PARSER_COMPILATION
+  // proxy don't need this, only for observer
+  ObActiveSessionGuard::get_stat().in_parse_ = true;
+#endif
   if (0 != parse_init(&result)) {
     ret = OB_ERR_PARSER_INIT;
   } else {
     ret = parse_sql(&result, str_ptr, static_cast<size_t>(str_len));
   }
+#ifndef SQL_PARSER_COMPILATION
+  ObActiveSessionGuard::get_stat().in_parse_ = false;
+#endif
   return ret;
 }
 
-int ObSQLParser::parse_and_gen_sqlid(
-    void* malloc_pool, const char* str_ptr, const int64_t str_len, const int64_t len, char* sql_id)
+int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
+                                     const char *str_ptr,
+                                     const int64_t str_len,
+                                     const int64_t len,
+                                     char *sql_id)
 {
   int ret = OB_SUCCESS;
-  ParseResult* parse_result = (ParseResult*)parse_malloc(sizeof(ParseResult), malloc_pool);
+  ParseResult *parse_result = (ParseResult *)parse_malloc(sizeof(ParseResult), malloc_pool);
   if (OB_ISNULL(parse_result)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    memset((void*)parse_result, 0, sizeof(ParseResult));
+    memset((void *)parse_result, 0, sizeof(ParseResult));
     parse_result->is_fp_ = true;
     parse_result->is_multi_query_ = false;
     parse_result->malloc_pool_ = malloc_pool;
@@ -58,7 +74,7 @@ int ObSQLParser::parse_and_gen_sqlid(
     parse_result->may_bool_value_ = false;
 
     int64_t new_length = str_len + 1;
-    char* buf = (char*)parse_malloc(new_length, parse_result->malloc_pool_);
+    char *buf = (char *)parse_malloc(new_length, parse_result->malloc_pool_);
     if (OB_UNLIKELY(NULL == buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -70,13 +86,18 @@ int ObSQLParser::parse_and_gen_sqlid(
     }
 
     if (OB_SUCC(ret)) {
-      ret = gen_sqlid(parse_result->no_param_sql_, parse_result->no_param_sql_len_, len, sql_id);
+      ret = gen_sqlid(parse_result->no_param_sql_,
+                      parse_result->no_param_sql_len_,
+                      len,
+                      sql_id);
     }
   }
   return ret;
 }
 
-int ObSQLParser::gen_sqlid(const char* paramed_sql, const int64_t sql_len, const int64_t len, char* sql_id)
+int ObSQLParser::gen_sqlid(const char* paramed_sql, const int64_t sql_len,
+                           const int64_t len,
+                           char *sql_id)
 {
   int ret = OB_SUCCESS;
   const int32_t MD5_LENGTH = 16;
@@ -84,7 +105,8 @@ int ObSQLParser::gen_sqlid(const char* paramed_sql, const int64_t sql_len, const
     ret = OB_INVALID_ARGUMENT;
   } else {
     unsigned char md5_buf[MD5_LENGTH];
-    unsigned char* res = MD5(reinterpret_cast<const unsigned char*>(paramed_sql), sql_len, md5_buf);
+    unsigned char *res = MD5(reinterpret_cast<const unsigned char *>(paramed_sql),
+                             sql_len, md5_buf);
 
     if (OB_ISNULL(res)) {
       ret = OB_ERR_UNEXPECTED;
@@ -95,5 +117,5 @@ int ObSQLParser::gen_sqlid(const char* paramed_sql, const int64_t sql_len, const
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

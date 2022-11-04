@@ -14,127 +14,107 @@
 #define _OCEABASE_OBSERVER_OMT_OB_TH_WORKER_H_
 
 #include <pthread.h>
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "lib/lock/ob_thread_cond.h"
-#include "lib/coro/co.h"
 #include "rpc/ob_request.h"
-#include "lib/coro/co_user_thread.h"
+#include "lib/thread/threads.h"
 #include "lib/thread/ob_thread_name.h"
+#include "observer/omt/ob_worker_processor.h"
+#include "share/rc/ob_tenant_base.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace rpc {
-namespace frame {
-class ObReqTranslator;
-}
-}  // namespace rpc
-namespace omt {
+namespace rpc { namespace frame { class ObReqTranslator; } }
+namespace omt
+{
 
 // Forward declarations
 class ObTenant;
-class ObIWorkerProcessor;
 class ObResourceGroup;
 
 static const int64_t WORKER_CHECK_PERIOD = 500L;
 static const int64_t REQUEST_WAIT_TIME = 10 * 1000L;
 
-class ObThWorker : public share::ObWorker, public lib::CoKThread {
+class ObThWorker
+    : public lib::Worker, public lib::Threads
+{
 public:
   enum RequestType { RT_NOTASK, RT_NEW, RT_OLD };
-  enum class WStatus { STOPPED, IDLE, RUNNING, WAITING, RUNNABLE };
 
 public:
-  explicit ObThWorker(ObIWorkerProcessor& procor);
+  explicit ObThWorker();
   virtual ~ObThWorker();
 
   int init();
   void destroy();
   inline void reset();
 
-  inline void set_tenant(ObTenant* tenant);
+  inline void set_tenant(ObTenant *tenant)
+{
+  tenant_ = tenant;
+  set_run_wrapper(MTL_CTX());
+}
 
-  void worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t& worker_level);
-  inline void set_group(ObResourceGroup* group);
+  inline void set_group(ObResourceGroup *group);
 
-  void run(int64_t idx) override;
+  void worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level);
+  void run(int64_t idx);
 
-  void resume() override;
+  void resume();
   void pause();
 
   Status check_qtime_throttle();
   Status check_throttle();
   Status check_rate_limiter();
-  virtual ObThWorker::Status check_wait() override;
+  virtual ObThWorker::Status check_wait();
   virtual int check_status() override;
-  virtual int check_large_query_quota() override;
+  virtual int check_large_query_quota();
 
   // retry relating
-  virtual bool need_retry() const override;
-  virtual void disable_retry() override;
-  virtual bool set_retry_flag() override;
-  virtual void reset_retry_flag() override;
+  virtual bool can_retry() const;
+  virtual void set_need_retry();
+  virtual bool need_retry() const;
 
   // active relating
   void wait_active();
   void activate();
   void set_inactive();
-  bool is_active()
-  {
-    return active_;
-  }
-  int64_t get_active_inactive_ts() const
-  {
-    return active_inactive_ts_;
-  }
-  bool is_waiting_active()
-  {
-    return ATOMIC_LOAD(&waiting_active_);
-  }
+  bool is_active() { return active_; }
+  int64_t get_active_inactive_ts() const { return active_inactive_ts_; }
+  bool is_waiting_active() { return ATOMIC_LOAD(&waiting_active_); }
 
-  bool large_query() const
-  {
-    return large_query_;
-  }
-  void set_large_query(bool v = true)
-  {
-    large_query_ = v;
-  }
+  bool large_query() const { return large_query_; }
+  void set_large_query(bool v=true) { large_query_ = v; }
 
-  void set_lq_token(bool v = true)
-  {
-    lq_token_ = v;
-  }
-  bool has_lq_token() const
-  {
-    return lq_token_;
-  }
+  void set_lq_token(bool v=true) { lq_token_ = v; }
+  bool has_lq_token() const { return lq_token_; }
 
   int64_t get_query_start_time() const;
   int64_t get_query_enqueue_time() const;
-  ObTenant* get_tenant()
-  {
-    return tenant_;
-  }
-  ObResourceGroup* get_group()
-  {
-    return group_;
-  }
+  ObTenant *get_tenant() { return tenant_; }
+  ObResourceGroup *get_group() { return group_; }
 
 private:
+  // SQL layer should not call disable_retry directly
+  // it can only decide retry, don't need to decide no-retry as it is by default.
+  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/sgl4x3#vhv1R
+  virtual void disable_retry();
+
   void set_th_worker_thread_name(uint64_t tenant_id);
   void wait_runnable();
-  void process_request(rpc::ObRequest& req);
+  void process_request(rpc::ObRequest &req);
 
   void th_created();
   void th_destroy();
 
 private:
-  ObIWorkerProcessor& procor_;
+  ObWorkerProcessor procor_;
 
   bool is_inited_;
 
-  ObTenant* tenant_;
-  ObResourceGroup* group_;
+  ObTenant *tenant_;
+  ObResourceGroup *group_;
   common::ObThreadCond run_cond_;
 
   bool pause_flag_;
@@ -148,11 +128,8 @@ private:
   bool can_retry_;
   // if upper scheduler support retry, need this request retry?
   bool need_retry_;
-  // if retry_in_place == true,process again directly when need retry
-  bool retry_in_place_;
 
-  // Used by SchedV2
-  WStatus ws_;
+
   // Set by other thread indicating the worker is going to be active
   // or not. When it is set as false, current worker would be paused
   // and no longer process request afterward.
@@ -164,10 +141,11 @@ private:
   bool waiting_active_;
   int64_t active_inactive_ts_;
   bool lq_token_;
+  bool has_add_to_cgroup_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
-};  // end of class ObThWorker
+}; // end of class ObThWorker
 
 inline void ObThWorker::reset()
 {
@@ -179,27 +157,16 @@ inline void ObThWorker::reset()
   large_query_ = false;
   query_start_time_ = 0;
   query_enqueue_time_ = 0;
-  run_status_ = RS_PAUSED;
   can_retry_ = true;
   need_retry_ = false;
-  ws_ = WStatus::STOPPED;
   active_ = false;
+  has_add_to_cgroup_ = false;
   unset_tidx();
 }
 
-inline void ObThWorker::set_tenant(ObTenant* tenant)
-{
-  tenant_ = tenant;
-}
-
-inline void ObThWorker::set_group(ObResourceGroup* group)
+inline void ObThWorker::set_group(ObResourceGroup *group)
 {
   group_ = group;
-}
-
-inline bool ObThWorker::need_retry() const
-{
-  return need_retry_;
 }
 
 inline void ObThWorker::disable_retry()
@@ -207,18 +174,20 @@ inline void ObThWorker::disable_retry()
   can_retry_ = false;
 }
 
-inline bool ObThWorker::set_retry_flag()
+inline bool ObThWorker::can_retry() const
 {
-  if (can_retry_) {
-    need_retry_ = true;
-  }
+  return can_retry_;
+}
+
+inline bool ObThWorker::need_retry() const
+{
   return need_retry_;
 }
 
-inline void ObThWorker::reset_retry_flag()
+// Note: you CAN NOT call set_need_retry when can_retry_ == false
+inline void ObThWorker::set_need_retry()
 {
-  can_retry_ = true;
-  need_retry_ = false;
+  need_retry_ = true;
 }
 
 inline void ObThWorker::pause()
@@ -242,9 +211,10 @@ inline int64_t ObThWorker::get_query_enqueue_time() const
   return query_enqueue_time_;
 }
 
-#define THIS_THWORKER static_cast<oceanbase::omt::ObThWorker&>(THIS_WORKER)
+#define THIS_THWORKER static_cast<oceanbase::omt::ObThWorker &>(THIS_WORKER)
+#define THIS_THWORKER_SAFE dynamic_cast<oceanbase::omt::ObThWorker *>(&THIS_WORKER)
 
-}  // end of namespace omt
-}  // end of namespace oceanbase
+} // end of namespace omt
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_OBSERVER_OMT_OB_TH_WORKER_H_ */

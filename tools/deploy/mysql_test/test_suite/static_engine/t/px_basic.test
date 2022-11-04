@@ -1,4 +1,5 @@
 # owner: peihan.dph
+#tags: optimizer
 # owner group: sql2
 
 connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
@@ -108,6 +109,7 @@ select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b wher
 
 select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
 
+#merge sort receive bug
 select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
 
 connection syscon;

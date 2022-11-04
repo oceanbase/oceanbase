@@ -19,46 +19,47 @@
 #include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
 
-class TestObObj : public ::testing::Test {
+class TestObObj: public ::testing::Test
+{
 public:
   TestObObj();
   virtual ~TestObObj();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestObObj);
-
 protected:
   // function members
-  void test_obj_serialize(ObObj& obj1, ObObj& obj2, char* buff, int64_t buff_len);
-  void parse_line(const char* line, char* res, int& res_len);
-  int compare_sortkey(
-      const ObCollationType cs_type, const char* lhs, const int lhs_len, const char* rhs, const int rhs_len);
-  void test_sortkey(const char* filename);
+  void test_obj_serialize(ObObj &obj1, ObObj &obj2, char* buff, int64_t buff_len);
+  void parse_line(const char *line,  char *res, int &res_len);
+  int compare_sortkey(const ObCollationType cs_type, const char *lhs, const int lhs_len, const char *rhs, const int rhs_len);
+  void test_sortkey(const char *filename);
   void test_random_sortkey();
-  void gen_random_unicode_string(const int len, char* res, int& real_len);
+  void gen_random_unicode_string(const int len, char *res, int &real_len);
   int random_range(const int low, const int high);
-  void print_obj(const ObObj& obj);
-
+  void print_obj(const ObObj &obj);
 protected:
   // data members
 };
 
 TestObObj::TestObObj()
-{}
+{
+}
 
 TestObObj::~TestObObj()
-{}
+{
+}
 
 void TestObObj::SetUp()
-{}
+{
+}
 
 void TestObObj::TearDown()
-{}
+{
+}
 
-void TestObObj::parse_line(const char* line, char* res, int& res_len)
+void TestObObj::parse_line(const char *line,  char *res, int &res_len)
 {
   const int64_t len = strlen(line);
   int c = 0;
@@ -72,7 +73,7 @@ void TestObObj::parse_line(const char* line, char* res, int& res_len)
       c = 16 * c + line[i] - '0';
       if (2 == integer_nums) {
         res[k++] = static_cast<char>(c);
-        // fprintf(stdout, "%X ", res[k-1]);
+        //fprintf(stdout, "%X ", res[k-1]);
         c = 0;
         integer_nums = 0;
       }
@@ -80,13 +81,13 @@ void TestObObj::parse_line(const char* line, char* res, int& res_len)
   }
   res[k] = '\0';
   res_len = k;
-  // fprintf(stdout, "\n");
+  //fprintf(stdout, "\n");
 }
 
-void TestObObj::print_obj(const ObObj& obj)
+void TestObObj::print_obj(const ObObj &obj)
 {
   const int64_t len = obj.get_val_len();
-  const char* ptr = obj.get_string_ptr();
+  const char *ptr = obj.get_string_ptr();
   fprintf(stdout, "type=%d ", obj.get_collation_type());
   for (int64_t i = 0; i < len; ++i) {
     fprintf(stdout, "%X ", ptr[i]);
@@ -94,8 +95,7 @@ void TestObObj::print_obj(const ObObj& obj)
   fprintf(stdout, "\n");
 }
 
-int TestObObj::compare_sortkey(
-    const ObCollationType cs_type, const char* lhs, const int lhs_len, const char* rhs, const int rhs_len)
+int TestObObj::compare_sortkey(const ObCollationType cs_type, const char *lhs, const int lhs_len, const char *rhs, const int rhs_len)
 {
   int cmp = 0;
   ObObj obj1;
@@ -118,14 +118,14 @@ int TestObObj::compare_sortkey(
   obj2.to_collation_free_obj(obj4, is_valid_collation_free2, allocator);
   if (is_valid_collation_free1 && is_valid_collation_free2) {
     ret2 = obj3.compare_collation_free(obj4);
-    // fprintf(stdout, "use collation free\n");
+    //fprintf(stdout, "use collation free\n");
   } else {
     ret2 = obj1.compare(obj2, cs_type);
-    // fprintf(stdout, "use original\n");
+    //fprintf(stdout, "use original\n");
   }
-  // print_obj(obj3);
-  // print_obj(obj4);
-  // fprintf(stdout, "ret1=%d ret2=%d\n", ret1, ret2);
+  //print_obj(obj3);
+  //print_obj(obj4);
+  //fprintf(stdout, "ret1=%d ret2=%d\n", ret1, ret2);
   if (0 == ret1) {
     if (0 != ret1) {
       cmp = -1;
@@ -151,7 +151,7 @@ int TestObObj::compare_sortkey(
   return cmp;
 }
 
-void TestObObj::test_sortkey(const char* filename)
+void TestObObj::test_sortkey(const char *filename)
 {
   std::ifstream if_file(filename);
   std::string prev_line;
@@ -176,12 +176,12 @@ int TestObObj::random_range(const int low, const int high)
   return std::rand() % (high - low) + low;
 }
 
-void TestObObj::gen_random_unicode_string(const int len, char* res, int& real_len)
+void TestObObj::gen_random_unicode_string(const int len, char *res, int &real_len)
 {
   int i = 0;
   int unicode_point = 0;
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
-  for (i = 0; i < len;) {
+  for (i = 0; i < len; ) {
     const int bytes = random_range(1, 7);
     if (bytes < 4) {
       unicode_point = random_range(0, 127);
@@ -191,8 +191,8 @@ void TestObObj::gen_random_unicode_string(const int len, char* res, int& real_le
       unicode_point = random_range(0XFFFF, 0X10FFFF);
     }
     std::string utf_str = converter.to_bytes(unicode_point);
-    // fprintf(stdout, "code_point=%d\n", unicode_point);
-    // fprintf(stdout, "utf8_str=%s\n", utf_str.c_str());
+    //fprintf(stdout, "code_point=%d\n", unicode_point);
+    //fprintf(stdout, "utf8_str=%s\n", utf_str.c_str());
     for (int j = 0; j < utf_str.size(); ++j) {
       res[i++] = utf_str[j];
     }
@@ -212,7 +212,7 @@ void TestObObj::test_random_sortkey()
   std::srand(static_cast<unsigned int>(std::time(0)));
   int cmp = 0;
   for (int64_t i = 0; i < TEST_RUN; ++i) {
-    // fprintf(stdout, "run=%ld\n", i);
+    //fprintf(stdout, "run=%ld\n", i);
     lhs_len_tmp = random_range(6, 8);
     rhs_len_tmp = random_range(6, 8);
     gen_random_unicode_string(lhs_len_tmp, lhs_buf, lhs_len);
@@ -641,7 +641,7 @@ TEST_F(TestObObj, test_compare_collation_free_oraclemode)
   obj1.set_varchar_value(aa, 3);
   obj2.set_varchar_value(bb, 4);
   cmp = obj1.compare_collation_free(obj2);
-  ASSERT_TRUE(cmp < 0);
+  ASSERT_TRUE(cmp <  0);
 
   // Test the size of a\1 and a
   aa[0] = 'a';
@@ -662,7 +662,7 @@ TEST_F(TestObObj, test_compare_collation_free_oraclemode)
   cmp = obj1.compare_collation_free(obj2);
   ASSERT_TRUE(cmp > 0);
 
-  // Under oracle varchar, the ones with spaces at the end are bigger
+  // Under oracle varchar, the ones with spaces at the end are bigger 
   obj1.set_varchar_value("abD", 3);
   obj2.set_varchar_value("abD ", 4);
   cmp = obj1.compare_collation_free(obj2);
@@ -767,9 +767,10 @@ TEST_F(TestObObj, test_compare_collation_free_oraclemode)
   obj2.set_char_value(bb, 1);
   cmp = obj1.compare_collation_free(obj2);
   ASSERT_TRUE(cmp < 0);
+
 }
 
-void TestObObj::test_obj_serialize(ObObj& obj1, ObObj& obj2, char* buff, int64_t buff_len)
+void TestObObj::test_obj_serialize(ObObj &obj1, ObObj &obj2, char* buff, int64_t buff_len)
 {
   int64_t len = obj1.get_serialize_size();
   int64_t pos = 0;
@@ -787,7 +788,11 @@ TEST_F(TestObObj, test_serialize)
   static const int64_t MY_BUF_SIZE = 1024;
   char buff[MY_BUF_SIZE];
   // 1. varchar
-  const char* cases[] = {"", "10.244.4.30:55412;10.244.4.31:55412"};
+  const char * cases[] =
+      {
+        "",
+        "10.244.4.30:55412;10.244.4.31:55412"
+      };
   for (int64_t i = 0; i < ARRAYSIZEOF(cases); ++i) {
     obj1.set_varchar(cases[i]);
     obj1.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
@@ -801,8 +806,8 @@ TEST_F(TestObObj, test_serialize)
   test_obj_serialize(obj1, obj2, buff, MY_BUF_SIZE);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

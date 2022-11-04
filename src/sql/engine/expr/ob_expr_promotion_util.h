@@ -18,18 +18,26 @@
 //#include "common/expression/ob_expr_string_buf.h"
 //#include "lib/timezone/ob_timezone_info.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprResType;
-class ObExprPromotionUtil {
-public:
-  static int get_nvl_type(ObExprResType& type, const ObExprResType& type1, const ObExprResType& type2);
-
-private:
-  static int get_calc_type(ObExprResType& type, const ObExprResType& type1, const ObExprResType& type2,
+namespace oceanbase
+{
+namespace sql
+{
+  class ObExprResType;
+  class ObExprPromotionUtil
+  {
+  public:
+    static int get_nvl_type(
+      ObExprResType &type,
+      const ObExprResType &type1,
+      const ObExprResType &type2);
+  private:
+    static int get_calc_type(
+      ObExprResType &type,
+      const ObExprResType &type1,
+      const ObExprResType &type2,
       const common::ObObjType map[common::ObMaxTC][common::ObMaxTC]);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_EXPR_PROMOTION_UTIL_H_ */
+}
+}
+#endif  /* _OB_EXPR_PROMOTION_UTIL_H_ */

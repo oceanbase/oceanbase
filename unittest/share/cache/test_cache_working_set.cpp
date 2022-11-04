@@ -24,10 +24,13 @@
 #include "observer/ob_signal_handle.h"
 
 using ::testing::_;
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace share;
-namespace common {
-class TestCacheWorkingSet : public ::testing::Test {
+namespace common
+{
+class TestCacheWorkingSet : public ::testing::Test
+{
 public:
   static const int64_t K_SIZE = 10;
   static const int64_t V_SIZE = 16 * 1024;
@@ -38,22 +41,24 @@ public:
   virtual ~TestCacheWorkingSet();
   virtual void SetUp();
   virtual void TearDown();
-
 protected:
   uint64_t tenant_id_;
   int64_t mem_limit_;
 };
 
-TestCacheWorkingSet::TestCacheWorkingSet() : tenant_id_(OB_INVALID_ID), mem_limit_(0)
-{}
+TestCacheWorkingSet::TestCacheWorkingSet()
+  : tenant_id_(OB_INVALID_ID), mem_limit_(0)
+{
+}
 
 TestCacheWorkingSet::~TestCacheWorkingSet()
-{}
+{
+}
 
 void TestCacheWorkingSet::SetUp()
 {
   ASSERT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init());
-  ObTenantManager& tenant_mgr = ObTenantManager::get_instance();
+  ObTenantManager &tenant_mgr = ObTenantManager::get_instance();
   mem_limit_ = 1 * 1024 * 1024 * 1024;
   tenant_id_ = 1001;
   ASSERT_EQ(OB_SUCCESS, tenant_mgr.init());
@@ -72,7 +77,7 @@ TEST_F(TestCacheWorkingSet, basic)
   CHUNK_MGR.set_limit(2L * 1024L * 1024L * 1024L);
   Key key;
   Value value;
-  const TestKVCacheValue<V_SIZE>* pvalue = NULL;
+  const TestKVCacheValue<V_SIZE> *pvalue = NULL;
   ObKVCacheHandle handle;
 
   ObCacheWorkingSet<Key, Value> ws;
@@ -151,8 +156,9 @@ TEST_F(TestCacheWorkingSet, parallel)
 TEST_F(TestCacheWorkingSet, cache_size_increase)
 {
   // close background wash timer task
-  ObKVGlobalCache::get_instance().wash_timer_.stop();
-  ObKVGlobalCache::get_instance().wash_timer_.wait();
+  // ObKVGlobalCache::get_instance().wash_timer_.stop();
+  // ObKVGlobalCache::get_instance().wash_timer_.wait();
+  ObKVGlobalCache::get_instance().wash_task_.cancelCallBack();
   Key key;
   Value value;
 
@@ -240,10 +246,10 @@ TEST_F(TestCacheWorkingSet, hit_ratio)
   ASSERT_TRUE(ws_hit_ratio > hit_ratio);
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::observer::ObSignalHandle signal_handle;
   oceanbase::observer::ObSignalHandle::change_signal_mask();

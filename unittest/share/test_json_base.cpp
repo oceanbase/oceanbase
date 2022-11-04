@@ -20,7 +20,6 @@
 #undef private
 
 #include <sys/time.h>    
-#include <limits.h> 
 using namespace std;
 namespace oceanbase {
 namespace common {
@@ -47,11 +46,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestJsonBase);
 };
 
-// json text compare
+// json text 比较
 //
-// @param [in] json_text_a, json text a
-// @param [in] json_text_b, json text b
-// @return -1(<), 1(>), 0(=)
+// @param [in] json_text_a 比较的json text a
+// @param [in] json_text_b 比较的json text b
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_json_text(common::ObString &json_text_a, common::ObString &json_text_b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -81,13 +80,13 @@ static int json_compare_json_text(common::ObString &json_text_a, common::ObStrin
   return res_bin;
 }
 
-// json string compare
+// json string 比较
 //
-// @param [in] str_a, string a
-// @param [in] len_a, len of a
-// @param [in] str_b, string b
-// @param [in] len_a, len of b
-// @return -1(<), 1(>), 0(=)
+// @param [in] str_a 比较的json 字符串a
+// @param [in] len_a 比较的json 字符串a的长度
+// @param [in] str_b 比较的json 字符串b
+// @param [in] len_a 比较的json 字符串b的长度
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_string(const char *str_a, uint32_t len_a, const char *str_b, uint32_t len_b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -121,7 +120,7 @@ static int json_compare_string(const char *str_a, uint32_t len_a, const char *st
 //
 // @param [in] a int64_t
 // @param [in] b int64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_int_int(int64_t a, int64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -155,7 +154,7 @@ static int json_compare_int_int(int64_t a, int64_t b)
 //
 // @param [in] a int64_t
 // @param [in] b uint64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_int_uint(int64_t a, uint64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -189,7 +188,7 @@ static int json_compare_int_uint(int64_t a, uint64_t b)
 //
 // @param [in] a int64_t
 // @param [in] b double
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_int_double(int64_t a, double b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -223,7 +222,7 @@ static int json_compare_int_double(int64_t a, double b)
 //
 // @param [in] a int64_t
 // @param [in] b ObNumber
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_int_decimal(int64_t a, number::ObNumber &b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -257,7 +256,7 @@ static int json_compare_int_decimal(int64_t a, number::ObNumber &b)
 //
 // @param [in] a uint64_t
 // @param [in] b uint64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_uint_uint(uint64_t a, uint64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -291,7 +290,7 @@ static int json_compare_uint_uint(uint64_t a, uint64_t b)
 //
 // @param [in] a uint64_t
 // @param [in] b int64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_uint_int(uint64_t a, int64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -325,7 +324,7 @@ static int json_compare_uint_int(uint64_t a, int64_t b)
 //
 // @param [in] a uint64_t
 // @param [in] b double
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_uint_double(uint64_t a, double b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -359,7 +358,7 @@ static int json_compare_uint_double(uint64_t a, double b)
 //
 // @param [in] a uint64_t
 // @param [in] b ObNumber
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_uint_decimal(uint64_t a, number::ObNumber &b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -393,7 +392,7 @@ static int json_compare_uint_decimal(uint64_t a, number::ObNumber &b)
 //
 // @param [in] a double
 // @param [in] b int64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_doule_int(double a, int64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -427,7 +426,7 @@ static int json_compare_doule_int(double a, int64_t b)
 //
 // @param [in] a double
 // @param [in] b uint64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_doule_uint(double a, uint64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -461,7 +460,7 @@ static int json_compare_doule_uint(double a, uint64_t b)
 //
 // @param [in] a double
 // @param [in] b ObNumber
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_double_decimal(double a, number::ObNumber &b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -495,7 +494,7 @@ static int json_compare_double_decimal(double a, number::ObNumber &b)
 //
 // @param [in] a double
 // @param [in] b double
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_double_double(double a, double b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -529,7 +528,7 @@ static int json_compare_double_double(double a, double b)
 //
 // @param [in] a ObNumber
 // @param [in] b ObNumber
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_decimal_decimal(number::ObNumber &a, number::ObNumber &b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -563,7 +562,7 @@ static int json_compare_decimal_decimal(number::ObNumber &a, number::ObNumber &b
 //
 // @param [in] a ObNumber
 // @param [in] b int64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_decimal_int(number::ObNumber &a, int64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -597,7 +596,7 @@ static int json_compare_decimal_int(number::ObNumber &a, int64_t b)
 //
 // @param [in] a ObNumber
 // @param [in] b uint64_t
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_decimal_uint(number::ObNumber &a, uint64_t b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -631,7 +630,7 @@ static int json_compare_decimal_uint(number::ObNumber &a, uint64_t b)
 //
 // @param [in] a ObNumber
 // @param [in] b double
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_decimal_double(number::ObNumber &a, double b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -665,7 +664,7 @@ static int json_compare_decimal_double(number::ObNumber &a, double b)
 //
 // @param [in] a bool
 // @param [in] b bool
-// @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_boolean_boolean(bool a, bool b)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -698,10 +697,10 @@ static int json_compare_boolean_boolean(bool a, bool b)
 // json datetime vs datetime
 //
 // @param [in] a ObTime
-// @param [in] a time type
+// @param [in] a 时间字段类型
 // @param [in] b ObTime
-// @param [in] a time type
-// @return -1(<), 1(>), 0(=)
+// @param [in] a 时间字段类型
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_datetime_datetime(ObTime &a, ObObjType type_a,
                                           ObTime &b, ObObjType type_b)
 {
@@ -738,7 +737,7 @@ static int json_compare_datetime_datetime(ObTime &a, ObObjType type_a,
 // @param [in] type_a ObObjType
 // @param [in] b ObString
 // @param [in] type_a ObObjType
-// @return @return -1(<), 1(>), 0(=)
+// @return 小于返回-1，大于返回1， 相等返回0
 static int json_compare_opaque_opaque(common::ObString a, ObObjType type_a,
                                       common::ObString b, ObObjType type_b)
 {
@@ -1051,7 +1050,7 @@ TEST_F(TestJsonBase, test_seek)
 
   // 8. seek test1
   common::ObString j_text8("{\"width\":\"800\",\"image\":800,\"thumbnail\":{\"url\":    \
-      \"iamexampleurl\",\"width\":100},\"ids\":[116,943,234,38793]}");
+      \"http://www.example.com/image/481989943\",\"width\":100},\"ids\":[116,943,234,38793]}");
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text8,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_tree));
   common::ObString path_text8_0("$.ids[0]");
@@ -1242,7 +1241,7 @@ TEST_F(TestJsonBase, test_print)
   ObJsonArray j_array(&allocator);
   ObJsonArray *j_array_head = &j_array;
   ObJsonArray *j_arr_last = j_array_head;
-  for (uint32_t i = 0; i < 99; i++) { // 99 nesing
+  for (uint32_t i = 0; i < 99; i++) { // 99个数组嵌套
     buf_ptr = allocator.alloc(sizeof(ObJsonArray));
     ASSERT_TRUE(buf_ptr != NULL);
     ObJsonArray *j_new_arr = new (buf_ptr) ObJsonArray(&allocator);
@@ -1256,7 +1255,7 @@ TEST_F(TestJsonBase, test_print)
   j_tree = j_array_head;
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_tree->print(j_buf, false));
-  // the turns of 100, error code OB_ERR_JSON_OUT_OF_DEPTH as we expected
+  // 第100个,预期报错OB_ERR_JSON_OUT_OF_DEPTH
   buf_ptr = allocator.alloc(sizeof(ObJsonArray));
   ASSERT_TRUE(buf_ptr != NULL);
   ObJsonArray *j_new_arr = new (buf_ptr) ObJsonArray(&allocator);
@@ -1278,7 +1277,7 @@ TEST_F(TestJsonBase, test_print)
   ObJsonObject *last_obj = NULL;
   ObJsonObject *new_obj = NULL;
   char key_buf[10] = {0};
-  for (uint32_t i = 0; i < 100; i++) { // 99 nesting 
+  for (uint32_t i = 0; i < 100; i++) { // 99个对象嵌套
     sprintf(key_buf, "key%d", i);
     if (i == 0) {
       ASSERT_EQ(OB_SUCCESS, create_object(&allocator, key_buf, strlen(key_buf), NULL, new_obj));
@@ -1290,7 +1289,7 @@ TEST_F(TestJsonBase, test_print)
   j_tree = new_obj;
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_tree->print(j_buf, false));
-  // the turns of 100, error code OB_ERR_JSON_OUT_OF_DEPTH as we expected
+  // 第100个,预期报错OB_ERR_JSON_OUT_OF_DEPTH
   ASSERT_EQ(OB_SUCCESS, create_object(&allocator, key_buf, strlen(key_buf), last_obj, new_obj));
   j_tree = new_obj;
   ASSERT_EQ(OB_ERR_JSON_OUT_OF_DEPTH, j_tree->print(j_buf, false));
@@ -1638,7 +1637,7 @@ TEST_F(TestJsonBase, test_compare)
   // J_DOUBLE vs J_UINT
   ASSERT_EQ(-1, json_compare_doule_uint(DBL_MIN, ULLONG_MAX));
   ASSERT_EQ(0, json_compare_doule_uint(0, 0.0));
-  ASSERT_EQ(1, json_compare_doule_uint(static_cast<double>(ULLONG_MAX), 0));
+  ASSERT_EQ(1, json_compare_doule_uint(ULLONG_MAX, 0));
 
   // J_DOUBLE vs J_DECIMAL
   alloc.free();

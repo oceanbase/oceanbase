@@ -5,6 +5,12 @@ labels: [question]
 assignees:
   - caifeizhi
 body:
+  - type: checkboxes
+    attributes:
+      label: Please check the issue list for the same question
+      options:
+        - label: Please try full text in English and attach precise description.
+          required: true
   - type: markdown
     attributes:
       value: |

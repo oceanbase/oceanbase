@@ -55,12 +55,20 @@ int ObAllVirtualPsItemInfo::inner_get_next_row()
 int ObAllVirtualPsItemInfo::inner_open()
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-  if (OB_UNLIKELY(NULL == pcm_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-  } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
-    SERVER_LOG(WARN, "fail to traverse pcm", K(ret));
+  // sys tenant show all tenant infos
+  if (is_sys_tenant(effective_tenant_id_)) {
+    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
+    if (OB_UNLIKELY(NULL == pcm_)) {
+      ret = OB_NOT_INIT;
+      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
+    } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
+      SERVER_LOG(WARN, "fail to traverse pcm", K(ret));
+    }
+  } else {
+    // user tenant show self tenant info
+    if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
+      SERVER_LOG(WARN, "tenant id array fail to push back", KR(ret), K(effective_tenant_id_));
+    }
   }
   return ret;
 }
@@ -73,11 +81,13 @@ void ObAllVirtualPsItemInfo::reset()
   ps_cache_ = NULL;
 }
 
-int ObAllVirtualPsItemInfo::fill_cells(
-    uint64_t tenant_id, ObPsStmtId stmt_id, ObPsStmtItem* stmt_item, ObPsStmtInfo* stmt_info)
+int ObAllVirtualPsItemInfo::fill_cells(uint64_t tenant_id,
+                                       ObPsStmtId stmt_id,
+                                       ObPsStmtItem *stmt_item,
+                                       ObPsStmtInfo *stmt_info)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   int64_t col_count = output_column_ids_.count();
   if (OB_ISNULL(stmt_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -103,12 +113,13 @@ int ObAllVirtualPsItemInfo::fill_cells(
           SERVER_LOG(WARN, "get server ip failed", K(ret));
         } else {
           cells[i].set_varchar(ipstr);
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
         }
         break;
       }
       case share::ALL_VIRTUAL_PS_ITEM_INFO_CDE::SVR_PORT: {
-        cells[i].set_int(GCTX.self_addr_.get_port());
+        cells[i].set_int(GCTX.self_addr().get_port());
         break;
       }
       case share::ALL_VIRTUAL_PS_ITEM_INFO_CDE::STMT_ID: {
@@ -124,8 +135,10 @@ int ObAllVirtualPsItemInfo::fill_cells(
         if (OB_FAIL(ob_write_string(*allocator_, stmt_info->get_ps_sql(), ps_sql))) {
           SERVER_LOG(WARN, "copy ps_sql failed", K(ret), K(stmt_info->get_ps_sql()));
         } else {
-          cells[i].set_lob_value(ObLongTextType, ps_sql.ptr(), static_cast<int32_t>(ps_sql.length()));
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cells[i].set_lob_value(ObLongTextType, ps_sql.ptr(),
+                                 static_cast<int32_t>(ps_sql.length()));
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
         }
         break;
       }
@@ -171,7 +184,7 @@ int ObAllVirtualPsItemInfo::fill_cells(
   return ret;
 }
 
-int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_id, bool& is_end)
+int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
 {
   int ret = OB_SUCCESS;
   is_end = false;
@@ -179,7 +192,7 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
     if (OB_UNLIKELY(NULL == pcm_)) {
       ret = OB_NOT_INIT;
       SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_UNLIKELY(NULL != ps_cache_)) {
+    } else if (OB_UNLIKELY(NULL != ps_cache_)){
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "before get_ps_cache, the point of ps_cache must be NULL", K(ret));
     } else if (NULL == (ps_cache_ = pcm_->get_ps_cache(tenant_id))) {
@@ -187,8 +200,8 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
       SERVER_LOG(DEBUG, "plan cache not exists for this tenant yet", K(ret));
     } else if (false == ps_cache_->is_inited() || false == ps_cache_->is_valid()) {
       is_end = true;
-      SERVER_LOG(
-          DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()), K(ps_cache_->is_valid()));
+      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()),
+                                                              K(ps_cache_->is_valid()));
     } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
       SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
     } else {
@@ -214,10 +227,10 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         }
       } else {
         is_end = false;
-        uint64_t stmt_id = stmt_id_array_.at(stmt_id_array_idx_);
+        uint64_t stmt_id= stmt_id_array_.at(stmt_id_array_idx_);
         ++stmt_id_array_idx_;
-        ObPsStmtInfo* stmt_info = NULL;
-        ObPsStmtItem* stmt_item = NULL;
+        ObPsStmtInfo *stmt_info = NULL;
+        ObPsStmtItem *stmt_item = NULL;
         int tmp_ret = ps_cache_->ref_stmt_info(stmt_id, stmt_info);
         if (OB_HASH_NOT_EXIST == tmp_ret) {
           SERVER_LOG(DEBUG, "cannot get stmt_info, may be deleted", K(ret), K(tmp_ret), K(stmt_id));
@@ -227,10 +240,12 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         } else if (OB_ISNULL(stmt_info)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "stmt_info is NULL", K(ret));
-        } else if (FALSE_IT(tmp_ret =
-                                ps_cache_->ref_stmt_item(stmt_info->get_db_id(), stmt_info->get_ps_sql(), stmt_item))) {
+        } else if (FALSE_IT(tmp_ret = ps_cache_->ref_stmt_item(stmt_info->get_db_id(),
+                                                               stmt_info->get_ps_sql(),
+                                                               stmt_item))) {
         } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-          SERVER_LOG(DEBUG, "cannot get stmt_item, may be deleted", K(ret), K(tmp_ret), K(stmt_info->get_ps_sql()));
+          SERVER_LOG(DEBUG, "cannot get stmt_item, may be deleted",
+                     K(ret), K(tmp_ret), K(stmt_info->get_ps_sql()));
         } else if (OB_SUCCESS != tmp_ret) {
           ret = tmp_ret;
           SERVER_LOG(WARN, "ref_stmt_item failed", K(ret), K(stmt_info->get_ps_sql()));
@@ -262,6 +277,7 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         if (OB_NOT_NULL(stmt_info)) {
           if (OB_SUCCESS != (tmp_ret = ps_cache_->deref_stmt_info(stmt_id))) {
             if (OB_SUCCESS == ret) {
+              // 如果ret不是OB_SUCCESS，则忽略了tmp_ret
               ret = tmp_ret;
             }
             SERVER_LOG(WARN, "deref_stmt_info failed", K(tmp_ret), K(stmt_id));
@@ -270,7 +286,7 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
           }
         }
       }
-    }  // while end
+    } //while end
   }
   return ret;
 }

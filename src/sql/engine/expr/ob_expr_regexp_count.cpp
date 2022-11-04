@@ -22,18 +22,24 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprRegexpCount::ObExprRegexpCount(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_REGEXP_COUNT, N_REGEXP_COUNT, MORE_THAN_ONE, NOT_ROW_DIMENSION)
-{}
+ObExprRegexpCount::ObExprRegexpCount(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_REGEXP_COUNT, N_REGEXP_COUNT, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprRegexpCount::~ObExprRegexpCount()
-{}
+{
+}
 
-int ObExprRegexpCount::calc_result_typeN(
-    ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const
+int ObExprRegexpCount::calc_result_typeN(ObExprResType &type,
+                                         ObExprResType *types,
+                                         int64_t param_num,
+                                         common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   CK(NULL != type_ctx.get_raw_expr());
@@ -49,8 +55,7 @@ int ObExprRegexpCount::calc_result_typeN(
       }
     }
     if (OB_SUCC(ret)) {
-      switch (param_num) {  // because of regexp engine need utf8 code, here need reset calc collation type and can
-                            // implicit cast.
+      switch (param_num) {//because of regexp engine need utf8 code, here need reset calc collation type and can implicit cast.
         case 4:
           types[3].set_calc_type(ObVarcharType);
         case 3:
@@ -77,122 +82,45 @@ int ObExprRegexpCount::calc_result_typeN(
   return ret;
 }
 
-int ObExprRegexpCount::calc_resultN(
-    common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const
+int ObExprRegexpCount::calc(int64_t &ret_count,
+                             const ObString &text,
+                             const ObString &pattern,
+                             int64_t position,
+                             ObCollationType calc_cs_type,
+                             const ObString &match_param,
+                             int64_t subexpr,
+                             bool has_null_argument,
+                             bool reusable,
+                             ObExprRegexContext *regexp_ptr,
+                             ObExprStringBuf &string_buf,
+                             ObIAllocator &exec_ctx_alloc)
 {
   int ret = OB_SUCCESS;
-  bool has_null = false;
-  ObString text, pattern, match_param;
-  int64_t position = 1, subexpr = 0;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("varchar buffer not init or exec ctx or physical plan ctx is NULL", K(expr_ctx.calc_buf_));
-  } else {
-    for (int i = 0; !has_null && i < param_num; i++) {
-      // match param is null, use default flags
-      if (objs[i].is_null()) {
-        if (share::is_oracle_mode() && i == 3) {  // compatible oracle
-        } else {
-          has_null = true;
-        }
-      }
-    }
-    for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-      if (!objs[i].is_null() && !is_type_valid(objs[i].get_type())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(i), K(objs[i]));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      switch (param_num) {
-        case 4:
-          if (!objs[3].is_null()) {
-            TYPE_CHECK(objs[3], ObVarcharType);
-            match_param = objs[3].get_string();
-          }
-        case 3:
-          if (!objs[2].is_null()) {
-            TYPE_CHECK(objs[2], ObNumberType);
-            if (OB_FAIL(ObExprUtil::get_trunc_int64(objs[2], expr_ctx, position))) {
-              LOG_WARN("fail get position", K(position), K(ret));
-              break;
-            } else if (OB_UNLIKELY(position <= 0)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("regexp_count position is invalid", K(ret), K(position));
-              break;
-            }
-          }
-        case 2:
-          if (!objs[1].is_null()) {
-            TYPE_CHECK(objs[1], ObVarcharType);
-            pattern = objs[1].get_string();
-          }
-          if (!objs[0].is_null() && !objs[0].is_clob()) {
-            TYPE_CHECK(objs[0], ObVarcharType);
-            text = objs[0].get_string();
-          } else if (objs[0].is_clob()) {
-            text = objs[0].get_string();
-          }
-        default:
-          break;
-      }
-      ObExprRegexContext regexp_obj;
-      if (OB_SUCC(ret)) {
-        int64_t ret_count = 0;
-        number::ObNumber num;
-        if (OB_FAIL(calc(ret_count,
-                text,
-                pattern,
-                position,
-                result_type_.get_calc_collation_type(),
-                match_param,
-                subexpr,
-                has_null,
-                &regexp_obj,
-                *expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to cacl regexp_count", K(ret), K(text), K(pattern), K(match_param), K(subexpr));
-        } else if (has_null) {
-          result.set_null();
-        } else if (OB_FAIL(num.from(ret_count, *expr_ctx.calc_buf_))) {
-          LOG_WARN("fail to get ObNumber from ret_count", K(ret), K(ret_count));
-        } else {
-          result.set_number(num);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExprRegexpCount::calc(int64_t& ret_count, const ObString& text, const ObString& pattern, int64_t position,
-    ObCollationType calc_cs_type, const ObString& match_param, int64_t subexpr, bool has_null_argument,
-    ObExprRegexContext* regexp_ptr, ObExprStringBuf& string_buf)
-{
-  int ret = OB_SUCCESS;
-  // begin with '^'
+  //begin with '^'
   bool from_begin = false;
-  // end with '$'
+  //end with '$'
   bool from_end = false;
   int64_t sub = 0;
   ret_count = 0;
-  ObExprRegexContext* regexp_count_ctx = regexp_ptr;
-  ObSEArray<uint32_t, 4> begin_locations(common::ObModIds::OB_SQL_EXPR_REPLACE, common::OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ObExprRegexContext *regexp_count_ctx = regexp_ptr;
+  ObSEArray<uint32_t, 4> begin_locations(common::ObModIds::OB_SQL_EXPR_REPLACE,
+                                           common::OB_MALLOC_NORMAL_BLOCK_SIZE);
   int flags = 0, multi_flag = 0;
-  const bool reusable = false;
   if (OB_ISNULL(regexp_count_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("regexp_count_ctx is null", K(ret));
-  } else if (!regexp_count_ctx->is_inited()) {
-    if (OB_FAIL(get_regexp_flags(calc_cs_type, match_param, flags, multi_flag))) {
-      LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
-    } else if (OB_FAIL(regexp_count_ctx->init(pattern, flags, string_buf, reusable))) {
-      LOG_WARN("fail to init regexp", K(pattern), K(flags));
-    }
+  } else if (OB_FAIL(get_regexp_flags(calc_cs_type, match_param, flags, multi_flag))) {
+    LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
+  } else if (OB_FAIL(regexp_count_ctx->init(pattern, flags,
+                                            reusable ? exec_ctx_alloc : string_buf,
+                                            reusable))) {
+    LOG_WARN("fail to init regexp", K(pattern), K(flags));
   }
   if (OB_SUCC(ret)) {
+    //为了更好的和oracle兼容
     if (has_null_argument) {
       /*do nothing*/
-    } else if (share::is_mysql_mode() && pattern.empty()) {
+    } else if (lib::is_mysql_mode() && pattern.empty()) {
       ret = OB_ERR_REGEXP_ERROR;
       LOG_WARN("empty regex expression", K(ret));
     } else {
@@ -211,14 +139,16 @@ int ObExprRegexpCount::calc(int64_t& ret_count, const ObString& text, const ObSt
       } else {
         ObSEArray<size_t, 4> byte_num;
         ObSEArray<size_t, 4> byte_offsets;
-        if (OB_FAIL(ObExprUtil::get_mb_str_info(
-                text, ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4), byte_num, byte_offsets))) {
+        if (OB_FAIL(ObExprUtil::get_mb_str_info(text,
+                                                ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4),
+                                                byte_num,
+                                                byte_offsets))) {
           LOG_WARN("failed to get mb str info", K(ret));
         } else if (multi_flag) {
           if (from_begin && 1 != position) {
             begin_locations.pop_back();
           }
-          const char* text_ptr = text.ptr();
+          const char *text_ptr = text.ptr();
           for (int64_t idx = position; OB_SUCC(ret) && idx < byte_offsets.count() - 1; ++idx) {
             if (OB_UNLIKELY(byte_offsets.at(idx) >= text.length())) {
               ret = OB_ERR_UNEXPECTED;
@@ -231,9 +161,10 @@ int ObExprRegexpCount::calc(int64_t& ret_count, const ObString& text, const ObSt
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(regexp_count_ctx->count_match_str(
-                  text, subexpr, sub, string_buf, from_begin, from_end, begin_locations))) {
-            LOG_WARN("fail to get count_match_str", K(ret), K(text), K(pattern), K(match_param), K(flags), K(subexpr));
+          if (OB_FAIL(regexp_count_ctx->count_match_str(text, subexpr, sub, string_buf, from_begin,
+                                                        from_end, begin_locations))) {
+            LOG_WARN("fail to get count_match_str", K(ret), K(text), K(pattern),
+                    K(match_param), K(flags), K(subexpr));
           } else {
             ret_count = sub;
           }
@@ -244,16 +175,17 @@ int ObExprRegexpCount::calc(int64_t& ret_count, const ObString& text, const ObSt
   return ret;
 }
 
-int ObExprRegexpCount::get_regexp_flags(
-    const common::ObCollationType calc_cs_type, const ObString& match_param, int& flags, int& multi_flag)
+int ObExprRegexpCount::get_regexp_flags(const common::ObCollationType calc_cs_type,
+                                        const ObString &match_param, int& flags,
+                                        int &multi_flag)
 {
   int ret = OB_SUCCESS;
   int n_flag = 1;
   int m_flag = 0;
-  const char* ptr = match_param.ptr();
+  const char *ptr = match_param.ptr();
   int length = match_param.length();
   flags = OB_REG_EXTENDED | OB_REG_NLSTOP | OB_REG_NEWLINE;
-  if (share::is_oracle_mode()) {
+  if (lib::is_oracle_mode()) {
     flags |= OB_REG_ORACLE_MODE;
   } else {
     flags &= ~OB_REG_ORACLE_MODE;
@@ -261,7 +193,7 @@ int ObExprRegexpCount::get_regexp_flags(
   if (!ObCharset::is_bin_sort(calc_cs_type)) {
     flags |= OB_REG_ICASE;
   }
-  for (int i = 0; i < length; i++) {
+  for (int i = 0; OB_SUCC(ret) && i < length; i++) {
     char c = ptr[i];
     switch (c) {
       case 'i':
@@ -273,15 +205,15 @@ int ObExprRegexpCount::get_regexp_flags(
       case 'n':
         flags &= ~OB_REG_NLSTOP;
         n_flag = 0;
-        break;
+		    break;
       case 'm':
         flags &= ~OB_REG_NLSTOP;
         flags |= OB_REG_NEWLINE;
         flags |= OB_REG_NLANCH;
         m_flag = 1;
-        break;
+		    break;
       case 'x':
-        if (share::is_oracle_mode()) {  // compatible oracle
+        if (lib::is_oracle_mode()) {//compatible oracle
           flags |= OB_REG_EXPANDED;
         } else {
           ret = OB_INVALID_ARGUMENT;
@@ -289,7 +221,7 @@ int ObExprRegexpCount::get_regexp_flags(
         }
         break;
       case 'u':
-        if (share::is_mysql_mode()) {  // compatible oracle
+        if (lib::is_mysql_mode()) {//compatible oracle
           flags |= OB_REG_NEWLINE;
         } else {
           ret = OB_INVALID_ARGUMENT;
@@ -301,40 +233,60 @@ int ObExprRegexpCount::get_regexp_flags(
         LOG_WARN("invalid match_param", K(match_param));
     }
   }
-  multi_flag = m_flag & n_flag;
-  if (m_flag == 1 && n_flag == 0) {
-    flags &= ~OB_REG_NEWLINE;
-    flags &= ~OB_REG_NLANCH;
+  if (OB_SUCC(ret)) {
+    multi_flag = m_flag & n_flag;
+    if (m_flag == 1 && n_flag == 0) {
+      flags &= ~OB_REG_NEWLINE;
+      flags &= ~OB_REG_NLANCH;
+    }
   }
   return ret;
 }
 
-int ObExprRegexpCount::cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const
+int ObExprRegexpCount::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
-  // FIXME : reuse pattern compile
   int ret = OB_SUCCESS;
   // regex_count is oracle only expr
+  UNUSED(op_cg_ctx);
   CK(lib::is_oracle_mode());
   CK(2 <= rt_expr.arg_cnt_ && rt_expr.arg_cnt_ <= 4);
-  rt_expr.eval_func_ = eval_regexp_count;
+  CK(raw_expr.get_param_count() >= 2);
+  if (OB_SUCC(ret)) {
+    const ObRawExpr *text = raw_expr.get_param_expr(0);
+    const ObRawExpr *pattern = raw_expr.get_param_expr(1);
+    if (OB_ISNULL(text) || OB_ISNULL(pattern)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(text), K(pattern), K(ret));
+    } else {
+      const bool const_text = text->is_const_expr();
+      const bool const_pattern = pattern->is_const_expr();
+      rt_expr.extra_ = (!const_text && const_pattern) ? 1 : 0;
+      rt_expr.eval_func_ = &eval_regexp_count;
+      LOG_TRACE("regexp count expr cg", K(const_text), K(const_pattern), K(rt_expr.extra_));
+    }
+  }
   return ret;
 }
 
-int ObExprRegexpCount::eval_regexp_count(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprRegexpCount::eval_regexp_count(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* text = NULL;
-  ObDatum* pattern = NULL;
-  ObDatum* position = NULL;
-  ObDatum* flags = NULL;
+  ObDatum *text = NULL;
+  ObDatum *pattern = NULL;
+  ObDatum *position = NULL;
+  ObDatum *flags = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, text, pattern, position, flags))) {
     LOG_WARN("evaluate parameters failed", K(ret));
   } else {
     // use default flags if NULL == flags and flags->is_null()
-    const bool null_result = (text->is_null() || pattern->is_null() || (NULL != position && position->is_null()) ||
-                              (share::is_mysql_mode() && NULL != flags && flags->is_null()));
+    const bool null_result = (text->is_null() || pattern->is_null()
+                              || (NULL != position && position->is_null()) ||
+                              (lib::is_mysql_mode() && NULL != flags && flags->is_null()));
     int64_t pos = 1;
-    ObString match_param = (NULL != flags && !flags->is_null()) ? flags->get_string() : ObString();
+    ObString match_param = (NULL != flags && !flags->is_null())
+        ? flags->get_string()
+        : ObString();
     if (OB_FAIL(ObExprUtil::get_int_param_val(position, pos))) {
       LOG_WARN("truncate number to int64 failed", K(ret));
     } else if (pos <= 0) {
@@ -342,23 +294,31 @@ int ObExprRegexpCount::eval_regexp_count(const ObExpr& expr, ObEvalCtx& ctx, ObD
       LOG_WARN("position out of range", K(ret), K(position), K(pos));
     }
 
-    ObExprRegexContext regexp_ctx;
-    ObIAllocator& alloc = ctx.get_reset_tmp_alloc();
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &alloc = alloc_guard.get_allocator();
     ObNumStackOnceAlloc num_alloc;
     number::ObNumber num;
     int64_t subexpr = 0;
     int64_t cnt = 0;
+    ObExprRegexContext local_regex_ctx;
+    ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+    const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
+    if (OB_SUCC(ret) && reusable) {
+      if (NULL == (regexp_ctx = static_cast<ObExprRegexContext *>(
+                  ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_)))) {
+        if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr.expr_ctx_id_, regexp_ctx))) {
+          LOG_WARN("create expr regex context failed", K(ret), K(expr));
+        } else if (OB_ISNULL(regexp_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL context returned", K(ret));
+        }
+      }
+    }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(calc(cnt,
-                   text->get_string(),
-                   pattern->get_string(),
-                   pos,
-                   expr.args_[0]->datum_meta_.cs_type_,
-                   match_param,
-                   subexpr,
-                   null_result,
-                   &regexp_ctx,
-                   alloc))) {
+    } else if (OB_FAIL(calc(cnt, text->get_string(), pattern->get_string(), pos,
+                            expr.args_[0]->datum_meta_.cs_type_,
+                            match_param, subexpr, null_result, reusable, regexp_ctx, alloc,
+                            ctx.exec_ctx_.get_allocator()))) {
       LOG_WARN("calc regex count failed", K(ret));
     } else if (null_result) {
       expr_datum.set_null();
@@ -371,5 +331,5 @@ int ObExprRegexpCount::eval_regexp_count(const ObExpr& expr, ObEvalCtx& ctx, ObD
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

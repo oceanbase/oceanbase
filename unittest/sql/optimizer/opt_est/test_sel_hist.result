@@ -9,7 +9,7 @@ EXPECTED RESULT :density * num_null = 0.002
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 = 10;
-SELECTIVITY = 0.01
+SELECTIVITY = 0
 
 ******************CASE1******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -22,7 +22,7 @@ EXPECTED RESULT :density * num_null = 0.002
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 = 5.5;
-SELECTIVITY = 0.01
+SELECTIVITY = 0
 
 ******************CASE2******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -35,7 +35,7 @@ EXPECTED RESULT :density * num_null = 0.002
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 > 20;
-SELECTIVITY = 0.02
+SELECTIVITY = 0.97
 
 ******************CASE3******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -48,7 +48,7 @@ EXPECTED RESULT :density * num_null = 0.002
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 < 1;
-SELECTIVITY = 0.02
+SELECTIVITY = 0.0475
 
 ******************CASE4******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -61,7 +61,7 @@ EXPECTED RESULT :5/200 * 0.8 = 0.02
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 = 1;
-SELECTIVITY = 0.01
+SELECTIVITY = 0
 
 ******************CASE5******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -74,7 +74,7 @@ EXPECTED RESULT :(5/200 + 0.0025) * 0.8 = 0.022
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 <= 1;
-SELECTIVITY = 0.02
+SELECTIVITY = 0.0475
 
 ******************CASE6******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -87,7 +87,7 @@ EXPECTED RESULT :(103 - 5) / 200 * 0.8 = 0.392
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 >= 2 and c1 <= 10;
-SELECTIVITY = 0.431053
+SELECTIVITY = 0.0025
 
 ******************CASE7******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -100,7 +100,7 @@ EXPECTED RESULT :((103 - 5) / 200) * 0.8 = 0.392
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 > 1.5 and c1 <= 10;
-SELECTIVITY = 0.431053
+SELECTIVITY = 0.00645
 
 ******************CASE8******************
 min = 1, max = 20, ndv = 20, null_num = 50
@@ -113,5 +113,5 @@ EXPECTED RESULT :((103 - 5) / 200 + 0.0025) * 0.8 = 0.393
 ----------------------------------------------------------
 
 EXPR_STR: select c1 from t1 where c1 >= 2 and c1 < 10.5;
-SELECTIVITY = 0.473684
+SELECTIVITY = 0.04085
 

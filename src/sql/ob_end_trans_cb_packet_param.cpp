@@ -16,9 +16,11 @@
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
-ObEndTransCbPacketParam& ObEndTransCbPacketParam::operator=(const ObEndTransCbPacketParam& other)
+namespace oceanbase
+{
+namespace sql
+{
+ObEndTransCbPacketParam &ObEndTransCbPacketParam::operator=(const ObEndTransCbPacketParam& other)
 {
   MEMCPY(message_, other.message_, MSG_SIZE);
   affected_rows_ = other.affected_rows_;
@@ -29,11 +31,14 @@ ObEndTransCbPacketParam& ObEndTransCbPacketParam::operator=(const ObEndTransCbPa
   return *this;
 }
 
-const ObEndTransCbPacketParam& ObEndTransCbPacketParam::fill(
-    ObResultSet& rs, ObSQLSessionInfo& session, const ObCurTraceId::TraceId& trace_id)
+const ObEndTransCbPacketParam &ObEndTransCbPacketParam::fill(ObResultSet &rs,
+                                                             ObSQLSessionInfo &session,
+                                                             const ObCurTraceId::TraceId &trace_id)
 {
-  MEMCPY(message_, rs.get_message(), MSG_SIZE);  // TODO: optimize out
-  affected_rows_ = rs.get_affected_rows();
+  MEMCPY(message_, rs.get_message(), MSG_SIZE); // TODO: optimize out
+  // oracle ANONYMOUS_BLOCK affect rows always return 1
+  affected_rows_ = stmt::T_ANONYMOUS_BLOCK == rs.get_stmt_type() 
+                    ? 1 : rs.get_affected_rows();
   last_insert_id_to_client_ = rs.get_last_insert_id_to_client();
   is_partition_hit_ = session.partition_hit().get_bool();
   trace_id_.set(trace_id);
@@ -41,5 +46,8 @@ const ObEndTransCbPacketParam& ObEndTransCbPacketParam::fill(
   return *this;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}/* ns sql*/
+}/* ns oceanbase */
+
+

@@ -17,27 +17,30 @@
 #include "share/cache/ob_kv_storecache.h"
 #include "lib/stat/ob_di_cache.h"
 
-namespace oceanbase {
-namespace common {
+
+namespace oceanbase
+{
+namespace common
+{
 class ObObj;
 }
 
-namespace observer {
+namespace observer
+{
 
-class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator {
+class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator
+{
 public:
   ObInfoSchemaKvCacheTable();
   virtual ~ObInfoSchemaKvCacheTable();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_addr(common::ObAddr& addr)
-  {
-    addr_ = &addr;
-  }
-  virtual int set_ip(common::ObAddr* addr);
+  inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
+  virtual int set_ip(common::ObAddr *addr);
 
 private:
-  enum CACHE_COLUMN {
+  enum CACHE_COLUMN
+  {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
     SVR_PORT,
@@ -54,10 +57,10 @@ private:
     TOTAL_MISS_CNT,
     HOLD_SIZE
   };
-  common::ObAddr* addr_;
+  common::ObAddr *addr_;
   common::ObString ipstr_;
   int32_t port_;
-  common::ObSEArray<common::ObKVCacheInstHandle, 100> inst_handles_;
+  common::ObSEArray<common::ObKVCacheInstHandle, 100 > inst_handles_;
   int16_t cache_iter_;
   common::ObStringBuf str_buf_;
   common::ObObj cells_[common::OB_ROW_MAX_COLUMNS_COUNT];
@@ -66,6 +69,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaKvCacheTable);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_KVCACHE_TABLE */
+

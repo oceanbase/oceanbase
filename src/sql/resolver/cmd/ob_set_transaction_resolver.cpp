@@ -19,28 +19,32 @@
 #include "sql/ob_trans_character.h"
 using namespace oceanbase::common;
 using namespace oceanbase::transaction;
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace share;
-namespace sql {
-ObSetTransactionResolver::ObSetTransactionResolver(ObResolverParams& params) : ObCMDResolver(params)
+namespace sql
+{
+ObSetTransactionResolver::ObSetTransactionResolver(ObResolverParams &params)
+    :ObCMDResolver(params)
 {}
 
 ObSetTransactionResolver::~ObSetTransactionResolver()
 {}
 
-int ObSetTransactionResolver::resolve(const ParseNode& parse_tree)
+int ObSetTransactionResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObVariableSetStmt* stmt = NULL;
+  ObVariableSetStmt *stmt = NULL;
   if (OB_ISNULL(stmt = create_stmt<ObVariableSetStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create stmt failed");
-  } else if (T_TRANSACTION != parse_tree.type_ || OB_ISNULL(parse_tree.children_)) {
+  } else if (T_TRANSACTION != parse_tree.type_
+             || OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid parse node", K(parse_tree.type_), K(parse_tree.children_));
   } else {
-    ParseNode* characteristics_node = parse_tree.children_[1];
-    ParseNode* scope_node = parse_tree.children_[0];
+    ParseNode *characteristics_node = parse_tree.children_[1];
+    ParseNode *scope_node = parse_tree.children_[0];
     ObVariableSetStmt::VariableSetNode access_var_node;
     ObVariableSetStmt::VariableSetNode isolation_var_node;
     ObSetVar::SetScopeType scope = ObSetVar::SET_SCOPE_NEXT_TRANS;
@@ -59,9 +63,11 @@ int ObSetTransactionResolver::resolve(const ParseNode& parse_tree)
       access_var_node.is_system_variable_ = true;
       isolation_var_node.set_scope_ = scope;
       isolation_var_node.is_system_variable_ = true;
-      if (OB_FAIL(ob_write_string(*allocator_, OB_SV_TX_ISOLATION, isolation_var_node.variable_name_))) {
+      if (OB_FAIL(ob_write_string(
+                  *allocator_, OB_SV_TX_ISOLATION, isolation_var_node.variable_name_))) {
         LOG_WARN("fail to write string", K(ret));
-      } else if (OB_FAIL(ob_write_string(*allocator_, OB_SV_TX_READ_ONLY, access_var_node.variable_name_))) {
+      } else if (OB_FAIL(ob_write_string(
+                  *allocator_, OB_SV_TX_READ_ONLY, access_var_node.variable_name_))) {
         LOG_WARN("fail to write string", K(ret));
       } else {
         ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, isolation_var_node.variable_name_);
@@ -91,18 +97,17 @@ int ObSetTransactionResolver::resolve(const ParseNode& parse_tree)
         }
       }
     }
-
     if (OB_SUCC(ret) && set_isolation_level) {
-      if (OB_FAIL(build_isolation_expr(isolation_var_node.value_expr_, isolation_level))) {
+      if (OB_FAIL(build_isolation_expr(isolation_var_node.value_expr_, isolation_level)) ) {
         LOG_WARN("fail to build isolation expr", K(ret));
-      } else if (OB_FAIL(stmt->add_variable_node(ObVariableSetStmt::make_variable_name_node(isolation_var_node)))) {
+      } else if (OB_FAIL(stmt->add_variable_node(isolation_var_node))) {
         LOG_WARN("fail to add variable node", K(ret));
       }
     }
     if (OB_SUCC(ret) && set_access_mode) {
       if (OB_FAIL(build_access_expr(access_var_node.value_expr_, is_read_only))) {
         LOG_WARN("fail to build access expr", K(ret));
-      } else if (OB_FAIL(stmt->add_variable_node(ObVariableSetStmt::make_variable_name_node(access_var_node)))) {
+      } else if (OB_FAIL(stmt->add_variable_node(access_var_node))) {
         LOG_WARN("fail to add variable node", K(ret));
       } else {
         LOG_DEBUG("add variable node", K(is_read_only));
@@ -120,12 +125,12 @@ int ObSetTransactionResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObSetTransactionResolver::build_isolation_expr(ObRawExpr*& expr, int32_t level)
+int ObSetTransactionResolver::build_isolation_expr(ObRawExpr *&expr, int32_t level)
 {
   int ret = OB_SUCCESS;
   ObObjParam val;
-  ObConstRawExpr* c_expr = NULL;
-  const ObString& level_name = ObTransIsolation::get_name(level);
+  ObConstRawExpr *c_expr = NULL;
+  const ObString &level_name = ObTransIsolation::get_name(level);
   if (OB_ISNULL(params_.expr_factory_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("invalid stmt", K_(stmt));
@@ -148,11 +153,11 @@ int ObSetTransactionResolver::build_isolation_expr(ObRawExpr*& expr, int32_t lev
   return ret;
 }
 
-int ObSetTransactionResolver::build_access_expr(ObRawExpr*& expr, const bool is_read_only)
+int ObSetTransactionResolver::build_access_expr(ObRawExpr *&expr, const bool is_read_only)
 {
   int ret = OB_SUCCESS;
   ObObjParam val;
-  ObConstRawExpr* c_expr = NULL;
+  ObConstRawExpr *c_expr = NULL;
   if (is_read_only) {
     val.set_int(1);
   } else {
@@ -174,10 +179,10 @@ int ObSetTransactionResolver::build_access_expr(ObRawExpr*& expr, const bool is_
   return ret;
 }
 
-int ObSetTransactionResolver::scope_resolve(const ParseNode& parse_tree, ObSetVar::SetScopeType& scope)
+int ObSetTransactionResolver::scope_resolve(const ParseNode &parse_tree, ObSetVar::SetScopeType &scope)
 {
   int ret = OB_SUCCESS;
-  switch (parse_tree.value_) {
+  switch(parse_tree.value_) {
     case 0:
       scope = ObSetVar::SET_SCOPE_NEXT_TRANS;
       break;
@@ -194,7 +199,7 @@ int ObSetTransactionResolver::scope_resolve(const ParseNode& parse_tree, ObSetVa
   return ret;
 }
 
-int ObSetTransactionResolver::access_mode_resolve(const ParseNode& parse_tree, bool& is_read_only)
+int ObSetTransactionResolver::access_mode_resolve(const ParseNode &parse_tree, bool &is_read_only)
 {
   int ret = OB_SUCCESS;
   if (IS_READ_ONLY(parse_tree.value_)) {
@@ -208,7 +213,8 @@ int ObSetTransactionResolver::access_mode_resolve(const ParseNode& parse_tree, b
   return ret;
 }
 
-int ObSetTransactionResolver::isolation_level_resolve(const ParseNode& parse_tree, int32_t& isolation_level)
+int ObSetTransactionResolver::isolation_level_resolve(const ParseNode &parse_tree,
+                                                      int32_t &isolation_level)
 {
   int ret = OB_SUCCESS;
   switch (parse_tree.value_) {
@@ -233,9 +239,10 @@ int ObSetTransactionResolver::isolation_level_resolve(const ParseNode& parse_tre
     if (!transaction::ObTransIsolation::is_valid(isolation_level)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid isolation level, we just supported READ_COMMIT and SERIALIZABLE", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "isolation level is");
     }
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

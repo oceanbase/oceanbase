@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #ifndef COND_H
 #define COND_H
 #include "lib/time/Time.h"
@@ -17,8 +18,8 @@
 namespace obutil
 {
 template<class T> class ObMonitor;
-class Mutex;
-
+class ObUtilMutex;
+typedef ObUtilMutex Mutex;
 class Cond
 {
 public:

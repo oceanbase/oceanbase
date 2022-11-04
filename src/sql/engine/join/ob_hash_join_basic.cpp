@@ -16,8 +16,10 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 //****************************** ObHashJoinBatch ******************************
 ObHashJoinBatch::~ObHashJoinBatch()
@@ -41,7 +43,7 @@ int ObHashJoinBatch::load_next_chunk()
   int ret = OB_SUCCESS;
   if (OB_FAIL(chunk_iter_.load_next_chunk(row_store_iter_))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("failed to load next chunk", K(ret));
+      LOG_WARN("faild to load next chunk", K(ret));
     }
   }
   return ret;
@@ -59,46 +61,62 @@ int ObHashJoinBatch::finish_dump(bool memory_need_dump)
   return ret;
 }
 
-int ObHashJoinBatch::dump(bool all_dump)
+int ObHashJoinBatch::dump(bool all_dump, int64_t dumped_size)
 {
   int ret = OB_SUCCESS;
   if (0 >= chunk_row_store_.get_mem_used()) {
     // ret = OB_ERR_UNEXPECTED;
     // LOG_WARN("unexpect chunk row store use memory", K(ret), K(chunk_row_store_.get_mem_used()));
-  } else if (OB_FAIL(chunk_row_store_.dump(false, all_dump))) {
+  } else if (OB_FAIL(chunk_row_store_.dump(false, all_dump, dumped_size))) {
     LOG_WARN("failed to dump data to chunk row store", K(ret));
   }
   return ret;
 }
 
-int ObHashJoinBatch::add_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx* eval_ctx, ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinBatch::add_row(
+  const ObIArray<ObExpr*> &exprs, ObEvalCtx *eval_ctx, ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  ObChunkDatumStore::StoredRow* hash_store_row = nullptr;
+  ObChunkDatumStore::StoredRow *hash_store_row = nullptr;
   if (OB_FAIL(chunk_row_store_.add_row(exprs, eval_ctx, &hash_store_row))) {
     LOG_WARN("failed to add row", K(ret));
   } else {
-    stored_row = static_cast<ObHashJoinStoredJoinRow*>(hash_store_row);
+    stored_row = static_cast<ObHashJoinStoredJoinRow *>(hash_store_row);
     ++n_add_rows_;
   }
   return ret;
 }
 
-int ObHashJoinBatch::add_row(const ObHashJoinStoredJoinRow* src_stored_row, ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinBatch::add_batch(const common::ObIArray<ObExpr *> &exprs,
+                               ObEvalCtx &ctx,
+                               const ObBitVector &skip,
+                               const int64_t batch_size,
+                               const uint16_t selector[],
+                               const int64_t size,
+                               ObHashJoinStoredJoinRow **stored_rows /*= nullptr*/)
+{
+  n_add_rows_ += size;
+  return chunk_row_store_.add_batch(exprs, ctx, skip,
+                          batch_size, selector, size,
+                          reinterpret_cast<ObChunkDatumStore::StoredRow**>(stored_rows));
+}
+
+int ObHashJoinBatch::add_row(
+  const ObHashJoinStoredJoinRow *src_stored_row, ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  ObChunkDatumStore::StoredRow* hash_store_row = nullptr;
+  ObChunkDatumStore::StoredRow *hash_store_row = nullptr;
   if (OB_FAIL(chunk_row_store_.add_row(*src_stored_row, &hash_store_row))) {
     LOG_WARN("failed to add row", K(ret));
   } else {
-    stored_row = static_cast<ObHashJoinStoredJoinRow*>(hash_store_row);
+    stored_row = static_cast<ObHashJoinStoredJoinRow *>(hash_store_row);
     ++n_add_rows_;
   }
   return ret;
 }
 
 int ObHashJoinBatch::convert_row(
-    const ObHashJoinStoredJoinRow* stored_row, const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx)
+  const ObHashJoinStoredJoinRow *stored_row, const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(row_store_iter_.convert_to_row(stored_row, exprs, eval_ctx))) {
@@ -108,10 +126,10 @@ int ObHashJoinBatch::convert_row(
 }
 
 int ObHashJoinBatch::get_next_row(
-    const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, const ObHashJoinStoredJoinRow*& stored_row)
+  const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, const ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  const ObChunkDatumStore::StoredRow* inner_stored_row = nullptr;
+  const ObChunkDatumStore::StoredRow *inner_stored_row = nullptr;
   while (OB_SUCC(ret) && nullptr == inner_stored_row) {
     if (OB_FAIL(row_store_iter_.get_next_row(inner_stored_row))) {
       if (OB_ITER_END != ret) {
@@ -123,15 +141,13 @@ int ObHashJoinBatch::get_next_row(
             LOG_WARN("failed to get next row", K(ret));
           } else if (n_get_rows_ != chunk_row_store_.get_row_cnt()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Got row count is not match with row count of chunk row store",
-                K(ret),
-                K(n_get_rows_),
-                K(chunk_row_store_.get_row_cnt()));
+            LOG_WARN("Got row count is not match with row count of chunk row store", K(ret),
+              K(n_get_rows_), K(chunk_row_store_.get_row_cnt()));
           }
         }
       }
     } else {
-      stored_row = static_cast<const ObHashJoinStoredJoinRow*>(inner_stored_row);
+      stored_row = static_cast<const ObHashJoinStoredJoinRow *>(inner_stored_row);
       if (OB_FAIL(convert_row(stored_row, exprs, eval_ctx))) {
         LOG_WARN("failed to convert row", K(ret));
       }
@@ -141,11 +157,11 @@ int ObHashJoinBatch::get_next_row(
   return ret;
 }
 
-int ObHashJoinBatch::get_next_row(const ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinBatch::get_next_row(const ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   stored_row = nullptr;
-  const ObChunkDatumStore::StoredRow* inner_stored_row = nullptr;
+  const ObChunkDatumStore::StoredRow *inner_stored_row = nullptr;
   while (OB_SUCC(ret) && nullptr == stored_row) {
     if (OB_FAIL(row_store_iter_.get_next_row(inner_stored_row))) {
       if (OB_ITER_END != ret) {
@@ -157,22 +173,92 @@ int ObHashJoinBatch::get_next_row(const ObHashJoinStoredJoinRow*& stored_row)
             LOG_WARN("failed to get next row", K(ret));
           } else if (n_get_rows_ != chunk_row_store_.get_row_cnt()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Got row count is not match with row count of chunk row store",
-                K(ret),
-                K(n_get_rows_),
-                K(chunk_row_store_.get_row_cnt()));
+            LOG_WARN("Got row count is not match with row count of chunk row store", K(ret),
+              K(n_get_rows_), K(chunk_row_store_.get_row_cnt()));
           }
         }
       }
     } else {
-      stored_row = static_cast<const ObHashJoinStoredJoinRow*>(inner_stored_row);
+      stored_row = static_cast<const ObHashJoinStoredJoinRow *>(inner_stored_row);
       ++n_get_rows_;
     }
   }
   return ret;
 }
 
-int ObHashJoinBatch::get_next_block_row(const ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinBatch::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
+                                    ObEvalCtx &ctx,
+                                    const int64_t max_rows,
+                                    int64_t &read_rows,
+                                    const ObHashJoinStoredJoinRow **stored_row)
+{
+  int ret = OB_SUCCESS;
+  const ObChunkDatumStore::StoredRow **inner_stored_row =
+                           reinterpret_cast<const ObChunkDatumStore::StoredRow **>(stored_row);
+  read_rows = 0;
+  while (OB_SUCC(ret) && 0 == read_rows) {
+    if (OB_FAIL(row_store_iter_.get_next_batch(exprs, ctx, max_rows, read_rows, 
+                                               inner_stored_row))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next row", K(ret));
+      } else if (!is_chunk_iter_) {
+        ret = OB_SUCCESS;
+        read_rows = 0;
+        if (OB_FAIL(chunk_iter_.load_next_chunk(row_store_iter_))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get next row", K(ret));
+          } else if (n_get_rows_ != chunk_row_store_.get_row_cnt()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Got row count is not match with row count of chunk row store", K(ret),
+              K(n_get_rows_), K(chunk_row_store_.get_row_cnt()));
+          }
+        }
+      }
+    } else {
+      n_get_rows_ += read_rows;
+    }
+  }
+
+  return ret;
+}
+
+int ObHashJoinBatch::get_next_batch(const ObHashJoinStoredJoinRow **stored_row,
+                                    const int64_t max_rows,
+                                    int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+
+  const ObChunkDatumStore::StoredRow **inner_stored_row =
+                             reinterpret_cast<const ObChunkDatumStore::StoredRow **>(stored_row);
+  read_rows = 0;
+  // here read empty once after iter end
+  while (OB_SUCC(ret) && 0 == read_rows) {
+    ret = row_store_iter_.get_next_batch(inner_stored_row, max_rows, read_rows);
+    if (OB_FAIL(ret)) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next row", K(ret));
+      } else if (!is_chunk_iter_) {
+        ret = OB_SUCCESS;
+        read_rows = 0;
+        if (OB_FAIL(chunk_iter_.load_next_chunk(row_store_iter_))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get next row", K(ret));
+          } else if (n_get_rows_ != chunk_row_store_.get_row_cnt()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Got row count is not match with row count of chunk row store", K(ret),
+              K(n_get_rows_), K(chunk_row_store_.get_row_cnt()));
+          }
+        }
+      }
+    } else {
+      n_get_rows_ += read_rows;
+    }
+  }
+
+  return ret;
+}
+
+int ObHashJoinBatch::get_next_block_row(const ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (!row_store_iter_.is_valid()) {
@@ -184,7 +270,7 @@ int ObHashJoinBatch::get_next_block_row(const ObHashJoinStoredJoinRow*& stored_r
   }
   if (OB_SUCC(ret)) {
     stored_row = nullptr;
-    const ObChunkDatumStore::StoredRow* inner_stored_row = nullptr;
+    const ObChunkDatumStore::StoredRow *inner_stored_row = nullptr;
     while (OB_SUCC(ret) && nullptr == stored_row) {
       if (OB_FAIL(row_store_iter_.get_next_block_row(inner_stored_row))) {
         if (OB_ITER_END != ret) {
@@ -194,7 +280,7 @@ int ObHashJoinBatch::get_next_block_row(const ObHashJoinStoredJoinRow*& stored_r
           row_store_iter_.reset();
         }
       } else {
-        stored_row = static_cast<const ObHashJoinStoredJoinRow*>(inner_stored_row);
+        stored_row = static_cast<const ObHashJoinStoredJoinRow *>(inner_stored_row);
         ++n_get_rows_;
       }
     }
@@ -220,6 +306,7 @@ int ObHashJoinBatch::init_progressive_iterator()
   return ret;
 }
 
+// 可能会读多次，所以每次都应该set iterator，同时reset
 int ObHashJoinBatch::set_iterator(bool is_chunk_iter)
 {
   int ret = OB_SUCCESS;
@@ -230,8 +317,10 @@ int ObHashJoinBatch::set_iterator(bool is_chunk_iter)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buf_mgr_ is null", K(ret));
   } else if (is_chunk_iter) {
+    // 上层逻辑手动调load_next_chunk来驱动获取一批数据
     chunk_size = buf_mgr_->get_reserve_memory_size();
-    if (buf_mgr_->get_reserve_memory_size() > chunk_row_store_.get_mem_used() + chunk_row_store_.get_file_size()) {
+    if (buf_mgr_->get_reserve_memory_size() >
+        chunk_row_store_.get_mem_used() + chunk_row_store_.get_file_size()) {
       chunk_size = chunk_row_store_.get_mem_used() + chunk_row_store_.get_file_size();
     }
     if (buf_mgr_->get_page_size() > chunk_size) {
@@ -245,7 +334,9 @@ int ObHashJoinBatch::set_iterator(bool is_chunk_iter)
     if (OB_FAIL(chunk_row_store_.begin(chunk_iter_, chunk_size))) {
       LOG_WARN("failed to set row store iterator", K(ret), K(chunk_size));
     } else if (OB_FAIL(load_next_chunk())) {
-      LOG_WARN("failed to load next chunk", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to load next chunk", K(ret));
+      }
     }
   }
   n_get_rows_ = 0;
@@ -257,8 +348,8 @@ int ObHashJoinBatch::set_iterator(bool is_chunk_iter)
 int ObHashJoinBatch::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(chunk_row_store_.init(
-          0, tenant_id_, common::ObCtxIds::WORK_AREA, common::ObModIds::OB_ARENA_HASH_JOIN, true, 8))) {
+  if (OB_FAIL(chunk_row_store_.init(0, tenant_id_,
+    common::ObCtxIds::WORK_AREA, common::ObModIds::OB_ARENA_HASH_JOIN, true, 8))) {
     LOG_WARN("failed to init chunk row store", K(ret));
   } else {
     chunk_row_store_.set_callback(buf_mgr_);
@@ -290,8 +381,7 @@ ObHashJoinBatchMgr::~ObHashJoinBatchMgr()
 
 void ObHashJoinBatchMgr::reset()
 {
-  FOREACH(p, batch_list_)
-  {
+  FOREACH(p, batch_list_) {
     if (NULL != p->left_) {
       free(p->left_);
       p->left_ = NULL;
@@ -304,8 +394,7 @@ void ObHashJoinBatchMgr::reset()
   batch_list_.clear();
 }
 
-int ObHashJoinBatchMgr::next_batch(ObHashJoinBatchPair& batch_pair)
-{
+int ObHashJoinBatchMgr::next_batch(ObHashJoinBatchPair &batch_pair) {
   int ret = batch_list_.pop_front(batch_pair);
   if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_ITER_END;
@@ -315,7 +404,7 @@ int ObHashJoinBatchMgr::next_batch(ObHashJoinBatchPair& batch_pair)
   return ret;
 }
 
-int ObHashJoinBatchMgr::remove_undumped_batch()
+int ObHashJoinBatchMgr::remove_undumped_batch(int64_t cur_dumped_partition, int32_t batch_round)
 {
   int ret = OB_SUCCESS;
   int64_t size = batch_list_.size();
@@ -323,8 +412,8 @@ int ObHashJoinBatchMgr::remove_undumped_batch()
   hj_batch_pair_list_type::iterator iter = batch_list_.begin();
   hj_batch_pair_list_type::iterator pre_iter = batch_list_.end();
   while (OB_SUCC(ret) && iter != batch_list_.end()) {
-    ObHashJoinBatch* left = iter->left_;
-    ObHashJoinBatch* right = iter->right_;
+    ObHashJoinBatch *left = iter->left_;
+    ObHashJoinBatch *right = iter->right_;
     bool erased = false;
     if (nullptr != left && nullptr != right) {
       if (left->is_dumped()) {
@@ -333,12 +422,31 @@ int ObHashJoinBatchMgr::remove_undumped_batch()
         //   ret = OB_ERR_UNEXPECTED;
         //   LOG_WARN("unexpect batch is not match", K(ret), K(left), K(right));
         // }
+        if ((batch_round == left->get_batchno() >> 32) &&
+            (INT64_MAX != cur_dumped_partition && (left->get_batchno() & PARTITION_IDX_MASK) <= cur_dumped_partition)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpect batch is not match", K(ret), K(left), K(right),
+            K(left->get_batchno()), K(cur_dumped_partition), K(batch_round));
+        }
       } else if (right->is_dumped()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect batch is not match", K(ret), K(left), K(right));
-      } else {
+        // left maybe empty
+        if (0 != left->get_row_count_in_memory()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect batch is not match", K(ret), K(left), K(right));
+        }
+        if ((batch_round == right->get_batchno() >> 32) &&
+            (INT64_MAX != cur_dumped_partition && (right->get_batchno() & PARTITION_IDX_MASK) <= cur_dumped_partition)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpect batch is not match", K(ret), K(left), K(right),
+            K(right->get_batchno()), K(cur_dumped_partition));
+        }
+      } else if (INT64_MAX == cur_dumped_partition
+              || (batch_round == (left->get_batchno() >> 32) && (left->get_batchno() & PARTITION_IDX_MASK) <= cur_dumped_partition)) {
         ++erase_cnt;
         erased = true;
+        LOG_DEBUG("debug remove undumped partition", K(ret), K(left), K(right),
+          K(left->get_batchno()), K(left->get_part_level()), K(left->get_batchno() >> 32),
+          K(left->get_batchno() & PARTITION_IDX_MASK));
         if (OB_FAIL(batch_list_.erase(iter))) {
           LOG_WARN("failed to remove iter", K(left->get_part_level()), K(left->get_batchno()));
         } else {
@@ -370,11 +478,11 @@ int ObHashJoinBatchMgr::remove_undumped_batch()
 }
 
 int ObHashJoinBatchMgr::get_or_create_batch(
-    int32_t level, int32_t batchno, bool is_left, ObHashJoinBatch*& batch, bool only_get)
+  int32_t level, int64_t part_shift, int64_t batchno, bool is_left, ObHashJoinBatch *&batch, bool only_get)
 {
   int ret = OB_SUCCESS;
   bool flag = false;
-  for (hj_batch_pair_list_type::iterator iter = batch_list_.begin(); iter != batch_list_.end(); iter++) {
+  for (hj_batch_pair_list_type::iterator iter = batch_list_.begin(); iter != batch_list_.end(); iter ++) {
     if (is_left) {
       if (iter->left_->get_part_level() == level && iter->left_->get_batchno() == batchno) {
         batch = iter->left_;
@@ -390,33 +498,43 @@ int ObHashJoinBatchMgr::get_or_create_batch(
     }
   }
 
-  if (!flag && !only_get) {  // not found, should new one
+  if (!flag && !only_get) { //not found, should new one
     ObHashJoinBatchPair batch_pair;
-    void* buf = alloc_.alloc(sizeof(ObHashJoinBatch));
-    if (NULL == buf) {
+    void *buf1 = alloc_.alloc(sizeof(ObHashJoinBatch));
+    void *buf2 = nullptr;
+    if (NULL == buf1) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      batch_count_++;
-      batch_pair.left_ = new (buf) ObHashJoinBatch(alloc_, buf_mgr_, tenant_id_, level, batchno);
+      batch_count_ ++;
+      batch_pair.left_ = new (buf1) ObHashJoinBatch(alloc_, buf_mgr_, tenant_id_, level, part_shift, batchno);
     }
     if (OB_SUCC(ret)) {
-      buf = alloc_.alloc(sizeof(ObHashJoinBatch));
-      if (NULL == buf) {
+      buf2 = alloc_.alloc(sizeof(ObHashJoinBatch));
+      if (NULL == buf2) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        batch_count_++;
-        batch_pair.right_ = new (buf) ObHashJoinBatch(alloc_, buf_mgr_, tenant_id_, level, batchno);
+        batch_count_ ++;
+        batch_pair.right_ = new (buf2) ObHashJoinBatch(alloc_, buf_mgr_, tenant_id_, level, part_shift, batchno);
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(batch_list_.push_front(batch_pair))) {
         LOG_WARN("fail to push batch pair to batch list", K(ret));
       } else {
+        LOG_DEBUG("push front batch", K(batchno), K(is_left));
         if (is_left) {
           batch = batch_pair.left_;
         } else {
           batch = batch_pair.right_;
         }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != buf1) {
+        alloc_.free(buf1);
+      }
+      if (nullptr != buf2) {
+        alloc_.free(buf2);
       }
     }
   }
@@ -425,9 +543,19 @@ int ObHashJoinBatchMgr::get_or_create_batch(
 }
 
 //****************************** ObHashJoinPartition ******************************
-int ObHashJoinPartition::init(int32_t part_level, int32_t part_id, bool is_left, ObHashJoinBufMgr* buf_mgr,
-    ObHashJoinBatchMgr* batch_mgr, ObHashJoinBatch* pre_batch, ObOperator* phy_op, ObSqlMemoryCallback* callback,
-    int64_t dir_id)
+int ObHashJoinPartition::init(
+  int32_t part_level,
+  int64_t part_shift,
+  int32_t part_id,
+  int32_t batch_round,
+  bool is_left,
+  ObHashJoinBufMgr *buf_mgr,
+  ObHashJoinBatchMgr *batch_mgr,
+  ObHashJoinBatch *pre_batch,
+  ObOperator *phy_op,
+  ObSqlMemoryCallback *callback,
+  int64_t dir_id,
+  ObIOEventObserver *io_event_observer)
 {
   int ret = OB_SUCCESS;
   UNUSED(pre_batch);
@@ -436,10 +564,12 @@ int ObHashJoinPartition::init(int32_t part_level, int32_t part_id, bool is_left,
   part_id_ = part_id;
   buf_mgr_ = buf_mgr;
   batch_mgr_ = batch_mgr;
+  int64_t tmp_batch_round = batch_round;
   if (OB_ISNULL(buf_mgr) || OB_ISNULL(batch_mgr)) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("buf mgr or batch_mgr is null", K(ret), K(part_level_), K(part_id_), K(is_left), K(buf_mgr), K(batch_mgr));
-  } else if (OB_FAIL(batch_mgr_->get_or_create_batch(part_level_, part_id_, is_left, batch_))) {
+    LOG_WARN("buf mgr or batch_mgr is null", K(ret), K(part_level_), K(part_id_),
+      K(is_left), K(buf_mgr), K(batch_mgr));
+  } else if (OB_FAIL(batch_mgr_->get_or_create_batch(part_level_, part_shift, (tmp_batch_round << 32) + part_id_, is_left, batch_))) {
     LOG_WARN("fail to get batch", K(ret), K(part_level_), K(part_id_), K(is_left));
   } else if (OB_ISNULL(batch_)) {
     ret = OB_INNER_STAT_ERROR;
@@ -452,11 +582,15 @@ int ObHashJoinPartition::init(int32_t part_level, int32_t part_id, bool is_left,
     batch_->get_chunk_row_store().set_block_size(buf_mgr_->get_page_size());
     batch_->get_chunk_row_store().set_callback(callback);
     batch_->get_chunk_row_store().set_dir_id(dir_id);
+    batch_->get_chunk_row_store().set_io_event_observer(io_event_observer);
+    LOG_DEBUG("debug init batch", K(part_level), K(part_id_),
+      K((tmp_batch_round << 32) + part_id_), K(tmp_batch_round));
   }
   return ret;
 }
 
-int ObHashJoinPartition::record_pre_batch_info(int64_t pre_part_count, int64_t pre_bucket_number, int64_t total_size)
+int ObHashJoinPartition::record_pre_batch_info(
+  int64_t pre_part_count, int64_t pre_bucket_number, int64_t total_size)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(batch_)) {
@@ -500,22 +634,21 @@ int ObHashJoinPartition::check()
   if (part_level_ == -1 || part_id_ == -1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part_level_ and part_id_ should not be null");
-  } else if (buf_mgr_ == NULL || batch_mgr_ == NULL) {
+  } else if (buf_mgr_ == NULL ||  batch_mgr_ == NULL) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buf_mgr_ and batch_mgr_ should not be null");
   }
   return ret;
 }
 
-void ObHashJoinPartition::reset()
-{
+void ObHashJoinPartition::reset() {
   buf_mgr_ = nullptr;
   batch_mgr_ = nullptr;
   batch_ = nullptr;
 }
 
 int ObHashJoinPartition::add_row(
-    const ObIArray<ObExpr*>& exprs, ObEvalCtx* eval_ctx, ObHashJoinStoredJoinRow*& stored_row)
+    const ObIArray<ObExpr*> &exprs, ObEvalCtx *eval_ctx, ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->add_row(exprs, eval_ctx, stored_row))) {
@@ -524,7 +657,20 @@ int ObHashJoinPartition::add_row(
   return ret;
 }
 
-int ObHashJoinPartition::add_row(const ObHashJoinStoredJoinRow* src_stored_row, ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinPartition::add_batch(const common::ObIArray<ObExpr *> &exprs,
+                                   ObEvalCtx &ctx,
+                                   const ObBitVector &skip,
+                                   const int64_t batch_size,
+                                   const uint16_t selector[],
+                                   const int64_t size,
+                                   ObHashJoinStoredJoinRow **stored_rows /*= nullptr*/)
+{
+  return batch_->add_batch(exprs, ctx, skip,
+                           batch_size, selector, size, stored_rows);
+}
+
+int ObHashJoinPartition::add_row(
+  const ObHashJoinStoredJoinRow *src_stored_row, ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->add_row(src_stored_row, stored_row))) {
@@ -536,22 +682,21 @@ int ObHashJoinPartition::add_row(const ObHashJoinStoredJoinRow* src_stored_row, 
 int ObHashJoinPartition::finish_dump(bool memory_need_dump)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(batch_->finish_dump(memory_need_dump))) {
+  if (OB_FAIL(batch_->finish_dump(memory_need_dump))){
     LOG_WARN("fail to finish batch dump", K(ret));
   }
   return ret;
 }
 
-int ObHashJoinPartition::dump(bool all_dump)
-{
+int ObHashJoinPartition::dump(bool all_dump, int64_t dumped_size) {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(batch_->dump(all_dump))) {
+  if (OB_FAIL(batch_->dump(all_dump, dumped_size))) {
     LOG_WARN("failed to dump data to chunk row store", K(ret));
   }
   return ret;
 }
 
-int ObHashJoinPartition::get_next_row(const ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinPartition::get_next_row(const ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->get_next_row(stored_row)) && OB_ITER_END != ret) {
@@ -560,7 +705,7 @@ int ObHashJoinPartition::get_next_row(const ObHashJoinStoredJoinRow*& stored_row
   return ret;
 }
 
-int ObHashJoinPartition::get_next_block_row(const ObHashJoinStoredJoinRow*& stored_row)
+int ObHashJoinPartition::get_next_block_row(const ObHashJoinStoredJoinRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(batch_->get_next_block_row(stored_row)) && OB_ITER_END != ret) {
@@ -569,5 +714,5 @@ int ObHashJoinPartition::get_next_block_row(const ObHashJoinStoredJoinRow*& stor
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

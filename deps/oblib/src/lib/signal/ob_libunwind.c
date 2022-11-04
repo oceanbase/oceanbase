@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifdef __x86_64__
 #include "lib/signal/ob_libunwind.h"
 #include "lib/signal/safe_snprintf.h"
 #define UNW_LOCAL_ONLY
@@ -17,8 +18,8 @@
 
 static const int MAX_BT_ADDRESS_CNT = 100;
 static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len, int64_t *pos);
-static ssize_t get_stack_trace_inplace(
-    unw_context_t *context, unw_cursor_t *cursor, uintptr_t *addresses, size_t max_addresses);
+static ssize_t get_stack_trace_inplace(unw_context_t *context, unw_cursor_t *cursor,
+    uintptr_t *addresses, size_t max_addresses);
 static int8_t get_frame_info(unw_cursor_t *cursor, uintptr_t *ip);
 
 int safe_backtrace(char *buf, int64_t len, int64_t *pos)
@@ -33,19 +34,20 @@ int safe_backtrace(char *buf, int64_t len, int64_t *pos)
   return ret;
 }
 
-static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len, int64_t *pos)
+static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
+                   int64_t *pos)
 {
   int ret = 0;
   unw_cursor_t cursor;
   uintptr_t addrs[MAX_BT_ADDRESS_CNT];
-  int n = get_stack_trace_inplace(context, &cursor, addrs, sizeof(addrs) / sizeof(addrs[0]));
+  int n = get_stack_trace_inplace(context, &cursor, addrs, sizeof(addrs)/sizeof(addrs[0]));
   *pos = 0;
   if (n < 0) {
     ret = -1;
   } else {
     for (int i = 0; i < n; i++) {
       int count = safe_snprintf(buf + *pos, len - *pos, "0x%lx", addrs[i]);
-      count++;  // for space
+      count++; // for space
       if (count > 0 && *pos + count < len) {
         *pos += count;
         buf[*pos - 1] = ' ';
@@ -60,8 +62,8 @@ static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len, int64
   return ret;
 }
 
-ssize_t get_stack_trace_inplace(
-    unw_context_t *context, unw_cursor_t *cursor, uintptr_t *addresses, size_t max_addresses)
+ssize_t get_stack_trace_inplace(unw_context_t *context, unw_cursor_t *cursor,
+    uintptr_t *addresses, size_t max_addresses)
 {
   if (max_addresses == 0) {
     return 0;
@@ -105,3 +107,4 @@ int8_t get_frame_info(unw_cursor_t *cursor, uintptr_t *ip)
   *ip = uip - (r == 0);
   return 1;
 }
+#endif

@@ -12,34 +12,32 @@
 
 #ifndef _OB_MOCK_STAT_MANAGER_H
 #define _OB_MOCK_STAT_MANAGER_H 1
-#include "share/stat/ob_stat_manager.h"
-#include "share/stat/ob_table_stat.h"
-#include "share/stat/ob_column_stat_cache.h"
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "share/schema/ob_column_schema.h"
-namespace test {
-class MockTableStatService : public oceanbase::common::ObTableStatDataService {
+namespace test
+{
+class MockTableStatService : public oceanbase::common::ObTableStatDataService
+{
 public:
   static const int64_t DEFAULT_ROW_COUNT = 100;
   static const int64_t DEFAULT_ROW_SIZE = 100;
   static const int64_t DEFAULT_DATA_SIZE = DEFAULT_ROW_COUNT * DEFAULT_ROW_SIZE;
   static const int64_t DEFAULT_MACROC_BLOCKS = DEFAULT_ROW_COUNT * DEFAULT_ROW_SIZE / DEFAULT_MACRO_BLOCK_SIZE;
   static const int64_t DEFAULT_MICRO_BLOCKS = DEFAULT_DATA_SIZE / DEFAULT_MICRO_BLOCK_SIZE;
-  MockTableStatService()
-  {
+  MockTableStatService() {
     reset_table_stat();
   }
-  virtual ~MockTableStatService()
-  {}
-  int get_table_stat(const ObPartitionKey& key, ObTableStat& tstat)
-  {
-    UNUSED(key);
-    tstat.reset();
-    tstat = table_stat_;
-    return OB_SUCCESS;
-  }
+  virtual ~MockTableStatService() {}
+  //int get_table_stat(const ObPartitionKey &key, ObTableStat &tstat)
+  //{
+  //  UNUSED(key);
+  //  tstat.reset();
+  //  tstat= table_stat_;
+  //  return OB_SUCCESS;
+  //}
+
 
   void reset_table_stat()
   {
@@ -48,29 +46,25 @@ public:
     table_stat_.set_macro_blocks_num(DEFAULT_MACROC_BLOCKS);
     table_stat_.set_micro_blocks_num(DEFAULT_MICRO_BLOCKS);
     table_stat_.set_average_row_size(DEFAULT_ROW_SIZE);
+    table_stat_.set_data_version(1);
   }
 
-  void set_table_stat(ObTableStat& table_stat)
-  {
-    table_stat_ = table_stat;
-  }
+  //void set_table_stat(ObTableStat &table_stat)
+ // { table_stat_ = table_stat; }
 
   void set_table_row_count(int64_t row_count)
-  {
-    table_stat_.set_row_count(row_count);
-  }
+  { table_stat_.set_row_count(row_count); }
 
-private:
-  ObTableStat table_stat_;
+//private:
+  //ObTableStat table_stat_;
 };
 
-class MockColumnStatService : public oceanbase::common::ObColumnStatDataService {
+class MockColumnStatService : public oceanbase::common::ObColumnStatDataService
+{
 public:
-  MockColumnStatService()
-  {}
-  virtual ~MockColumnStatService()
-  {}
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStatValueHandle& handle)
+  MockColumnStatService() {}
+  virtual ~MockColumnStatService() {}
+  int get_column_stat(const ObColumnStat::Key &key, const bool force_new, ObColumnStatValueHandle &handle)
   {
     UNUSED(key);
     UNUSED(force_new);
@@ -78,7 +72,7 @@ public:
     return OB_SUCCESS;
   }
 
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStat& cstat, ObIAllocator& alloc)
+  int get_column_stat(const ObColumnStat::Key &key, const bool force_new, ObColumnStat &cstat, ObIAllocator &alloc)
   {
     UNUSED(key);
     UNUSED(force_new);
@@ -87,8 +81,10 @@ public:
     return OB_SUCCESS;
   }
 
-  int get_batch_stat(const uint64_t table_id, const ObIArray<uint64_t>& partition_id,
-      const ObIArray<uint64_t>& column_ids, ObIArray<ObColumnStatValueHandle>& handles)
+  int get_batch_stat(const uint64_t table_id,
+                     const ObIArray<uint64_t> &partition_id,
+                     const ObIArray<uint64_t> &column_ids,
+                     ObIArray<ObColumnStatValueHandle> &handles)
   {
     UNUSED(table_id);
     UNUSED(partition_id);
@@ -97,8 +93,10 @@ public:
     return OB_SUCCESS;
   }
 
-  int get_batch_stat(const oceanbase::share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
-      ObIArray<ObColumnStat*>& stats, ObIAllocator& allocator)
+  int get_batch_stat(const oceanbase::share::schema::ObMergeSchema &table_schema,
+                     const uint64_t partition_id,
+                     ObIArray<ObColumnStat *> &stats,
+                     ObIAllocator &allocator)
   {
     UNUSED(table_schema);
     UNUSED(partition_id);
@@ -108,33 +106,35 @@ public:
     return OB_SUCCESS;
   }
 
-  int update_column_stats(const ObIArray<ObColumnStat*>& column_stats)
+  int update_column_stats(const ObIArray<ObColumnStat *> &column_stats)
   {
     UNUSED(column_stats);
     return OB_SUCCESS;
   }
-  int update_column_stat(const ObColumnStat& cstat)
+  int update_column_stat(const ObColumnStat &cstat)
   {
     UNUSED(cstat);
     return OB_SUCCESS;
   }
 
-  int erase_column_stat(const ObPartitionKey& pkey, const int64_t column_id)
-  {
-    UNUSEDx(pkey, column_id);
-    return OB_SUCCESS;
-  }
+  // int erase_column_stat(const ObPartitionKey &pkey, const int64_t column_id)
+  // {
+  //   UNUSEDx(pkey, column_id);
+  //   return OB_SUCCESS;
+  // }
+
 };
 
-class MockStatManager : public oceanbase::common::ObStatManager {
+class MockStatManager : public oceanbase::common::ObStatManager
+{
   static const uint64_t DEFAULT_TABLE1_ID = 1099511677777;
   static const uint64_t DEFAULT_TABLE2_ID = 1099511677778;
   static const int64_t TIME_MAX_VALUE = (3020399 * 1000000LL);
   static const int64_t DATE_MAX_VALUE = 2932896;
   static const int64_t DATE_MIN_VALUE = -354258;
-
 public:
-  struct ColumnStatInfo {
+  struct ColumnStatInfo
+  {
     ObObj min_;
     ObObj max_;
     int64_t distinct_num_;
@@ -165,45 +165,49 @@ public:
     table2_row_count_ = 100;
     default_stat_ = false;
   }
-  virtual ~MockStatManager()
-  {}
+  virtual ~MockStatManager() {}
 
-  void set_schema_checker(oceanbase::sql::ObSchemaChecker* schema_checker)
-  {
-    schema_checker_ = schema_checker;
-  }
+  void set_schema_checker(oceanbase::sql::ObSchemaChecker *schema_checker)
+  { schema_checker_ = schema_checker; }
 
   void set_default_stat(bool is_default)
   {
     default_stat_ = is_default;
   }
 
-  int get_table_stat(const ObPartitionKey& pkey, ObTableStat& tstat)
-  {
-    int ret = OB_SUCCESS;
-    if (default_stat_) {
-      tstat.set_row_count(0);
-    } else if (DEFAULT_TABLE2_ID == pkey.get_table_id()) {  // for opt_sel
-      tstat.set_row_count(table2_row_count_);
-      tstat.set_data_size(DEFAULT_ROW_SIZE * tstat.get_row_count());
-    } else {
-      tstat.set_row_count(table1_row_count_);  // table1 or default
-      tstat.set_data_size(DEFAULT_ROW_SIZE * tstat.get_row_count());
-    }
-    return ret;
-  }
+  // int get_table_stat(const ObPartitionKey &pkey, ObTableStat &tstat)
+  // {
+  //   int ret = OB_SUCCESS;
+  //   if (default_stat_) {
+  //     tstat.set_row_count(0);
+  //     tstat.set_data_version(1);
+  //   } else if (DEFAULT_TABLE2_ID == pkey.get_table_id()) { // for opt_sel
+  //     tstat.set_row_count(table2_row_count_);
+  //     tstat.set_data_size(DEFAULT_ROW_SIZE * tstat.get_row_count());
+  //     tstat.set_data_version(1);
+  //   } else {
+  //     tstat.set_row_count(table1_row_count_); //table1 or default
+  //     tstat.set_data_size(DEFAULT_ROW_SIZE * tstat.get_row_count());
+  //     tstat.set_data_version(1);
+  //   }
+  //   return ret;
+  // }
 
-  int get_column_stat(uint64_t table_id, uint64_t partition_id, uint64_t column_id, ObColumnStatValueHandle& handle)
+  int get_column_stat(uint64_t table_id,
+                      uint64_t partition_id,
+                      uint64_t column_id,
+                      ObColumnStatValueHandle &handle)
   {
     int ret = oceanbase::common::OB_SUCCESS;
     UNUSED(partition_id);
     UNUSED(handle);
-    const oceanbase::share::schema::ObColumnSchemaV2* col_schema = NULL;
+    const oceanbase::share::schema::ObColumnSchemaV2 *col_schema = NULL;
     ObObj min;
     ObObj max;
-    ObColumnStat* column_stat = (ObColumnStat*)allocator_.alloc(sizeof(ObColumnStat));
-    char* llc_bitmap = (char*)allocator_.alloc(oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
-    MEMSET(llc_bitmap, 0, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+    ObColumnStat *column_stat = (ObColumnStat *)allocator_.alloc(sizeof(ObColumnStat));
+    char *llc_bitmap = (char *)allocator_.alloc(oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+    MEMSET(llc_bitmap, 1, 96);
+    MEMSET(llc_bitmap + 96, 0, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET - 96);
     if (NULL == column_stat) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "failed to allocate column stat", K(ret));
@@ -218,9 +222,11 @@ public:
       column_stat->set_num_distinct(int_info_.distinct_num_);
       column_stat->set_num_null(int_info_.null_num_);
       column_stat->set_llc_bitmap(llc_bitmap, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+      column_stat->set_version(1);
     }
     if (OB_SUCC(ret) && NULL != schema_checker_) {
-      if (OB_FAIL(schema_checker_->get_column_schema(table_id, column_id, col_schema, true))) {
+      if (OB_FAIL(schema_checker_->get_column_schema(
+                  table_id, column_id, col_schema, true))) {
         COMMON_LOG(WARN, "Failed to get column schema", K(ret));
       } else if (NULL == col_schema) {
         ret = OB_ERR_UNEXPECTED;
@@ -230,37 +236,38 @@ public:
         column_stat->set_num_null(0);
         min.set_min_value();
         max.set_max_value();
+        MEMSET(llc_bitmap, 0, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
       } else if (oceanbase::common::ObStringTC == col_schema->get_meta_type().get_type_class()) {
         column_stat->set_num_distinct(str_info_.distinct_num_);
         column_stat->set_num_null(str_info_.null_num_);
-        min = str_info_.min_;  // todo(yeti): special use, need deep copy
+        min = str_info_.min_; // todo(yeti): special use, need deep copy
         max = str_info_.max_;
-      } else if (col_schema->get_meta_type().get_type() >= ObDateTimeType &&
-                 col_schema->get_meta_type().get_type() <= ObYearType) {
+      } else if (col_schema->get_meta_type().get_type() >= ObDateTimeType
+                 && col_schema->get_meta_type().get_type() <= ObYearType) {
         switch (col_schema->get_meta_type().get_type()) {
-          case ObDateTimeType: {
+        case ObDateTimeType: {
             min.set_datetime(DATETIME_MIN_VAL);
             max.set_datetime(DATETIME_MAX_VAL);
             break;
           }
-          case ObTimestampType: {
+        case ObTimestampType: {
             min.set_timestamp(DATETIME_MIN_VAL);
             max.set_timestamp(DATETIME_MAX_VAL);
             break;
           }
-          case ObDateType: {
+        case ObDateType: {
             min.set_date(DATE_MIN_VALUE);
-            ObObj xx;
+            ObObj xx ;
             xx.set_varchar("9999-12-31");
             max.set_date(DATE_MAX_VALUE);
             break;
           }
-          case ObTimeType: {
+        case ObTimeType: {
             min.set_time(ObTimeConverter::ZERO_TIME);
             max.set_time(TIME_MAX_VALUE);
             break;
           }
-          case ObYearType: {
+        case ObYearType: {
             uint8_t ymin = 0;
             ObTimeConverter::int_to_year(1970, ymin);
             min.set_year(ymin);
@@ -269,10 +276,9 @@ public:
             max.set_year(ymax);
             break;
           }
-          default:
-            break;
+        default: break;
         }
-      } else {
+      } else {//分更多种类型,default
         min = int_info_.min_;
         max = int_info_.max_;
       }
@@ -283,8 +289,10 @@ public:
     return ret;
   }
 
-  int get_batch_stat(const uint64_t table_id, const ObIArray<uint64_t>& partition_ids,
-      const ObIArray<uint64_t>& column_ids, ObIArray<ObColumnStatValueHandle>& handles) override
+  int get_batch_stat(const uint64_t table_id,
+                     const ObIArray<uint64_t> &partition_ids,
+                     const ObIArray<uint64_t> &column_ids,
+                     ObIArray<ObColumnStatValueHandle> &handles) override
   {
     int ret = OB_SUCCESS;
     ObColumnStatValueHandle handle;
@@ -302,8 +310,10 @@ public:
     return ret;
   }
 
-  int get_batch_stat(const oceanbase::share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
-      ObIArray<ObColumnStat*>& stats, ObIAllocator& allocator)
+  int get_batch_stat(const oceanbase::share::schema::ObTableSchema &table_schema,
+                     const uint64_t partition_id,
+                     ObIArray<ObColumnStat *> &stats,
+                     ObIAllocator &allocator)
   {
     UNUSED(table_schema);
     UNUSED(partition_id);
@@ -328,7 +338,7 @@ public:
   }
 
 private:
-  oceanbase::sql::ObSchemaChecker* schema_checker_;
+  oceanbase::sql::ObSchemaChecker *schema_checker_;
   ObArenaAllocator allocator_;
   ObSEArray<ObColumnStat*, 8> column_stats_;
   int64_t table1_row_count_;
@@ -338,6 +348,7 @@ private:
   bool default_stat_;
 };
 
-}  // end namespace test
+} // end namespace test
 
 #endif /* _OB_MOCK_STAT_MANAGER_H */
+

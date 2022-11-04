@@ -117,7 +117,7 @@ uint64_t ObTscTimestamp::get_cpufreq_khz_()
 {
   int ret = OB_SUCCESS;
   char line[256];
-  FILE* stream = NULL;
+  FILE *stream = NULL;
   double freq_mhz = 0.0;
   uint64_t freq_khz = 0;
   stream = fopen("/proc/cpuinfo", "r");
@@ -126,6 +126,10 @@ uint64_t ObTscTimestamp::get_cpufreq_khz_()
     LIB_LOG(WARN, "/proc/cpuinfo not exist", K(ret));
   } else {
     while (fgets(line, sizeof(line), stream)) {
+      // FIXME: TSC frequency is not easy to retrieve from user-space
+      // see: https://stackoverflow.com/questions/35123379/getting-tsc-rate-from-x86-kernel/57835630#57835630
+      // cpu MHz was not stable and not equals to TSC frequency
+      // don't depends on to calculate and then comapre to real clock time
       if (sscanf(line, "cpu MHz\t: %lf", &freq_mhz) == 1) {
         freq_khz = (uint64_t)(freq_mhz * 1000UL);
         break;
@@ -152,7 +156,7 @@ bool ObTscTimestamp::is_support_invariant_tsc_()
   if (ret) {
     cpu_info[3] = 0;
     getcpuid(cpu_info, 0x80000001);
-    if (cpu_info[3] & (1 << 27)) {
+    if (cpu_info[3] & (1<<27)) {
       // RDTSCP is supported
     } else {
       ret = false;
@@ -166,9 +170,9 @@ bool ObTscTimestamp::is_support_invariant_tsc_()
 uint64_t ObTscTimestamp::get_cpufreq_khz_(void)
 {
   uint64_t timer_frequency = 0;
-  asm volatile("mrs %0, cntfrq_el0" : "=r"(timer_frequency));
-  LIB_LOG(INFO, "TSC freq : ", "freq", timer_frequency / 1000);
-  return timer_frequency / 1000;
+  asm volatile("mrs %0, cntfrq_el0":"=r"(timer_frequency));
+  LIB_LOG(INFO, "TSC freq : ", "freq", timer_frequency/1000);
+  return timer_frequency/1000;
 }
 
 #else

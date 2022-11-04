@@ -20,12 +20,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int AND t1.col_null]), filter(nil), 
+  0 - output([t1.col_int AND t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_int], [t1.col_null]), partitions(p0)
 
 select col_int and col_null from t1;
@@ -40,12 +40,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null AND t1.col_int]), filter(nil), 
+  0 - output([t1.col_null AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_int]), partitions(p0)
 
 select col_null and col_int from t1;
@@ -61,12 +61,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_int AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_int], [t1.col_varchar]), partitions(p0)
 
 select col_int and col_varchar from t1;
@@ -83,12 +83,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND t1.col_int]), filter(nil), 
+  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_varchar], [t1.col_int]), partitions(p0)
 
 select col_varchar and col_int from t1;
@@ -106,12 +106,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_int AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_int], [t1.col_varchar_num]), partitions(p0)
 
 select col_int and col_varchar_num from t1;
@@ -126,12 +126,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND t1.col_int]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_varchar_num], [t1.col_int]), partitions(p0)
 
 select col_varchar_num and col_int from t1;
@@ -147,12 +147,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int AND 0]), filter(nil), 
+  0 - output([t1.col_int AND 0]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select col_int and 0 from t1;
@@ -167,12 +167,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([0 AND t1.col_int]), filter(nil), 
+  0 - output([0 AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select 0 and col_int from t1;
@@ -189,12 +189,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null AND t1.col_null]), filter(nil), 
+  0 - output([t1.col_null AND t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select col_null and col_null from t1;
@@ -209,12 +209,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_null AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_varchar_num]), partitions(p0)
 
 select col_null and col_varchar_num from t1;
@@ -229,12 +229,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND t1.col_null]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_varchar_num], [t1.col_null]), partitions(p0)
 
 select col_varchar_num and col_null from t1;
@@ -250,12 +250,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_null AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_varchar]), partitions(p0)
 
 select col_null and col_varchar from t1;
@@ -272,12 +272,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND t1.col_null]), filter(nil), 
+  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_varchar], [t1.col_null]), partitions(p0)
 
 select col_varchar and col_null from t1;
@@ -295,12 +295,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null AND 0]), filter(nil), 
+  0 - output([t1.col_null AND 0]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select col_null and 0 from t1;
@@ -317,12 +317,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND 0]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND 0]), filter(nil), rowset=256, 
       access([t1.col_varchar_num]), partitions(p0)
 
 select col_varchar_num and 0 from t1;
@@ -337,12 +337,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND 0]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND 0]), filter(nil), rowset=256, 
       access([t1.col_varchar_num]), partitions(p0)
 
 select col_varchar_num and 0 from t1;
@@ -359,12 +359,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int AND ?]), filter(nil), 
+  0 - output([t1.col_int AND cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select col_int and '' from t1;
@@ -379,12 +379,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? AND t1.col_int]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select '' and col_int from t1;
@@ -400,12 +400,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND ?]), filter(nil), 
+  0 - output([cast(t1.col_varchar, DOUBLE(-1, -1)) AND cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_varchar]), partitions(p0)
 
 select col_varchar and '' from t1;
@@ -422,12 +422,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) AND cast(t1.col_varchar, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_varchar]), partitions(p0)
 
 select '' and col_varchar from t1;
@@ -442,12 +442,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND ?]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) AND cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_varchar_num]), partitions(p0)
 
 select col_varchar_num and '' from t1;
@@ -463,12 +463,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) AND cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_varchar_num]), partitions(p0)
 
 select '' and col_varchar_num from t1;
@@ -489,12 +489,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int OR t1.col_int]), filter(nil), 
+  0 - output([t1.col_int OR t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select col_int or col_int from t1;
@@ -509,12 +509,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_zero OR t1.col_zero]), filter(nil), 
+  0 - output([t1.col_zero OR t1.col_zero]), filter(nil), rowset=256, 
       access([t1.col_zero]), partitions(p0)
 
 select col_zero or col_zero from t1;
@@ -529,12 +529,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_zero, DOUBLE(-1, -1)) OR cast(t1.col_varchar_zero, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([cast(t1.col_varchar_zero, DOUBLE(-1, -1)) OR cast(t1.col_varchar_zero, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_varchar_zero]), partitions(p0)
 
 select col_varchar_zero or col_varchar_zero from t1;
@@ -551,12 +551,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR t1.col_null]), filter(nil), 
+  0 - output([t1.col_null OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select col_null or col_null from t1;
@@ -571,12 +571,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int OR t1.col_null]), filter(nil), 
+  0 - output([t1.col_int OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_int], [t1.col_null]), partitions(p0)
 
 select col_int or col_null from t1;
@@ -591,12 +591,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR t1.col_int]), filter(nil), 
+  0 - output([t1.col_null OR t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_int]), partitions(p0)
 
 select col_null or col_int from t1;
@@ -612,12 +612,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_zero OR t1.col_null]), filter(nil), 
+  0 - output([t1.col_zero OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_zero], [t1.col_null]), partitions(p0)
 
 select col_zero or col_null from t1;
@@ -632,12 +632,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR t1.col_zero]), filter(nil), 
+  0 - output([t1.col_null OR t1.col_zero]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_zero]), partitions(p0)
 
 select col_null or col_zero from t1;
@@ -653,12 +653,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) OR t1.col_null]), filter(nil), 
+  0 - output([cast(t1.col_varchar_num, DOUBLE(-1, -1)) OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_varchar_num], [t1.col_null]), partitions(p0)
 
 select col_varchar_num or col_null from t1;
@@ -673,12 +673,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_null OR cast(t1.col_varchar_num, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_varchar_num]), partitions(p0)
 
 select col_null or col_varchar_num from t1;
@@ -694,12 +694,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_varchar_zero, DOUBLE(-1, -1)) OR t1.col_null]), filter(nil), 
+  0 - output([cast(t1.col_varchar_zero, DOUBLE(-1, -1)) OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_varchar_zero], [t1.col_null]), partitions(p0)
 
 select col_varchar_zero or col_null from t1;
@@ -714,12 +714,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR cast(t1.col_varchar_zero, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([t1.col_null OR cast(t1.col_varchar_zero, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_varchar_zero]), partitions(p0)
 
 select col_null or col_varchar_zero from t1;
@@ -736,12 +736,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_null OR ?]), filter(nil), 
+  0 - output([t1.col_null OR cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select col_null or '' from t1;
@@ -756,12 +756,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_null]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select '' or col_null from t1;
@@ -777,12 +777,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_int OR ?]), filter(nil), 
+  0 - output([t1.col_int OR cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select col_int or '' from t1;
@@ -797,12 +797,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_int]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) OR t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select '' or col_int from t1;
@@ -818,12 +818,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.col_zero OR ?]), filter(nil), 
+  0 - output([t1.col_zero OR cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_zero]), partitions(p0)
 
 select col_zero or '' from t1;
@@ -838,12 +838,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_zero]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) OR t1.col_zero]), filter(nil), rowset=256, 
       access([t1.col_zero]), partitions(p0)
 
 select '' or col_zero from t1;
@@ -859,12 +859,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cast(t1.col_empty_str, DOUBLE(-1, -1)) OR ?]), filter(nil), 
+  0 - output([cast(t1.col_empty_str, DOUBLE(-1, -1)) OR cast('', DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_empty_str]), partitions(p0)
 
 select col_empty_str or '' from t1;
@@ -881,12 +881,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? AND t1.col_int]), filter(nil), 
+  0 - output([1 AND 2 AND 3 AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select 1 and 2 and 3 and col_int from t1;
@@ -901,12 +901,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND t1.col_int]), filter(nil), 
+  0 - output([1 AND t1.col_null AND 3 AND t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_int]), partitions(p0)
 
 select 1 and col_null and 3 and col_int from t1;
@@ -921,12 +921,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND t1.col_zero]), filter(nil), 
+  0 - output([1 AND t1.col_null AND 3 AND t1.col_zero]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_zero]), partitions(p0)
 
 select 1 and col_null and 3 and col_zero from t1;
@@ -941,12 +941,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1 AND t1.col_null AND 3 AND cast(t1.col_empty_str, DOUBLE(-1, -1))]), filter(nil), 
+  0 - output([1 AND t1.col_null AND 3 AND cast(t1.col_empty_str, DOUBLE(-1, -1))]), filter(nil), rowset=256, 
       access([t1.col_null], [t1.col_empty_str]), partitions(p0)
 
 select 1 and col_null and 3 and col_empty_str from t1;
@@ -963,12 +963,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_int]), filter(nil), 
+  0 - output([1 OR 2 OR t1.col_int]), filter(nil), rowset=256, 
       access([t1.col_int]), partitions(p0)
 
 select 1 or 2 or col_int from t1;
@@ -983,12 +983,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_null]), filter(nil), 
+  0 - output([1 OR 2 OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select 1 or 2 or col_null from t1;
@@ -1003,12 +1003,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([? OR t1.col_null]), filter(nil), 
+  0 - output([cast('', DOUBLE(-1, -1)) OR 0 OR t1.col_null]), filter(nil), rowset=256, 
       access([t1.col_null]), partitions(p0)
 
 select '' or 0 or col_null from t1;
@@ -1050,12 +1050,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c1], [t1.c1 AND t1.c1]), filter(nil), 
+  0 - output([t1.c1], [t1.c1], [t1.c1 AND t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 select c1, c1, c1 and c1 from t1;
@@ -1069,12 +1069,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c1], [t1.c1 OR t1.c1]), filter(nil), 
+  0 - output([t1.c1], [t1.c1], [t1.c1 OR t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 select c1, c1, c1 or c1 from t1;
@@ -1088,12 +1088,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 AND t1.c2]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c1 AND t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 select c1, c2, c1 and c2 from t1;
@@ -1107,12 +1107,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 OR t1.c2]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c1 OR t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 select c1, c2, c1 or c2 from t1;
@@ -1126,12 +1126,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c3], [t1.c1 AND t1.c3]), filter(nil), 
+  0 - output([t1.c1], [t1.c3], [t1.c1 AND t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c3]), partitions(p0)
 
 select c1, c3, c1 and c3 from t1;
@@ -1145,12 +1145,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c3], [t1.c1 OR t1.c3]), filter(nil), 
+  0 - output([t1.c1], [t1.c3], [t1.c1 OR t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c3]), partitions(p0)
 
 select c1, c3, c1 or c3 from t1;
@@ -1164,12 +1164,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c1], [t1.c2 AND t1.c1]), filter(nil), 
+  0 - output([t1.c2], [t1.c1], [t1.c2 AND t1.c1]), filter(nil), rowset=256, 
       access([t1.c2], [t1.c1]), partitions(p0)
 
 select c2, c1, c2 and c1 from t1;
@@ -1183,12 +1183,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c1], [t1.c2 OR t1.c1]), filter(nil), 
+  0 - output([t1.c2], [t1.c1], [t1.c2 OR t1.c1]), filter(nil), rowset=256, 
       access([t1.c2], [t1.c1]), partitions(p0)
 
 select c2, c1, c2 or c1 from t1;
@@ -1202,12 +1202,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c2], [t1.c2 AND t1.c2]), filter(nil), 
+  0 - output([t1.c2], [t1.c2], [t1.c2 AND t1.c2]), filter(nil), rowset=256, 
       access([t1.c2]), partitions(p0)
 
 select c2, c2, c2 and c2 from t1;
@@ -1221,12 +1221,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c2], [t1.c2 OR t1.c2]), filter(nil), 
+  0 - output([t1.c2], [t1.c2], [t1.c2 OR t1.c2]), filter(nil), rowset=256, 
       access([t1.c2]), partitions(p0)
 
 select c2, c2, c2 or c2 from t1;
@@ -1240,12 +1240,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c3], [t1.c2 AND t1.c3]), filter(nil), 
+  0 - output([t1.c2], [t1.c3], [t1.c2 AND t1.c3]), filter(nil), rowset=256, 
       access([t1.c2], [t1.c3]), partitions(p0)
 
 select c2, c3, c2 and c3 from t1;
@@ -1259,12 +1259,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c3], [t1.c2 OR t1.c3]), filter(nil), 
+  0 - output([t1.c2], [t1.c3], [t1.c2 OR t1.c3]), filter(nil), rowset=256, 
       access([t1.c2], [t1.c3]), partitions(p0)
 
 select c2, c3, c2 or c3 from t1;
@@ -1278,12 +1278,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c1], [t1.c3 AND t1.c1]), filter(nil), 
+  0 - output([t1.c3], [t1.c1], [t1.c3 AND t1.c1]), filter(nil), rowset=256, 
       access([t1.c3], [t1.c1]), partitions(p0)
 
 select c3, c1, c3 and c1 from t1;
@@ -1297,12 +1297,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c1], [t1.c3 OR t1.c1]), filter(nil), 
+  0 - output([t1.c3], [t1.c1], [t1.c3 OR t1.c1]), filter(nil), rowset=256, 
       access([t1.c3], [t1.c1]), partitions(p0)
 
 select c3, c1, c3 or c1 from t1;
@@ -1316,12 +1316,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c2], [t1.c3 AND t1.c2]), filter(nil), 
+  0 - output([t1.c3], [t1.c2], [t1.c3 AND t1.c2]), filter(nil), rowset=256, 
       access([t1.c3], [t1.c2]), partitions(p0)
 
 select c3, c2, c3 and c2 from t1;
@@ -1335,12 +1335,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c2], [t1.c3 OR t1.c2]), filter(nil), 
+  0 - output([t1.c3], [t1.c2], [t1.c3 OR t1.c2]), filter(nil), rowset=256, 
       access([t1.c3], [t1.c2]), partitions(p0)
 
 select c3, c2, c3 or c2 from t1;
@@ -1354,12 +1354,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c3], [t1.c3 AND t1.c3]), filter(nil), 
+  0 - output([t1.c3], [t1.c3], [t1.c3 AND t1.c3]), filter(nil), rowset=256, 
       access([t1.c3]), partitions(p0)
 
 select c3, c3, c3 and c3 from t1;
@@ -1373,12 +1373,12 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |36  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c3], [t1.c3], [t1.c3 OR t1.c3]), filter(nil), 
+  0 - output([t1.c3], [t1.c3], [t1.c3 OR t1.c3]), filter(nil), rowset=256, 
       access([t1.c3]), partitions(p0)
 
 select c3, c3, c3 or c3 from t1;
@@ -1388,52 +1388,3 @@ select c3, c3, c3 or c3 from t1;
 | NULL | NULL |     NULL |
 +------+------+----------+
 
-drop table t1;
-CREATE TABLE t1(c0 VARCHAR(500), c1 DECIMAL);
-EXPLAIN insert into t1 values('', 123);
-Query Plan
-====================================
-|ID|OPERATOR   |NAME|EST. ROWS|COST|
-------------------------------------
-|0 |INSERT     |    |1        |1   |
-|1 | EXPRESSION|    |1        |1   |
-====================================
-
-Outputs & filters: 
--------------------------------------
-  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(VARCHAR,utf8mb4_general_ci,length:500,NULL,__values.c0)], [column_conv(DECIMAL,PS:(10,0),NULL,__values.c1)]), filter(nil), 
-      columns([{t1: ({t1: (t1.__pk_increment, t1.c0, t1.c1)})}]), partitions(p0)
-  1 - output([__values.c0], [__values.c1]), filter(nil)
-      values({'', 123})
-
-insert into t1 values('', 123);
-EXPLAIN SELECT ALL t1.c0 AS ref0 FROM t1 WHERE (NULL AND ( CAST(COALESCE(t1.c0,  EXISTS (SELECT 1)) AS SIGNED) IS NOT NULL)) IS NULL;
-Query Plan
-=======================================
-|ID|OPERATOR      |NAME|EST. ROWS|COST|
----------------------------------------
-|0 |SUBPLAN FILTER|    |1        |37  |
-|1 | TABLE SCAN   |t1  |1        |37  |
-|2 | LIMIT        |    |1        |1   |
-|3 |  EXPRESSION  |    |1        |1   |
-=======================================
-
-Outputs & filters: 
--------------------------------------
-  0 - output([t1.c0]), filter(nil), 
-      exec_params_(nil), onetime_exprs_([cast((T_OP_EXISTS, subquery(1)), VARCHAR(500))]), init_plan_idxs_(nil)
-  1 - output([t1.c0]), filter([(T_OP_IS, ? AND (T_OP_IS_NOT, cast(coalesce(t1.c0, ?), BIGINT(0, 0)), NULL, 0), NULL, 0)]), 
-      access([t1.c0]), partitions(p0)
-  2 - output([1]), filter(nil), limit(1), offset(nil)
-  3 - output([1]), filter(nil)
-      values({1})
-
-SELECT ALL t1.c0 AS ref0 FROM t1 WHERE (NULL AND ( CAST(COALESCE(t1.c0,  EXISTS (SELECT 1)) AS SIGNED) IS NOT NULL)) IS NULL;
-+------+
-| ref0 |
-+------+
-|      |
-+------+
-Warnings:
-Warning	1292	Truncated incorrect INTEGER value: ''
-drop table t1;

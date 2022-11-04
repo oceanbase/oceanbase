@@ -40,12 +40,11 @@ public:
   void broadcast() {
       cond_.broadcast();
   }
-
 private:
   oceanbase::common::ObThreadCond cond_;
 };
 
-}  // namespace obsys
-}  // namespace oceanbase
+}
+}
 
 #endif /*THREAD_COND_H_*/

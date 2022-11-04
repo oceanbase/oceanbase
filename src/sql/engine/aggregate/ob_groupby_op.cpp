@@ -18,13 +18,22 @@
 //#include "sql/engine/expr/ob_sql_expression.h"
 //#include "sql/ob_sql_utils.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-OB_SERIALIZE_MEMBER((ObGroupBySpec, ObOpSpec), aggr_infos_);
+OB_SERIALIZE_MEMBER((ObGroupBySpec, ObOpSpec),
+                    aggr_infos_,
+                    aggr_stage_,
+                    dist_aggr_group_idxes_,
+                    aggr_code_idx_,
+                    aggr_code_expr_,
+                    by_pass_enabled_,
+                    support_fast_single_row_agg_);
 
 DEF_TO_STRING(ObGroupBySpec)
 {
@@ -47,16 +56,33 @@ int ObGroupByOp::inner_open()
   } else if (OB_FAIL(aggr_processor_.init())) {
     LOG_WARN("failed to init", K(ret));
   } else {
-    LOG_DEBUG("finish inner_open");
+    ObGroupBySpec *op_spec = static_cast<ObGroupBySpec*>(const_cast<ObOpSpec*>(&spec_));
+    aggr_processor_.set_3stage_info(op_spec->aggr_stage_,
+                                    op_spec->aggr_code_idx_,
+                                    &op_spec->dist_aggr_group_idxes_,
+                                    op_spec->aggr_code_expr_);
+    if (ObThreeStageAggrStage::NONE_STAGE != op_spec->aggr_stage_) {
+      if (OB_ISNULL(op_spec->aggr_code_expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: aggr_code_expr is null in three stage aggregation", K(ret));
+      } else if (ObThreeStageAggrStage::FIRST_STAGE != op_spec->aggr_stage_ &&
+          0 == op_spec->dist_aggr_group_idxes_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: distinct aggregation group is 0", K(ret),
+          K(op_spec->aggr_stage_), K(op_spec->dist_aggr_group_idxes_.count()));
+      }
+    } else {
+      LOG_DEBUG("finish inner_open");
+    }
   }
   return ret;
 }
 
-int ObGroupByOp::rescan()
+int ObGroupByOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   aggr_processor_.reuse();
-  if (OB_FAIL(ObOperator::rescan())) {
+  if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   } else if (OB_FAIL(aggr_processor_.init())) {
     LOG_WARN("failed to init", K(ret));
@@ -66,11 +92,11 @@ int ObGroupByOp::rescan()
   return ret;
 }
 
-int ObGroupByOp::switch_iterator()
+int ObGroupByOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
   aggr_processor_.reuse();
-  if (OB_FAIL(ObOperator::switch_iterator())) {
+  if (OB_FAIL(ObOperator::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
   } else if (OB_FAIL(aggr_processor_.init())) {
     LOG_WARN("failed to init", K(ret));
@@ -98,5 +124,5 @@ void ObGroupByOp::destroy()
   ObOperator::destroy();
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

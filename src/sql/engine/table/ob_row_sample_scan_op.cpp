@@ -19,17 +19,17 @@ using namespace common;
 using namespace storage;
 using namespace sql;
 
-int ObRowSampleScanOp::prepare_scan_param()
+int ObRowSampleScanOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableScanOp::prepare_scan_param())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("prepare scan param failed", K(ret));
-    }
+  if (OB_FAIL(ObTableScanOp::inner_open())) {
+    LOG_WARN("fail to inner open", K(ret));
+  } else if (MY_SPEC.use_dist_das()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Row Sample Scan with dist DAS");
   } else {
-    scan_param_.sample_info_ = MY_SPEC.get_sample_info();
-    scan_param_.op_filters_ = NULL;
-    scan_param_.op_filters_before_index_back_ = NULL;
+    need_sample_ = !MY_SPEC.get_sample_info().is_no_sample();
+    tsc_rtdef_.scan_rtdef_.sample_info_ = need_sample_ ? &(MY_SPEC.get_sample_info()) : nullptr;
   }
   return ret;
 }
@@ -43,6 +43,15 @@ int ObRowSampleScanOp::inner_get_next_row()
     }
   }
   LOG_DEBUG("static engine row sample scan get row", K(ret));
+  return ret;
+}
+
+int ObRowSampleScanOp::inner_get_next_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTableScanOp::inner_get_next_batch(max_row_cnt))) {
+    LOG_WARN("get next batch failed", K(ret), "op", op_name());
+  }
   return ret;
 }
 

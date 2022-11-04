@@ -11,7 +11,6 @@
  */
 
 #include "ob_query_response_time.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase;

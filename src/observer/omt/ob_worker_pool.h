@@ -14,54 +14,64 @@
 #define _OCEABASE_OBSERVER_OMT_OB_WORKER_POOL_H_
 
 #include <stdint.h>
-#include "lib/queue/ob_fixed_queue.h"
+#include "lib/queue/ob_link_queue.h"
 #include "observer/ob_srv_xlator.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace rpc {
-namespace frame {
+namespace rpc
+{
+namespace frame
+{
 class ObReqTranslator;
 }
-}  // namespace rpc
+}
 
-namespace omt {
+namespace omt
+{
 
 class ObThWorker;
-class ObIWorkerProcessor;
 
 // This class isn't thread safe.
-class ObWorkerPool {
-  static const int64_t MAX_WORKER_CNT = 10240;
-  typedef common::ObFixedQueue<ObThWorker> WorkerArray;
+class ObWorkerPool
+{
+public:
+  class Queue
+  {
+  public:
+    Queue() {}
+    virtual ~Queue() {}
+    int push(ObThWorker *worker);
+    int pop(ObThWorker *&worker);
+  private:
+    common::ObLinkQueue queue_;
+  };
 
 public:
-  explicit ObWorkerPool(ObIWorkerProcessor& procor);
+  explicit ObWorkerPool();
   virtual ~ObWorkerPool();
 
-  int init(int64_t init_cnt, int64_t idle_cnt, int64_t max_cnt);
+  int init(int64_t init_cnt, int64_t idle_cnt);
   void destroy();
 
-  ObThWorker* alloc();
-  void free(ObThWorker* worker);
-
-  void set_max(int64_t v);
+  ObThWorker *alloc();
+  void free(ObThWorker *worker);
 
 private:
-  int create_worker(ObThWorker*& worker);
-  void destroy_worker(ObThWorker* worker);
+  int create_worker(ObThWorker *&worker);
+  void destroy_worker(ObThWorker *worker);
 
 private:
   bool is_inited_;
   int64_t init_cnt_;
   int64_t idle_cnt_;
-  int64_t max_cnt_;
   int64_t worker_cnt_;
-  WorkerArray workers_;
-  ObIWorkerProcessor& procor_;
-};  // end of class ObWorkerPool
+  Queue workers_;
+}; // end of class ObWorkerPool
 
-}  // end of namespace omt
-}  // end of namespace oceanbase
+} // end of namespace omt
+} // end of namespace oceanbase
+
 
 #endif /* _OCEABASE_OBSERVER_OMT_OB_WORKER_POOL_H_ */

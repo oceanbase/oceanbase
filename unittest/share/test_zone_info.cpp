@@ -17,16 +17,19 @@
 #include <gtest/gtest.h>
 #include "schema/db_initializer.h"
 
-namespace oceanbase {
-namespace share {
+
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace share::schema;
 
-class TestZoneInfo : public ::testing::Test {
+class TestZoneInfo : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
+  virtual void TearDown() {}
 
 protected:
   DBInitializer db_initer_;
@@ -56,7 +59,8 @@ TEST_F(TestZoneInfo, create_global_info)
 
 TEST_F(TestZoneInfo, zone_item_update)
 {
-  int ret = global_info_.lease_info_version_.update(db_initer_.get_sql_proxy(), global_info_.zone_, 1, "a");
+  int ret = global_info_.lease_info_version_.update(
+      db_initer_.get_sql_proxy(), global_info_.zone_, 1, "a");
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, global_info_.lease_info_version_.value_);
   ASSERT_EQ(1, global_info_.lease_info_version_);
@@ -114,7 +118,7 @@ TEST_F(TestZoneInfo, zone_item_update)
 
 TEST_F(TestZoneInfo, zone_info)
 {
-  const char* zone = "ZJ.HZ.XH";
+  const char *zone = "ZJ.HZ.XH";
   ObZoneInfo zone_info;
   zone_info.zone_ = zone;
   zone_info.status_.value_ = ObZoneStatus::ACTIVE;
@@ -134,19 +138,22 @@ TEST_F(TestZoneInfo, zone_info)
   LOG_INFO("zone_info", K(zone_info));
 
   ObArray<ObZone> zone_list;
-  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::get_zone_list(db_initer_.get_sql_proxy(), zone_list));
+  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::get_zone_list(
+  db_initer_.get_sql_proxy(), zone_list));
   ASSERT_EQ(1, zone_list.size());
 
-  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::remove_zone_info(db_initer_.get_sql_proxy(), zone));
+  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::remove_zone_info(
+      db_initer_.get_sql_proxy(), zone));
 
   zone_list.reuse();
-  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::get_zone_list(db_initer_.get_sql_proxy(), zone_list));
+  ASSERT_EQ(OB_SUCCESS, ObZoneTableOperation::get_zone_list(
+  db_initer_.get_sql_proxy(), zone_list));
   ASSERT_EQ(0, zone_list.size());
 }
 
 TEST_F(TestZoneInfo, get_lease_info)
 {
-  const char* zone = "ZJ.HZ.XH";
+  const char *zone = "ZJ.HZ.XH";
   ObZoneInfo zone_info;
   zone_info.zone_ = zone;
   zone_info.status_.value_ = ObZoneStatus::ACTIVE;
@@ -155,7 +162,7 @@ TEST_F(TestZoneInfo, get_lease_info)
 
   ObZoneItemTransUpdater updater;
   updater.start(db_initer_.get_sql_proxy());
-  const ObZone& gz = global_info_.zone_;
+  const ObZone &gz = global_info_.zone_;
   global_info_.lease_info_version_.update(updater, gz, 4);
   global_info_.config_version_.update(updater, gz, 3);
   global_info_.frozen_version_.update(updater, gz, 2);
@@ -179,10 +186,10 @@ TEST_F(TestZoneInfo, get_lease_info)
   ASSERT_TRUE(lease_info.suspend_merging_);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

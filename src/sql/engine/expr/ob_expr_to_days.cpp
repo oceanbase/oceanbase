@@ -19,69 +19,42 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprToDays::ObExprToDays(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DAYS, N_TO_DAYS, 1, NOT_ROW_DIMENSION){};
+ObExprToDays::ObExprToDays(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DAYS, N_TO_DAYS, 1, NOT_ROW_DIMENSION) {};
 
 ObExprToDays::~ObExprToDays()
-{}
+{
+}
 
-int ObExprToDays::calc_result_type1(ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const
+int ObExprToDays::calc_result_type1(ObExprResType &type,
+                                           ObExprResType &date,
+                                           common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  UNUSED(type_ctx);
   type.set_int();
   type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   if (ob_is_enumset_tc(date.get_type())) {
     date.set_calc_type(ObVarcharType);
   } else {
-    const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
-    if (OB_ISNULL(session)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cast basic session to sql session info failed", K(ret));
-    } else if (session->use_static_typing_engine()) {
-      date.set_calc_type(ObDateType);
-    }
+    date.set_calc_type(ObDateType);
   }
   return ret;
 }
 
-int ObExprToDays::calc_result1(ObObj& result, const ObObj& date, ObExprCtx& expr_ctx) const
+int calc_todays_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
-  const ObObj* p_obj = NULL;
-  EXPR_CAST_OBJ_V2(ObDateType, date, p_obj);
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(p_obj)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("p_obj is null", K(ret));
-    } else if (p_obj->is_null() || OB_INVALID_DATE_VALUE == cast_ctx.warning_) {
-      result.set_null();
-    } else {
-      int64_t value = p_obj->get_date() + DAYS_FROM_ZERO_TO_BASE;
-      if (value < 0) {
-        result.set_null();
-      } else {
-        result.set_int(value);
-      }
-    }
-  } else {
-    LOG_WARN("cast obj failed", K(ret));
-  }
-  return ret;
-}
-
-int calc_todays_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* day_datum = NULL;
-  // Unlike non-static engine which check whether return value is OB_INVLIAD_DATE_VALUE.
-  // If convert failed, result is set to ZERO_DATE(default cast mode is ZERO_ON_WARN)
-  // According to MySQL, when result is zero date, return value is NULL.
+  ObDatum *day_datum = NULL;
+  // 这里没有像老框架一样，判断cast的返回值是否是OB_INVLIAD_DATE_VALUE
+  // 如果转换失败，结果会被置为ZERO_DATE（cast mode默认是ZERO_ON_WARN）
+  // MySQL的行为是，结果是zero date时，返回NULL
   if (OB_FAIL(expr.args_[0]->eval(ctx, day_datum))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (day_datum->is_null()) {
@@ -97,7 +70,8 @@ int calc_todays_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprToDays::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprToDays::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -105,7 +79,8 @@ int ObExprToDays::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw_expr should got one child", K(ret), K(raw_expr));
   } else if (ObDateType != rt_expr.args_[0]->datum_meta_.type_) {
-    // TODO: support enum/set type parameter
+    // 类型推导部分有针对enum/set设置的calc type，但是新框架cast目前对enum/set支持不完整
+    // 这里先报错，后续补上对enum/set的处理
     // enum/set->varchar->date
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param type should be date", K(ret), K(rt_expr));
@@ -115,5 +90,5 @@ int ObExprToDays::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

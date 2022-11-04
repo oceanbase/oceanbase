@@ -16,14 +16,16 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 #define OB_LOG_LEVEL_NONE 7
-#define OB_LOG_LEVEL_NP -1  // set this level, would not print log
+#define OB_LOG_LEVEL_NP -1  //set this level, would not print log
 #define OB_LOG_LEVEL_ERROR 0
 //#define OB_LOG_LEVEL_USER_ERROR  1
-#define OB_LOG_LEVEL_WARN 2
-#define OB_LOG_LEVEL_INFO 3
+#define OB_LOG_LEVEL_WARN  2
+#define OB_LOG_LEVEL_INFO  3
 #define OB_LOG_LEVEL_TRACE 4
 #define OB_LOG_LEVEL_DEBUG 5
 
@@ -31,14 +33,14 @@ struct ObLogIdLevelMap;
 //@class ObThreadLogLevel
 //@brief Deliver the id_level_map of the session which set the session variable
 //'log_level'
-struct ObThreadLogLevel {
-  ObThreadLogLevel() : id_level_map_(NULL), level_(OB_LOG_LEVEL_NONE)
-  {}
-  const ObLogIdLevelMap* id_level_map_;
-  int8_t level_;  // Used for transmit log_level in packet.
+struct ObThreadLogLevel
+{
+  ObThreadLogLevel(): id_level_map_(NULL), level_(OB_LOG_LEVEL_NONE) { }
+  const ObLogIdLevelMap *id_level_map_;
+  int8_t level_; //Used for transmit log_level in packet.
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif

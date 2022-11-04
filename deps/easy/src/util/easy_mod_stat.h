@@ -19,9 +19,9 @@
 EASY_CPP_START
 
 typedef struct mod_stat_t {
-  uint64_t id;
-  int64_t count;
-  int64_t size;
+    uint64_t id;
+    int64_t count;
+    int64_t size;
 } mod_stat_t;
 
 extern __thread mod_stat_t* easy_cur_mod_stat;

@@ -17,21 +17,24 @@
 #include "sql/resolver/tcl/ob_tcl_resolver.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
 
-namespace oceanbase {
-namespace sql {
-class ObEndTransResolver : public ObTCLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObEndTransResolver : public ObTCLResolver
+{
 public:
-  explicit ObEndTransResolver(ObResolverParams& params);
+  explicit ObEndTransResolver(ObResolverParams &params);
   virtual ~ObEndTransResolver();
 
-  virtual int resolve(const ParseNode& parse_node);
-
+  virtual int resolve(const ParseNode &parse_node);
 private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObEndTransResolver);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_RESOLVER_TCL_END_TRANS_RESOLVER_ */
 //// end of header file
+

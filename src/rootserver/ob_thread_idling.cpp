@@ -15,11 +15,14 @@
 #include "ob_thread_idling.h"
 #include "share/ob_define.h"
 #include "lib/time/ob_time_utility.h"
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 using namespace common;
 
-ObThreadIdling::ObThreadIdling(volatile bool& stop) : cond_(), stop_(stop), wakeup_cnt_(0)
+ObThreadIdling::ObThreadIdling(volatile bool &stop)
+    : cond_(), stop_(stop), wakeup_cnt_(0)
 {
   cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT);
 }
@@ -70,5 +73,5 @@ int ObThreadIdling::idle(const int64_t max_idle_time_us)
   return ret;
 }
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase

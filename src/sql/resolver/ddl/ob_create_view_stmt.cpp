@@ -15,22 +15,28 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObCreateViewStmt::ObCreateViewStmt() : ObStmt(stmt::T_CREATE_VIEW), name_pool_(NULL), definition_stmt_(NULL)
-{}
+ObCreateViewStmt::ObCreateViewStmt()
+    : ObStmt(stmt::T_CREATE_VIEW),
+      name_pool_(NULL), definition_stmt_(NULL)
+{
+}
 
-ObCreateViewStmt::ObCreateViewStmt(ObIAllocator* name_pool)
-    : ObStmt(stmt::T_CREATE_VIEW), name_pool_(name_pool), definition_stmt_(NULL)
-{}
+ObCreateViewStmt::ObCreateViewStmt(ObIAllocator *name_pool)
+    : ObStmt(stmt::T_CREATE_VIEW),
+      name_pool_(name_pool), definition_stmt_(NULL)
+{
+}
 
 ObCreateViewStmt::~ObCreateViewStmt()
-{}
+{
+}
 
-void ObCreateViewStmt::set_name_pool(common::ObIAllocator* name_pool)
+void ObCreateViewStmt::set_name_pool(common::ObIAllocator *name_pool)
 {
   name_pool_ = name_pool;
 }
 
-int ObCreateViewStmt::set_view_name(const common::ObString& view_name)
+int ObCreateViewStmt::set_view_name(const common::ObString &view_name)
 {
   OB_ASSERT(name_pool_);
   OB_ASSERT(view_name.length() > 0 && view_name.ptr());
@@ -42,7 +48,7 @@ int ObCreateViewStmt::set_view_name(const common::ObString& view_name)
   return ret;
 }
 
-int ObCreateViewStmt::set_view_definition(const common::ObString& view_definition)
+int ObCreateViewStmt::set_view_definition(const common::ObString &view_definition)
 {
   OB_ASSERT(name_pool_);
   OB_ASSERT(view_definition.length() > 0 && view_definition.ptr());
@@ -54,28 +60,28 @@ int ObCreateViewStmt::set_view_definition(const common::ObString& view_definitio
   return ret;
 }
 
-void ObCreateViewStmt::set_definition_stmt(ObSelectStmt* definition_stmt)
+void ObCreateViewStmt::set_definition_stmt(ObSelectStmt *definition_stmt)
 {
   OB_ASSERT(definition_stmt);
   definition_stmt_ = definition_stmt;
 }
 
-const ObString& ObCreateViewStmt::get_view_name() const
+const ObString &ObCreateViewStmt::get_view_name() const
 {
   return view_name_;
 }
 
-const ObString& ObCreateViewStmt::get_view_definition() const
+const ObString &ObCreateViewStmt::get_view_definition() const
 {
   return view_definition_;
 }
 
-const ObSelectStmt* ObCreateViewStmt::get_definition_stmt() const
+const ObSelectStmt *ObCreateViewStmt::get_definition_stmt() const
 {
   return definition_stmt_;
 }
 
-void ObCreateViewStmt::print(FILE* fp, int32_t level, int32_t index)
+void ObCreateViewStmt::print(FILE *fp, int32_t level, int32_t index)
 {
   OB_ASSERT(fp && definition_stmt_);
 

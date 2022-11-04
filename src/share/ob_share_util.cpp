@@ -13,12 +13,14 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_share_util.h"
 #include "common/ob_timeout_ctx.h"
-#include "share/ob_worker.h"
+#include "lib/worker.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/oblog/ob_log_module.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
 int ObShareUtil::set_default_timeout_ctx(ObTimeoutCtx &ctx, const int64_t default_timeout)
 {
   int ret = OB_SUCCESS;
@@ -26,32 +28,42 @@ int ObShareUtil::set_default_timeout_ctx(ObTimeoutCtx &ctx, const int64_t defaul
   int64_t ctx_timeout_ts = ctx.get_abs_timeout();
   int64_t worker_timeout_ts = THIS_WORKER.get_timeout_ts();
   if (0 < ctx_timeout_ts) {
-    // ctx has already been set, use it
+    //ctx is already been set, use it
     abs_timeout_ts = ctx_timeout_ts;
   } else if (INT64_MAX == worker_timeout_ts) {
-    // if worker's timeout_ts has not been set，change to default_timeout
+    //if worker's timeout_ts not be set，set to default timeout
     abs_timeout_ts = ObTimeUtility::current_time() + default_timeout;
   } else if (0 < worker_timeout_ts) {
-    // use worker's timeout if only it is valid
+    //use worker's timeout if only it is valid
     abs_timeout_ts = worker_timeout_ts;
   } else {
-    // worker's timeout_ts is invalid, set to default timeout
+    //worker's timeout_ts is invalid, set to default timeout
     abs_timeout_ts = ObTimeUtility::current_time() + default_timeout;
   }
   if (OB_FAIL(ctx.set_abs_timeout(abs_timeout_ts))) {
-    LOG_WARN(
-        "set timeout failed", KR(ret), K(abs_timeout_ts), K(ctx_timeout_ts), K(worker_timeout_ts), K(default_timeout));
+    LOG_WARN("set timeout failed", KR(ret), K(abs_timeout_ts), K(ctx_timeout_ts),
+        K(worker_timeout_ts), K(default_timeout));
   } else if (ctx.is_timeouted()) {
     ret = OB_TIMEOUT;
-    LOG_WARN("timeout", KR(ret), K(abs_timeout_ts), K(ctx_timeout_ts), K(worker_timeout_ts), K(default_timeout));
+    LOG_WARN("timeouted", KR(ret), K(abs_timeout_ts), K(ctx_timeout_ts),
+        K(worker_timeout_ts), K(default_timeout));
   } else {
-    LOG_DEBUG("set_default_timeout_ctx success",
-        K(abs_timeout_ts),
-        K(ctx_timeout_ts),
-        K(worker_timeout_ts),
-        K(default_timeout));
+    LOG_TRACE("set_default_timeout_ctx success", K(abs_timeout_ts),
+        K(ctx_timeout_ts), K(worker_timeout_ts), K(default_timeout));
   }
   return ret;
 }
-}  // end namespace share
-}  // end namespace oceanbase
+
+int ObShareUtil::get_abs_timeout(const int64_t default_timeout, int64_t &abs_timeout)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    LOG_WARN("fail to set default timeout ctx", KR(ret), K(default_timeout));
+  } else {
+    abs_timeout = ctx.get_abs_timeout();
+  }
+  return ret;
+}
+} //end namespace share
+} //end namespace oceanbase

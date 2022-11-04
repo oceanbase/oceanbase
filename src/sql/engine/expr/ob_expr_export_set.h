@@ -23,18 +23,15 @@ public:
   virtual ~ObExprExportSet();
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_export_set(common::ObObj& result, const common::ObObj& bits, const common::ObObj& on,
-      const common::ObObj& off, const common::ObObj& sep, const common::ObObj& n_bits, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprExportSet);
   // helper func
-  static int calc_export_set_inner(ObString& ret_str, const uint64_t bits, const ObString& on, const ObString& off,
-    const ObString& sep, const int64_t n_bits, ObExprStringBuf& string_buf);
+  static int calc_export_set_inner(const int64_t max_result_size,
+      ObString& ret_str, const uint64_t bits, const ObString& on, const ObString& off,
+      const ObString& sep, const int64_t n_bits, ObExprStringBuf& string_buf);
 };
 }  // namespace sql
 }  // namespace oceanbase

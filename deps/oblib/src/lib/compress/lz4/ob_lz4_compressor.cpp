@@ -16,73 +16,72 @@
 
 using namespace oceanbase::lib::lz4_171;
 
-namespace oceanbase {
-namespace common {
-const char* ObLZ4Compressor::compressor_name = "lz4_1.0";
-int ObLZ4Compressor::compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
-    const int64_t dst_buffer_size, int64_t& dst_data_size)
+namespace oceanbase
+{
+namespace common
+{
+int ObLZ4Compressor::compress(const char *src_buffer,
+                              const int64_t src_data_size,
+                              char *dst_buffer,
+                              const int64_t dst_buffer_size,
+                              int64_t &dst_data_size)
 {
   int ret = OB_SUCCESS;
   int64_t max_overflow_size = 0;
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+  if (NULL == src_buffer
+      || 0 >= src_data_size
+      || NULL == dst_buffer
+      || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN,
-        "invalid compress argument, ",
-        K(ret),
-        KP(src_buffer),
-        K(src_data_size),
-        KP(dst_buffer),
-        K(dst_buffer_size));
+    LIB_LOG(WARN, "invalid compress argument, ",
+        K(ret), KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
   } else if (OB_FAIL(get_max_overflow_size(src_data_size, max_overflow_size))) {
     LIB_LOG(WARN, "fail to get max_overflow_size, ", K(ret), K(src_data_size));
   } else if ((src_data_size + max_overflow_size) > dst_buffer_size) {
     ret = OB_BUF_NOT_ENOUGH;
-    LIB_LOG(WARN, "dst buffer not enough, ", K(ret), K(src_data_size), K(max_overflow_size), K(dst_buffer_size));
-  } else if (0 >= (dst_data_size = LZ4_compress_default(
-                       src_buffer, dst_buffer, static_cast<int>(src_data_size), static_cast<int>(dst_buffer_size)))) {
+    LIB_LOG(WARN, "dst buffer not enough, ",
+        K(ret), K(src_data_size), K(max_overflow_size), K(dst_buffer_size));
+  } else if (0 >= (dst_data_size = LZ4_compress_default(src_buffer,
+                                                        dst_buffer,
+                                                        static_cast<int>(src_data_size),
+                                                        static_cast<int>(dst_buffer_size)))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    LIB_LOG(WARN,
-        "fail to compress data by LZ4_compress, ",
-        K(ret),
-        K(src_buffer),
-        K(src_data_size),
-        K(dst_buffer_size),
-        K(dst_data_size));
+    LIB_LOG(WARN, "fail to compress data by LZ4_compress, ",
+        K(ret), KP(src_buffer), K(src_data_size), K(dst_buffer_size), K(dst_data_size));
   }
 
   return ret;
 }
 
-int ObLZ4Compressor::decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
-    const int64_t dst_buffer_size, int64_t& dst_data_size)
+int ObLZ4Compressor::decompress(const char *src_buffer,
+                                const int64_t src_data_size,
+                                char *dst_buffer,
+                                const int64_t dst_buffer_size,
+                                int64_t &dst_data_size)
 {
   int ret = OB_SUCCESS;
 
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+  if (NULL == src_buffer
+      || 0 >= src_data_size
+      || NULL == dst_buffer
+      || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN,
-        "invalid decompress argument, ",
-        K(ret),
-        KP(src_buffer),
-        K(src_data_size),
-        K(dst_buffer),
-        K(dst_buffer_size));
-  } else if (0 >= (dst_data_size = LZ4_decompress_safe(
-                       src_buffer, dst_buffer, static_cast<int>(src_data_size), static_cast<int>(dst_buffer_size)))) {
+    LIB_LOG(WARN, "invalid decompress argument, ",
+        K(ret), KP(src_buffer), K(src_data_size), KP(dst_buffer), K(dst_buffer_size));
+  } else if (0 >= (dst_data_size = LZ4_decompress_safe(src_buffer,
+                                                      dst_buffer,
+                                                      static_cast<int>(src_data_size),
+                                                      static_cast<int>(dst_buffer_size)))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    LIB_LOG(WARN,
-        "fail to decompress by LZ4_uncompress, ",
-        K(ret),
-        KP(src_buffer),
-        K(src_data_size),
-        K(dst_buffer_size),
-        K(dst_data_size));
+    LIB_LOG(WARN, "fail to decompress by LZ4_uncompress, ",
+        K(ret), KP(src_buffer), K(src_data_size), K(dst_buffer_size), K(dst_data_size));
   }
 
   return ret;
 }
 
-int ObLZ4Compressor::get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const
+int ObLZ4Compressor::get_max_overflow_size(const int64_t src_data_size,
+                                           int64_t &max_overflow_size) const
 {
   int ret = OB_SUCCESS;
   if (src_data_size < 0) {
@@ -94,10 +93,15 @@ int ObLZ4Compressor::get_max_overflow_size(const int64_t src_data_size, int64_t&
   return ret;
 }
 
-const char* ObLZ4Compressor::get_compressor_name() const
+const char *ObLZ4Compressor::get_compressor_name() const
 {
-  return compressor_name;
+  return all_compressor_name[ObCompressorType::LZ4_COMPRESSOR];
 }
 
-}  // namespace common
-}  // namespace oceanbase
+ObCompressorType ObLZ4Compressor::get_compressor_type() const
+{
+  return ObCompressorType::LZ4_COMPRESSOR;
+}
+
+}//namespace common
+}//namesoace oceanbase

@@ -16,12 +16,14 @@
 #include "lib/utility/utility.h"
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace json {
-int Parser::token(const char*& begin, const char* end, Token& token)
+namespace oceanbase
+{
+namespace json
+{
+int Parser::token(const char *&begin, const char *end, Token &token)
 {
   int ret = OB_ITER_END;
-  const char* c = begin;
+  const char *c = begin;
   if (OB_ISNULL(c)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("begin ptr is NULL", K(ret));
@@ -49,7 +51,8 @@ int Parser::token(const char*& begin, const char* end, Token& token)
         case 't':
         case 'T':
           // true ?
-          if (end - c >= 4 && 0 == strncasecmp("true", c, 4)) {
+          if (end - c >= 4
+              && 0 == strncasecmp("true", c, 4)) {
             ret = OB_SUCCESS;
             token.type_ = TK_TRUE;
             c += 4;
@@ -60,7 +63,8 @@ int Parser::token(const char*& begin, const char* end, Token& token)
         case 'f':
         case 'F':
           // false ?
-          if (end - c >= 5 && 0 == strncasecmp("false", c, 5)) {
+          if (end - c >= 5
+              && 0 == strncasecmp("false", c, 5)) {
             ret = OB_SUCCESS;
             token.type_ = TK_FALSE;
             c += 5;
@@ -71,7 +75,8 @@ int Parser::token(const char*& begin, const char* end, Token& token)
         case 'n':
         case 'N':
           // null ?
-          if (end - c >= 4 && 0 == strncasecmp("null", c, 4)) {
+          if (end - c >= 4
+              && 0 == strncasecmp("null", c, 4)) {
             ret = OB_SUCCESS;
             token.type_ = TK_NULL;
             c += 4;
@@ -96,7 +101,8 @@ int Parser::token(const char*& begin, const char* end, Token& token)
           bool is_neg = false;
           if (*c == '-') {
             ++c;
-            if (c != end && (*c >= '0' && *c <= '9')) {
+            if (c != end
+                && (*c >= '0' && *c <= '9')) {
               token.value_.int_ = *c - '0';
               c++;
               is_neg = true;
@@ -118,7 +124,7 @@ int Parser::token(const char*& begin, const char* end, Token& token)
             }
           }
           if (OB_SUCC(ret) && is_neg) {
-            token.value_.int_ = -token.value_.int_;
+            token.value_.int_ = - token.value_.int_;
           }
           break;
         }
@@ -142,7 +148,7 @@ int Parser::token(const char*& begin, const char* end, Token& token)
           ret = OB_ERR_PARSER_SYNTAX;
           break;
       }
-    }  // end if
+    } // end if
     if (OB_SUCC(ret)) {
       begin = c;
     } else {
@@ -152,7 +158,7 @@ int Parser::token(const char*& begin, const char* end, Token& token)
   return ret;
 }
 
-int Parser::init(common::ObArenaAllocator* allocator, JsonProcessor* json_processor)
+int Parser::init(common::ObArenaAllocator *allocator, JsonProcessor *json_processor)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator)) {
@@ -165,38 +171,38 @@ int Parser::init(common::ObArenaAllocator* allocator, JsonProcessor* json_proces
   return ret;
 }
 
-int Parser::alloc_value(Type t, Value*& value)
+int Parser::alloc_value(Type t, Value *&value)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator not set", K(ret));
-  } else if (OB_ISNULL(value = (Value*)allocator_->alloc(sizeof(Value)))) {
+  } else if (OB_ISNULL(value = (Value *)allocator_->alloc(sizeof(Value)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("no memory", K(ret));
   } else {
-    value = new (value) Value();
+    value = new(value) Value();
     value->set_type(t);
   }
   return ret;
 }
 
-int Parser::alloc_pair(Pair*& pair)
+int Parser::alloc_pair(Pair *&pair)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator not set", K(ret));
-  } else if (OB_ISNULL(pair = (Pair*)allocator_->alloc(sizeof(Pair)))) {
+  } else if (OB_ISNULL(pair = (Pair *)allocator_->alloc(sizeof(Pair)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("no memory", K(ret));
   } else {
-    pair = new (pair) Pair();
+    pair = new(pair) Pair();
   }
   return ret;
 }
 
-int Parser::parse_value(const char*& begin, const char* end, Value*& value)
+int Parser::parse_value(const char *&begin, const char *end, Value *&value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(token(begin, end, cur_token_))) {
@@ -207,12 +213,12 @@ int Parser::parse_value(const char*& begin, const char* end, Value*& value)
         if (OB_FAIL(alloc_value(JT_STRING, value))) {
           LOG_WARN("fail to alloc value", K(ret));
         } else if (OB_ISNULL(value)) {
-          ret = OB_ERR_UNEXPECTED;
-          ;
+          ret = OB_ERR_UNEXPECTED;;
           LOG_WARN("succ to alloc value, but value is NULL", K(ret));
         } else {
-          value->set_string(const_cast<char*>(cur_token_.value_.str_.begin_),
-              static_cast<int32_t>(cur_token_.value_.str_.end_ - cur_token_.value_.str_.begin_));
+          value->set_string(const_cast<char *>(cur_token_.value_.str_.begin_),
+                            static_cast<int32_t>(cur_token_.value_.str_.end_ -
+                                                 cur_token_.value_.str_.begin_));
         }
         break;
       case TK_NUMBER:
@@ -231,8 +237,7 @@ int Parser::parse_value(const char*& begin, const char* end, Value*& value)
         } else if (OB_ISNULL(value)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc value, but value is NULL", K(ret));
-        } else {
-        }
+        } else {}
         break;
       case TK_FALSE:
         if (OB_FAIL(alloc_value(JT_FALSE, value))) {
@@ -240,8 +245,7 @@ int Parser::parse_value(const char*& begin, const char* end, Value*& value)
         } else if (OB_ISNULL(value)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc value, but value is NULL", K(ret));
-        } else {
-        }
+        } else {}
         break;
       case TK_NULL:
         if (OB_FAIL(alloc_value(JT_NULL, value))) {
@@ -249,20 +253,17 @@ int Parser::parse_value(const char*& begin, const char* end, Value*& value)
         } else if (OB_ISNULL(value)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc value, but value is NULL", K(ret));
-        } else {
-        }
+        } else {}
         break;
       case '{':
         if (OB_FAIL(parse_object(begin, end, value))) {
           LOG_WARN("fail to parse object", K(ret));
-        } else {
-        }
+        } else {}
         break;
       case '[':
         if (OB_FAIL(parse_array(begin, end, value))) {
           LOG_WARN("fail to parse array", K(ret));
-        } else {
-        }
+        } else {}
         break;
       default:
         ret = OB_ERR_PARSER_SYNTAX;
@@ -274,10 +275,10 @@ int Parser::parse_value(const char*& begin, const char* end, Value*& value)
   return ret;
 }
 
-int Parser::parse_array(const char*& begin, const char* end, Value*& arr)
+int Parser::parse_array(const char *&begin, const char *end, Value *&arr)
 {
   int ret = OB_SUCCESS;
-  Value* value = NULL;
+  Value *value = NULL;
   if (OB_FAIL(alloc_value(JT_ARRAY, arr))) {
     LOG_WARN("fail to alloc value", K(ret));
   } else if (OB_ISNULL(arr)) {
@@ -293,7 +294,9 @@ int Parser::parse_array(const char*& begin, const char* end, Value*& arr)
   } else {
     arr->array_add(value);
     bool is_finish = false;
-    while (OB_SUCC(ret) && !is_finish && OB_SUCC(token(begin, end, cur_token_))) {
+    while (OB_SUCC(ret)
+           && !is_finish
+           && OB_SUCC(token(begin, end, cur_token_))) {
       switch (cur_token_.type_) {
         case ',':
           if (OB_SUCC(parse_value(begin, end, value))) {
@@ -312,7 +315,7 @@ int Parser::parse_array(const char*& begin, const char* end, Value*& arr)
   return ret;
 }
 
-int Parser::parse_pair(const char*& begin, const char* end, Pair*& pair)
+int Parser::parse_pair(const char *&begin, const char *end, Pair *&pair)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(token(begin, end, cur_token_))) {
@@ -327,8 +330,9 @@ int Parser::parse_pair(const char*& begin, const char* end, Pair*& pair)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("succ to alloc pair, but pair is NULL", K(ret));
     } else {
-      pair->name_.assign_ptr(const_cast<char*>(cur_token_.value_.str_.begin_),
-          static_cast<int32_t>(cur_token_.value_.str_.end_ - cur_token_.value_.str_.begin_));
+      pair->name_.assign_ptr(const_cast<char *>(cur_token_.value_.str_.begin_),
+                             static_cast<int32_t>(cur_token_.value_.str_.end_ -
+                                                  cur_token_.value_.str_.begin_));
       if (OB_FAIL(token(begin, end, cur_token_))) {
         LOG_WARN("fail to get token", K(ret));
       } else if (':' != cur_token_.type_) {
@@ -336,22 +340,20 @@ int Parser::parse_pair(const char*& begin, const char* end, Pair*& pair)
         LOG_WARN("invalid pair", K(cur_token_.type_));
       } else if (OB_FAIL(parse_value(begin, end, pair->value_))) {
         if (cur_token_.type_ != '}' && begin != end) {
-          LOG_WARN("lack of member value", K(ret), K(pair->name_), K(begin));
-        } else {
-        }
+          LOG_WARN("lack of member value", K(ret), K(pair->name_), KCSTRING(begin));
+        } else {}
       } else if (NULL != json_processor_) {
         json_processor_->process_value(pair->name_, pair->value_);
-      } else {
-      }
+      } else {}
     }
   }
   return ret;
 }
 
-int Parser::parse_object(const char*& begin, const char* end, Value*& obj)
+int Parser::parse_object(const char *&begin, const char *end, Value *&obj)
 {
   int ret = OB_SUCCESS;
-  Pair* pair = NULL;
+  Pair *pair = NULL;
   if (OB_FAIL(alloc_value(JT_OBJECT, obj))) {
     LOG_WARN("fail to alloc value", K(ret));
   } else if (OB_ISNULL(obj)) {
@@ -367,13 +369,14 @@ int Parser::parse_object(const char*& begin, const char* end, Value*& obj)
   } else {
     obj->object_add(pair);
     bool is_finish = false;
-    while (OB_SUCC(ret) && !is_finish && OB_SUCC(token(begin, end, cur_token_))) {
+    while (OB_SUCC(ret)
+           && !is_finish
+           && OB_SUCC(token(begin, end, cur_token_))) {
       switch (cur_token_.type_) {
         case ',':
           if (OB_SUCC(parse_pair(begin, end, pair))) {
             obj->object_add(pair);
-          } else {
-          }
+          } else {}
           break;
         case '}':
           is_finish = true;
@@ -386,11 +389,11 @@ int Parser::parse_object(const char*& begin, const char* end, Value*& obj)
   return ret;
 };
 
-int Parser::parse(const char* buf, const int64_t buf_len, Value*& root)
+int Parser::parse(const char *buf, const int64_t buf_len, Value *&root)
 {
   int ret = OB_SUCCESS;
-  const char* begin = buf;
-  const char* end = buf + buf_len;
+  const char *begin = buf;
+  const char *end = buf + buf_len;
   cur_token_.type_ = TK_INVALID;
   Token tok;
   if (OB_SUCC(token(begin, end, tok))) {
@@ -398,14 +401,12 @@ int Parser::parse(const char* buf, const int64_t buf_len, Value*& root)
       case '{':
         if (OB_FAIL(parse_object(begin, end, root))) {
           LOG_WARN("fail to parse object", K(ret));
-        } else {
-        }
+        } else {}
         break;
       case '[':
         if (OB_FAIL(parse_array(begin, end, root))) {
           LOG_WARN("fail to parse array", K(ret));
-        } else {
-        }
+        } else {}
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -415,7 +416,7 @@ int Parser::parse(const char* buf, const int64_t buf_len, Value*& root)
   return ret;
 }
 ////////////////////////////////////////////////////////////////
-int Walker::step(int level, const Value* node, Type parent)
+int Walker::step(int level, const Value *node, Type parent)
 {
   int ret = OB_SUCCESS;
   if (NULL != node) {
@@ -423,65 +424,55 @@ int Walker::step(int level, const Value* node, Type parent)
       case JT_NULL:
         if (OB_FAIL(on_null(level, parent))) {
           LOG_WARN("fail to run on_null", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       case JT_TRUE:
         if (OB_FAIL(on_true(level, parent))) {
           LOG_WARN("fail to run on_true", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       case JT_FALSE:
         if (OB_FAIL(on_false(level, parent))) {
           LOG_WARN("fail to run on_false", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       case JT_STRING:
         if (OB_FAIL(on_string(level, parent, node->get_string()))) {
           LOG_WARN("fail to run on_string", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       case JT_NUMBER:
         if (OB_FAIL(on_number(level, parent, node->get_number()))) {
           LOG_WARN("fail to run on_number", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       case JT_ARRAY: {
-        const Array& arr = node->get_array();
+        const Array &arr = node->get_array();
         if (OB_FAIL(on_array_start(level, parent, arr))) {
           LOG_WARN("fail to run on_array_start", K(ret), K(level));
-        } else {
-        }
-        DLIST_FOREACH(subnode, arr)
-        {
+        } else {}
+        DLIST_FOREACH(subnode, arr) {
           if (OB_FAIL(on_array_item_start(level, parent, subnode))) {
             LOG_WARN("fail to run on_array_item_start", K(ret), K(level));
           } else if (OB_FAIL(step(level + 1, subnode, JT_ARRAY))) {
             LOG_WARN("fail to run step", K(ret), K(level));
-          } else if (OB_FAIL(on_array_item_end(level, parent, subnode, subnode == arr.get_last()))) {
+          } else if (OB_FAIL(on_array_item_end(
+                      level, parent, subnode, subnode == arr.get_last()))) {
             LOG_WARN("fail to run on_array_item_end", K(ret), K(level));
-          } else {
-          }
+          } else {}
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(on_array_end(level, parent, arr))) {
           LOG_WARN("fail to run on_array_end", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       }
       case JT_OBJECT: {
-        const Object& obj = node->get_object();
+        const Object &obj = node->get_object();
         if (OB_FAIL(on_object_start(level, parent, obj))) {
           LOG_WARN("fail to run on_object_start", K(ret), K(level));
-        } else {
-        }
-        DLIST_FOREACH(kv, obj)
-        {
+        } else {}
+        DLIST_FOREACH(kv, obj) {
           if (OB_ISNULL(kv)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("kv is NULL", K(ret));
@@ -491,11 +482,11 @@ int Walker::step(int level, const Value* node, Type parent)
             if (step_in_) {
               if (OB_FAIL(step(level + 1, kv->value_, JT_OBJECT))) {
                 LOG_WARN("fail to run step", K(ret), K(level));
-              } else {
-              }
+              } else {}
             }
             if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(on_object_member_end(level, parent, kv, kv == obj.get_last()))) {
+            } else if (OB_FAIL(on_object_member_end(
+                        level, parent, kv, kv == obj.get_last()))) {
               LOG_WARN("fail to run on_object_member_end", K(ret), K(level));
             }
           }
@@ -503,8 +494,7 @@ int Walker::step(int level, const Value* node, Type parent)
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(on_object_end(level, parent, obj))) {
           LOG_WARN("fail to run on_object_end", K(ret), K(level));
-        } else {
-        }
+        } else {}
         break;
       }
       default:
@@ -523,52 +513,48 @@ int Walker::go()
     if (step_in_) {
       if (OB_FAIL(step(0, root_, JT_NULL))) {
         LOG_WARN("fail to run step", K(ret));
-      } else {
-      }
+      } else {}
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(on_walk_end())) {
     LOG_WARN("fail to run on_walk_end", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////
-int64_t Tidy::to_string(char* buf, const int64_t buf_len) const
+int64_t Tidy::to_string(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   (void)print_buffer_.set_data(buf, buf_len);
-  if (OB_FAIL(const_cast<Tidy*>(this)->go())) {
+  if (OB_FAIL(const_cast<Tidy *>(this)->go())) {
     databuff_printf(buf, buf_len, pos, "WARN failed to go, ret=%d", ret);
-  } else {
-  }
+  } else {}
   return print_buffer_.get_position();
 }
 
 int Tidy::print_indent(int level)
 {
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
 
   for (int i = 0; OB_SUCC(ret) && i < level; ++i) {
     if (OB_FAIL(BUF_PRINTF("  "))) {
       LOG_WARN("fail to printf", K(ret));
-    } else {
-    }
-  }  // end for
+    } else {}
+  } // end for
   return ret;
 }
 
-int Tidy::on_array_start(int level, Type parent, const Array& arr)
+int Tidy::on_array_start(int level, Type parent, const Array &arr)
 {
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   UNUSED(arr);
   UNUSED(parent);
   UNUSED(level);
@@ -579,32 +565,31 @@ int Tidy::on_array_start(int level, Type parent, const Array& arr)
   return BUF_PRINTF(" [\n");
 }
 
-int Tidy::on_array_end(int level, Type parent, const Array& arr)
+int Tidy::on_array_end(int level, Type parent, const Array &arr)
 {
   UNUSED(parent);
   UNUSED(arr);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (OB_FAIL(print_indent(level))) {
     LOG_WARN("fail to print indent", K(ret));
   } else if (OB_FAIL(BUF_PRINTF("]"))) {
     LOG_WARN("fail to buf printf", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int Tidy::on_object_start(int level, Type parent, const Object& obj)
+int Tidy::on_object_start(int level, Type parent, const Object &obj)
 {
   UNUSED(obj);
   UNUSED(level);
   UNUSED(parent);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   //  if (JT_OBJECT == parent) {
   //    BUF_PRINTF("\n");
   //    print_indent(level);
@@ -612,96 +597,87 @@ int Tidy::on_object_start(int level, Type parent, const Object& obj)
   if (level > 0) {
     if (OB_FAIL(BUF_PRINTF(" "))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   }
   if (0 == obj.get_size()) {
     if (OB_FAIL(BUF_PRINTF("{"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     if (OB_FAIL(BUF_PRINTF("{\n"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
-int Tidy::on_object_end(int level, Type parent, const Object& obj)
+int Tidy::on_object_end(int level, Type parent, const Object &obj)
 {
   UNUSED(parent);
   UNUSED(obj);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (0 == obj.get_size()) {
     if (OB_FAIL(BUF_PRINTF(" }"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     if (OB_FAIL(print_indent(level))) {
       LOG_WARN("fail to print indent", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("}"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   }
   return OB_SUCCESS;
 }
 
-int Tidy::on_array_item_start(int level, Type parent, const Value* val)
+int Tidy::on_array_item_start(int level, Type parent, const Value *val)
 {
   UNUSED(parent);
   UNUSED(val);
   return print_indent(level + 1);
 }
 
-int Tidy::on_array_item_end(int level, Type parent, const Value* val, bool is_last)
+int Tidy::on_array_item_end(int level, Type parent, const Value *val, bool is_last)
 {
   UNUSED(level);
   UNUSED(parent);
   UNUSED(val);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (is_last) {
     if (OB_FAIL(BUF_PRINTF("\n"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     if (OB_FAIL(BUF_PRINTF(",\n"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
 
-int Tidy::on_object_member_end(int level, Type parent, const Pair* kv, bool is_last)
+int Tidy::on_object_member_end(int level, Type parent, const Pair *kv, bool is_last)
 {
   UNUSED(level);
   UNUSED(parent);
   UNUSED(kv);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (is_last) {
     if (OB_FAIL(BUF_PRINTF("\n"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   } else {
     if (OB_FAIL(BUF_PRINTF(",\n"))) {
       LOG_WARN("fail to buf printf", K(ret));
-    } else {
-    }
+    } else {}
   }
   return ret;
 }
@@ -710,9 +686,9 @@ int Tidy::on_null(int level, Type parent)
 {
   UNUSED(level);
   UNUSED(parent);
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   return BUF_PRINTF("null");
 }
 
@@ -720,9 +696,9 @@ int Tidy::on_true(int level, Type parent)
 {
   UNUSED(level);
   UNUSED(parent);
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   return BUF_PRINTF("true");
 }
 
@@ -730,57 +706,60 @@ int Tidy::on_false(int level, Type parent)
 {
   UNUSED(level);
   UNUSED(parent);
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   return BUF_PRINTF("false");
 }
 
-int Tidy::on_string(int level, Type parent, const String& str)
+int Tidy::on_string(int level, Type parent, const String &str)
 {
   UNUSED(level);
   UNUSED(parent);
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   return BUF_PRINTF("\"%.*s\"", str.length(), str.ptr());
 }
 
-int Tidy::on_number(int level, Type parent, const Number& num)
+int Tidy::on_number(int level, Type parent, const Number &num)
 {
   UNUSED(level);
   UNUSED(parent);
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   return BUF_PRINTF("%ld", num);
 }
 
-int Tidy::on_object_member_start(int level, Type parent, const Pair* kv)
+int Tidy::on_object_member_start(int level, Type parent, const Pair *kv)
 {
   UNUSED(parent);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (OB_ISNULL(kv)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("kv is NULL", K(ret));
   } else if (OB_FAIL(print_indent(level + 1))) {
     LOG_WARN("fail to print indent", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\"%.*s\":", kv->name_.length(), kv->name_.ptr()))) {
+  } else if (OB_FAIL(BUF_PRINTF("\"%.*s\":",
+                                kv->name_.length(),
+                                kv->name_.ptr()))) {
     LOG_WARN("fail to buf printf", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////
-RegexFilter::RegexFilter() : Tidy(NULL), allocator_(ObModIds::OB_REGEX), regex_list_(allocator_)
-{}
+RegexFilter::RegexFilter(): Tidy(NULL),
+                            allocator_(ObModIds::OB_REGEX),
+                            regex_list_(allocator_)
+{
+}
 
-RegexFilter::~RegexFilter()
-{}
+RegexFilter::~RegexFilter() {}
 
 void RegexFilter::reset()
 {
@@ -788,12 +767,13 @@ void RegexFilter::reset()
   Tidy::reset();
 }
 
-int RegexFilter::on_obj_name(common::ObDataBuffer& path_buffer, bool& is_match) const
+int RegexFilter::on_obj_name(common::ObDataBuffer &path_buffer, bool &is_match) const
 {
   int ret = OB_SUCCESS;
   is_match = false;
   RegexList::const_iterator iter;
-  for (iter = regex_list_.begin(); OB_SUCC(ret) && false == is_match && iter != regex_list_.end(); iter++) {
+  for (iter = regex_list_.begin(); OB_SUCC(ret) && false == is_match &&
+       iter != regex_list_.end(); iter++) {
     int regexec_ret = regexec(&(*iter), path_buffer.get_data(), 0, NULL, 0);
     if (REG_NOMATCH == regexec_ret) {
       // not match, continue
@@ -804,13 +784,14 @@ int RegexFilter::on_obj_name(common::ObDataBuffer& path_buffer, bool& is_match) 
       const static int64_t REG_ERR_MSG_BUF_LEN = 512;
       char reg_err_msg[REG_ERR_MSG_BUF_LEN];
       size_t err_msg_len = regerror(regexec_ret, &(*iter), reg_err_msg, REG_ERR_MSG_BUF_LEN);
-      LOG_WARN("fail to run match func: regexec", K(ret), K(regexec_ret), K(err_msg_len), K(reg_err_msg));
+      LOG_WARN("fail to run match func: regexec", K(ret),
+               K(regexec_ret), K(err_msg_len), KCSTRING(reg_err_msg));
     }
   }
   return ret;
 }
 
-void RegexFilter::register_regex(const char* pattern)
+void RegexFilter::register_regex(const char *pattern)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(NULL != pattern)) {
@@ -818,24 +799,23 @@ void RegexFilter::register_regex(const char* pattern)
     int regcomp_ret = 0;
     if (OB_UNLIKELY(0 != (regcomp_ret = regcomp(&regex, pattern, REG_EXTENDED | REG_NOSUB)))) {
       ret = OB_ERR_REGEXP_ERROR;
-      LOG_ERROR("regcomp fail", K(ret), K(regcomp_ret), K(pattern));
+      LOG_ERROR("regcomp fail", K(ret), K(regcomp_ret), KCSTRING(pattern));
     } else if (OB_FAIL(regex_list_.push_back(regex))) {
       LOG_ERROR("push back to regex list fail", K(ret));
       regfree(&regex);
     } else {
-      LOG_INFO("register regex pattern succ", K(pattern));
+      LOG_INFO("register regex pattern succ", KCSTRING(pattern));
     }
-  } else {
-  }
+  } else {}
 }
 
-int RegexFilter::on_object_member_start(int level, Type parent, const Pair* kv)
+int RegexFilter::on_object_member_start(int level, Type parent, const Pair *kv)
 {
   UNUSED(parent);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (OB_ISNULL(kv)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("kv is NULL", K(ret));
@@ -844,23 +824,22 @@ int RegexFilter::on_object_member_start(int level, Type parent, const Pair* kv)
       LOG_WARN("fail to print indent", K(ret), K(level));
     } else if (OB_FAIL(BUF_PRINTF("\"%.*s\": ", kv->name_.length(), kv->name_.ptr()))) {
       LOG_WARN("fail to buf printf", K(ret), K(kv->name_));
-    } else {
-    }
+    } else {}
   } else {
     step_in_ = false;
   }
   return ret;
 }
 
-int RegexFilter::on_object_member_end(int level, Type parent, const Pair* kv, bool is_last)
+int RegexFilter::on_object_member_end(int level, Type parent, const Pair *kv, bool is_last)
 {
   UNUSED(level);
   UNUSED(parent);
   UNUSED(kv);
   int ret = OB_SUCCESS;
-  char* buf = print_buffer_.get_data();
+  char *buf = print_buffer_.get_data();
   const int64_t buf_len = print_buffer_.get_capacity();
-  int64_t& pos = print_buffer_.get_position();
+  int64_t &pos = print_buffer_.get_position();
   if (OB_ISNULL(kv)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("kv is NULL", K(ret));
@@ -868,13 +847,11 @@ int RegexFilter::on_object_member_end(int level, Type parent, const Pair* kv, bo
     if (is_last) {
       if (OB_FAIL(BUF_PRINTF("\n"))) {
         LOG_WARN("fail to buf printf", K(ret));
-      } else {
-      }
+      } else {}
     } else {
       if (OB_FAIL(BUF_PRINTF(",\n"))) {
         LOG_WARN("fail to buf printf", K(ret));
-      } else {
-      }
+      } else {}
     }
   } else {
     step_in_ = true;
@@ -888,28 +865,29 @@ int RegexFilter::on_walk_start()
   char data_buffer[4096];
   ObDataBuffer path_buffer;
   (void)path_buffer.set_data(data_buffer, sizeof(data_buffer) - 1);
-  return mark_need_print(const_cast<Value*>(root_), path_buffer, is_need_print);
+  return mark_need_print(const_cast<Value *>(root_), path_buffer, is_need_print);
 }
 
-int RegexFilter::mark_need_print(Value* node, common::ObDataBuffer path_buffer, bool& is_need_print) const
+int RegexFilter::mark_need_print(Value *node,
+                                 common::ObDataBuffer path_buffer,
+                                 bool &is_need_print) const
 {
   int ret = OB_SUCCESS;
   is_need_print = false;
   if (NULL != node) {
     switch (node->get_type()) {
       case JT_OBJECT:
-        DLIST_FOREACH(kv, node->get_object())
-        {
+        DLIST_FOREACH(kv, node->get_object()) {
           ObDataBuffer tmp_buffer = path_buffer;
           if (OB_ISNULL(kv)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("kv is NULL", K(ret));
           } else if (OB_FAIL(databuff_printf(tmp_buffer.get_data(),
-                         tmp_buffer.get_capacity(),
-                         tmp_buffer.get_position(),
-                         "/%.*s",
-                         kv->name_.length(),
-                         kv->name_.ptr()))) {
+                                             tmp_buffer.get_capacity(),
+                                             tmp_buffer.get_position(),
+                                             "/%.*s",
+                                             kv->name_.length(),
+                                             kv->name_.ptr()))) {
             LOG_WARN("fail to databuff printf", K(ret));
           } else {
             bool path_is_match = false;
@@ -920,30 +898,26 @@ int RegexFilter::mark_need_print(Value* node, common::ObDataBuffer path_buffer, 
               if (true == path_is_match) {
                 kv->filt_flag_ = Pair::FT_PASS;
                 is_need_print = true;
-              } else {
-              }
+              } else {}
               if (OB_FAIL(mark_need_print(kv->value_, tmp_buffer, child_node_need_print))) {
                 LOG_WARN("fail to mark if child node need print", K(ret));
               } else if (true == child_node_need_print) {
                 kv->filt_flag_ = Pair::FT_PASS;
                 is_need_print = true;
-              } else {
-              }
+              } else {}
             }
           }
         }
         break;
       case JT_ARRAY:
-        DLIST_FOREACH(subnode, node->get_array())
-        {
+        DLIST_FOREACH(subnode, node->get_array()) {
           ObDataBuffer tmp_buffer = path_buffer;
           bool arr_node_need_print = false;
           if (OB_FAIL(mark_need_print(subnode, tmp_buffer, arr_node_need_print))) {
             LOG_WARN("fail to mark if arrary node need print", K(ret));
           } else if (true == arr_node_need_print) {
             is_need_print = true;
-          } else {
-          }
+          } else {}
         }
         break;
       default:
@@ -962,54 +936,50 @@ int Path::for_all_path()
   (void)path_buffer.set_data(data_buffer, sizeof(data_buffer) - 1);
   if (OB_FAIL(iterate(root_, path_buffer))) {
     LOG_WARN("fail to iterate", K(ret));
-  } else {
-  }
+  } else {}
   return ret;
 }
 
-int Path::iterate(Value* node, ObDataBuffer path_buff)
+int Path::iterate(Value *node, ObDataBuffer path_buff)
 {
   int ret = OB_SUCCESS;
   if (NULL != node) {
     String path;
     switch (node->get_type()) {
       case JT_OBJECT:
-        DLIST_FOREACH(kv, node->get_object())
-        {
+        DLIST_FOREACH(kv, node->get_object()) {
           if (OB_ISNULL(kv)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("kv is NULL", K(ret));
           } else if (OB_FAIL(databuff_printf(path_buff.get_data(),
-                         path_buff.get_capacity(),
-                         path_buff.get_position(),
-                         "/%.*s",
-                         kv->name_.length(),
-                         kv->name_.ptr()))) {
+                                             path_buff.get_capacity(),
+                                             path_buff.get_position(),
+                                             "/%.*s",
+                                             kv->name_.length(),
+                                             kv->name_.ptr()))) {
             LOG_WARN("fail to databuff printf", K(ret), K(kv->name_));
-          } else if (FALSE_IT(path.assign_ptr(path_buff.get_data(), static_cast<int32_t>(path_buff.get_position())))) {
+          } else if (FALSE_IT(path.assign_ptr(path_buff.get_data(), static_cast<int32_t>(
+                          path_buff.get_position())))) {
           } else if (OB_FAIL(on_path(path, kv))) {
             LOG_WARN("fail to run on_path", K(ret));
           } else if (OB_FAIL(iterate(kv->value_, path_buff))) {
             LOG_WARN("fail to iterate", K(ret));
-          } else {
-          }
+          } else {}
         }
         break;
       case JT_ARRAY:
-        DLIST_FOREACH(subnode, node->get_array())
-        {
+        DLIST_FOREACH(subnode, node->get_array()) {
           if (OB_FAIL(iterate(subnode, path_buff))) {
             LOG_WARN("fail to iterate", K(ret));
-          } else {
-          }
+          } else {}
         }
         break;
       default:
         break;
-    }  // end switch
+    } // end switch
   }
   return ret;
 }
 
-}  // namespace json
-}  // namespace oceanbase
+}
+}

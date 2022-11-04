@@ -1,0 +1,38 @@
+DEFINE_SQL_CATEGORY(1, "Contents",  0 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(2, "Data Types", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(3, "Functions", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(4, "Operator", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(5, "Escape character", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(6, "Data Definition", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(7, "Data Manipulation", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(8, "Transaction Statements", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(9, "Prepared Statements", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(10, "Compound Statements", 1 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(11, "Administration", 1 , "www.alipay.com")
+
+DEFINE_SQL_CATEGORY(21, "Numeric Types", 2 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(22, "Date and Time Types", 2 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(23, "String Types", 2 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(24, "Bool Types", 2 , "www.alipay.com")
+
+DEFINE_SQL_CATEGORY(31, "Date and Time Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(32, "String Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(33, "GROUP BY (Aggregate) Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(34, "Cast Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(35, "Mathematical Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(36, "Other Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(38, "Control Flow Functions", 3 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(37, "Comparison Functions", 3 , "www.alipay.com")
+
+
+DEFINE_SQL_CATEGORY(41, "Logical Operators", 4 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(42, "Comparison Operators", 4 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(43, "Arithmetic Operators", 4 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(44, "Vector Comparison Operators", 4 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(45, "Splicing Operator", 4 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(46, "Operator Precedence", 4 , "www.alipay.com")
+
+DEFINE_SQL_CATEGORY(101, "Flow Control Statements", 10 , "www.alipay.com")
+
+DEFINE_SQL_CATEGORY(111, "Account Management", 11 , "www.alipay.com")
+DEFINE_SQL_CATEGORY(112, "Other Management", 11 , "www.alipay.com")

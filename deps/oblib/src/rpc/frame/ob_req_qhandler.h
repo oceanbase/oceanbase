@@ -15,31 +15,36 @@
 
 #include "rpc/frame/obi_req_qhandler.h"
 
-namespace oceanbase {
-namespace rpc {
+namespace oceanbase
+{
+namespace rpc
+{
 class ObRequest;
-namespace frame {
+namespace frame
+{
 
 class ObReqTranslator;
-class ObReqQHandler : public ObiReqQHandler {
+class ObReqQHandler
+    : public ObiReqQHandler
+{
 public:
-  explicit ObReqQHandler(ObReqTranslator& translator_);
+  explicit ObReqQHandler(ObReqTranslator &translator_);
   virtual ~ObReqQHandler();
 
   int init();
 
   // invoke when queue thread created.
-  int onThreadCreated(obsys::CThread*);
-  int onThreadDestroy(obsys::CThread*);
+  int onThreadCreated(obsys::CThread *);
+  int onThreadDestroy(obsys::CThread *);
 
-  bool handlePacketQueue(ObRequest* req, void* args);
+  bool handlePacketQueue(ObRequest *req, void *args);
 
 private:
-  ObReqTranslator& translator_;
-};  // end of class ObReqQHandler
+  ObReqTranslator &translator_;
+}; // end of class ObReqQHandler
 
-}  // end of namespace frame
-}  // namespace rpc
-}  // end of namespace oceanbase
+} // end of namespace frame
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OCEABASE_RPC_FRAME_OB_REQ_QHANDLER_H_ */

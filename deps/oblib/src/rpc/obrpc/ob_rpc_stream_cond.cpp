@@ -21,8 +21,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
-ObRpcStreamCond::ObRpcStreamCond(ObRpcSessionHandler& handler) : sessid_(0), handler_(handler)
-{}
+ObRpcStreamCond::ObRpcStreamCond(ObRpcSessionHandler &handler)
+    : sessid_(0), handler_(handler)
+{
+}
 
 ObRpcStreamCond::~ObRpcStreamCond()
 {
@@ -44,20 +46,21 @@ int ObRpcStreamCond::prepare()
   return ret;
 }
 
-int ObRpcStreamCond::wait(ObRequest*& req, int64_t timeout)
+int ObRpcStreamCond::wait(ObRequest *&req, int64_t timeout)
 {
   int ret = OB_SUCCESS;
   if (sessid_ <= 0) {
     LOG_WARN("sessid is invalied", K_(sessid));
-  } else if (OB_FAIL(handler_.wait_for_next_request(sessid_, req, timeout))) {
+  } else if (OB_FAIL(handler_.wait_for_next_request(
+                        sessid_, req, timeout))) {
     LOG_WARN("wait for next request failed", K(ret), K_(sessid));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int ObRpcStreamCond::wakeup(rpc::ObRequest& req)
+int ObRpcStreamCond::wakeup(rpc::ObRequest &req)
 {
   return handler_.wakeup_next_thread(req);
 }

@@ -15,52 +15,37 @@
 
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 typedef common::ObIArray<common::ObString> ObStringIArray;
 
-class ObLogLink : public ObLogicalOperator {
+class ObLogLink : public ObLogicalOperator
+{
 public:
-  ObLogLink(ObLogPlan& plan);
-  virtual ~ObLogLink()
-  {}
-  virtual int copy_without_child(ObLogicalOperator*& out) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  ObLogLink(ObLogPlan &plan);
+  virtual ~ObLogLink() {}
+  virtual int est_cost() override;
+  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
 
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
+  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
 
-  int gen_link_stmt_fmt();
-  int assign_param_infos(const common::ObIArray<ObParamPosIdx>& param_infos);
-  int assign_stmt_fmt(const char* stmt_fmt_buf, int32_t stmt_fmt_len);
-  inline const common::ObIArray<ObParamPosIdx>& get_param_infos() const
-  {
-    return param_infos_;
-  }
-  inline const char* get_stmt_fmt_buf() const
-  {
-    return stmt_fmt_buf_;
-  }
-  inline int32_t get_stmt_fmt_len() const
-  {
-    return stmt_fmt_len_;
-  }
-
-private:
-  int gen_link_stmt_fmt_buf();
+  inline const common::ObIArray<ObParamPosIdx> &get_param_infos() const { return param_infos_; }
+  inline const char *get_stmt_fmt_buf() const { return stmt_fmt_buf_; }
+  inline int32_t get_stmt_fmt_len() const { return stmt_fmt_len_; }
   int gen_link_stmt_param_infos();
-
 private:
-  common::ObIAllocator& allocator_;
-  ObLinkStmt link_stmt_;
-  char* stmt_fmt_buf_;
-  int32_t stmt_fmt_buf_len_;
+  int print_link_stmt(char *buf, int64_t buf_len);
+private:
+  common::ObIAllocator &allocator_;
+  char *stmt_fmt_buf_;
   int32_t stmt_fmt_len_;
   common::ObSEArray<ObParamPosIdx, 16> param_infos_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_LOG_LINK_H
+#endif // OCEANBASE_SQL_OB_LOG_LINK_H

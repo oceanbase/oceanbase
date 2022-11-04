@@ -16,8 +16,10 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_string.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 TEST(ObSqlString, ObSqlString)
 {
@@ -53,7 +55,7 @@ TEST(ObSqlString, ObSqlString)
 
 TEST(ObSqlString, assign)
 {
-  const char* test_str = "Test str";
+  const char *test_str = "Test str";
   ObSqlString sql;
   sql.assign(test_str);
   ASSERT_FALSE(sql.empty());
@@ -68,7 +70,7 @@ TEST(ObSqlString, assign)
   sql.assign_fmt("%s%s%d", "A", "B", 1);
   ASSERT_STREQ("AB1", sql.ptr());
 
-  char buf[] = {"ABC DEF"};
+  char buf[] = { "ABC DEF" };
   sql.assign(buf, sizeof(buf));
   ASSERT_TRUE(sizeof(buf) == sql.length());
   buf[3] = '\0';
@@ -84,7 +86,7 @@ TEST(ObSqlString, assign)
 
 TEST(ObSqlString, append)
 {
-  const char* test_str = "Test str";
+  const char *test_str = "Test str";
   std::string str;
   ObSqlString sql;
   sql.append(test_str);
@@ -112,7 +114,7 @@ TEST(ObSqlString, extend)
   std::string str;
   const uint64_t max_len = OB_MALLOC_NORMAL_BLOCK_SIZE * 17;
   str.reserve(max_len);
-  const char* test_str = "ABCD";
+  const char *test_str = "ABCD";
   while (str.length() < max_len) {
     ASSERT_EQ(OB_SUCCESS, sql1.append(test_str));
     ASSERT_EQ(OB_SUCCESS, sql2.append_fmt("%s", test_str));
@@ -146,7 +148,7 @@ TEST(ObSqlString, set_length)
   ASSERT_EQ(OB_SUCCESS, sql.set_length(0));
   ASSERT_EQ(0, sql.capacity());
 
-  const char* test_str = "ABCD";
+  const char *test_str = "ABCD";
   sql.reserve(10);
   memcpy(sql.ptr(), test_str, strlen(test_str));
   sql.set_length(3);
@@ -158,11 +160,11 @@ TEST(ObSqlString, set_length)
   ASSERT_NE(OB_SUCCESS, sql.set_length(sql.capacity() + 1));
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

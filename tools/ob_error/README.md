@@ -26,15 +26,6 @@ cp tools/ob_error/src/ob_error /usr/local/bin
 
 The compiled product for `ob_error` is stored in `RELEASE_BUILD_DIR/tools/ob_error/src/ob_error` by default.
 
-### RPM packages
-
-`ob_error` is provided in `oceanbase-ce-utils-3.1.1-4.el7.x86_64.rpm`. If you only need `ob_error`, use the `rpm2cpio` command to get `ob_error`.
-
-```bash
-rpm2cpio oceanbase-ce-utils-3.1.1-4.el7.x86_64.rpm | cpio -idmv ./home/admin/oceanbase/bin/ob_error
-cp home/admin/oceanbase/bin/ob_error /usr/local/bin
-```
-
 ## How to use
 
 You can search for error messages by only entering the error code. Then you will get the error message corresponding to the operation system, Oracle mode, MySQL mode, and OceanBase error (if any). For example:

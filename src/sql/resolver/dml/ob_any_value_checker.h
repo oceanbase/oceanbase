@@ -15,10 +15,13 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObAnyValueChecker : public ObRawExprVisitor {
+class ObAnyValueChecker: public ObRawExprVisitor
+{
 public:
   ObAnyValueChecker() : ObRawExprVisitor(), skip_expr_(nullptr), is_pass_(true)
   {}
@@ -26,7 +29,9 @@ public:
   {}
   /// interface of ObRawExprVisitor
   virtual int visit(ObConstRawExpr &expr);
+  virtual int visit(ObExecParamRawExpr &expr);
   virtual int visit(ObVarRawExpr &expr);
+  virtual int visit(ObOpPseudoColumnRawExpr &expr);
   virtual int visit(ObQueryRefRawExpr &expr);
   virtual int visit(ObColumnRefRawExpr &expr);
   virtual int visit(ObOpRawExpr &expr);
@@ -35,32 +40,25 @@ public:
   virtual int visit(ObSysFunRawExpr &expr);
   virtual int visit(ObSetOpRawExpr &expr);
   virtual int visit(ObAliasRefRawExpr &expr);
-  virtual int visit(ObFunMatchAgainst &expr);
   virtual int visit(ObWinFunRawExpr &expr);
   virtual int visit(ObPseudoColumnRawExpr &expr);
+  virtual int visit(ObPlQueryRefRawExpr &expr);
 
   // set expr skip
-  virtual bool skip_child(ObRawExpr &expr)
-  {
-    return skip_expr_ == &expr;
-  }
+  virtual bool skip_child(ObRawExpr &expr) { return skip_expr_ == &expr; }
 
   int check_select_stmt(const ObSelectStmt *ref_stmt);
-  int check_any_value(const ObRawExpr *expr, const ObColumnRefRawExpr *undefined_column);
+  int check_any_value(const ObRawExpr *expr, const ObColumnRefRawExpr * undefined_column);
   bool is_pass_after_check();
-
 private:
-  void set_skip_expr(ObRawExpr *expr)
-  {
-    skip_expr_ = expr;
-  }
-  const ObColumnRefRawExpr *undefined_column_;
+  void set_skip_expr(ObRawExpr *expr) { skip_expr_ = expr; }
+  const ObColumnRefRawExpr * undefined_column_;
   ObRawExpr *skip_expr_;
   bool is_pass_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAnyValueChecker);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SRC_SQL_RESOLVER_DML_OB_ANY_VALUE_CHECKER_H_
+}
+}
+#endif //OCEANBASE_SRC_SQL_RESOLVER_DML_OB_ANY_VALUE_CHECKER_H_

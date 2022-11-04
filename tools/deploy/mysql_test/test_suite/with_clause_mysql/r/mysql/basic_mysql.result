@@ -181,7 +181,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 
@@ -280,10 +280,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([T_FUN_COUNT(*)]), filter(nil), 
-      group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output([1]), filter(nil), 
-      access([t1.__pk_increment]), partitions(p0)
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256, 
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256, 
+      access(nil), partitions(p0)
 
 
 with cte as (select count(*) from t1) select * from cte;
@@ -306,7 +306,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter([t1.c1 > 1]), 
+  0 - output([t1.c1]), filter([t1.c1 > 1]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 
@@ -336,7 +336,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter([cast(t1.c1, DOUBLE(-1, -1)) + ? <= ?]), 
+  0 - output([t1.c1]), filter([cast(t1.c1, DOUBLE(-1, -1)) + cast('1', DOUBLE(-1, -1)) <= cast(3, DOUBLE(-1, -1))]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 
@@ -354,24 +354,21 @@ explain basic with
   cte1 AS ( select 1 as c1, 2 as c2 from t1 group by c1)
 select c1 from cte1;
 Query Plan
-========================
-|ID|OPERATOR      |NAME|
-------------------------
-|0 |MERGE GROUP BY|    |
-|1 | SORT         |    |
-|2 |  TABLE SCAN  |t1  |
-========================
+=======================
+|ID|OPERATOR     |NAME|
+-----------------------
+|0 |HASH GROUP BY|    |
+|1 | TABLE SCAN  |t1  |
+=======================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1]), filter(nil), 
+  0 - output([1]), filter(nil), rowset=256, 
       group([t1.c1]), agg_func(nil)
-  1 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1]), filter(nil), 
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 Warnings:
-Warning	1052	Column 'c1' in group statement is ambiguous
 Warning	1052	Column 'c1' in group statement is ambiguous
 with 
   cte1 AS ( select 1 as c1, 2 as c2 from t1 group by c1)
@@ -389,7 +386,6 @@ select c1 from cte1;
 +----+
 Warnings:
 Warning	1052	Column 'c1' in group statement is ambiguous
-Warning	1052	Column 'c1' in group statement is ambiguous
 
 ##   带有having
 explain basic with 
@@ -404,7 +400,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter([t1.c1 > 2]), 
+  0 - output([t1.c1]), filter([t1.c1 > 2]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with 
@@ -435,8 +431,8 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), sort_keys([t1.c2, ASC])
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c2, ASC])
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 with 
@@ -461,22 +457,20 @@ Query Plan
 ==========================
 |ID|OPERATOR        |NAME|
 --------------------------
-|0 |MERGE OUTER JOIN|    |
-|1 | SORT           |    |
+|0 |SORT            |    |
+|1 | HASH OUTER JOIN|    |
 |2 |  TABLE SCAN    |t1  |
-|3 | SORT           |    |
-|4 |  TABLE SCAN    |t2  |
+|3 |  TABLE SCAN    |t2  |
 ==========================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  1 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1]), filter(nil), 
+  2 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  3 - output([t2.c21]), filter(nil), sort_keys([t2.c21, ASC])
-  4 - output([t2.c21]), filter(nil), 
+  3 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 with 
@@ -513,12 +507,12 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       conds([t1.c1 = t2.c21]), nl_params_(nil)
-  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 
@@ -550,11 +544,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
-  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 
@@ -590,7 +584,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
   1 - output([1], [2]), filter(nil)
       values({1, 2})
   2 - output([3], [4]), filter(nil)
@@ -629,10 +623,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])], [UNION([2])]), filter(nil)
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t2.c21], [t2.c22]), filter(nil), 
+  2 - output([t2.c21], [t2.c22]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 
@@ -670,49 +664,40 @@ explain basic WITH cte AS
 select * from cte, t1 where t1.c1 = cte.col;
 Query Plan
 =====================================
-|ID|OPERATOR                  |NAME |
+|ID|OPERATOR                   |NAME|
 -------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|     |
-|1 | HASH RIGHT SEMI JOIN     |     |
-|2 |  SUBPLAN SCAN            |VIEW1|
-|3 |   SUBPLAN FILTER         |     |
-|4 |    TABLE SCAN            |t1   |
-|5 |    LIMIT                 |     |
-|6 |     MERGE UNION DISTINCT |     |
-|7 |      LIMIT               |     |
-|8 |       EXPRESSION         |     |
-|9 |      LIMIT               |     |
-|10|       EXPRESSION         |     |
-|11|  TABLE SCAN              |t1   |
-|12| MATERIAL                 |     |
-|13|  TABLE SCAN              |t1   |
+|0 |SUBPLAN FILTER             |    |
+|1 | NESTED-LOOP JOIN CARTESIAN|    |
+|2 |  TABLE SCAN               |t1  |
+|3 |  MATERIAL                 |    |
+|4 |   TABLE SCAN              |t1  |
+|5 | LIMIT                     |    |
+|6 |  MERGE UNION DISTINCT     |    |
+|7 |   LIMIT                   |    |
+|8 |    EXPRESSION             |    |
+|9 |   LIMIT                   |    |
+|10|    EXPRESSION             |    |
 =====================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
-      conds(nil), nl_params_(nil)
-  1 - output([1]), filter(nil), 
-      equal_conds([t1.c1 = VIEW1.c1]), other_conds(nil)
-  2 - output([VIEW1.c1]), filter(nil), 
-      access([VIEW1.c1])
-  3 - output([t1.c1]), filter([?]), 
+  0 - output([1], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
-  4 - output([t1.c1]), filter(nil), 
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), startup_filter([?]), rowset=256, 
+      conds(nil), nl_params_(nil)
+  2 - output(nil), filter([(T_OP_IS_NOT, t1.c1, NULL, 0)]), rowset=256, 
       access([t1.c1]), partitions(p0)
-  5 - output([UNION([1])]), filter(nil), limit(1), offset(nil)
-  6 - output([UNION([1])]), filter(nil)
-  7 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256, 
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+  5 - output([UNION([1])]), filter(nil), rowset=256, limit(1), offset(nil)
+  6 - output([UNION([1])]), filter(nil), rowset=256
+  7 - output([1]), filter(nil), rowset=256, limit(1), offset(nil)
   8 - output([1]), filter(nil)
       values({1})
-  9 - output([1]), filter(nil), limit(1), offset(nil)
+  9 - output([1]), filter(nil), rowset=256, limit(1), offset(nil)
   10 - output([1]), filter(nil)
       values({1})
-  11 - output([t1.c1]), filter(nil), 
-      access([t1.c1]), partitions(p0)
-  12 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
-  13 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), 
-      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 
 WITH cte AS
@@ -743,7 +728,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t3.c1]), filter(nil), 
+  0 - output([t3.c1]), filter(nil), rowset=256, 
       access([t3.c1]), partitions(p0)
 
 
@@ -766,7 +751,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), 
+  0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), rowset=256, 
       access([t5.c1], [t5.c2], [t5.c3]), partitions(p0)
 
 
@@ -794,7 +779,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 
@@ -826,7 +811,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1 + 1]), filter(nil), 
+  0 - output([t1.c1 + 1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with 
@@ -856,7 +841,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1 + 1]), filter(nil), 
+  0 - output([t1.c1 + 1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with
@@ -886,7 +871,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1 + 1 + 3]), filter(nil), 
+  0 - output([t1.c1 + 1 + 3]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with
@@ -917,8 +902,8 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1]), filter(nil), 
-      access([t1.__pk_increment]), partitions(p0)
+  0 - output([1]), filter(nil), rowset=256, 
+      access(nil), partitions(p0)
 
 with 
   cte AS (select 1 from t1)
@@ -948,8 +933,8 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
-  1 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 WITH cte2 AS (select c1 from t1)
@@ -980,11 +965,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7, 11)]), 
+  1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7, 11)]), rowset=256, 
       access([t2.c21]), partitions(p0)
-  2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7, 11)]), 
+  2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7, 11)]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 WITH cte2 AS (select c1 from t1)
@@ -1012,11 +997,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7)]), 
+  1 - output([t2.c21]), filter([t2.c21 IN (1, 4, 7)]), rowset=256, 
       access([t2.c21]), partitions(p0)
-  2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7)]), 
+  2 - output([t1.c1]), filter([t1.c1 IN (1, 4, 7)]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 WITH
@@ -1044,8 +1029,8 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), sort_keys([t1.c2, ASC])
-  1 - output([t1.c1], [t1.c2]), filter([t1.c1 IN (1, 4, 11)]), 
+  0 - output([t1.c1]), filter(nil), rowset=256, sort_keys([t1.c2, ASC])
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 IN (1, 4, 11)]), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 WITH
@@ -1065,24 +1050,26 @@ Query Plan
 |ID|OPERATOR                  |NAME |
 -------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN|     |
-|1 | SUBPLAN SCAN             |VIEW1|
-|2 |  SCALAR GROUP BY         |     |
-|3 |   TABLE SCAN             |t1   |
-|4 | TABLE SCAN               |t2   |
+|1 | TABLE SCAN               |t2   |
+|2 | MATERIAL                 |     |
+|3 |  SUBPLAN SCAN            |VIEW1|
+|4 |   SCALAR GROUP BY        |     |
+|5 |    TABLE SCAN            |t1   |
 =====================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([VIEW1.count(*)]), filter(nil), 
+  0 - output([VIEW1.count(*)]), filter(nil), rowset=256, 
       conds(nil), nl_params_(nil)
-  1 - output([VIEW1.count(*)]), filter(nil), 
+  1 - output(nil), filter(nil), rowset=256, 
+      access(nil), partitions(p0)
+  2 - output([VIEW1.count(*)]), filter(nil), rowset=256
+  3 - output([VIEW1.count(*)]), filter(nil), rowset=256, 
       access([VIEW1.count(*)])
-  2 - output([T_FUN_COUNT(*)]), filter(nil), 
-      group(nil), agg_func([T_FUN_COUNT(*)])
-  3 - output([1]), filter(nil), 
-      access([t1.__pk_increment]), partitions(p0)
-  4 - output([1]), filter(nil), 
-      access([t2.__pk_increment]), partitions(p0)
+  4 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256, 
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  5 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256, 
+      access(nil), partitions(p0)
 
 with cte as (select * from t1) select (select count(*) from cte) from t2;
 +----------------------------+
@@ -1111,11 +1098,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
-  1 - output([t1.c1]), filter(nil), 
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  2 - output([t1.c1]), filter(nil), 
+  2 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with cte AS (select c1 from t1) 
@@ -1147,15 +1134,15 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cte.c1]), filter(nil), 
+  0 - output([cte.c1]), filter(nil), rowset=256, 
       equal_conds([z1.c1 = cte.c1]), other_conds(nil)
-  1 - output([z1.c1]), filter(nil), 
+  1 - output([z1.c1]), filter(nil), rowset=256, 
       access([z1.c1])
-  2 - output([t1.c1]), filter(nil), 
+  2 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  3 - output([cte.c1]), filter(nil), 
+  3 - output([cte.c1]), filter(nil), rowset=256, 
       access([cte.c1])
-  4 - output([t1.c1]), filter(nil), 
+  4 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with cte AS (select c1 from t1) 
@@ -1180,22 +1167,20 @@ Query Plan
 ======================
 |ID|OPERATOR    |NAME|
 ----------------------
-|0 |MERGE JOIN  |    |
-|1 | SORT       |    |
+|0 |SORT        |    |
+|1 | HASH JOIN  |    |
 |2 |  TABLE SCAN|t1  |
-|3 | SORT       |    |
-|4 |  TABLE SCAN|t2  |
+|3 |  TABLE SCAN|t2  |
 ======================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds([t2.c21 != t1.c1])
-  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-  3 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), sort_keys([t2.c21, ASC])
-  4 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  3 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
 
 with
@@ -1221,10 +1206,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t3.c1], [t3.c2]), filter(nil)
-  1 - output([t3.c1], [t3.c2]), filter(nil), dop=1
-  2 - output([t3.c1], [t3.c2]), filter(nil)
-  3 - output([t3.c1], [t3.c2]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t3.c1, t3.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t3.c1, t3.c2)]), filter(nil), rowset=256, dop=1
+  2 - output([t3.c1], [t3.c2]), filter(nil), rowset=256
+  3 - output([t3.c1], [t3.c2]), filter(nil), rowset=256, 
       access([t3.c1], [t3.c2]), partitions(p[0-1])
 
 WITH cte2 AS (select * from t3)
@@ -1254,7 +1239,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t2.c21]), filter(nil), 
+  0 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 WITH 
@@ -1286,7 +1271,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 WITH
@@ -1321,11 +1306,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t2.c22]), filter(nil), 
+  0 - output([t1.c2], [t2.c22]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t2.c21], [t2.c22]), filter(nil), 
+  2 - output([t2.c21], [t2.c22]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 WITH 
@@ -1354,22 +1339,20 @@ Query Plan
 ==========================
 |ID|OPERATOR        |NAME|
 --------------------------
-|0 |MERGE OUTER JOIN|    |
-|1 | SORT           |    |
+|0 |SORT            |    |
+|1 | HASH OUTER JOIN|    |
 |2 |  TABLE SCAN    |t1  |
-|3 | SORT           |    |
-|4 |  TABLE SCAN    |t2  |
+|3 |  TABLE SCAN    |t2  |
 ==========================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  3 - output([t2.c21], [t2.c22]), filter(nil), sort_keys([t2.c21, ASC])
-  4 - output([t2.c21], [t2.c22]), filter(nil), 
+  3 - output([t2.c21], [t2.c22]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 WITH
@@ -1404,11 +1387,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c2 = t2.c21]), other_conds(nil)
-  1 - output([t2.c21]), filter(nil), 
+  1 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 WITH
@@ -1437,11 +1420,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c2], [t1.c2]), filter(nil), 
+  0 - output([t1.c2], [t1.c2]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 WITH 
@@ -1480,12 +1463,12 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 + 1 * 2], [t1.c2 - 1 * 3]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c1 + 1 * 2], [t1.c2 - 1 * 3]), filter(nil), rowset=256, 
       conds([t1.c1 < t1.c1 + 1 * 2]), nl_params_(nil)
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t1.c1], [t1.c2]), filter(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 WITH 
@@ -1556,51 +1539,47 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
 Query Plan
-===================================
-|ID|OPERATOR                |NAME |
------------------------------------
-|0 |HASH RIGHT SEMI JOIN    |     |
-|1 | SUBPLAN SCAN           |VIEW1|
-|2 |  SUBPLAN FILTER        |     |
-|3 |   TABLE SCAN           |t2   |
-|4 |   LIMIT                |     |
-|5 |    MERGE UNION DISTINCT|     |
-|6 |     SORT               |     |
-|7 |      LIMIT             |     |
-|8 |       HASH DISTINCT    |     |
-|9 |        TABLE SCAN      |t1   |
-|10|     SORT               |     |
-|11|      LIMIT             |     |
-|12|       HASH DISTINCT    |     |
-|13|        TABLE SCAN      |t1   |
-|14| TABLE SCAN             |t1   |
-===================================
+==================================
+|ID|OPERATOR               |NAME |
+----------------------------------
+|0 |HASH SEMI JOIN         |     |
+|1 | TABLE SCAN            |t1   |
+|2 | SUBPLAN SCAN          |VIEW1|
+|3 |  SUBPLAN FILTER       |     |
+|4 |   TABLE SCAN          |t2   |
+|5 |   LIMIT               |     |
+|6 |    HASH UNION DISTINCT|     |
+|7 |     LIMIT             |     |
+|8 |      HASH DISTINCT    |     |
+|9 |       TABLE SCAN      |t1   |
+|10|     LIMIT             |     |
+|11|      HASH DISTINCT    |     |
+|12|       TABLE SCAN      |t1   |
+==================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1]), filter(nil), 
+  0 - output([1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = VIEW1.d]), other_conds(nil)
-  1 - output([VIEW1.d]), filter(nil), 
-      access([VIEW1.d])
-  2 - output([t2.c22]), filter([?]), 
-      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
-  3 - output([t2.c22]), filter(nil), 
-      access([t2.c22]), partitions(p0)
-  4 - output([UNION([1])]), filter(nil), limit(1), offset(nil)
-  5 - output([UNION([1])]), filter(nil)
-  6 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
-  7 - output([t1.c2]), filter(nil), limit(1), offset(nil)
-  8 - output([t1.c2]), filter(nil), 
-      distinct([t1.c2])
-  9 - output([t1.c2]), filter(nil), 
-      access([t1.c2]), partitions(p0)
-  10 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
-  11 - output([t1.c1]), filter(nil), limit(1), offset(nil)
-  12 - output([t1.c1]), filter(nil), 
-      distinct([t1.c1])
-  13 - output([t1.c1]), filter(nil), 
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  14 - output([t1.c1]), filter(nil), 
+  2 - output([VIEW1.d]), filter(nil), rowset=256, 
+      access([VIEW1.d])
+  3 - output([t2.c22]), filter(nil), rowset=256, 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  4 - output([t2.c22]), filter(nil), startup_filter([?]), rowset=256, 
+      access([t2.c22]), partitions(p0)
+  5 - output([UNION([1])]), filter(nil), rowset=256, limit(1), offset(nil)
+  6 - output([UNION([1])]), filter(nil), rowset=256
+  7 - output([t1.c2]), filter(nil), rowset=256, limit(1), offset(nil)
+  8 - output([t1.c2]), filter(nil), rowset=256, 
+      distinct([t1.c2])
+  9 - output([t1.c2]), filter(nil), rowset=256, 
+      access([t1.c2]), partitions(p0)
+  10 - output([t1.c1]), filter(nil), rowset=256, limit(1), offset(nil)
+  11 - output([t1.c1]), filter(nil), rowset=256, 
+      distinct([t1.c1])
+  12 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 WITH
@@ -1618,51 +1597,47 @@ explain basic WITH
   cte2 (c, d) AS (SELECT c21, c22 FROM t2)
 select /*+no_rewrite()*/ 1 from cte1 where a in (select d from cte2 where exists( (select b from cte1) union (select a from cte1)));
 Query Plan
-=================================
-|ID|OPERATOR               |NAME|
----------------------------------
-|0 |SUBPLAN FILTER         |    |
-|1 | SUBPLAN SCAN          |cte1|
-|2 |  TABLE SCAN           |t1  |
-|3 | SUBPLAN FILTER        |    |
-|4 |  TABLE SCAN           |t2  |
-|5 |  LIMIT                |    |
-|6 |   MERGE UNION DISTINCT|    |
-|7 |    SORT               |    |
-|8 |     LIMIT             |    |
-|9 |      HASH DISTINCT    |    |
-|10|       TABLE SCAN      |t1  |
-|11|    SORT               |    |
-|12|     LIMIT             |    |
-|13|      HASH DISTINCT    |    |
-|14|       TABLE SCAN      |t1  |
-=================================
+================================
+|ID|OPERATOR              |NAME|
+--------------------------------
+|0 |SUBPLAN FILTER        |    |
+|1 | SUBPLAN SCAN         |cte1|
+|2 |  TABLE SCAN          |t1  |
+|3 | SUBPLAN FILTER       |    |
+|4 |  TABLE SCAN          |t2  |
+|5 |  LIMIT               |    |
+|6 |   HASH UNION DISTINCT|    |
+|7 |    LIMIT             |    |
+|8 |     HASH DISTINCT    |    |
+|9 |      TABLE SCAN      |t1  |
+|10|    LIMIT             |    |
+|11|     HASH DISTINCT    |    |
+|12|      TABLE SCAN      |t1  |
+================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1]), filter([cte1.a = ANY(subquery(1))]), 
+  0 - output([1]), filter([cte1.a = ANY(subquery(1))]), rowset=256, 
       exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
-  1 - output([cte1.a]), filter(nil), 
+  1 - output([cte1.a]), filter(nil), rowset=256, 
       access([cte1.a])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
-      access([t1.c1], [t1.c2]), partitions(p0)
-  3 - output([t2.c22]), filter([?]), 
+  2 - output([t1.c1]), filter(nil), rowset=256, 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c22]), filter(nil), rowset=256, 
       exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
-  4 - output([t2.c22]), filter(nil), 
+  4 - output([t2.c22]), filter(nil), startup_filter([?]), rowset=256, 
       access([t2.c22]), partitions(p0)
-  5 - output([UNION([1])]), filter(nil), limit(1), offset(nil)
-  6 - output([UNION([1])]), filter(nil)
-  7 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
-  8 - output([t1.c2]), filter(nil), limit(1), offset(nil)
-  9 - output([t1.c2]), filter(nil), 
+  5 - output([UNION([1])]), filter(nil), rowset=256, limit(1), offset(nil)
+  6 - output([UNION([1])]), filter(nil), rowset=256
+  7 - output([t1.c2]), filter(nil), rowset=256, limit(1), offset(nil)
+  8 - output([t1.c2]), filter(nil), rowset=256, 
       distinct([t1.c2])
-  10 - output([t1.c2]), filter(nil), 
+  9 - output([t1.c2]), filter(nil), rowset=256, 
       access([t1.c2]), partitions(p0)
-  11 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
-  12 - output([t1.c1]), filter(nil), limit(1), offset(nil)
-  13 - output([t1.c1]), filter(nil), 
+  10 - output([t1.c1]), filter(nil), rowset=256, limit(1), offset(nil)
+  11 - output([t1.c1]), filter(nil), rowset=256, 
       distinct([t1.c1])
-  14 - output([t1.c1]), filter(nil), 
+  12 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 WITH
@@ -1683,22 +1658,20 @@ Query Plan
 ======================
 |ID|OPERATOR    |NAME|
 ----------------------
-|0 |MERGE JOIN  |    |
-|1 | SORT       |    |
+|0 |SORT        |    |
+|1 | HASH JOIN  |    |
 |2 |  TABLE SCAN|t1  |
-|3 | SORT       |    |
-|4 |  TABLE SCAN|t2  |
+|3 |  TABLE SCAN|t2  |
 ======================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  1 - output([t1.c1], [t1.c2], [t2.c21], [t2.c22]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds([t1.c2 != t2.c22])
-  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
-  3 - output([t2.c21], [t2.c22]), filter(nil), sort_keys([t2.c21, ASC])
-  4 - output([t2.c21], [t2.c22]), filter(nil), 
+  3 - output([t2.c21], [t2.c22]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 WITH
@@ -1728,10 +1701,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])]), filter(nil)
-  1 - output([t1.c1]), filter(nil), 
+  0 - output([UNION([1])]), filter(nil), rowset=256
+  1 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  2 - output([t2.c21]), filter(nil), 
+  2 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 WITH cte2 AS (select c1 from t1)
@@ -1773,12 +1746,12 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([UNION([1])]), filter(nil)
-  1 - output([cte2.c1]), filter(nil), 
+  0 - output([UNION([1])]), filter(nil), rowset=256
+  1 - output([cte2.c1]), filter(nil), rowset=256, 
       access([cte2.c1])
-  2 - output([t1.c1]), filter(nil), 
+  2 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  3 - output([t2.c21]), filter(nil), 
+  3 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 WITH cte2 AS (select c1 from t1)
@@ -1817,10 +1790,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])]), filter(nil)
-  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])]), filter(nil), rowset=256
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
-  2 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  2 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
 
 WITH cte2 AS (select c1 from t1)
@@ -1860,7 +1833,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 with cte as (select c21 from t2)
@@ -1889,7 +1862,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t2.c21]), filter(nil), 
+  0 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 with cte as (select c21 from t2)
@@ -1921,10 +1894,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t3.c1]), filter(nil)
-  1 - output([t3.c1]), filter(nil), dop=1
-  2 - output([t3.c1]), filter(nil)
-  3 - output([t3.c1]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t3.c1)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t3.c1)]), filter(nil), rowset=256, dop=1
+  2 - output([t3.c1]), filter(nil), rowset=256
+  3 - output([t3.c1]), filter(nil), rowset=256, 
       access([t3.c1]), partitions(p[0-1])
 
 with cte as (select c21 from t2)
@@ -1978,11 +1951,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c21], [t2.c22]), filter(nil), rowset=256, 
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
-  1 - output([t2.c21], [t2.c22]), filter(nil), 
+  1 - output([t2.c21], [t2.c22]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 WITH cte_outer AS (select * from t2) 
@@ -2022,12 +1995,12 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t2.c21], [t2.c22]), filter(nil), sort_keys([t2.c22, ASC])
-  1 - output([t1.c1], [t2.c21], [t2.c22]), filter(nil), 
+  0 - output([t1.c1], [t2.c21], [t2.c22]), filter(nil), rowset=256, sort_keys([t2.c22, ASC])
+  1 - output([t2.c22], [t1.c1], [t2.c21]), filter(nil), rowset=256, 
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
-  2 - output([t1.c1]), filter([t1.c1 > 1000]), 
+  2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256, 
       access([t1.c1]), partitions(p0)
-  3 - output([t2.c21], [t2.c22]), filter([t2.c21 > 1000]), 
+  3 - output([t2.c21], [t2.c22]), filter([t2.c21 > 1000]), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 WITH cte_outer AS (select * from t2)
@@ -2053,7 +2026,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter([t1.c1 > 1000]), 
+  0 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 select * from (WITH t2 AS (select c1 from t1) select c1 from t2 where t2.c1 > 1000) t;
@@ -2075,11 +2048,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([?], [t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  0 - output([?], [t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
-  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-  2 - output([t1.c1]), filter([t1.c1 > 1000]), 
+  2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 select ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000), t2.* from t2;
@@ -2106,7 +2079,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter([t1.c1 > 0], [t1.c1 > 1000]), 
+  0 - output([t1.c1]), filter([t1.c1 > 0], [t1.c1 > 1000]), rowset=256, 
       access([t1.c1]), partitions(p0)
 
 select t3.* from ( WITH cte AS (select c1 from t1) select c1 from cte where cte.c1 > 1000) t3 where t3.c1 > 0;
@@ -2133,12 +2106,12 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
-  1 - output([t1.c1], [t1.c1], [t1.c2]), filter(nil), 
+  0 - output([t1.c1], [t1.c1], [t1.c2]), filter(nil), rowset=256, sort_keys([t1.c2, ASC])
+  1 - output([t1.c2], [t1.c1], [t1.c1]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t1.c1]), other_conds(nil)
-  2 - output([t1.c1]), filter([t1.c1 > 1000]), 
+  2 - output([t1.c1]), filter([t1.c1 > 1000]), rowset=256, 
       access([t1.c1]), partitions(p0)
-  3 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1000]), 
+  3 - output([t1.c1], [t1.c2]), filter([t1.c1 > 1000]), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 select t3.*, t4.* from 
@@ -2165,11 +2138,11 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t2.c21], [t2.c22], [t2.c23], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       equal_conds([t2.c21 = t1.c1]), other_conds(nil)
-  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), 
+  1 - output([t2.c21], [t2.c22], [t2.c23]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22], [t2.c23]), partitions(p0)
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 with cte as (select * from t1) select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
@@ -2292,10 +2265,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([T_FUN_COUNT(*)]), filter([T_FUN_COUNT(*) = 1]), 
-      group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output([1]), filter(nil), 
-      access([t1.__pk_increment]), partitions(p0)
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter([T_FUN_COUNT_SUM(T_FUN_COUNT(*)) = 1]), rowset=256, 
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256, 
+      access(nil), partitions(p0)
 
 with cte as (select count(*) as k from t1) select * from cte where k = 1;
 +------+
@@ -2319,7 +2292,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 WITH
@@ -2342,42 +2315,44 @@ select * from cte0 for update;
 ##############################
 explain basic insert into t1 with cte as (select * from t1) SELECT * FROM cte;
 Query Plan
-========================
-|ID|OPERATOR     |NAME |
-------------------------
-|0 |INSERT       |     |
-|1 | SUBPLAN SCAN|VIEW1|
-|2 |  TABLE SCAN |t1   |
-========================
+==================================
+|ID|OPERATOR     |NAME           |
+----------------------------------
+|0 |INSERT       |               |
+|1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
+|2 |  TABLE SCAN |t1             |
+==================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
-      columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0)
-  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
-      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  0 - output(nil), filter(nil), 
+      columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 insert into t1 with cte as (select * from t1) SELECT * FROM cte;
 
 explain basic insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
 Query Plan
-========================
-|ID|OPERATOR     |NAME |
-------------------------
-|0 |INSERT       |     |
-|1 | SUBPLAN SCAN|VIEW1|
-|2 |  TABLE SCAN |t2   |
-========================
+==================================
+|ID|OPERATOR     |NAME           |
+----------------------------------
+|0 |INSERT       |               |
+|1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
+|2 |  TABLE SCAN |t2             |
+==================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([column_conv(BIGINT UNSIGNED,PS:(-1,-1),NOT NULL,nextval(1))], [column_conv(INT,PS:(11,0),NULL,VIEW1.a)], [column_conv(INT,PS:(11,0),NULL,VIEW1.b)], [column_conv(INT,PS:(11,0),NULL,VIEW1.a)]), filter(nil), 
-      columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0)
-  1 - output([VIEW1.a], [VIEW1.b], [VIEW1.a]), filter(nil), 
-      access([VIEW1.a], [VIEW1.b], [VIEW1.a])
-  2 - output([t2.c21], [t2.c22], [t2.c21]), filter(nil), 
+  0 - output(nil), filter(nil), 
+      columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]), partitions(p0), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.a)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.b)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.a)])
+  1 - output([ANONYMOUS_VIEW1.a], [ANONYMOUS_VIEW1.b], [ANONYMOUS_VIEW1.a]), filter(nil), rowset=256, 
+      access([ANONYMOUS_VIEW1.a], [ANONYMOUS_VIEW1.b], [ANONYMOUS_VIEW1.a])
+  2 - output([t2.c21], [t2.c22], [t2.c21]), filter(nil), rowset=256, 
       access([t2.c21], [t2.c22]), partitions(p0)
 
 insert into t1 with cte (a,b,c) as (select c21,c22,c23 from t2) select a,b,a from cte;
@@ -2427,18 +2402,18 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]),
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)}), hash_distinct}]),
       update([t1.c1=column_conv(INT,PS:(11,0),NULL,cast(cte.count(*)+99, INT(-1, 0)))])
-  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [column_conv(INT,PS:(11,0),NULL,cast(cte.count(*)+99, INT(-1, 0)))]), filter(nil), 
+  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [cte.count(*)+99]), filter(nil), rowset=256, 
       conds(nil), nl_params_(nil)
-  2 - output([t1.c1], [t1.__pk_increment], [t1.c2], [t1.c3]), filter([t1.c2 = 2]), 
-      access([t1.c1], [t1.__pk_increment], [t1.c2], [t1.c3]), partitions(p0)
-  3 - output([cte.count(*)+99]), filter(nil)
-  4 - output([cte.count(*)+99]), filter(nil), 
+  2 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 2]), rowset=256, 
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+  3 - output([cte.count(*)+99]), filter(nil), rowset=256
+  4 - output([cte.count(*)+99]), filter(nil), rowset=256, 
       access([cte.count(*)+99])
-  5 - output([T_FUN_COUNT(*) + 99]), filter(nil), 
-      group(nil), agg_func([T_FUN_COUNT(*)])
-  6 - output([1]), filter([t2.c21 = 1]), 
+  5 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*)) + 99]), filter(nil), rowset=256, 
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  6 - output([T_FUN_COUNT(*)]), filter([t2.c21 = 1]), rowset=256, 
       access([t2.c21]), partitions(p0)
 
 update t1 set c1=(with cte as (select count(*)+99 from t2 where c21=1) select * from cte) where c2 = 2;
@@ -2484,10 +2459,10 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), 
+  0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), rowset=256, 
       group([t1.c1]), agg_func([T_FUN_MAX(t1.c2)])
-  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 with cte as (select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from t1 group by c1 order by c1) select * from cte;
@@ -2517,14 +2492,14 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), 
+  0 - output([t1.c1], [T_FUN_MAX(t1.c2)], [CASE WHEN T_FUN_MAX(t1.c2) = 4 THEN 4 WHEN T_FUN_MAX(t1.c2) = 43 THEN 43 ELSE 1 END]), filter(nil), rowset=256, 
       group([t1.c1]), agg_func([T_FUN_MAX(t1.c2)])
-  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       equal_conds([t1.c1 = t2.c21]), other_conds(nil)
-  3 - output([t2.c21]), filter(nil), 
+  3 - output([t2.c21]), filter(nil), rowset=256, 
       access([t2.c21]), partitions(p0)
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 with cte(c1, c2) as (select t1.c1, t1.c2 from t1, t2 where t1.c1 = t2.c21) select c1, max(c2), CASE max(c2) when 4 then 4 when 43 then 43 else 1 end from cte group by c1 order by c1;
@@ -2558,15 +2533,15 @@ Query Plan
 Outputs & filters: 
 -------------------------------------
   0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}])
-  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       conds([t1.c1 = cte.max( c1 )]), nl_params_(nil)
-  2 - output([cte.max( c1 )]), filter(nil), 
+  2 - output([cte.max( c1 )]), filter(nil), rowset=256, 
       access([cte.max( c1 )])
-  3 - output([T_FUN_MAX(t1.c1)]), filter(nil), 
+  3 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256, 
       group(nil), agg_func([T_FUN_MAX(t1.c1)])
-  4 - output([t1.c1]), filter(nil), 
+  4 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 delete from t1 where c1 = ( with cte as (select max( c1 ) from ( select * from t1 )) select * from cte);
@@ -2587,15 +2562,15 @@ Query Plan
 Outputs & filters: 
 -------------------------------------
   0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}])
-  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       conds([t1.c1 = cte.a]), nl_params_(nil)
-  2 - output([cte.a]), filter(nil), 
+  2 - output([cte.a]), filter(nil), rowset=256, 
       access([cte.a])
-  3 - output([T_FUN_MAX(t1.c1)]), filter(nil), 
+  3 - output([T_FUN_MAX(t1.c1)]), filter(nil), rowset=256, 
       group(nil), agg_func([T_FUN_MAX(t1.c1)])
-  4 - output([t1.c1]), filter(nil), 
+  4 - output([t1.c1]), filter(nil), rowset=256, 
       access([t1.c1]), partitions(p0)
-  5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+  5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
 
 delete from t1 where c1 = ( with cte (a) as (select max( c1 ) from t1 ) select * from cte);

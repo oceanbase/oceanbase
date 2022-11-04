@@ -18,11 +18,15 @@ using namespace lib;
 using namespace common;
 using namespace share;
 
-ObBackupFileLockMgr::ObBackupFileLockMgr() : is_inited_(false), lock_mgr_()
-{}
+ObBackupFileLockMgr::ObBackupFileLockMgr()
+  : is_inited_(false),
+    lock_mgr_()
+{
+}
 
 ObBackupFileLockMgr::~ObBackupFileLockMgr()
-{}
+{
+}
 
 void ObBackupFileLockMgr::destroy()
 {
@@ -32,7 +36,7 @@ void ObBackupFileLockMgr::destroy()
   }
 }
 
-ObBackupFileLockMgr& ObBackupFileLockMgr::get_instance()
+ObBackupFileLockMgr &ObBackupFileLockMgr::get_instance()
 {
   static ObBackupFileLockMgr instance;
   return instance;
@@ -52,7 +56,8 @@ int ObBackupFileLockMgr::init()
   return ret;
 }
 
-int ObBackupFileLockMgr::try_lock(const ObBackupPath& path)
+int ObBackupFileLockMgr::try_lock(
+    const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -76,7 +81,10 @@ int ObBackupFileLockMgr::try_lock(const ObBackupPath& path)
   return ret;
 }
 
-int ObBackupFileLockMgr::low_try_lock(const ObBackupPath& path, const int64_t max_spin_cnt, uint64_t& spin_cnt)
+int ObBackupFileLockMgr::low_try_lock(
+    const ObBackupPath &path,
+    const int64_t max_spin_cnt,
+    uint64_t &spin_cnt)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -84,7 +92,7 @@ int ObBackupFileLockMgr::low_try_lock(const ObBackupPath& path, const int64_t ma
   for (; OB_SUCC(ret) && spin_cnt < max_spin_cnt; ++spin_cnt) {
     hash_ret = lock_mgr_.exist_refactored(path);
     if (OB_HASH_EXIST == hash_ret) {
-      // do nothing
+      //do nothing
     } else if (OB_HASH_NOT_EXIST == hash_ret) {
       if (OB_FAIL(lock_mgr_.set_refactored(path))) {
         LOG_WARN("failed to set lock", K(ret), K(path));
@@ -101,28 +109,31 @@ int ObBackupFileLockMgr::low_try_lock(const ObBackupPath& path, const int64_t ma
   return ret;
 }
 
-int ObBackupFileLockMgr::lock(const ObBackupPath& path, const int64_t abs_timeout_us)
+int ObBackupFileLockMgr::lock(
+    const ObBackupPath &path,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   uint64_t i = 0;
   uint64_t yield_cnt = 0;
-  if (path.is_empty() || OB_UNLIKELY(abs_timeout_us <= 0)) {
+  if (path.is_empty()
+        || OB_UNLIKELY(abs_timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(path), K(abs_timeout_us));
   } else {
     while (OB_SUCC(ret)) {
-      // spin
+      //spin
       if (OB_FAIL(low_try_lock(path, MAX_SPIN_TIMES, i))) {
         LOG_WARN("failed to low try lock", K(ret), K(i), K(path));
       } else if (OB_LIKELY(i < MAX_SPIN_TIMES)) {
-        // success lock
+        //success lock
         break;
       } else if (yield_cnt < MAX_YIELD_CNT) {
         sched_yield();
         ++yield_cnt;
         continue;
       } else {
-        // wait
+        //wait
         if (OB_FAIL(wait(path, abs_timeout_us))) {
           if (OB_TIMEOUT != ret) {
             COMMON_LOG(WARN, "Fail to wait the lock, ", K(ret));
@@ -136,7 +147,7 @@ int ObBackupFileLockMgr::lock(const ObBackupPath& path, const int64_t abs_timeou
   return ret;
 }
 
-int ObBackupFileLockMgr::wait(const ObBackupPath& path, const int64_t abs_timeout_us)
+int ObBackupFileLockMgr::wait(const ObBackupPath &path, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   int64_t timeout = 0;
@@ -155,14 +166,14 @@ int ObBackupFileLockMgr::wait(const ObBackupPath& path, const int64_t abs_timeou
         ret = OB_SUCCESS;
         break;
       } else {
-        usleep(1 * 1000 * 1000);  // 1s
+        ob_usleep(1 * 1000 * 1000); //1s
       }
     }
   }
   return ret;
 }
 
-int ObBackupFileLockMgr::unlock(const ObBackupPath& path)
+int ObBackupFileLockMgr::unlock(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -175,8 +186,12 @@ int ObBackupFileLockMgr::unlock(const ObBackupPath& path)
   return ret;
 }
 
-ObBackupFileSpinLock::ObBackupFileSpinLock() : is_inited_(false), is_locked_(false), path_()
-{}
+ObBackupFileSpinLock::ObBackupFileSpinLock()
+    : is_inited_(false),
+      is_locked_(false),
+      path_()
+{
+}
 
 ObBackupFileSpinLock::~ObBackupFileSpinLock()
 {
@@ -190,7 +205,7 @@ ObBackupFileSpinLock::~ObBackupFileSpinLock()
   }
 }
 
-int ObBackupFileSpinLock::init(const ObBackupPath& path)
+int ObBackupFileSpinLock::init(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -218,7 +233,8 @@ int ObBackupFileSpinLock::lock()
 int ObBackupFileSpinLock::lock(const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBackupFileLockMgr::get_instance().lock(path_, ObTimeUtility::current_time() + timeout_us))) {
+  if (OB_FAIL(ObBackupFileLockMgr::get_instance().lock(path_,
+      ObTimeUtility::current_time() + timeout_us))) {
     LOG_WARN("failed to lock", K(ret), K(path_));
   } else {
     is_locked_ = true;
@@ -247,3 +263,5 @@ int ObBackupFileSpinLock::unlock()
   }
   return ret;
 }
+
+

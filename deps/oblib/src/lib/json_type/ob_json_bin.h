@@ -70,10 +70,19 @@ typedef struct ObJsonBinKeyDict {
 } ObJsonBinKeyDict;
 
 typedef struct ObJsonBinHeader {
+  ObJsonBinHeader()
+  : type_(0), 
+        entry_size_(0), 
+        count_size_(0), 
+        obj_size_size_(0), 
+        is_continuous_(0), 
+        reserved_(0) 
+  {
+  }
   uint8_t type_;			 // node type for current node
-  uint8_t entry_size_   : 2; // the size describe var size of key_entry, val_entry
+  uint8_t entry_size_   : 2; // the size describe var size of key_entry，val_entry
   uint8_t count_size_   : 2; // the size describe var size of element count
-  uint8_t obj_size_size_ : 2; // the size describe var size of key_entry, val_entry
+  uint8_t obj_size_size_ : 2; // the size describe var size of key_entry，val_entry
   uint8_t is_continuous_  : 1; // memory of current node and subtree is continous 
   uint8_t reserved_   : 1; // reserved bit
   char used_size_[]; // var size
@@ -170,7 +179,6 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
-  int get_use_size(uint64_t& obj_size, uint64_t& used_size) const;
   int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
@@ -404,7 +412,8 @@ private:
                              uint64_t length,
                              uint8_t type,
                              uint64_t value_offset,
-                             ObJsonNode *&json_tree);
+                             ObJsonNode *&json_tree,
+                             uint64_t type_size);
 
   int deserialize_json_object_v0(const char *data, uint64_t length, ObJsonObject *object);
   inline int deserialize_json_object(const char *data, uint64_t length, ObJsonObject *object, ObJBVerType vertype);
@@ -459,7 +468,6 @@ private:
   inline int rebuild_json_process_value(const char *data, uint64_t length, const char *old_val_entry, 
                                         uint64_t new_val_entry_offset, uint64_t count, uint8_t var_type, int64_t st_pos,
                                         ObJsonBuffer &result, ObJBVerType cur_vertype, ObJBVerType dest_vertype) const;
-  
 
   void stack_update(ObJsonBuffer& stack, uint32_t idx, const ObJBNodeMeta& new_value);
   int stack_copy(ObJsonBuffer& src, ObJsonBuffer& dst);
@@ -474,6 +482,7 @@ private:
   int check_valid_object_op(uint64_t index) const;
   int check_valid_array_op(uint64_t index) const;
   int create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const;
+  int get_use_size(uint64_t& used_size) const;
 /* data */
 private:
   common::ObIAllocator *allocator_;
@@ -512,7 +521,7 @@ public:
   static uint8_t get_var_type(uint64_t var);
   static int read_var(const char *data, uint8_t type, int64_t *var);
   static uint64_t var_int2uint(int64_t var);
-  static int64_t var_uint2int(uint64_t var, uint8_t entry_size = 0);
+  static int64_t var_uint2int(uint64_t var, uint8_t entry_size);
   static uint8_t get_var_type(int64_t var);
 };
 

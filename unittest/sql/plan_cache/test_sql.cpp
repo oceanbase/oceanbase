@@ -22,10 +22,12 @@ using namespace oceanbase::json;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::obrpc;
 
-namespace test {
+namespace test
+{
 
-TestSQL::TestSQL(const ObString& schema_file_name)
-    : addr_(ObAddr::IPV4, "1.1.1.1", 8888), merged_version_(OB_MERGED_VERSION_INIT)
+TestSQL::TestSQL(const ObString &schema_file_name)
+    : addr_(ObAddr::IPV4, "1.1.1.1", 8888),
+    merged_version_(OB_MERGED_VERSION_INIT)
 {
   memset(schema_file_path_, '\0', 128);
   memcpy(schema_file_path_, schema_file_name.ptr(), schema_file_name.length());
@@ -36,7 +38,7 @@ TestSQL::~TestSQL()
   destroy();
 }
 
-int TestSQL::do_parse(ObIAllocator& allocator, const char* query_str, ParseResult& parse_result)
+int TestSQL::do_parse(ObIAllocator &allocator, const char* query_str, ParseResult &parse_result)
 {
   int ret = OB_SUCCESS;
   ObSQLMode mode = SMO_DEFAULT;
@@ -48,11 +50,11 @@ int TestSQL::do_parse(ObIAllocator& allocator, const char* query_str, ParseResul
   return ret;
 }
 
-int TestSQL::do_resolve(TestSqlCtx& test_sql_ctx, ParseResult& parse_result, ObStmt*& stmt, ParamStore* params)
+int TestSQL::do_resolve(TestSqlCtx &test_sql_ctx, ParseResult &parse_result, ObStmt *&stmt, ParamStore *params)
 {
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
-  // if (OB_ISNULL(schema_mgr_)) {
+  //if (OB_ISNULL(schema_mgr_)) {
   //  ret = OB_ERR_UNEXPECTED;
   //  LOG_WARN("schema_mgr_ is NULL", K(ret));
   //} else
@@ -61,7 +63,7 @@ int TestSQL::do_resolve(TestSqlCtx& test_sql_ctx, ParseResult& parse_result, ObS
   } else {
 
     ObResolverParams resolver_ctx;
-    resolver_ctx.allocator_ = test_sql_ctx.allocator_;
+    resolver_ctx.allocator_  = test_sql_ctx.allocator_;
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = &session_info_;
     resolver_ctx.database_id_ = get_database_id();
@@ -77,31 +79,34 @@ int TestSQL::do_resolve(TestSqlCtx& test_sql_ctx, ParseResult& parse_result, ObS
   return ret;
 }
 
-int TestSQL::generate_logical_plan(TestSqlCtx& test_sql_ctx, ParamStore* params, ObStmt* stmt, ObLogPlan*& logical_plan)
+int TestSQL::generate_logical_plan(TestSqlCtx &test_sql_ctx,
+                                   ParamStore *params,
+                                   ObStmt *stmt,
+                                   ObLogPlan *&logical_plan)
 {
   int ret = OB_SUCCESS;
   ObQueryHint query_hint = dynamic_cast<ObDMLStmt*>(stmt)->get_stmt_hint().get_query_hint();
   exec_ctx_.get_sql_ctx()->session_info_ = &session_info_;
-  ObOptimizerContext* optctx = new ObOptimizerContext(&session_info_,
-      &exec_ctx_,
-      // schema_mgr_, // schema manager
-      &sql_schema_guard_,  // schema guard
-      &stat_manager_,      // statistics manager
-      NULL,
-      &partition_service_,
-      *test_sql_ctx.allocator_,
-      &part_cache_,
-      params,
-      addr_,
-      NULL,
-      OB_MERGED_VERSION_INIT,
-      query_hint,
-      *test_sql_ctx.expr_factory_,
-      dynamic_cast<ObDMLStmt*>(stmt));
+  ObOptimizerContext *optctx = new ObOptimizerContext(&session_info_,
+                                                      &exec_ctx_,
+                                                      //schema_mgr_, // schema manager
+                                                      &sql_schema_guard_, //schema guard
+                                                      &stat_manager_, // statistics manager
+                                                      NULL,
+                                                      &partition_service_,
+                                                      *test_sql_ctx.allocator_,
+                                                      params,
+                                                      addr_,
+                                                      NULL,
+                                                      query_hint,
+                                                      *test_sql_ctx.expr_factory_,
+                                                      dynamic_cast<ObDMLStmt*>(stmt),
+                                                      false,
+                                                      stmt_factory_.get_query_ctx());
   //  ObTableLocation table_location;
   //  ret = optctx.get_table_location_list().push_back(table_location);
   //  LOG_DEBUG("setting local address to 1.1.1.1");
-  //  optctx.set_local_server_ipv4_addr("1.1.1.1", 8888);
+  //  optctx.set_local_server_addr("1.1.1.1", 8888);
   ObOptimizer optimizer(*optctx);
   if (OB_FAIL(optimizer.optimize(*dynamic_cast<ObDMLStmt*>(stmt), logical_plan))) {
     SQL_PC_LOG(WARN, "fail to generate logical plan", K(ret));
@@ -109,7 +114,7 @@ int TestSQL::generate_logical_plan(TestSqlCtx& test_sql_ctx, ParamStore* params,
   return ret;
 }
 
-int TestSQL::generate_physical_plan(ObLogPlan* logical_plan, ObPhysicalPlan*& physical_plan)
+int TestSQL::generate_physical_plan(ObLogPlan *logical_plan, ObPhysicalPlan *&physical_plan)
 {
   int ret = OB_SUCCESS;
   ObCodeGeneratorImpl code_generator(CLUSTER_VERSION_1500);
@@ -125,4 +130,4 @@ int TestSQL::generate_physical_plan(ObLogPlan* logical_plan, ObPhysicalPlan*& ph
   return ret;
 }
 
-}  // namespace test
+}

@@ -31,7 +31,7 @@
  */
 
 #ifdef REGEX_STANDALONE
-#include "regalone.h"
+#	include "regalone.h"
 //#else
 //#	include "obInt.h"
 #endif
@@ -40,11 +40,11 @@
  * Overrides for regguts.h definitions, if any.
  */
 
-#define FUNCPTR(name, args) (*name) args
+#define	FUNCPTR(name, args)	(*name)args
 #ifndef REGEX_STANDALONE
-#define MALLOC(n) ckalloc(n)
-#define FREE(p) ckfree(VS(p))
-#define REALLOC(p, n) ckrealloc(VS(p), n)
+#define	MALLOC(n)		ckalloc(n)
+#define	FREE(p)			ckfree(VS(p))
+#define	REALLOC(p,n)		ckrealloc(VS(p),n)
 #endif
 
 /*
@@ -79,17 +79,17 @@
 #undef __REG_NOCHAR
 #endif
 /* Interface types */
-#define __REG_WIDE_T Ob_UniChar
-#define __REG_REGOFF_T long /* Not really right, but good enough... */
-#define __REG_VOID_T void
-#define __REG_CONST const
+#define	__REG_WIDE_T	Ob_UniChar
+#define	__REG_REGOFF_T	long	/* Not really right, but good enough... */
+#define	__REG_VOID_T	void
+#define	__REG_CONST	const
 /* Names and declarations */
-#define __REG_WIDE_COMPILE ObReComp
-#define __REG_WIDE_EXEC ObReExec
-#define __REG_NOFRONT /* Don't want ob_regcomp() and ob_regexec() */
-#define __REG_NOCHAR  /* Or the char versions */
-#define ob_regfree ObReFree
-#define ob_regerror ObReError
+#define	__REG_WIDE_COMPILE	ObReComp
+#define	__REG_WIDE_EXEC		ObReExec
+#define	__REG_NOFRONT		/* Don't want ob_regcomp() and ob_regexec() */
+#define	__REG_NOCHAR		/* Or the char versions */
+#define	ob_regfree		ObReFree
+#define	ob_regerror	ObReError
 /* --- end --- */
 
 /*
@@ -97,63 +97,64 @@
  */
 
 #ifndef REGEX_STANDALONE
-typedef Ob_UniChar chr; /* The type itself. */
+typedef Ob_UniChar chr;	/* The type itself. */
 #endif
-typedef int pchr;               /* What it promotes to. */
-typedef unsigned uchr;          /* Unsigned type that will hold a chr. */
-typedef int celt;               /* Type to hold chr, or NOCELT */
-#define NOCELT (-1)             /* Celt value which is not valid chr */
-#define CHR(c) (UCHAR(c))       /* Turn char literal into chr literal */
-#define DIGITVAL(c) ((c) - '0') /* Turn chr digit into its value */
+typedef int pchr;		/* What it promotes to. */
+typedef unsigned uchr;		/* Unsigned type that will hold a chr. */
+typedef int celt;		/* Type to hold chr, or NOCELT */
+#define	NOCELT (-1)		/* Celt value which is not valid chr */
+#define	CHR(c) (UCHAR(c))	/* Turn char literal into chr literal */
+#define	DIGITVAL(c) ((c)-'0')	/* Turn chr digit into its value */
 #if OB_UTF_MAX > 3
-#define CHRBITS 32         /* Bits in a chr; must not use sizeof */
-#define CHR_MIN 0x00000000 /* Smallest and largest chr; the value */
-#define CHR_MAX 0xffffffff /* CHR_MAX-CHR_MIN+1 should fit in uchr */
-#elif defined(REGEX_STANDALONE) && !defined(REGEX_WCHAR)
-#define CHRBITS 8
-#define CHR_MIN 0x00
-#define CHR_MAX 0xff
+#define	CHRBITS	32		/* Bits in a chr; must not use sizeof */
+#define	CHR_MIN	0x00000000	/* Smallest and largest chr; the value */
+#define	CHR_MAX	0xffffffff	/* CHR_MAX-CHR_MIN+1 should fit in uchr */
+#elif defined(REGEX_STANDALONE) && ! defined(REGEX_WCHAR)
+#	define CHRBITS	8
+#	define CHR_MIN	0x00
+#	define CHR_MAX	0xff
 #else
-#define CHRBITS 16     /* Bits in a chr; must not use sizeof */
-#define CHR_MIN 0x0000 /* Smallest and largest chr; the value */
-#define CHR_MAX 0xffff /* CHR_MAX-CHR_MIN+1 should fit in uchr */
+#define	CHRBITS	16		/* Bits in a chr; must not use sizeof */
+#define	CHR_MIN	0x0000		/* Smallest and largest chr; the value */
+#define	CHR_MAX	0xffff		/* CHR_MAX-CHR_MIN+1 should fit in uchr */
 #endif
 
 /*
  * Functions operating on chr.
  */
 
-#define iscalnum(x) Ob_UniCharIsAlnum(x)
-#define iscalpha(x) Ob_UniCharIsAlpha(x)
-#define iscdigit(x) Ob_UniCharIsDigit(x)
-#define iscspace(x) Ob_UniCharIsSpace(x)
+#define	iscalnum(x)	Ob_UniCharIsAlnum(x)
+#define	iscalpha(x)	Ob_UniCharIsAlpha(x)
+#define	iscdigit(x)	Ob_UniCharIsDigit(x)
+#define	iscspace(x)	Ob_UniCharIsSpace(x)
 
 /*
  * Name the external functions.
  */
 
 #ifdef REGEX_STANDALONE
-#ifdef REGEX_WCHAR
-#define compile ob_re_wcomp
-#define exec ob_re_wexec
-#define __REG_NOCHAR
+#	ifdef REGEX_WCHAR
+#		define compile		ob_re_wcomp
+#		define exec		ob_re_wexec
+#		define __REG_NOCHAR
+#	else
+#		define compile		ob_re_comp
+#		define exec		ob_re_exec
+#		undef __REG_NOCHAR
+#	endif
 #else
-#define compile ob_re_comp
-#define exec ob_re_exec
-#undef __REG_NOCHAR
-#endif
-#else
-#define compile ObReComp
-#define exec ObReExec
+#define	compile		ObReComp
+#define	exec		ObReExec
 #endif
 
 /*
 & Enable/disable debugging code (by whether OB_REG_DEBUG is defined or not).
 */
 
-#if 0                /* No debug unless requested by makefile. */
-#define OB_REG_DEBUG /* */
+#if 0				/* No debug unless requested by makefile. */
+#define	OB_REG_DEBUG	/* */
 #endif
+
 
 #ifndef REGEX_STANDALONE
 /*
@@ -161,17 +162,20 @@ typedef int celt;               /* Type to hold chr, or NOCELT */
  * space to store this because the regular expression engine is never
  * reentered from the same thread; it doesn't make any callbacks.
  */
-#define AllocVars(vPtr)            \
-  static Ob_ThreadDataKey varsKey; \
-  register struct vars* vPtr = (struct vars*)Ob_GetThreadData(&varsKey, sizeof(struct vars))
+#define AllocVars(vPtr) \
+    static Ob_ThreadDataKey varsKey; \
+    register struct vars *vPtr = (struct vars *) \
+	    Ob_GetThreadData(&varsKey, sizeof(struct vars))
 #elif 0
 /*
  * This strategy for allocating workspace is "more proper" in some sense, but
  * quite a bit slower. Using TSD (as above) leads to code that is quite a bit
  * faster in practice (measured!)
  */
-#define AllocVars(vPtr) register struct vars* vPtr = (struct vars*)MALLOC(sizeof(struct vars))
-#define FreeVars(vPtr) FREE(vPtr)
+#define AllocVars(vPtr) \
+    register struct vars *vPtr = (struct vars *) MALLOC(sizeof(struct vars))
+#define FreeVars(vPtr) \
+    FREE(vPtr)
 #endif
 
 /*

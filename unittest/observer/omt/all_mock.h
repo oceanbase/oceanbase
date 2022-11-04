@@ -31,9 +31,8 @@ void all_mock_init()
     OBSERVER.init_global_context();
     OBSERVER.init_schema();
     OBSERVER.init_tz_info_mgr();
-    ((ObPartitionService*)GCTX.par_ser_)->cp_fty_ = &OBSERVER.partition_cfy_;
-    ((ObPartitionService*)GCTX.par_ser_)->txs_ = OBSERVER.partition_cfy_.get_trans_service();
-    ((ObPartitionService*)GCTX.par_ser_)->is_inited_ = true;
+    GCTX.sql_engine_->plan_cache_manager_.init(GCTX.self_addr());
+    GCTX.sql_engine_->plan_cache_manager_.inited_ = false;
     inited = true;
   }
 }

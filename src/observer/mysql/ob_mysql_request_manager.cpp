@@ -32,26 +32,25 @@
 #include "sql/session/ob_basic_session_info.h"
 #include "observer/mysql/ob_query_response_time.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace oceanbase::share::schema;
-namespace obmysql {
+namespace obmysql
+{
 
 ObMySQLRequestRecord::~ObMySQLRequestRecord()
-{}
+{
+
+}
 
 const int64_t ObMySQLRequestManager::EVICT_INTERVAL;
 
 ObMySQLRequestManager::ObMySQLRequestManager()
-    : inited_(false),
-      destroyed_(false),
-      request_id_(0),
-      mem_limit_(0),
-      allocator_(),
-      queue_(),
-      task_(),
-      tenant_id_(OB_INVALID_TENANT_ID),
-      tg_id_(-1)
-{}
+  : inited_(false), destroyed_(false), request_id_(0), mem_limit_(0),
+    allocator_(), queue_(), task_(),
+    tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1)
+{
+}
 
 ObMySQLRequestManager::~ObMySQLRequestManager()
 {
@@ -60,21 +59,26 @@ ObMySQLRequestManager::~ObMySQLRequestManager()
   }
 }
 
-int ObMySQLRequestManager::init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size)
+int ObMySQLRequestManager::init(uint64_t tenant_id,
+                                const int64_t max_mem_size,
+                                const int64_t queue_size)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size, tenant_id))) {
     SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
-  } else if (OB_FAIL(TG_CREATE(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
     SERVER_LOG(WARN, "create failed", K(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
     SERVER_LOG(WARN, "init timer fail", K(ret));
-  } else if (OB_FAIL(allocator_.init(SQL_AUDIT_PAGE_SIZE, ObModIds::OB_MYSQL_REQUEST_RECORD, tenant_id, INT64_MAX))) {
+  } else if (OB_FAIL(allocator_.init(SQL_AUDIT_PAGE_SIZE,
+                                     ObModIds::OB_MYSQL_REQUEST_RECORD,
+                                     tenant_id,
+                                     INT64_MAX))) {
     SERVER_LOG(WARN, "failed to init allocator", K(ret));
   } else {
-    // check FIFO mem used and sql audit records every 1 seconds
+    //check FIFO mem used and sql audit records every 1 seconds
     if (OB_FAIL(task_.init(this))) {
       SERVER_LOG(WARN, "fail to init sql audit time tast", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
@@ -119,96 +123,87 @@ void ObMySQLRequestManager::destroy()
  *11.tenant_name           varchar
  */
 
-int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record, bool is_sensitive)
+int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record, bool is_sensitive)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
   } else {
-    ObMySQLRequestRecord* record = NULL;
-    char* buf = NULL;
-    // alloc mem from allocator
+    ObMySQLRequestRecord *record = NULL;
+    char *buf = NULL;
+    //alloc mem from allocator
     int64_t pos = sizeof(ObMySQLRequestRecord);
-    int64_t sched_info_len = audit_record.sched_info_.get_len();
-    int64_t trace_info_len = audit_record.ob_trace_info_.length();
-    int64_t total_size = sizeof(ObMySQLRequestRecord) + audit_record.sql_len_ + audit_record.tenant_name_len_ +
-                         audit_record.user_name_len_ + audit_record.db_name_len_ + sched_info_len + trace_info_len;
+    int64_t total_size = sizeof(ObMySQLRequestRecord)
+                     + audit_record.sql_len_
+                     + audit_record.tenant_name_len_
+                     + audit_record.user_name_len_
+                     + audit_record.db_name_len_
+                     + audit_record.params_value_len_;
     if (NULL == (buf = (char*)alloc(total_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         SERVER_LOG(WARN, "record concurrent fifoallocator alloc mem failed", K(total_size), K(ret));
       }
     } else {
-      record = new (buf) ObMySQLRequestRecord();
+      record = new(buf)ObMySQLRequestRecord();
       record->allocator_ = &allocator_;
       record->data_ = audit_record;
-      // deep copy sql
+      //deep copy sql
       if ((audit_record.sql_len_ > 0) && (NULL != audit_record.sql_)) {
         int64_t stmt_len = min(audit_record.sql_len_, OB_MAX_SQL_LENGTH);
         MEMCPY(buf + pos, audit_record.sql_, stmt_len);
         record->data_.sql_ = buf + pos;
         pos += stmt_len;
       }
-      // deep copy tenant_name
+      //deep copy params value
+      if ((audit_record.params_value_len_ > 0) && (NULL != audit_record.params_value_)) {
+        MEMCPY(buf + pos, audit_record.params_value_, audit_record.params_value_len_);
+        record->data_.params_value_ = buf + pos;
+        pos += audit_record.params_value_len_;
+      }
+      //deep copy tenant_name
       if ((audit_record.tenant_name_len_ > 0) && (NULL != audit_record.tenant_name_)) {
         int64_t tenant_len = min(audit_record.tenant_name_len_, OB_MAX_TENANT_NAME_LENGTH);
         MEMCPY(buf + pos, audit_record.tenant_name_, tenant_len);
         record->data_.tenant_name_ = buf + pos;
         pos += tenant_len;
       }
-      // deep copy user_name
+      //deep copy user_name
       if ((audit_record.user_name_len_ > 0) && (NULL != audit_record.user_name_)) {
         int64_t user_len = min(audit_record.user_name_len_, OB_MAX_USER_NAME_LENGTH);
         MEMCPY(buf + pos, audit_record.user_name_, user_len);
         record->data_.user_name_ = buf + pos;
         pos += user_len;
       }
-      // deep copy db_name
+      //deep copy db_name
       if ((audit_record.db_name_len_ > 0) && (NULL != audit_record.db_name_)) {
         int64_t db_len = min(audit_record.db_name_len_, OB_MAX_DATABASE_NAME_LENGTH);
         MEMCPY(buf + pos, audit_record.db_name_, db_len);
         record->data_.db_name_ = buf + pos;
         pos += db_len;
       }
-      // deep_copy sched_info
-      if ((sched_info_len > 0) && (NULL != audit_record.sched_info_.get_ptr())) {
-        if (sched_info_len > OB_MAX_SCHED_INFO_LENGTH) {
-          ret = OB_INVALID_ARGUMENT;
-          SERVER_LOG(WARN, "sched info len is invalid", K(ret));
-        } else {
-          MEMCPY(buf + pos, audit_record.sched_info_.get_ptr(), sched_info_len);
-          record->data_.sched_info_.assign(buf + pos, sched_info_len);
-          pos += sched_info_len;
-        }
-      }
-      if (!audit_record.ob_trace_info_.empty()) {
-        MEMCPY(buf + pos, audit_record.ob_trace_info_.ptr(), trace_info_len);
-        record->data_.ob_trace_info_.assign(buf + pos, trace_info_len);
-        pos += trace_info_len;
-      }
       int64_t timestamp = common::ObTimeUtility::current_time();
-      // only print this log if enable_record_trace_log is enable,
-      // for `receive_ts_` might be invalid if `enable_record_trace_log` is false
-      if (lib::is_trace_log_enabled() &&
-          OB_UNLIKELY(timestamp - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
-        SERVER_LOG(WARN,
-            "record: query too slow ",
-            "elapsed",
-            timestamp - audit_record.exec_timestamp_.receive_ts_,
-            "receive_ts",
-            audit_record.exec_timestamp_.receive_ts_);
+      //for find bug http://k3.alibaba-inc.com/issue/5689896?stat=1.5.1&toPage=1&versionId=1043200
+      // only print this log if enable_perf_event is enable,
+      // for `receive_ts_` might be invalid if `enable_perf_event` is false
+      if (lib::is_diagnose_info_enabled()
+          && OB_UNLIKELY(timestamp - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
+        SERVER_LOG(WARN, "record: query too slow ",
+                   "elapsed", timestamp - audit_record.exec_timestamp_.receive_ts_,
+                   "receive_ts", audit_record.exec_timestamp_.receive_ts_);
       }
 
       // query response time
       observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
 
-      // push into queue
+      //push into queue
       if (OB_SUCC(ret)) {
         int64_t req_id = 0;
         if (is_sensitive) {
           free(record);
           record = NULL;
         } else if (OB_FAIL(queue_.push(record, req_id))) {
+          //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
           }
@@ -219,11 +214,12 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
         }
       }
     }
-  }  // end
+  } // end
   return ret;
 }
 
-int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id, int64_t& mem_limit)
+int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
+                                         int64_t &mem_limit)
 {
   int ret = OB_SUCCESS;
   int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id);
@@ -235,8 +231,11 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id, int64_t& mem_limit)
   ObObj obj_val;
   int64_t mem_pct = 0;
   const char* conf_name = "ob_sql_audit_percentage";
-  if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(
-          tenant_id, alloc, ObDataTypeCastParams(), ObString(conf_name), obj_val))) {
+  if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(tenant_id,
+                                                          alloc,
+                                                          ObDataTypeCastParams(),
+                                                          ObString(conf_name),
+                                                          obj_val))) {
     LOG_WARN("failed to get global sys variable", K(ret), K(tenant_id), K(conf_name), K(obj_val));
   } else if (OB_FAIL(obj_val.get_int(mem_pct))) {
     LOG_WARN("failed to get int", K(ret), K(obj_val));
@@ -245,12 +244,13 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id, int64_t& mem_limit)
     LOG_WARN("invalid value of sql audit mem percentage", K(ret), K(mem_pct));
   } else {
     mem_limit = static_cast<int64_t>(static_cast<double>(tenant_mem_limit * mem_pct) / 100);
-    LOG_DEBUG("tenant sql audit memory limit", K(tenant_id), K(tenant_mem_limit), K(mem_pct), K(mem_limit));
+    LOG_DEBUG("tenant sql audit memory limit",
+             K(tenant_id), K(tenant_mem_limit), K(mem_pct), K(mem_limit));
   }
   return ret;
 }
 
-int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager*& req_mgr)
+int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
 {
   int ret = OB_SUCCESS;
   req_mgr = OB_NEW(ObMySQLRequestManager, ObModIds::OB_MYSQL_REQUEST_RECORD);
@@ -275,11 +275,11 @@ int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager*& req_mgr)
   return ret;
 }
 
-void ObMySQLRequestManager::mtl_destroy(ObMySQLRequestManager*& req_mgr)
+void ObMySQLRequestManager::mtl_destroy(ObMySQLRequestManager* &req_mgr)
 {
   common::ob_delete(req_mgr);
   req_mgr = nullptr;
 }
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase

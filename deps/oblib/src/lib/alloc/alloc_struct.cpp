@@ -20,59 +20,45 @@ using namespace oceanbase;
 using namespace lib;
 using namespace common;
 
-bool ObLabel::operator==(const ObLabel& other) const
+bool ObLabel::operator==(const ObLabel &other) const
 {
   bool bret = false;
-  if (v_ != 0 && other.v_ != 0) {
-    if (is_str_ && other.is_str_ && str_[0] == other.str_[0]) {
+  if (is_valid() && other.is_valid()) {
+    if (str_[0] == other.str_[0]) {
       if (0 == STRCMP(str_, other.str_)) {
         bret = true;
       }
-    } else if (!is_str_ && !other.is_str_) {
-      if (mod_id_ == other.mod_id_) {
-        bret = true;
-      }
-    }
+    } 
+  } else if (!is_valid() && !other.is_valid()) {
+    bret = true;
   }
   return bret;
 }
 
-ObLabel::operator const char*() const
+ObLabel::operator const char *() const
 {
-  const char* str = nullptr;
-  if (is_str_) {
-    str = str_;
-  } else {
-    static constexpr int len = 32;
-    static CoVar<char[len]> buf;
-    snprintf(&buf[0], len, "%ld", mod_id_);
-    str = &buf[0];
-  }
-  return str;
+  return str_;
 }
 
-int64_t ObLabel::to_string(char* buf, const int64_t buf_len) const
+int64_t ObLabel::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  (void)common::logdata_printf(buf, buf_len, pos, "%s", (const char*)(*this));
+  (void)common::logdata_printf(
+      buf, buf_len, pos, "%s", (const char*)(*this));
   return pos;
 }
 
 int64_t ObMemAttr::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  (void)common::logdata_printf(buf,
-      buf_len,
-      pos,
+  (void)common::logdata_printf(
+      buf, buf_len, pos,
       "tenant_id=%ld, label=%s, ctx_id=%ld, prio=%d",
-      tenant_id_,
-      (const char*)label_,
-      ctx_id_,
-      prio_);
+      tenant_id_, (const char *)label_, ctx_id_, prio_);
   return pos;
 }
 
-void Label::fmt(char* buf, int64_t buf_len, int64_t& pos, const char* str)
+void Label::fmt(char *buf, int64_t buf_len, int64_t &pos, const char *str)
 {
   if (OB_UNLIKELY(pos >= buf_len)) {
   } else {
@@ -82,14 +68,5 @@ void Label::fmt(char* buf, int64_t buf_len, int64_t& pos, const char* str)
     } else {
       pos = buf_len;
     }
-  }
-}
-
-void Label::fmt(char* buf, int64_t buf_len, int64_t& pos, int64_t digit)
-{
-  if (OB_UNLIKELY(pos >= buf_len)) {
-  } else {
-    ObFastFormatInt ff(digit);
-    fmt(buf, buf_len, pos, ff.str());
   }
 }

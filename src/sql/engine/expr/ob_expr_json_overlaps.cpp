@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_overlaps.
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_overlaps.h"
 #include "ob_expr_json_func_helper.h"
@@ -52,54 +51,14 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
   return ret;
 }
 
-int ObExprJsonOverlaps::calc_result2(common::ObObj &result,
-                                     const common::ObObj &obj1,
-                                     const common::ObObj &obj2,
-                                     common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-
-  if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    ObIJsonBase *json_a = NULL;
-    ObIJsonBase *json_b = NULL;
-    bool is_null_result = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(&obj1, allocator, 0,
-                                               json_a, is_null_result, false))) {
-      LOG_WARN("get_json_doc failed", K(ret));
-    } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(&obj2, allocator, 0,
-                                               json_b, is_null_result, false))) {
-      LOG_WARN("get_json_doc failed", K(ret));
-    } else {
-      bool is_overlaps = false;
-      if (!is_null_result) {
-        if (OB_FAIL(json_overlaps(json_a, json_b, &is_overlaps))) {
-          LOG_WARN("json_overlaps in sub_json_targets failed", K(ret));
-        }
-      }
-      // set result
-      if (OB_FAIL(ret)) {
-        LOG_WARN("json_overlaps failed", K(ret));
-      } else if (is_null_result) {
-        result.set_null();
-      } else {
-        result.set_int(static_cast<int64_t>(is_overlaps));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObExprJsonOverlaps::eval_json_overlaps(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
   ObIJsonBase *json_a = NULL;
   ObIJsonBase *json_b = NULL;
   bool is_null_result = false;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0, json_a, is_null_result, false))) {
     LOG_WARN("get_json_doc failed", K(ret));
   } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, json_b, is_null_result, false))) {

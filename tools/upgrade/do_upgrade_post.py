@@ -109,6 +109,11 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
       logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
       conn.commit()
 
+      # 获取standby_cluster_info列表
+      standby_cluster_infos = actions.fetch_standby_cluster_infos(conn, query_cur, my_user, my_passwd)
+      # check ddl and dml sync
+      actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
+
       actions.refresh_commit_sql_list()
       dump_sql_to_file(upgrade_params.sql_dump_filename, tenant_id_list)
       logging.info('================succeed to dump sql to file: {0}==============='.format(upgrade_params.sql_dump_filename))
@@ -119,6 +124,8 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         normal_ddl_actions_post.do_normal_ddl_actions(cur)
         logging.info('================succeed to run ddl===============')
         conn.autocommit = False
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_EACH_TENANT_DDL in my_module_set:
         has_run_ddl = True
@@ -127,29 +134,40 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         each_tenant_ddl_actions_post.do_each_tenant_ddl_actions(cur, tenant_id_list)
         logging.info('================succeed to run each tenant ddl===============')
         conn.autocommit = False
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_NORMAL_DML in my_module_set:
         logging.info('================begin to run normal dml===============')
+        normal_dml_actions_post.do_normal_dml_actions_by_standby_cluster(standby_cluster_infos)
         normal_dml_actions_post.do_normal_dml_actions(cur)
         logging.info('================succeed to run normal dml===============')
         conn.commit()
         actions.refresh_commit_sql_list()
         logging.info('================succeed to commit dml===============')
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
         logging.info('================begin to run each tenant dml===============')
         conn.autocommit = True
+        each_tenant_dml_actions_post.do_each_tenant_dml_actions_by_standby_cluster(standby_cluster_infos)
         each_tenant_dml_actions_post.do_each_tenant_dml_actions(cur, tenant_id_list)
         conn.autocommit = False
         logging.info('================succeed to run each tenant dml===============')
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
 
       if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
         logging.info('================begin to run special action===============')
         conn.autocommit = True
+        special_upgrade_action_post.do_special_upgrade_in_standy_cluster(standby_cluster_infos, my_user, my_passwd)
         special_upgrade_action_post.do_special_upgrade(conn, cur, tenant_id_list, my_user, my_passwd)
         conn.autocommit = False
         actions.refresh_commit_sql_list()
         logging.info('================succeed to commit special action===============')
+        # check ddl and dml sync
+        actions.check_ddl_and_dml_sync(conn, query_cur, standby_cluster_infos, tenant_id_list)
     except Exception, e:
       logging.exception('run error')
       raise e

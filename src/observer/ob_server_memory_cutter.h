@@ -15,19 +15,21 @@
 
 #include "lib/signal/ob_memory_cutter.h"
 
-namespace oceanbase {
-namespace observer {
-class ObServerMemoryCutter : public lib::ObIMemoryCutter {
+namespace oceanbase
+{
+namespace observer
+{
+class ObServerMemoryCutter : public lib::ObIMemoryCutter
+{
 public:
-  virtual void cut(int64_t& total_size) override;
-
+  virtual void cut(int64_t &total_size) override;
 private:
-  void free_cache(int64_t& total_size);
+  void free_cache(int64_t &total_size);
 };
 
 extern ObServerMemoryCutter g_server_mem_cutter;
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* OCEANBASE_SERVER_MEMORY_CUTTER_H_ */

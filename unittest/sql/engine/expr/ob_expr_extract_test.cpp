@@ -17,36 +17,38 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprExtractTest : public ::testing::Test {
+class ObExprExtractTest : public ::testing::Test
+{
 public:
   ObExprExtractTest();
   virtual ~ObExprExtractTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprExtractTest(const ObExprExtractTest& other);
-  ObExprExtractTest& operator=(const ObExprExtractTest& other);
-
+  ObExprExtractTest(const ObExprExtractTest &other);
+  ObExprExtractTest& operator=(const ObExprExtractTest &other);
 private:
   // data members
 };
 
 ObExprExtractTest::ObExprExtractTest()
-{}
+{
+}
 
 ObExprExtractTest::~ObExprExtractTest()
-{}
+{
+}
 
 void ObExprExtractTest::SetUp()
-{}
+{
+}
 
 void ObExprExtractTest::TearDown()
-{}
+{
+}
 
-#define T(obj, t1, v1, t2, v2, ref_type, ref_value) \
-  EXPECT_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, ref_type, ref_value) EXPECT_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, ref_type, ref_value)
 #define F(obj, t1, v1, t2, v2) EXPECT_FAIL_RESULT2(obj, &buf, calc_result2, t1, v1, t2, v2, int, 0)
 
 TEST_F(ObExprExtractTest, base_test)
@@ -56,7 +58,7 @@ TEST_F(ObExprExtractTest, base_test)
 
   ASSERT_EQ(2, extract.get_param_num());
 
-  // T(extract, int, DATE_UNIT_MICROSECOND, int, 1, int, 0);
+ // T(extract, int, DATE_UNIT_MICROSECOND, int, 1, int, 0);
   T(extract, int, DATE_UNIT_MICROSECOND, varchar, "2014-01-04 11:58:58.999", int, 999000);
   T(extract, int, DATE_UNIT_SECOND, varchar, "2014-01-04 11:58:58.999", int, 58);
   T(extract, int, DATE_UNIT_MINUTE, varchar, "2014-01-04 11:58:58.999", int, 58);
@@ -77,7 +79,7 @@ TEST_F(ObExprExtractTest, base_test)
   T(extract, int, DATE_UNIT_DAY_HOUR, varchar, "2014-01-04 11:58:58.999", int, 411);
 }
 
-// TEST_F(ObExprExtractTest, fail_test)
+//TEST_F(ObExprExtractTest, fail_test)
 //{
 //  ObExprExtract extract;
 //  //ObExprStringBuf buf;
@@ -90,9 +92,9 @@ TEST_F(ObExprExtractTest, base_test)
 //  F(extract, double, 1.1111, int, 2);*/
 //}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

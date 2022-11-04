@@ -13,27 +13,33 @@
 #ifndef OCEANBASE_SQL_SET_PASSWORD_EXECUTOR_
 #define OCEANBASE_SQL_SET_PASSWORD_EXECUTOR_
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 class ObSqlString;
-}  // namespace common
-namespace obrpc {
+}
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
 
-namespace sql {
+namespace sql
+{
 class ObExecContext;
 class ObSetPasswordStmt;
 
-class ObSetPasswordExecutor {
+class ObSetPasswordExecutor
+{
 public:
   ObSetPasswordExecutor();
   virtual ~ObSetPasswordExecutor();
-  int execute(ObExecContext& ctx, ObSetPasswordStmt& stmt);
+  int execute(ObExecContext &ctx, ObSetPasswordStmt &stmt);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* __OB_SQL_SET_PASSWORD_EXECUTOR_H__ */
 //// end of header file
+

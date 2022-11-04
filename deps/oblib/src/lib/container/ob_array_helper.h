@@ -17,22 +17,28 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
 
-namespace oceanbase {
-namespace common {
-template <class T>
-class ObArrayHelper final : public ObIArray<T> {
+namespace oceanbase
+{
+namespace common
+{
+template<class T>
+class ObArrayHelper final : public ObIArray<T>
+{
 public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;
 
-  ObArrayHelper(int64_t capacity, T* base_address, int64_t index = 0)
+  ObArrayHelper(int64_t capacity, T *base_address, int64_t index = 0)
       : ObIArray<T>(base_address, index), capacity_(capacity)
-  {}
+  {
+  }
 
-  ObArrayHelper() : capacity_(0)
-  {}
+  ObArrayHelper()
+      : ObIArray<T>(), capacity_(0)
+  {
+  }
 
-  void init(int64_t capacity, T* base_address, int64_t index = 0)
+  void init(int64_t capacity, T *base_address, int64_t index = 0)
   {
     capacity_ = capacity;
     data_ = base_address;
@@ -44,12 +50,9 @@ public:
     return (NULL != data_) && (count_ >= 0) && (count_ <= capacity_);
   }
 
-  inline void extra_access_check(void) const override
-  {
-    OB_ASSERT(check_inner_stat());
-  }
+  inline void extra_access_check(void) const override { OB_ASSERT(check_inner_stat()); }
 
-  int push_back(const T& obj)
+  int push_back(const T &obj)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(!check_inner_stat())) {
@@ -79,7 +82,7 @@ public:
     }
   }
 
-  int pop_back(T& obj)
+  int pop_back(T &obj)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(!check_inner_stat())) {
@@ -118,7 +121,7 @@ public:
     return ret;
   }
 
-  int at(int64_t idx, T& obj) const
+  int at(int64_t idx, T &obj) const
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(!check_inner_stat())) {
@@ -133,14 +136,8 @@ public:
     return ret;
   }
 
-  inline int64_t capacity() const
-  {
-    return capacity_;
-  }
-  inline T* get_base_address() const
-  {
-    return data_;
-  }
+  inline int64_t capacity() const { return capacity_; }
+  inline T *get_base_address() const { return data_; }
 
   void reset()
   {
@@ -149,29 +146,12 @@ public:
     capacity_ = 0;
   }
 
-  void clear()
-  {
-    count_ = 0;
-  }
-  inline void reuse()
-  {
-    count_ = 0;
-  }
-  void destroy()
-  {
-    reset();
-  }
-  int reserve(int64_t capacity)
-  {
-    UNUSED(capacity);
-    return OB_SUCCESS;
-  }
-  int prepare_allocate(int64_t capacity)
-  {
-    UNUSED(capacity);
-    return OB_NOT_SUPPORTED;
-  }
-  int assign(const ObIArray<T>& other)
+  void clear() { count_ = 0; }
+  inline void reuse() { count_ = 0; }
+  void destroy() { reset(); }
+  int reserve(int64_t capacity) { UNUSED(capacity); return OB_SUCCESS;}
+  int prepare_allocate(int64_t capacity) { UNUSED(capacity); return OB_NOT_SUPPORTED; }
+  int assign(const ObIArray<T> &other)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(!check_inner_stat())) {
@@ -185,7 +165,7 @@ public:
     }
     return ret;
   }
-  ObArrayHelper& operator=(const ObArrayHelper& other)
+  ObArrayHelper &operator=(const ObArrayHelper &other)
   {
     data_ = other.data_;
     count_ = other.count_;
@@ -201,8 +181,10 @@ private:
   int64_t capacity_;
 };
 
-template <class T>
-class ObArrayHelpers {
+
+template<class T>
+class ObArrayHelpers
+{
 public:
   ObArrayHelpers()
   {
@@ -210,28 +192,28 @@ public:
     arr_count_ = 0;
   }
 
-  int add_array_helper(ObArrayHelper<T>& helper)
+  int add_array_helper(ObArrayHelper<T> &helper)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(arr_count_ >= MAX_ARR_COUNT)) {
       ret = OB_ARRAY_OUT_OF_RANGE;
     } else {
       arrs_[arr_count_] = &helper;
-      arr_count_++;
+      arr_count_ ++;
     }
     return ret;
   }
 
-  T* at(const int64_t index)
+  T *at(const int64_t index)
   {
-    const ObArrayHelpers* pthis = static_cast<const ObArrayHelpers*>(this);
-    return const_cast<T*>(pthis->at(index));
+    const ObArrayHelpers *pthis = static_cast<const ObArrayHelpers *>(this);
+    return const_cast<T *>(pthis->at(index));
   }
 
-  const T* at(const int64_t index) const
+  const T *at(const int64_t index) const
   {
     int64_t counter = 0;
-    T* res = NULL;
+    T *res = NULL;
     if (OB_UNLIKELY(index < 0)) {
       res = NULL;
     } else {
@@ -254,7 +236,7 @@ public:
     }
   }
 
-  int64_t get_array_index() const
+  int64_t get_array_index()const
   {
     int64_t counter = 0;
     for (int64_t i = 0; i < arr_count_; i++) {
@@ -262,12 +244,11 @@ public:
     }
     return counter;
   }
-
 private:
   static const int MAX_ARR_COUNT = 16;
-  ObArrayHelper<T>* arrs_[MAX_ARR_COUNT];
+  ObArrayHelper<T> *arrs_[MAX_ARR_COUNT];
   int64_t arr_count_;
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 #endif

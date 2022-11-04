@@ -16,14 +16,16 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 
-int ObResourceWeightParser::MyCb::match(const char* key, const char* value)
+int ObResourceWeightParser::MyCb::match(const char *key, const char *value)
 {
   int ret = OB_SUCCESS;
-  static const int key_len[] = {5, 7, 4, 5};
-  static const char* keys[] = {"iops", "memory", "cpu", "disk"};
+  static const int key_len[]    = { 5,        7,          4,       5};
+  static const char *keys[]     = {"iops",   "memory",   "cpu",   "disk"};
   static WeightSetter setters[] = {set_iops, set_memory, set_cpu, set_disk};
   bool found = false;
 
@@ -46,7 +48,7 @@ int ObResourceWeightParser::MyCb::match(const char* key, const char* value)
   return ret;
 }
 
-int ObResourceWeightParser::parse(const char* str, ObResourceWeight& weight)
+int ObResourceWeightParser::parse(const char *str, ObResourceWeight &weight)
 {
   int ret = OB_SUCCESS;
   weight.reset();
@@ -62,5 +64,8 @@ int ObResourceWeightParser::parse(const char* str, ObResourceWeight& weight)
   return ret;
 }
 
-}  // namespace rootserver
-}  // namespace oceanbase
+
+}/* ns rootserver*/
+}/* ns oceanbase */
+
+

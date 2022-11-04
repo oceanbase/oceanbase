@@ -22,18 +22,19 @@ namespace dtl {
 class ObDtlChannel;
 
 // Watcher
-class ObDtlChannelWatcher {
+class ObDtlChannelWatcher
+{
 public:
-  virtual void notify(ObDtlChannel& chan) = 0;
-  virtual void remove_data_list(ObDtlChannel* chan, bool force = false) = 0;
-  virtual void add_last_data_list(ObDtlChannel* ch) = 0;
-  virtual void set_first_no_data(ObDtlChannel* ch) = 0;
-  virtual int has_first_buffer(uint64_t chan_id, bool& has_first_buffer) = 0;
+  virtual void notify(ObDtlChannel &chan) = 0;
+  virtual void remove_data_list(ObDtlChannel *chan, bool force = false) = 0;
+  virtual void add_last_data_list(ObDtlChannel *ch) = 0;
+  virtual void set_first_no_data(ObDtlChannel *ch) = 0;
+  virtual int has_first_buffer(uint64_t chan_id, bool &has_first_buffer) = 0;
   virtual int set_first_buffer(uint64_t chan_id) = 0;
 };
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase
 
 #endif /* OB_DTL_CHANNEL_WATCHER_H */

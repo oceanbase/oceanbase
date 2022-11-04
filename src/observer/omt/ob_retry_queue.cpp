@@ -15,18 +15,20 @@
 #include "lib/time/ob_time_utility.h"
 #include "ob_retry_queue.h"
 
+
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
 using namespace oceanbase::rpc;
 
-int ObRetryQueue::push(ObRequest& req, const uint64_t timestamp)
+
+int ObRetryQueue::push(ObRequest &req, const uint64_t timestamp)
 {
   uint64_t idx = max(timestamp / RETRY_QUEUE_TIMESTEP, last_timestamp_ / RETRY_QUEUE_TIMESTEP + 2);
   int queue_idx = idx & (RETRY_QUEUE_SIZE - 1);
   return queue_[queue_idx].push(&req);
 }
 
-int ObRetryQueue::pop(ObLink*& task)
+int ObRetryQueue::pop(ObLink *&task)
 {
   int ret = OB_ENTRY_NOT_EXIST;
   uint64_t curr_timestamp = ObTimeUtility::current_time();

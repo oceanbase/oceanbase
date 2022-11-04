@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: guoping.wgp
+# owner: link.zt
 # owner group: sql4
 # tags: optimizer
 # description: 从mysql中迁移过来的基础subquery_sj_innodb.test测试集

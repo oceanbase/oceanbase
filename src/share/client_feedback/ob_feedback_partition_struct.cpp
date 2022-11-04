@@ -14,11 +14,13 @@
 
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 
-int ObFeedbackReplicaLocation::serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const
+int ObFeedbackReplicaLocation::serialize_struct_content(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   const int32_t version = server_.get_version();
@@ -38,7 +40,7 @@ int ObFeedbackReplicaLocation::serialize_struct_content(char* buf, const int64_t
   OB_FB_SER_END;
 }
 
-int ObFeedbackReplicaLocation::deserialize_struct_content(char* buf, const int64_t len, int64_t& pos)
+int ObFeedbackReplicaLocation::deserialize_struct_content(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
   int32_t version = 0;
@@ -63,14 +65,14 @@ int ObFeedbackReplicaLocation::deserialize_struct_content(char* buf, const int64
   if (OB_SUCC(ret)) {
     if (ObAddr::IPV4 == version) {
       server_.set_ipv4_addr(ipv4, port);
-    } else if (ObAddr::IPV6 == version) {
+    } else if (ObAddr::IPV6 == version){
       server_.set_ipv6_addr(ipv6_high, ipv6_low, port);
     }
   }
   OB_FB_DESER_END;
 }
 
-int ObFeedbackPartitionLocation::serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const
+int ObFeedbackPartitionLocation::serialize_struct_content(char *buf, const int64_t len, int64_t &pos) const
 {
   OB_FB_SER_START;
   OB_FB_ENCODE_INT(table_id_);
@@ -80,7 +82,7 @@ int ObFeedbackPartitionLocation::serialize_struct_content(char* buf, const int64
   OB_FB_SER_END;
 }
 
-int ObFeedbackPartitionLocation::deserialize_struct_content(char* buf, const int64_t len, int64_t& pos)
+int ObFeedbackPartitionLocation::deserialize_struct_content(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
   OB_FB_DECODE_INT(table_id_, uint64_t);
@@ -90,7 +92,7 @@ int ObFeedbackPartitionLocation::deserialize_struct_content(char* buf, const int
   OB_FB_DESER_END;
 }
 
-int ObFeedbackRerouteInfo::set_tbl_name(const ObString& table_name)
+int ObFeedbackRerouteInfo::set_tbl_name(const ObString &table_name)
 {
   int ret = OB_SUCCESS;
   if (table_name.length() > OB_MAX_TABLE_NAME_LENGTH) {
@@ -103,7 +105,9 @@ int ObFeedbackRerouteInfo::set_tbl_name(const ObString& table_name)
   return ret;
 }
 
-int ObFeedbackRerouteInfo::serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const
+int ObFeedbackRerouteInfo::serialize_struct_content(char *buf,
+                                                    const int64_t len,
+                                                    int64_t &pos) const
 {
   OB_FB_SER_START;
   const int32_t version = server_.get_version();
@@ -125,7 +129,7 @@ int ObFeedbackRerouteInfo::serialize_struct_content(char* buf, const int64_t len
   OB_FB_SER_END;
 }
 
-int ObFeedbackRerouteInfo::deserialize_struct_content(char* buf, const int64_t len, int64_t& pos)
+int ObFeedbackRerouteInfo::deserialize_struct_content(char *buf, const int64_t len, int64_t &pos)
 {
   OB_FB_DESER_START;
   int32_t version = 0;
@@ -152,7 +156,7 @@ int ObFeedbackRerouteInfo::deserialize_struct_content(char* buf, const int64_t l
       server_.set_ipv4_addr(ipv4, port);
     } else {
       // must IPV6, not support yet, TODO open below later
-      // server_.set_ipv6_addr(ipv6_high, ipv6_low, port);
+      //server_.set_ipv6_addr(ipv6_high, ipv6_low, port);
       server_.reset();
     }
   }
@@ -161,5 +165,5 @@ int ObFeedbackRerouteInfo::deserialize_struct_content(char* buf, const int64_t l
   OB_FB_DESER_END;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase

@@ -15,11 +15,14 @@
 #include "sql/executor/ob_job_id.h"
 #include "lib/json/ob_yson.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 OB_SERIALIZE_MEMBER(ObJobID, ob_execution_id_, job_id_, root_op_id_);
-DEFINE_TO_YSON_KV(ObJobID, OB_ID(execution_id), ob_execution_id_, OB_ID(job_id), job_id_);
+DEFINE_TO_YSON_KV(ObJobID, OB_ID(execution_id), ob_execution_id_,
+                           OB_ID(job_id), job_id_);
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns */
+}/* ns oceanbase */

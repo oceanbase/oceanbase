@@ -13,13 +13,14 @@
 #include <sys/time.h>
 #include "lib/lock/cond.h"
 #include "lib/oblog/ob_log.h"
-namespace obutil {
+namespace obutil
+{
 Cond::Cond()
 {
-  int rt = pthread_cond_init(&_cond, NULL);
-  if (0 != rt) {
-    _OB_LOG(WARN, "Failed to init cond, err=%d", rt);
-  }
+    int rt = pthread_cond_init(&_cond, NULL);
+    if (0 != rt) {
+      _OB_LOG(WARN, "Failed to init cond, err=%d", rt);
+    }
 }
 
 Cond::~Cond()
@@ -32,17 +33,17 @@ Cond::~Cond()
 
 void Cond::signal()
 {
-  const int rt = pthread_cond_signal(&_cond);
-  if (0 != rt) {
-    _OB_LOG(WARN, "Failed to signal condition, err=%d", rt);
-  }
+    const int rt = pthread_cond_signal(&_cond);
+    if (0 != rt) {
+      _OB_LOG(WARN, "Failed to signal condition, err=%d", rt);
+    }
 }
 
 void Cond::broadcast()
 {
-  const int rt = pthread_cond_broadcast(&_cond);
-  if (0 != rt) {
-    _OB_LOG(WARN, "Failed to broadcast condition, err=%d", rt);
-  }
+    const int rt = pthread_cond_broadcast(&_cond);
+    if (0 != rt) {
+      _OB_LOG(WARN, "Failed to broadcast condition, err=%d", rt);
+    }
 }
-} //end namespace obutil
+}//end namespace obutil

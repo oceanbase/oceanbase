@@ -12,8 +12,10 @@
 
 #include "ob_handle_list.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 void ObHandleList::init_handle(Handle& handle)
 {
   handle.reset();
@@ -59,9 +61,9 @@ int64_t ObHandleList::calc_hazard()
     Handle* handle = CONTAINER_OF(last, Handle, active_list_);
     x = handle->get_clock();
   }
-  COMMON_LOG(INFO, "HandleList.calc_hazard", K(x));
+  COMMON_LOG(TRACE, "HandleList.calc_hazard", K(x));
   return x;
 }
 
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase

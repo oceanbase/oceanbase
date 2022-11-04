@@ -14,11 +14,15 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/ob_simple_thread_pool.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ObSimpleThreadPool::ObSimpleThreadPool()
-    : name_("unknown"), is_inited_(false), total_thread_num_(0), active_thread_num_(0), last_adjust_ts_(0)
-{}
+    : name_("unknown"), is_inited_(false), total_thread_num_(0), active_thread_num_(0),
+      last_adjust_ts_(0)
+{
+}
 
 ObSimpleThreadPool::~ObSimpleThreadPool()
 {
@@ -27,14 +31,14 @@ ObSimpleThreadPool::~ObSimpleThreadPool()
   }
 }
 
-int ObSimpleThreadPool::init(const int64_t thread_num, const int64_t task_num_limit, const char* name)
+int ObSimpleThreadPool::init(const int64_t thread_num, const int64_t task_num_limit, const char* name, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else if (thread_num <= 0 || task_num_limit <= 0 || thread_num > MAX_THREAD_NUM || OB_ISNULL(name)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(queue_.init(task_num_limit))) {
+  } else if (OB_FAIL(queue_.init(task_num_limit, name, tenant_id))) {
     LOG_WARN("task queue init failed", K(ret), K(task_num_limit));
   } else {
     is_inited_ = true;
@@ -43,14 +47,14 @@ int ObSimpleThreadPool::init(const int64_t thread_num, const int64_t task_num_li
     active_thread_num_ = thread_num;
     set_thread_count(thread_num);
     last_adjust_ts_ = ObTimeUtility::current_time();
-    if (OB_FAIL(ThreadPool::start())) {
+    if (OB_FAIL(lib::ThreadPool::start())) {
       LOG_WARN("start thread pool fail", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
     destroy();
   } else {
-    LOG_INFO("simple thread pool init success", K(name), K(thread_num), K(task_num_limit));
+    LOG_INFO("simple thread pool init success", KCSTRING(name), K(thread_num), K(task_num_limit));
   }
   return ret;
 }
@@ -58,18 +62,20 @@ int ObSimpleThreadPool::init(const int64_t thread_num, const int64_t task_num_li
 void ObSimpleThreadPool::destroy()
 {
   is_inited_ = false;
-  ThreadPool::stop();
-  ThreadPool::wait();
+  lib::ThreadPool::stop();
+  lib::ThreadPool::wait();
   queue_.destroy();
 }
 
-int ObSimpleThreadPool::push(void* task)
+int ObSimpleThreadPool::push(void *task)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == task) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (has_set_stop()) {
+    ret = OB_IN_STOP_STATE;
   } else {
     ret = queue_.push(task);
     if (OB_SIZE_OVERFLOW == ret) {
@@ -91,22 +97,31 @@ void ObSimpleThreadPool::run1()
   if (NULL != name_) {
     lib::set_thread_name(name_, thread_idx);
   }
-  while (!has_set_stop()) {
-    void* task = NULL;
+  while (!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
+    void *task = NULL;
     const int64_t old_thread_num = active_thread_num_;
     int64_t new_thread_num = old_thread_num;
+    const int64_t curr_thread_num = get_thread_count();
     if (!adaptive_strategy_.is_valid()) {
+      if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
+        handle(task);
+      }
+    } else if (curr_thread_num != total_thread_num_) {
+      ATOMIC_STORE(&total_thread_num_, curr_thread_num);
+      ATOMIC_STORE(&active_thread_num_, curr_thread_num);
       if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
         handle(task);
       }
     } else if (thread_idx >= old_thread_num) {
       usleep((10 + thread_idx - old_thread_num) * 1000);
     } else {
-      void* task = NULL;
+      void *task = NULL;
       const int64_t least_thread_num = adaptive_strategy_.get_least_thread_num();
       const int64_t estimate_ts = adaptive_strategy_.get_estimate_ts();
-      const int64_t expand_ts = adaptive_strategy_.get_estimate_ts() * adaptive_strategy_.get_expand_rate() / 100;
-      const int64_t shrink_ts = adaptive_strategy_.get_estimate_ts() * adaptive_strategy_.get_shrink_rate() / 100;
+      const int64_t expand_ts =
+          adaptive_strategy_.get_estimate_ts() * adaptive_strategy_.get_expand_rate() / 100;
+      const int64_t shrink_ts =
+          adaptive_strategy_.get_estimate_ts() * adaptive_strategy_.get_shrink_rate() / 100;
       start_ts = ObTimeUtility::current_time();
       if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
         wakeup_ts = ObTimeUtility::current_time();
@@ -140,12 +155,14 @@ void ObSimpleThreadPool::run1()
           // do nothing
         }
         if (new_thread_num > old_thread_num) {
-          if (ATOMIC_BCAS(&active_thread_num_, old_thread_num, new_thread_num) && REACH_TIME_INTERVAL(100000)) {
-            LOG_INFO("activate work thread", K(name_), K(new_thread_num), K(idle_ts), K(run_ts));
+          if (ATOMIC_BCAS(&active_thread_num_, old_thread_num, new_thread_num) &&
+              REACH_TIME_INTERVAL(100000)) {
+            LOG_INFO("activate work thread", KCSTRING(name_), K(new_thread_num), K(idle_ts), K(run_ts));
           }
         } else if (new_thread_num < old_thread_num) {
-          if (ATOMIC_BCAS(&active_thread_num_, old_thread_num, new_thread_num) && REACH_TIME_INTERVAL(100000)) {
-            LOG_INFO("inactivate work thread", K(name_), K(new_thread_num), K(idle_ts), K(run_ts));
+          if (ATOMIC_BCAS(&active_thread_num_, old_thread_num, new_thread_num) &&
+              REACH_TIME_INTERVAL(100000)) {
+            LOG_INFO("inactivate work thread", KCSTRING(name_), K(new_thread_num), K(idle_ts), K(run_ts));
           }
         } else {
           // do thing
@@ -155,20 +172,26 @@ void ObSimpleThreadPool::run1()
       }
     }
   }
+  if (has_set_stop()) {
+    void *task = NULL;
+    while (OB_SUCC(queue_.pop(task))) {
+      handle_drop(task);
+    }
+  }
 }
 
-int ObSimpleThreadPool::set_adaptive_strategy(const ObAdaptiveStrategy& strategy)
+int ObSimpleThreadPool::set_adaptive_strategy(const ObAdaptiveStrategy &strategy)
 {
   int ret = OB_SUCCESS;
   if (!strategy.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(name_), K(strategy));
+    LOG_WARN("invalid argument", K(ret), KCSTRING(name_), K(strategy));
   } else {
     adaptive_strategy_ = strategy;
-    LOG_INFO("set thread pool adaptive strategy success", K(name_), K(strategy));
+    LOG_INFO("set thread pool adaptive strategy success", KCSTRING(name_), K(strategy));
   }
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

@@ -26,6 +26,7 @@ select collation(concat(uc, x'41')) from coll_test;
 select collation(concat('abc', x'41')) from coll_test;
 select collation(concat('abc' collate utf8mb4_general_ci, x'41')) from coll_test;
 select collation(concat(1, 2)) from coll_test;
+# @bug collation is wrong for NULL result (zhuweng.yzf) ....yzf....Fri, 21 Aug 2015....18:17....
 select collation(concat(1, null)) from coll_test;
 
 # group_concat
@@ -254,3 +255,32 @@ select collation(cast('A' as char)), cast('A' as char) < 'a';
 ################################################################
 # tear-down
 drop table coll_test;
+
+
+select CAST('Ab123人' AS char CHAR SET utf8mb4);
+SELECT collation(CAST('Ab123人' AS char CHAR SET utf8mb4));
+SELECT length(CAST('Ab123人' AS char CHAR SET utf8mb4));
+
+select CAST('Ab123人' AS char CHAR SET binary);
+SELECT collation(CAST('Ab123人' AS char CHAR SET binary));
+SELECT length(CAST('Ab123人' AS char CHAR SET binary));
+
+select CAST('Ab123人' AS char CHAR SET gbk);
+SELECT collation(CAST('Ab123人' AS char CHAR SET gbk));
+SELECT length(CAST('Ab123人' AS char CHAR SET gbk));
+
+create table coll_test(c1 char(10) collate utf8mb4_bin, c2 char(10) collate gbk_bin, c3 char(10) char set binary);
+insert into coll_test values('Ab123人', 'Ab123人', 'Ab123人');
+select cast(c1 as char(20)), cast(c2 as char(20)), cast(c3 as char(20)) from coll_test;
+select collation(cast(c1 as char(20))), collation(cast(c2 as char(20))), collation(cast(c3 as char(20))) from coll_test;
+
+
+create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char), cast('abc' as char char set utf8mb4),
+        cast('abc' as char char set binary),  cast('abc' as binary);
+show create view v1;
+
+create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char(10)), cast('abc' as char(10) char set utf8mb4),
+        cast('abc' as char(10) char set binary),  cast('abc' as binary(10));
+show create view v1;
+drop table coll_test;
+drop view v1;

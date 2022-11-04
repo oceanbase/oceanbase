@@ -15,23 +15,28 @@
 #include <string.h>
 #include "lib/charset/ob_charset.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprRight::ObExprRight(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_RIGHT, "right", 2)
-{}
+ObExprRight::ObExprRight(ObIAllocator &alloc) :
+    ObStringExprOperator(alloc, T_FUN_SYS_RIGHT, "right", 2)
+{
+}
 
 ObExprRight::~ObExprRight()
-{}
+{
+}
 
-int ObExprRight::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprTypeCtx& type_ctx) const
+int ObExprRight::calc_result_type2(ObExprResType &type, ObExprResType &type1,
+                                   ObExprResType &type2,ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   type2.set_calc_type(ObIntType);
@@ -44,68 +49,45 @@ int ObExprRight::calc_result_type2(
   return ret;
 }
 
-int do_right(const ObString& input_value, const ObCollationType& cs_type, const int64_t length, ObString& res_str)
+int do_right(const ObString &input_value, const ObCollationType &cs_type,
+             const int64_t length, ObString &res_str)
 {
   int ret = OB_SUCCESS;
-  const char* input_start = input_value.ptr();
-  int64_t input_length = input_value.length();
-  if (OB_ISNULL(input_start) && 0 != input_length) {
-    LOG_WARN("String invalid", K(input_start), K(input_length));
+  int64_t char_len = (int64_t)(ObCharset::strlen_char(cs_type,
+                                                      input_value.ptr(),
+                                                      input_value.length()));
+  int64_t pos = char_len - length;
+  if (length < 0) {
+    res_str.reset();
+    //return empty string
+  } else if (pos <= 0) {
+    res_str = input_value;
   } else {
-    int64_t char_beyond_end = input_length;
-    int64_t wanted = min(length, input_length);
-    int64_t got = 0;
-    int64_t char_length = 0;
-    while (OB_SUCC(ret) && (got < wanted) && (-1 < char_beyond_end)) {
-      if (OB_FAIL(ObCharset::last_valid_char(cs_type, input_start, char_beyond_end, char_length))) {
-        LOG_WARN("Get last valid char failed ", K(ret));
-      } else {
-        char_beyond_end -= char_length;
-        ++got;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      res_str.assign_ptr(input_start + char_beyond_end, static_cast<int32_t>(input_length - char_beyond_end));
+    int32_t offset = (int32_t)
+        ObCharset::charpos(cs_type, input_value.ptr(), input_value.length(), pos);
+    if (offset <= input_value.length()) {
+      res_str.assign_ptr(input_value.ptr() + offset, input_value.length() - offset);
     }
   }
   return ret;
 }
 
-int ObExprRight::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(expr_ctx);
-  if (obj1.is_null() || obj2.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(obj2, ObIntType);
-    int64_t length = obj2.get_int();
-    ObString res_str;
-    if (OB_FAIL(do_right(obj1.get_string(), obj1.get_collation_type(), length, res_str))) {
-      LOG_WARN("Failed to calc", K(ret));
-    } else {
-      result.set_varchar(res_str);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int calc_right_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_right_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   // right(s, n)
-  ObDatum* s_datum = NULL;
-  ObDatum* n_datum = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, s_datum)) || OB_FAIL(expr.args_[1]->eval(ctx, n_datum))) {
+  ObDatum *s_datum = NULL;
+  ObDatum *n_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, s_datum)) ||
+      OB_FAIL(expr.args_[1]->eval(ctx, n_datum))) {
     LOG_WARN("eval arg failed", K(ret), KP(s_datum), KP(n_datum));
   } else if (s_datum->is_null() || n_datum->is_null()) {
     res_datum.set_null();
   } else {
     ObString res_str;
     const ObCollationType arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-    if (OB_FAIL(do_right(s_datum->get_string(), arg_cs_type, n_datum->get_int(), res_str))) {
-      LOG_WARN("failed to calculate right expression", K(ret));
+		if(OB_FAIL(do_right(s_datum->get_string(), arg_cs_type, n_datum->get_int(), res_str))) {
+			LOG_WARN("failed to calculate right expression", K(ret));
     } else {
       if (res_str.empty() && is_oracle_mode()) {
         res_datum.set_null();
@@ -117,7 +99,8 @@ int calc_right_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprRight::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprRight::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -126,5 +109,5 @@ int ObExprRight::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, Ob
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}// namespace sql
+}// namespace oceanbase

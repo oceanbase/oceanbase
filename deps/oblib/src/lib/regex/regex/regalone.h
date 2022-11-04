@@ -1,70 +1,59 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
-
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #ifndef REGEX_STANDALONE
-#define REGEX_STANDALONE
+# define	REGEX_STANDALONE
 #endif
 
 #ifdef REGEX_WCHAR
-#include <wctype.h>
-#include <wchar.h>
-typedef wchar_t chr;
-typedef chr Ob_UniChar;
+#	include <wctype.h>
+#	include <wchar.h>
+	typedef wchar_t chr;
+	typedef chr Ob_UniChar;
 #else
-#include <ctype.h>
-typedef unsigned char chr;
-typedef wchar_t Ob_UniChar;
+#	include <ctype.h>
+	typedef unsigned char chr;
+	typedef wchar_t Ob_UniChar;
 #endif
 
 /*
  * In The standalone version we are more concerned with performance,
  * so an automatic var is our best choice.
  */
-#define AllocVars(vPtr)      \
-  struct vars regex_autovar; \
-  register struct vars* vPtr = &regex_autovar;
+#define AllocVars(vPtr)					\
+		struct vars regex_autovar;		\
+		register struct vars *vPtr = &regex_autovar;
 
-#define MALLOC(n) calloc(1, n)
-#define FREE(p) free(VS(p))
-#define REALLOC(p, n) realloc(VS(p), n)
-#define ckalloc(n) calloc(1, n)
-#define ckrealloc(p, n) realloc(p, n)
-#define ckfree(p) free(p)
+#define MALLOC(n)	calloc(1,n)
+#define FREE(p)		free(VS(p))
+#define REALLOC(p,n)	realloc(VS(p),n)
+#define ckalloc(n)	calloc(1,n)
+#define ckrealloc(p,n)	realloc(p,n)
+#define ckfree(p)	free(p)
 
 #ifdef REGEX_WCHAR
-#define Ob_UniCharToLower(c) towlower(c)
-#define Ob_UniCharToUpper(c) towupper(c)
-#define Ob_UniCharToTitle(c) towupper(c)
-#define Ob_UniCharIsAlpha(c) iswalpha(c)
-#define Ob_UniCharIsAlnum(c) iswalnum(c)
-#define Ob_UniCharIsDigit(c) iswdigit(c)
-#define Ob_UniCharIsSpace(c) iswspace(c)
+#	define Ob_UniCharToLower(c)		towlower(c)
+#	define Ob_UniCharToUpper(c)		towupper(c)
+#	define Ob_UniCharToTitle(c)		towupper(c)
+#	define Ob_UniCharIsAlpha(c)		iswalpha(c)
+#	define Ob_UniCharIsAlnum(c)		iswalnum(c)
+#	define Ob_UniCharIsDigit(c)		iswdigit(c)
+#	define Ob_UniCharIsSpace(c)		iswspace(c)
 #else
-#define Ob_DStringInit(ds)
-#define Ob_UniCharToUtfDString(s, l, ds) (s)
-#define Ob_DStringFree(ds)
-#define Ob_UniCharToLower(c) tolower(c)
-#define Ob_UniCharToUpper(c) toupper(c)
-#define Ob_UniCharToTitle(c) toupper(c)
-#define Ob_UniCharIsAlpha(c) isalpha(c)
-#define Ob_UniCharIsAlnum(c) isalnum(c)
-#define Ob_UniCharIsDigit(c) isdigit(c)
-#define Ob_UniCharIsSpace(c) isspace(c)
+#	define Ob_DStringInit(ds)
+#	define Ob_UniCharToUtfDString(s,l,ds)	(s)
+#	define Ob_DStringFree(ds)
+#	define Ob_UniCharToLower(c)		tolower(c)
+#	define Ob_UniCharToUpper(c)		toupper(c)
+#	define Ob_UniCharToTitle(c)		toupper(c)
+#	define Ob_UniCharIsAlpha(c)		isalpha(c)
+#	define Ob_UniCharIsAlnum(c)		isalnum(c)
+#	define Ob_UniCharIsDigit(c)		isdigit(c)
+#	define Ob_UniCharIsSpace(c)		isspace(c)
 #endif
+
 
 /*
  * The maximum number of bytes that are necessary to represent a single
@@ -77,8 +66,9 @@ typedef wchar_t Ob_UniChar;
  */
 
 #ifndef Ob_UTF_MAX
-#define Ob_UTF_MAX 3
+#define Ob_UTF_MAX		3
 #endif
+
 
 /*
  * The structure defined below is used to hold dynamic strings. The only
@@ -88,19 +78,20 @@ typedef wchar_t Ob_UniChar;
 
 #define OB_DSTRING_STATIC_SIZE 200
 typedef struct Ob_DString {
-  char* string; /* Points to beginning of string: either
-                 * staticSpace below or a malloced array. */
-  int length;   /* Number of non-NULL characters in the
-                 * string. */
-  int spaceAvl; /* Total number of bytes available for the
-                 * string and its terminating NULL char. */
-  char staticSpace[OB_DSTRING_STATIC_SIZE];
-  /* Space to use in common case where string is
-   * small. */
+    char *string;		/* Points to beginning of string: either
+				 * staticSpace below or a malloced array. */
+    int length;			/* Number of non-NULL characters in the
+				 * string. */
+    int spaceAvl;		/* Total number of bytes available for the
+				 * string and its terminating NULL char. */
+    char staticSpace[OB_DSTRING_STATIC_SIZE];
+				/* Space to use in common case where string is
+				 * small. */
 } Ob_DString;
 
 #define Ob_DStringLength(dsPtr) ((dsPtr)->length)
 #define Ob_DStringValue(dsPtr) ((dsPtr)->string)
+
 
 /*
  * The macro below is used to modify a "char" value (e.g. by casting it to an
@@ -108,17 +99,18 @@ typedef struct Ob_DString {
  * isspace.
  */
 
-#define UCHAR(c) ((unsigned char)(c))
+#define UCHAR(c) ((unsigned char) (c))
+
 
 /*
  * Used to tag functions that are only to be visible within the module being
  * built and not outside it (where this is supported by the linker).
  */
 #ifndef MODULE_SCOPE
-#ifdef __cplusplus
-#define MODULE_SCOPE extern "C"
+#   ifdef __cplusplus
+#	define MODULE_SCOPE extern "C"
 #else
-#define MODULE_SCOPE extern
+#	define MODULE_SCOPE extern
 #endif
 #endif
 
@@ -135,30 +127,29 @@ typedef struct Ob_DString {
  *       MSVCRT.
  */
 
-#if (defined(__WIN32__) && (defined(_MSC_VER) || (__BORLANDC__ >= 0x0550) || defined(__LCC__) || \
-                               defined(__WATCOMC__) || (defined(__GNUC__) && defined(__declspec))))
-#define HAVE_DECLSPEC 1
-#ifdef STATIC_BUILD
-#define DLLIMPORT
-#define DLLEXPORT
-#ifdef _DLL
-#define CRTIMPORT __declspec(dllimport)
+#if (defined(__WIN32__) && (defined(_MSC_VER) || (__BORLANDC__ >= 0x0550) || defined(__LCC__) || defined(__WATCOMC__) || (defined(__GNUC__) && defined(__declspec))))
+#   define HAVE_DECLSPEC 1
+#   ifdef STATIC_BUILD
+#       define DLLIMPORT
+#       define DLLEXPORT
+#       ifdef _DLL
+#           define CRTIMPORT __declspec(dllimport)
+#       else
+#           define CRTIMPORT
+#       endif
+#   else
+#       define DLLIMPORT __declspec(dllimport)
+#       define DLLEXPORT __declspec(dllexport)
+#       define CRTIMPORT __declspec(dllimport)
+#   endif
 #else
-#define CRTIMPORT
-#endif
-#else
-#define DLLIMPORT __declspec(dllimport)
-#define DLLEXPORT __declspec(dllexport)
-#define CRTIMPORT __declspec(dllimport)
-#endif
-#else
-#define DLLIMPORT
-#if defined(__GNUC__) && __GNUC__ > 3
-#define DLLEXPORT __attribute__((visibility("default")))
-#else
-#define DLLEXPORT
-#endif
-#define CRTIMPORT
+#   define DLLIMPORT
+#   if defined(__GNUC__) && __GNUC__ > 3
+#       define DLLEXPORT __attribute__ ((visibility("default")))
+#   else
+#       define DLLEXPORT
+#   endif
+#   define CRTIMPORT
 #endif
 
 /*
@@ -179,13 +170,13 @@ typedef struct Ob_DString {
 
 #undef Ob_STORAGE_CLASS
 #ifdef BUILD_Ob
-#define Ob_STORAGE_CLASS DLLEXPORT
+#   define Ob_STORAGE_CLASS DLLEXPORT
 #else
-#ifdef USE_Ob_STUBS
-#define Ob_STORAGE_CLASS
-#else
-#define Ob_STORAGE_CLASS DLLIMPORT
-#endif
+#   ifdef USE_Ob_STUBS
+#      define Ob_STORAGE_CLASS
+#   else
+#      define Ob_STORAGE_CLASS DLLIMPORT
+#   endif
 #endif
 
 /*
@@ -195,39 +186,39 @@ typedef struct Ob_DString {
 
 #undef _ANSI_ARGS_
 #ifndef INLINE
-#define INLINE
+#   define INLINE
 #endif
 
 #ifndef NO_CONST
-#define CONST1 const
+#   define CONST1 const
 #else
-#define CONST1
+#   define CONST1
 #endif
 
 #ifndef NO_PROTOTYPES
-#define _ANSI_ARGS_(x) x
+#   define _ANSI_ARGS_(x)	x
 #else
-#define _ANSI_ARGS_(x) ()
+#   define _ANSI_ARGS_(x)	()
 #endif
 
 #ifdef USE_NON_CONST
-#ifdef USE_COMPAT_CONST
-#error define at most one of USE_NON_CONST and USE_COMPAT_CONST
-#endif
-#define CONST84
-#define CONST84_RETURN
+#   ifdef USE_COMPAT_CONST
+#      error define at most one of USE_NON_CONST and USE_COMPAT_CONST
+#   endif
+#   define CONST84
+#   define CONST84_RETURN
 #else
-#ifdef USE_COMPAT_CONST
-#define CONST84
-#define CONST84_RETURN CONST1
-#else
-#define CONST84 CONST1
-#define CONST84_RETURN CONST1
-#endif
+#   ifdef USE_COMPAT_CONST
+#      define CONST84
+#      define CONST84_RETURN CONST1
+#   else
+#      define CONST84 CONST1
+#      define CONST84_RETURN CONST1
+#   endif
 #endif
 
 #ifndef CONST86
-#define CONST86 CONST1
+#      define CONST86 CONST1
 #endif
 
 /*
@@ -235,18 +226,21 @@ typedef struct Ob_DString {
  */
 
 #ifdef EXTERN
-#undef EXTERN
+#   undef EXTERN
 #endif /* EXTERN */
 
 #ifdef __cplusplus
-#define EXTERN extern "C" Ob_STORAGE_CLASS
+#   define EXTERN extern "C" Ob_STORAGE_CLASS
 #else
-#define EXTERN extern Ob_STORAGE_CLASS
+#   define EXTERN extern Ob_STORAGE_CLASS
 #endif
 
+
 #ifdef REGEX_WCHAR
-EXTERN void Ob_DStringFree(Ob_DString* dsPtr);
-EXTERN void Ob_DStringInit(Ob_DString* dsPtr);
-EXTERN char* Ob_UniCharToUtfDString(CONST1 Ob_UniChar* uniStr, int uniLength, Ob_DString* dsPtr);
-EXTERN void Ob_DStringSetLength(Ob_DString* dsPtr, int length);
-#endif /* REGEX_WCHAR	*/
+EXTERN void		Ob_DStringFree (Ob_DString * dsPtr);
+EXTERN void		Ob_DStringInit (Ob_DString * dsPtr);
+EXTERN char *		Ob_UniCharToUtfDString (CONST1 Ob_UniChar * uniStr, 
+				int uniLength, Ob_DString * dsPtr);
+EXTERN void		Ob_DStringSetLength (Ob_DString * dsPtr, 
+				int length);
+#endif		/* REGEX_WCHAR	*/

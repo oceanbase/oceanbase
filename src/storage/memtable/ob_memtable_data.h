@@ -18,27 +18,27 @@
 
 #include "storage/ob_i_store.h"
 
-namespace oceanbase {
-namespace memtable {
+namespace oceanbase
+{
+namespace memtable
+{
 // The structure actually written to MvccTransNode::buf_
-class ObMemtableDataHeader {
+class ObMemtableDataHeader
+{
 public:
-  ObMemtableDataHeader(storage::ObRowDml dml_type, int64_t buf_len) : dml_type_(dml_type), buf_len_(buf_len)
+  ObMemtableDataHeader(blocksstable::ObDmlFlag dml_flag, int64_t buf_len)
+      : dml_flag_(dml_flag), buf_len_(buf_len)
   {}
-  ~ObMemtableDataHeader()
-  {}
-  TO_STRING_KV(K_(dml_type), K_(buf_len));
-  inline int64_t dup_size() const
-  {
-    return (sizeof(ObMemtableDataHeader) + buf_len_);
-  }
-  inline int checksum(common::ObBatchChecksum& bc) const
+  ~ObMemtableDataHeader() {}
+  TO_STRING_KV(K_(dml_flag), K_(buf_len));
+  inline int64_t dup_size() const { return (sizeof(ObMemtableDataHeader) + buf_len_); }
+  inline int checksum(common::ObBatchChecksum &bc) const
   {
     int ret = common::OB_SUCCESS;
     if (buf_len_ <= 0) {
       ret = common::OB_NOT_INIT;
     } else {
-      bc.fill(&dml_type_, sizeof(dml_type_));
+      bc.fill(&dml_flag_, sizeof(dml_flag_));
       bc.fill(&buf_len_, sizeof(buf_len_));
       bc.fill(buf_, buf_len_);
     }
@@ -47,54 +47,51 @@ public:
 
   // the template parameter T supports ObMemtableData and ObMemtableDataHeader,
   // but in practice only ObMemtableDataHeader is involved in building.
-  template <class T>
-  static int build(ObMemtableDataHeader* new_data, const T* data)
+  template<class T>
+  static int build(ObMemtableDataHeader *new_data, const T *data)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(data->buf_len_ < 0)) {
       ret = OB_NOT_INIT;
     } else if (OB_ISNULL(data->buf_) || 0 == data->buf_len_) {
       // do nothing
-    } else if (OB_ISNULL(new (new_data) ObMemtableDataHeader(data->dml_type_, data->buf_len_))) {
+    } else if (OB_ISNULL(new(new_data) ObMemtableDataHeader(data->dml_flag_, data->buf_len_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       MEMCPY(new_data->buf_, data->buf_, data->buf_len_);
     }
     return ret;
   }
-  storage::ObRowDml dml_type_;
+  blocksstable::ObDmlFlag dml_flag_;
   int64_t buf_len_;
   char buf_[0];
 };
 
 // only used for more conveniently passsing parameters
-class ObMemtableData {
+class ObMemtableData
+{
 public:
-  ObMemtableData(storage::ObRowDml dml_type, int64_t buf_len, const char* buf)
-      : dml_type_(dml_type), buf_len_(buf_len), buf_(buf)
+  ObMemtableData(blocksstable::ObDmlFlag dml_flag, int64_t buf_len, const char *buf)
+      : dml_flag_(dml_flag), buf_len_(buf_len), buf_(buf)
   {}
-  ~ObMemtableData()
-  {}
-  TO_STRING_KV(K_(dml_type), K_(buf_len));
-  void set(storage::ObRowDml dml_type, const int64_t data_len, char* buf)
+  ~ObMemtableData() {}
+  TO_STRING_KV(K_(dml_flag), K_(buf_len));
+  void set(blocksstable::ObDmlFlag dml_flag, const int64_t data_len, char *buf)
   {
-    dml_type_ = dml_type;
+    dml_flag_ = dml_flag;
     buf_len_ = data_len;
     buf_ = buf;
   }
   // must use the size of ObMemtableDataHeader, since the actual structure
   // involved in dup is always ObMemtableDataHeader
-  inline int64_t dup_size() const
-  {
-    return (sizeof(ObMemtableDataHeader) + buf_len_);
-  }
+  inline int64_t dup_size() const { return (sizeof(ObMemtableDataHeader) + buf_len_); }
 
-  storage::ObRowDml dml_type_;
+  blocksstable::ObDmlFlag dml_flag_;
   int64_t buf_len_;
-  const char* buf_;
+  const char *buf_;
 };
 
-}  // namespace memtable
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_MEMTABLE_OB_MEMTABLE_DATA_
+#endif // OCEANBASE_MEMTABLE_OB_MEMTABLE_DATA_

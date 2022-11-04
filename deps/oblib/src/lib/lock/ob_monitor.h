@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #ifndef OB_MONITOR_H
 #define OB_MONITOR_H
 #include "lib/lock/ob_lock.h"

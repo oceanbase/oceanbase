@@ -3563,7 +3563,7 @@ select a as c, b from t1 having b>(select t1.a as d from t2 having count(d)>0);
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG"
           ],
           "rel_id": [
@@ -3686,9 +3686,9 @@ select a as c, b from t1 having b>(select t1.a as d from t2 having count(d)>0);
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -4531,7 +4531,7 @@ select a as c, b from t1 having b>(select t1.a as d from t2 having count(c)>0);
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG"
           ],
           "rel_id": [
@@ -4652,9 +4652,9 @@ select a as c, b from t1 having b>(select t1.a as d from t2 having count(c)>0);
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -14609,7 +14609,7 @@ select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG"
           ],
           "rel_id": [
@@ -14795,9 +14795,9 @@ select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -15211,7 +15211,7 @@ select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select 
           "expr_info": [
             "CNT_CONST",
             "CNT_COLUMN",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_AGG",
             "CNT_SUB_QUERY"
           ],
@@ -15426,9 +15426,9 @@ select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -16546,7 +16546,7 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_FUNC",
             "CNT_CALCULABLE_EXPR"
           ],
@@ -16578,9 +16578,9 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -17141,7 +17141,7 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                 "IS_CALCULABLE_EXPR",
                 "IS_CONST_EXPR",
                 "CNT_CONST",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "CNT_FUNC",
                 "CNT_CALCULABLE_EXPR"
               ],
@@ -17173,9 +17173,9 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                   },
                   "expr_info": [
                     "IS_CONST",
-                    "IS_PARAM",
+                    "IS_STATIC_PARAM",
                     "CNT_CONST",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                   ],
@@ -17416,7 +17416,7 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
               "expr_info": [
                 "CNT_CONST",
                 "CNT_COLUMN",
-                "CNT_PARAM",
+                "CNT_STATIC_PARAM",
                 "CNT_AGG"
               ],
               "rel_id": [
@@ -17618,7 +17618,7 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                   "expr_info": [
                     "CNT_CONST",
                     "CNT_COLUMN",
-                    "CNT_PARAM"
+                    "CNT_STATIC_PARAM"
                   ],
                   "rel_id": [
                     1
@@ -17693,10 +17693,10 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                       },
                       "expr_info": [
                         "IS_CONST",
-                        "IS_PARAM",
+                        "IS_STATIC_PARAM",
                         "CNT_CONST",
-                        "CNT_PARAM",
-                        "IS_EXEC_PARM"
+                        "CNT_STATIC_PARAM",
+                        "IS_DYNAMIC_PARAM"
                       ],
                       "rel_id": [
                       ],
@@ -17791,7 +17791,7 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                     "IS_CALCULABLE_EXPR",
                     "IS_CONST_EXPR",
                     "CNT_CONST",
-                    "CNT_PARAM",
+                    "CNT_STATIC_PARAM",
                     "CNT_FUNC",
                     "CNT_CALCULABLE_EXPR"
                   ],
@@ -17823,9 +17823,9 @@ SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY
                       },
                       "expr_info": [
                         "IS_CONST",
-                        "IS_PARAM",
+                        "IS_STATIC_PARAM",
                         "CNT_CONST",
-                        "CNT_PARAM"
+                        "CNT_STATIC_PARAM"
                       ],
                       "rel_id": [
                       ],
@@ -18941,10 +18941,10 @@ select (select count(t1.b) from t2 union select 1 from t2 where 12 < 3) from t1 
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM",
-                "IS_EXEC_PARM"
+                "CNT_STATIC_PARAM",
+                "IS_DYNAMIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -18996,10 +18996,10 @@ select (select count(t1.b) from t2 union select 1 from t2 where 12 < 3) from t1 
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],

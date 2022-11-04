@@ -17,17 +17,16 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class TestRawExprPrintVisitor : public ::testing::Test {
+class TestRawExprPrintVisitor: public ::testing::Test
+{
 public:
   TestRawExprPrintVisitor();
   virtual ~TestRawExprPrintVisitor();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprPrintVisitor);
-
 protected:
   // function members
 protected:
@@ -35,16 +34,20 @@ protected:
 };
 
 TestRawExprPrintVisitor::TestRawExprPrintVisitor()
-{}
+{
+}
 
 TestRawExprPrintVisitor::~TestRawExprPrintVisitor()
-{}
+{
+}
 
 void TestRawExprPrintVisitor::SetUp()
-{}
+{
+}
 
 void TestRawExprPrintVisitor::TearDown()
-{}
+{
+}
 
 TEST_F(TestRawExprPrintVisitor, const_test)
 {
@@ -143,11 +146,11 @@ TEST_F(TestRawExprPrintVisitor, agg_op_test)
   ObObj obj;
   obj.set_int(123);
   ObConstRawExpr const_expr1(obj, T_INT);
-  ObSEArray<ObRawExpr*, 1, ModulePageAllocator, true> real_param_exprs1;
+  ObSEArray<ObRawExpr *, 1, ModulePageAllocator, true> real_param_exprs1;
   OK(real_param_exprs1.push_back(&const_expr1));
   ObAggFunRawExpr expr(real_param_exprs1, true, T_FUN_MAX);
   _OB_LOG(INFO, "%s", S(ObRawExprPrintVisitor(expr)));
-  ObSEArray<ObRawExpr*, 1, ModulePageAllocator, true> real_param_exprs2;
+  ObSEArray<ObRawExpr *, 1, ModulePageAllocator, true> real_param_exprs2;
   ObAggFunRawExpr expr2(real_param_exprs2, false, T_FUN_COUNT);
   _OB_LOG(INFO, "%s", S(ObRawExprPrintVisitor(expr2)));
 }
@@ -165,8 +168,8 @@ TEST_F(TestRawExprPrintVisitor, sys_fun_test)
   _OB_LOG(INFO, "%s", S(ObRawExprPrintVisitor(expr)));
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -15,23 +15,26 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprRight : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprRight : public ObStringExprOperator
+{
 public:
-  explicit ObExprRight(common::ObIAllocator& alloc);
+  explicit  ObExprRight(common::ObIAllocator &alloc);
   virtual ~ObExprRight();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& text, ObExprResType& start_pos, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &text,
+                                ObExprResType &start_pos,
+                                common::ObExprTypeCtx &type_ctx) const;
+  int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRight);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_EXPR_FUNC_RIGHT_
+#endif //OCEANBASE_SQL_EXPR_FUNC_RIGHT_

@@ -15,25 +15,24 @@
 #include "lib/container/ob_se_array.h"
 using namespace oceanbase::common;
 
-class TestStoreRange : public ::testing::Test {
+class TestStoreRange : public ::testing::Test
+{
 public:
-  TestStoreRange()
-  {}
-  ~TestStoreRange()
-  {}
+  TestStoreRange() {}
+  ~TestStoreRange() {}
   virtual void SetUp();
   virtual void TearDown();
 
 private:
   // disallow copy
-  TestStoreRange(const TestStoreRange& other);
-  TestStoreRange& operator=(const TestStoreRange& other);
+  TestStoreRange(const TestStoreRange &other);
+  TestStoreRange& operator=(const TestStoreRange &other);
 
 protected:
   ObObj start_cells_[2];
   ObObj end_cells_[2];
-  const char* start_var_ = "key1";
-  const char* end_var_ = "key2";
+  const char *start_var_ = "key1";
+  const char *end_var_ = "key2";
   ObStoreRowkey start_key_;
   ObStoreRowkey end_key_;
   uint64_t table_id_;
@@ -98,10 +97,10 @@ TEST_F(TestStoreRange, test_whole_range)
   ASSERT_EQ(ret, OB_SUCCESS);
 
   ObStoreRange all_asc_whole_range;
-  ret = all_asc_whole_range.set_whole_range(&all_asc_orders, allocator);
+  all_asc_whole_range.set_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(all_asc_whole_range.is_valid());
-  ret = all_asc_whole_range.is_whole_range(all_asc_orders, 2, is_whole);
+  ret = all_asc_whole_range.is_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(is_whole);
 
@@ -112,14 +111,14 @@ TEST_F(TestStoreRange, test_whole_range)
   ASSERT_EQ(ret, OB_SUCCESS);
 
   ObStoreRange asc_desc_whole_range;
-  ret = asc_desc_whole_range.set_whole_range(&asc_desc_orders, allocator);
+  asc_desc_whole_range.set_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(asc_desc_whole_range.is_valid());
   is_whole = false;
-  ret = asc_desc_whole_range.is_whole_range(asc_desc_orders, 2, is_whole);
+  ret = asc_desc_whole_range.is_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(is_whole);
-  ret = asc_desc_whole_range.is_whole_range(all_asc_orders, 2, is_whole);
+  ret = asc_desc_whole_range.is_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(is_whole);
 
@@ -128,14 +127,15 @@ TEST_F(TestStoreRange, test_whole_range)
   regular_range.set_start_key(start_key_);
   regular_range.set_end_key(end_key_);
   is_whole = true;
-  ret = regular_range.is_whole_range(all_asc_orders, 2, is_whole);
+  ret = regular_range.is_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(is_whole);
   is_whole = true;
-  ret = regular_range.is_whole_range(asc_desc_orders, 2, is_whole);
+  ret = regular_range.is_whole_range();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(is_whole);
 }
+
 
 TEST_F(TestStoreRange, test_serialize_deserialize)
 {
@@ -171,8 +171,7 @@ TEST_F(TestStoreRange, test_deep_copy)
 {
   int ret = OB_SUCCESS;
   ObStoreRange src_range;
-  ObStoreRange dst_range;
-  ;
+  ObStoreRange dst_range;;
 
   src_range.set_start_key(start_key_);
   src_range.set_end_key(end_key_);
@@ -204,9 +203,11 @@ TEST_F(TestStoreRange, test_get_common_store_rowkey)
   no_common_range.set_end_key(end_key_);
   no_common_range.get_common_store_rowkey(common_store_rowkey);
   ASSERT_FALSE(common_store_rowkey.is_valid());
+
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   OB_LOGGER.set_log_level("INFO");

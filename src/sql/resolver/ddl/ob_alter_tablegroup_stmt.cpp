@@ -12,34 +12,43 @@
 
 #include "sql/resolver/ddl/ob_alter_tablegroup_stmt.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
 using namespace share::schema;
 
-namespace sql {
+namespace sql
+{
 
-ObAlterTablegroupStmt::ObAlterTablegroupStmt(common::ObIAllocator* name_pool)
+ObAlterTablegroupStmt::ObAlterTablegroupStmt(common::ObIAllocator *name_pool)
     : ObTablegroupStmt(name_pool, stmt::T_ALTER_TABLEGROUP)
-{}
+{
+}
 
-ObAlterTablegroupStmt::ObAlterTablegroupStmt() : ObTablegroupStmt(stmt::T_ALTER_TABLEGROUP)
-{}
+ObAlterTablegroupStmt::ObAlterTablegroupStmt()
+    : ObTablegroupStmt(stmt::T_ALTER_TABLEGROUP)
+{
+}
 
 ObAlterTablegroupStmt::~ObAlterTablegroupStmt()
-{}
+{
+}
 
-int ObAlterTablegroupStmt::add_table_item(const obrpc::ObTableItem& table_item)
+
+int ObAlterTablegroupStmt::add_table_item(const obrpc::ObTableItem &table_item)
 {
   return alter_tablegroup_arg_.table_items_.push_back(table_item);
 }
 
-int ObAlterTablegroupStmt::set_primary_zone(const common::ObString& zone)
+int ObAlterTablegroupStmt::set_primary_zone(const common::ObString &zone)
 {
-  return alter_tablegroup_arg_.alter_tablegroup_schema_.set_primary_zone(zone);
+  return OB_SUCCESS; // ignore this (not support in 4.0)
 }
-int ObAlterTablegroupStmt::set_locality(const common::ObString& locality)
+int ObAlterTablegroupStmt::set_locality(const common::ObString &locality)
 {
-  return alter_tablegroup_arg_.alter_tablegroup_schema_.set_locality(locality);
+  return OB_SUCCESS; // ignore this (not support in 4.0)
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
+
+

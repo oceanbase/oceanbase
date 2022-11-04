@@ -24,9 +24,9 @@ using namespace std;
 
 const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
 
-// ObFIFOAllocator::PageType page_size = ObFIFOAllocator::LARGE_PAGE;
-// int64_t page_size = OB_MALLOC_BIG_BLOCK_SIZE;
-// int64_t page_size = 128;
+//ObFIFOAllocator::PageType page_size = ObFIFOAllocator::LARGE_PAGE;
+//int64_t page_size = OB_MALLOC_BIG_BLOCK_SIZE;
+//int64_t page_size = 128;
 const int64_t idle_size = 2 * page_size;
 const int64_t init_size = 0;
 
@@ -36,65 +36,71 @@ int64_t glibc_free_count = 0;
 #define MOCK_ALIGN 512
 #define MOCK_ALLOC_ALIGN 1
 
-class MockAllocator : public ObIAllocator {
+
+class MockAllocator : public ObIAllocator
+{
 public:
   MockAllocator() : alloc_count_(0), free_count_(0), page_size_(page_size), last_alloc_addr_(NULL), status_(true)
-  {}
-
-  void* alloc(const int64_t size)
   {
-    void* p = NULL;
+  }
+  ~MockAllocator() {}
+
+  void *alloc(const int64_t size)
+  {
+    void *p = NULL;
     if (status_) {
 #if MOCK_ALLOC_ALIGN
-      void* p_orig = ::malloc(size + MOCK_ALIGN - 1);
-      p = reinterpret_cast<void*>((reinterpret_cast<int64_t>(p_orig) + MOCK_ALIGN - 1) & (~(MOCK_ALIGN - 1)));
-      addr_map_.insert(pair<void*, void*>(p, p_orig));
-      LIB_ALLOC_LOG(DEBUG, "MOCK ALIGN");
+    void *p_orig = ::malloc(size + MOCK_ALIGN - 1);
+    p = reinterpret_cast<void *>((reinterpret_cast<int64_t>(p_orig) + MOCK_ALIGN - 1) & (~
+                                                                                         (MOCK_ALIGN - 1)));
+    addr_map_.insert(pair<void *, void *>(p, p_orig));
+    LIB_ALLOC_LOG(DEBUG, "MOCK ALIGN");
 #else
-      p = ::malloc(size);
-      LIB_ALLOC_LOG(DEBUG, "NOT MOCK ALIGN");
+    p = ::malloc(size);
+    LIB_ALLOC_LOG(DEBUG, "NOT MOCK ALIGN");
 #endif
-      LIB_ALLOC_LOG(DEBUG, "::malloc ", K(p));
-      last_alloc_addr_ = p;
-      ++alloc_count_;
-    } else {
-      p = NULL;
+    LIB_ALLOC_LOG(DEBUG, "::malloc ", K(p));
+    last_alloc_addr_ = p;
+    ++alloc_count_;
+    }  else {
+        p = NULL;
     }
     return p;
   }
 
-  void* alloc(const int64_t size, const ObMemAttr& attr)
+  void* alloc(const int64_t size, const ObMemAttr &attr)
   {
-    void* p = NULL;
+    void *p = NULL;
     UNUSED(attr);
     if (status_) {
 #if MOCK_ALLOC_ALIGN
-      void* p_orig = ::malloc(size + MOCK_ALIGN - 1);
-      p = reinterpret_cast<void*>((reinterpret_cast<int64_t>(p_orig) + MOCK_ALIGN - 1) & (~(MOCK_ALIGN - 1)));
-      addr_map_.insert(pair<void*, void*>(p, p_orig));
+      void *p_orig = ::malloc(size + MOCK_ALIGN - 1);
+      p = reinterpret_cast<void *>((reinterpret_cast<int64_t>(p_orig) + MOCK_ALIGN - 1) & (~
+          (MOCK_ALIGN - 1)));
+      addr_map_.insert(pair<void *, void *>(p, p_orig));
       LIB_ALLOC_LOG(DEBUG, "MOCK ALIGN");
 #else
-      p = ::malloc(size);
-      LIB_ALLOC_LOG(DEBUG, "NOT MOCK ALIGN");
+  p = ::malloc(size);
+LIB_ALLOC_LOG(DEBUG, "NOT MOCK ALIGN");
 #endif
-      LIB_ALLOC_LOG(DEBUG, "::malloc ", K(p));
-      last_alloc_addr_ = p;
-      ++alloc_count_;
-    } else {
+LIB_ALLOC_LOG(DEBUG, "::malloc ", K(p));
+last_alloc_addr_ = p;
+++alloc_count_;
+    }  else {
       p = NULL;
     }
     return p;
   }
 
-  void* get_last_alloc()
+  void *get_last_alloc()
   {
     return last_alloc_addr_;
   }
 
-  void free(void* p)
+  void free(void *p)
   {
 #if MOCK_ALLOC_ALIGN
-    map<void*, void*>::iterator iter = addr_map_.find(p);
+    map<void *, void *>::iterator iter = addr_map_.find(p);
     if (iter == addr_map_.end()) {
       assert(false && "can not happen....");
     } else {
@@ -110,83 +116,63 @@ public:
     return (alloc_count_ != free_count_);
   }
 
-  void reset()
-  {}
-  void* mod_alloc(const int64_t size, const lib::ObLabel& label = nullptr)
-  {
-    UNUSED(size);
-    UNUSED(label);
-    return NULL;
-  }
-  void* mod_realloc(void* p, int64_t size, const lib::ObLabel& label = nullptr)
-  {
-    UNUSED(p);
-    UNUSED(size);
-    UNUSED(label);
-    return NULL;
-  }
-  void mod_free(void* p, const lib::ObLabel& label = nullptr)
-  {
-    UNUSED(p);
-    UNUSED(label);
-  }
-  void set_label(const lib::ObLabel& label)
-  {
-    UNUSED(label);
-  };
+  void reset() {}
+  void *mod_alloc(const int64_t size, const lib::ObLabel &label = nullptr) { UNUSED(size); UNUSED(label); return NULL; }
+  void *mod_realloc(void *p, int64_t size, const lib::ObLabel &label = nullptr) { UNUSED(p); UNUSED(size); UNUSED(label); return NULL; }
+  void mod_free(void *p, const lib::ObLabel &label = nullptr) { UNUSED(p); UNUSED(label); }
+  void set_label(const lib::ObLabel &label) { UNUSED(label); };
 
-  void set_status(bool status)
-  {
-    status_ = status;
-  }
+  void set_status(bool status) { status_ = status; }
 
   int64_t alloc_count_;
   int64_t free_count_;
   const int64_t page_size_;
-  void* last_alloc_addr_;
+  void *last_alloc_addr_;
 #ifdef MOCK_ALLOC_ALIGN
-  map<void*, void*> addr_map_;
+  map<void *, void *> addr_map_;
 #endif
   bool status_;
 };
 
-class ObFIFOAllocatorTest : public ::testing::Test {
+class ObFIFOAllocatorTest : public ::testing::Test
+{
 public:
   ObFIFOAllocatorTest();
   virtual ~ObFIFOAllocatorTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  bool check_align(void* p, int64_t align);
+  bool check_align(void *p, int64_t align);
 };
 
-struct AllocParam {
+struct AllocParam
+{
   int64_t size_;
   int64_t align_;
 };
 
-bool test_align(void* p, int64_t align)
+bool test_align(void *p, int64_t align)
 {
   return (reinterpret_cast<int64_t>(p) & (align - 1)) == 0;
 }
 
-#define ROUTINE_CHECK_PTR(fa)                 \
+#define ROUTINE_CHECK_PTR(fa) \
   EXPECT_TRUE((fa)->total() >= (fa)->used()); \
-  EXPECT_TRUE((fa)->total() >= 0);            \
+  EXPECT_TRUE((fa)->total() >= 0); \
   EXPECT_TRUE((fa)->used() >= 0);
 
-#define ROUTINE_CHECK(fa)                   \
+#define ROUTINE_CHECK(fa) \
   EXPECT_TRUE((fa).total() >= (fa).used()); \
-  EXPECT_TRUE((fa).total() >= 0);           \
+  EXPECT_TRUE((fa).total() >= 0); \
   EXPECT_TRUE((fa).used() >= 0);
 
 // [1] just a simple test
 TEST(ObFIFOAllocatorTest, simple_test)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  void* p = fa->alloc_align(101, 1024);
+  void *p = fa->alloc_align(101, 1024);
   ASSERT_TRUE(test_align(p, 1024));
   ROUTINE_CHECK_PTR(fa);
   fa->free(p);
@@ -209,8 +195,8 @@ TEST(ObFIFOAllocatorTest, simple_test)
 // [2] test invalid size. size <= 0.
 TEST(FIFOAllocatorTest, invalid_size)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
   EXPECT_TRUE(fa->alloc(-100) == NULL);
   EXPECT_TRUE(fa->alloc(1l << 44) == NULL);
@@ -222,13 +208,13 @@ TEST(FIFOAllocatorTest, invalid_size)
 // [3] test invalid address to free
 TEST(ObFIFOAllocator, invalid_free)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  void* p = NULL;
-  void* ptr_to_free = NULL;
+  void *p = NULL;
+  void *ptr_to_free = NULL;
   p = fa->alloc(10);
-  ptr_to_free = static_cast<void*>(static_cast<char*>(p) + 1);
+  ptr_to_free = static_cast<void *>(static_cast<char *>(p) + 1);
   fa->free(ptr_to_free);
   fa->free(p);
   delete fa;
@@ -236,7 +222,8 @@ TEST(ObFIFOAllocator, invalid_free)
 }
 
 // [4] test alignment
-class ObFIFOAllocatorAlignParamTest : public ::testing::TestWithParam<AllocParam> {
+class ObFIFOAllocatorAlignParamTest : public ::testing::TestWithParam<AllocParam>
+{
 public:
   ObFIFOAllocatorAlignParamTest()
   {
@@ -249,16 +236,15 @@ public:
     delete fa_;
     delete mock_allocator_;
   }
-  bool check_align(void* p, int64_t align);
+  bool check_align(void *p, int64_t align);
 
 public:
-  ObFIFOAllocator* fa_;
-
+  ObFIFOAllocator *fa_;
 private:
-  MockAllocator* mock_allocator_;
+  MockAllocator *mock_allocator_;
 };
 
-bool ObFIFOAllocatorAlignParamTest::check_align(void* p, int64_t align)
+bool ObFIFOAllocatorAlignParamTest::check_align(void *p, int64_t align)
 {
   int64_t pint = reinterpret_cast<int64_t>(p);
   pint = pint & (align - 1);
@@ -271,26 +257,27 @@ TEST_P(ObFIFOAllocatorAlignParamTest, testAlignBy)
   struct AllocParam align_param = GetParam();
   int64_t size = align_param.size_;
   int64_t align = align_param.align_;
-  void* p = fa_->alloc_align(size, align);
+  void *p = fa_->alloc_align(size, align);
   if ((align & (align - 1)) == 0) {
     EXPECT_TRUE(check_align(p, align));
     fa_->free(p);
   } else {
-    EXPECT_TRUE(p == NULL);
+    EXPECT_TRUE(p ==  NULL);
   }
 }
 
-struct AllocParam ap1 = {450, 64};
-struct AllocParam ap2 = {234, 16};
-struct AllocParam ap3 = {1230, 16};
-struct AllocParam ap4 = {4700, 32};
-struct AllocParam ap5 = {56000, 4};
-struct AllocParam ap6 = {10000, 1};
-struct AllocParam ap7 = {7156, 1};
-struct AllocParam ap8 = {8924, 1};
-struct AllocParam ap9 = {4712, 32};
-struct AllocParam ap10 = {56223, 1024};
-struct AllocParam ap11 = {56, 4096};
+
+struct AllocParam ap1 = { 450, 64 };
+struct AllocParam ap2 = { 234, 16};
+struct AllocParam ap3 = { 1230, 16 };
+struct AllocParam ap4 = { 4700, 32 };
+struct AllocParam ap5 = { 56000, 4 };
+struct AllocParam ap6 = { 10000, 1 };
+struct AllocParam ap7 = { 7156, 1 };
+struct AllocParam ap8 = { 8924, 1 };
+struct AllocParam ap9 = { 4712, 32 };
+struct AllocParam ap10 = { 56223, 1024 };
+struct AllocParam ap11 = { 56, 4096 };
 
 /*
 struct AllocParam ap1 = { 45, 16 };
@@ -305,31 +292,32 @@ struct AllocParam ap9 = { 47, 32 };
 struct AllocParam ap10 = { 6, 32 };
 struct AllocParam ap11 = { 16, 16 };
 */
-struct AllocParam alloc_param_normal[11] = {ap1, ap2, ap3, ap4, ap5, ap6, ap7, ap8, ap9, ap10, ap11};
+struct AllocParam alloc_param_normal[11] = { ap1, ap2, ap3, ap4, ap5, ap6, ap7, ap8, ap9, ap10, ap11 };
 
 INSTANTIATE_TEST_CASE_P(ObFIFOAllocatorAlignParamTestInstance, ObFIFOAllocatorAlignParamTest,
-    testing::Values(ap1, ap2, ap3, ap4, ap5, ap6, ap7, ap8, ap9, ap10, ap11));
+                        testing::Values(ap1, ap2, ap3, ap4, ap5, ap6, ap7, ap8, ap9, ap10, ap11));
 
-struct AllocParam ps1 = {page_size, 1};
-struct AllocParam ps2 = {page_size - 8 * 3, 1};
-struct AllocParam ps3 = {page_size - 8 * 3, 2};
-struct AllocParam ps4 = {page_size - 8 * 3, 4};
-struct AllocParam ps5 = {page_size + 1, 8};
-struct AllocParam ps6 = {page_size + 155, 8};
-struct AllocParam ps7 = {page_size * 2, 16};
-struct AllocParam ps8 = {page_size * 23, 16};
-struct AllocParam ps9 = {page_size * 99, 16};
-struct AllocParam ps10 = {page_size * 99, 256};
-struct AllocParam ps11 = {page_size, 1024 * 8};
-struct AllocParam alloc_param_special[11] = {ps1, ps2, ps3, ps4, ps5, ps6, ps7, ps8, ps9, ps10, ps11};
+struct AllocParam ps1 = { page_size, 1 };
+struct AllocParam ps2 = { page_size - 8 * 3, 1 };
+struct AllocParam ps3 = { page_size - 8 * 3, 2 };
+struct AllocParam ps4 = { page_size - 8 * 3, 4 };
+struct AllocParam ps5 = { page_size + 1, 8 };
+struct AllocParam ps6 = { page_size + 155, 8 };
+struct AllocParam ps7 = { page_size * 2, 16 };
+struct AllocParam ps8 = { page_size * 23, 16 };
+struct AllocParam ps9 = { page_size * 99, 16 };
+struct AllocParam ps10 = { page_size * 99, 256 };
+struct AllocParam ps11 = { page_size, 1024 * 8 };
+struct AllocParam alloc_param_special[11] = { ps1, ps2, ps3, ps4, ps5, ps6, ps7, ps8, ps9, ps10, ps11 };
 
-class ObFIFOAllocatorSpecialPageListTest {
+class ObFIFOAllocatorSpecialPageListTest
+{
 public:
   ObFIFOAllocatorSpecialPageListTest()
   {
     mock_allocator_ = new MockAllocator();
     fa_ = new ObFIFOAllocator();
-    EXPECT_TRUE(OB_SUCCESS == fa_->init(mock_allocator_, page_size, default_memattr, init_size, idle_size));
+    EXPECT_TRUE(OB_SUCCESS == fa_->init(mock_allocator_ , page_size, default_memattr, init_size, idle_size));
   }
   virtual ~ObFIFOAllocatorSpecialPageListTest()
   {
@@ -339,18 +327,16 @@ public:
 
 public:
   void check_special_list();
-  ObFIFOAllocator* fa_;
-
+  ObFIFOAllocator *fa_;
 private:
-  MockAllocator* mock_allocator_;
+  MockAllocator *mock_allocator_;
 };
 
 void ObFIFOAllocatorSpecialPageListTest::check_special_list()
 {
   LIB_ALLOC_LOG(DEBUG, "special page list is : START =================");
   int64_t index = 0;
-  DLIST_FOREACH_NORET(iter, fa_->special_page_list_)
-  {
+  DLIST_FOREACH_NORET(iter, fa_->special_page_list_) {
     LIB_ALLOC_LOG(DEBUG, "Iterate Special List ", K(index), "special page ", iter, K(iter->get_next()));
     ++index;
   }
@@ -361,9 +347,9 @@ void ObFIFOAllocatorSpecialPageListTest::check_special_list()
 TEST(ObFIFOAllocatorSpecialPageListTest, special_list_test)
 {
   ObFIFOAllocatorSpecialPageListTest special_list_test;
-  queue<void*> ptr_queue;
-  void* p = NULL;
-  void* ptr_to_free = NULL;
+  queue<void *> ptr_queue;
+  void *p = NULL;
+  void *ptr_to_free = NULL;
 
   for (int64_t i = 0; i < 11; i++) {
     p = special_list_test.fa_->alloc_align(alloc_param_special[i].size_, alloc_param_special[i].align_);
@@ -389,13 +375,14 @@ TEST(ObFIFOAllocatorSpecialPageListTest, special_list_test)
 TEST(ObFIFOAllocatorSpecialPageListTest, non_fifo_special_list_test)
 {
   ObFIFOAllocatorSpecialPageListTest special_list_test;
-  vector<void*> ptr_vector;
-  void* p = NULL;
-  void* ptr_to_free = NULL;
+  vector<void *> ptr_vector;
+  void *p = NULL;
+  void *ptr_to_free = NULL;
   int64_t pos = 0;
 
   for (int64_t i = 0; i < 11; i++) {
-    p = special_list_test.fa_->alloc_align(alloc_param_special[i].size_, alloc_param_special[i].align_);
+    p  = special_list_test.fa_->alloc_align(alloc_param_special[i].size_,
+                                            alloc_param_special[i].align_);
     if (NULL != p) {
       ptr_vector.push_back(p);
     }
@@ -414,7 +401,8 @@ TEST(ObFIFOAllocatorSpecialPageListTest, non_fifo_special_list_test)
   }
 }
 
-class ObFIFOAllocatorNormalPageListTest {
+class ObFIFOAllocatorNormalPageListTest
+{
 public:
   ObFIFOAllocatorNormalPageListTest()
   {
@@ -428,7 +416,7 @@ public:
     delete mock_allocator_;
   }
 
-  bool check_align(void* p, int64_t align)
+  bool check_align(void *p, int64_t align)
   {
     int64_t pint = reinterpret_cast<int64_t>(p);
     pint = pint & (align - 1);
@@ -436,26 +424,22 @@ public:
     return is_align;
   }
 
-  int64_t get_offset(void* p)
+  int64_t get_offset(void *p)
   {
-    char* p_addr = static_cast<char*>(p);
-    char* current_page_addr = reinterpret_cast<char*>(fa_->current_using_);
+    char *p_addr = static_cast<char *>(p);
+    char *current_page_addr = reinterpret_cast<char *>(fa_->current_using_);
     int64_t diff_offset = p_addr - current_page_addr;
-    LIB_ALLOC_LOG(DEBUG, "get_offset ", K((void*)p_addr), K((void*)current_page_addr));
+    LIB_ALLOC_LOG(DEBUG, "get_offset ", K((void *)p_addr), K((void *)current_page_addr));
     return diff_offset;
   }
 
-  MockAllocator* get_mock_allocator()
-  {
-    return mock_allocator_;
-  }
+  MockAllocator *get_mock_allocator() { return mock_allocator_; }
 
   void print_normal_list()
   {
     LIB_ALLOC_LOG(DEBUG, "Iterate Page Using List Start");
     int64_t index = 0;
-    DLIST_FOREACH_NORET(iter, fa_->using_page_list_)
-    {
+    DLIST_FOREACH_NORET(iter, fa_->using_page_list_) {
       LIB_ALLOC_LOG(DEBUG, "* * * * * *   Page Using ", K(index), K(iter));
       ++index;
     }
@@ -466,8 +450,7 @@ public:
   {
     int64_t index = 0;
     LIB_ALLOC_LOG(DEBUG, "Iterate Page Free List Start");
-    DLIST_FOREACH_NORET(iter, fa_->free_page_list_)
-    {
+    DLIST_FOREACH_NORET(iter, fa_->free_page_list_) {
       LIB_ALLOC_LOG(DEBUG, "* * * * * *  Page Free ", K(index), K(iter));
       ++index;
     }
@@ -481,8 +464,8 @@ public:
 
   int64_t generate_size(int64_t align)
   {
-    int64_t start_offset =
-        sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(ObFIFOAllocator::ALLOC_HEADER) + sizeof(int64_t);
+    int64_t start_offset = sizeof(ObFIFOAllocator::NormalPageHeader) + sizeof(
+                               ObFIFOAllocator::ALLOC_HEADER) + sizeof(int64_t);
     int64_t after_align = (start_offset + align - 1);
     int64_t max_free_space = page_size - after_align;
     return rand() % max_free_space + 1;
@@ -490,15 +473,14 @@ public:
 
   int64_t generate_size()
   {
-    const int64_t MAX_SIZE = page_size * 2 / 4;  // TODO
+    const int64_t MAX_SIZE = page_size * 2 / 4; //TODO
     return rand() % MAX_SIZE + 1;
   }
 
 public:
-  ObFIFOAllocator* fa_;
-
+  ObFIFOAllocator *fa_;
 private:
-  MockAllocator* mock_allocator_;
+  MockAllocator *mock_allocator_;
 };
 
 // [7] Test the continuous allocation of ordinary pages, printing the using list and the free list.
@@ -506,9 +488,9 @@ TEST(ObFIFOAllocatorTest, normal_page_list)
 {
   LIB_ALLOC_LOG(DEBUG, "===== Start Normal List Test ====");
   ObFIFOAllocatorNormalPageListTest normal_list_test;
-  queue<void*> ptr_queue;
-  void* p = NULL;
-  void* ptr_to_free = NULL;
+  queue<void *> ptr_queue;
+  void *p = NULL;
+  void *ptr_to_free = NULL;
 
   for (int64_t i = 0; i < 11; i++) {
     p = normal_list_test.fa_->alloc_align(alloc_param_normal[i].size_, alloc_param_normal[i].align_);
@@ -544,9 +526,9 @@ TEST(ObFIFOAllocatorTest, normal_page_list_more)
   int64_t test_count = 10;
   int64_t size = 0;
   int64_t align = 0;
-  void* p = NULL;
-  queue<void*> ptr_queue;
-  void* ptr_to_free = NULL;
+  void *p = NULL;
+  queue<void *> ptr_queue;
+  void *ptr_to_free = NULL;
   int64_t free_count = 0;
 
   for (int64_t i = 0; i < test_count; ++i) {
@@ -583,13 +565,14 @@ TEST(ObFIFOAllocatorTest, normal_page_list_more)
   }
 }
 
+
 // [9] Test the normal page list in non-fifo mode.
-TEST(ObFIFOAllocatorNormalPageListTest, non_fifo_normal_list_test)
+TEST(ObFIFOAllocatorNormalPageListTest , non_fifo_normal_list_test)
 {
   ObFIFOAllocatorNormalPageListTest normal_list_test;
-  vector<void*> ptr_vector;
-  void* p = NULL;
-  void* ptr_to_free = NULL;
+  vector<void *> ptr_vector;
+  void *p = NULL;
+  void *ptr_to_free = NULL;
   int64_t pos = 0;
 
   for (int64_t i = 0; i < 11; i++) {
@@ -619,9 +602,9 @@ TEST(ObFIFOAllocatorTest, non_fifo_normal_list_test_more)
   int64_t test_count = 100;
   int64_t size = 0;
   int64_t align = 0;
-  void* p = NULL;
-  vector<void*> ptr_vector;
-  void* ptr_to_free = NULL;
+  void *p = NULL;
+  vector<void *> ptr_vector;
+  void *ptr_to_free = NULL;
 
   for (int64_t i = 0; i < test_count; ++i) {
     align = normal_list_test.generate_align();
@@ -632,7 +615,7 @@ TEST(ObFIFOAllocatorTest, non_fifo_normal_list_test_more)
     p = normal_list_test.fa_->alloc_align(size, align);
     ROUTINE_CHECK_PTR(normal_list_test.fa_);
     ptr_vector.push_back(p);
-    LIB_ALLOC_LOG(INFO, "", K(i), KP(p));
+    LIB_ALLOC_LOG(INFO, "nijia", K(i), KP(p));
     EXPECT_TRUE(p != NULL);
   }
 
@@ -646,12 +629,12 @@ TEST(ObFIFOAllocatorTest, non_fifo_normal_list_test_more)
 // [11] test reset function
 TEST(ObFIFOAllocatorTest, reset)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  queue<void*> ptr_queue;
+  queue<void *> ptr_queue;
   int64_t alloc_count = 4;
-  void* p = NULL;
+  void *p = NULL;
 
   for (int64_t i = 0; i < alloc_count; i++) {
     p = fa->alloc(page_size / 2);
@@ -672,20 +655,20 @@ TEST(ObFIFOAllocatorTest, reset)
 }
 
 // When testing using ObConcurrentFIFOAllocator in a multithreaded environment. Expect: Print an ERROR log.
-ObFIFOAllocator* global_fa;
+ObFIFOAllocator *global_fa;
 pthread_cond_t can_alloc_cond;
 pthread_cond_t can_free_cond;
-volatile bool can_alloc_flag = false;  // can alloc
-volatile bool can_free_flag = false;   // can free
+volatile bool can_alloc_flag = false; // can alloc
+volatile bool can_free_flag = false; // can free
 pthread_mutex_t alloc_mutex;
 pthread_mutex_t free_mutex;
-void* allocated_addr = NULL;
-MockAllocator* mock_allocator;
+void *allocated_addr = NULL;
+MockAllocator *mock_allocator;
 
-void* owner_routine(void* data)
+void *owner_routine(void  *data)
 {
-  data = data;
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  //data = data;
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
   global_fa = fa;
   allocated_addr = fa->alloc(1);
@@ -698,9 +681,9 @@ void* owner_routine(void* data)
   return NULL;
 }
 
-void* thief_routine(void* data)
+void *thief_routine(void *data)
 {
-  data = data;
+  //data = data;
   pthread_mutex_lock(&alloc_mutex);
   while (!can_alloc_flag) {
     LIB_ALLOC_LOG(DEBUG, "wait can alloc");
@@ -708,8 +691,8 @@ void* thief_routine(void* data)
   }
   pthread_mutex_unlock(&alloc_mutex);
   LIB_ALLOC_LOG(DEBUG, "thief start to reuse ObConcurrentFIFOAllocator");
-  ObFIFOAllocator* fa = global_fa;
-  void* ptr = fa->alloc(1);
+  ObFIFOAllocator *fa = global_fa;
+  void *ptr = fa->alloc(1);
   EXPECT_TRUE(ptr == NULL);
   pthread_mutex_lock(&free_mutex);
   can_free_flag = true;
@@ -753,10 +736,10 @@ TEST(ObFIFOAllocatorTest, multithread_test)
 // [12] Test double free
 TEST(ObFIFOAllocator, double_free)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  void* p = NULL;
+  void *p = NULL;
   p = fa->alloc(10);
   fa->free(p);
   fa->free(p);
@@ -764,15 +747,14 @@ TEST(ObFIFOAllocator, double_free)
   delete mock_allocator;
 }
 
-// [13] Test the free list. Continuously allocate a number of page_size/2 memory blocks, release them continuously, and
-// then re-apply for allocation.
+// [13] Test the free list. Continuously allocate a number of page_size/2 memory blocks, release them continuously, and then re-apply for allocation.
 TEST(ObFIFOAllocator, free_list_test)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  queue<void*> ptr_queue;
-  void* p = NULL;
+  queue<void *> ptr_queue;
+  void *p = NULL;
   int64_t test_count = 6;
 
   for (int64_t i = 0; i < test_count; i++) {
@@ -813,12 +795,12 @@ TEST(ObFIFOAllocator, free_list_test)
 // When executed under valgrind, there is a memory leak (predicted). memory leak
 TEST(ObFIFOAllocator, dump_using_when_dctor)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  queue<void*> ptr_queue;
+  queue<void *> ptr_queue;
   int64_t test_count = 10;
-  void* p = NULL;
+  void *p = NULL;
 
   for (int64_t i = 0; i < test_count; i++) {
     p = fa->alloc_align(page_size / 2, 64);
@@ -844,7 +826,7 @@ TEST(ObFIFOAllocator, dump_using_when_dctor)
 int64_t get_current_time()
 {
   uint32_t low, high;
-  __asm__ __volatile__("rdtsc" : "=a"(low), "=d"(high));
+  __asm__ __volatile__("rdtsc":"=a"(low), "=d"(high));
   return ((uint64_t)high << 32) | low;
 }
 
@@ -859,9 +841,9 @@ TEST(ObFIFOAllocatorTest, alloc_free_with_perftest)
   int64_t test_count = 10;
   int64_t size = 0;
   int64_t align = 0;
-  void* p = NULL;
-  queue<void*> ptr_queue;
-  void* ptr_to_free;
+  void *p = NULL;
+  queue<void *> ptr_queue;
+  void *ptr_to_free;
   int64_t alloc_index = 0;
   int64_t free_index = 0;
 
@@ -910,26 +892,26 @@ TEST(ObFIFOAllocatorTest, alloc_free_with_perftest)
 // [17] Performance comparison test vs thread-safe ObConcurrentFIFOAllocator
 TEST(PerformanceTest, performance_compare_test)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* new_fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *new_fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == new_fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
-  ObConcurrentFIFOAllocator* old_fa = new ObConcurrentFIFOAllocator();
+  ObConcurrentFIFOAllocator *old_fa = new ObConcurrentFIFOAllocator();
   old_fa->init(100 * idle_size, idle_size, page_size);
   int64_t timestamp1 = 0;
   int64_t timestamp2 = 0;
   int64_t timestamp3 = 0;
-  // int64_t align;
+  //int64_t align;
   int64_t size;
-  void* new_ptr = NULL;
-  void* old_ptr = NULL;
-  queue<void*> new_ptr_queue;
-  queue<void*> old_ptr_queue;
+  void *new_ptr = NULL;
+  void *old_ptr = NULL;
+  queue<void *> new_ptr_queue;
+  queue<void *> old_ptr_queue;
   ObFIFOAllocatorNormalPageListTest normal_list_test;
   int64_t test_count = 100;
 
   OB_LOGGER.set_log_level("INFO");
   for (int64_t i = 0; i < test_count; i++) {
-    // align = normal_list_test.generate_align();
+    //align = normal_list_test.generate_align();
     size = normal_list_test.generate_size();
 
     timestamp1 = get_current_time();
@@ -937,10 +919,8 @@ TEST(PerformanceTest, performance_compare_test)
     timestamp2 = get_current_time();
     old_ptr = old_fa->alloc(size);
     timestamp3 = get_current_time();
-    LIB_ALLOC_LOG(INFO,
-        "PERF_CMP_TAG performance_new-alloc is (t2-t1), old-alloc is (t3-t2)",
-        K(timestamp2 - timestamp1),
-        K(timestamp3 - timestamp2));
+    LIB_ALLOC_LOG(INFO, "PERF_CMP_TAG performance_new-alloc is (t2-t1), old-alloc is (t3-t2)",
+                      K(timestamp2 - timestamp1), K(timestamp3 - timestamp2));
     new_ptr_queue.push(new_ptr);
     old_ptr_queue.push(old_ptr);
   }
@@ -956,10 +936,8 @@ TEST(PerformanceTest, performance_compare_test)
     timestamp2 = get_current_time();
     old_fa->free(old_ptr);
     timestamp3 = get_current_time();
-    LIB_ALLOC_LOG(INFO,
-        "PERF_CMP_TAG performance_new-free is (t2-t1), old-free is (t3-t2)",
-        K(timestamp2 - timestamp1),
-        K(timestamp3 - timestamp2));
+    LIB_ALLOC_LOG(INFO, "PERF_CMP_TAG performance_new-free is (t2-t1), old-free is (t3-t2)",
+                      K(timestamp2 - timestamp1), K(timestamp3 - timestamp2));
   }
   OB_LOGGER.set_log_level("DEBUG");
   delete new_fa;
@@ -969,9 +947,9 @@ TEST(PerformanceTest, performance_compare_test)
 
 TEST(MockAllocatorDead, mock_alloc_fail_tolerant)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
   mock_allocator->set_status(false);
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
   mock_allocator->set_status(true);
 
@@ -984,11 +962,11 @@ TEST(MockAllocatorDead, mock_alloc_fail_tolerant)
 
 TEST(TestModID, label)
 {
-  MockAllocator* mock_allocator = new MockAllocator();
-  ObFIFOAllocator* fa = new ObFIFOAllocator();
+  MockAllocator *mock_allocator = new MockAllocator();
+  ObFIFOAllocator *fa = new ObFIFOAllocator();
   EXPECT_TRUE(OB_SUCCESS == fa->init(mock_allocator, page_size, default_memattr, init_size, idle_size));
   void* p = fa->alloc(page_size / 2);
-  fa->set_label(1);
+  fa->set_label("FIFO");
   EXPECT_TRUE(p != NULL);
   fa->free(p);
   delete fa;
@@ -1006,8 +984,8 @@ TEST(TestFIFO, init_idle_max)
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, 0, -1));
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 1, 0, 0));
   ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, 1, 0));
-  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, 0, page_size - 1));
-  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 2, 1, page_size - 1));
+  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0,  0, page_size - 1));
+  ASSERT_NE(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 2,  1, page_size - 1));
   // succ
   ASSERT_EQ(OB_SUCCESS, fa.init(&mock_allocator, page_size, default_memattr, 0, page_size, page_size));
   ASSERT_EQ(OB_INIT_TWICE, fa.init(&mock_allocator, page_size, default_memattr, 0, page_size, page_size));
@@ -1026,7 +1004,7 @@ TEST(TestFIFO, init_idle_max)
     ASSERT_TRUE(fa.normal_total() >= init_size * 2);
     vector<void*> ptrs;
     while (ptrs.size() * 512 < init_size * 1.5) {
-      void* ptr = fa.alloc(512);
+      void *ptr = fa.alloc(512);
       ASSERT_NE(nullptr, ptr);
       ptrs.push_back(ptr);
     }
@@ -1042,9 +1020,8 @@ TEST(TestFIFO, init_idle_max)
     ptrs.clear();
     fa.set_max(init_size, false);
     while (true) {
-      void* ptr = fa.alloc(512);
-      if (!ptr)
-        break;
+      void *ptr = fa.alloc(512);
+      if (!ptr) break;
       ptrs.push_back(ptr);
     }
     ASSERT_EQ(OB_SUCCESS, fa.set_max(init_size / 2, true));
@@ -1068,10 +1045,10 @@ TEST(TestFIFO, max)
   ASSERT_EQ(OB_SUCCESS, fa.init(&mock_allocator, pz, default_memattr, init, idle, max));
   int64_t normal_total = fa.normal_total();
   int64_t total = fa.total();
-  ASSERT_GE(normal_total, init);
-  ASSERT_LE(normal_total, init);
-  ASSERT_LE(normal_total, max);
-  void* ptr = fa.alloc(64L << 10);
+  ASSERT_GE(normal_total , init);
+  ASSERT_LE(normal_total ,init);
+  ASSERT_LE(normal_total , max);
+  void *ptr = fa.alloc(64L << 10);
   ASSERT_NE(ptr, nullptr);
   ASSERT_NE(fa.used(), 0);
   ASSERT_EQ(fa.normal_total(), normal_total);
@@ -1086,24 +1063,23 @@ TEST(TestFIFO, max)
 
   vector<void*> ptrs;
   while (true) {
-    void* ptr = fa.alloc(64L << 10);
-    if (nullptr == ptr)
-      break;
+    void *ptr = fa.alloc(64L << 10);
+    if (nullptr == ptr) break;
     ptrs.push_back(ptr);
   }
-  ASSERT_LE(fa.total(), max);
-  ASSERT_GE(fa.total(), max - pz);
-  ASSERT_LE(fa.used(), max);
-  ASSERT_GE(fa.used(), max - pz);
+  ASSERT_LE(fa.total() , max);
+  ASSERT_GE(fa.total() , max - pz);
+  ASSERT_LE(fa.used() , max);
+  ASSERT_GE(fa.used() , max - pz);
   for (int64_t i = 0; i < ptrs.size(); i++) {
     fa.free(ptrs[i]);
   }
-  ASSERT_GE(fa.total(), idle);
-  ASSERT_LE(fa.total(), idle + pz);
+  ASSERT_GE(fa.total() , idle);
+  ASSERT_LE(fa.total() , idle + pz);
   ASSERT_EQ(fa.used(), 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("DEBUG");
   OB_LOGGER.set_file_name("test_fifo_allocator.log", true, true);

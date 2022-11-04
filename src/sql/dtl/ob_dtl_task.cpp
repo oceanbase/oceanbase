@@ -26,10 +26,11 @@ OB_SERIALIZE_MEMBER(ObDtlChannelInfo, chid_, type_, peer_, role_, tenant_id_);
 OB_SERIALIZE_MEMBER(ObDtlChSet, exec_addr_, ch_info_set_);
 OB_SERIALIZE_MEMBER(ObDtlTask, jobid_, taskid_, cis_, chans_cnt_);
 OB_SERIALIZE_MEMBER(ObDtlExecServer, total_task_cnt_, exec_addrs_, prefix_task_counts_);
-OB_SERIALIZE_MEMBER(
-    ObDtlChTotalInfo, start_channel_id_, transmit_exec_server_, receive_exec_server_, channel_count_, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDtlChTotalInfo, start_channel_id_, transmit_exec_server_,
+                    receive_exec_server_, channel_count_, tenant_id_);
 
-int ObDtlChSet::add_channel_info(const ObDtlChannelInfo& info)
+
+int ObDtlChSet::add_channel_info(const ObDtlChannelInfo &info)
 {
   int ret = OB_SUCCESS;
   if (ch_info_set_.count() >= MAX_CHANS) {
@@ -41,7 +42,7 @@ int ObDtlChSet::add_channel_info(const ObDtlChannelInfo& info)
   return ret;
 }
 
-int ObDtlChSet::get_channel_info(int64_t chan_idx, ObDtlChannelInfo& ci) const
+int ObDtlChSet::get_channel_info(int64_t chan_idx, ObDtlChannelInfo &ci) const
 {
   int ret = OB_SUCCESS;
   if (chan_idx < 0 || chan_idx >= ch_info_set_.count()) {
@@ -53,7 +54,7 @@ int ObDtlChSet::get_channel_info(int64_t chan_idx, ObDtlChannelInfo& ci) const
   return ret;
 }
 
-int ObDtlChSet::assign(const ObDtlChSet& other)
+int ObDtlChSet::assign(const ObDtlChSet &other)
 {
   int ret = OB_SUCCESS;
   exec_addr_ = other.exec_addr_;
@@ -70,7 +71,7 @@ int ObDtlChSet::assign(const ObDtlChSet& other)
   return ret;
 }
 
-int ObDtlExecServer::assign(const ObDtlExecServer& other)
+int ObDtlExecServer::assign(const ObDtlExecServer &other)
 {
   int ret = OB_SUCCESS;
   total_task_cnt_ = other.total_task_cnt_;
@@ -89,7 +90,7 @@ int ObDtlExecServer::assign(const ObDtlExecServer& other)
   return ret;
 }
 
-int ObDtlChTotalInfo::assign(const ObDtlChTotalInfo& other)
+int ObDtlChTotalInfo::assign(const ObDtlChTotalInfo &other)
 {
   int ret = OB_SUCCESS;
   start_channel_id_ = other.start_channel_id_;
@@ -100,7 +101,7 @@ int ObDtlChTotalInfo::assign(const ObDtlChTotalInfo& other)
   return ret;
 }
 
-int ObDtlExecServer::add_exec_addr(const common::ObAddr& exec_addr)
+int ObDtlExecServer::add_exec_addr(const common::ObAddr &exec_addr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(exec_addrs_.push_back(exec_addr))) {
@@ -135,7 +136,7 @@ int ObDtlExecServer::add_exec_addr(const common::ObAddr& exec_addr)
 //         LOG_WARN("create rpc channel fail", K(i), K(ret));
 //       }
 //     } else {
-//       auto proxy = DTL.get_rpc_proxy().to(GCTX.self_addr_);
+//       auto proxy = DTL.get_rpc_proxy().to(GCTX.self_addr());
 //       obrpc::ObDtlRpcChanArgs args;
 //       args.chid_ = ci.chid_;
 //       args.peer_ = ci.peer_;
@@ -189,6 +190,7 @@ int ObDtlExecServer::add_exec_addr(const common::ObAddr& exec_addr)
 //   }
 // }
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+
+}  // dtl
+}  // sql
+}  // oceanbase

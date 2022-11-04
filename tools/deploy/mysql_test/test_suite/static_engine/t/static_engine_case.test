@@ -1,4 +1,5 @@
 # owner: peihan.dph
+#tags: optimizer
 # owner group: SQL2
 # description: 测试执行引擎3.0下case表达式
 
@@ -105,5 +106,4 @@ drop table t2;
 ## bugfix#https://work.aone.alibaba-inc.com/issue/37018706
 SELECT CASE 'A' WHEN 0 THEN 0 ELSE 1 END VAL;
 
-alter system set _enable_static_typing_engine = false;
 --sleep 2

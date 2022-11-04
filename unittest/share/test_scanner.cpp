@@ -14,17 +14,16 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
-class TestScanner : public ::testing::Test {
+class TestScanner: public ::testing::Test
+{
 public:
   TestScanner();
   virtual ~TestScanner();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestScanner);
-
 protected:
   // function members
 protected:
@@ -32,16 +31,20 @@ protected:
 };
 
 TestScanner::TestScanner()
-{}
+{
+}
 
 TestScanner::~TestScanner()
-{}
+{
+}
 
 void TestScanner::SetUp()
-{}
+{
+}
 
 void TestScanner::TearDown()
-{}
+{
+}
 
 TEST_F(TestScanner, basic_test)
 {
@@ -104,7 +107,7 @@ TEST_F(TestScanner, serialization)
 
   ModuleArena allocator;
   int64_t buf_size = scanner.get_serialize_size();
-  char* buf = (char*)allocator.alloc(buf_size);
+  char *buf = (char *)allocator.alloc(buf_size);
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, scanner.serialize(buf, buf_size, pos));
   ASSERT_EQ(buf_size, pos);
@@ -140,8 +143,8 @@ TEST_F(TestScanner, serialization)
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -13,14 +13,19 @@
 #include "ob_stat_template.h"
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-DIRWLock::DIRWLock() : lock_(0)
-{}
+DIRWLock::DIRWLock()
+  : lock_(0)
+{
+}
 
 DIRWLock::~DIRWLock()
-{}
+{
+}
 
 int DIRWLock::try_rdlock()
 {
@@ -82,5 +87,5 @@ void DIRWLock::unlock()
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}

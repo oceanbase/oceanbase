@@ -17,34 +17,36 @@
 #include "lib/resource/achunk_mgr.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/coro/co_protected_stack_allocator.h"
+#include "lib/thread/protected_stack_allocator.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 ObMemoryCutter g_lib_mem_cutter;
-ObIMemoryCutter* g_mem_cutter = &g_lib_mem_cutter;
+ObIMemoryCutter *g_mem_cutter = &g_lib_mem_cutter;
 
-uint64_t ObMemoryCutter::chunk_size(AChunk* chunk)
+uint64_t ObMemoryCutter::chunk_size(AChunk *chunk)
 {
   return lib::AChunkMgr::aligned(chunk->alloc_bytes_);
 }
 
-void ObMemoryCutter::free_chunk(const void* ptr, const uint64_t size)
+void ObMemoryCutter::free_chunk(const void *ptr, const uint64_t size)
 {
-  auto& mgr = AChunkMgr::instance();
+  auto &mgr = AChunkMgr::instance();
   mgr.low_free(ptr, size);
 }
 
 // TODO: Change the segmented linked list to solve the problem that a single object cannot go on if it is written badly
-void ObMemoryCutter::free_chunk(int64_t& total_size)
+void ObMemoryCutter::free_chunk(int64_t &total_size)
 {
-  auto& mgr = AChunkMgr::instance();
-  auto& free_list = mgr.free_list_;
-  AChunk* head = free_list.header_;
+  auto &mgr = AChunkMgr::instance();
+  auto &free_list = mgr.free_list_;
+  AChunk *head = free_list.header_;
   while (head) {
-    if (head->check_magic_code()) {
-      AChunk* next = head->next_;
+    if (head->is_valid()) {
+      AChunk *next = head->next_;
       uint64_t all_size = chunk_size(head);
       free_chunk(head, all_size);
       total_size += all_size;
@@ -57,13 +59,12 @@ void ObMemoryCutter::free_chunk(int64_t& total_size)
 }
 
 // TODO: Change the segmented linked list to solve the problem that a single object cannot go on if it is written badly
-void ObMemoryCutter::free_stack(int64_t& total_size)
+void ObMemoryCutter::free_stack(int64_t &total_size)
 {
   uint64_t self_pth = pthread_self();
-  ObStackHeader* dummy = &g_stack_mgr.dummy_;
-  ObStackHeader* cur = dummy->next_;
-  while (cur != dummy) {
-    auto* next = cur->next_;
+  auto cur = g_stack_mgr.begin();
+  while (cur != g_stack_mgr.end()) {
+    auto next = cur->next_;
     if (cur->check_magic()) {
       if (cur->pth_ != self_pth) {
         int64_t size = cur->size_;
@@ -78,51 +79,48 @@ void ObMemoryCutter::free_stack(int64_t& total_size)
   }
 }
 
-void ObMemoryCutter::free_memstore(int64_t& total_size)
+void ObMemoryCutter::free_memstore(int64_t &total_size)
 {
   for (int64_t slot = 0; slot < ObMallocAllocator::PRESERVED_TENANT_COUNT; ++slot) {
     bool has_crash = false;
-    do_with_crash_restore(
-      [&]() {
-        ObTenantCtxAllocator* ta = ObMallocAllocator::get_instance()->allocators_[slot][ObCtxIds::MEMSTORE_CTX_ID];
-        while (ta != nullptr) {
-          bool has_crash = false;
-          do_with_crash_restore(
-            [&]() {
-              AChunk* cur = ta->using_list_head_.next2_;
-              while (cur != &ta->using_list_head_) {
-                if (cur->check_magic_code()) {
-                  AChunk* next = cur->next2_;
-                  uint64_t all_size = chunk_size(cur);
-                  free_chunk(cur, all_size);
-                  total_size += all_size;
-                  cur = next;
-                } else {
-                  DLOG(WARN, "invalid chunk magic");
-                  break;
-                }
-              }
-            },
-            has_crash);
-          if (has_crash) {
-            DLOG(WARN, "restore from crash, let's goon~");
+    do_with_crash_restore([&]() {
+      ObTenantCtxAllocator *ta =
+        ObMallocAllocator::get_instance()->allocators_[slot][ObCtxIds::MEMSTORE_CTX_ID];
+      while (ta != nullptr) {
+        bool has_crash = false;
+        do_with_crash_restore([&]() {
+          AChunk *cur = ta->using_list_head_.next2_;
+          while (cur != &ta->using_list_head_) {
+            if (cur->is_valid()) {
+              AChunk *next = cur->next2_;
+              uint64_t all_size = chunk_size(cur);
+              free_chunk(cur, all_size);
+              total_size += all_size;
+              cur = next;
+            } else {
+              DLOG(WARN, "invalid chunk magic");
+              break;
+            }
           }
-          ta = ta->get_next();
+        }, has_crash);
+        if (has_crash) {
+          DLOG(WARN, "restore from crash, let's goon~");
         }
-      },
-      has_crash);
+        ta = ta->get_next();
+      }
+    }, has_crash);
     if (has_crash) {
       DLOG(WARN, "restore from crash, let's goon~");
     }
   }
 }
 
-void ObMemoryCutter::cut(int64_t& total_size)
+void ObMemoryCutter::cut(int64_t &total_size)
 {
   bool has_crash = false;
 
   int64_t total_size_bak = total_size;
-  do_with_crash_restore([&]() { free_chunk(total_size); }, has_crash);
+  do_with_crash_restore([&](){free_chunk(total_size);}, has_crash);
   if (has_crash) {
     DLOG(WARN, "restore from crash, let's goon~");
   } else {
@@ -130,7 +128,7 @@ void ObMemoryCutter::cut(int64_t& total_size)
   }
 
   total_size_bak = total_size;
-  do_with_crash_restore([&]() { free_stack(total_size); }, has_crash);
+  do_with_crash_restore([&](){free_stack(total_size);}, has_crash);
   if (has_crash) {
     DLOG(WARN, "restore from crash, let's goon~");
   } else {
@@ -138,7 +136,7 @@ void ObMemoryCutter::cut(int64_t& total_size)
   }
 
   total_size_bak = total_size;
-  do_with_crash_restore([&]() { free_memstore(total_size); }, has_crash);
+  do_with_crash_restore([&](){free_memstore(total_size);}, has_crash);
   if (has_crash) {
     DLOG(WARN, "restore from crash, let's goon~");
   } else {
@@ -146,5 +144,5 @@ void ObMemoryCutter::cut(int64_t& total_size)
   }
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+} // namespace lib
+} // namespace oceanbase

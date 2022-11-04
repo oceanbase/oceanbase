@@ -14,32 +14,32 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObExprAnyValue::ObExprAnyValue(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ANY_VALUE, N_ANY_VAL, 1, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ANY_VALUE, N_ANY_VAL, 1, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprAnyValue::~ObExprAnyValue()
-{}
+{
+}
 
-int ObExprAnyValue::calc_result_type1(ObExprResType &type, ObExprResType &arg, common::ObExprTypeCtx &) const
+int ObExprAnyValue::calc_result_type1(ObExprResType &type,
+                                           ObExprResType &arg,
+                                           common::ObExprTypeCtx &) const
 {
   int ret = OB_SUCCESS;
   type = arg;
   return ret;
 }
 
-int ObExprAnyValue::calc_result1(common::ObObj &result, const common::ObObj &arg, common::ObExprCtx &expr_ctx) const
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-  result = arg;
-  return ret;
-}
-
-int ObExprAnyValue::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
+int ObExprAnyValue::cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(expr_cg_ctx);
@@ -47,7 +47,9 @@ int ObExprAnyValue::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   return OB_SUCCESS;
 }
 
-int ObExprAnyValue::eval_any_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+int ObExprAnyValue::eval_any_value(const ObExpr &expr,
+                      ObEvalCtx &ctx,
+                      ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = NULL;
@@ -59,5 +61,5 @@ int ObExprAnyValue::eval_any_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

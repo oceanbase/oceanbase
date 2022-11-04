@@ -18,33 +18,39 @@
 #include "lib/container/ob_array_serialization.h"
 #include "share/partition_table/ob_partition_location.h"
 #include "share/inner_table/ob_inner_table_schema.h"
+#include "share/location_cache/ob_vtable_location_service.h" // share::ObVtableLocationType
 
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 class ObServerManager;
 class ObUnitManager;
 
-class ObVTableLocationGetter {
+class ObVTableLocationGetter
+{
 public:
-  ObVTableLocationGetter(ObServerManager& server_mgr, ObUnitManager& unit_mgr);
+  ObVTableLocationGetter(ObServerManager &server_mgr,
+                         ObUnitManager &unit_mgr);
   virtual ~ObVTableLocationGetter();
-  int get(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
+  int get(const share::ObVtableLocationType &vtable_type,
+          common::ObSArray<common::ObAddr> &servers);
 
 private:
-  int get_only_rs_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
-  int get_global_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
-  int get_tenant_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
-  int build_location(const uint64_t table_id, const common::ObArray<common::ObAddr>& servers,
-      common::ObSArray<share::ObPartitionLocation>& locations);
+  int get_only_rs_vtable_location_(const share::ObVtableLocationType &vtable_type,
+                                   common::ObSArray<common::ObAddr> &servers);
+  int get_global_vtable_location_(const share::ObVtableLocationType &vtable_type,
+                                  common::ObSArray<common::ObAddr> &servers);
+  int get_tenant_vtable_location_(const share::ObVtableLocationType &vtable_type,
+                                  common::ObSArray<common::ObAddr> &servers);
 
-  ObServerManager& server_mgr_;
-  ObUnitManager& unit_mgr_;
-
+  ObServerManager &server_mgr_;
+  ObUnitManager &unit_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVTableLocationGetter);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+}//end namespace rootserver
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_ROOTSERVER_OB_VTABLE_LOCATION_GETTER_H_
+#endif //OCEANBASE_ROOTSERVER_OB_VTABLE_LOCATION_GETTER_H_

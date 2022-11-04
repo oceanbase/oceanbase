@@ -1,0 +1,11 @@
+macro(obtable_example case)
+  add_executable(${case} EXCLUDE_FROM_ALL ${ARGN})
+  target_link_libraries(${case} PRIVATE obtable)
+  target_include_directories(${case} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+endmacro()
+
+obtable_example(table_example ob_table_example.cpp)
+obtable_example(table_example_s ob_table_example.cpp)
+obtable_example(kvtable_example ob_kvtable_example.cpp)
+obtable_example(pstore_example ob_pstore_example.cpp)
+obtable_example(kvtable_benchmark ob_kvtable_benchmark.cpp)

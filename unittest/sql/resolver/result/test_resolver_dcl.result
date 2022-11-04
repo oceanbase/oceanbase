@@ -48,7 +48,7 @@ create user 'hualong' identified by '123456'
   ]
 }
 ***************   Case 6   ***************
-create user 'hualong' identified by '123456', '' identified by '123456'
+create user 'hualong' identified by '123456', 'xiyu' identified by '123456'
 {
   "stmt_type":58,
   "users_to_create": [
@@ -56,7 +56,7 @@ create user 'hualong' identified by '123456', '' identified by '123456'
     "%",
     "123456",
     "YES",
-    "",
+    "xiyu",
     "%",
     "123456",
     "YES"

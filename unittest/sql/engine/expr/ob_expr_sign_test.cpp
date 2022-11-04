@@ -17,59 +17,50 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprSignTest : public ::testing::Test {
+class ObExprSignTest: public ::testing::Test
+{
 public:
   ObExprSignTest();
   virtual ~ObExprSignTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprSignTest(const ObExprSignTest& other);
-  ObExprSignTest& operator=(const ObExprSignTest& other);
-
+  ObExprSignTest(const ObExprSignTest &other);
+  ObExprSignTest& operator=(const ObExprSignTest &other);
 private:
   // data members
 };
-ObExprSignTest::ObExprSignTest()
-{}
+ObExprSignTest::ObExprSignTest() {}
 
-ObExprSignTest::~ObExprSignTest()
-{}
+ObExprSignTest::~ObExprSignTest() {}
 
-void ObExprSignTest::SetUp()
-{}
+void ObExprSignTest::SetUp() {}
 
-void ObExprSignTest::TearDown()
-{}
+void ObExprSignTest::TearDown() {}
 
-class TestAllocator : public ObIAllocator {
+class TestAllocator: public ObIAllocator
+{
 public:
-  TestAllocator() : label_(ObModIds::TEST)
-  {}
-  virtual ~TestAllocator()
-  {}
-  void* alloc(const int64_t sz)
-  {
+  TestAllocator() :
+      label_(ObModIds::TEST) {}
+  virtual ~TestAllocator() {}
+  void *alloc(const int64_t sz) {
     UNUSED(sz);
     return NULL;
   }
-  void free(void* p)
-  {
+  void free(void *p) {
     UNUSED(p);
   }
-  void freed(const int64_t sz)
-  {
+  void freed(const int64_t sz) {
     UNUSED(sz);
   }
-  void set_label(const char* label)
-  {
+  void set_label(const char *label) {
     label_ = label;
-  };
-
+  }
+  ;
 private:
-  const char* label_;
+  const char *label_;
 };
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -84,17 +75,17 @@ TEST_F(ObExprSignTest, basic_test)
   TestAllocator str_buf;
   ASSERT_EQ(1, sign.get_param_num());
 
-  // null
+  //null
   TN(sign);
-  // test
-  //  T(sign, varchar, "123", int32, 1);
-  //  T(sign, varchar, "-123", int32, -1);
-  //  T(sign, varchar, "0", int32, 0);
-  //  T(sign, int, 123, int32, 1);
-  //  T(sign, int, -123, int32, -1);
-  //  T(sign, int, 0, int32, 0);
+  //test
+//  T(sign, varchar, "123", int32, 1);
+//  T(sign, varchar, "-123", int32, -1);
+//  T(sign, varchar, "0", int32, 0);
+//  T(sign, int, 123, int32, 1);
+//  T(sign, int, -123, int32, -1);
+//  T(sign, int, 0, int32, 0);
   T(sign, bool, true, int32, 1);
-  T(sign, bool, false, int32, 0);
+  T(sign, bool , false, int32, 0);
   T(sign, double, 123.3, int32, 1);
   T(sign, double, -123.3, int32, -1);
   T(sign, double, 0, int32, 0);
@@ -109,10 +100,10 @@ TEST_F(ObExprSignTest, fail_test)
   TestAllocator str_buf;
   ASSERT_EQ(1, sign.get_param_num());
 
-  // OB_NOT_INIT
+  //OB_NOT_INIT
   TNI(sign, int, 123);
 }
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);

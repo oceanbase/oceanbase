@@ -1,0 +1,22 @@
+digraph start_flow {
+    start -> "提供IP PORT？"
+    "提供IP PORT？" -> "检查IP PORT" [label = "是"]
+    "检查IP PORT" -> DONE [label = "成功"]
+    "检查IP PORT" -> FAIL [label = "失败"]
+    "提供IP PORT？" -> "提供dataID？" [label = "否"]
+    "提供dataID？" -> "获取lms列表" [label = "是"]
+    "获取lms列表" -> "检查IP PORT" [label = "成功"]
+    "获取lms列表" -> FAIL [label = "失败"]
+    "提供dataID？" -> "获取dataID列表" [label = "否"]
+    "获取dataID列表" -> "用户选择dataID" [label = "成功"]
+    "获取dataID列表" -> FAIL [label = "失败"]
+    "用户选择dataID" -> "获取lms列表" [label = "是"]
+    "用户选择dataID" -> FAIL [label = "否"]
+
+    start[shape=circle,style=filled,fillcolor=CYAN]
+    {
+        FAIL[shape=circle,style=filled,fillcolor=RED];
+        DONE[shape=circle,style=filled,fillcolor=GREEN];
+        rank=same;
+    }
+}

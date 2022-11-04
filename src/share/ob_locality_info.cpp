@@ -13,9 +13,11 @@
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_locality_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
 void ObLocalityZone::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
@@ -30,7 +32,7 @@ int ObLocalityZone::init(const uint64_t tenant_id, const uint64_t region_priorit
   return OB_SUCCESS;
 }
 
-ObLocalityZone& ObLocalityZone::operator=(const ObLocalityZone& item)
+ObLocalityZone &ObLocalityZone::operator = (const ObLocalityZone &item)
 {
   tenant_id_ = item.tenant_id_;
   region_priority_ = item.region_priority_;
@@ -52,7 +54,6 @@ void ObLocalityInfo::reset()
   local_idc_.reset();
   local_zone_type_ = ObZoneType::ZONE_TYPE_INVALID;
   local_zone_status_ = ObZoneStatus::UNKNOWN;
-  local_merge_status_ = ObZoneInfo::MERGE_STATUS_MAX;
   locality_region_array_.reset();
   locality_zone_array_.reset();
 }
@@ -64,7 +65,7 @@ void ObLocalityInfo::destroy()
   STORAGE_LOG(INFO, "ObLocalityInfo destroy finished");
 }
 
-int ObLocalityInfo::add_locality_zone(const ObLocalityZone& item)
+int ObLocalityInfo::add_locality_zone(const ObLocalityZone &item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(locality_zone_array_.push_back(item))) {
@@ -78,7 +79,7 @@ int ObLocalityInfo::add_locality_zone(const ObLocalityZone& item)
 
 void ObLocalityInfo::set_version(const int64_t version)
 {
-  version_ = version;
+  version_= version;
 }
 
 int64_t ObLocalityInfo::get_version() const
@@ -86,17 +87,17 @@ int64_t ObLocalityInfo::get_version() const
   return version_;
 }
 
-void ObLocalityInfo::set_local_region(const char* region)
+void ObLocalityInfo::set_local_region(const char *region)
 {
   local_region_ = region;
 }
 
-void ObLocalityInfo::set_local_zone(const char* zone)
+void ObLocalityInfo::set_local_zone(const char *zone)
 {
   local_zone_ = zone;
 }
 
-void ObLocalityInfo::set_local_idc(const char* idc)
+void ObLocalityInfo::set_local_idc(const char *idc)
 {
   local_idc_ = idc;
 }
@@ -106,12 +107,12 @@ void ObLocalityInfo::set_local_zone_type(const ObZoneType zone_type)
   local_zone_type_ = zone_type;
 }
 
-const char* ObLocalityInfo::get_local_zone() const
+const char *ObLocalityInfo::get_local_zone() const
 {
   return local_zone_.ptr();
 }
 
-const char* ObLocalityInfo::get_local_region() const
+const char *ObLocalityInfo::get_local_region() const
 {
   return local_region_.ptr();
 }
@@ -121,17 +122,17 @@ ObZoneType ObLocalityInfo::get_local_zone_type()
   return local_zone_type_;
 }
 
-const char* ObLocalityInfo::get_local_idc() const
+const char *ObLocalityInfo::get_local_idc() const
 {
   return local_idc_.ptr();
 }
 
-int ObLocalityInfo::get_locality_zone(const uint64_t tenant_id, ObLocalityZone& item)
+int ObLocalityInfo::get_locality_zone(const uint64_t tenant_id, ObLocalityZone &item)
 {
   int ret = OB_SUCCESS;
   int64_t i = 0;
   item.reset();
-  for (i = 0; i < locality_zone_array_.count(); i++) {
+  for (i = 0;i < locality_zone_array_.count(); i++) {
     if (locality_zone_array_.at(i).get_tenant_id() == tenant_id) {
       item = locality_zone_array_.at(i);
       break;
@@ -144,12 +145,12 @@ int ObLocalityInfo::get_locality_zone(const uint64_t tenant_id, ObLocalityZone& 
   return ret;
 }
 
-int ObLocalityInfo::get_region_priority(const uint64_t tenant_id, uint64_t& region_priority)
+int ObLocalityInfo::get_region_priority(const uint64_t tenant_id, uint64_t &region_priority)
 {
   int ret = OB_SUCCESS;
   int64_t i = 0;
   region_priority = UINT64_MAX;
-  for (i = 0; i < locality_zone_array_.count(); i++) {
+  for (i = 0;i < locality_zone_array_.count(); i++) {
     if (locality_zone_array_.at(i).get_tenant_id() == tenant_id) {
       region_priority = locality_zone_array_.at(i).get_region_priority();
       break;
@@ -164,10 +165,12 @@ int ObLocalityInfo::get_region_priority(const uint64_t tenant_id, uint64_t& regi
 
 bool ObLocalityInfo::is_valid()
 {
-  return !local_zone_.is_empty() && !local_region_.is_empty() && ObZoneType::ZONE_TYPE_INVALID != local_zone_type_;
+  return !local_zone_.is_empty()
+         && !local_region_.is_empty()
+         && ObZoneType::ZONE_TYPE_INVALID != local_zone_type_;
 }
 
-int ObLocalityInfo::copy_to(ObLocalityInfo& locality_info)
+int ObLocalityInfo::copy_to(ObLocalityInfo &locality_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(locality_info.local_region_.assign(local_region_))) {
@@ -182,10 +185,9 @@ int ObLocalityInfo::copy_to(ObLocalityInfo& locality_info)
     LOG_WARN("copy locality_region_array fail", K(ret), K_(locality_region_array));
   } else {
     locality_info.local_zone_type_ = local_zone_type_;
-    locality_info.local_merge_status_ = local_merge_status_;
     locality_info.local_zone_status_ = local_zone_status_;
   }
   return ret;
 }
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase

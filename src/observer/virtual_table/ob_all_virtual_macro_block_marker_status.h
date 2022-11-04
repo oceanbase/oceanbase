@@ -17,16 +17,19 @@
 #include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualMacroBlockMarkerStatus : public common::ObVirtualTableScannerIterator {
+class ObAllVirtualMacroBlockMarkerStatus: public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualMacroBlockMarkerStatus();
   virtual ~ObAllVirtualMacroBlockMarkerStatus();
 
-  int init(const blocksstable::ObMacroBlockMarkerStatus& marker_status);
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  int init (const blocksstable::ObMacroBlockMarkerStatus &marker_status);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
 private:
@@ -37,6 +40,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMacroBlockMarkerStatus);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+
+}// observer
+}// oceanbase
 #endif /* SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_MACRO_BLOCK_MARKER_STATUS_H_ */

@@ -15,6 +15,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/ob_tenant_mgr.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase {
 namespace common {
@@ -31,18 +32,25 @@ class ObDatabaseSchema;
 
 namespace observer {
 
-class ObInfoSchemaQueryResponseTimeTable : public common::ObVirtualTableScannerIterator {
+class ObInfoSchemaQueryResponseTimeTable : public common::ObVirtualTableScannerIterator, 
+                                          public omt::ObMultiTenantOperator
+{
 public:
   ObInfoSchemaQueryResponseTimeTable();
   virtual ~ObInfoSchemaQueryResponseTimeTable();
+  int init(ObIAllocator *allocator, common::ObAddr &addr);
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
+  virtual bool is_need_process(uint64_t tenant_id) override;
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  virtual void release_last_tenant() override;
   virtual void reset() override;
   int set_ip(common::ObAddr* addr);
   inline void set_addr(common::ObAddr& addr)
   {
     addr_ = &addr;
   }
+  int process_row_data(ObNewRow *&row, ObObj* cells);
   
 private:
   enum SYS_COLUMN {
@@ -56,8 +64,7 @@ private:
   common::ObAddr* addr_;
   common::ObString ipstr_;
   int32_t port_;
-  uint64_t tenant_id_;
-  common::hash::ObHashMap<uint64_t, ObRSTTimeCollector*>::iterator collector_iter_;
+  ObRSTTimeCollector* time_collector_;
   int32_t utility_iter_;
 };
 

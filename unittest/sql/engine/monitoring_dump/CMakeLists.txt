@@ -1,1 +1,1 @@
-sql_unittest(test_monitoring_dump)
+# sql_unittest(test_monitoring_dump)

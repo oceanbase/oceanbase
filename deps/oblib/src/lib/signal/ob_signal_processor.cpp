@@ -22,9 +22,12 @@
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_libunwind.h"
 
-namespace oceanbase {
-namespace common {
-ObSigBTOnlyProcessor::ObSigBTOnlyProcessor() : fd_(-1), pos_(-1)
+namespace oceanbase
+{
+namespace common
+{
+ObSigBTOnlyProcessor::ObSigBTOnlyProcessor()
+  : fd_(-1), pos_(-1)
 {
   char *buf = filename_;
   int64_t len = sizeof(filename_);
@@ -43,6 +46,14 @@ ObSigBTOnlyProcessor::~ObSigBTOnlyProcessor()
   }
 }
 
+int ObSigBTOnlyProcessor::start()
+{
+  int64_t len = 0;
+  const char *buf = ObProcMaps::get_instance().get_maps(len);
+  ::write(fd_, buf, static_cast<int32_t>(len));
+  return OB_SUCCESS;
+}
+
 int ObSigBTOnlyProcessor::prepare()
 {
   int ret = OB_SUCCESS;
@@ -54,7 +65,9 @@ int ObSigBTOnlyProcessor::prepare()
   int64_t count = 0;
   count = safe_snprintf(buf_ + pos_, len - pos_, "tid: %ld, tname: %s, lbt: ", tid, tname);
   pos_ += count;
+#ifdef __x86_64__
   safe_backtrace(buf_ + pos_, len - pos_, &count);
+#endif
   pos_ += count;
   buf_[pos_++] = '\n';
   return ret;
@@ -91,5 +104,5 @@ int ObSigBTSQLProcessor::process()
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // namespace common
+} // namespace oceanbase

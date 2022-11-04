@@ -18,30 +18,29 @@
 #include "lib/utility/utility.h"
 #include "lib/hash/ob_hashutils.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 /**
  * not thread safe hash map only for pointer
  */
 template <class K, class V, template <class, class> class GetKey>
-class ObPointerHashArray {
+class ObPointerHashArray
+{
 public:
-  struct Iterator {
-    Iterator() : ha_(NULL), pos_(NULL), end_(NULL)
-    {}
-    Iterator(const ObPointerHashArray* ha, const V* pos, const V* end) : ha_(ha), pos_(pos), end_(end)
+  struct Iterator
+  {
+    Iterator() : ha_(NULL), pos_(NULL), end_(NULL) {}
+    Iterator(const ObPointerHashArray *ha, const V *pos, const V *end)
+        : ha_(ha), pos_(pos), end_(end)
     {
       advance_past_empty_and_deleted();
     }
-    V& operator*() const
-    {
-      return const_cast<V&>(*pos_);
-    }
-    V* operator->() const
-    {
-      return &(operator*());
-    }
+    V &operator*() const { return const_cast<V &>(*pos_); }
+    V *operator->() const { return &(operator*()); }
 
     void advance_past_empty_and_deleted()
     {
@@ -50,7 +49,7 @@ public:
       }
     }
 
-    Iterator& operator++()
+    Iterator &operator++()
     {
       if (pos_ == end_) {
         COMMON_LOG(ERROR, "pos is equal to end, unexpected error!");
@@ -61,42 +60,36 @@ public:
       return *this;
     }
 
-    bool operator==(const Iterator& it) const
-    {
-      return pos_ == it.pos_;
-    }
-    bool operator!=(const Iterator& it) const
-    {
-      return pos_ != it.pos_;
-    }
+    bool operator==(const Iterator &it) const { return pos_ == it.pos_; }
+    bool operator!=(const Iterator &it) const { return pos_ != it.pos_; }
 
-    const ObPointerHashArray* ha_;
-    const V* pos_;
-    const V* end_;
+    const ObPointerHashArray *ha_;
+    const V *pos_;
+    const V *end_;
   };
 
 public:
-  explicit ObPointerHashArray(const int64_t array_mem_size, const double load_factor = 0.7)
+  explicit ObPointerHashArray(const int64_t array_mem_size,
+                              const double load_factor = 0.7)
       : capacity_((array_mem_size - sizeof(ObPointerHashArray)) / sizeof(V)),
         max_entries_((int64_t)((double)capacity_ * load_factor)),
         anchor_mask_(next_pow2(capacity_) - 1),
         empty_v_((V)0),
-        erased_v_((V)-1),
+        erased_v_((V) - 1),
         count_(0),
         item_count_(0)
   {
     memset(cells_, 0, capacity_ * sizeof(V));
   }
 
-  ~ObPointerHashArray()
-  {}
+  ~ObPointerHashArray() {}
   static int64_t get_hash_array_mem_size(const int64_t ele_cnt)
   {
-    return (std::max((static_cast<int64_t>(MIN_HASH_ARRAY_ITEM_COUNT)), ele_cnt * 2) * sizeof(void*) +
-            sizeof(ObPointerHashArray));
+    return (std::max((static_cast<int64_t>(MIN_HASH_ARRAY_ITEM_COUNT)),
+                     ele_cnt * 2) * sizeof(void *) + sizeof(ObPointerHashArray));
   }
 
-  ObPointerHashArray& operator=(const ObPointerHashArray& other)
+  ObPointerHashArray &operator =(const ObPointerHashArray &other)
   {
     if (this != &other) {
       MEMCPY(this, &other, sizeof(ObPointerHashArray) + other.capacity_ * sizeof(V));
@@ -104,21 +97,15 @@ public:
     return *this;
   }
 
-  ObPointerHashArray(const ObPointerHashArray& other)
-      : capacity_(0), max_entries_(0), anchor_mask_(0), empty_v_((V)0), erased_v_((V)-1), count_(0), item_count_(0)
+  ObPointerHashArray(const ObPointerHashArray &other) : capacity_(0), max_entries_(0),
+                                                        anchor_mask_(0), empty_v_((V)0), erased_v_((V) - 1), count_(0), item_count_(0)
   {
     memset(cells_, 0, capacity_ * sizeof(V));
     *this = other;
   }
 
-  Iterator begin()
-  {
-    return Iterator(this, cells_, cells_ + capacity_);
-  }
-  Iterator end()
-  {
-    return Iterator(this, cells_ + capacity_, cells_ + capacity_);
-  }
+  Iterator begin() { return Iterator(this, cells_, cells_ + capacity_); }
+  Iterator end() { return Iterator(this, cells_ + capacity_, cells_ + capacity_); }
 
   /**
    * put a key value pair into HashMap
@@ -128,7 +115,7 @@ public:
    * @retval OB_HASH_EXIST key exist when overwrite = 0
    * @retval other errors
    */
-  int set_refactored(const K& key, const V& value, V& over_write_value, int overwrite = 0)
+  int set_refactored(const K &key, const V &value, V &over_write_value, int overwrite = 0)
   {
     int ret = OB_SUCCESS;
     int64_t pos = -1;
@@ -140,7 +127,7 @@ public:
     if (OB_SUCC(ret)) {
       ret = set_value(pos, value, over_write_value);
     } else {
-      // HASH_EXIST, HASH_NOT_EXIST or HASH_FULL
+      //HASH_EXIST, HASH_NOT_EXIST or HASH_FULL
     }
 
     return ret;
@@ -154,13 +141,15 @@ public:
    * @retval OB_HASH_EXIST key exist when overwrite = 0
    * @retval other errors
    */
-  int set_refactored(const K& key, const V& value, int overwrite = 0)
+  int set_refactored(const K &key, const V &value, int overwrite = 0)
   {
     V over_write_value = empty_v_;
     return set_refactored(key, value, over_write_value, overwrite);
   }
 
-  int find_set_pos(const K& key, const V& value, int64_t& pos, int64_t& erased_pos, bool& exist, int overwrite)
+
+  int find_set_pos(const K &key, const V &value, int64_t &pos,
+                   int64_t &erased_pos, bool &exist, int overwrite)
   {
     int ret = OB_SUCCESS;
     pos = -1;
@@ -169,8 +158,8 @@ public:
     ret = placement_hash_find_set_pos(key, overwrite, pos, exist);
     if (OB_SUCC(ret) && !exist) {
       if (OB_UNLIKELY(value == erased_v_)) {
-        // not allow to insert erased value,
-        // but it can overwrite with erased value
+        //not allow to insert erased value,
+        //but it can overwrite with erased value
         ret = OB_HASH_NOT_EXIST;
       } else if (is_full()) {
         // full but we found one erased pos
@@ -184,13 +173,13 @@ public:
         ret = OB_HASH_FULL;
       }
     } else {
-      // HASH_EXIST, HASH_OVERWRITE_SUCC or HASH_FULL
+      //HASH_EXIST, HASH_OVERWRITE_SUCC or HASH_FULL
     }
 
     return ret;
   }
 
-  int set_value(const int64_t pos, const V& value, V& over_write_value)
+  int set_value(const int64_t pos, const V &value, V &over_write_value)
   {
     int ret = OB_SUCCESS;
     over_write_value = empty_v_;
@@ -220,7 +209,7 @@ public:
     return ret;
   }
 
-  int set_value(const int64_t pos, const V& value)
+  int set_value(const int64_t pos, const V &value)
   {
     V over_write_value = empty_v_;
     return set_value(pos, value, over_write_value);
@@ -231,7 +220,7 @@ public:
    * @retval OB_HASH_NOT_EXIST key does not exist
    * @retval other errors
    */
-  int get_refactored(const K& key, V& value) const
+  int get_refactored(const K &key, V &value) const
   {
     int ret = OB_SUCCESS;
     int64_t pos = 0;
@@ -250,9 +239,9 @@ public:
    * @retval value get the corresponding value of key
    * @retval NULL key does not exist
    */
-  const V* get(const K& key) const
+  const V *get(const K &key) const
   {
-    const V* ret = NULL;
+    const V *ret = NULL;
     int64_t pos = 0;
     if (OB_SUCCESS == placement_hash_search(key, pos)) {
       if (pos < 0 || pos >= capacity_) {
@@ -264,9 +253,9 @@ public:
     return ret;
   }
 
-  V* get(const K& key)
+  V *get(const K &key)
   {
-    V* ret = NULL;
+    V *ret = NULL;
     int64_t pos = 0;
     if (OB_SUCCESS == placement_hash_search(key, pos)) {
       if (pos < 0 || pos >= capacity_) {
@@ -281,7 +270,7 @@ public:
   // @retval OB_SUCCESS success
   // @retval OB_HASH_NOT_EXIST key not found
   // @retval other errors
-  inline int erase_refactored(const K& key, V& erased_value)
+  inline int erase_refactored(const K &key, V &erased_value)
   {
     return set_refactored(key, erased_v_, erased_value, 1);
   }
@@ -289,7 +278,7 @@ public:
   // @retval OB_SUCCESS success
   // @retval OB_HASH_NOT_EXIST key not found
   // @retval other errors
-  inline int erase_refactored(const K& key)
+  inline int erase_refactored(const K &key)
   {
     V erased_value = empty_v_;
     return set_refactored(key, erased_v_, erased_value, 1);
@@ -299,8 +288,8 @@ public:
   {
     int ret = OB_SUCCESS;
     if ((erased_v_ != (*it)) && (empty_v_ != (*it))) {
-      (*it) = erased_v_;
-      --item_count_;
+     (*it) = erased_v_;
+     --item_count_;
     } else {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid iterator", K(ret));
@@ -317,18 +306,9 @@ public:
     item_count_ = 0;
   }
 
-  inline int64_t count() const
-  {
-    return count_;
-  }
-  inline int64_t item_count() const
-  {
-    return item_count_;
-  }
-  inline bool is_full() const
-  {
-    return count_ >= max_entries_;
-  }
+  inline int64_t count() const { return count_; }
+  inline int64_t item_count() const { return item_count_; }
+  inline bool is_full() const { return count_ >= max_entries_; }
 
   // all position is used, and erase_count > useful slot of one sub_map * 10%
   inline bool need_rebuild() const
@@ -336,10 +316,7 @@ public:
     return (((count_ - item_count_) > (max_entries_ / 10)) && is_full());
   }
 
-  int64_t get_max_entries() const
-  {
-    return max_entries_;
-  }
+  int64_t get_max_entries() const { return max_entries_; }
 
   inline void dump_keys(void) const
   {
@@ -350,22 +327,13 @@ public:
     }
   }
 
-  K get_key(Iterator& it) const
-  {
-    return get_key_(*it);
-  }
+  K get_key(Iterator &it) const { return get_key_(*it); }
 
-  bool test_empty(Iterator& it) const
-  {
-    return *it == empty_v_;
-  }
-  bool test_erased(Iterator& it) const
-  {
-    return *it == erased_v_;
-  }
+  bool test_empty(Iterator &it) const { return *it == empty_v_; }
+  bool test_erased(Iterator &it) const { return *it == erased_v_; }
 
 private:
-  uint64_t key_to_anchor_idx(const K& key) const
+  uint64_t key_to_anchor_idx(const K &key) const
   {
     uint64_t hash_val = do_hash(key);
     uint64_t probe = hash_val & anchor_mask_;
@@ -380,7 +348,7 @@ private:
     return OB_LIKELY(idx < capacity_) ? idx : (idx - capacity_);
   }
 
-  int placement_hash_search(const K& key_in, int64_t& pos) const
+  int placement_hash_search(const K &key_in, int64_t &pos) const
   {
     int hash_ret = OB_SUCCESS;
     pos = -1;
@@ -388,7 +356,7 @@ private:
     if (item_count_ <= 0) {
       hash_ret = OB_HASH_NOT_EXIST;
     } else {
-      for (int64_t i = key_to_anchor_idx(key_in), num_probes = 0;; i = probe_next(i)) {
+      for (int64_t i = key_to_anchor_idx(key_in), num_probes = 0; ; i = probe_next(i)) {
         if (OB_UNLIKELY(cells_[i] == empty_v_)) {
           // if we hit an empty element, this key does not exist
           hash_ret = OB_HASH_NOT_EXIST;
@@ -411,13 +379,13 @@ private:
     return hash_ret;
   }
 
-  int placement_hash_find_set_pos(const K& key_in, int overwrite, int64_t& pos, bool& exist) const
+  int placement_hash_find_set_pos(const K &key_in, int overwrite, int64_t &pos, bool &exist) const
   {
     int ret = OB_SUCCESS;
     pos = -1;
     exist = false;
 
-    for (int64_t i = key_to_anchor_idx(key_in), num_probes = 0;; i = probe_next(i)) {
+    for (int64_t i = key_to_anchor_idx(key_in), num_probes = 0; ; i = probe_next(i)) {
       if (OB_UNLIKELY(cells_[i] == empty_v_)) {
         // if we hit an empty element, this key does not exist, can insert
         if (-1 == pos) {
@@ -455,7 +423,6 @@ private:
 
 public:
   static const int64_t MIN_HASH_ARRAY_ITEM_COUNT = 16;
-
 private:
   int64_t capacity_;
   int64_t max_entries_;
@@ -466,26 +433,26 @@ private:
   int64_t count_;
   // actual meaningful item count(not include erase_v)
   int64_t item_count_;
-  GetKey<K, V> get_key_;
+  GetKey<K, V>  get_key_;
   // This must be the last field of this class
   V cells_[0];
 };
 
-template <class K, class V, template <class, class> class GetKey, int64_t default_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
-    class Allocator = ModulePageAllocator>
-class ObPointerHashMap {
+template < class K, class V, template <class, class> class GetKey,
+           int64_t default_size = OB_MALLOC_NORMAL_BLOCK_SIZE, class Allocator = ModulePageAllocator >
+class ObPointerHashMap
+{
   typedef ObPointerHashArray<K, V, GetKey> SubMap;
-
 public:
   typedef typename SubMap::Iterator iterator;
 
-  explicit ObPointerHashMap(const lib::ObLabel& label = ObModIds::OB_HASH_NODE)
+  explicit ObPointerHashMap(const lib::ObLabel &label = ObModIds::OB_HASH_NODE)
       : sub_map_count_(0), sub_map_mem_size_(default_size), allocator_(label)
   {
     memset(sub_maps_, 0, sizeof(sub_maps_));
   }
 
-  explicit ObPointerHashMap(const Allocator& alloc)
+  explicit ObPointerHashMap(const Allocator &alloc)
       : sub_map_count_(0), sub_map_mem_size_(default_size), allocator_(alloc)
   {
     memset(sub_maps_, 0, sizeof(sub_maps_));
@@ -496,7 +463,7 @@ public:
     destroy();
   }
 
-  int assign(const ObPointerHashMap& other)
+  int assign(const ObPointerHashMap &other)
   {
     int ret = OB_SUCCESS;
     if (this != &other) {
@@ -514,7 +481,7 @@ public:
     return ret;
   }
 
-  ObPointerHashMap& operator=(const ObPointerHashMap& other)
+  ObPointerHashMap &operator =(const ObPointerHashMap &other)
   {
     int ret = assign(other);
     if (OB_FAIL(ret)) {
@@ -523,9 +490,10 @@ public:
     return *this;
   }
 
-  explicit ObPointerHashMap(const ObPointerHashMap& other) : sub_map_count_(0), sub_map_mem_size_(default_size)
+  explicit ObPointerHashMap(const ObPointerHashMap &other)
+      : sub_map_count_(0), sub_map_mem_size_(default_size)
   {
-    memset(sub_maps_, 0, sizeof(SubMap*) * MAX_SUB_MAP_COUNT);
+    memset(sub_maps_, 0, sizeof(SubMap *) * MAX_SUB_MAP_COUNT);
     *this = other;
   }
 
@@ -564,7 +532,7 @@ public:
    * @retval OB_HASH_EXIST key exist when overwrite = 0
    * @retval other errors
    */
-  int set_refactored(const K& key, const V& value, V& over_write_value, int overwrite = 0, int overwrite_key = 0)
+  int set_refactored(const K &key, const V &value, V &over_write_value, int overwrite = 0, int overwrite_key = 0)
   {
     int ret = OB_SUCCESS;
     int64_t sub_map_idx = -1;
@@ -586,7 +554,7 @@ public:
       }
 
       if (OB_HASH_FULL == ret) {
-        SubMap* sub_map = resize();
+        SubMap *sub_map = resize();
         if (NULL != sub_map) {
           ret = sub_map->set_refactored(key, value, over_write_value, overwrite);
         } else {
@@ -607,7 +575,7 @@ public:
    * @retval OB_HASH_EXIST key exist when overwrite = 0
    * @retval other errors
    */
-  int set_refactored(const K& key, const V& value, int overwrite = 0, int overwrite_key = 0)
+  int set_refactored(const K &key, const V &value, int overwrite = 0, int overwrite_key = 0)
   {
     V over_write_value = (V(0));
     return set_refactored(key, value, over_write_value, overwrite, overwrite_key);
@@ -618,7 +586,7 @@ public:
    * @retval OB_HASH_NOT_EXIST key does not exist
    * @retval other errors
    */
-  int get_refactored(const K& key, V& value) const
+  int get_refactored(const K &key, V &value) const
   {
     int hash_ret = OB_HASH_NOT_EXIST;
 
@@ -640,9 +608,9 @@ public:
    * @retval value get the corresponding value of key
    * @retval NULL key does not exist
    */
-  const V* get(const K& key) const
+  const V *get(const K &key) const
   {
-    const V* ret = NULL;
+    const V *ret = NULL;
 
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
       COMMON_LOG(WARN, "not initialize pointer hash map");
@@ -657,9 +625,9 @@ public:
     return ret;
   }
 
-  V* get(const K& key)
+  V *get(const K &key)
   {
-    V* ret = NULL;
+    V *ret = NULL;
 
     if (OB_UNLIKELY(NULL == sub_maps_[0])) {
       COMMON_LOG(WARN, "not initialize pointer hash map");
@@ -691,7 +659,7 @@ public:
   // @retval OB_SUCCESS success
   // @retval OB_HASH_NOT_EXIST key not found
   // @retval other errors
-  int erase_refactored(const K& key, V& erased_value)
+  int erase_refactored(const K &key, V &erased_value)
   {
     int ret = OB_HASH_NOT_EXIST;
 
@@ -715,13 +683,13 @@ public:
   // @retval OB_SUCCESS success
   // @retval OB_HASH_NOT_EXIST key not found
   // @retval other errors
-  int erase_refactored(const K& key)
+  int erase_refactored(const K &key)
   {
     V erased_value = (V(0));
     return erase_refactored(key, erased_value);
   }
 
-  int erase(iterator& it, const int64_t sub_map_id)
+  int erase(iterator &it, const int64_t sub_map_id)
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(sub_map_id >= 0) && OB_UNLIKELY(sub_map_id < sub_map_count_)) {
@@ -791,39 +759,34 @@ public:
     return iter;
   }
 
-  int64_t get_sub_map_count() const
-  {
-    return sub_map_count_;
-  }
-  int64_t get_sub_map_mem_size() const
-  {
-    return sub_map_mem_size_;
-  }
+  int64_t get_sub_map_count() const { return sub_map_count_; }
+  int64_t get_sub_map_mem_size() const { return sub_map_mem_size_; }
 
 private:
-  ObPointerHashMap(const ObPointerHashMap& other, const int64_t resize_to)
+  ObPointerHashMap(const ObPointerHashMap &other, const int64_t resize_to)
       : sub_map_count_(0), sub_map_mem_size_(resize_to)
   {
     memset(sub_maps_, 0, sizeof(sub_maps_));
     copy_from(other, resize_to);
   }
 
-  SubMap* create_sub_map(const SubMap* sub_map_in = NULL)
+  SubMap *create_sub_map(const SubMap *sub_map_in = NULL)
   {
-    SubMap* sub_map = NULL;
-    void* sub_map_mem = NULL;
+    SubMap *sub_map = NULL;
+    void *sub_map_mem = NULL;
 
     if (NULL == (sub_map_mem = allocator_.alloc(sub_map_mem_size_))) {
       COMMON_LOG(ERROR, "failed to allocate memory for sub map", K_(sub_map_mem_size));
     } else if (NULL != sub_map_in) {
-      sub_map = new (sub_map_mem) SubMap(*sub_map_in);
+      sub_map = new(sub_map_mem) SubMap(*sub_map_in);
     } else {
-      sub_map = new (sub_map_mem) SubMap(sub_map_mem_size_);
+      sub_map = new(sub_map_mem) SubMap(sub_map_mem_size_);
     }
     return sub_map;
   }
 
-  int find_set_pos(const K& key, const V& value, int64_t& sub_map_idx, int64_t& pos, int overwrite)
+  int find_set_pos(const K &key, const V &value, int64_t &sub_map_idx,
+                   int64_t &pos, int overwrite)
   {
     int ret = OB_SUCCESS;
     int64_t set_pos = -1;
@@ -858,16 +821,16 @@ private:
           break;
         }
       } else {
-        // HASH_EXIST or HASH_NOT_EXIST
+        //HASH_EXIST or HASH_NOT_EXIST
         break;
       }
     }
     return ret;
   }
 
-  SubMap* resize()
+  SubMap *resize()
   {
-    SubMap* ret = NULL;
+    SubMap *ret = NULL;
     int64_t resize_to = 0;
     bool add_sub_map = false;
     bool is_need_extend = (count() < (int64_t)(1.1 * (double)item_count()));
@@ -883,8 +846,9 @@ private:
      */
     if (1 == sub_map_count_) {
       int64_t needed_size = extend_size;
-      if ((OB_MALLOC_NORMAL_BLOCK_SIZE == sub_map_mem_size_ || OB_MALLOC_BIG_BLOCK_SIZE == sub_map_mem_size_) &&
-          sub_map_count_ < MAX_SUB_MAP_COUNT) {
+      if ((OB_MALLOC_NORMAL_BLOCK_SIZE == sub_map_mem_size_
+           || OB_MALLOC_BIG_BLOCK_SIZE == sub_map_mem_size_)
+          && sub_map_count_ < MAX_SUB_MAP_COUNT) {
         // need add a new sub map
         add_sub_map = true;
       } else if (needed_size <= OB_MALLOC_NORMAL_BLOCK_SIZE) {
@@ -915,17 +879,8 @@ private:
       // do nothing
     }
 
-    COMMON_LOG(INFO,
-        "extend",
-        K(add_sub_map),
-        K_(sub_map_count),
-        "curr_sub_map_mem_size",
-        sub_map_mem_size_,
-        K(resize_to),
-        "count",
-        count(),
-        "item_count",
-        item_count());
+    COMMON_LOG(INFO, "extend", K(add_sub_map), K_(sub_map_count), "curr_sub_map_mem_size",
+               sub_map_mem_size_, K(resize_to), "count", count(), "item_count", item_count());
 
     if (add_sub_map) {
       if (sub_map_count_ < MAX_SUB_MAP_COUNT) {
@@ -945,7 +900,7 @@ private:
     return ret;
   }
 
-  void swap(ObPointerHashMap& other)
+  void swap(ObPointerHashMap &other)
   {
     for (int64_t i = 0; i < std::max(sub_map_count_, other.sub_map_count_); ++i) {
       std::swap(sub_maps_[i], other.sub_maps_[i]);
@@ -955,22 +910,21 @@ private:
     std::swap(allocator_, other.allocator_);
   }
 
-  void copy_from(const ObPointerHashMap& other, const int64_t resize_to)
+  void copy_from(const ObPointerHashMap &other, const int64_t resize_to)
   {
     destroy();
     sub_map_mem_size_ = resize_to;
     allocator_ = other.allocator_;
 
-    SubMap* sub_map = create_sub_map();
+    SubMap *sub_map = create_sub_map();
     if (NULL != sub_map) {
       sub_maps_[sub_map_count_++] = sub_map;
       for (int64_t i = 0; i < other.sub_map_count_; ++i) {
         // We use a const iterator to get non-deleted bcks from ht
         // We could use set() here, but since we know there are
         // no duplicates and no deleted items, we can be more efficient
-        for (iterator it = const_cast<ObPointerHashMap&>(other).sub_maps_[i]->begin();
-             it != const_cast<ObPointerHashMap&>(other).sub_maps_[i]->end();
-             ++it) {
+        for (iterator it = const_cast<ObPointerHashMap &>(other).sub_maps_[i]->begin();
+             it != const_cast<ObPointerHashMap &>(other).sub_maps_[i]->end(); ++it) {
           sub_map->set_refactored(other.sub_maps_[i]->get_key(it), *it);
         }
       }
@@ -979,15 +933,14 @@ private:
 
 private:
   static const int64_t MAX_SUB_MAP_COUNT = 4;
-
 private:
-  SubMap* sub_maps_[MAX_SUB_MAP_COUNT];
+  SubMap *sub_maps_[MAX_SUB_MAP_COUNT];
   int64_t sub_map_count_;
   int64_t sub_map_mem_size_;
   Allocator allocator_;
 };
-}  // namespace hash
-}  // namespace common
-}  // namespace oceanbase
+} // namespace hash
+} // namespace common
+} // namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_HASH_POINTER_HASHMAP_
+#endif // OCEANBASE_COMMON_HASH_POINTER_HASHMAP_

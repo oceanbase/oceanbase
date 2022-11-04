@@ -1,20 +1,15 @@
 add_library(oblib_testbase INTERFACE)
 target_include_directories(oblib_testbase INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(oblib_testbase INTERFACE -lgmock -lgtest)
+file(COPY run_tests.sh DESTINATION .)
+enable_testing()
 
 function(oblib_addtest mainfile)
   get_filename_component(testname ${mainfile} NAME_WE)
   add_executable(${testname} ${ARGV})
-  target_link_libraries(${testname} PRIVATE
-  -Wl,--start-group
-  aio
-  easy
-  -L${DEP_DIR}/lib/mariadb mariadb
-  oblib
-  oblib_testbase
-  -Wl,--end-group
-  -static-libgcc
-  -static-libstdc++)
+  add_test(${testname} ${testname})
+  target_link_libraries(${testname} PRIVATE objit oblib oblib_testbase -static-libgcc -static-libstdc++
+      -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 endfunction()
 
 add_subdirectory(lib)

@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #ifndef OCEANBASE_OB_STRING_UTIL_H_
 #define OCEANBASE_OB_STRING_UTIL_H_
 

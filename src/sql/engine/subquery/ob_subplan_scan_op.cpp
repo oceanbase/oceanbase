@@ -14,19 +14,25 @@
 
 #include "ob_subplan_scan_op.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObSubPlanScanSpec::ObSubPlanScanSpec(ObIAllocator& alloc, const ObPhyOperatorType type)
+ObSubPlanScanSpec::ObSubPlanScanSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObOpSpec(alloc, type), projector_(alloc)
-{}
+{
+}
 
 OB_SERIALIZE_MEMBER((ObSubPlanScanSpec, ObOpSpec), projector_);
 
-ObSubPlanScanOp::ObSubPlanScanOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-    : ObOperator(exec_ctx, spec, input)
-{}
+
+ObSubPlanScanOp::ObSubPlanScanOp(
+    ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+  : ObOperator(exec_ctx, spec, input)
+{
+}
 
 int ObSubPlanScanOp::inner_open()
 {
@@ -41,9 +47,9 @@ int ObSubPlanScanOp::inner_open()
   return ret;
 }
 
-int ObSubPlanScanOp::rescan()
+int ObSubPlanScanOp::inner_rescan()
 {
-  return ObOperator::rescan();
+  return ObOperator::inner_rescan();
 }
 
 int ObSubPlanScanOp::inner_get_next_row()
@@ -67,20 +73,65 @@ int ObSubPlanScanOp::inner_get_next_row()
       }
     }
 
+
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.projector_.count(); i += 2) {
-      ObExpr* from = MY_SPEC.projector_[i];
-      ObExpr* to = MY_SPEC.projector_[i + 1];
-      ObDatum* datum = NULL;
+      ObExpr *from = MY_SPEC.projector_[i];
+      ObExpr *to = MY_SPEC.projector_[i + 1];
+      ObDatum *datum = NULL;
       if (OB_FAIL(from->eval(eval_ctx_, datum))) {
         LOG_WARN("expr evaluate failed", K(ret), K(*from));
       } else {
         to->locate_expr_datum(eval_ctx_) = *datum;
-        to->get_eval_info(eval_ctx_).evaluated_ = true;
+        to->set_evaluated_projected(eval_ctx_);
       }
     }
   }
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+int ObSubPlanScanOp::inner_get_next_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  clear_evaluated_flag();
+  const ObBatchRows *child_brs = nullptr;
+  if (OB_FAIL(child_->get_next_batch(max_row_cnt, child_brs))) {
+    LOG_WARN("get child next batch failed", K(ret));
+  } else if (child_brs->end_ && 0 == child_brs->size_) {
+    brs_.copy(child_brs);
+  } else {
+    brs_.copy(child_brs);
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.projector_.count(); i += 2) {
+      ObExpr *from = MY_SPEC.projector_[i];
+      ObExpr *to = MY_SPEC.projector_[i + 1];
+      if (OB_FAIL(from->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
+        LOG_WARN("eval batch failed", K(ret));
+      } else {
+        ObDatum *from_datums = from->locate_batch_datums(eval_ctx_);
+        ObDatum *to_datums = to->locate_batch_datums(eval_ctx_);
+        const ObEvalInfo &from_info = from->get_eval_info(eval_ctx_);
+        ObEvalInfo &to_info = to->get_eval_info(eval_ctx_);
+        if (OB_UNLIKELY(!to->is_batch_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("output of subplan scan should be batch result", K(ret), KPC(to));
+        } else if (from->is_batch_result()) {
+          MEMCPY(to_datums, from_datums, brs_.size_ * sizeof(ObDatum));
+          to_info = from_info;
+          to_info.projected_ = true;
+          to_info.point_to_frame_ = false;
+        } else {
+          for (int64_t j = 0; j < brs_.size_; j++) {
+            to_datums[j] = *from_datums;
+          }
+          to_info = from_info;
+          to_info.projected_ = true;
+          to_info.point_to_frame_ = false;
+          to_info.cnt_ = brs_.size_;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+} // end namespace sql
+} // end namespace oceanbase

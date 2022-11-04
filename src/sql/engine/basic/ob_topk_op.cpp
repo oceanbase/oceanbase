@@ -17,24 +17,27 @@
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace oceanbase::common;
 
-ObTopKSpec::ObTopKSpec(ObIAllocator& alloc, const ObPhyOperatorType type)
-    : ObOpSpec(alloc, type), minimum_row_count_(-1), topk_precision_(-1), org_limit_(NULL), org_offset_(NULL)
-{}
+ObTopKSpec::ObTopKSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
+  : ObOpSpec(alloc, type), minimum_row_count_(-1), topk_precision_(-1),
+    org_limit_(NULL), org_offset_(NULL) {}
 
 bool ObTopKSpec::is_valid() const
 {
-  return (get_output_count() > 0) && (NULL != org_limit_) && (NULL != child_) && (child_->get_output_count() > 0);
+  return (get_output_count() > 0) && (NULL != org_limit_) &&
+         (NULL != child_) && (child_->get_output_count() > 0);
 }
 
-OB_SERIALIZE_MEMBER((ObTopKSpec, ObOpSpec), minimum_row_count_, topk_precision_, org_limit_, org_offset_);
+OB_SERIALIZE_MEMBER((ObTopKSpec, ObOpSpec), minimum_row_count_, topk_precision_,
+                    org_limit_, org_offset_);
 
-ObTopKOp::ObTopKOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-    : ObOperator(exec_ctx, spec, input), topk_final_count_(-1), output_count_(0)
-{}
+ObTopKOp::ObTopKOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+  : ObOperator(exec_ctx, spec, input), topk_final_count_(-1), output_count_(0) {}
 
 int ObTopKOp::inner_open()
 {
@@ -46,10 +49,10 @@ int ObTopKOp::inner_open()
   return ret;
 }
 
-int ObTopKOp::rescan()
+int ObTopKOp::inner_rescan()
 {
   output_count_ = 0;
-  return ObOperator::rescan();
+  return ObOperator::inner_rescan();
 }
 
 int ObTopKOp::inner_get_next_row()
@@ -85,16 +88,18 @@ int ObTopKOp::get_topk_final_count()
   int64_t limit = -1;
   int64_t offset = 0;
   bool is_null_value = false;
-  ObPhysicalPlanCtx* plan_ctx = ctx_.get_physical_plan_ctx();
+  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   if (OB_ISNULL(child_) || OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child_ or plan_ctx is NULL", K(ret), KP(child_), KP(plan_ctx));
-  } else if (OB_FAIL(ObLimitOp::get_int_val(MY_SPEC.org_limit_, eval_ctx_, limit, is_null_value))) {
+  } else if (OB_FAIL(ObLimitOp::get_int_val(MY_SPEC.org_limit_, eval_ctx_,
+                                            limit, is_null_value))) {
     LOG_WARN("get limit values failed", K(ret));
-  } else if (!is_null_value && OB_FAIL(ObLimitOp::get_int_val(MY_SPEC.org_offset_, eval_ctx_, offset, is_null_value))) {
+  } else if (!is_null_value && OB_FAIL(ObLimitOp::get_int_val(MY_SPEC.org_offset_, eval_ctx_,
+                                                              offset, is_null_value))) {
     LOG_WARN("get offset values failed", K(ret));
   } else {
-    // revise limit, offset because rownum < -1 is rewritten as limit -1
+    //revise limit, offset because rownum < -1 is rewritten as limit -1
     limit = (is_null_value || limit < 0) ? 0 : limit;
     offset = (is_null_value || offset < 0) ? 0 : offset;
     topk_final_count_ = std::max(MY_SPEC.minimum_row_count_, limit + offset);
@@ -114,7 +119,7 @@ int ObTopKOp::get_topk_final_count()
         break;
       }
       case PHY_HASH_GROUP_BY: {
-        ObHashGroupByOp* gby_op = static_cast<ObHashGroupByOp*>(child_);
+        ObHashGroupByOp *gby_op = static_cast<ObHashGroupByOp *>(child_);
         row_count = gby_op->get_hash_groupby_row_count();
         break;
       }
@@ -126,7 +131,8 @@ int ObTopKOp::get_topk_final_count()
     }
 
     if (OB_SUCC(ret)) {
-      topk_final_count_ = std::max(topk_final_count_, static_cast<int64_t>(row_count * MY_SPEC.topk_precision_ / 100));
+      topk_final_count_ = std::max(topk_final_count_,
+          static_cast<int64_t>(row_count * MY_SPEC.topk_precision_ / 100));
       if (topk_final_count_ >= row_count) {
         plan_ctx->set_is_result_accurate(true);
       } else {
@@ -137,5 +143,5 @@ int ObTopKOp::get_topk_final_count()
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

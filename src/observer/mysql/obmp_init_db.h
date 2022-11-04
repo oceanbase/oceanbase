@@ -14,33 +14,35 @@
 #define _OBMP_INIT_DB_H
 #include "observer/mysql/obmp_base.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace observer {
-class ObMPInitDB : public ObMPBase {
+namespace observer
+{
+class ObMPInitDB: public ObMPBase
+{
 public:
-  static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_INIT_DB;
-
+  static const obmysql::ObMySQLCmd COM = obmysql::COM_INIT_DB;
 public:
-  explicit ObMPInitDB(const ObGlobalContext& gctx) : ObMPBase(gctx), db_name_()
+  explicit ObMPInitDB(const ObGlobalContext &gctx)
+      :ObMPBase(gctx),
+       db_name_()
   {}
-  virtual ~ObMPInitDB()
-  {}
-
+  virtual ~ObMPInitDB() {}
 protected:
   int process();
   int deserialize();
-
 private:
-  int do_process(sql::ObSQLSessionInfo* session);
-
+  int do_process(sql::ObSQLSessionInfo *session);
 private:
   common::ObString db_name_;
+  char db_name_conv_buf[common::OB_MAX_DATABASE_NAME_BUF_LENGTH];
 };
 
-}  // end namespace observer
-}  // end namespace oceanbase
+} // end namespace observer
+} // end namespace oceanbase
 
 #endif /* _OBMP_INIT_DB_H */

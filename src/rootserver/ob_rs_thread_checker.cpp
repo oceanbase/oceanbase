@@ -15,11 +15,14 @@
 #include "ob_rs_thread_checker.h"
 #include "share/ob_errno.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace rootserver {
+namespace rootserver
+{
 
-ObRsThreadChecker::ObRsThreadChecker() : inited_(false)
+ObRsThreadChecker::ObRsThreadChecker()
+  :inited_(false)
 {}
 
 ObRsThreadChecker::~ObRsThreadChecker()
@@ -61,8 +64,7 @@ void ObRsThreadChecker::run3()
   LOG_WARN("rs_monitor_check : thread checker stop");
 }
 
-int ObRsThreadChecker::destroy()
-{
+int ObRsThreadChecker::destroy() {
   int ret = OB_SUCCESS;
   if (inited_) {
     stop();
@@ -75,5 +77,5 @@ int ObRsThreadChecker::destroy()
   return ret;
 }
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
