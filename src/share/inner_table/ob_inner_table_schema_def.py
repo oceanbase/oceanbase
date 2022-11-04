@@ -10769,6 +10769,7 @@ def_table_schema(
 )
 
 # 12339: __all_virtual_show_trace
+# 12340: __all_virtual_ha_diagnose
 
 #
 # 余留位置
