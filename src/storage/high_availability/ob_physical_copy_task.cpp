@@ -1191,6 +1191,7 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   const bool is_rollback = false;
+  bool need_merge = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1200,10 +1201,12 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id_));
+  } else if (OB_FAIL(check_need_merge_tablet_meta_(tablet, need_merge))) {
+    LOG_WARN("failedto check remote logical sstable exist", K(ret), KPC(tablet));
   } else {
     update_table_store_param.multi_version_start_ = 0;
     update_table_store_param.need_report_ = true;
-    update_table_store_param.tablet_meta_ = src_tablet_meta_;
+    update_table_store_param.tablet_meta_ = need_merge ? src_tablet_meta_ : nullptr;
     update_table_store_param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle_))) {
@@ -1229,6 +1232,7 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+  bool is_logical_sstable_exist = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1243,24 +1247,19 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
     LOG_WARN("tablet here should only has one", K(ret), KPC(tablet));
   } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
     //do nothing
+  } else if (OB_FAIL(check_remote_logical_sstable_exist_(tablet, is_logical_sstable_exist))) {
+    LOG_WARN("failedto check remote logical sstable exist", K(ret), KPC(tablet));
+  } else if (is_logical_sstable_exist && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet still has remote logical sstable, unexpected !!!", K(ret), KPC(tablet));
   } else {
-    const ObSSTableArray &minor_sstables = tablet->get_table_store().get_minor_sstables();
     const ObSSTableArray &major_sstables = tablet->get_table_store().get_major_sstables();
-    for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
-      const ObITable *table = minor_sstables[i];
-      if (table->is_remote_logical_minor_sstable()
-          && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet still has remote logical sstable, unexpected !!!", K(ret), KPC(table), KPC(tablet));
-      }
-    }
-
     if (OB_SUCC(ret)
         && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()
         && tablet->get_tablet_meta().ha_status_.is_restore_status_full()
         && major_sstables.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet should has major sstable, unexpected", K(ret), K(tablet), K(major_sstables));
+      LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet), K(major_sstables));
     }
 
 #ifdef ERRSIM
@@ -1287,10 +1286,63 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
         LOG_WARN("failed to submit tablet update task", K(tmp_ret), KPC(ls_), K(tablet_id_));
       }
     }
-
   }
   return ret;
 }
+
+int ObTabletCopyFinishTask::check_need_merge_tablet_meta_(
+    ObTablet *tablet,
+    bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = false;
+  bool is_exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check need merge tablet meta get invalid argument", K(ret), KP(tablet));
+  } else if (tablet->get_tablet_meta().clog_checkpoint_ts_ >= src_tablet_meta_->clog_checkpoint_ts_) {
+    need_merge = false;
+  } else if (OB_FAIL(check_remote_logical_sstable_exist_(tablet, is_exist))) {
+    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
+  } else if (!is_exist) {
+    need_merge = false;
+  } else {
+    need_merge = true;
+  }
+  return ret;
+}
+
+int ObTabletCopyFinishTask::check_remote_logical_sstable_exist_(
+    ObTablet *tablet,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check remote logical sstable exist get invalid argument", K(ret), KP(tablet));
+  } else {
+    const ObSSTableArray &minor_sstables = tablet->get_table_store().get_minor_sstables();
+    for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
+      const ObITable *table = minor_sstables.array_[i];
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("minor sstable should not be NULL", K(ret), KP(table));
+      } else if (table->is_remote_logical_minor_sstable()) {
+        is_exist = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 
 }
 }

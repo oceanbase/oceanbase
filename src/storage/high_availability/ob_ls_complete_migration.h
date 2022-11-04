@@ -173,7 +173,7 @@ private:
   int wait_log_replay_sync_();
   int wait_trans_tablet_explain_data_();
   int change_member_list_();
-  int check_need_wait_log_sync_(
+  int check_need_wait_(
       ObLS *ls,
       bool &need_wait);
   int update_ls_migration_status_hold_();
@@ -181,10 +181,7 @@ private:
   int check_tablet_ready_(
       const common::ObTabletID &tablet_id,
       ObLS *ls);
-  int check_need_wait_checkpoint_ts_push_(
-      ObLS *ls,
-      bool &need_wait);
-  int wait_ls_checkpoint_ts_push_();
+  int wait_log_replay_to_max_minor_end_scn_();
   int record_server_event_();
 
 private:

@@ -216,6 +216,12 @@ public:
 private:
   int create_new_table_store_();
   int update_tablet_data_status_();
+  int check_need_merge_tablet_meta_(
+      ObTablet *tablet,
+      bool &need_merge);
+  int check_remote_logical_sstable_exist_(
+      ObTablet *tablet,
+      bool &is_exist);
 
 private:
   bool is_inited_;

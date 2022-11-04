@@ -321,8 +321,8 @@ bool ObBatchUpdateTableStoreParam::is_valid() const
   return snapshot_version_ >= 0
       && multi_version_start_ >= 0
       && rebuild_seq_ > OB_INVALID_VERSION
-      && ((!update_logical_minor_sstable_ && OB_NOT_NULL(tablet_meta_))
-          || (update_logical_minor_sstable_ && start_scn_ > 0));
+      && (!update_logical_minor_sstable_
+          || (update_logical_minor_sstable_ && start_scn_ > 0 && OB_ISNULL(tablet_meta_)));
 }
 
 int ObBatchUpdateTableStoreParam::assign(

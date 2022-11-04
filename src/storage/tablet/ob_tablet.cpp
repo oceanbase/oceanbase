@@ -284,7 +284,6 @@ int ObTablet::init(
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
   } else if (is_update
       && !tablet_id.is_ls_inner_tablet()
-      && param.ha_status_.is_restore_status_full() // is_update && is_migrate: init memtable_mgr. restore reuse memtable_mgr
       && OB_FAIL(init_storage_related_member(ls_id, tablet_id, param.max_sync_storage_schema_version_))) {
     LOG_WARN("failed to init storage related member", K(ret), K(ls_id), K(tablet_id));
   } else if (!is_update && OB_FAIL(init_shared_params(ls_id, tablet_id, param.max_sync_storage_schema_version_, freezer))) {
