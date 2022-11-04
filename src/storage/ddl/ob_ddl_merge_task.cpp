@@ -751,8 +751,8 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid table schema", K(ret), K(tenant_id), K(table_id));
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
   } else {
     ObArray<ObColDesc> column_ids;
     ObArray<ObDDLChecksumItem> ddl_checksum_items;
