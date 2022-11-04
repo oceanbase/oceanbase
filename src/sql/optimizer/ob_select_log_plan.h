@@ -245,8 +245,6 @@ private:
                                       const bool ignore_hint,
                                       ObLogicalOperator *&top);
 
-  int adjust_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
-
   int allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
                                           ObLogicalOperator *right_child,
                                           DistAlgo dist_set_method,

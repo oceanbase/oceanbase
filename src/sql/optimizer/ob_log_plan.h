@@ -1333,6 +1333,8 @@ public:
 
   int candi_allocate_material();
 
+  int allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
+
 protected:
   ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;
   const ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;

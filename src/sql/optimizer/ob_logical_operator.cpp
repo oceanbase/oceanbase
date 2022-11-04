@@ -346,6 +346,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     contain_fake_cte_(false),
     contain_pw_merge_op_(false),
     contain_das_op_(false),
+    contain_match_all_fake_cte_(false),
     dup_table_pos_(),
     strong_sharding_(NULL),
     weak_sharding_(),
@@ -799,6 +800,23 @@ int ObLogicalOperator::compute_op_other_info()
         }
       }
     }
+    
+    // compute contains fake cte match all sharding
+    if (OB_SUCC(ret)) {
+      if (get_type() == log_op_def::ObLogOpType::LOG_SET &&
+          static_cast<ObLogSet*>(this)->is_recursive_union()) {
+        /*do nothing*/
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && !contain_match_all_fake_cte_ && i < get_num_of_child(); i++) {
+          if (OB_ISNULL(get_child(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else {
+            contain_match_all_fake_cte_ |= get_child(i)->get_contains_match_all_fake_cte();
+          }
+        }
+      }
+    }
 
     // compute contains merge style op
     if (OB_SUCC(ret)) {
@@ -891,6 +909,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_location_type(path->location_type_);
     set_contains_fake_cte(path->contain_fake_cte_);
     set_contains_pw_merge_op(path->contain_pw_merge_op_);
+    set_contains_match_all_fake_cte(path->contain_match_all_fake_cte_);
     set_contains_das_op(path->contain_das_op_);
     is_pipelined_plan_ = path->is_pipelined_path();
     is_nl_style_pipelined_plan_ = path->is_nl_style_pipelined_path();

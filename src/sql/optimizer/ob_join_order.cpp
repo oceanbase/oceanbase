@@ -3412,6 +3412,11 @@ int ObJoinOrder::add_path(Path* path)
   } else {
     bool should_add = true;
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
+    if (!path->is_cte_path() && 
+        path->contain_match_all_fake_cte() &&
+        !path->is_remote()) {
+      should_add = false;
+    }
     for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && should_add && i >= 0; --i) {
       Path *cur_path = interesting_paths_.at(i);
       if (OB_ISNULL(cur_path)) {
@@ -3720,6 +3725,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   location_type_ = other.location_type_;
   contain_fake_cte_ = other.contain_fake_cte_;
   contain_pw_merge_op_ = other.contain_pw_merge_op_;
+  contain_match_all_fake_cte_ = other.contain_match_all_fake_cte_;
   contain_das_op_ = other.contain_das_op_;
   parallel_ = other.parallel_;
   server_cnt_ = other.server_cnt_;
@@ -4829,6 +4835,8 @@ int JoinPath::compute_join_path_info()
     contain_pw_merge_op_ = (left_path_->contain_pw_merge_op_ && !is_left_need_exchange()) || 
                            (right_path_->contain_pw_merge_op_ && !is_right_need_exchange()) ||
                            (join_algo_ == JoinAlgo::MERGE_JOIN && is_partition_wise());
+    contain_match_all_fake_cte_ = left_path_->contain_match_all_fake_cte_ ||
+                                  right_path_->contain_match_all_fake_cte_; 
     contain_das_op_ = left_path_->contain_das_op_ || right_path_->contain_das_op_;
   }
   return ret;
@@ -5369,6 +5377,7 @@ void JoinPath::reuse()
   location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   contain_fake_cte_ = false;
   contain_pw_merge_op_ = false;
+  contain_match_all_fake_cte_ = false;
   contain_das_op_ = false;
   parallel_ = 1;
   server_cnt_ = 1;
@@ -5642,19 +5651,12 @@ int ObJoinOrder::param_funct_table_expr(ObRawExpr* &function_table_expr,
   return ret;
 }
 
-int ObJoinOrder::generate_cte_table_paths()
+int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item, 
+                                           ObShardingInfo *sharding)
 {
   int ret = OB_SUCCESS;
   CteTablePath *ap = NULL;
-  const ObDMLStmt *stmt = NULL;
-  const TableItem *table_item = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get  unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
-  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(table_id_));
-  } else if (OB_ISNULL(ap = reinterpret_cast<CteTablePath*>(allocator_->alloc(sizeof(CteTablePath))))) {
+  if (OB_ISNULL(ap = reinterpret_cast<CteTablePath*>(allocator_->alloc(sizeof(CteTablePath))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate an AccessPath", K(ret));
   } else {
@@ -5666,7 +5668,9 @@ int ObJoinOrder::generate_cte_table_paths()
     ap->ref_table_id_ = table_item->ref_id_;
     ap->parent_ = this;
     ap->contain_fake_cte_ = true;
-    ap->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
+    ap->strong_sharding_ = sharding;
+    ap->contain_match_all_fake_cte_ = (table_item->is_recursive_union_fake_table_ &&
+                                       sharding->is_match_all());
     if (OB_FAIL(append(ap->filter_, get_restrict_infos()))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(ap->estimate_cost())) {
@@ -5675,7 +5679,32 @@ int ObJoinOrder::generate_cte_table_paths()
       LOG_WARN("failed to compute pipelined path", K(ret));
     } else if (OB_FAIL(add_path(ap))) {
       LOG_WARN("failed to add path", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      /* do nothing */
+    }
+  }
+
+  return ret;
+}
+
+int ObJoinOrder::generate_cte_table_paths()
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get  unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_id_));
+  } else if (OB_FAIL(create_one_cte_table_path(table_item, 
+                                               get_plan()->get_optimizer_context().get_match_all_sharding()))) {
+    LOG_WARN("failed to create one cte table path", K(ret));
+  } else if (table_item->is_recursive_union_fake_table_ &&
+             OB_FAIL(create_one_cte_table_path(table_item, 
+                                               get_plan()->get_optimizer_context().get_local_sharding()))) {
+    LOG_WARN("failed to create one cte table path", K(ret));
   }
   return ret;
 }
@@ -6068,6 +6097,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->location_type_ = root->get_location_type();
       path->contain_fake_cte_ = root->get_contains_fake_cte();
       path->contain_pw_merge_op_ = root->get_contains_pw_merge_op();
+      path->contain_match_all_fake_cte_ = root->get_contains_match_all_fake_cte();
       path->contain_das_op_ = root->get_contains_das_op();
       path->parallel_ = root->get_parallel();
       path->server_cnt_ = root->get_server_cnt();
