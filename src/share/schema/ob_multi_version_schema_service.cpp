@@ -3514,12 +3514,18 @@ bool ObMultiVersionSchemaService::is_schema_error_need_retry(
      const uint64_t tenant_id)
 {
   bool bret = false;
-  if (!is_sys_full_schema()) {
+  int ret = OB_SUCCESS;
+  bool schema_not_full = false;
+  int64_t schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(refresh_full_schema_map_.get_refactored(OB_SYS_TENANT_ID, schema_not_full))) {
+    // skip
+  } else if (schema_not_full) {
     // observer may be not start service, do not retry
-  } else if (is_tenant_full_schema(tenant_id)) {
-    // refresh schema success once, do not retry
+  } else if (OB_FAIL(refresh_full_schema_map_.get_refactored(tenant_id, schema_not_full))) {
+    // skip
+  } else if (!schema_not_full) {
+    // tenant's schema is full, do not retry
   } else {
-    int ret = OB_SUCCESS;
     ObSchemaGetterGuard tmp_guard;
     const ObSimpleTenantSchema *tenant_schema = NULL;
     if (OB_ISNULL(guard)) {
@@ -3540,7 +3546,7 @@ bool ObMultiVersionSchemaService::is_schema_error_need_retry(
       // 2. restoring
       // 3. dropping
     } else {
-      // normal
+      // observer restarts
       bret = true;
     }
   }
