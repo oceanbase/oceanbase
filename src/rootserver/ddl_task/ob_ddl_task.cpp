@@ -20,6 +20,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/location_cache/ob_location_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
@@ -828,7 +829,6 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
     }
   }
   is_trans_end = is_trans_end_;
-  ret = OB_LS_LOCATION_LEADER_NOT_EXIST == ret ? OB_SUCCESS : ret;
   return ret;
 }
 
@@ -1066,9 +1066,6 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
     }
   }
   is_column_checksum_ready = is_calc_done_;
-  if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
