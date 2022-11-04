@@ -936,7 +936,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
      tx_table_guard,
      snapshot.core_,
      store_ctx.timeout_,
-     lock_timeout
+     lock_timeout,
+     snapshot.is_weak_read()
     );
     update_max_read_ts_(tenant_id_, ls_id, snapshot.core_.version_);
   }

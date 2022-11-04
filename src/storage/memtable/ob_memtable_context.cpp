@@ -457,6 +457,11 @@ int ObMemtableCtx::trans_end(
 {
   int ret = OB_SUCCESS;
 
+  if (commit && INT64_MAX == get_trans_version()) {
+    TRANS_LOG(ERROR, "unexpected prepare version", K(*this));
+    // no retcode
+  }
+
   ret = do_trans_end(commit,
                      trans_version,
                      final_log_ts,

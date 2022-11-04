@@ -90,6 +90,17 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
     }
   }
 
+  // add barrier snapshot version for defensive check
+  if (NULL != version_iter_) {
+    if (ctx_->is_weak_read()) {
+      version_iter_->set_safe_read_barrier(ctx_->snapshot_.version_);
+    }
+    if (!flag.is_prewarm()
+        && !version_iter_->is_elr()) {
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
+    }
+  }
+
   lock_for_read_end(lock_start_time, ret);
   return ret;
 }
