@@ -580,7 +580,10 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
     }
   }
 
-  if (OB_FAIL(trans_end(commit, trans_version, final_log_ts))) {
+  if (OB_FAIL(do_trans_end(commit,
+                           trans_version,
+                           final_log_ts,
+                           commit ? OB_TRANS_COMMITED : OB_TRANS_ROLLBACKED))) {
     TRANS_LOG(ERROR, "trans_end fail", K(ret), K(*this));
   } else {
     ret = cs_ret;
