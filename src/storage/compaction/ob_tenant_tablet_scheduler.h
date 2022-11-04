@@ -179,6 +179,12 @@ public:
 
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
+  static const int64_t BF_TASK_QUEUE_SIZE = 10L * 1000;
+  static const int64_t BF_TASK_MAP_SIZE = 10L * 1000;
+  static const int64_t BF_TASK_TOTAL_LIMIT = 512L * 1024L * 1024L;
+  static const int64_t BF_TASK_HOLD_LIMIT = 256L * 1024L * 1024L;
+  static const int64_t BF_TASK_PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; //64K
+
   static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 3;
   static constexpr ObMergeType MERGE_TYPES[] = {
       MINI_MINOR_MERGE, BUF_MINOR_MERGE, HISTORY_MINI_MINOR_MERGE};
