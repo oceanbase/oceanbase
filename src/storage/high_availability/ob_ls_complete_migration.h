@@ -188,6 +188,7 @@ private:
   int record_server_event_();
 
 private:
+  static const int64_t IS_REPLAY_DONE_THRESHOLD_NS = 3L * 1000 * 1000 * 1000;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObLSCompleteMigrationCtx *ctx_;

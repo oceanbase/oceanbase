@@ -1010,7 +1010,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
       } else if (OB_FAIL(ls->get_max_decided_log_ts_ns(current_replay_log_ts_ns))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else if (current_replay_log_ts_ns >= log_sync_scn_) {
+      } else if (current_replay_log_ts_ns + IS_REPLAY_DONE_THRESHOLD_NS >= log_sync_scn_) {
         wait_log_replay_success = true;
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
