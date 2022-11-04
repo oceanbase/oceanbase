@@ -223,6 +223,7 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
 
+  int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
   virtual int add_table_schema(share::schema::ObTableSchema &table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
   virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema);
@@ -2155,6 +2156,17 @@ private:
   int check_table_pk(const share::schema::ObTableSchema &orig_table_schema);
   int check_can_convert_to_character(const share::schema::ObColumnSchemaV2 &col_schema, bool &can_convert);
   int clean_global_context(const ObContextSchema &context_schema);
+
+  int get_hard_code_system_table_schema_(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      share::schema::ObTableSchema &hard_code_schema);
+  int create_system_table_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &hard_code_schema);
+  int alter_system_table_column_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &hard_code_schema);
 private:
   bool inited_;
   volatile bool stopped_;

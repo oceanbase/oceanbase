@@ -18513,6 +18513,204 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
   return ret;
 }
 
+int ObDDLService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[UPGRADE] begin upgrade system table", K(arg));
+  const uint64_t tenant_id = arg.get_tenant_id();
+  const uint64_t table_id = arg.get_table_id();
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (!GCONF.enable_sys_table_ddl) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("upgrade table schema when enable_sys_table_ddl is off is not allowed",
+             KR(ret), K(arg));
+  } else {
+    HEAP_VAR(ObTableSchema, hard_code_schema) {
+      ObSchemaGetterGuard schema_guard;
+      bool exist = false;
+      if (OB_FAIL(get_hard_code_system_table_schema_(
+          tenant_id, table_id, hard_code_schema))) {
+        LOG_WARN("fail to get hard code table schema", KR(ret), K(tenant_id), K(table_id));
+      } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+        LOG_WARN("get_schema_guard with version in inner table failed", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id, table_id, exist))) {
+        LOG_WARN("fail to check table exist", KR(ret), K(tenant_id), K(table_id));
+      } else if (!exist) {
+        if (OB_FAIL(create_system_table_(schema_guard, hard_code_schema))) {
+          LOG_WARN("fail to create system table", KR(ret), K(tenant_id), K(table_id));
+        }
+      } else if (OB_FAIL(alter_system_table_column_(schema_guard, hard_code_schema))) {
+        LOG_WARN("fail to alter system table's column", KR(ret), K(tenant_id), K(table_id));
+      }
+    }
+  }
+  FLOG_INFO("[UPGRADE] end upgrade system table",
+            KR(ret), K(tenant_id), K(table_id),
+            "cost", ObTimeUtility::current_time() - start_time);
+  return ret;
+
+}
+
+int ObDDLService::get_hard_code_system_table_schema_(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObTableSchema &hard_code_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TENANT_ID == tenant_id
+      && !is_system_table(table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or table_id", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    bool finded = false;
+    const schema_create_func *creator_ptr_array[] = {
+      share::core_table_schema_creators,
+      share::sys_table_schema_creators, NULL };
+    for (const schema_create_func **creator_ptr_ptr = creator_ptr_array;
+         OB_SUCC(ret) && !finded && OB_NOT_NULL(*creator_ptr_ptr); ++creator_ptr_ptr) {
+      for (const schema_create_func *creator_ptr = *creator_ptr_ptr;
+           OB_SUCC(ret) && !finded && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
+        hard_code_schema.reset();
+        bool exist = false;
+        if (OB_FAIL((*creator_ptr)(hard_code_schema))) {
+          LOG_WARN("create table schema failed", KR(ret));
+        } else if (!is_sys_tenant(tenant_id)
+                   && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
+                              tenant_id, hard_code_schema))) {
+          LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
+                   tenant_id, hard_code_schema, exist))) {
+          LOG_WARN("fail to check inner table exist",
+                   KR(ret), K(tenant_id), K(hard_code_schema));
+        } else if (!exist) {
+          // skip
+        } else if (hard_code_schema.get_table_id() == table_id) {
+          finded = true;
+        }
+      } // end for
+    } // end for
+
+    if (OB_SUCC(ret) && !finded) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("hard code table schema not exist", KR(ret), K(tenant_id), K(table_id));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::create_system_table_(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &hard_code_schema)
+{
+  int ret = OB_SUCCESS;
+  bool if_not_exist = true;
+  int64_t frozen_scn = 0;
+  ObArray<ObTableSchema> table_schemas;
+  // the following variable is not used
+  ObString ddl_stmt_str;
+  ObErrorInfo error_info;
+  obrpc::ObSequenceDDLArg sequence_ddl_arg;
+  uint64_t last_replay_log_id = 0;
+  ObArray<ObDependencyInfo> dep_infos;
+  ObArray<ObMockFKParentTableSchema> mock_fk_parent_table_schema_array;
+  // sys index、sys lob table will be added in create_user_tables()
+  if (OB_FAIL(table_schemas.push_back(hard_code_schema))) {
+    LOG_WARN("fail to push back new table schema", KR(ret));
+  } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(
+             hard_code_schema.get_tenant_id(), frozen_scn))) {
+    LOG_WARN("get_frozen_scn failed", KR(ret), "tenant_id", hard_code_schema.get_tenant_id());
+  } else if (OB_FAIL(create_user_tables(if_not_exist, ddl_stmt_str,
+             error_info, table_schemas, frozen_scn, schema_guard, sequence_ddl_arg,
+             last_replay_log_id, &dep_infos, mock_fk_parent_table_schema_array))) {
+    LOG_WARN("fail to create system table", KR(ret), K(hard_code_schema));
+  }
+  return ret;
+}
+
+int ObDDLService::alter_system_table_column_(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &hard_code_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = hard_code_schema.get_tenant_id();
+  const uint64_t table_id = hard_code_schema.get_table_id();
+  const ObTableSchema *orig_table_schema = NULL;
+  ObArray<uint64_t> add_column_ids;
+  ObArray<uint64_t> alter_column_ids;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(orig_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ObRootInspection::check_and_get_system_table_column_diff(
+             *orig_table_schema, hard_code_schema, add_column_ids, alter_column_ids))) {
+    LOG_WARN("fail to check system table's column schemas", KR(ret), K(tenant_id), K(table_id));
+  } else if (0 == add_column_ids.count() && 0 == alter_column_ids.count()) {
+    LOG_INFO("system table's column schemas not changed, just skip", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+    HEAP_VAR(ObTableSchema, new_table_schema) {
+
+    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
+      LOG_WARN("fail to assign table schema", KR(ret), K(tenant_id), K(table_id));
+    } else {
+      const ObColumnSchemaV2 *hard_code_column = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < add_column_ids.count(); i++) {
+        const uint64_t column_id = add_column_ids.at(i);
+        if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column schema", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (OB_FAIL(new_table_schema.add_column(*hard_code_column))) {
+          LOG_WARN("fail to add column", KR(ret), KPC(hard_code_column));
+        }
+      } // end for
+
+      ObColumnSchemaV2 new_column;
+      for (int64_t i = 0; OB_SUCC(ret) && i < alter_column_ids.count(); i++) {
+        const uint64_t column_id = alter_column_ids.at(i);
+        if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column schema", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (OB_FAIL(new_column.assign(*hard_code_column))) {
+          LOG_WARN("fail to assign column", KR(ret), KPC(hard_code_column));
+        } else if (OB_FAIL(new_table_schema.alter_column(new_column, share::schema::ObTableSchema::CHECK_MODE_ONLINE))) {
+          LOG_WARN("fail to alter column", KR(ret), K(new_column));
+        }
+      } // end for
+
+      if (FAILEDx(ddl_operator.batch_update_system_table_columns(trans,
+          *orig_table_schema, new_table_schema, add_column_ids, alter_column_ids, NULL))) {
+        LOG_WARN("fail to batch update columns", KR(ret), K(new_table_schema));
+      }
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(tmp_ret));
+        ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+      }
+    }
+    if (FAILEDx(publish_schema(tenant_id))) {
+      LOG_WARN("fail to publish schema", KR(ret), K(tenant_id));
+    }
+
+    } // end HEAP_VAR
+  }
+  return ret;
+}
+
 
 int ObDDLService::add_table_schema(
     ObTableSchema &table_schema,
@@ -18533,18 +18731,30 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
   ObString *stmt = NULL;
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
+  const ObSimpleTableSchemaV2 * table = NULL;
   if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init");
-  } else if (!is_inner_table(table_schema.get_table_id())) {
+    LOG_WARN("variable is not init", KR(ret), K(tenant_id), K(table_id));
+  } else if (!is_inner_table(table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table not inner table", "table_id", table_schema.get_table_id(), K(ret));
+    LOG_WARN("table not inner table", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
-  } else if (OB_FAIL(drop_table_in_trans(schema_guard, table_schema, false, table_schema.is_index_table(),
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table)) {
+    // bugfix: https://work.aone.alibaba-inc.com/issue/45050614
+    // virtual table index may be dropped with virtual table, so here we ignore OB_TABLE_NOT_EXIST failure.
+    LOG_INFO("table has already been dropped, just ignore",
+             K(tenant_id), K(table_id), "table_name", table_schema.get_table_name());
+  } else if (OB_FAIL(drop_table_in_trans(schema_guard,
+                                         table_schema,
+                                         false,
+                                         table_schema.is_index_table(),
                                          false, /* to recyclebin*/
                                          stmt,
                                          NULL, NULL, NULL))) {
-    LOG_WARN("drop table in transaction failed", K(ret), K(table_schema));
+    LOG_WARN("drop table in transaction failed", KR(ret), K(tenant_id), K(table_id));
   }
   return ret;
 }
@@ -21685,7 +21895,8 @@ int ObDDLService::lock_tenant(const ObString &tenant_name, const bool is_lock)
 
 int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
 {
-  LOG_INFO("receive add system variable request", K(arg));
+  FLOG_INFO("[UPGRADE] begin upgrade system variable", K(arg));
+  int64_t start_time = ObTimeUtility::current_time();
   DEBUG_SYNC(BEFORE_UPRADE_SYSTEM_VARIABLE);
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
@@ -21725,14 +21936,15 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
     LOG_WARN("sys var schema is null", KR(ret), K(arg));
   } else if (!arg.update_sys_var_) {
     // case 1. add sys var, and sys var exist
-    if (arg.if_not_exist_) {
-      execute = false;
+    if (new_sys_var.is_equal_for_add(*old_schema)) {
+      // new sys var will be mocked by schema when upgrade,
+      // only persist new sys var when sys var is equal with old sys var.
     } else {
-      ret = OB_ERR_PARAM_DUPLICATE;
+      ret = OB_SCHEMA_ERROR;
       LOG_WARN("system variable duplicated", KR(ret), K(var_name));
     }
   } else {
-    // upate sys var
+    // update sys var
     if (new_sys_var.is_equal_except_value(*old_schema)) {
       // case 2. new sys var is same with existed schema(except value), do nothing
       execute = false;
@@ -21784,6 +21996,8 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
       LOG_WARN("publish schema failed", KR(ret));
     }
   }
+  FLOG_INFO("[UPGRADE] end upgrade system variable",
+            KR(ret), K(arg), "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

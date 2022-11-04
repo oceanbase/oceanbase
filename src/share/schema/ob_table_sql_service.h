@@ -98,7 +98,8 @@ public:
   //alter table add column
   int insert_single_column(common::ObISQLClient &sql_client,
                            const ObTableSchema &new_table_schema,
-                           const ObColumnSchemaV2 &column_schema);
+                           const ObColumnSchemaV2 &column_schema,
+                           const bool record_ddl_operation);
   //alter table add constraint
   int insert_single_constraint(common::ObISQLClient &sql_client,
                            const ObTableSchema &new_table_schema,

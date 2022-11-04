@@ -2685,7 +2685,8 @@ int ObDDLOperator::insert_single_column(ObMySQLTransaction &trans,
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (FALSE_IT(new_column.set_schema_version(new_schema_version))) {
     //do nothing
-  } else if (OB_FAIL(schema_service->get_table_sql_service().insert_single_column(trans, new_table_schema, new_column))) {
+  } else if (OB_FAIL(schema_service->get_table_sql_service().insert_single_column(
+             trans, new_table_schema, new_column, true))) {
     LOG_WARN("insert single column failed", K(ret));
   }
   return ret;
@@ -3848,6 +3849,59 @@ int ObDDLOperator::update_single_column(common::ObMySQLTransaction &trans,
               trans, origin_table_schema, new_table_schema, column_schema,
               true /* record_ddl_operation */))) {
       RS_LOG(WARN, "failed to update single column", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::batch_update_system_table_columns(
+    common::ObMySQLTransaction &trans,
+    const share::schema::ObTableSchema &orig_table_schema,
+    share::schema::ObTableSchema &new_table_schema,
+    const common::ObIArray<uint64_t> &add_column_ids,
+    const common::ObIArray<uint64_t> &alter_column_ids,
+    const common::ObString *ddl_stmt_str/*=NULL*/)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  const uint64_t table_id = new_table_schema.get_table_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema_service_impl must not null", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+  } else {
+    (void) new_table_schema.set_schema_version(new_schema_version);
+    ObColumnSchemaV2 *new_column = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < add_column_ids.count(); i++) {
+      const uint64_t column_id = add_column_ids.at(i);
+      if (OB_ISNULL(new_column = new_table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+      } else if (FALSE_IT(new_column->set_schema_version(new_schema_version))) {
+      } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_single_column(
+                 trans, new_table_schema, *new_column, false))) {
+        LOG_WARN("fail to insert column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+      }
+    } // end for
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < alter_column_ids.count(); i++) {
+      const uint64_t column_id = alter_column_ids.at(i);
+      if (OB_ISNULL(new_column = new_table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+      } else if (FALSE_IT(new_column->set_schema_version(new_schema_version))) {
+      } else if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
+                 trans, orig_table_schema, new_table_schema, *new_column, false))) {
+        LOG_WARN("fail to insert column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+      }
+    } // end for
+
+    if (FAILEDx(schema_service_impl->get_table_sql_service().update_table_attribute(
+        trans, new_table_schema, OB_DDL_ALTER_TABLE, ddl_stmt_str))) {
+      LOG_WARN("failed to update table attribute", KR(ret), K(tenant_id), K(table_id));
     }
   }
   return ret;

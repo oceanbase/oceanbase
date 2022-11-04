@@ -4451,8 +4451,10 @@ struct ObUpgradeJobArg
 public:
   enum Action {
     INVALID_ACTION,
-    RUN_UPGRADE_JOB,
-    STOP_UPGRADE_JOB
+    UPGRADE_POST_ACTION,
+    STOP_UPGRADE_JOB,
+    UPGRADE_SYSTEM_VARIABLE,
+    UPGRADE_SYSTEM_TABLE,
   };
 public:
   ObUpgradeJobArg();
@@ -4462,6 +4464,26 @@ public:
 public:
   Action action_;
   int64_t version_;
+};
+
+struct ObUpgradeTableSchemaArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpgradeTableSchemaArg()
+    : ObDDLArg(),
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      table_id_(common::OB_INVALID_ID) {}
+  ~ObUpgradeTableSchemaArg() {}
+  int init(const uint64_t tenant_id, const uint64_t table_id);
+  bool is_valid() const;
+  int assign(const ObUpgradeTableSchemaArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_table_id() const { return table_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(table_id));
+private:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
 };
 
 struct ObAdminMergeArg

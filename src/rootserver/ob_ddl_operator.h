@@ -292,6 +292,13 @@ public:
   int delete_single_column(common::ObMySQLTransaction &trans,
                            share::schema::ObTableSchema &new_table_schema,
                            const common::ObString &column_name);
+  int batch_update_system_table_columns(
+      common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::ObTableSchema &new_table_schema,
+      const common::ObIArray<uint64_t> &add_column_ids,
+      const common::ObIArray<uint64_t> &alter_column_ids,
+      const common::ObString *ddl_stmt_str = NULL);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,

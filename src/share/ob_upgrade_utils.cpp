@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SHARE
+#define USING_LOG_PREFIX RS
 
 #include "lib/string/ob_sql_string.h"
 #include "share/ob_rpc_struct.h"
@@ -280,17 +280,17 @@ int ObUpgradeUtils::upgrade_sys_variable(
       || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(calc_diff_sys_var(sql_client, tenant_id, update_list, add_list))) {
+  } else if (OB_FAIL(calc_diff_sys_var_(sql_client, tenant_id, update_list, add_list))) {
     LOG_WARN("fail to calc diff sys var", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(update_sys_var(rpc_proxy, tenant_id, update_list))) {
+  } else if (OB_FAIL(update_sys_var_(rpc_proxy, tenant_id, true, update_list))) {
     LOG_WARN("fail to update sys var", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(add_sys_var(sql_client, tenant_id, add_list))) {
+  } else if (OB_FAIL(update_sys_var_(rpc_proxy, tenant_id, false, add_list))) {
     LOG_WARN("fail to add sys var", KR(ret), K(tenant_id));
   }
   return ret;
 }
 
-int ObUpgradeUtils::calc_diff_sys_var(
+int ObUpgradeUtils::calc_diff_sys_var_(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
     common::ObArray<int64_t> &update_list,
@@ -361,7 +361,7 @@ int ObUpgradeUtils::calc_diff_sys_var(
                 || 0 != hard_code_min_val.compare(min_val)
                 || 0 != hard_code_max_val.compare(max_val)) {
               // sys var to modify
-              LOG_INFO("sys var diff, need modify", K(tenant_id), K(name),
+              LOG_INFO("[UPGRADE] sys var diff, need modify", K(tenant_id), K(name),
                        K(data_type), K(flags), K(min_val), K(max_val), K(info),
                        K(hard_code_type), K(hard_code_flag), K(hard_code_min_val),
                        K(hard_code_max_val), K(hard_code_info));
@@ -398,7 +398,7 @@ int ObUpgradeUtils::calc_diff_sys_var(
         } else if (OB_FAIL(add_list.push_back(i))) {
           LOG_WARN("fail to push back var_store_idx", KR(ret), K(tenant_id), K(name));
         } else {
-          LOG_INFO("sys var miss, need add", K(tenant_id), K(name), K(i));
+          LOG_INFO("[UPGRADE] sys var miss, need add", K(tenant_id), K(name), K(i));
         }
       }
     }
@@ -406,15 +406,11 @@ int ObUpgradeUtils::calc_diff_sys_var(
   return ret;
 }
 
-/*
- * This function is used to restore backup data from cluster with lower cluster version.
- * For modified system variable schema in physical restore, we compensate by methods below.
- * 1. Modify system variable(except value) by DDL in physical restore.
- * 2. Observer should run with system variable schema which is not modified yet.
- */
-int ObUpgradeUtils::update_sys_var(
+// modify & add sys var according by hard code schema
+int ObUpgradeUtils::update_sys_var_(
     obrpc::ObCommonRpcProxy &rpc_proxy,
     const uint64_t tenant_id,
+    const bool is_update,
     common::ObArray<int64_t> &update_list)
 {
   int ret = OB_SUCCESS;
@@ -423,7 +419,9 @@ int ObUpgradeUtils::update_sys_var(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else {
+    const int64_t timeout = GCONF.internal_sql_execute_timeout;
     for (int64_t i = 0; OB_SUCC(ret) && i < update_list.count(); i++) {
+      int64_t start_ts = ObTimeUtility::current_time();
       int64_t var_store_idx = update_list.at(i);
       const ObString &name = ObSysVariables::get_name(var_store_idx);
       const ObObjType &type = ObSysVariables::get_type(var_store_idx);
@@ -436,9 +434,9 @@ int ObUpgradeUtils::update_sys_var(
       ObSysParam sys_param;
       obrpc::ObAddSysVarArg arg;
       arg.exec_tenant_id_ = tenant_id;
-      arg.if_not_exist_ = true;
+      arg.if_not_exist_ = true; // not used
       arg.sysvar_.set_tenant_id(tenant_id);
-      arg.update_sys_var_ = true;
+      arg.update_sys_var_ = is_update;
       if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
           value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
         LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
@@ -448,298 +446,16 @@ int ObUpgradeUtils::update_sys_var(
         LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
       } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, arg.sysvar_))) {
         LOG_WARN("convert sys param to sysvar schema failed", KR(ret));
-      } else if (OB_FAIL(rpc_proxy.add_system_variable(arg))) {
-        LOG_WARN("add system variable failed", KR(ret), K(arg));
-      /*} else if (OB_FAIL(execute_update_sys_var_sql(sql_client, tenant_id, sys_param))) {
-        LOG_WARN("fail to execute update sys var sql", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(execute_update_sys_var_history_sql(sql_client, tenant_id, sys_param))) {
-        LOG_WARN("fail to execute update sys var history sql", KR(ret), K(tenant_id));*/
+      } else if (OB_FAIL(rpc_proxy.timeout(timeout).add_system_variable(arg))) {
+        LOG_WARN("add system variable failed", KR(ret), K(timeout), K(arg));
       }
+      LOG_INFO("[UPGRADE] finish upgrade system variable",
+               KR(ret), K(tenant_id), K(name), "cost", ObTimeUtility::current_time() - start_ts);
     }
   }
   return ret;
 }
 
-int ObUpgradeUtils::execute_update_sys_var_sql(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObSysParam &sys_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else {
-    int64_t affected_rows = 0;
-    ObDMLSqlSplicer dml;
-    ObDMLExecHelper exec(sql_client, tenant_id);
-    if (OB_FAIL(gen_basic_sys_variable_dml(tenant_id, sys_param, dml))) {
-      LOG_WARN("fail to gen dml", KR(ret), K(tenant_id), K(sys_param));
-    } else if (OB_FAIL(exec.exec_update(OB_ALL_SYS_VARIABLE_TNAME, dml, affected_rows))) {
-      LOG_WARN("execute insert failed", KR(ret));
-    } else if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
-      LOG_WARN("invalid affected_rows", KR(ret), K(tenant_id), K(affected_rows));
-    } else {
-      LOG_INFO("[UPGRADE] modify sys var", KR(ret), K(tenant_id), K(sys_param));
-    }
-  }
-  return ret;
-}
-
-int ObUpgradeUtils::execute_update_sys_var_history_sql(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObSysParam &sys_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else {
-    int64_t schema_version = OB_INVALID_VERSION;
-    {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObMySQLResult *result = NULL;
-        ObSqlString sql;
-        if (OB_FAIL(sql.append_fmt(
-                    "select schema_version from %s where tenant_id = %lu"
-                    " and zone = '' and name = '%s' order by schema_version desc limit 1",
-                    OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
-                    ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                    sys_param.name_))) {
-          LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
-        } else if (NULL == (result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is not expected to be NULL", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(result->next())) {
-          LOG_WARN("fail to get row", KR(ret), K(tenant_id), K(sql));
-        } else {
-          EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t);
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      int64_t affected_rows = 0;
-      ObDMLSqlSplicer dml;
-      ObDMLExecHelper exec(sql_client, tenant_id);
-      if (OB_INVALID_VERSION == schema_version) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid schema_version", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(gen_basic_sys_variable_dml(tenant_id, sys_param, dml))) {
-        LOG_WARN("fail to gen dml", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(dml.add_pk_column("schema_version", schema_version))) {
-        LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(schema_version));
-      } else if (OB_FAIL(exec.exec_update(OB_ALL_SYS_VARIABLE_HISTORY_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute insert failed", KR(ret));
-      } else if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
-        LOG_WARN("invalid affected_rows", KR(ret), K(tenant_id), K(affected_rows));
-      } else {
-        LOG_INFO("[UPGRADE] modify sys var history", KR(ret), K(tenant_id), K(sys_param));
-      }
-    }
-  }
-  return ret;
-}
-
-/*
- * This function is used to restore backup data from cluster with lower cluster version.
- * For missing system variable schema in physical restore, we compensate by methods below.
- * 1. Missing system variable schema will be added according to hardcoded meta schema when refreshing schema.
- * 2. (Not necessary) Modify __all_sys_variable/__all_sys_variable_history, so we can construct system variable schema
- *    from inner table when observer restarts.
- */
-int ObUpgradeUtils::add_sys_var(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    common::ObArray<int64_t> &add_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else {
-    ObArenaAllocator allocator("AddSysVar");
-    for (int64_t i = 0; OB_SUCC(ret) && i < add_list.count(); i++) {
-      int64_t var_store_idx = add_list.at(i);
-      const ObString &name = ObSysVariables::get_name(var_store_idx);
-      const ObObjType &type = ObSysVariables::get_type(var_store_idx);
-      const ObString &min = ObSysVariables::get_min(var_store_idx);
-      const ObString &max = ObSysVariables::get_max(var_store_idx);
-      const ObString &info = ObSysVariables::get_info(var_store_idx);
-      const int64_t flag = ObSysVariables::get_flags(var_store_idx);
-      const ObString zone("");
-      ObSysParam sys_param;
-      ObString value;
-      if (OB_FAIL(convert_sys_variable_value(var_store_idx, allocator, value))) {
-        LOG_WARN("fail to get sys variable value", KR(ret), K(tenant_id), K(var_store_idx));
-      } else if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
-                 value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
-        LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
-                 K(type), K(value), K(min), K(max), K(info), K(flag));
-      } else if (!sys_param.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(execute_add_sys_var_sql(sql_client, tenant_id, sys_param))) {
-        LOG_WARN("fail to execute add sys var sql", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(execute_add_sys_var_history_sql(sql_client, tenant_id, sys_param))) {
-        LOG_WARN("fail to execute add sys var history sql", KR(ret), K(tenant_id));
-      }
-    }
-  }
-  return ret;
-}
-
-// C++ implement for special_update_sys_vars_for_tenant() in python upgrade script.
-int ObUpgradeUtils::convert_sys_variable_value(
-    const int64_t var_store_idx,
-    common::ObIAllocator &allocator,
-    ObString &value)
-{
-  int ret = OB_SUCCESS;
-  const ObString &name = ObSysVariables::get_name(var_store_idx);
-  if (0 == name.compare("nls_date_format")) {
-    if (OB_FAIL(ob_write_string(
-                allocator, ObString("YYYY-MM-DD HH24:MI:SS"), value))) {
-      LOG_WARN("fail to write string", KR(ret), K(name));
-    }
-  } else if (0 == name.compare("nls_timestamp_format")) {
-    if (OB_FAIL(ob_write_string(
-                allocator, ObString("YYYY-MM-DD HH24:MI:SS.FF"), value))) {
-      LOG_WARN("fail to write string", KR(ret), K(name));
-    }
-  } else if (0 == name.compare("nls_timestamp_tz_format")) {
-    if (OB_FAIL(ob_write_string(
-                allocator, ObString("YYYY-MM-DD HH24:MI:SS.FF TZR TZD"), value))) {
-      LOG_WARN("fail to write string", KR(ret), K(name));
-    }
-  } else {
-    const ObString &ori_value = ObSysVariables::get_value(var_store_idx);
-    value.assign_ptr(ori_value.ptr(), ori_value.length());
-  }
-  return ret;
-}
-
-int ObUpgradeUtils::execute_add_sys_var_sql(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObSysParam &sys_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else {
-    int64_t affected_rows = 0;
-    ObDMLSqlSplicer dml;
-    ObDMLExecHelper exec(sql_client, tenant_id);
-    if (OB_FAIL(gen_basic_sys_variable_dml(tenant_id, sys_param, dml))) {
-      LOG_WARN("fail to gen dml", KR(ret), K(tenant_id), K(sys_param));
-    } else if (OB_FAIL(dml.add_column("value", FORMAT_STR(ObString(sys_param.value_))))) {
-      LOG_WARN("fail to gen dml", KR(ret), K(tenant_id), K(sys_param));
-    } else if (OB_FAIL(exec.exec_replace(OB_ALL_SYS_VARIABLE_TNAME, dml, affected_rows))) {
-      LOG_WARN("execute insert failed", KR(ret));
-    } else if (!is_zero_row(affected_rows)
-               && !is_single_row(affected_rows)
-               && !is_double_row(affected_rows)) {
-      LOG_WARN("invalid affected_rows", KR(ret), K(tenant_id), K(affected_rows));
-    } else {
-      LOG_INFO("[UPGRADE] add sys var", KR(ret), K(tenant_id), K(sys_param));
-    }
-  }
-  return ret;
-}
-
-int ObUpgradeUtils::execute_add_sys_var_history_sql(
-    common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObSysParam &sys_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else {
-    int64_t schema_version = OB_INVALID_VERSION;
-    {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObMySQLResult *result = NULL;
-        ObSqlString sql;
-        if (OB_FAIL(sql.append_fmt(
-                    "select schema_version from %s where tenant_id = %lu"
-                    " order by schema_version asc limit 1",
-                    OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
-                    ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
-          LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
-        } else if (NULL == (result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is not expected to be NULL", KR(ret), K(tenant_id), K(sql));
-        } else if (OB_FAIL(result->next())) {
-          LOG_WARN("fail to get row", KR(ret), K(tenant_id), K(sql));
-        } else {
-          EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version, int64_t);
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      int64_t affected_rows = 0;
-      ObDMLSqlSplicer dml;
-      ObDMLExecHelper exec(sql_client, tenant_id);
-      if (OB_INVALID_VERSION == schema_version) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid schema_version", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(gen_basic_sys_variable_dml(tenant_id, sys_param, dml))) {
-        LOG_WARN("fail to gen dml", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(dml.add_pk_column("schema_version", schema_version))
-                 || OB_FAIL(dml.add_column("value", FORMAT_STR(ObString(sys_param.value_))))
-                 || OB_FAIL(dml.add_column("is_deleted", 0))) {
-        LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(schema_version));
-      } else if (OB_FAIL(exec.exec_replace(OB_ALL_SYS_VARIABLE_HISTORY_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute insert failed", KR(ret));
-      } else if (!is_zero_row(affected_rows)
-                 && !is_single_row(affected_rows)
-                 && !is_double_row(affected_rows)) {
-        LOG_WARN("invalid affected_rows", KR(ret), K(tenant_id), K(affected_rows));
-      } else {
-        LOG_INFO("[UPGRADE] add sys var history", KR(ret), K(tenant_id), K(sys_param));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpgradeUtils::gen_basic_sys_variable_dml(
-    const uint64_t tenant_id,
-    const ObSysParam &sys_param,
-    ObDMLSqlSplicer &dml)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_TENANT_ID == tenant_id
-      || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (
-      OB_FAIL(dml.add_pk_column("tenant_id",
-              ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))
-      || OB_FAIL(dml.add_pk_column("zone", ""))
-      || OB_FAIL(dml.add_pk_column("name", FORMAT_STR(ObString(sys_param.name_))))
-      || OB_FAIL(dml.add_column("data_type", sys_param.data_type_))
-      || OB_FAIL(dml.add_column("min_val", FORMAT_STR(ObString(sys_param.min_val_))))
-      || OB_FAIL(dml.add_column("max_val", FORMAT_STR(ObString(sys_param.max_val_))))
-      || OB_FAIL(dml.add_column("info", FORMAT_STR(ObString(sys_param.info_))))
-      || OB_FAIL(dml.add_column("flags", sys_param.flags_))) {
-    LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(sys_param));
-  }
-  return ret;
-}
 /* =========== upgrade sys variable end =========== */
 
 /* =========== upgrade sys stat =========== */

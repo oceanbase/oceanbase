@@ -38,7 +38,6 @@ public:
   static int can_run_upgrade_job(rootserver::ObRsJobType job_type, bool &can);
   static int check_upgrade_job_passed(rootserver::ObRsJobType job_type);
   static int check_schema_sync(bool &is_sync);
-  /* physical restore related */
   // upgrade_sys_variable()/upgrade_sys_stat() can be called when enable_ddl = false.
   static int upgrade_sys_variable(
              obrpc::ObCommonRpcProxy &rpc_proxy,
@@ -51,42 +50,16 @@ private:
   static int check_rs_job_success(rootserver::ObRsJobType job_type, bool &success);
 
   /* upgrade sys variable */
-  static int calc_diff_sys_var(
+  static int calc_diff_sys_var_(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       common::ObArray<int64_t> &update_list,
       common::ObArray<int64_t> &add_list);
-  static int update_sys_var(
+  static int update_sys_var_(
              obrpc::ObCommonRpcProxy &rpc_proxy,
              const uint64_t tenant_id,
+             const bool is_update,
              common::ObArray<int64_t> &update_list);
-  static int add_sys_var(common::ObISQLClient &sql_client,
-                         const uint64_t tenant_id,
-                         common::ObArray<int64_t> &add_list);
-  static int execute_update_sys_var_sql(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const share::schema::ObSysParam &sys_param);
-  static int execute_update_sys_var_history_sql(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const share::schema::ObSysParam &sys_param);
-  static int execute_add_sys_var_sql(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const share::schema::ObSysParam &sys_param);
-  static int execute_add_sys_var_history_sql(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const share::schema::ObSysParam &sys_param);
-  static int convert_sys_variable_value(
-      const int64_t var_store_idx,
-      common::ObIAllocator &allocator,
-      common::ObString &value);
-  static int gen_basic_sys_variable_dml(
-      const uint64_t tenant_id,
-      const share::schema::ObSysParam &sys_param,
-      share::ObDMLSqlSplicer &dml);
   /* upgrade sys variable end */
   static int filter_sys_stat(
       common::ObISQLClient &sql_client,

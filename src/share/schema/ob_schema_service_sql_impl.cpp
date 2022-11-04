@@ -1271,7 +1271,7 @@ int ObSchemaServiceSQLImpl::get_sys_variable_schema(
   }
 
   if (OB_SUCC(ret)) {
-    // mock missed system variable schema by hardcoded schema
+    // To avoid -5044 error, mock missed system variable schema with default value by hardcoded schema.
     for (int64_t i = 0; OB_SUCC(ret) && i < ObSysVariables::get_amount(); i++) {
       ObSysVarClassType sys_var_id = ObSysVariables::get_sys_var_id(i);
       const ObSysVarSchema *sys_var = NULL;

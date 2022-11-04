@@ -169,6 +169,12 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
   return *this;
 }
 
+int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &other)
+{
+  *this = other;
+  return error_ret_;
+}
+
 bool ObColumnSchemaV2::operator==(const ObColumnSchemaV2 &r) const
 {
   return (tenant_id_ == r.tenant_id_ && table_id_ == r.table_id_ && column_id_ == r.column_id_

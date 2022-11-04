@@ -1431,20 +1431,22 @@ int ObRootService::submit_offline_server_task(const common::ObAddr &server)
   return ret;
 }
 
-int ObRootService::submit_upgrade_task(const int64_t version)
+int ObRootService::submit_upgrade_task(
+    const obrpc::ObUpgradeJobArg::Action action,
+    const int64_t version)
 {
   int ret = OB_SUCCESS;
-  ObUpgradeTask task(upgrade_executor_, version);
+  ObUpgradeTask task(upgrade_executor_, action, version);
   task.set_retry_times(0); //not repeat
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(upgrade_executor_.can_execute())) {
-    LOG_WARN("can't run task now", KR(ret), K(version));
+    LOG_WARN("can't run task now", KR(ret), K(action), K(version));
   } else if (OB_FAIL(task_queue_.add_async_task(task))) {
-    LOG_WARN("submit upgrade task fail", KR(ret), K(version));
+    LOG_WARN("submit upgrade task fail", KR(ret), K(action), K(version));
   } else {
-    LOG_INFO("submit upgrade task success", KR(ret), K(version));
+    LOG_INFO("submit upgrade task success", KR(ret), K(action), K(version));
   }
   return ret;
 }
@@ -7955,13 +7957,15 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), KR(ret));
-  } else if (version < CLUSTER_VERSION_2270
-             || !ObUpgradeChecker::check_cluster_version_exist(version)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
-  } else if (ObUpgradeJobArg::RUN_UPGRADE_JOB == arg.action_) {
-    if (OB_FAIL(submit_upgrade_task(arg.version_))) {
+  } else if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
+             || ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE == arg.action_
+             || ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE == arg.action_) {
+    if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
+        && !ObUpgradeChecker::check_cluster_version_exist(version)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
+    } else if (OB_FAIL(submit_upgrade_task(arg.action_, version))) {
       LOG_WARN("fail to submit upgrade task", KR(ret), K(arg));
     }
   } else if (ObUpgradeJobArg::STOP_UPGRADE_JOB == arg.action_) {
@@ -7975,6 +7979,18 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
     LOG_WARN("invalid action type", KR(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "admin_run_upgrade_job", KR(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ddl_service_.upgrade_table_schema(arg))) {
+    LOG_WARN("fail to upgrade table schema", KR(ret), K(arg));
+  }
   return ret;
 }
 

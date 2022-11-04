@@ -38,6 +38,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_config.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 
 namespace oceanbase
 {
@@ -2596,15 +2597,24 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
       LOG_ERROR("create ObRunUpgradeJobStmt failed", KR(ret));
     } else {
       stmt_ = stmt;
-      ObString version_str;
+      ObString str;
       uint64_t version = OB_INVALID_VERSION;
-      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], version_str))) {
+      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], str))) {
         LOG_WARN("resolve string failed", KR(ret));
-      } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
-        LOG_WARN("fail to get version", KR(ret), K(version_str));
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_SYSTEM_VARIABLE))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE;
+      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
+                 rootserver::JOB_TYPE_UPGRADE_SYSTEM_TABLE))) {
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE;
       } else {
-        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::RUN_UPGRADE_JOB;
-        stmt->get_rpc_arg().version_ = static_cast<int64_t>(version);
+        // UPGRADE_POST_ACTION
+        if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
+          LOG_WARN("fail to get version", KR(ret), K(str));
+        } else {
+          stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_POST_ACTION;
+          stmt->get_rpc_arg().version_ = static_cast<int64_t>(version);
+        }
       }
     }
   }

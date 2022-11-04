@@ -3819,7 +3819,8 @@ ObUpgradeJobArg::ObUpgradeJobArg()
 {}
 bool ObUpgradeJobArg::is_valid() const
 {
-  return INVALID_ACTION != action_ && version_ > 0;
+  return INVALID_ACTION != action_
+          && (UPGRADE_POST_ACTION != action_ || version_ > 0);
 }
 int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
 {
@@ -3829,6 +3830,41 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
   return ret;
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
+
+int ObUpgradeTableSchemaArg::init(
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObDDLArg::reset();
+  exec_tenant_id_ = tenant_id;
+  tenant_id_ = tenant_id;
+  table_id_ = table_id;
+  return ret;
+}
+
+bool ObUpgradeTableSchemaArg::is_valid() const
+{
+  return common::OB_INVALID_TENANT_ID != exec_tenant_id_
+         && common::OB_INVALID_TENANT_ID != tenant_id_
+         /*index、lob table will be created with related system table*/
+         && is_system_table(table_id_);
+}
+
+int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ObDDLArg", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    table_id_ = other.table_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_);
 
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {

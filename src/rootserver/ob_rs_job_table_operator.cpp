@@ -63,7 +63,9 @@ static const char* job_type_str_array[JOB_TYPE_MAX] = {
   "UPGRADE_STORAGE_FORMAT_VERSION",
   "STOP_UPGRADE_STORAGE_FORMAT_VERSION",
   "CREATE_INNER_SCHEMA",
-  "RUN_UPGRADE_POST_JOB"
+  "UPGRADE_POST_ACTION",
+  "UPGRADE_SYSTEM_VARIABLE",
+  "UPGRADE_SYSTEM_TABLE"
 };
 
 const char* ObRsJobTableOperator::get_job_type_str(ObRsJobType job_type)

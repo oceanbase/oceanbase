@@ -1271,6 +1271,7 @@ public:
   void reset();
   int64_t get_convert_size() const;
   bool is_equal_except_value(const ObSysVarSchema &other) const;
+  bool is_equal_for_add(const ObSysVarSchema &other) const;
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   const common::ObString &get_name() const { return name_; }

@@ -1257,7 +1257,7 @@ public:
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int check_column_can_be_altered_online(const ObColumnSchemaV2 *src_schema,
-                                         ObColumnSchemaV2 *dst_schema);
+                                         ObColumnSchemaV2 *dst_schema) const;
   int check_column_can_be_altered_offline(const ObColumnSchemaV2 *src_schema,
                                           ObColumnSchemaV2 *dst_schema) const;
   int check_alter_column_is_offline(const ObColumnSchemaV2 *src_schema,
