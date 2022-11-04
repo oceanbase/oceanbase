@@ -13833,6 +13833,15 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
               new_index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
               bool is_exist = false;
               if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(schema_guard.check_table_exist(new_index_schema.get_tenant_id(),
+                                                                new_index_schema.get_database_id(),
+                                                                new_index_schema.get_table_name_str(),
+                                                                true/*is_index*/,
+                                                                ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
+                                                                is_exist))) {
+                LOG_WARN("failed to check table exist", K(ret));
+              } else if (is_exist) {
+                LOG_INFO("index already rebuilt, skip", K(new_index_schema.get_table_id()), K(new_index_schema.get_table_name_str()));
               } else if (OB_FAIL(new_table_schemas.push_back(new_index_schema))) {
                 LOG_WARN("failed to add table schema!", K(ret));
               } else if (OB_FAIL(index_ids.push_back(new_idx_tid))) {
