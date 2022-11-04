@@ -435,10 +435,11 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
 int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
 {
   int ret = OB_SUCCESS;
-  if (NULL == host_.tx_data_) {
+  auto tmp_tx_data = host_.tx_data_;
+  if (NULL == tmp_tx_data) {
     ret = OB_TRANS_CTX_NOT_EXIST;
   } else {
-    tx_data = host_.tx_data_;
+    tx_data = tmp_tx_data;
   }
   return ret;
 }
