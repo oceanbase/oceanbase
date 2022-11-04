@@ -490,7 +490,7 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
         ret = OB_SUCCESS;
       }
     }
-    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L);
+    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
     snapshot_from_type = "undo_retention";
     if (freeze_info.freeze_ts < snapshot_version) {
       snapshot_version = freeze_info.freeze_ts;
