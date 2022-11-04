@@ -89,7 +89,6 @@ protected:
                       ObDASTabletLoc *&tablet_loc);
   int open_table_for_each();
   int get_next_row_from_child();
-  int do_instead_of_trigger_insert();
   int close_table_for_each();
 
   int check_insert_affected_row();

@@ -170,32 +170,6 @@ int ObTableUpdateOp::inner_switch_iterator()
   return ret;
 }
 
-int ObTableUpdateOp::do_instead_of_trigger_update()
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count(); ++i) {
-    const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
-    if (0 < upd_rtdefs_.count()) {
-      // pdml upd_rtdefs_ maybe empty
-      UpdRtDefArray &rtdefs = upd_rtdefs_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < ctdefs.count(); ++j) {
-        const ObUpdCtDef &upd_ctdef = *ctdefs.at(j);
-        ObUpdRtDef &upd_rtdef = rtdefs.at(j);
-        if (upd_ctdef.is_primary_index_) {
-          if (OB_FAIL(ObDMLService::process_instead_of_trigger_update(upd_ctdef, upd_rtdef, *this))) {
-            LOG_WARN("failed to process instead of trigger", K(ret));
-          } else {
-            plan_ctx->add_affected_rows(1);
-            plan_ctx->add_row_matched_count(1);
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableUpdateOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -212,10 +186,6 @@ int ObTableUpdateOp::inner_get_next_row()
         } else {
           iter_end_ = true;
         }
-      } else if (MY_SPEC.has_instead_of_trigger_) {
-        if (OB_FAIL(do_instead_of_trigger_update())) {
-          LOG_WARN("failed to do instead of trigger", K(ret));
-        }
       } else if (OB_FAIL(update_row_to_das())) {
         LOG_WARN("update row to das failed", K(ret));
       } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
@@ -228,7 +198,7 @@ int ObTableUpdateOp::inner_get_next_row()
       }
     }
     if (OB_ITER_END == ret) {
-      if (!MY_SPEC.has_instead_of_trigger_ && OB_FAIL(upd_rows_post_proc())) {
+      if (!MY_SPEC.upd_ctdefs_.at(0).at(0)->has_instead_of_trigger_ && OB_FAIL(upd_rows_post_proc())) {
         LOG_WARN("do update rows post process failed", K(ret));
       } else {
         //can not overwrite the original error code
@@ -380,7 +350,6 @@ OB_INLINE int ObTableUpdateOp::calc_tablet_loc(const ObUpdCtDef &upd_ctdef,
 OB_INLINE int ObTableUpdateOp::update_row_to_das()
 {
   int ret = OB_SUCCESS;
-
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count(); ++i) {
     const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
     UpdRtDefArray &rtdefs = upd_rtdefs_.at(i);

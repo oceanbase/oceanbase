@@ -125,32 +125,6 @@ int ObTableDeleteOp::inner_open()
   return ret;
 }
 
-
-int ObTableDeleteOp::do_instead_of_trigger_delete()
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.del_ctdefs_.count(); ++i) {
-    const ObTableDeleteSpec::DelCtDefArray &ctdefs = MY_SPEC.del_ctdefs_.at(i);
-    if (0 < del_rtdefs_.count()) {
-      // pdml del_rtdefs_ maybe empty
-      DelRtDefArray &rtdefs = del_rtdefs_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < ctdefs.count(); ++j) {
-        const ObDelCtDef &del_ctdef = *ctdefs.at(j);
-        ObDelRtDef &del_rtdef = rtdefs.at(j);
-        if (del_ctdef.is_primary_index_) {
-          if (OB_FAIL(ObDMLService::process_instead_of_trigger_delete(del_ctdef, del_rtdef, *this))) {
-            LOG_WARN("failed to process instead of trigger", K(ret));
-          } else {
-            plan_ctx->add_affected_rows(1);
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableDeleteOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -167,10 +141,6 @@ int ObTableDeleteOp::inner_get_next_row()
         } else {
           iter_end_ = true;
         }
-      } else if (MY_SPEC.has_instead_of_trigger_) {
-        if (OB_FAIL(do_instead_of_trigger_delete())) {
-          LOG_WARN("failed to do instead of trigger", K(ret));
-        }
       } else if (OB_FAIL(delete_row_to_das())) {
         LOG_WARN("delete row to das failed", K(ret));
       } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
@@ -181,7 +151,7 @@ int ObTableDeleteOp::inner_get_next_row()
       }
     }
     if (OB_ITER_END == ret) {
-      if (!MY_SPEC.has_instead_of_trigger_ && OB_FAIL(del_rows_post_proc())) {
+      if (!MY_SPEC.del_ctdefs_.at(0).at(0)->has_instead_of_trigger_ && OB_FAIL(del_rows_post_proc())) {
         LOG_WARN("do delete rows post process failed", K(ret));
       } else {
         //can not overwrite the original error code

@@ -93,7 +93,6 @@ protected:
   int open_table_for_each();
   int close_table_for_each();
   int get_next_row_from_child();
-  int do_instead_of_trigger_delete();
   int check_delete_affected_row();
 protected:
   DelRtDef2DArray del_rtdefs_;  //see the comment of DelCtDef2DArray

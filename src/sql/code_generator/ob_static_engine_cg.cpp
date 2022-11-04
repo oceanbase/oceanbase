@@ -1917,7 +1917,6 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       spec.use_dist_das_ = op.is_multi_part_dml();
       spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
       spec.is_returning_ = op.is_returning();
-      spec.has_instead_of_trigger_ = op.has_instead_of_trigger();
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -1928,7 +1927,11 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
       LOG_WARN("index dml info is null", K(ret));
     } else if (OB_FAIL(dml_cg_service_.generate_insert_ctdef(op, *index_dml_info, ins_ctdef))) {
       LOG_WARN("generate insert ctdef failed", K(ret));
+    } else if (OB_ISNULL(ins_ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ins_ctdef is null", K(ret));
     } else {
+      ins_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
       spec.ins_ctdefs_.at(0).at(i) = ins_ctdef;
     }
   } // for index_dml_infos end
@@ -1994,7 +1997,6 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
-    spec.has_instead_of_trigger_ = op.has_instead_of_trigger();
     if (OB_FAIL(spec.del_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 delete_table_list.count()))) {
       LOG_WARN("allocate delete ctdef array failed", K(ret));
@@ -2025,7 +2027,11 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
         LOG_WARN("index dml info is null", K(ret));
       } else if (OB_FAIL(dml_cg_service_.generate_delete_ctdef(op, *index_dml_info, del_ctdef))) {
         LOG_WARN("generate delete ctdef failed", K(ret));
+      } else if (OB_ISNULL(del_ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("del_ctdef is null", K(ret));
       } else {
+        del_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
         ctdefs.at(j) = del_ctdef;
       }
     }  // for index_dml_infos end
@@ -2117,7 +2123,6 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
     spec.use_dist_das_ = op.is_multi_part_dml();
     spec.gi_above_ = op.is_gi_above() && !spec.use_dist_das_;
     spec.is_returning_ = op.is_returning();
-    spec.has_instead_of_trigger_ = op.has_instead_of_trigger();
     if (OB_FAIL(spec.upd_ctdefs_.allocate_array(phy_plan_->get_allocator(),
                                                 table_list.count()))) {
       LOG_WARN("allocate update ctdef array failed", K(ret), K(table_list));
@@ -2145,7 +2150,11 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
         LOG_WARN("index dml info is null", K(ret));
       } else if (OB_FAIL(dml_cg_service_.generate_update_ctdef(op, *index_dml_info, upd_ctdef))) {
         LOG_WARN("generate update ctdef failed", K(ret));
+      } else if (OB_ISNULL(upd_ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("upd_ctdef is null", K(ret));
       } else {
+        upd_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
         ctdefs.at(j) = upd_ctdef;
       }
     }  // for index_dml_infos end

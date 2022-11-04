@@ -406,29 +406,6 @@ int ObTableInsertOp::get_next_row_from_child()
   return ret;
 }
 
-int ObTableInsertOp::do_instead_of_trigger_insert()
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count(); ++i) {
-    const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
-    InsRtDefArray &rtdefs = ins_rtdefs_.at(i);
-    // insert each table with fetched row
-    for (int64_t j = 0; OB_SUCC(ret) && j < ctdefs.count(); ++j) {
-      const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
-      ObInsRtDef &ins_rtdef = rtdefs.at(j);
-      if (ins_ctdef.is_primary_index_) {
-        if (OB_FAIL(ObDMLService::process_instead_of_trigger_insert(ins_ctdef, ins_rtdef, *this))) {
-          LOG_WARN("failed to process instead of trigger", K(ret));
-        } else {
-          plan_ctx->add_affected_rows(1);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableInsertOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -445,10 +422,6 @@ int ObTableInsertOp::inner_get_next_row()
         } else {
           iter_end_ = true;
         }
-      } else if (MY_SPEC.has_instead_of_trigger_) {
-        if (OB_FAIL(do_instead_of_trigger_insert())) {
-          LOG_WARN("failed to do instead of trigger", K(ret));
-        }
       } else if (OB_FAIL(insert_row_to_das())) {
         LOG_WARN("insert row to das failed", K(ret));
       } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
@@ -462,7 +435,7 @@ int ObTableInsertOp::inner_get_next_row()
     }
 
     if (OB_ITER_END == ret) {
-      if (!MY_SPEC.has_instead_of_trigger_ && OB_FAIL(ins_rows_post_proc())) {
+      if (!MY_SPEC.ins_ctdefs_.at(0).at(0)->has_instead_of_trigger_ && OB_FAIL(ins_rows_post_proc())) {
         LOG_WARN("do insert rows post process failed", K(ret));
       } else {
         ret = OB_ITER_END;
