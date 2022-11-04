@@ -487,8 +487,7 @@ int ObDDLTask::wait_trans_end(
   // try wait transaction end
   if (OB_SUCC(ret) && new_status != next_task_status && tmp_snapshot_version <= 0) {
     bool is_trans_end = false;
-    const bool need_wait_trans_end = true;
-    if (OB_FAIL(wait_trans_ctx.try_wait(is_trans_end, tmp_snapshot_version, need_wait_trans_end))) {
+    if (OB_FAIL(wait_trans_ctx.try_wait(is_trans_end, tmp_snapshot_version, true /*need_wait_trans_end */))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("fail to try wait transaction", K(ret));
       } else {
@@ -803,7 +802,7 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
           if (OB_SUCCESS == ret_codes.at(i) && tmp_snapshots.at(i) > 0) {
             snapshot_array_.at(tablet_pos_indexes.at(i)) = tmp_snapshots.at(i);
             ++succ_count;
-          } else if (OB_EAGAIN == ret_codes.at(i)) {
+          } else if (ObIDDLTask::in_ddl_retry_white_list(ret_codes.at(i))) {
             // need retry
           } else if (OB_SUCCESS != ret_codes.at(i)) {
             ret = ret_codes.at(i);
