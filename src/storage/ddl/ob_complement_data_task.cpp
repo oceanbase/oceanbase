@@ -362,6 +362,51 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
   return ret;
 }
 
+int ObComplementDataDag::create_first_task()
+{
+  int ret = OB_SUCCESS;
+  ObComplementPrepareTask *prepare_task = nullptr;
+  ObComplementWriteTask *write_task = nullptr;
+  ObComplementMergeTask *merge_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(alloc_task(prepare_task))) {
+    LOG_WARN("allocate task failed", K(ret));
+  } else if (OB_ISNULL(prepare_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(prepare_task->init(param_, context_))) {
+    LOG_WARN("init prepare task failed", K(ret));
+  } else if (OB_FAIL(add_task(*prepare_task))) {
+    LOG_WARN("add task failed", K(ret));
+  } else if (OB_FAIL(alloc_task(write_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(write_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(write_task->init(0, param_, context_))) {
+    LOG_WARN("init write task failed", K(ret));
+  } else if (OB_FAIL(prepare_task->add_child(*write_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(add_task(*write_task))) {
+    LOG_WARN("add task failed", K(ret));
+  } else if (OB_FAIL(alloc_task(merge_task))) {
+    LOG_WARN("alloc task failed", K(ret));
+  } else if (OB_ISNULL(merge_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr task", K(ret));
+  } else if (OB_FAIL(merge_task->init(param_, context_))) {
+    LOG_WARN("init merge task failed", K(ret));
+  } else if (OB_FAIL(write_task->add_child(*merge_task))) {
+    LOG_WARN("add child task failed", K(ret));
+  } else if (OB_FAIL(add_task(*merge_task))) {
+    LOG_WARN("add task failed");
+  }
+
+  return ret;
+}
+
 int ObComplementDataDag::prepare_context()
 {
   int ret = OB_SUCCESS;
@@ -419,8 +464,9 @@ int64_t ObComplementDataDag::hash() const
     tmp_ret = OB_ERR_SYS;
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));
   } else {
-    hash_val = param_.ls_id_.hash() + param_.source_tablet_id_.hash() + param_.dest_tablet_id_.hash() +
-               param_.data_table_schema_->get_table_id() + param_.hidden_table_schema_->get_table_id() + ObDagType::DAG_TYPE_DDL;
+    hash_val = param_.tenant_id_ + param_.ls_id_.hash() 
+             + param_.data_table_schema_->get_table_id() + param_.hidden_table_schema_->get_table_id() 
+             + param_.source_tablet_id_.hash() + param_.dest_tablet_id_.hash() + ObDagType::DAG_TYPE_DDL;
   }
   return hash_val;
 }
@@ -437,11 +483,10 @@ bool ObComplementDataDag::operator==(const ObIDag &other) const
       tmp_ret = OB_ERR_SYS;
       LOG_ERROR("invalid argument", K(tmp_ret), K(param_), K(dag.param_));
     } else {
-      is_equal = (param_.ls_id_ == dag.param_.ls_id_) && (param_.tenant_id_ == dag.param_.tenant_id_) &&
-                 (param_.source_tablet_id_ == dag.param_.source_tablet_id_) && (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_) &&
+      is_equal = (param_.tenant_id_ == dag.param_.tenant_id_) && (param_.ls_id_ == dag.param_.ls_id_) &&
                  (param_.data_table_schema_->get_table_id() == dag.param_.data_table_schema_->get_table_id()) &&
                  (param_.hidden_table_schema_->get_table_id() == dag.param_.hidden_table_schema_->get_table_id()) &&
-                 (param_.compat_mode_ == dag.param_.compat_mode_);
+                 (param_.source_tablet_id_ == dag.param_.source_tablet_id_) && (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_);
     }
   }
   return is_equal;
@@ -562,10 +607,6 @@ int ObComplementPrepareTask::process()
     LOG_WARN("prepare complement context failed", K(ret));
   } else if (OB_FAIL(context_->write_start_log(*param_))) {
     LOG_WARN("write start log failed", K(ret), KPC(param_));
-  } else if (OB_FAIL(generate_complement_write_task(dag, write_task))) {
-    LOG_WARN("fail to generate complement write task", K(ret));
-  } else if (OB_FAIL(generate_complement_merge_task(dag, write_task, merge_task))) {
-    LOG_WARN("fail to generate complement merge task", K(ret));
   } else {
     LOG_INFO("finish the complement prepare task", K(ret));
   }
@@ -573,51 +614,6 @@ int ObComplementPrepareTask::process()
   if (OB_FAIL(ret)) {
     context_->complement_data_ret_ = ret;
     ret = OB_SUCCESS;
-  }
-  return ret;
-}
-
-int ObComplementPrepareTask::generate_complement_write_task(ObComplementDataDag *dag,
-    ObComplementWriteTask *&write_task)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObComplementPrepareTask has not been inited", K(ret));
-  } else if (OB_ISNULL(dag)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(dag));
-  } else if (OB_FAIL(dag->alloc_task(write_task))) {
-    LOG_WARN("fail to alloc write task", K(ret));
-  } else if (OB_FAIL(write_task->init(0, *param_, *context_))) {
-    LOG_WARN("fail to init complement write task", K(ret));
-  } else if (OB_FAIL(add_child(*write_task))) {
-    LOG_WARN("fail to add child for complement prepare task", K(ret));
-  } else if (OB_FAIL(dag->add_task(*write_task))) {
-    LOG_WARN("fail to add complement write task to dag", K(ret));
-  }
-  return ret;
-}
-
-int ObComplementPrepareTask::generate_complement_merge_task(ObComplementDataDag *dag,
-    ObComplementWriteTask *write_task, ObComplementMergeTask *&merge_task)
-{
-  int ret = OB_SUCCESS;
-  merge_task = NULL;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObComplementPrepareTask has not been inited", K(ret));
-  } else if (OB_ISNULL(dag) || OB_ISNULL(write_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(dag), KP(write_task));
-  } else if (OB_FAIL(dag->alloc_task(merge_task))) {
-    LOG_WARN("fail to alloc merge task", K(ret));
-  } else if (OB_FAIL(merge_task->init(*param_, *context_))) {
-    LOG_WARN("fail to init merge task", K(ret));
-  } else if (OB_FAIL(write_task->add_child(*merge_task))) {
-    LOG_WARN("fail to add child for write task", K(ret));
-  } else if (OB_FAIL(dag->add_task(*merge_task))) {
-    LOG_WARN("fail to add merge task", K(ret));
   }
   return ret;
 }

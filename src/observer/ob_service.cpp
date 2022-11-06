@@ -1848,7 +1848,6 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
       MTL_SWITCH(arg.tenant_id_) {
         ObTenantDagScheduler *dag_scheduler = nullptr;
         ObComplementDataDag *dag = nullptr;
-        ObComplementPrepareTask *prepare_task = nullptr;
         if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dag scheduler is null", K(ret));
@@ -1859,15 +1858,8 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
           LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
         } else if (OB_FAIL(dag->init(arg))) {
           LOG_WARN("fail to init complement data dag", K(ret), K(arg));
-        } else if (OB_FAIL(dag->alloc_task(prepare_task))) {
-          LOG_WARN("fail to alloc complement prepare task", K(ret));
-        } else if (OB_ISNULL(prepare_task)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, prepare task is null", K(ret), KP(prepare_task));
-        } else if (OB_FAIL(prepare_task->init(dag->get_param(), dag->get_context()))) {
-          LOG_WARN("fail to init complement prepare task", K(ret));
-        } else if (OB_FAIL(dag->add_task(*prepare_task))) {
-          LOG_WARN("fail to add complement prepare task to dag", K(ret));
+        } else if (OB_FAIL(dag->create_first_task())) {
+          LOG_WARN("create first task failed", K(ret));
         } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;

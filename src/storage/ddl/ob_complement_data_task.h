@@ -144,6 +144,7 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
+  virtual int create_first_task() override;
   // report replica build status to RS.
   int report_replica_build_status();
 private:
@@ -160,9 +161,6 @@ public:
   ~ObComplementPrepareTask();
   int init(ObComplementDataParam &param, ObComplementDataContext &context);
   int process() override;
-private:
-  int generate_complement_write_task(ObComplementDataDag *dag, ObComplementWriteTask *&write_task);
-  int generate_complement_merge_task(ObComplementDataDag *dag, ObComplementWriteTask *write_task, ObComplementMergeTask *&merge_task);
 private:
   bool is_inited_;
   ObComplementDataParam *param_;
