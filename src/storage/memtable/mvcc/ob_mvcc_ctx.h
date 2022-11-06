@@ -44,6 +44,7 @@ class ObLockMemtable;
 namespace storage
 {
 class ObLsmtTransNode;
+class ObFreezer;
 }
 
 using namespace transaction::tablelock;
@@ -261,10 +262,10 @@ public:
   ObMvccWriteGuard(const bool exclusive = false)
     : exclusive_(exclusive),
       ctx_(NULL),
-      is_freeze_(false) {}
+      memtable_(NULL) {}
   ~ObMvccWriteGuard();
-  void set_is_freeze(bool flag) {
-    is_freeze_ = flag;
+  void set_memtable(ObMemtable *memtable) {
+    memtable_ = memtable;
   }
   /*
    * purpose of ensure replica writable
@@ -279,7 +280,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccWriteGuard);
   const bool exclusive_;  // if true multiple write_auth will be serialized
   ObMemtableCtx *ctx_;
-  bool is_freeze_;
+  ObMemtable *memtable_;
 };
 }
 }

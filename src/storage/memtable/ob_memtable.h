@@ -308,6 +308,7 @@ public:
 
   // // TODO: ==================== Memtable Other Interface ==================
   int set_freezer(storage::ObFreezer *handler);
+  storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
   void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { memtable_mgr_ = mgr; }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }

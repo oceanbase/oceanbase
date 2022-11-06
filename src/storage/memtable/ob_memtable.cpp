@@ -311,7 +311,7 @@ int ObMemtable::set(
                row,
                NULL,
                NULL);
-    guard.set_is_freeze(freezer_->is_freeze());
+    guard.set_memtable(this);
   }
   return ret;
 }
@@ -346,7 +346,7 @@ int ObMemtable::set(
                new_row,
                &old_row,
                &update_idx);
-    guard.set_is_freeze(freezer_->is_freeze());
+    guard.set_memtable(this);
   }
   return ret;
 }
