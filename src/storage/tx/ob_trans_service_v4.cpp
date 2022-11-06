@@ -1767,7 +1767,8 @@ int ObTransService::handle_tx_batch_req(int msg_type,
       TRANS_LOG(ERROR, "msg is invalid", K(ret), K(msg_type), K(msg));  \
     } else if (OB_FAIL(get_tx_ctx_(msg.get_receiver(), msg.get_trans_id(), ctx))) { \
       TRANS_LOG(WARN, "get tx context fail", K(ret),  K(msg));          \
-      if (OB_TRANS_CTX_NOT_EXIST == ret) {                              \
+      if (OB_TRANS_CTX_NOT_EXIST == ret ||                              \
+          OB_PARTITION_NOT_EXIST == ret) {                              \
         /* need_check_leader : just for unittest case*/                 \
         handle_orphan_2pc_msg_(msg, need_check_leader);                 \
       }                                                                 \
