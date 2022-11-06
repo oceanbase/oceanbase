@@ -99,6 +99,7 @@ private:
   int fetch_macro_block_with_retry_(
       ObMacroBlocksWriteCtx &copied_ctx);
   int fetch_macro_block_(
+      const int64_t retry_times,
       ObMacroBlocksWriteCtx &copied_ctx);
   int build_macro_block_copy_info_(ObPhysicalCopyFinishTask *finish_task);
   int get_macro_block_reader_(
@@ -111,6 +112,7 @@ private:
       ObICopyMacroBlockReader *&reader);
   int get_macro_block_writer_(
       ObICopyMacroBlockReader *reader,
+      ObIndexBlockRebuilder *index_block_rebuilder,
       ObStorageHAMacroBlockWriter *&writer);
   void free_macro_block_reader_(ObICopyMacroBlockReader *&reader);
   void free_macro_block_writer_(ObStorageHAMacroBlockWriter *&writer);
@@ -126,7 +128,6 @@ private:
   ObPhysicalCopyFinishTask *finish_task_;
   ObITable::TableKey copy_table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
-  ObIndexBlockRebuilder index_block_rebuilder_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };
