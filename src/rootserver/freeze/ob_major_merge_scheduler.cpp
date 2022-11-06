@@ -578,9 +578,13 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
             cur_all_merged_scn = progress->smallest_snapshot_version_;
           }
 
-          if ((last_merged_scn < cur_all_merged_scn) || (ori_all_merged_scn > cur_all_merged_scn)) {
+          // cur_all_merged_scn >= last_merged_scn
+          // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
+          // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which 
+          // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
+          if ((cur_all_merged_scn < last_merged_scn) || (ori_all_merged_scn > cur_all_merged_scn)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect version", KR(ret), K(last_merged_scn), K(cur_all_merged_scn),
+            LOG_ERROR("unexpect merge scn", KR(ret), K(last_merged_scn), K(cur_all_merged_scn),
               K(ori_all_merged_scn));
           } else {
             // TODO 'zone merge finish' & 'zone all tablet merge finish' should be handled in same procedure.

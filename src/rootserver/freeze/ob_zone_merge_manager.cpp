@@ -372,8 +372,7 @@ int ObZoneMergeManagerBase::finish_zone_merge(
 
   if (OB_FAIL(check_valid(zone, idx))) {
     LOG_WARN("fail to check valid", KR(ret), K(zone), K_(tenant_id));
-  } else if ((last_merged_scn <= 0) || (all_merged_scn <= 0)
-             || (all_merged_scn > last_merged_scn)) {
+  } else if ((last_merged_scn <= 0) || (all_merged_scn <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(zone), K_(tenant_id),
              K(last_merged_scn), K(all_merged_scn));
@@ -393,7 +392,7 @@ int ObZoneMergeManagerBase::finish_zone_merge(
     } else {
       ObZoneMergeInfo::MergeStatus status = static_cast<ObZoneMergeInfo::MergeStatus>(
         zone_merge_infos_[idx].merge_status_.value_);
-      if (last_merged_scn != zone_merge_infos_[idx].last_merged_scn_) {
+      if (last_merged_scn > zone_merge_infos_[idx].last_merged_scn_) {
         const int64_t is_merging = 0;
         tmp_info.is_merging_.set_val(is_merging, true);
         tmp_info.last_merged_scn_.set_val(last_merged_scn, true);
