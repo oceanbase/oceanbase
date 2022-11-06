@@ -81,6 +81,7 @@ namespace transaction
 {
 
 const static int64_t OB_TX_MAX_LOG_CBS = 32;
+const static int64_t RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING = 1;
 
 // participant transaction context
 class ObPartTransCtx : public ObTransCtx,
@@ -738,6 +739,8 @@ private:
   // | end_log_ts = n+10 | ----------------> |                                 | -------------------> |       | --> |    (0<m<10)     | --> |                      |
   // +-------------------+                   +---------------------------------+                      +-------+     +-----------------+     +----------------------+
   bool is_incomplete_replay_ctx_;
+  // set true when submitting redo log for freezing and reset after freezing
+  bool is_submitting_redo_log_for_freeze_;
   int64_t start_replay_ts_; // replay debug
 
   int64_t start_working_log_ts_;
@@ -751,6 +754,9 @@ private:
   common::ObAddr tmp_scheduler_;
   // ========================================================
 };
+
+// reserve log callback for freezing and other two log callbacks for normal
+STATIC_ASSERT(OB_TX_MAX_LOG_CBS >= RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING + 2, "log callback is not enough");
 
 #if defined(__x86_64__)
 /* uncomment this block to error messaging real size
