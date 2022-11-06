@@ -766,7 +766,8 @@ public:
   int inner_truncate_prefix_blocks(const LSN &lsn);
   // ==================================================================
   int check_and_switch_state();
-  int try_freeze_last_log();
+  int check_and_switch_freeze_mode();
+  int period_freeze_last_log();
   int handle_prepare_request(const common::ObAddr &server,
                              const int64_t &proposal_id) override final;
   int handle_prepare_response(const common::ObAddr &server,

@@ -2025,15 +2025,26 @@ int PalfHandleImpl::reset_location_cache_cb()
   return ret;
 }
 
-
-int PalfHandleImpl::try_freeze_last_log()
+int PalfHandleImpl::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
     RLockGuard guard(lock_);
-    sw_.try_freeze_last_log();
+    sw_.check_and_switch_freeze_mode();
+  }
+  return ret;
+}
+
+int PalfHandleImpl::period_freeze_last_log()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    RLockGuard guard(lock_);
+    sw_.period_freeze_last_log();
   }
   return ret;
 }

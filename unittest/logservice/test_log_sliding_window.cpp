@@ -444,7 +444,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   // use correct prev_log_proposal_id
   prev_log_proposal_id = curr_proposal_id;
   // handle submit log
-  EXPECT_EQ(OB_SUCCESS, log_sw_.try_freeze_last_log());
+  EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   EXPECT_EQ(OB_EAGAIN, log_sw_.receive_log(src_server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, data_buf_, group_entry_size, true, truncate_log_info));
   LSN old_lsn = lsn;
   // test lsn > group_buffer capacity case, will return -4023
@@ -501,7 +501,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   EXPECT_TRUE(group_header.check_integrity(data_buf_ + group_header_size, group_entry_size - group_header_size));
   PALF_LOG(INFO, "begin receive log with log_id=3, and proposal_id 21");
   // handle submit log
-  EXPECT_EQ(OB_SUCCESS, log_sw_.try_freeze_last_log());
+  EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   EXPECT_EQ(OB_EAGAIN, log_sw_.receive_log(src_server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, data_buf_, group_entry_size, true, truncate_log_info));
   EXPECT_TRUE(TRUNCATE_CACHED_LOG_TASK == truncate_log_info.truncate_type_);
   EXPECT_EQ(log_id, truncate_log_info.truncate_log_id_);
@@ -614,7 +614,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_log)
   int64_t log_ts = -1;
   // submit first log
   EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
-  EXPECT_EQ(OB_SUCCESS, log_sw_.try_freeze_last_log());
+  EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   // generate new group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
@@ -826,7 +826,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   src_server = self_;
   TruncateLogInfo truncate_log_info;
   // handle submit log
-  EXPECT_EQ(OB_SUCCESS, log_sw_.try_freeze_last_log());
+  EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   PALF_LOG(INFO, "begin receive log with log_id=2");
   EXPECT_EQ(OB_SUCCESS, log_sw_.receive_log(src_server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, data_buf_, group_entry_size, false, truncate_log_info));
   // gen next group log
