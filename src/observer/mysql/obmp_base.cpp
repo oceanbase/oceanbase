@@ -517,15 +517,14 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       }
     }
 
-  }
-
-  if (OB_SUCC(ret)) {
-    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-    ObSMRow sm_row(obmysql::BINARY, row, dtc_params, fields);
-    obmysql::OMPKRow rp(sm_row);
-    if (OB_FAIL(response_packet(rp, &session))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("response packet fail", K(ret));
+    if (OB_SUCC(ret)) {
+      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
+      ObSMRow sm_row(obmysql::BINARY, row, dtc_params, fields);
+      obmysql::OMPKRow rp(sm_row);
+      if (OB_FAIL(response_packet(rp, &session))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("response packet fail", K(ret));
+      }
     }
   }
   return ret;
