@@ -256,12 +256,11 @@ private:
   bool is_inited_;
   bool remote_write_;
   int64_t start_log_ts_;
-  ObLSHandle ls_handle_;
-  ObTabletHandle tablet_handle_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
   ObDDLRedoLogHandle ddl_redo_handle_;
   ObAddr leader_addr_;
   share::ObLSID leader_ls_id_;
-  ObTabletID tablet_id_;
   char *buffer_;
 };
 
