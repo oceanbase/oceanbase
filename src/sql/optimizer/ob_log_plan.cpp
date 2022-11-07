@@ -12489,6 +12489,7 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
         } else { /*do nothing*/ }
       } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
                  log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
+                 log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type() &&
                  OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
         LOG_WARN("failed to allocate materialize as top", K(ret));
       } else { /*do nothing*/ }
