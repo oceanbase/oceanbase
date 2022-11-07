@@ -574,10 +574,11 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         // for proxy
         // in multi-stmt, send extra ok packet in the last stmt(has no more result)
         if (OB_SUCC(ret)) {
-          if (!has_ok_packet()) {
-            update_last_pkt_pos();
-          }
-          if (OB_FAIL(response_packet(eofp, &session))) {
+          if (OB_FAIL(packet_sender_.alloc_ezbuf())) {
+            LOG_WARN("failed to alloc easy buf", K(ret));
+          } else if (!has_ok_packet() && OB_FAIL(update_last_pkt_pos())) {
+            LOG_WARN("failed to update last packet pos", K(ret));
+          } else if (OB_FAIL(response_packet(eofp, &session))) {
             LOG_WARN("response packet fail", K(ret));
           } else if (last_row && !cursor.is_scrollable() 
                               && !cursor.is_streaming()

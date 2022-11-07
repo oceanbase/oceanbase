@@ -315,9 +315,10 @@ int ObMPStmtGetPieceData::response_result(ObSQLSessionInfo &session)
     if (OB_FAIL(response_packet(piece_packet, &session))) {
       LOG_WARN("response piece packet fail.", K(ret), K(stmt_id_), K(column_id_));
     } else {
-      update_last_pkt_pos();
       ObPiece *piece = NULL;
-      if (OB_FAIL(piece_cache->get_piece(stmt_id_, column_id_, piece))) {
+      if (OB_FAIL(update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
+      } else if (OB_FAIL(piece_cache->get_piece(stmt_id_, column_id_, piece))) {
         LOG_WARN("get piece fail", K(stmt_id_), K(column_id_), K(ret) );
       } else if (NULL != piece) {
         uint64_t count = NULL == piece->get_buffer_array() 

@@ -150,8 +150,9 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 
       // for proxy
       // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-      if (!is_prexecute_ && !result.has_more_result()) {
-        sender_.update_last_pkt_pos();
+      if (!is_prexecute_ && !result.has_more_result()
+            && OB_FAIL(sender_.update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
       }
       if (OB_SUCC(ret) && !result.get_is_com_filed_list() &&
           OB_FAIL(sender_.response_packet(eofp, &result.get_session()))) {

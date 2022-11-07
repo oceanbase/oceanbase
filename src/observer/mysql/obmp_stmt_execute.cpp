@@ -2755,9 +2755,12 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
 
     // for obproxy, 最后一次要把 eof和OK包放一起
     if (OB_SUCC(ret)) {
-      OX (update_last_pkt_pos());
-      if (OB_FAIL(response_packet(eofp, &session))) {
+      if (OB_FAIL(update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
+      } else if (OB_FAIL(response_packet(eofp, &session))) {
         LOG_WARN("response packet fail", K(ret));
+      } else {
+        // do nothing
       }
     }
     // for obproxy

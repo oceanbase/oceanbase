@@ -629,8 +629,9 @@ int ObMPStmtPrepare::send_column_packet(const ObSQLSessionInfo &session,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
-      packet_sender_.update_last_pkt_pos();
-      if (OB_FAIL(send_eof_packet(session, result))) {
+      if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
+      } else if (OB_FAIL(send_eof_packet(session, result))) {
         LOG_WARN("send eof field failed", K(ret));
       }
     }
