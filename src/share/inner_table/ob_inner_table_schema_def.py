@@ -5113,6 +5113,7 @@ def_table_schema(
 
 # 429 : __all_arbitration_service
 # 430 : __all_arbitration_service_replica_task
+# 431 : __all_meta_dictionary_location;
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10808,6 +10809,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+# 12341: __all_virtual_meta_dictionary_location
 
 #
 # 余留位置
