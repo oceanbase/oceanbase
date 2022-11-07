@@ -25,7 +25,7 @@ using namespace sql;
 using namespace obrpc;
 
 #define MIN_FILTER_SIZE 256
-#define MAX_BIT_COUNT 4611686018427387904 // 2^62
+#define MAX_BIT_COUNT 17179869184// 2^34 due to the memory single alloc limit
 #define BF_BLOCK_SIZE 256L
 #define BLOCK_MASK 255L         // = size of block - 1
 #define CACHE_LINE_SIZE 64      // 64 bytes
