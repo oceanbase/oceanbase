@@ -3369,19 +3369,9 @@ int LogSlidingWindow::try_send_committed_info(const common::ObAddr &server,
     ret = OB_NOT_INIT;
   } else if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (state_mgr_->is_leader_active()) {
-    // Leader
-    int64_t last_log_id = OB_INVALID_LOG_ID;
-    int64_t last_log_proposal_id = INVALID_PROPOSAL_ID;
-    if (OB_FAIL(leader_get_committed_log_info_(committed_end_lsn, last_log_id, last_log_proposal_id))
-        || OB_INVALID_LOG_ID == last_log_id) {
-      // no need send committed_info
-    } else if (OB_FAIL(log_engine_->submit_committed_info_req(server, curr_proposal_id,
-                last_log_id, log_proposal_id, committed_end_lsn))) {
-      PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
-    }
   } else {
-    // Follower
+    // leader/follower can send committed_info to request server,
+    // if the arg log has slid out and its end_lsn equals to committed_end_lsn.
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
     int64_t last_slide_log_ts = OB_INVALID_TIMESTAMP;
     LSN last_slide_lsn;
@@ -3399,7 +3389,7 @@ int LogSlidingWindow::try_send_committed_info(const common::ObAddr &server,
             last_slide_log_id, log_proposal_id, committed_end_lsn))) {
         PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
       } else {
-        PALF_LOG(TRACE, "follower try_send_committed_info success", K(ret), K_(palf_id), K_(self),
+        PALF_LOG(TRACE, "try_send_committed_info success", K(ret), K_(palf_id), K_(self),
             K(last_slide_log_id), K(log_proposal_id), K(committed_end_lsn));
       }
     }
