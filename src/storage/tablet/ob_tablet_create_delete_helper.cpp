@@ -664,10 +664,10 @@ int ObTabletCreateDeleteHelper::abort_create_tablets(
     LOG_WARN("unexpected arg", K(ret), K(PRINT_CREATE_ARG(arg)));
   } else if (OB_FAIL(do_abort_create_tablets(arg, trans_flags))) {
     LOG_WARN("failed to do abort create tablets", K(ret), K(PRINT_CREATE_ARG(arg)), K(trans_flags));
-  } else if (OB_FAIL(ObTabletBindingHelper::unlock_tablet_binding_for_create(arg, ls_, trans_flags))) {
-    LOG_WARN("failed to unlock tablet binding", K(ret), K(trans_flags));
   } else if (OB_FAIL(ObTabletBindingHelper::fix_binding_info_for_create_tablets(arg, ls_, trans_flags))) {
     LOG_WARN("failed to fix_binding_info_for_create_tablets", K(ret), K(arg), K(trans_flags));
+  } else if (OB_FAIL(ObTabletBindingHelper::unlock_tablet_binding_for_create(arg, ls_, trans_flags))) {
+    LOG_WARN("failed to unlock tablet binding", K(ret), K(trans_flags));
   } else {
     LOG_INFO("succeeded to abort create tablets", K(ret), K(PRINT_CREATE_ARG(arg)), K(trans_flags));
   }
