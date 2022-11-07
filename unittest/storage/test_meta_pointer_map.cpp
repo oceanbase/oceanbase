@@ -66,7 +66,7 @@ TestMetaPointerMap::TestMetaPointerMap()
 
 void TestMetaPointerMap::SetUp()
 {
-  int ret = tablet_map_.init(10243L, "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
+  int ret = tablet_map_.init(100000000L, "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
           common::OB_MALLOC_NORMAL_BLOCK_SIZE);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
