@@ -137,13 +137,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionPrepareRequestMsgMiddle::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionPrepareRequestMsgMiddle::get_serialize_size();
   }
@@ -183,13 +183,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionPrepareResponseMsgMiddle::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionPrepareResponseMsgMiddle::get_serialize_size();
   }
@@ -238,13 +238,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionAcceptRequestMsgMiddle::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionAcceptRequestMsgMiddle::get_serialize_size();
   }
@@ -302,13 +302,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionAcceptResponseMsgMiddle::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionAcceptResponseMsgMiddle::get_serialize_size();
   }
@@ -353,13 +353,13 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos) {
     int ret = ElectionChangeLeaderMsgMiddle::deserialize(buf, data_len, pos);
     debug_ts_.dest_deserialize_ts_ = ObClockGenerator::getRealClock();
-    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+    print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     return ret;
   }
   int64_t get_serialize_size() const {
     if (debug_ts_.src_serialize_ts_ == 0) {// cause get_serialize_size maybe call more than once
       const_cast<int64_t&>(debug_ts_.src_serialize_ts_) = ObClockGenerator::getRealClock();
-      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
+      print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
     }
     return ElectionChangeLeaderMsgMiddle::get_serialize_size();
   }

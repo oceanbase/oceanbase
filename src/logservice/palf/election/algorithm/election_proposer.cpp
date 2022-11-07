@@ -12,6 +12,7 @@
 
 
 #include "logservice/palf/election/message/election_message.h"
+#include "ob_role.h"
 #include "share/ob_occam_time_guard.h"
 #include "election_proposer.h"
 #include "common/ob_clock_generator.h"
@@ -275,9 +276,17 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
   } else if (CLICK_FAIL(p_election_->timer_->schedule_task_repeat_spcifiy_first_delay(devote_task_handle_,
                                                                                       delay_us,
                                                                                       CALCULATE_MAX_ELECT_COST_TIME(),
-                                                                                      [this]() {
+                                                                                      [this, delay_us]() {
+    int ret = OB_SUCCESS;
     LockGuard lock_guard(p_election_->lock_);
-    this->prepare(ObRole::FOLLOWER);
+    if (check_leader()) {// Leader不应该靠定时任务主动做Prepare，只能被动触发Prepare
+      LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large");
+    } else {
+      if (role_ == ObRole::LEADER) {
+        role_ = ObRole::FOLLOWER;
+      }
+      this->prepare(role_);// 只有Follower可以走到这里
+    }
     return false;
   }))) {
     LOG_INIT(ERROR, "first time register devote task failed");
@@ -369,34 +378,35 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
   ELECT_TIME_GUARD(500_ms);
   #define PRINT_WRAPPER KR(ret), K(prepare_req), K(*this)
   int ret = OB_SUCCESS;
-  // 1. 忽略leader prepare消息，不触发一呼百应
-  if (static_cast<ObRole>(prepare_req.get_role()) == ObRole::LEADER) {// leader prepare不触发一呼百应
-  } else if (static_cast<ObRole>(prepare_req.get_role()) != ObRole::FOLLOWER) {
-    // 非candidate prepare是非预期的
-    LOG_ELECT_LEADER(ERROR, "unexpected code path");
-  // 2. 尝试一呼百应
-  } else if (memberlist_with_states_.get_member_list().get_addr_list().empty()) {
-    LOG_ELECT_LEADER(INFO, "memberlist is empty, give up do prepare this time");
-  } else {
-    // 2.1 拒绝旧消息
-    if (prepare_req.get_ballot_number() <= ballot_number_) {
-      // 注意这里是<=，若本轮已经发过一呼百应，则不会再重试，否则将无限循环
-      if (prepare_req.get_ballot_number() < ballot_number_) {
-        ElectionPrepareResponseMsg prepare_res_reject(p_election_->get_self_addr(),
-                                                      prepare_req);
-        prepare_res_reject.set_rejected(ballot_number_);
-        if (CLICK_FAIL(p_election_->send_(prepare_res_reject))) {
-          LOG_ELECT_LEADER(ERROR, "create prepare request failed");
-        }
+  // 0. 拒绝旧消息、过滤本轮次消息、根据新消息推大轮次
+  if (prepare_req.get_ballot_number() <= ballot_number_) {
+    if (prepare_req.get_ballot_number() < ballot_number_) {// 对于旧消息发送拒绝响应
+      ElectionPrepareResponseMsg prepare_res_reject(p_election_->get_self_addr(),
+                                                    prepare_req);
+      prepare_res_reject.set_rejected(ballot_number_);
+      if (CLICK_FAIL(p_election_->send_(prepare_res_reject))) {
+        LOG_ELECT_LEADER(ERROR, "create prepare request failed");
       } else {
-        LOG_ELECT_LEADER(INFO, "has been send prepare request in this ballot, give up this time");
+        LOG_ELECT_LEADER(INFO, "send reject response cause prepare message ballot too small");
       }
-    // 2.2 一呼百应
+    } else {// 对于本轮次消息，需要过滤，否则无限循环
+      LOG_ELECT_LEADER(INFO, "has been send prepare request in this ballot, give up this time");
+    }
+  } else {// 对于新的消息，推大本机选举轮次
+    LOG_ELECT_LEADER(INFO, "receive bigger ballot prepare request");
+    (void) advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(),
+                                                           "receive bigger ballot prepare request");
+      // 1. 忽略leader prepare消息，不触发一呼百应
+    if (static_cast<ObRole>(prepare_req.get_role()) == ObRole::LEADER) {
+      LOG_ELECT_LEADER(INFO, "proposer ignore leader prepare");
+    } else if (static_cast<ObRole>(prepare_req.get_role()) != ObRole::FOLLOWER) {
+      // 非candidate prepare是非预期的
+      LOG_ELECT_LEADER(ERROR, "unexpected code path");
+    // 2. 尝试一呼百应
+    } else if (memberlist_with_states_.get_member_list().get_addr_list().empty()) {
+      LOG_ELECT_LEADER(INFO, "memberlist is empty, give up do prepare this time");
     } else {
-      LOG_ELECT_LEADER(INFO, "receive bigger ballot prepare request");
       (void) p_election_->refresh_priority_();
-      (void) advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(),
-                                                             "receive bigger ballot prepare request");
       ElectionPrepareRequestMsg prepare_followed_req(p_election_->id_,
                                                      p_election_->get_self_addr(),
                                                      restart_counter_,
@@ -409,7 +419,7 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
         LOG_ELECT_LEADER(INFO, "self is not in memberlist, give up do prepare");
       } else if (CLICK_FAIL(p_election_->broadcast_(prepare_followed_req,
                                                     memberlist_with_states_.get_member_list()
-                                                                           .get_addr_list()))) {
+                                                                            .get_addr_list()))) {
         LOG_ELECT_LEADER(ERROR, "broadcast prepare request failed");
       } else {
         last_do_prepare_ts_ = ObClockGenerator::getCurrentTime();

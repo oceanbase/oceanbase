@@ -42,62 +42,65 @@ public:
 };
 }
 
-#define DEFAULT_ALLOCATOR value_sematic_string::DefaultAllocator::get_instance()
 class ObStringHolder
 {
+  static constexpr int64_t TINY_STR_SIZE = 16;// no need count '\0'
 public:
-  ObStringHolder() : ObStringHolder(DEFAULT_ALLOCATOR) {};
-  ObStringHolder(const ObStringHolder &) = delete;
-  ObStringHolder(ObStringHolder &&rhs) : ObStringHolder(DEFAULT_ALLOCATOR)
-  {
-    std::swap(buffer_, rhs.buffer_);
-    std::swap(len_, rhs.len_);
-  }
-  ObStringHolder &operator=(const ObStringHolder &) = delete;
-  ObStringHolder &operator=(ObStringHolder &&rhs)
-  {
-    std::swap(buffer_, rhs.buffer_);
-    std::swap(len_, rhs.len_);
-    return *this;
-  }
-  ObStringHolder(ObIAllocator &alloc) :
-  buffer_(nullptr), len_(0), allocator_(alloc) {}
+  ObStringHolder() : buffer_(nullptr), len_(0) {}
   ~ObStringHolder() { reset(); }
   void reset() {
-    if (OB_NOT_NULL(buffer_)) {
-      allocator_.free(buffer_);
+    if (buffer_ == local_buffer_for_tiny_str_) {// tiny str
+      buffer_ = nullptr;
+      len_ = 0;
+    } else if (OB_ISNULL(buffer_)) {// empty str
+      len_ = 0;
+    } else {// big str
+      value_sematic_string::DefaultAllocator::get_instance().free(buffer_);
       buffer_ = nullptr;
       len_ = 0;
     }
   }
-  ObString get_ob_string() const { return ObString(len_, buffer_); }
-  int assign(const ObStringHolder &rhs) {
-    int ret = OB_SUCCESS;
-    if (!rhs.empty()) {
-      reset();
-      if (OB_ISNULL(buffer_ = (char *)allocator_.alloc(rhs.len_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        len_ = rhs.len_;
-        memcpy(buffer_, rhs.buffer_, len_);
-      }
+  // move sematic
+  ObStringHolder(ObStringHolder &&rhs) : ObStringHolder() { *this = std::move(rhs); }
+  ObStringHolder &operator=(ObStringHolder &&rhs) {
+    reset();
+    if (rhs.buffer_ == rhs.local_buffer_for_tiny_str_) {// tiny str
+      copy_from_tiny_ob_str_(rhs.get_ob_string());
+    } else {// big str
+      std::swap(buffer_, rhs.buffer_);
+      std::swap(len_, rhs.len_);
     }
-    return ret;
+    return *this;
   }
+  // not allow copy construction and copy assignment
+  ObStringHolder(const ObStringHolder &) = delete;
+  ObStringHolder &operator=(const ObStringHolder &) = delete;
+  // copy from assign
+  int assign(const ObStringHolder &rhs) { return assign(rhs.get_ob_string()); }
   int assign(const ObString &str) {
     int ret = OB_SUCCESS;
-    reset();
     if (OB_LIKELY(!str.empty())) {
-      int64_t len = str.length();
-      if (OB_ISNULL(buffer_ = (char *)allocator_.alloc(len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        len_ = len;
-        memcpy(buffer_, str.ptr(), len_);
+      if (str.length() <= TINY_STR_SIZE) {// tiny str
+        copy_from_tiny_ob_str_(str);
+      } else {// big str
+        int64_t len = str.length();
+        char *temp_buffer = nullptr;
+        if (OB_ISNULL(temp_buffer = (char *)value_sematic_string::DefaultAllocator::get_instance().alloc(len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          reset();
+          buffer_ = temp_buffer;
+          len_ = len;
+          memcpy(buffer_, str.ptr(), len_);
+        }
       }
+    } else {
+      reset();
     }
     return ret;
   }
+  // use ObString method to serialize and print
+  ObString get_ob_string() const { return ObString(len_, buffer_); }
   bool empty() const {
     return OB_ISNULL(buffer_) && len_ == 0;
   }
@@ -124,11 +127,18 @@ public:
     return ret;
   }
 private:
+  void copy_from_tiny_ob_str_(const ObString &tiny_str) {
+    reset();
+    OB_ASSERT(tiny_str.length() <= TINY_STR_SIZE);
+    memcpy(local_buffer_for_tiny_str_, tiny_str.ptr(), tiny_str.length());
+    buffer_ = local_buffer_for_tiny_str_;
+    len_ = tiny_str.length();
+  }
+private:
   char *buffer_;
   int64_t len_;
-  ObIAllocator &allocator_;
+  char local_buffer_for_tiny_str_[TINY_STR_SIZE];
 };
-#undef DEFAULT_ALLOCATOR
 
 }
 }

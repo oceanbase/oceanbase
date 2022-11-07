@@ -12,6 +12,7 @@
 
 #include "log_request_handler.h"
 #include "log_req.h"
+#include "share/ob_occam_time_guard.h"
 
 namespace oceanbase
 {
@@ -383,15 +384,16 @@ int LogRequestHandler::handle_request<MsgType>(\
     const ObAddr &server,\
     const MsgType &req)\
 {\
+  TIMEGUARD_INIT(ELECT, 50_ms, 10_s);\
   int ret = common::OB_SUCCESS;\
   if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {\
     ret = OB_INVALID_ARGUMENT;\
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req));\
   } else {\
     PalfHandleImplGuard guard;\
-    if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {\
+    if (CLICK_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {\
       PALF_LOG(WARN, "ObLogMgr get_log_service failed", K(ret), K(palf_id), KP(palf_env_impl_));\
-    } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_election_message(req))) {\
+    } else if (CLICK_FAIL(guard.get_palf_handle_impl()->handle_election_message(req))) {\
       PALF_LOG(WARN, "handle message failed", K(ret), K(palf_id), K(server), K(req));\
     } else {\
       PALF_LOG(DEBUG, "handle message success", K(ret), K(palf_id), K(server), K(req));\
