@@ -772,10 +772,17 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
         || ObExtendTC == ob_obj_type_class(dst_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));
-    } else {
-      // 检查普通类型之间是否可以互转
-      OZ (ObObjCaster::can_cast_in_oracle_mode(dst_type,
+    } else { // 检查普通类型之间是否可以互转
+      if (lib::is_oracle_mode()) {
+        OZ (ObObjCaster::can_cast_in_oracle_mode(dst_type,
           dst_pl_type.get_meta_type()->get_collation_type(), src_type, src_coll_type));
+      } else if (!cast_supported(
+        src_type, src_coll_type, dst_type, dst_pl_type.get_meta_type()->get_collation_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes",
+          K(ret), K(src_type), K(src_coll_type),
+          K(dst_type), K(dst_pl_type.get_meta_type()->get_collation_type()));
+      }
     }
     bool is_numric_type = (IS_NUMRIC_TYPE(src_type) && IS_NUMRIC_TYPE(dst_type));
     OX (match_info = ObRoutineMatchInfo::MatchInfo(

@@ -4522,7 +4522,8 @@ int lookup_pl_symbol(const void *pl_ns, const char *symbol, size_t len, int64_t 
    const oceanbase::pl::ObPLBlockNS *ns = static_cast<const oceanbase::pl::ObPLBlockNS *>(pl_ns);
    if (OB_FAIL(ns->resolve_symbol(var_name, type, pl_data_type, parent_id, var_index))) {
      LOG_WARN("failed to get var index", K(var_name), K(ret));
-   } else if (oceanbase::pl::ObPLExternalNS::LOCAL_VAR == type) {
+   } else if (oceanbase::pl::ObPLExternalNS::LOCAL_VAR == type
+              && !pl_data_type.is_cursor_type()) { // mysql can not access explicit cursor in sql/expression
      *idx = var_index;
    } else { /*do nothing*/ }
  }
