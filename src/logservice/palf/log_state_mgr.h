@@ -94,6 +94,7 @@ public:
   virtual int disable_vote();
   virtual int enable_vote();
   virtual LogReplicaType get_replica_type() const;
+  virtual int get_election_role(common::ObRole &role, int64_t &epoch) const;
   TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_),                         \
       "state", replica_state_to_string(state_), K_(prepare_meta), K_(leader), K_(leader_epoch),        \
       K_(is_sync_enabled), K_(pending_end_lsn), K_(scan_disk_log_finished), K_(last_check_start_id),   \

@@ -10769,7 +10769,45 @@ def_table_schema(
 )
 
 # 12339: __all_virtual_show_trace
-# 12340: __all_virtual_ha_diagnose
+def_table_schema(
+  owner = 'keqing.llt',
+  table_name = '__all_virtual_ha_diagnose',
+  table_id = '12340',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = False,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('election_role', 'varchar:32'),
+    ('election_epoch', 'int'),
+    ('palf_role', 'varchar:32'),
+    ('palf_state', 'varchar:32'),
+    ('palf_proposal_id', 'int'),
+    ('log_handler_role', 'varchar:32'),
+    ('log_handler_proposal_id', 'int'),
+    ('log_handler_takeover_state', 'varchar:32'),
+    ('log_handler_takeover_log_type', 'varchar:32'),
+    ('max_applied_scn', 'uint'),
+    ('max_replayed_lsn', 'uint'),
+    ('max_replayed_scn', 'uint'),
+    ('replay_diagnose_info', 'varchar:1024'),
+    ('gc_state', 'varchar:32'),
+    ('gc_start_ts', 'int'),
+    ('archive_scn', 'uint'),
+    ('checkpoint_scn', 'uint'),
+    ('min_rec_scn', 'uint'),
+    ('min_rec_scn_log_type', 'varchar:32')
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 #
 # 余留位置

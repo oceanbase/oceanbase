@@ -106,6 +106,20 @@ void ObCheckpointExecutor::offline()
   update_checkpoint_enabled_ = false;
 }
 
+void ObCheckpointExecutor::get_min_rec_log_ts(int &log_type,
+                                              int64_t &min_rec_log_ts) const
+{
+  for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
+    if (OB_NOT_NULL(handlers_[i])) {
+      int64_t rec_log_ts = handlers_[i]->get_rec_log_ts();
+      if (rec_log_ts > 0 && rec_log_ts < min_rec_log_ts) {
+        min_rec_log_ts = rec_log_ts;
+        log_type = i;
+      }
+    }
+  }
+}
+
 inline void get_min_rec_log_ts_service_type_by_index_(int index, char* service_type)
 {
   int ret = OB_SUCCESS;
@@ -133,15 +147,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
         // used to record which handler provide the smallest rec_log_ts
         int min_rec_log_ts_service_type_index = 0;
         char service_type[common::MAX_SERVICE_TYPE_BUF_LENGTH];
-        for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
-          if (OB_NOT_NULL(handlers_[i])) {
-            int64_t rec_log_ts = handlers_[i]->get_rec_log_ts();
-            if (rec_log_ts > 0 && rec_log_ts < checkpoint_ts) {
-              checkpoint_ts = rec_log_ts;
-              min_rec_log_ts_service_type_index = i;
-            }
-          }
-        }
+        get_min_rec_log_ts(min_rec_log_ts_service_type_index, checkpoint_ts);
         get_min_rec_log_ts_service_type_by_index_(min_rec_log_ts_service_type_index, service_type);
 
         const int64_t checkpoint_ts_in_ls_meta = ls_->get_clog_checkpoint_ts();
@@ -275,7 +281,7 @@ bool ObCheckpointExecutor::need_flush()
                 K(end_log_ts), K(ls_->get_clog_checkpoint_ts()));
     need_flush = true;
   }
-  
+
   return need_flush;
 }
 
@@ -286,7 +292,7 @@ bool ObCheckpointExecutor::is_wait_advance_checkpoint()
       ATOMIC_STORE(&wait_advance_checkpoint_, false);
     }
   }
-  
+
   return ATOMIC_LOAD(&wait_advance_checkpoint_);
 }
 
@@ -313,6 +319,18 @@ int64_t ObCheckpointExecutor::get_cannot_recycle_log_size()
   return cannot_recycle_log_size;
 }
 
+int ObCheckpointExecutor::diagnose(CheckpointDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  int log_type_index = 0;
+  diagnose_info.checkpoint_ = ls_->get_clog_checkpoint_ts();
+  diagnose_info.min_rec_scn_ = INT64_MAX;
+  get_min_rec_log_ts(log_type_index, diagnose_info.min_rec_scn_);
+  ObLogBaseType log_type = static_cast<ObLogBaseType>(log_type_index);
+  diagnose_info.log_type_ = log_type;
+  return ret;
+}
 }  // namespace checkpoint
 }  // namespace storage
 }  // namespace oceanbase

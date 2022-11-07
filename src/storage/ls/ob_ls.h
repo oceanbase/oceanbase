@@ -37,7 +37,9 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 #include "storage/restore/ob_ls_restore_handler.h"
+#include "logservice/applyservice/ob_log_apply_service.h"
 #include "logservice/replayservice/ob_replay_handler.h"
+#include "logservice/replayservice/ob_replay_status.h"
 #include "logservice/rcservice/ob_role_change_handler.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"     // ObLogRestoreHandler
 #include "logservice/ob_log_handler.h"
@@ -120,6 +122,31 @@ struct ObLSVTInfo
   int64_t checkpoint_ts_;
   //TODO SCN
   int64_t checkpoint_lsn_;
+};
+
+// 诊断虚表统计信息
+struct DiagnoseInfo
+{
+  bool is_role_sync() {
+    return ((palf_diagnose_info_.election_role_ == palf_diagnose_info_.palf_role_)
+           && (palf_diagnose_info_.palf_role_ == log_handler_diagnose_info_.log_handler_role_));
+  }
+  int64_t ls_id_;
+  logservice::LogHandlerDiagnoseInfo log_handler_diagnose_info_;
+  palf::PalfDiagnoseInfo palf_diagnose_info_;
+  logservice::RCDiagnoseInfo rc_diagnose_info_;
+  logservice::ApplyDiagnoseInfo apply_diagnose_info_;
+  logservice::ReplayDiagnoseInfo replay_diagnose_info_;
+  logservice::GCDiagnoseInfo gc_diagnose_info_;
+  checkpoint::CheckpointDiagnoseInfo checkpoint_diagnose_info_;
+  TO_STRING_KV(K(ls_id_),
+               K(log_handler_diagnose_info_),
+               K(palf_diagnose_info_),
+               K(rc_diagnose_info_),
+               K(apply_diagnose_info_),
+               K(replay_diagnose_info_),
+               K(gc_diagnose_info_),
+               K(checkpoint_diagnose_info_));
 };
 
 class ObIComponentFactory;
@@ -640,6 +667,7 @@ public:
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
   int try_update_uppder_trans_version();
+  int diagnose(DiagnoseInfo &info) const;
 
 private:
   // StorageBaseUtil

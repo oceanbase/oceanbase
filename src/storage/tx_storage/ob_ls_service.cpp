@@ -1256,6 +1256,34 @@ bool ObLSService::need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) co
   return arg.need_create_inner_tablets();
 }
 
+int ObLSService::iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func)
+{
+  int ret = OB_SUCCESS;
+  common::ObSharedGuard<ObLSIterator> ls_iter;
+  ObLS *ls = nullptr;
+
+  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::OBSERVER_MOD))) {
+    LOG_WARN("failed to get ls iter", K(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(ls_iter->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          LOG_ERROR("fail to get next ls", K(ret));
+        }
+      } else if (nullptr == ls) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("ls is null", K(ret));
+      } else if (OB_FAIL(func(*ls))) {
+        LOG_WARN("iter ls diagnose failed", K(ret));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 } // storage
 } // oceanbase
 

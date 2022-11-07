@@ -613,5 +613,49 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   }
   return ret;
 }
+
+int ObLogService::diagnose_role_change(RCDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(role_change_service_.diagnose(diagnose_info))) {
+    CLOG_LOG(WARN, "role_change_service diagnose failed", K(ret));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObLogService::diagnose_replay(const share::ObLSID &id,
+                                  ReplayDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(replay_service_.diagnose(id, diagnose_info))) {
+    CLOG_LOG(WARN, "replay_service diagnose failed", K(ret), K(id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObLogService::diagnose_apply(const share::ObLSID &id,
+                                 ApplyDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(apply_service_.diagnose(id, diagnose_info))) {
+    CLOG_LOG(WARN, "apply_service diagnose failed", K(ret), K(id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
 }//end of namespace logservice
 }//end of namespace oceanbase

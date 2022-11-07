@@ -181,6 +181,9 @@ public:
   int iterate_palf(const ObFunction<int(const palf::PalfHandle&)> &func);
   int iterate_apply(const ObFunction<int(const ObApplyStatus&)> &func);
   int iterate_replay(const ObFunction<int(const ObReplayStatus&)> &func);
+  int diagnose_role_change(RCDiagnoseInfo &diagnose_info);
+  int diagnose_replay(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
+  int diagnose_apply(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
 
   palf::PalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL

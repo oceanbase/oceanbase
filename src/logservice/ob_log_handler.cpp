@@ -1307,5 +1307,31 @@ int ObLogHandler::unregister_rebuild_cb()
 	return ret;
 }
 
+int ObLogHandler::diagnose(LogHandlerDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    diagnose_info.log_handler_role_ = ATOMIC_LOAD(&role_);
+    diagnose_info.log_handler_proposal_id_ = ATOMIC_LOAD(&proposal_id_);
+  }
+  return ret;
+}
+
+int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(palf_handle_.diagnose(diagnose_info))) {
+    CLOG_LOG(WARN, "palf handle diagnose failed", K(ret), KPC(this));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
 } // end namespace logservice
 } // end napespace oceanbase

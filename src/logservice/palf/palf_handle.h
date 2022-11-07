@@ -368,7 +368,7 @@ public:
   //   OB_NOT_MASTER: self is not active leader
   //   OB_EAGAIN: another change_acess_mode is running, try again later
   // NB: 1. if return OB_EAGAIN, caller need execute 'change_access_mode' again.
-  //     2. before execute 'change_access_mode', caller need execute 'get_access_mode' to 
+  //     2. before execute 'change_access_mode', caller need execute 'get_access_mode' to
   //      get 'mode_version' and pass it to 'change_access_mode'
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
@@ -427,6 +427,8 @@ public:
   int reset_election_priority();
   int stat(PalfStat &palf_stat) const;
 
+ 	// @param [out] diagnose info, current diagnose info of palf
+  int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));
 private:
   palf::PalfHandleImpl *palf_handle_impl_;

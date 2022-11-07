@@ -263,10 +263,10 @@ int ObAllVirtualPalfStat::member_list_to_string_(
       tmp_member_list))) {
     SERVER_LOG(WARN, "fail to transform member_list", KR(ret), K(member_list));
   } else if (OB_FAIL(share::ObLSReplica::member_list2text(
-      tmp_member_list, 
-      member_list_buf_, 
+      tmp_member_list,
+      member_list_buf_,
       MAX_MEMBER_LIST_LENGTH))) {
-    SERVER_LOG(WARN, "member_list2text failed", KR(ret), 
+    SERVER_LOG(WARN, "member_list2text failed", KR(ret),
         K(member_list), K(tmp_member_list), K_(member_list_buf));
   }
   return ret;

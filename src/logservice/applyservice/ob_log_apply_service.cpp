@@ -757,6 +757,18 @@ int ObApplyStatus::handle_drop_cb()
   return ret;
 }
 
+int ObApplyStatus::diagnose(ApplyDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t min_unapplied_scn = OB_INVALID_TIMESTAMP;
+  if (OB_FAIL(get_min_unapplied_log_ts_ns(min_unapplied_scn))) {
+    CLOG_LOG(WARN, "get_min_unapplied_log_ts_ns failed", KPC(this), K(ret));
+  } else {
+    diagnose_info.max_applied_scn_ = min_unapplied_scn - 1;
+  }
+  return ret;
+}
+
 int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
 {
   int ret = OB_SUCCESS;
@@ -1376,6 +1388,28 @@ int ObLogApplyService::stat_for_each(const common::ObFunction<int (const ObApply
     return bret;
   };
   return apply_status_map_.for_each(stat_func);
+}
+
+int ObLogApplyService::diagnose(const share::ObLSID &id,
+                                ApplyDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  ObApplyStatus *apply_status = NULL;
+  ObApplyStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply service not init", K(ret));
+  } else if (OB_FAIL(get_apply_status(id, guard))) {
+    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
+  } else if (NULL == (apply_status = guard.get_apply_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->diagnose(diagnose_info))) {
+    CLOG_LOG(WARN, "apply status diagnose failed", K(ret), K(id));
+  } else {
+    CLOG_LOG(TRACE, "apply service diagnose success", K(id));
+  }
+  return ret;
 }
 
 int ObLogApplyService::handle_cb_queue_(ObApplyStatus *apply_status,

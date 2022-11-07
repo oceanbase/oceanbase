@@ -84,6 +84,19 @@ struct PalfStat {
       K_(replica_type), K_(base_lsn), K_(end_lsn), K_(end_ts_ns), K_(max_lsn));
 };
 
+struct PalfDiagnoseInfo {
+  common::ObRole election_role_;
+  int64_t election_epoch_;
+  common::ObRole palf_role_;
+  palf::ObReplicaState palf_state_;
+  int64_t palf_proposal_id_;
+  TO_STRING_KV(K(election_role_),
+               K(election_epoch_),
+               K(palf_role_),
+               K(palf_state_),
+               K(palf_proposal_id_));
+};
+
 struct LSKey {
   LSKey() : id_(-1) {}
   explicit LSKey(const int64_t id) : id_(id) {}
@@ -576,6 +589,7 @@ public:
   virtual int revoke_leader(const int64_t proposal_id) = 0;
   virtual int stat(PalfStat &palf_stat) = 0;
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
+  virtual int diagnose(PalfDiagnoseInfo &diagnose_info) const = 0;
 };
 
 class PalfHandleImpl : public IPalfHandleImpl
@@ -842,6 +856,7 @@ public:
                                   const RegisterReturn reg_ret) override final;
   int handle_learner_req(const LogLearner &server, const LogLearnerReqType req_type) override final;
   int get_palf_epoch(int64_t &palf_epoch) const;
+  int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
 private:
   int do_init_mem_(const int64_t palf_id,

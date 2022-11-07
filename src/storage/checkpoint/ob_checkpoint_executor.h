@@ -36,6 +36,17 @@ struct ObCheckpointVTInfo
   );
 };
 
+struct CheckpointDiagnoseInfo
+{
+  int64_t checkpoint_;
+  int64_t min_rec_scn_;
+  logservice::ObLogBaseType log_type_;
+
+  TO_STRING_KV(K(checkpoint_),
+               K(min_rec_scn_),
+               K(log_type_));
+};
+
 class ObCheckpointExecutor
 {
 public:
@@ -71,6 +82,10 @@ public:
 
   int64_t get_cannot_recycle_log_size();
 
+  void get_min_rec_log_ts(int &log_type, int64_t &min_rec_log_ts) const;
+
+  int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
+
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
   static const int64_t MAX_NEED_REPLAY_CLOG_INTERVAL = (int64_t)60 * 60 * 1000 * 1000 * 1000; //ns
@@ -81,7 +96,7 @@ private:
   // be used to avoid checkpoint concurrently,
   // no need to protect handlers_[] because ls won't be destroyed(hold lshandle)
   // when the public interfaces are invoked
-  common::ObSpinLock lock_;
+  mutable common::ObSpinLock lock_;
 
   // avoid frequent freeze when clog_used_over_threshold
   bool wait_advance_checkpoint_;

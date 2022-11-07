@@ -624,5 +624,11 @@ int PalfHandle::stat(PalfStat &palf_stat) const
   return palf_handle_impl_->stat(palf_stat);
 }
 
+int PalfHandle::diagnose(PalfDiagnoseInfo &diagnose_info) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->diagnose(diagnose_info);
+}
+
 } // end namespace palf
 } // end namespace oceanbase

@@ -75,6 +75,15 @@ struct LSReplayStat
                K(pending_cnt_));
 };
 
+struct ReplayDiagnoseInfo
+{
+  palf::LSN max_replayed_lsn_;
+  int64_t max_replayed_scn_;
+  ObSqlString diagnose_str_;
+  TO_STRING_KV(K(max_replayed_lsn_),
+               K(max_replayed_scn_));
+};
+
 //此类型为前向barrier日志专用, 与ObLogReplayTask分开分配
 //因此此结构的内存需要单独释放
 struct ObLogReplayBuffer
@@ -131,6 +140,8 @@ public:
   bool is_raw_write_;
   int64_t first_handle_ts_;
   int64_t print_error_ts_;
+  int64_t replay_cost_; //此任务重试的总耗时时间
+  int64_t retry_cost_; //此任务回放成功时的当次处理时间
   void *log_buf_;
 
   TO_STRING_KV(K(ls_id_),
@@ -367,6 +378,11 @@ public:
   }
   int get_min_unreplayed_log_info(palf::LSN &lsn,
                                   int64_t &log_ts,
+                                  int64_t &replay_hint,
+                                  ObLogBaseType &log_type,
+                                  int64_t &first_handle_ts,
+                                  int64_t &replay_cost,
+                                  int64_t &retry_cost,
                                   bool &is_queue_empty);
 private:
   Link *pop_()
@@ -421,12 +437,20 @@ public:
     }
     void reset() {
       lsn_.reset();
+      scn_ = 0;
+      log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+      is_submit_err_ = false;
       err_ts_ = 0;
       err_ret_ = common::OB_SUCCESS;
     }
-    TO_STRING_KV(K(lsn_), K(err_ts_), K(err_ret_));
+    TO_STRING_KV(K(lsn_), K(scn_), K(log_type_),
+                 K(is_submit_err_), K(err_ts_), K(err_ret_));
   public:
     palf::LSN lsn_;
+    uint64_t scn_;
+    ObLogBaseType log_type_;
+    int64_t replay_hint_;
+    bool is_submit_err_;  //is submit log task error occured
     int64_t err_ts_;  //the timestamp that partition encounts fatal error
     int err_ret_;  //the ret code of fatal error
   };
@@ -496,7 +520,12 @@ public:
   int get_min_unreplayed_lsn(palf::LSN &lsn);
   int get_min_unreplayed_log_ts_ns(int64_t &log_ts);
   int get_min_unreplayed_log_info(palf::LSN &lsn,
-                                  int64_t &log_ts);
+                                  int64_t &log_ts,
+                                  int64_t &replay_hint,
+                                  ObLogBaseType &log_type,
+                                  int64_t &first_handle_ts,
+                                  int64_t &replay_cost,
+                                  int64_t &retry_cost);
   int get_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
   //提交日志检查barrier状态
   int check_submit_barrier();
@@ -508,7 +537,7 @@ public:
   void set_post_barrier_submitted(const palf::LSN &lsn);
   int set_post_barrier_finished(const palf::LSN &lsn);
   int stat(LSReplayStat &stat) const;
-
+  int diagnose(ReplayDiagnoseInfo &diagnose_info);
   inline void inc_ref()
   {
     ATOMIC_INC(&ref_cnt_);
@@ -522,7 +551,13 @@ public:
     return replay_hint & (REPLAY_TASK_QUEUE_SIZE - 1);
   }
   // 用于记录日志流级别的错误, 此类错误不可恢复
-  void set_err_info(const palf::LSN &lsn, const int64_t err_ts, const int err_ret);
+  void set_err_info(const palf::LSN &lsn,
+                    const uint64_t scn,
+                    const ObLogBaseType &log_type,
+                    const int64_t replay_hint,
+                    const bool is_submit_err,
+                    const int64_t err_ts,
+                    const int err_ret);
   bool has_fatal_error() const
   {
     return is_fatal_error(err_info_.err_ret_);

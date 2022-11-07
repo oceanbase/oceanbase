@@ -61,6 +61,7 @@ public:
   void handle(void *task);
   int on_role_change(const int64_t id) final override;
   int on_need_change_leader(const int64_t ls_id, const common::ObAddr &dst_addr) final override;
+  int diagnose(RCDiagnoseInfo &diagnose_info);
 
 private:
   int submit_role_change_event_(const RoleChangeEvent &event);
@@ -136,6 +137,7 @@ private:
   logservice::ObLogApplyService *apply_service_;
   logservice::ObILogReplayService *replay_service_;
   int tg_id_;
+  RCDiagnoseInfo cur_task_info_; // for diagnose
   bool is_inited_;
 };
 } // end namespace logservice

@@ -298,7 +298,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObGCLSLog)
 ObGCHandler::ObGCHandler() : is_inited_(false),
                              rwlock_(),
                              ls_(NULL),
-                             gc_seq_invalid_member_(-1)
+                             gc_seq_invalid_member_(-1),
+                             gc_start_ts_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -312,6 +313,7 @@ void ObGCHandler::reset()
   WLockGuard wlock_guard(rwlock_);
   gc_seq_invalid_member_ = -1;
   ls_ = NULL;
+  gc_start_ts_ = OB_INVALID_TIMESTAMP;
   is_inited_ = false;
 }
 
@@ -770,6 +772,7 @@ void ObGCHandler::handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_
     ObRole role;
     ObLSID ls_id = ls_->get_ls_id();
     LSGCState gc_state = INVALID_LS_GC_STATE;
+    gc_start_ts_ = ObTimeUtility::current_time();
     if (OB_FAIL(get_palf_role_(role))) {
       CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
     } else if (ObRole::LEADER != role) {
@@ -822,6 +825,22 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     }
     CLOG_LOG(INFO, "ls handle_gc_ls_offline finished", K(ls_id), K(role));
   }
+}
+
+int ObGCHandler::diagnose(GCDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    CLOG_LOG(WARN, "GC handler not init");
+  } else {
+    RLockGuard wlock_guard(rwlock_);
+    if (OB_FAIL(ls_->get_gc_state(diagnose_info.gc_state_))) {
+      CLOG_LOG(WARN, "get_gc_state failed", K(ls_id));
+    } else {
+      diagnose_info.gc_start_ts_ = gc_start_ts_;
+    }
+  }
+  return ret;
 }
 
 //---------------ObGarbageCollector---------------//

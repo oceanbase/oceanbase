@@ -746,7 +746,8 @@ void ObLogReplayService::process_replay_ret_code_(const int ret_code,
   if (OB_SUCCESS != ret_code) {
     int64_t cur_ts = ObTimeUtility::fast_current_time();
     if (replay_status.is_fatal_error(ret_code)) {
-      replay_status.set_err_info(replay_task.lsn_, cur_ts, ret_code);
+      replay_status.set_err_info(replay_task.lsn_, replay_task.log_ts_, replay_task.log_type_,
+                                 replay_task.replay_hint_, false, cur_ts, ret_code);
       CLOG_LOG(ERROR, "replay task encount fatal error", K(replay_status), K(replay_task), K(ret_code));
     } else {/*do nothing*/}
 
@@ -802,10 +803,8 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
 {
   int ret = OB_SUCCESS;
   ObLS *ls;
-  int64_t start_ts = ObTimeUtility::fast_current_time();
   get_replay_queue_index() = replay_queue_idx;
   ObLogReplayBuffer *replay_log_buff = NULL;
-  int64_t retry_time = 0;
   bool need_replay = false;
   if (OB_ISNULL(replay_status) || OB_ISNULL(replay_task)) {
     ret = OB_INVALID_ARGUMENT;
@@ -848,24 +847,6 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
       }
     }
     CLOG_LOG(TRACE, "do replay task", KPC(replay_task), KPC(replay_status));
-  } else if (OB_EAGAIN == ret) {
-    if (common::OB_INVALID_TIMESTAMP == replay_task->first_handle_ts_) {
-      replay_task->first_handle_ts_ = start_ts;
-      replay_task->print_error_ts_ = start_ts;
-    } else if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
-      retry_time = start_ts - replay_task->first_handle_ts_;
-      CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
-              K(retry_time), KPC(replay_task), KPC(replay_status));
-      replay_task->print_error_ts_ = start_ts;
-    }
-  }
-  int64_t replay_used_time = ObTimeUtility::fast_current_time() - start_ts;
-  if (replay_used_time > MAX_REPLAY_TIME_PER_ROUND) {
-    if (replay_used_time > MAX_SINGLE_REPLAY_WARNING_TIME_THRESOLD && !get_replay_is_writing_throttling()) {
-      CLOG_LOG(ERROR, "single replay task cost too much time. replay may be delayed", K(replay_used_time), KPC(replay_task), KPC(replay_status));
-    } else {
-      CLOG_LOG(WARN, "single replay task cost too much time", K(replay_used_time), KPC(replay_task), KPC(replay_status));
-    }
   }
   get_replay_queue_index() = -1;
   get_replay_is_writing_throttling() = false;
@@ -940,6 +921,8 @@ int ObLogReplayService::try_submit_remained_log_replay_task_(ObReplayServiceSubm
           LSN cur_log_lsn = replay_task->lsn_;
           int64_t cur_log_size = replay_task->log_size_;
           int64_t cur_log_ts = replay_task->log_ts_;
+          int64_t replay_hint = replay_task->replay_hint_;
+          ObLogBaseType log_type = replay_task->log_type_;
           if (OB_FAIL(check_can_submit_log_replay_task_(replay_task, replay_status))) {
             // do nothing
           } else if (OB_SUCC(submit_log_replay_task_(*replay_task, *replay_status))) {
@@ -953,7 +936,7 @@ int ObLogReplayService::try_submit_remained_log_replay_task_(ObReplayServiceSubm
               // log info回退
               int64_t cur_ts = common::ObTimeUtility::fast_current_time();
               CLOG_LOG(ERROR, "failed to update_next_submit_log_info", KR(ret), KPC(replay_status), K(cur_log_lsn), K(cur_log_size), K(cur_log_ts));
-              replay_status->set_err_info(cur_log_lsn, cur_ts, ret);
+              replay_status->set_err_info(cur_log_lsn, cur_log_ts, log_type, replay_hint, true, cur_ts, ret);
             }
           }
         }
@@ -1105,14 +1088,16 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
         CLOG_LOG(ERROR, "failed to update_next_to_submit_log_ts_allow_equal", KR(tmp_ret),
                   K(cur_log_submit_ts), K(replay_status));
         ret = OB_ERR_UNEXPECTED;
-        replay_status.set_err_info(cur_lsn, ObClockGenerator::getClock(), ret);
+        replay_status.set_err_info(cur_lsn, cur_log_submit_ts, replay_task->log_type_,
+                                   replay_task->replay_hint_, true, ObClockGenerator::getClock(), tmp_ret);
         free_replay_task_log_buf(replay_task);
         free_replay_task(replay_task);
       } else {
         submit_task->cache_replay_task(replay_task);
       }
     } else {
-      replay_status.set_err_info(cur_lsn, ObClockGenerator::getClock(), ret);
+      replay_status.set_err_info(cur_lsn, cur_log_submit_ts, replay_task->log_type_,
+                                 replay_task->replay_hint_ ,true, ObClockGenerator::getClock(), ret);
       free_replay_task_log_buf(replay_task);
       free_replay_task(replay_task);
     }
@@ -1170,7 +1155,8 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
             } else if (OB_FAIL(submit_task->update_next_to_submit_lsn(committed_end_lsn))) {
               // log info回退
               CLOG_LOG(ERROR, "failed to update_next_submit_log_info", KR(ret), K(committed_end_lsn), KPC(replay_status));
-              replay_status->set_err_info(committed_end_lsn, ObClockGenerator::getClock(), ret);
+              replay_status->set_err_info(committed_end_lsn, to_submit_log_ts, ObLogBaseType::INVALID_LOG_BASE_TYPE,
+                                          0, true, ObClockGenerator::getClock(), ret);
             } else {
               CLOG_LOG(INFO, "no log to fetch but committed_end_lsn not reached, last log may be padding",
                         KR(ret), K(to_submit_lsn), K(committed_end_lsn), K(to_submit_log_ts), KPC(replay_status));
@@ -1191,7 +1177,8 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
             // log info回退
             CLOG_LOG(ERROR, "failed to update_next_submit_log_info", KR(ret), K(to_submit_lsn),
                        K(log_size), K(to_submit_log_ts));
-            replay_status->set_err_info(to_submit_lsn, ObClockGenerator::getClock(), ret);
+            replay_status->set_err_info(to_submit_lsn, to_submit_log_ts, ObLogBaseType::INVALID_LOG_BASE_TYPE,
+                                        0, true, ObClockGenerator::getClock(), ret);
           }
         } else if (OB_EAGAIN == ret) {
           // do nothing
@@ -1416,6 +1403,26 @@ int ObLogReplayService::remove_all_ls_()
     CLOG_LOG(WARN, "failed to remove log stream", K(ret));
   } else {
     CLOG_LOG(INFO, "replay service remove all ls", K(ret));
+  }
+  return ret;
+}
+
+int ObLogReplayService::diagnose(const share::ObLSID &id,
+                                 ReplayDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  ObReplayStatus *replay_status = NULL;
+  ObReplayStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_FAIL(get_replay_status_(id, guard))) {
+    CLOG_LOG(WARN, "guard get replay status failed", K(ret), K(id));
+  } else if (NULL == (replay_status = guard.get_replay_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(replay_status->diagnose(diagnose_info))) {
+    CLOG_LOG(WARN, "replay status enable failed", K(ret), K(id));
   }
   return ret;
 }

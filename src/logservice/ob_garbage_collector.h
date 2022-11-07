@@ -65,6 +65,38 @@ enum LSGCState
   MAX_LS_GC_STATE = 6,
 };
 
+static inline
+int gc_state_to_string(const LSGCState gc_state,
+                       char *str,
+                       const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  if (gc_state == INVALID_LS_GC_STATE) {
+    strncpy(str ,"INVALID_STATE", str_len);
+  } else if (gc_state == NORMAL) {
+    strncpy(str ,"NORMAL", str_len);
+  } else if (gc_state == LS_BLOCKED) {
+    strncpy(str ,"LS_BLOCKED", str_len);
+  } else if (gc_state == WAIT_OFFLINE) {
+    strncpy(str ,"WAIT_OFFLINE", str_len);
+  } else if (gc_state == LS_OFFLINE) {
+    strncpy(str ,"LS_OFFLINE", str_len);
+  } else if (gc_state == WAIT_GC) {
+    strncpy(str ,"WAIT_GC", str_len);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
+}
+
+struct GCDiagnoseInfo
+{
+  LSGCState gc_state_;
+  int64_t gc_start_ts_;
+  TO_STRING_KV(K(gc_state_),
+               K(gc_start_ts_));
+};
+
 class ObGCLSLog
 {
 public:
@@ -189,6 +221,7 @@ public:
   int check_ls_can_offline();
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
+  int diagnose(GCDiagnoseInfo &diagnose_info) const;
 
   // for replay
   virtual int replay(const void *buffer,
@@ -267,6 +300,7 @@ private:
   RWLock rwlock_; //for leader revoke/takeover submit log
   storage::ObLS *ls_;
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
+  int64_t gc_start_ts_;
 };
 
 } // namespace logservice

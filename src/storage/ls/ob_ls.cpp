@@ -1336,5 +1336,38 @@ int ObLS::update_id_meta_without_writing_slog(const int64_t service_type,
   return ret;
 }
 
+int ObLS::diagnose(DiagnoseInfo &info) const
+{
+  int ret = OB_SUCCESS;
+  logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
+  share::ObLSID ls_id = get_ls_id();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret));
+  } else if (FALSE_IT(info.ls_id_ = ls_id.id()) ||
+             FALSE_IT(info.rc_diagnose_info_.id_ = ls_id.id())) {
+  } else if (OB_FAIL(gc_handler_.diagnose(info.gc_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose gc failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(checkpoint_executor_.diagnose(info.checkpoint_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose checkpoint failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(log_service->diagnose_apply(ls_id, info.apply_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose apply failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(log_service->diagnose_replay(ls_id, info.replay_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose replay failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(log_handler_.diagnose(info.log_handler_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose log handler failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(log_handler_.diagnose_palf(info.palf_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose palf failed", K(ret), K(ls_id));
+  } else if (info.is_role_sync()) {
+    // 角色同步时不需要诊断role change service
+    info.rc_diagnose_info_.state_ = logservice::TakeOverState::TAKE_OVER_FINISH;
+    info.rc_diagnose_info_.log_type_ = logservice::ObLogBaseType::INVALID_LOG_BASE_TYPE;
+  } else if (OB_FAIL(log_service->diagnose_role_change(info.rc_diagnose_info_))) {
+    // election, palf, log handler角色不统一时可能出现无主
+    STORAGE_LOG(WARN, "diagnose rc service failed", K(ret), K(ls_id));
+  }
+  STORAGE_LOG(INFO, "diagnose finish", K(ret), K(info), K(ls_id));
+  return ret;
+}
 }
 }

@@ -3508,5 +3508,14 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
   return ret;
 }
 
+int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  state_mgr_.get_role_and_state(diagnose_info.palf_role_, diagnose_info.palf_state_);
+  diagnose_info.palf_proposal_id_ = state_mgr_.get_proposal_id();
+  state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
+  return ret;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

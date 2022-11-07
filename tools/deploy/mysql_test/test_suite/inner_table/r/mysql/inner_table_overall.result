@@ -553,6 +553,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12336	__all_virtual_schema_memory	2	201001	1
 12337	__all_virtual_schema_slot	2	201001	1
 12338	__all_virtual_minor_freeze_info	2	201001	1
+12340	__all_virtual_ha_diagnose	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

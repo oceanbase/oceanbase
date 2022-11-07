@@ -11,6 +11,7 @@
  */
 
 #include "ob_ls_adapter.h"
+#include "replayservice/ob_log_replay_service.h"
 #include "replayservice/ob_replay_status.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -58,6 +59,7 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
   int ret = OB_SUCCESS;
   ObLS *ls = NULL;
   ObLSHandle ls_handle;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLSAdapter not inited", K(ret));
@@ -72,6 +74,25 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
                                 replay_task->lsn_,
                                 replay_task->log_ts_))) {
     CLOG_LOG(WARN, "log stream do replay failed", K(ret), KPC(replay_task));
+  }
+  if (OB_EAGAIN == ret) {
+    if (common::OB_INVALID_TIMESTAMP == replay_task->first_handle_ts_) {
+      replay_task->first_handle_ts_ = start_ts;
+      replay_task->print_error_ts_ = start_ts;
+    } else if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
+      replay_task->retry_cost_ = start_ts - replay_task->first_handle_ts_;
+      CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
+                KPC(replay_task));
+      replay_task->print_error_ts_ = start_ts;
+    }
+  }
+  replay_task->replay_cost_ = ObTimeUtility::fast_current_time() - start_ts;
+  if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_WARNING_TIME_THRESOLD) {
+    if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_ERROR_TIME_THRESOLD && !get_replay_is_writing_throttling()) {
+      CLOG_LOG(ERROR, "single replay task cost too much time. replay may be delayed", KPC(replay_task));
+    } else {
+      CLOG_LOG(WARN, "single replay task cost too much time", KPC(replay_task));
+    }
   }
   return ret;
 }

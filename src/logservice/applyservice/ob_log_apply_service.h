@@ -58,6 +58,12 @@ struct LSApplyStat
                K(pending_cnt_));
 };
 
+struct ApplyDiagnoseInfo
+{
+  int64_t max_applied_scn_;
+  TO_STRING_KV(K(max_applied_scn_));
+};
+
 class ObApplyFsCb : public palf::PalfFSCb
 {
 public:
@@ -164,6 +170,7 @@ public:
   int get_min_unapplied_log_ts_ns(int64_t &log_ts);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
+  int diagnose(ApplyDiagnoseInfo &diagnose_info);
   TO_STRING_KV(K(ls_id_),
                K(role_),
                K(proposal_id_),
@@ -251,6 +258,7 @@ public:
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);
+  int diagnose(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
 public:
   class GetApplyStatusFunctor
   {

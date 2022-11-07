@@ -72,7 +72,9 @@ int log_base_type_to_string(const ObLogBaseType log_type,
                             const int64_t str_len)
 {
   int ret = OB_SUCCESS;
-  if (log_type == TRANS_SERVICE_LOG_BASE_TYPE) {
+  if (log_type == INVALID_LOG_BASE_TYPE) {
+    strncpy(str ,"INVALID_TYPE", str_len);
+  } else if (log_type == TRANS_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"TRANS_SERVICE", str_len);
   } else if (log_type == TABLET_OP_LOG_BASE_TYPE) {
     strncpy(str ,"TABLET_OP", str_len);
