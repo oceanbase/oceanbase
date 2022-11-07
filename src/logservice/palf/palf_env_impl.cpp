@@ -645,11 +645,11 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
     int64_t min_block_max_ts = OB_INVALID_TIMESTAMP;
-    // OB_ENTRY_EXIST means there is not any block;
+    // OB_ENTRY_NOT_EXIST means there is not any block;
     // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
     // OB_ERR_OUT_OF_UPPER_BOUND means there is one block
     auto need_skip_by_ret = [](const int ret ){
-      return OB_ENTRY_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret 
+      return OB_ENTRY_NOT_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret 
           || OB_ERR_OUT_OF_UPPER_BOUND == ret;
     };
     if (false == base_lsn.is_valid()) {
