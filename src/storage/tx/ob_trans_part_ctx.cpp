@@ -3198,7 +3198,7 @@ int ObPartTransCtx::get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb)
     if (free_cbs_.is_empty()) {
       ret = OB_TX_NOLOGCB;
       //TRANS_LOG(INFO, "all log cbs are busy now, try again later", K(ret), K(*this));
-    } else if (free_cbs_.get_size() == RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING &&
+    } else if (free_cbs_.get_size() <= RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING &&
         ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) == false) {
       ret = OB_TX_NOLOGCB;
       //TRANS_LOG(INFO, "reserve log callback for freezing, try again later", K(ret), K(*this));
@@ -3873,6 +3873,8 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     //   tx_data_->end_log_ts_ = redo_log_no_;
     // }
     if (exec_info_.participants_.count() > 1) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+    } else if (exec_info_.upstream_.is_valid()) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
     } else if (is_sub2pc()) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
