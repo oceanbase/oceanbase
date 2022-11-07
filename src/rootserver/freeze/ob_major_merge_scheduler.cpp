@@ -371,10 +371,17 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
     // loop until 'this round major merge finished' or 'epoch changed'
     while (!stop_ && !is_paused()) {
       update_last_run_timestamp();
-
-      // get zones to schedule merge
       ObZoneArray to_merge_zone;
-      if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {
+      // Place is_last_merge_complete() to the head of this while loop.
+      // So as to break this loop at once, when the last merge is complete.
+      // Otherwise, may run one extra loop that should not run, and thus incur error.
+      // https://work.aone.alibaba-inc.com/issue/45954449
+      if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
+        LOG_WARN("fail to get zone global merge info", KR(ret));
+      } else if (global_info.is_last_merge_complete()) {
+        // this round major merge is complete
+        break;
+      } else if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {  // get zones to schedule merge
         LOG_WARN("fail to get next merge zones", KR(ret));
       } else if (to_merge_zone.empty()) {
         // no new zone to merge
@@ -382,16 +389,11 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       } else if (OB_FAIL(schedule_zones_to_merge(to_merge_zone, expected_epoch))) {
         LOG_WARN("fail to get next merge zones", KR(ret), K(to_merge_zone), K(expected_epoch));
       }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
-          LOG_WARN("fail to get zone global merge info", KR(ret));
-        } else if (global_info.is_last_merge_complete()) {
-          // this round major merge is complete
-          break;
-        } else if (OB_FAIL(update_merge_status(expected_epoch))) {
-          LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
-        }
+      // Need to update_merge_status, even though to_merge_zone is empty.
+      // E.g., in the 1st loop, already schedule all zones to merge, but not finish major merge.
+      // In the 2nd loop, though to_merge_zone is empty, need continue to update_merge_status.
+      if (FAILEDx(update_merge_status(expected_epoch))) {
+        LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
       }
 
       if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
