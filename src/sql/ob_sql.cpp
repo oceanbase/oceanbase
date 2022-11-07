@@ -3745,7 +3745,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                             context,
                                             result,
                                             pc_ctx.is_begin_commit_stmt(),
-                                            is_psmode))) {
+                                            is_psmode,
+                                            &outline_parse_result))) {
     if (OB_ERR_PROXY_REROUTE == ret) {
       LOG_DEBUG("Failed to generate plan", K(ret));
     } else {
