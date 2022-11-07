@@ -160,6 +160,8 @@ int ObExprRelationAnalyzer::visit_stmt(ObDMLStmt *stmt)
         LOG_WARN("relation expr is null", K(ret), K(expr));
       } else if (OB_FAIL(visit_expr(*expr, stmt->get_current_level()))) {
         LOG_WARN("failed to visit expr", K(ret));
+      } else if (OB_FAIL(expr->extract_info())) {
+        LOG_WARN("failed to extract expr info");
       }
     }
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
