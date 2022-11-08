@@ -25,6 +25,7 @@
 #include "lib/alloc/alloc_assist.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/coro/co_var.h"
+#include "lib/time/ob_tsc_timestamp.h"
 
 #define TP_COMMA(x) ,
 #define TP_EMPTY(x)
@@ -218,7 +219,9 @@ struct EventItem
       ret = 0;
     } else if (trigger_freq_ == 1) {
       ret = static_cast<int>(error_code_);
-      COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
+      }
     } else {
       if (rand() % trigger_freq_ == 0) {
         ret = static_cast<int>(error_code_);

@@ -235,6 +235,7 @@ enum class ProbeAction
  PROBE_NONE,
  PROBE_BT,
  PROBE_ABORT,
+ PROBE_DISABLE,
 };
 
 //@class ObLogger
@@ -724,10 +725,11 @@ private:
               const uint64_t location_hash_val,
               Function &&log_data_func);
   void check_probe(
-      const char *file,
+      const char* file,
       int32_t line,
       const uint64_t location_hash_val,
-      bool &force_bt);
+      bool& force_bt,
+      bool& disable);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
@@ -1071,12 +1073,14 @@ inline int ObLogger::set_mod_log_levels(const char *level_str, int64_t version)
 extern void __attribute__ ((noinline)) on_probe_abort();
 
 inline void ObLogger::check_probe(
-      const char *file,
+      const char* file,
       int32_t line,
       const uint64_t location_hash_val,
-      bool &force_bt)
+      bool& force_bt,
+      bool& disable)
 {
   force_bt = false;
+  disable = false;
   for (int i = 0; i < probe_cnt_; i++) {
     auto &probe = probes_[i];
     if (location_hash_val == probe.location_hash_val_ &&
@@ -1089,9 +1093,23 @@ inline void ObLogger::check_probe(
         filename++;
       }
       if (0 == strncmp(filename, probe.file_, sizeof probe.file_)) {
-        force_bt = ProbeAction::PROBE_BT == probe.action_;
-        if (ProbeAction::PROBE_ABORT == probe.action_) {
-          on_probe_abort();
+        switch (probe.action_) {
+          case ProbeAction::PROBE_BT: {
+            force_bt = true;
+            break;
+          }
+          case ProbeAction::PROBE_ABORT: {
+            on_probe_abort();
+            break;
+          }
+          case ProbeAction::PROBE_DISABLE: {
+            disable = true;
+            break;
+          }
+          default: {
+            // do nothing
+            break;
+          }
         }
         break;
       }
@@ -1117,7 +1135,9 @@ inline void ObLogger::do_log_message(const bool is_async,
   bool allow = true;
 
   bool force_bt = false;
-  check_probe(file, line, location_hash_val, force_bt);
+  bool disable = false;
+  check_probe(file, line, location_hash_val, force_bt, disable);
+  if(OB_UNLIKELY(disable)) return;
   const int64_t logging_time_us_begin = get_cur_us();
   auto fd_type = get_fd_type(mod_name);
   if (OB_FAIL(precheck_tl_log_limiter(level, allow))) {
