@@ -478,6 +478,7 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     need_init_before_get_row_(true),
     io_event_observer_(op_monitor_info_),
     cpu_begin_time_(0),
+    total_time_(0),
     batch_reach_end_(false),
     row_reach_end_(false),
     output_batches_b4_rescan_(0),
@@ -643,7 +644,6 @@ int ObOperator::open()
 
     LOG_DEBUG("open op", K(ret), "op_type", op_name(), "op_id", spec_.id_, K(open_order));
   }
-
   return ret;
 }
 
@@ -885,6 +885,15 @@ int ObOperator::submit_op_monitor_node()
                   || (op_monitor_info_.close_time_
                       - ctx_.get_plan_start_time()
                       > MONITOR_RUNNING_TIME_THRESHOLD)))) {
+        // exclude time cost in children, but px receive have no real children in exec view
+        uint64_t db_time = total_time_; // use temp var to avoid dis-order close
+        if (!spec_.is_receive()) {
+          for (int64_t i = 0; i < child_cnt_; i++) {
+            db_time -= children_[i]->total_time_;
+          }
+        }
+        // exclude io time cost
+        op_monitor_info_.db_time_ = db_time;
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
@@ -1174,6 +1183,7 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
 // copy ObPhyOperator::drain_exch
 int ObOperator::drain_exch()
 {
+  uint64_t cpu_begin_time = rdtsc();
   int ret = OB_SUCCESS;
   /**
    * 1. try to open this operator
@@ -1192,6 +1202,7 @@ int ObOperator::drain_exch()
       }
     }
   }
+  total_time_ += (rdtsc() - cpu_begin_time);
   return ret;
 }
 

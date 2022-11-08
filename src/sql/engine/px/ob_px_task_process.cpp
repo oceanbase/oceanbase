@@ -288,7 +288,7 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
           static_cast<ObPxTransmitOp *>(root)->set_batch_param_remain(false);
         }
       }
-      OZ(static_cast<ObPxTransmitOp *>(root)->do_transmit());
+      OZ(static_cast<ObPxTransmitOp *>(root)->transmit());
     }
 
     if (OB_FAIL(ret)) {
