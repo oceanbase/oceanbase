@@ -164,9 +164,9 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
       ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
       LOG_WARN("index table schema should not be null", K(arg.index_name_), K(ret));
       LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
-    } else if (index_table_schema->is_unavailable_index()) {
+    } else if (!arg.is_inner_ && index_table_schema->is_unavailable_index()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support to drop a building index", K(ret), KPC(index_table_schema));
+      LOG_WARN("not support to drop a building index", K(ret), K(arg.is_inner_), KPC(index_table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
     } else if (arg.is_add_to_scheduler_) {
       ObDDLOperator ddl_operator(ddl_service_.get_schema_service(), ddl_service_.get_sql_proxy());

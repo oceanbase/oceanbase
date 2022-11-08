@@ -55,7 +55,8 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       ObSQLSessionInfo &session,
-      obrpc::ObCommonRpcProxy *common_rpc_proxy);
+      obrpc::ObCommonRpcProxy *common_rpc_proxy,
+      const bool is_support_cancel = true);
   static int wait_ddl_retry_task_finish(
       const uint64_t tenant_id,
       const int64_t task_id,
