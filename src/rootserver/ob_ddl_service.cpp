@@ -12540,14 +12540,21 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
           for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
             ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
             foreign_key_info.foreign_key_id_ = OB_INVALID_ID;
-            if (OB_FAIL(schema_service->fetch_new_constraint_id(tmp_schema.get_tenant_id(), foreign_key_info.foreign_key_id_))) {
+            if (OB_FAIL(schema_service->fetch_new_constraint_id(
+                        tmp_schema.get_tenant_id(), foreign_key_info.foreign_key_id_))) {
               LOG_WARN("failed to fetch new foreign key id", K(ret), K(tmp_schema.get_tenant_id()));
-            } else if (foreign_key_info.child_table_id_ == foreign_key_info.parent_table_id_) {
-              // When it depends on itself, the parent table ID also needs to be updated
-              foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
-            }
-            if (OB_SUCC(ret)) {
+            } else if (orig_table_schema.get_table_id() == foreign_key_info.child_table_id_) {
+              if (foreign_key_info.child_table_id_ == foreign_key_info.parent_table_id_) {
+                // When it depends on itself, the parent table ID also needs to be updated
+                foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
+              }
               foreign_key_info.child_table_id_ = tmp_schema.get_table_id();
+            } else if (orig_table_schema.get_table_id() == foreign_key_info.parent_table_id_) {
+              foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("orig table id is not equal to orig parent_table_id_ or orig child_table_id_ of foreign_key_info ",
+                       K(ret), K(orig_table_schema.get_table_id()), K(foreign_key_info));
             }
           }
         }
@@ -15577,7 +15584,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support trunate table has materialized view", K(ret));
         }
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && arg.foreign_key_checks_) {
           // When truncate table, check whether the table being truncate is the parent table
           // of the foreign key constraint
           // if it is parent table, not allow truncate

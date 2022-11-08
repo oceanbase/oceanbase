@@ -1779,7 +1779,8 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     table_name_,
                     session_id_,
                     is_add_to_scheduler_,
-                    compat_mode_);
+                    compat_mode_,
+                    foreign_key_checks_);
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -1790,7 +1791,8 @@ DEF_TO_STRING(ObTruncateTableArg)
        K_(table_name),
        K_(session_id),
        K_(is_add_to_scheduler),
-       K_(compat_mode));
+       K_(compat_mode),
+       K_(foreign_key_checks));
   J_OBJ_END();
   return pos;
 }

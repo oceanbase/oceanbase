@@ -1818,6 +1818,9 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                && FALSE_IT(const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).session_id_ = my_session->get_sessid_for_table())) {
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
+      int64_t foreign_key_checks = 0;
+      my_session->get_foreign_key_checks(foreign_key_checks);
+      const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;

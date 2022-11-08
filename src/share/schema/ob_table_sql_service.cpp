@@ -694,7 +694,7 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
 
   if (OB_SUCC(ret)) {
     // For oracle compatibility, foreign key should be dropped while drop table.
-    if (OB_FAIL(delete_foreign_key(sql_client, table_schema, new_schema_version))) {
+    if (OB_FAIL(delete_foreign_key(sql_client, table_schema, new_schema_version, is_truncate_table))) {
       LOG_WARN("failed to delete foreign key", K(ret));
     }
   }
@@ -1883,7 +1883,7 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
         || (OB_DDL_TRUNCATE_DROP_TABLE_TO_RECYCLEBIN == operation_type)) {
       // 1. For oracle compatibility, drop foreign key while drop table.
       // 2. Foreign key will be rebuilded while truncate table.
-      if (OB_FAIL(delete_foreign_key(sql_client, new_table_schema, new_table_schema.get_schema_version()))) {
+      if (OB_FAIL(delete_foreign_key(sql_client, new_table_schema, new_table_schema.get_schema_version(), OB_DDL_TRUNCATE_DROP_TABLE_TO_RECYCLEBIN == operation_type))) {
         LOG_WARN("failed to delete foreign key", K(ret));
       }
     }
@@ -4226,7 +4226,9 @@ int ObTableSqlService::delete_from_all_foreign_key_column(ObISQLClient &sql_clie
 }
 
 // drop fk child table or drop fk child table into recyclebin will come here
-int ObTableSqlService::delete_foreign_key(common::ObISQLClient &sql_client, const ObTableSchema &table_schema, const int64_t new_schema_version)
+int ObTableSqlService::delete_foreign_key(
+    common::ObISQLClient &sql_client, const ObTableSchema &table_schema,
+    const int64_t new_schema_version, const bool is_truncate_table)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema.get_foreign_key_infos();
@@ -4236,8 +4238,9 @@ int ObTableSqlService::delete_foreign_key(common::ObISQLClient &sql_client, cons
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
     const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
-    if (table_schema.get_table_id() == foreign_key_info.child_table_id_
-        || table_schema.is_offline_ddl_table()) { // offline ddl table will swap and drop parent table
+    if (is_truncate_table // truncate table will drop parent table and create it again
+        || table_schema.is_offline_ddl_table() // offline ddl table will swap and drop parent table
+        || table_schema.get_table_id() == foreign_key_info.child_table_id_) {
       uint64_t foreign_key_id = foreign_key_info.foreign_key_id_;
       if (OB_FAIL(delete_from_all_foreign_key(sql_client, tenant_id, new_schema_version, foreign_key_info))) {
         LOG_WARN("failed to delete __all_foreign_key_history", K(table_schema), K(ret));
@@ -4450,8 +4453,8 @@ int ObTableSqlService::add_foreign_key(
     } else if (!foreign_key_info.is_parent_table_mock_) {
       // If parent table is mock, it may not exist. And we will deal with mock fk parent table after add_foreign_key.
       if (OB_FAIL(update_data_table_schema_version(sql_client, tenant_id,
-                  foreign_key_info.parent_table_id_, table.get_in_offline_ddl_white_list()))) {
-        LOG_WARN("failed to update parent table schema version", K(ret));
+          table.get_table_id() == foreign_key_info.child_table_id_ ? foreign_key_info.parent_table_id_ : foreign_key_info.child_table_id_, table.get_in_offline_ddl_white_list()))) {
+        LOG_WARN("failed to update parent table schema version", K(ret), K(foreign_key_info));
       }
     }
     if (OB_FAIL(ret)) {
