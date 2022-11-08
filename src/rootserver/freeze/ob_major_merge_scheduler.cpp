@@ -572,50 +572,48 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
 
           int64_t cur_all_merged_scn = 0;
           const uint64_t ori_all_merged_scn = info.all_merged_scn_.value_;
-          int64_t last_merged_scn = (merged ? info.broadcast_scn_ : info.last_merged_scn_);
+          int64_t cur_merged_scn = (merged ? info.broadcast_scn_ : info.last_merged_scn_);
 
           if (progress->smallest_snapshot_version_ <= 0) {
             cur_all_merged_scn = info.broadcast_scn_;
           } else {
             cur_all_merged_scn = progress->smallest_snapshot_version_;
           }
+          LOG_INFO("check updating merge status", KR(ret), K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
+            K(cur_merged_scn), "smallest_snapshot_version", progress->smallest_snapshot_version_, K(info));
 
-          // cur_all_merged_scn >= last_merged_scn
-          // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
-          // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which 
-          // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
-          if ((cur_all_merged_scn < last_merged_scn) || (ori_all_merged_scn > cur_all_merged_scn)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("unexpect merge scn", KR(ret), K(last_merged_scn), K(cur_all_merged_scn),
-              K(ori_all_merged_scn));
-          } else {
-            // TODO 'zone merge finish' & 'zone all tablet merge finish' should be handled in same procedure.
-            if (info.last_merged_scn_ != last_merged_scn) {
-              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
-                K(ori_all_merged_scn), K(last_merged_scn));
-              // update last_merged_scn in all_merge_info table
-              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn, 
-                  ori_all_merged_scn))) {
-                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
+          if (OB_SUCC(ret) && merged) {
+            // cur_all_merged_scn >= cur_merged_scn
+            // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
+            // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which 
+            // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
+            //
+            // cur_all_merged_scn >= ori_all_merged_scn
+            // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
+            // 2. Equal: In backup-restore situation, tablets may have higher snapshot_version(eg. version=10).
+            // If major_freeze with version=4, all_merged_scn will be updated to 10; if major_freeze with version=5,
+            // all_merged_scn will still be 10.
+            if ((cur_all_merged_scn < cur_merged_scn) || (cur_all_merged_scn < ori_all_merged_scn) 
+                || (cur_merged_scn < info.last_merged_scn_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected merged scn", KR(ret), K(merged), K(cur_merged_scn), K(cur_all_merged_scn),
+                K(ori_all_merged_scn), K(info));
+            } else if (cur_merged_scn > info.last_merged_scn_) {
+              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn), K(ori_all_merged_scn),
+                K(cur_merged_scn), "last_merged_scn", info.last_merged_scn_);
+              // update last_merged_scn & all_merged_scn in all_zone_merge_info
+              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, cur_merged_scn, cur_all_merged_scn))) {
+                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch), K(cur_merged_scn), 
+                  K(cur_all_merged_scn), K(info));
               } else {
                 ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id), 
-                                      "last_merged_scn", info.last_merged_scn_, K(zone));
-              }
-            } 
-            
-            if (OB_SUCC(ret) && (ori_all_merged_scn != cur_all_merged_scn)) {
-              LOG_INFO("this zone all tablet merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
-                K(ori_all_merged_scn), K(last_merged_scn));
-              // update all_merged_scn in all_merge_info table
-              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn,
-                  cur_all_merged_scn))) {
-                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
-              } else {
-                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_all_tablet_merged", K_(tenant_id),
-                                      "all_merged_scn", cur_all_merged_scn, K(zone));
+                                      "last_merged_scn", cur_merged_scn, 
+                                      "all_merged_scn", cur_all_merged_scn,
+                                      K(zone));
               }
             }
           }
+
         }
       }
     }

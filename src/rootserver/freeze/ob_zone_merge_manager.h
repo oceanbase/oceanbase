@@ -48,8 +48,8 @@ public:
   virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
   virtual int finish_zone_merge(const common::ObZone &zone,
                                 const int64_t expected_epoch,
-                                const int64_t last_merged_scn,
-                                const int64_t all_merged_scn);
+                                const int64_t new_last_merged_scn,
+                                const int64_t new_all_merged_scn);
   int suspend_merge(const int64_t expected_epoch);
   int resume_merge(const int64_t expected_epoch);
   int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
@@ -119,8 +119,8 @@ public:
   virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
   virtual int finish_zone_merge(const common::ObZone &zone,
                                 const int64_t expected_epoch,
-                                const int64_t last_merged_scn,
-                                const int64_t all_merged_scn);
+                                const int64_t new_last_merged_scn,
+                                const int64_t new_all_merged_scn);
   virtual int suspend_merge(const int64_t expected_epoch);
   virtual int resume_merge(const int64_t expected_epoch);
   virtual int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
