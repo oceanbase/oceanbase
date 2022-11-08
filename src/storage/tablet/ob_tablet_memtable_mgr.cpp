@@ -141,7 +141,7 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
                                          const int64_t schema_version,
                                          const bool for_replay)
 {
-  ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 10 * 1000);
   // Write lock
   SpinWLockGuard lock_guard(lock_);
   time_guard.click("lock");

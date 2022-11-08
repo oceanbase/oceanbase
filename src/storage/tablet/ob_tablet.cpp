@@ -1539,7 +1539,7 @@ int ObTablet::create_memtable(const int64_t schema_version,
                               const bool for_replay)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObTablet::create_memtable", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObTablet::create_memtable", 10 * 1000);
   TCWLockGuard guard(table_store_lock_);
   time_guard.click("lock");
   const int64_t clog_checkpoint_ts = tablet_meta_.clog_checkpoint_ts_;

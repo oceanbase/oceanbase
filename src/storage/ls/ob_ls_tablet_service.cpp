@@ -1798,7 +1798,7 @@ int ObLSTabletService::create_memtable(
     const bool for_replay)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObLSTabletService::create_memtable", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::create_memtable", 10 * 1000);
   ObTabletHandle handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
