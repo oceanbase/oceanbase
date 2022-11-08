@@ -8,6 +8,7 @@ ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
 ob_define(OB_BUILD_CDC OFF)
 ob_define(OB_USE_CLANG ON)
+ob_define(OB_USE_CCACHE ON)
 ob_define(OB_ERRSIM OFF)
 ob_define(BUILD_NUMBER 1)
 ob_define(OB_GPERF_MODE OFF)
@@ -50,6 +51,18 @@ endif()
 # should not use initial-exec for tls-model if building OBCDC.
 if(NOT OB_BUILD_CDC)
   add_definitions(-DENABLE_INITIAL_EXEC_TLS_MODEL)
+endif()
+
+if (OB_USE_CCACHE)
+  find_program(OB_CCACHE ccache
+    PATHS "${DEVTOOLS_DIR}/bin"
+    NO_DEFAULT_PATH)
+  if (NOT OB_CCACHE)
+    message(WARNING "CCACHE NOT FOUND, COMPILE CACHE MAY NOT WORK.")
+  else()
+    set(CMAKE_C_COMPILER_LAUNCHER ${OB_CCACHE})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${OB_CCACHE})
+  endif()
 endif()
 
 if (OB_USE_CLANG)
