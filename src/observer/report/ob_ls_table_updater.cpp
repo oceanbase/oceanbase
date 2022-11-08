@@ -314,7 +314,7 @@ int ObLSTableUpdater::batch_process_tasks(
             tenant_id,
             ls_id,
             replica))) {
-          if (OB_LS_NOT_EXIST == ret) { // remove from table if not exist
+          if (OB_LS_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret) { // remove from table if not exist
             if (OB_FAIL(GCTX.lst_operator_->remove(tenant_id, ls_id, server))) {
               LOG_WARN("fail to remove replica",
                   KR(ret), K(tenant_id), K(ls_id), "self_addr", server);
