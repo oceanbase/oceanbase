@@ -1,7 +1,3 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
-
 #pragma once
 
 #include "lib/file/ob_file.h"

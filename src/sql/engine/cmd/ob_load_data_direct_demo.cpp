@@ -1,6 +1,3 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <suzhi.yt@oceanbase.com>
 
 #define USING_LOG_PREFIX SQL_ENG
 
