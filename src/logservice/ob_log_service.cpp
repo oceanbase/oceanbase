@@ -325,8 +325,14 @@ int ObLogService::remove_ls(const ObLSID &id,
     CLOG_LOG(WARN, "failed to remove from replay_service", K(ret), K(id));
     // NB: remove palf_handle lastly.
   } else {
-    log_handler.destroy();
-    restore_handler.destroy();
+    // NB: can not execute destroy, otherwise, each interface in log_handler or restore_handler
+    // may return OB_NOT_INIT.
+    // TODO by runlin: create_ls don't init ObLogHandler and ObLogRestoreHandler.
+    //
+    // In normal case(for gc), stop has been executed, this stop has no effect.
+    // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
+    log_handler.stop();
+    restore_handler.stop();
     if (OB_FAIL(palf_env_->remove(id.id()))) {
       CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
     } else {
