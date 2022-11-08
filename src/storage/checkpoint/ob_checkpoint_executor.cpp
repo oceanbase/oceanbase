@@ -29,9 +29,7 @@ namespace checkpoint
 {
 
 ObCheckpointExecutor::ObCheckpointExecutor()
-  : wait_advance_checkpoint_(false),
-    last_set_wait_advance_checkpoint_time_(0),
-    update_checkpoint_enabled_(false)
+  : update_checkpoint_enabled_(false)
 {
   reset();
 }
@@ -185,7 +183,6 @@ int ObCheckpointExecutor::update_clog_checkpoint()
             STORAGE_LOG(ERROR, "set base lsn failed", K(ret), K(clog_checkpoint_lsn), K(ls_id));
           }
         } else {
-          ATOMIC_STORE(&wait_advance_checkpoint_, false);
           FLOG_INFO("[CHECKPOINT] update clog checkpoint successfully",
                     K(clog_checkpoint_lsn), K(checkpoint_ts), K(ls_id),
                     K(service_type));
@@ -266,43 +263,6 @@ int ObCheckpointExecutor::get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &chec
     }
   }
   return ret;
-}
-
-bool ObCheckpointExecutor::need_flush()
-{
-  int ret = OB_SUCCESS;
-  bool need_flush = false;
-  int64_t end_log_ts = 0;
-  if (OB_FAIL(loghandler_->get_end_ts_ns(end_log_ts))) {
-    STORAGE_LOG(WARN, "get_end_ts_ns failed", K(ret));
-  } else if (end_log_ts -
-             ls_->get_clog_checkpoint_ts() > MAX_NEED_REPLAY_CLOG_INTERVAL) {
-    STORAGE_LOG(INFO, "over max need replay clog interval",
-                K(end_log_ts), K(ls_->get_clog_checkpoint_ts()));
-    need_flush = true;
-  }
-
-  return need_flush;
-}
-
-bool ObCheckpointExecutor::is_wait_advance_checkpoint()
-{
-  if (ATOMIC_LOAD(&wait_advance_checkpoint_)) {
-    if (ObTimeUtility::current_time() - last_set_wait_advance_checkpoint_time_ > 10 * 1000 * 1000) {
-      ATOMIC_STORE(&wait_advance_checkpoint_, false);
-    }
-  }
-
-  return ATOMIC_LOAD(&wait_advance_checkpoint_);
-}
-
-void ObCheckpointExecutor::set_wait_advance_checkpoint(int64_t checkpoint_log_ts)
-{
-  ObSpinLockGuard guard(lock_);
-  if (checkpoint_log_ts == ls_->get_clog_checkpoint_ts()) {
-    ATOMIC_STORE(&wait_advance_checkpoint_, true);
-    last_set_wait_advance_checkpoint_time_ = ObTimeUtility::current_time();
-  }
 }
 
 int64_t ObCheckpointExecutor::get_cannot_recycle_log_size()

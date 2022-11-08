@@ -1212,16 +1212,15 @@ int ObLS::flush_if_need_(const bool need_flush)
 {
   int ret = OB_SUCCESS;
   int64_t clog_checkpoint_ts = get_clog_checkpoint_ts();
-  if ((!need_flush && !checkpoint_executor_.need_flush()) || checkpoint_executor_.is_wait_advance_checkpoint()) {
-    STORAGE_LOG(INFO, "the ls no need flush to advance_checkpoint", K(get_ls_id()));
+  if (!need_flush) {
+    STORAGE_LOG(INFO, "the ls no need flush to advance_checkpoint",
+                K(get_ls_id()),
+                K(need_flush));
   } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush())) {
     STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
-  } else {
-    checkpoint_executor_.set_wait_advance_checkpoint(clog_checkpoint_ts);
   }
   return ret;
 }
-
 
 int ObLS::try_update_uppder_trans_version()
 {

@@ -171,10 +171,10 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   }
 }
 
-bool ObCheckPointService::clog_disk_usage_over_threshold_(int64_t &threshold)
+bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
 {
   int ret = OB_SUCCESS;
-  int clog_disk_usage_over_threshold = false;
+  bool get_disk_usage_threshold_success = false;
   // avod clog disk full
   logservice::ObLogService *log_service = nullptr;
   PalfEnv *palf_env = nullptr;
@@ -189,13 +189,13 @@ bool ObCheckPointService::clog_disk_usage_over_threshold_(int64_t &threshold)
     int64_t total_size = 0;
     if (OB_FAIL(palf_env->get_disk_usage(used_size, total_size))) {
       STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
-    } else if (used_size > (threshold = (total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100))) {
-      STORAGE_LOG(INFO, "clog disk is not enough",
-                  K(used_size), K(total_size));
-      clog_disk_usage_over_threshold = true;
+    } else {
+      threshold = total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100;
+      get_disk_usage_threshold_success = true;
     }
   }
-  return clog_disk_usage_over_threshold;
+
+  return get_disk_usage_threshold_success;
 }
 
 bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold)
@@ -327,7 +327,7 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   int ret = OB_SUCCESS;
   int64_t threshold_size = INT64_MAX;
   bool need_flush = false;
-  if (checkpoint_service_.clog_disk_usage_over_threshold_(threshold_size)) {
+  if (checkpoint_service_.get_disk_usage_threshold_(threshold_size)) {
     if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size)) {
       need_flush = true;
     }
