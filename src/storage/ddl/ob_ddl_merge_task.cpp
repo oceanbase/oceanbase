@@ -105,7 +105,12 @@ int ObDDLTableMergeDag::create_first_task()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(ddl_param_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+    }
   } else if (ddl_param_.start_log_ts_ < ddl_kv_mgr_handle.get_obj()->get_start_log_ts()) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
@@ -191,6 +196,13 @@ int ObDDLTableMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
+bool ObDDLTableMergeDag::ignore_warning()
+{
+  return OB_LS_NOT_EXIST == dag_ret_
+    || OB_TABLET_NOT_EXIST == dag_ret_
+    || OB_TASK_EXPIRED == dag_ret_;
+}
+
 /******************             ObDDLTableDumpTask             *****************/
 ObDDLTableDumpTask::ObDDLTableDumpTask()
   : ObITask(ObITaskType::TASK_TYPE_DDL_KV_DUMP),
@@ -240,7 +252,12 @@ int ObDDLTableDumpTask::process()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(ls_id_), K(tablet_id_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(ls_id_), K(tablet_id_));
+    }
   } else {
     ObDDLKVHandle ddl_kv_handle;
     ObDDLKV *ddl_kv = nullptr;
@@ -316,7 +333,12 @@ int ObDDLTableMergeTask::process()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(merge_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(merge_param_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(merge_param_));
+    }
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstable_handles(ddl_sstable_handles))) {
     LOG_WARN("get ddl sstable handles failed", K(ret));
   } else if (ddl_sstable_handles.get_count() >= MAX_DDL_SSTABLE || merge_param_.is_commit_) {
