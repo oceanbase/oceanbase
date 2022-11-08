@@ -399,7 +399,7 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
   }
 
 #define TRY_SYNONYM(synonym_name)             \
-if (OB_FAIL(ret) || 0 == routines.count()) {  \
+if ((OB_FAIL(ret) && OB_ALLOCATE_MEMORY_FAILED != ret) || 0 == routines.count()) {  \
   ret = OB_SUCCESS;                           \
   bool exist = false;                         \
   ObSynonymChecker synonym_checker;           \

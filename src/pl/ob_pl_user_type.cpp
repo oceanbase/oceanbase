@@ -1391,7 +1391,10 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
     if (NULL == dest) {
       dest = reinterpret_cast<ObPLComposite*>(allocator.alloc(src.get_init_size()));
       composite = static_cast<ObPLRecord*>(dest);
-      CK (OB_NOT_NULL(composite));
+      if (OB_ISNULL(composite)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate composite memory failed", K(ret));
+      }
       LOG_INFO("src size is: ", K(src.get_init_size()), K(src));
       OX (new(composite)ObPLRecord(src.get_id(), static_cast<ObPLRecord&>(src).get_count()));
     } else {
@@ -2095,7 +2098,10 @@ int ObPLCollection::set_row(const ObIArray<ObObj> &row, int64_t idx, bool deep_c
         if (element_.is_record_type()) {
           ObPLRecord *new_record = reinterpret_cast<ObPLRecord*>(
               allocator_->alloc(ObRecordType::get_init_size(element_.get_field_count())));
-          CK (OB_NOT_NULL(new_record));
+          if (OB_ISNULL(new_record)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate composite memory failed", K(ret));
+          }
           OX (new (new_record)ObPLRecord(element_.get_udt_id(), element_.get_field_count()));
           OX (new_record->set_data(row));
           OX (data_obj.set_extend(reinterpret_cast<int64_t>(new_record),
