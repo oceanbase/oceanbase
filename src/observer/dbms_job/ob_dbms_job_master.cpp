@@ -416,7 +416,7 @@ int ObDBMSJobMaster::scheduler_job(ObDBMSJobKey *job_key, bool is_retry)
     } else {
       int tmp = alive_jobs_.erase_refactored(job_info.get_job_id_with_tenant());
       if (tmp != OB_SUCCESS) {
-        LOG_ERROR("failed delete valid job from hash set", K(ret), K(job_info));
+        LOG_INFO("failed delete valid job from hash set", K(ret), K(job_info));
       }
       allocator_.free(job_key); // job deleted!
     }

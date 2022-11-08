@@ -66,7 +66,7 @@ public:
       close_time_(0),
       rescan_times_(0),
       output_row_count_(0),
-      cpu_time_(0),
+      db_time_(0),
       block_time_(0),
       memory_used_(0),
       disk_read_count_(0),
@@ -129,7 +129,7 @@ public:
   int64_t close_time_;
   int64_t rescan_times_;
   int64_t output_row_count_;
-  uint64_t cpu_time_; // rdtsc cpu cycles spend on this op and its child
+  uint64_t db_time_; // rdtsc cpu cycles spend on this op, include cpu instructions & io
   uint64_t block_time_; // rdtsc cpu cycles wait for network, io etc
   int64_t memory_used_;
   int64_t disk_read_count_;

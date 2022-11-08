@@ -1274,6 +1274,7 @@ public:
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
+    is_inner_ = false;
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1283,12 +1284,14 @@ public:
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
+    is_inner_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   bool is_add_to_scheduler_;
   bool is_hidden_;
   bool is_in_recyclebin_;
+  bool is_inner_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

@@ -1027,7 +1027,7 @@ int ObIndexBuildTask::clean_on_failed()
               LOG_WARN("generate drop index sql failed", K(ret));
             }
           } else {
-            if (OB_FAIL(drop_index_sql.append_fmt("drop index \"%.*s\" on \"%.*s\"", index_name.length(), index_name.ptr(),
+            if (OB_FAIL(drop_index_sql.append_fmt("drop index %.*s on %.*s", index_name.length(), index_name.ptr(),
                     data_table_schema->get_table_name_str().length(), data_table_schema->get_table_name_str().ptr()))) {
               LOG_WARN("generate drop index sql failed", K(ret));
             }
@@ -1048,6 +1048,7 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.is_add_to_scheduler_ = false;
           drop_index_arg.is_hidden_         = index_schema->is_user_hidden_table();
           drop_index_arg.is_in_recyclebin_  = index_schema->is_in_recyclebin();
+          drop_index_arg.is_inner_          = true;
           if (OB_FAIL(root_service_->get_common_rpc_proxy().drop_index(drop_index_arg, drop_index_res))) {
             LOG_WARN("drop index failed", K(ret));
           }

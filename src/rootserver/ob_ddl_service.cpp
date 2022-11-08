@@ -4904,9 +4904,9 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
               LOG_WARN("index table schema should not be null", K(*drop_index_arg), K(ret));
               LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, drop_index_arg->index_name_.length(), drop_index_arg->index_name_.ptr());
-            } else if (index_table_schema->is_unavailable_index()) {
+            } else if (!drop_index_arg->is_inner_ && index_table_schema->is_unavailable_index()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support to drop a building index", K(ret), KPC(index_table_schema));
+              LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
             } else if (drop_index_arg->is_add_to_scheduler_) {
               ObDDLRes ddl_res;

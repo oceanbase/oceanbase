@@ -725,7 +725,7 @@ int ObTxReplayExecutor::get_compat_mode_(const ObTabletID &tablet_id, lib::Worke
 void ObTxReplayExecutor::rewrite_replay_retry_code_(int &ret_code)
 {
   if (ret_code == OB_MINOR_FREEZE_NOT_ALLOW || ret_code == OB_LOG_TS_OUT_OF_BOUND ||
-      ret_code == OB_ALLOCATE_MEMORY_FAILED || ret_code == OB_TIMEOUT) {
+      ret_code == OB_ALLOCATE_MEMORY_FAILED) {
     TRANS_LOG(INFO, "rewrite replay error_code as OB_EAGAIN for retry", K(ret_code),
               K(ls_->get_ls_id()), K(log_ts_ns_));
     ret_code = OB_EAGAIN;

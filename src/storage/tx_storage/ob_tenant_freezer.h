@@ -52,20 +52,11 @@ public:
   int stop();
   void wait();
 
-  // freeze all the ls of this tenant.
-  // return the first failed code.
-  int tenant_freeze();
   // freeze a tablet
   int tablet_freeze(const common::ObTabletID &tablet_id,
                     const bool is_force_freeze=false);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
-  // we can only deal with freeze one by one.
-  // set tenant freezing will prevent a new freeze.
-  int set_tenant_freezing();
-  // unset tenant freezing flag.
-  // @param[in] rollback_freeze_cnt, reduce the tenant's freeze count by 1, if true.
-  int unset_tenant_freezing(const bool rollback_freeze_cnt);
 
   // If the tenant's freeze process is slowed, we will only freeze one time every
   // SLOW_FREEZE_INTERVAL.
@@ -128,45 +119,40 @@ public:
   ObServerConfig *get_config() { return config_; }
   bool exist_ls_freezing();
 private:
-  int ls_freeze_(ObLS *ls);
-  int64_t get_freeze_trigger_percentage_() const;
+  static int ls_freeze_(ObLS *ls);
+  // freeze all the ls of this tenant.
+  // return the first failed code.
+  static int tenant_freeze_();
+  // we can only deal with freeze one by one.
+  // set tenant freezing will prevent a new freeze.
+  int set_tenant_freezing_();
+  // unset tenant freezing flag.
+  // @param[in] rollback_freeze_cnt, reduce the tenant's freeze count by 1, if true.
+  int unset_tenant_freezing_(const bool rollback_freeze_cnt);
+  static int64_t get_freeze_trigger_percentage_();
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);
   int retry_failed_major_freeze_(bool &triggered);
   int get_global_frozen_scn_(int64_t &frozen_version);
   int post_tx_data_freeze_request_();
-  int get_tenant_mem_usage_(int64_t &active_memstore_used,
-                            int64_t &total_memstore_used,
-                            int64_t &total_memstore_hold);
-  int get_freeze_trigger_(int64_t &memstore_freeze_trigger);
-  int get_freeze_trigger_(int64_t &max_mem_memstore_can_get_now,
-                          int64_t &kvcache_mem,
-                          int64_t &memstore_freeze_trigger);
-  int get_mem_remain_trigger_(int64_t &mem_remain_trigger);
-  bool need_freeze_(const int64_t active_memstore_used,
-                    const int64_t memstore_freeze_trigger);
-  bool is_minor_need_slow_(const int64_t mem_total_memstore_hold,
-                           const int64_t memstore_freeze_trigger);
+  int get_tenant_mem_usage_(ObTenantFreezeCtx &ctx);
+  static int get_freeze_trigger_(ObTenantFreezeCtx &ctx);
+  static bool need_freeze_(const ObTenantFreezeCtx &ctx);
+  bool is_minor_need_slow_(const ObTenantFreezeCtx &ctx);
   bool is_major_freeze_turn_();
   int do_major_if_need_(const bool need_freeze);
-  int do_minor_freeze_(const int64_t active_memstore_used,
-                       const int64_t memstore_freeze_trigger);
+  int do_minor_freeze_(const ObTenantFreezeCtx &ctx);
   int do_major_freeze_(const int64_t try_frozen_scn);
-  void log_frozen_memstore_info_if_need_(const int64_t active_memstore_used,
-                                         const int64_t mem_total_memstore_used,
-                                         const int64_t mem_total_memstore_hold,
-                                         const int64_t memstore_freeze_trigger);
-  void halt_prewarm_if_need_(const int64_t memstore_freeze_trigger,
-                             const int64_t mem_total_memstore_hold);
+  void log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx &ctx);
+  void halt_prewarm_if_need_(const ObTenantFreezeCtx &ctx);
   int unset_tenant_slow_freeze_();
-  int check_and_freeze_normal_data_();
+  int check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx);
   int check_and_freeze_tx_data_();
   int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_mem_used);
   int get_ls_tx_data_mem_used_(ObLS *ls, int64_t &ls_tx_data_mem_used);
 private:
   bool is_inited_;
   bool is_freezing_tx_data_;
-  SpinRWLock lock_;
   ObTenantInfo tenant_info_;                  // store the mem limit, memstore limit and etc.
   obrpc::ObTenantFreezerRpcProxy rpc_proxy_;  // used to trigger minor/major freeze
   obrpc::ObTenantFreezerRpcCb tenant_mgr_cb_; // callback after the trigger rpc finish.

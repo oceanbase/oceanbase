@@ -1515,6 +1515,9 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
+      } else if (expr->has_flag(CNT_SUB_QUERY) && 
+                 OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
+        LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
         LOG_WARN("failed to push back detector", K(ret));
       } else {
@@ -1537,7 +1540,10 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
-    }
+    } else if (expr->has_flag(CNT_SUB_QUERY) && 
+               OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
+      LOG_WARN("failed to add members", K(ret));
+    } 
   }
   //3. 生成inner join的冲突规则
   for (int64_t i = 0; OB_SUCC(ret) && i < inner_join_detectors.count(); ++i) {

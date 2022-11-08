@@ -504,6 +504,12 @@ int ObComplementDataDag::report_replica_build_status()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", K(ret), K(param_));
   } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      LOG_INFO("report replica build status errsim", K(ret));
+    }
+#endif
     obrpc::ObDDLBuildSingleReplicaResponseArg arg;
     ObAddr rs_addr;
     arg.tenant_id_ = param_.tenant_id_;
@@ -517,7 +523,8 @@ int ObComplementDataDag::report_replica_build_status()
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_.complement_data_ret_), K(arg));
-    if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_SYS;
       LOG_WARN("innner system error, rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {

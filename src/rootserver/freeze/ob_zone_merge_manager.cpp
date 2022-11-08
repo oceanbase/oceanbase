@@ -361,8 +361,8 @@ int ObZoneMergeManagerBase::start_zone_merge(
 int ObZoneMergeManagerBase::finish_zone_merge(
     const ObZone &zone,
     const int64_t expected_epoch,
-    const int64_t last_merged_scn,
-    const int64_t all_merged_scn)
+    const int64_t new_last_merged_scn,
+    const int64_t new_all_merged_scn)
 {
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_INDEX;
@@ -372,15 +372,16 @@ int ObZoneMergeManagerBase::finish_zone_merge(
 
   if (OB_FAIL(check_valid(zone, idx))) {
     LOG_WARN("fail to check valid", KR(ret), K(zone), K_(tenant_id));
-  } else if ((last_merged_scn <= 0) || (all_merged_scn <= 0)) {
+  } else if ((new_last_merged_scn <= 0) || (new_all_merged_scn <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(zone), K_(tenant_id),
-             K(last_merged_scn), K(all_merged_scn));
-  } else if ((last_merged_scn != zone_merge_infos_[idx].broadcast_scn_)) {
+             K(new_last_merged_scn), K(new_all_merged_scn));
+  } else if ((new_last_merged_scn != zone_merge_infos_[idx].broadcast_scn_)
+             || (new_last_merged_scn <= zone_merge_infos_[idx].last_merged_scn_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid merged_scn", KR(ret), K(zone), K_(tenant_id),
-              K(last_merged_scn), K(all_merged_scn), "zone broadcast_scn",
-              zone_merge_infos_[idx].broadcast_scn_);
+              K(new_last_merged_scn), K(new_all_merged_scn), 
+              "zone_merge_info", zone_merge_infos_[idx]);
   } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
     LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
   } else if (OB_FAIL(check_freeze_service_epoch(trans, expected_epoch))) {
@@ -392,17 +393,15 @@ int ObZoneMergeManagerBase::finish_zone_merge(
     } else {
       ObZoneMergeInfo::MergeStatus status = static_cast<ObZoneMergeInfo::MergeStatus>(
         zone_merge_infos_[idx].merge_status_.value_);
-      if (last_merged_scn > zone_merge_infos_[idx].last_merged_scn_) {
-        const int64_t is_merging = 0;
-        tmp_info.is_merging_.set_val(is_merging, true);
-        tmp_info.last_merged_scn_.set_val(last_merged_scn, true);
-        tmp_info.last_merged_time_.set_val(cur_time, true);
-        status = ObZoneMergeInfo::MERGE_STATUS_IDLE;
-        tmp_info.merge_status_.set_val(status, true);
-      }
+      const int64_t is_merging = 0;
+      tmp_info.is_merging_.set_val(is_merging, true);
+      tmp_info.last_merged_scn_.set_val(new_last_merged_scn, true);
+      tmp_info.last_merged_time_.set_val(cur_time, true);
+      status = ObZoneMergeInfo::MERGE_STATUS_IDLE;
+      tmp_info.merge_status_.set_val(status, true);
 
-      if (all_merged_scn > zone_merge_infos_[idx].all_merged_scn_) {
-        tmp_info.all_merged_scn_.set_val(all_merged_scn, true);
+      if (new_all_merged_scn > zone_merge_infos_[idx].all_merged_scn_) {
+        tmp_info.all_merged_scn_.set_val(new_all_merged_scn, true);
       }
 
       if (OB_FAIL(ObZoneMergeTableOperator::update_partial_zone_merge_info(trans, tenant_id_, tmp_info))) {
@@ -419,7 +418,7 @@ int ObZoneMergeManagerBase::finish_zone_merge(
     }
   }
   
-  LOG_INFO("finish zone merge", KR(ret), K_(tenant_id), K(zone), K(last_merged_scn), K(all_merged_scn));
+  LOG_INFO("finish zone merge", KR(ret), K_(tenant_id), K(zone), K(new_last_merged_scn), K(new_all_merged_scn));
   return ret;
 }
 
@@ -1217,8 +1216,8 @@ int ObZoneMergeManager::start_zone_merge(const ObZone &zone, const int64_t expec
 int ObZoneMergeManager::finish_zone_merge(
     const ObZone &zone,
     const int64_t expected_epoch,
-    const int64_t last_merged_scn,
-    const int64_t all_merged_scn)
+    const int64_t new_last_merged_scn,
+    const int64_t new_all_merged_scn)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(write_lock_);
@@ -1228,7 +1227,7 @@ int ObZoneMergeManager::finish_zone_merge(
     ObZoneMergeMgrGuard shadow_guard(lock_, 
       *(static_cast<ObZoneMergeManagerBase *> (this)), shadow_, ret);
     if (OB_SUCC(ret)) {
-      ret = shadow_.finish_zone_merge(zone, expected_epoch, last_merged_scn, all_merged_scn);
+      ret = shadow_.finish_zone_merge(zone, expected_epoch, new_last_merged_scn, new_all_merged_scn);
     }
   }
   return ret;

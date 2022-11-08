@@ -37,7 +37,7 @@ public:
       check_clog_disk_usage_task_(*this)
   {}
 
-  static const int64_t NEED_FLUSH_CLOG_DISK_PERCENT = 60;
+  static const int64_t NEED_FLUSH_CLOG_DISK_PERCENT = 30;
   static int mtl_init(ObCheckPointService *&m);
   int init();
   int start();
@@ -60,7 +60,7 @@ private:
   // the thread which is used to deal with checkpoint task.
   ObLSFreezeThread freeze_thread_;
 
-  bool clog_disk_usage_over_threshold_(int64_t &threshold);
+  bool get_disk_usage_threshold_(int64_t &threshold);
   bool cannot_recycle_log_over_threshold_(const int64_t threshold);
   int flush_if_need_(bool need_flush);
   // reduce the risk of clog full due to checkpoint long interval

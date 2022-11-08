@@ -109,12 +109,8 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id));
   }
-  bool bool_ret = false;
 
-  while (OB_SUCC(ret) && need_to_refresh_table(iter.table_iter_, ret)) {
-    // it's ok that get_read_tables cover the ret code returned by need_to_refresh_table
-    // because need_to_refresh_table return false and stop the loop if refresh too much times
-    // the last ret code will be passed to upper levels
+  while (OB_SUCC(ret) && need_to_refresh_table(iter.table_iter_)) {
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version(),
@@ -125,6 +121,13 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
       tablet_ = iter.tablet_handle_.get_obj();
+      // TODO: check if seesion is killed
+      if (store_ctx_.timeout_ > 0) {
+        const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
+        if (query_left_time <= 0) {
+          ret = OB_TRANS_STMT_TIMEOUT;
+        }
+      }
     }
   }
 
@@ -188,9 +191,6 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
         if (TC_REACH_TIME_INTERVAL(10 * 1000)) {
           TRANS_LOG(WARN, "refresh replay table too much times", K(ret),
                     K(ls_id), K(tablet_id), K(cost_time));
-        }
-        if (cost_time > LOG_INTERVAL_US) {
-          ret = OB_TIMEOUT;
         }
       }
     } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret) && bool_ret);
@@ -316,9 +316,9 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
   return ret;
 }
 
-bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter, int &ret)
+bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
 {
-  ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   bool bool_ret = false;
   int exit_flag = -1;
 
@@ -360,9 +360,6 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter, int 
       LOG_WARN("check_freeze_to_inc_write_ref costs too much time", K(ret), K(ls_id), K(tablet_id), KPC(table));
     } else {
       LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
-    }
-    if (OB_FAIL(ret)) {
-      bool_ret = false;
     }
   }
 

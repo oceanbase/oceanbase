@@ -2176,7 +2176,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(index_table_id),
        K_(is_add_to_scheduler),
        K_(is_in_recyclebin),
-       K_(is_hidden));
+       K_(is_hidden),
+       K_(is_inner));
   J_OBJ_END();
   return pos;
 }
@@ -2189,7 +2190,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     index_table_id_,
                     is_add_to_scheduler_,
                     is_in_recyclebin_,
-                    is_hidden_);
+                    is_hidden_,
+                    is_inner_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 

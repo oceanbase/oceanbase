@@ -509,15 +509,16 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 //      OZ(after_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
       throw;
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (info->is_called_in_sql_) {
       if (tmp_result.is_pl_extend()) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, tmp_result, result, true));
       } else {
         OZ (deep_copy_obj(alloc, tmp_result, result));
       }
-      if (info->is_called_in_sql_) {
-        OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
-      }
+      OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
+    } else {
+      result = tmp_result;
     }
     if (OB_SUCC(ret) && info->is_udt_cons_) {
       pl::ObPLComposite *obj_self = reinterpret_cast<pl::ObPLRecord *>(udf_params->at(0).get_ext());
