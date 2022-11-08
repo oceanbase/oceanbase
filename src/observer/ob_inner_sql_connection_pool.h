@@ -115,9 +115,11 @@ private:
   int alloc_conn(ObInnerSQLConnection *&conn);
   // revert connection to %free_conn_list_
   int free_conn(ObInnerSQLConnection *conn);
-
   // revert connection, called by ObInnerSQLConnection::unref()
   int revert(ObInnerSQLConnection *conn);
+
+  int add_to_used_conn_list(ObInnerSQLConnection *conn);
+  int remove_from_used_conn_list(ObInnerSQLConnection *conn);
 
   bool inited_;
   volatile bool stop_;
