@@ -509,7 +509,8 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
                                     ls_handle_.get_ls()->get_ls_id(),
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
                                     build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
-                                    1L))) {
+                                    1L /*snapshot_version*/,
+                                    GET_MIN_CLUSTER_VERSION()))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;

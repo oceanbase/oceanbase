@@ -171,7 +171,7 @@ int ObTenantCompactionProgressMgr::loop_major_sstable_(
       } else if (ls->is_deleted()) {
         // do nothing
       } else {
-        ObLSTabletIterator tablet_iter;
+        ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
         const ObLSID &ls_id = ls->get_ls_id();
         if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
           LOG_WARN("failed to build ls tablet iter", K(ret), K(ls));
@@ -267,16 +267,10 @@ int ObTenantCompactionProgressMgr::finish_progress_(ObTenantCompactionProgress &
 {
   int ret = OB_SUCCESS;
   if (share::ObIDag::DAG_STATUS_FINISH != progress.status_) {
-    int64_t occupy_size = 0;
     progress.unfinished_data_size_ = 0;
     progress.estimated_finish_time_ = ObTimeUtility::fast_current_time();
     progress.unfinished_tablet_cnt_ = 0;
     progress.status_ = share::ObIDag::DAG_STATUS_FINISH;
-
-    int64_t unused_cnt = 0;
-    if (OB_FAIL(loop_major_sstable_(progress.merge_version_, true/*equal_flag*/,unused_cnt, progress.data_size_))) {
-      LOG_WARN("failed to get sstable info", K(ret));
-    }
   }
   return ret;
 }
