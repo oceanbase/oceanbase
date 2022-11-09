@@ -170,9 +170,9 @@ public:
                                  const int64_t execution_id,
                                  const int64_t ddl_task_id,
                                  const ObIArray<int64_t> &column_checksums);
-  static int check_if_major_sstable_exist(const share::ObLSID &ls_id,
-                                          const ObTabletID &tablet_id,
-                                          bool &is_major_sstable_exist);
+  static int check_and_get_major_sstable(const share::ObLSID &ls_id,
+                                         const ObTabletID &tablet_id,
+                                         const blocksstable::ObSSTable *&latest_major_sstable);
 
 };
 

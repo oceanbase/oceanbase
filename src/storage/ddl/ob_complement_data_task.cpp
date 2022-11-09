@@ -258,12 +258,15 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
 {
   int ret = OB_SUCCESS;
   void *builder_buf = nullptr;
+  const ObSSTable *latest_major_sstable = nullptr;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataContext has already been inited", K(ret));
   } else if (OB_UNLIKELY(!param.is_valid() || !desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param), K(desc));
+  } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.ls_id_, param.dest_tablet_id_, latest_major_sstable))) {
+    LOG_WARN("check if major sstable exist failed", K(ret), K(param));
   } else if (OB_FAIL(data_sstable_redo_writer_.init(param.ls_id_,
                                                     param.dest_tablet_id_))) {
     LOG_WARN("fail to init data sstable redo writer", K(ret), K(param));
@@ -278,6 +281,7 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
   } else if (OB_FAIL(index_builder_->init(desc))) {
     LOG_WARN("failed to init index builder", K(ret), K(desc));
   } else {
+    is_major_sstable_exist_ = nullptr != latest_major_sstable ? true : false;
     concurrent_cnt_ = param.concurrent_cnt_;
     is_inited_ = true;
   }
@@ -320,6 +324,7 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
 void ObComplementDataContext::destroy()
 {
   is_inited_ = false;
+  is_major_sstable_exist_ = false;
   complement_data_ret_ = OB_SUCCESS;
   concurrent_cnt_ = 0;
   if (OB_NOT_NULL(index_builder_)) {
@@ -612,6 +617,8 @@ int ObComplementPrepareTask::process()
   } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
   } else if (OB_FAIL(dag->prepare_context())) {
     LOG_WARN("prepare complement context failed", K(ret));
+  } else if (context_->is_major_sstable_exist_) {
+    FLOG_INFO("major sstable exists, all task should finish", K(ret), K(*param_));
   } else if (OB_FAIL(context_->write_start_log(*param_))) {
     LOG_WARN("write start log failed", K(ret), KPC(param_));
   } else {
@@ -672,6 +679,7 @@ int ObComplementWriteTask::process()
     LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
   } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
+  } else if (context_->is_major_sstable_exist_) {
   } else if (OB_FAIL(guard.switch_to(param_->tenant_id_))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->tenant_id_));
   } else if (OB_FAIL(local_scan_by_range())) {
@@ -1123,6 +1131,23 @@ int ObComplementMergeTask::process()
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
   } else if (OB_FAIL(guard.switch_to(param_->hidden_table_schema_->get_tenant_id()))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->hidden_table_schema_->get_tenant_id()));
+  } else if (context_->is_major_sstable_exist_) {
+    const ObSSTable *latest_major_sstable = nullptr;
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param_->ls_id_, param_->dest_tablet_id_, latest_major_sstable))) {
+      LOG_WARN("check if major sstable exist failed", K(ret), K(*param_));
+    } else if (OB_ISNULL(latest_major_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
+    } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
+                                                            param_->dest_tablet_id_,
+                                                            param_->hidden_table_schema_->get_table_id(),
+                                                            1 /* execution_id */,
+                                                            param_->task_id_,
+                                                            latest_major_sstable->get_meta().get_col_checksum()))) {
+      LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
+    } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
+      LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
+    }
   } else if (OB_FAIL(add_build_hidden_table_sstable())) {
     LOG_WARN("fail to build new sstable and write macro redo", K(ret));
   }

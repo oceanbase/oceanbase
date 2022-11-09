@@ -354,10 +354,10 @@ int ObDDLTableMergeTask::process()
     ObTabletDDLParam ddl_param;
     ObTableHandleV2 table_handle;
     bool is_data_complete = false;
-    bool is_major_sstable_exist = false;
-    if (OB_FAIL(ObTabletDDLUtil::check_if_major_sstable_exist(merge_param_.ls_id_, merge_param_.tablet_id_, is_major_sstable_exist))) {
+    const ObSSTable *latest_major_sstable = nullptr;
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, latest_major_sstable))) {
       LOG_WARN("check if major sstable exist failed", K(ret));
-    } else if (is_major_sstable_exist) {
+    } else if (nullptr != latest_major_sstable) {
       LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
       sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
@@ -829,14 +829,14 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObTabletDDLUtil::check_if_major_sstable_exist(const share::ObLSID &ls_id,
-                                                  const ObTabletID &tablet_id,
-                                                  bool &is_major_sstable_exist)
+int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
+                                                 const ObTabletID &tablet_id,
+                                                 const ObSSTable *&latest_major_sstable)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  ObSSTable *latest_major_sstable = nullptr;
+  latest_major_sstable = nullptr;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
@@ -852,7 +852,6 @@ int ObTabletDDLUtil::check_if_major_sstable_exist(const share::ObLSID &ls_id,
   } else {
     latest_major_sstable = static_cast<ObSSTable *>(
         tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
-    is_major_sstable_exist = nullptr != latest_major_sstable;
   }
   return ret;
 }

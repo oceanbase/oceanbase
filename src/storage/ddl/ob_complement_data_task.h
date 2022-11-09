@@ -105,7 +105,7 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), complement_data_ret_(common::OB_SUCCESS),
+    is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     allocator_("ComplementData"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
   {}
   ~ObComplementDataContext() { destroy(); }
@@ -115,6 +115,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
 public:
   bool is_inited_;
+  bool is_major_sstable_exist_;
   int complement_data_ret_;
   common::ObArenaAllocator allocator_;
   ObSpinLock lock_;
