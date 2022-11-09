@@ -128,11 +128,7 @@ int ObIMemtableMgr::release_memtables(const int64_t log_ts)
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(memtable), K(i));
       } else {
-        if (memtable->is_data_memtable()
-            && memtable->is_empty()
-            && !memtable->get_is_force_freeze()) {
-          break;
-        } else if (memtable->get_end_log_ts() <= log_ts
+        if (memtable->get_end_log_ts() <= log_ts
             && memtable->can_be_minor_merged()) {
           if (OB_FAIL(release_head_memtable_(memtable))) {
             STORAGE_LOG(WARN, "fail to release memtable", K(ret), KPC(memtable));

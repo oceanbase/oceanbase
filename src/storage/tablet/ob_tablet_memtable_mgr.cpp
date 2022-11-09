@@ -554,44 +554,6 @@ int ObTabletMemtableMgr::get_all_memtables(ObTableHdlArray &handle)
   return ret;
 }
 
-int ObTabletMemtableMgr::release_head_empty_memtable(memtable::ObIMemtable *flush_memtable)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID ls_id = ls_->get_ls_id();
-
-  if (lock_.try_wrlock()) {
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "not inited", K(ret));
-    } else {
-      memtable::ObIMemtable *imemtable = tables_[get_memtable_idx(memtable_head_)];
-      if (OB_ISNULL(imemtable)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(imemtable), K(memtable_head_));
-      } else if (flush_memtable == imemtable) {
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
-        if (memtable->is_empty()) {
-          if (!memtable->is_frozen_memtable() ||
-              0 != memtable->get_write_ref() ||
-              0 != memtable->get_unsubmitted_cnt() ||
-              0 != memtable->get_unsynced_cnt()) {
-            STORAGE_LOG(WARN, "The empty memtable cannot be released!", K(ls_id), K(tablet_id_), KPC(memtable));
-          } else if (OB_FAIL(release_head_memtable_(imemtable))) {
-            STORAGE_LOG(WARN, "fail to release empty memtable", K(ret), K(ls_id), K(tablet_id_));
-          } else {
-            STORAGE_LOG(INFO, "succeed to release empty memtable", K(ret), K(ls_id), K(tablet_id_));
-          }
-        }
-      }
-    }
-    lock_.unlock();
-  } else {
-    ret = OB_EAGAIN;
-  }
-
-  return ret;
-}
-
 int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
                                                 const bool force)
 {

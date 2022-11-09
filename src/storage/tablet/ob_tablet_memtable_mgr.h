@@ -86,7 +86,6 @@ public:
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
   int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
                                                bool is_force_freeze = false);
-  int release_head_empty_memtable(memtable::ObIMemtable *flush_memtable);
 
   ObStorageSchemaRecorder &get_storage_schema_recorder()
   {

@@ -1425,13 +1425,7 @@ void ObMemtable::dec_unsubmitted_and_unsynced_cnt()
 
 bool ObMemtable::can_be_minor_merged()
 {
-  bool bool_ret = false;
-
-  if (!is_empty() || get_is_force_freeze()) {
-    bool_ret = is_in_prepare_list_of_data_checkpoint();
-  }
-
-  return bool_ret;
+  return is_in_prepare_list_of_data_checkpoint();
 }
 
 int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
@@ -1849,33 +1843,19 @@ int ObMemtable::flush(share::ObLSID ls_id)
                        "ready for flush time:",
                        mt_stat_.ready_for_flush_time_);
     }
+    ObTabletMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = key_.tablet_id_;
+    param.merge_type_ = MINI_MERGE;
+    param.merge_version_ = ObVersion::MIN_VERSION;
 
-    if (is_empty() && !get_is_force_freeze()) {
-      if (OB_FAIL(memtable_mgr_->release_head_empty_memtable(this))) {
-        if (OB_EAGAIN != ret) {
-          TRANS_LOG(WARN, "fail to release empty memtable", K(ret), K(ls_id), KPC(this));
-        } else {
-          // wait next time flush
-          ret = OB_SUCCESS;
-        }
-      } else {
-        TRANS_LOG(INFO, "release head empty memtable", K(ret), KPC(this));
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
+      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+        TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
       }
     } else {
-      ObTabletMergeDagParam param;
-      param.ls_id_ = ls_id;
-      param.tablet_id_ = key_.tablet_id_;
-      param.merge_type_ = MINI_MERGE;
-      param.merge_version_ = ObVersion::MIN_VERSION;
-
-      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
-        if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-          TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
-        }
-      } else {
-        mt_stat_.create_flush_dag_time_ = cur_time;
-        TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
-      }
+      mt_stat_.create_flush_dag_time_ = cur_time;
+      TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
     }
   }
 
