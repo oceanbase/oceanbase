@@ -833,8 +833,9 @@ int ObTransService::end_nested_stmt(
   } else if (OB_UNLIKELY(trans_desc.need_rollback())) {
     ret = OB_TRANS_NEED_ROLLBACK;
     TRANS_LOG(WARN, "transaction need rollback", K(ret), K(trans_desc));
-  } else if (is_rollback &&
-             OB_FAIL(do_dist_rollback_(trans_desc, trans_desc.get_stmt_min_sql_no() - 1, participants))) {
+  } else if (is_rollback
+             && !trans_desc.is_bounded_staleness_read()
+             && OB_FAIL(do_dist_rollback_(trans_desc, trans_desc.get_stmt_min_sql_no() - 1, participants))) {
     TRANS_LOG(WARN, "fail to do dist rollback", K(ret), K(trans_desc), K(participants));
   }
 
