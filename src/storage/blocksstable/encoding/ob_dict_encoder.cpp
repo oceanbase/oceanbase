@@ -95,7 +95,7 @@ int ObDictEncoder::traverse(bool &suitable)
     count_ = ht_->size();
     const bool enable_bit_packing = ctx_->encoding_ctx_->encoder_opt_.enable_bit_packing_;
 
-    if (0 > dict_fix_data_size_) {
+    if (store_var_dict()) {
       dict_index_byte_ = var_data_size_ <= UINT8_MAX ? 1 : 2;
       if (OB_UNLIKELY(var_data_size_ > UINT16_MAX)) {
         dict_index_byte_ = 4;
@@ -183,7 +183,7 @@ int ObDictEncoder::store_meta(ObBufferWriter &buf_writer)
     dict_meta_header_ = reinterpret_cast<ObDictMetaHeader *>(buf);
     buf += sizeof(ObDictMetaHeader);
 
-    if (0 > dict_fix_data_size_) { // fill var dict data
+    if (store_var_dict()) { // fill var dict data
       // var: the first var do not need index
       const int64_t meta_size = sizeof(ObDictMetaHeader) +
         (count_ - 1) * dict_index_byte_ + var_data_size_;
