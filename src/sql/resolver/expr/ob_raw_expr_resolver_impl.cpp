@@ -2316,7 +2316,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           c_expr->set_expr_obj_meta(question_mark_meta);
           if (NULL == ctx_.external_param_info_) {
             /*do nothing...*/
-          } else if (ctx_.is_for_dynamic_sql_ || ctx_.is_for_dbms_sql_) {
+          } else if (ctx_.is_for_dbms_sql_
+                     || (ctx_.is_for_dynamic_sql_ && OB_NOT_NULL(session_info->get_pl_context()))){
+            //NOTICE: only need to process PL dynamic sql and dbms sql
             /*dynmaic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {

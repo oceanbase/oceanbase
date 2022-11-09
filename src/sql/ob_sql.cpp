@@ -915,14 +915,18 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObExecContext &ectx = result.get_exec_context();
   ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
   ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
-                         context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
+                         (context.is_dynamic_sql_  || !is_inner_sql) ? DYNAMIC_SQL_MODE :
                          session.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
-  bool is_normal_ps_prepare = is_inner_sql ? false : true;
+
+  // normal ps sql also a dynamic sql, we adjust is_dynamic_sql_ for normal ps sql parser.
+  context.is_dynamic_sql_ = !context.is_dynamic_sql_ ? !is_inner_sql : context.is_dynamic_sql_;
+
   bool is_from_pl = (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol());
   ObPlanCacheCtx pc_ctx(sql, true, /*is_ps_mode*/
                         allocator, context, ectx, session.get_effective_tenant_id());
   ParamStore param_store( (ObWrapperAllocator(&allocator)) );
   pc_ctx.set_is_inner_sql(is_inner_sql);
+
   CHECK_COMPATIBILITY_MODE(context.session_info_);
 
   if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
@@ -931,8 +935,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   } else if (OB_FAIL(parser.parse(sql,
                                   parse_result,
                                   parse_mode,
-                                  false/*is_batched_multi_stmt_split_on*/,
-                                  is_normal_ps_prepare))) {
+                                  false/*is_batched_multi_stmt_split_on*/))) {
     LOG_WARN("generate syntax tree failed", K(sql), K(ret));
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
@@ -949,12 +952,8 @@ int ObSql::do_real_prepare(const ObString &sql,
                  && context.is_prepare_protocol_
                  && context.is_prepare_stage_
                  && context.is_pre_execute_)) {
-    if (parse_result.is_dynamic_sql_) {
-      context.is_dynamic_sql_ = true;
-    }
     param_cnt = parse_result.question_mark_ctx_.count_;
-    normalized_sql = context.is_dynamic_sql_ && parse_result.no_param_sql_len_ > 0
-      ? ObString(parse_result.no_param_sql_len_, parse_result.no_param_sql_) : sql;
+    normalized_sql = sql;
     if (stmt::T_ANONYMOUS_BLOCK == stmt_type
                  && context.is_prepare_protocol_
                  && context.is_prepare_stage_
@@ -968,9 +967,6 @@ int ObSql::do_real_prepare(const ObString &sql,
       }
     }
   } else {
-    if (parse_result.is_dynamic_sql_) {
-      context.is_dynamic_sql_ = true;
-    }
     if (context.is_dynamic_sql_ && !context.is_dbms_sql_) {
       parse_result.input_sql_ = parse_result.no_param_sql_;
       parse_result.input_sql_len_ = parse_result.no_param_sql_len_;
@@ -1478,6 +1474,10 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
   context.is_prepare_protocol_ = true;
   ObPsStmtId inner_stmt_id = client_stmt_id;
   context.stmt_type_ = stmt_type;
+
+  // normal ps execute sql also a dynamic sql, here we adjust is_dynamic_sql_.
+  context.is_dynamic_sql_ = !context.is_dynamic_sql_ ? !is_inner_sql : context.is_dynamic_sql_;
+
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
@@ -1538,6 +1538,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
 #ifndef NDEBUG
       LOG_INFO("Begin to handle execute stmtement", K(session.get_sessid()), K(sql));
 #endif
+
       if (!ps_info->get_fixed_raw_params().empty()) {
         pctx->set_is_ps_rewrite_sql();
       }
@@ -1545,7 +1546,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         LOG_WARN("store query string fail", K(ret));
       } else if (FALSE_IT(generate_ps_sql_id(sql, context))) {
       } else if (OB_LIKELY(ObStmt::is_dml_stmt(stmt_type))) {
-        context.is_dynamic_sql_ = ps_info->get_is_dynamic_sql();
         //if plan not exist, generate plan
         ObPlanCacheCtx pc_ctx(sql, true, /*is_ps_mode*/
                               allocator, context, ectx, session.get_effective_tenant_id());
@@ -2162,7 +2162,10 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           SQL_LOG(DEBUG, "SET STMT PARAM COUNT", K(resolver.get_params().prepare_param_count_), K(&resolver_ctx));
           //secondary_namespace_不为空，说明是PL里sql的prepare阶段
           //带有returning子句的动态sql也需要rebuild,用来去除into子句
-          bool in_pl = NULL != resolver_ctx.secondary_namespace_ || resolver_ctx.is_dynamic_sql_ || resolver_ctx.is_dbms_sql_;
+          //pl context not null indicate PL dynamic sql, only need rebuild PL dynamic sql
+          bool in_pl = NULL != resolver_ctx.secondary_namespace_
+            || (resolver_ctx.is_dynamic_sql_ && OB_NOT_NULL(result.get_session().get_pl_context()))
+            || resolver_ctx.is_dbms_sql_;
           bool need_rebuild = lib::is_mysql_mode() ?  false : resolver_ctx.is_prepare_stage_ && in_pl;
           bool is_returning_into = false;
           if (stmt->is_insert_stmt() || stmt->is_update_stmt() || stmt->is_delete_stmt()) {
