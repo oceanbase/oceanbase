@@ -3331,6 +3331,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
           ObObjType val_type = tmp_obj->get_type();
           ObCollationType cs_type = tmp_obj->get_collation_type();
           ObScale scale = tmp_obj->get_scale();
+          scale = (val_type == ObBitType) ? aggr_info.param_exprs_.at(0)->datum_meta_.length_semantics_ : scale;
           ObIJsonBase *json_val = NULL;
           ObDatum converted_datum;
           converted_datum.set_datum(storted_row->cells()[0]);
