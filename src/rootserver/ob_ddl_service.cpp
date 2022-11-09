@@ -15351,6 +15351,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
           new_col_schema.set_nullable(false);
           new_col_schema.drop_not_null_cst();
           new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+          ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
           if (OB_FAIL(new_hidden_table_schema.alter_column(new_col_schema, ObTableSchema::CHECK_MODE_ONLINE))) {
             LOG_WARN("failed to alter column", K(ret));
           } else if (OB_FAIL(ddl_operator.update_single_column(trans,
@@ -15363,6 +15364,8 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
                                                                                     new_hidden_table_schema,
                                                                                     trans))) {
             LOG_WARN("failed to drop constraint", K(ret));
+          } else if (OB_FAIL(ddl_operator.update_table_attribute(new_hidden_table_schema, trans, operation_type))) {
+            LOG_WARN("failed to update data table schema attribute", K(ret));
           }
         }
       }
@@ -18222,10 +18225,22 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
               */
             } else {
               bool to_recyclebin = drop_table_arg.to_recyclebin_;
+              bool has_conflict_ddl = false;
               if (table_schema->get_table_type() == MATERIALIZED_VIEW || table_schema->is_tmp_table()) {
                 to_recyclebin = false;
               }
-              if (OB_FAIL(drop_table_in_trans(schema_guard,
+              if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(
+                      sql_proxy_,
+                      drop_table_arg.tenant_id_,
+                      table_schema->get_table_id(),
+                      drop_table_arg.task_id_,
+                      ObDDLType::DDL_DROP_TABLE,
+                      has_conflict_ddl))) {
+                LOG_WARN("failed to check has conflict ddl", K(ret));
+              } else if (has_conflict_ddl) {
+                ret = OB_SCHEMA_EAGAIN;
+                LOG_WARN("failed to drop table that has conflict ddl", K(ret), K(table_schema->get_table_id()));
+              } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                           tmp_table_schema,
                           false,
                           USER_INDEX == drop_table_arg.table_type_,

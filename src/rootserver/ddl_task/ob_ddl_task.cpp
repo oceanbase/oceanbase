@@ -1400,6 +1400,64 @@ int ObDDLTaskRecordOperator::check_has_long_running_ddl(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::check_has_conflict_ddl(
+    common::ObMySQLProxy *proxy,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t task_id,
+    const ObDDLType ddl_type,
+    bool &has_conflict_ddl)
+{
+  int ret = OB_SUCCESS;
+  has_conflict_ddl = false;
+  if (OB_UNLIKELY(nullptr == proxy || !proxy->is_inited() 
+    || OB_INVALID_ID == tenant_id
+    || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), KP(proxy), K(tenant_id), K(table_id));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT tenant_id, task_id, object_id, target_object_id, ddl_type,"
+          "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version,"
+          "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
+          "WHERE tenant_id = %lu AND object_id = %lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
+          tenant_id, table_id))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy->read(res, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        ObDDLTaskRecord task_record;
+        ObArenaAllocator allocator("DdlTaskRec");
+        while (OB_SUCC(ret) && !has_conflict_ddl && OB_SUCC(result->next())) {
+          allocator.reuse();
+          if (OB_FAIL(fill_task_record(result, allocator, task_record))) {
+            LOG_WARN("failed to fill task record", K(ret));
+          } else if (task_record.task_id_ != task_id) {
+            switch (ddl_type) {
+            case ObDDLType::DDL_DROP_TABLE: {
+              has_conflict_ddl = true;
+              break;
+            }
+            default: {
+              // do nothing
+            }
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::get_all_record(
     common::ObMySQLProxy &proxy,
     common::ObIAllocator &allocator,
