@@ -5861,7 +5861,7 @@ int ObDDLService::fill_column_collation(
         column_schema, table_schema.get_charset_type(), table_schema.get_collation_type()))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(column_schema,
-                       table_schema.get_table_id()))) {
+                       table_schema.get_table_id(), true))) {
       RS_LOG(WARN, "failed to check text or blob column length", K(ret));
     }
   } else if (ObEnumSetTC == col_tc) {
