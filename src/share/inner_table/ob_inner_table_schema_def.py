@@ -10811,6 +10811,13 @@ def_table_schema(
 )
 # 12341: __all_virtual_meta_dictionary_location
 
+# 12342: __all_virtual_transfer_task
+# 12343: __all_virtual_transfer_task_history
+# 12344: __all_virtual_balance_job
+# 12345: __all_virtual_balance_job_history
+# 12346: __all_virtual_balance_task
+# 12347: __all_virtual_balance_task_history
+
 #
 # 余留位置
 #
