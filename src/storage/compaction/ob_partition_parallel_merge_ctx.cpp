@@ -77,10 +77,12 @@ int ObParallelMergeCtx::init(compaction::ObTabletMergeCtx &merge_ctx)
   } else {
     int64_t tablet_size = merge_ctx.get_merge_schema()->get_tablet_size();
     bool enable_parallel_minor_merge = false;
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      enable_parallel_minor_merge = tenant_config->_enable_parallel_minor_merge;
-    }
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        enable_parallel_minor_merge = tenant_config->_enable_parallel_minor_merge;
+      }
+    } // end of ObTenantConfigGuard
     if (enable_parallel_minor_merge && tablet_size > 0 && merge_ctx.param_.is_mini_merge()) {
       if (OB_FAIL(init_parallel_mini_merge(merge_ctx))) {
         STORAGE_LOG(WARN, "Failed to init parallel setting for mini merge", K(ret));

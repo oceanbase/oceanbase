@@ -638,12 +638,14 @@ int ObPartitionMergePolicy::check_need_mini_minor_merge(
   const ObTabletTableStore &table_store = tablet.get_table_store();
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   int64_t delay_merge_schedule_interval = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObTablesHandleArray minor_tables;
-  if (tenant_config.is_valid()) {
-    mini_minor_threshold = tenant_config->minor_compact_trigger;
-    delay_merge_schedule_interval = tenant_config->_minor_compaction_interval;
-  }
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      mini_minor_threshold = tenant_config->minor_compact_trigger;
+      delay_merge_schedule_interval = tenant_config->_minor_compaction_interval;
+    }
+  } // end of ObTenantConfigGuard
   if (table_store.get_minor_sstables().count_ <= mini_minor_threshold) {
     // total number of mini sstable is less than threshold + 1
   } else if (tablet.is_ls_tx_data_tablet()) {
@@ -1074,13 +1076,15 @@ int ObPartitionMergePolicy::refine_mini_minor_merge_result(ObGetMergeTablesResul
     if (OB_SUCC(ret)) {
       int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
       int64_t size_amplification_factor = OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR;
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
-        minor_compact_trigger = tenant_config->minor_compact_trigger;
-        if (tenant_config->_minor_compaction_amplification_factor != 0) {
-          size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
+      {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (tenant_config.is_valid()) {
+          minor_compact_trigger = tenant_config->minor_compact_trigger;
+          if (tenant_config->_minor_compaction_amplification_factor != 0) {
+            size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
+          }
         }
-      }
+      } // end of ObTenantConfigGuard
       if (1 == result.handle_.get_count()) {
         LOG_INFO("minor refine, only one sstable, no need to do mini minor merge", K(result));
         result.handle_.reset();
