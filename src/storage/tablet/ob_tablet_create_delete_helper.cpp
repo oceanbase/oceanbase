@@ -1732,7 +1732,7 @@ int ObTabletCreateDeleteHelper::build_tablet_create_info(
         // find hidden lob info
         int64_t aux_idx = -1;
         if (find_related_aux_info(arg, tablet_create_info.data_tablet_id_, aux_idx)) {
-          const ObCreateTabletInfo aux_info = arg.tablets_.at(aux_idx);
+          const ObCreateTabletInfo &aux_info = arg.tablets_.at(aux_idx);
           if (OB_FAIL(fill_aux_infos(arg, aux_info, tablet_create_info))) {
             LOG_WARN("failed to fill aux info", K(ret), K(PRINT_CREATE_ARG(arg)), K(aux_idx));
           } else if (OB_FAIL(skip_idx.push_back(aux_idx))) {

@@ -2699,6 +2699,8 @@ public:
   common::ObSArray<int64_t> table_schema_index_;
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };
 
 struct ObBatchCreateTabletArg
@@ -7117,11 +7119,11 @@ public:
                                         dest_schema_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(0) {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
-           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0 
+           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
            && task_id_ > 0 && parallelism_ > 0;
   }
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id), 
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
     K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id));
 public:
   uint64_t tenant_id_;
