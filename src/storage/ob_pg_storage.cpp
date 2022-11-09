@@ -3236,7 +3236,7 @@ int ObPGStorage::delete_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_pa
   PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
-    STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
+    STORAGE_LOG(ERROR, "replica is not writable", K(ret), "replica_type", get_replica_type_(), "this", *this);
   } else if (NULL == (pg_partition = guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
