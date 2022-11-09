@@ -56,7 +56,7 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
     LOG_WARN("schema checker is null", K(ret));
   } else if (!is_curr_or_next_val(q_name.col_name_)) {
     ret = OB_ERR_BAD_FIELD_ERROR;
-  } else if (session_info->get_database_name().empty()) {
+  } else if (q_name.database_name_.empty() && session_info->get_database_name().empty()) {
     ret = OB_ERR_NO_DB_SELECTED;
     LOG_WARN("No database selected", K(q_name), K(ret));
   } else {
