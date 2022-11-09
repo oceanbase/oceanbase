@@ -127,7 +127,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
     }
   }
 
-  if (OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
+  if (!need_wait && OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
     TRANS_LOG(ERROR, "update publish version failed", KR(ret), KPC(this));
   }
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {

@@ -541,6 +541,7 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
     TRANS_LOG(INFO,
               "[Replay Tx] Replay redo in MemTable cost too much time",
               K(ret),
+              K(timeguard.get_diff()),
               K(log_ts_ns_),
               K(ctx_->get_trans_id()),
               K(ctx_->get_ls_id()),

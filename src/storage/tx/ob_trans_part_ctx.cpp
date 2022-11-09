@@ -635,6 +635,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     case ObTxState::ABORT:
       ret = OB_TRANS_KILLED;
       break;
+    case ObTxState::PRE_COMMIT:
     case ObTxState::COMMIT:
     case ObTxState::CLEAR:
       ret = OB_TRANS_COMMITED;
@@ -866,7 +867,7 @@ int ObPartTransCtx::update_publish_version_(const int64_t publish_version, const
     TRANS_LOG(WARN, "set commit version failed", K(ret));
   } else {
     trans_service_->get_tx_version_mgr().update_max_commit_ts(publish_version, false);
-    REC_TRANS_TRACE_EXT2(tlog_, update_trans_version, OB_ID(trans_version), publish_version,
+    REC_TRANS_TRACE_EXT2(tlog_, push_max_commit_version, OB_ID(trans_version), publish_version,
                          OB_ID(ctx_ref), get_ref());
   }
 
@@ -1846,7 +1847,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
     }
     REC_TRANS_TRACE_EXT(tlog_, log_sync_succ_cb,
                                OB_ID(ret), ret,
-                               Y(log_type),
+                               OB_ID(log_type), (void*)log_type,
                                OB_ID(t), log_ts,
                                OB_ID(offset), log_lsn,
                                OB_ID(ctx_ref), get_ref());
@@ -1974,7 +1975,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       }
       if (need_callback_scheduler_()) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(defer_commit_callback_(OB_TRANS_KILLED, -1))) {
+        if (OB_TMP_FAIL(defer_callback_scheduler_(OB_TRANS_KILLED, -1))) {
           TRANS_LOG(WARN, "notify scheduler txn killed fail", K(tmp_ret), K_(trans_id));
         } else {
           commit_cb_.disable();
@@ -1985,7 +1986,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
     }
     REC_TRANS_TRACE_EXT(tlog_, on_fail_cb,
                                OB_ID(ret), ret,
-                               Y(log_type),
+                               OB_ID(log_type), (void*)log_type,
                                OB_ID(t), log_ts,
                                OB_ID(ctx_ref), get_ref());
     TRANS_LOG(INFO, "ObPartTransCtx::on_failure end", KR(ret), K(*this), KPC(log_cb));

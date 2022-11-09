@@ -132,9 +132,9 @@ void ObTransCtx::print_trace_log_if_necessary_()
   }
 
   if (is_slow_query_()) {
-    static ObMiniStat::ObStatItem item("slow trans statistics", 60 * 1000 * 1000);
+    static ObMiniStat::ObStatItem item("long trans statistics", 60 * 1000 * 1000);
     ObMiniStat::stat(item);
-    FORCE_PRINT_TRACE(tlog_, "[slow trans] ");
+    FORCE_PRINT_TRACE(tlog_, "[long trans] ");
   } else if (OB_UNLIKELY(trans_id_ % 128 == 1)) {
     FORCE_PRINT_TRACE(tlog_, "[trans sampling] ");
   } else {
@@ -197,7 +197,15 @@ ObITsMgr *ObTransCtx::get_ts_mgr_()
   return trans_service_->get_ts_mgr();
 }
 
-int ObTransCtx::defer_commit_callback_(const int retcode, const int64_t commit_version)
+
+bool ObTransCtx::has_callback_scheduler_()
+{
+  return !commit_cb_.is_enabled() // callback scheduler has accomplished by others
+    || commit_cb_.is_inited();    // callback has been defered
+}
+
+// callback scheduler commit result
+int ObTransCtx::defer_callback_scheduler_(const int retcode, const int64_t commit_version)
 {
   int ret = OB_SUCCESS;
   if (!commit_cb_.is_enabled()) {
@@ -250,9 +258,10 @@ int ObTransCtx::register_timeout_task_(const int64_t interval_us)
       (void)ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
     }
   }
-  REC_TRANS_TRACE_EXT2(tlog_, register_timeout_task, OB_ID(ret), ret,
-                                                     OB_ID(ctx_ref), get_ref());
-
+  if (OB_FAIL(ret)) {
+    REC_TRANS_TRACE_EXT2(tlog_, register_timeout_task, OB_ID(ret), ret,
+                         OB_ID(ctx_ref), get_ref());
+  }
   return ret;
 }
 
@@ -277,9 +286,10 @@ int ObTransCtx::unregister_timeout_task_()
       (void)ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
     }
   }
-  REC_TRANS_TRACE_EXT2(tlog_, unregister_timeout_task, OB_ID(ret), ret,
-                                                       OB_ID(ctx_ref), get_ref());
-
+  if (OB_FAIL(ret)) {
+    REC_TRANS_TRACE_EXT2(tlog_, unregister_timeout_task, OB_ID(ret), ret,
+                         OB_ID(ctx_ref), get_ref());
+  }
   return ret;
 }
 

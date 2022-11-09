@@ -1047,13 +1047,13 @@ int ObTransService::acquire_tx_ctx(const share::ObLSID &ls_id, const ObTxDesc &t
   TX_PARTS_CONTAIN_(tx.parts_, id_, ls_id, exist);
   if (exist) {
     if (OB_FAIL(get_tx_ctx_(ls_id, ls, tx.tx_id_, ctx))) {
-      TRANS_LOG(WARN, "get tx ctx fail", K(ret), K(tx));
+      TRANS_LOG(WARN, "get tx ctx fail", K(ret), K(ls_id), K(tx));
       if (ret == OB_TRANS_CTX_NOT_EXIST) {
-        TRANS_LOG(WARN, "participant lost update", K_(tx.tx_id));
+        TRANS_LOG(WARN, "participant lost update", K(ls_id), K_(tx.tx_id));
       }
     }
   } else if (OB_FAIL(create_tx_ctx_(ls_id, ls, tx, ctx))) {
-    TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(tx));
+    TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls_id), K(tx));
   }
   TRANS_LOG(TRACE, "acquire tx ctx", K(ret), K(*this), K(ls_id), K(tx), KP(ctx));
   return ret;

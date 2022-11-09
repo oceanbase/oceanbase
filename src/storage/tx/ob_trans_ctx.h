@@ -115,7 +115,7 @@ public:
   void get_ctx_guard(CtxLockGuard &guard);
   void print_trace_log();
   // ATTENTION! There is no lock protect
-  bool is_too_slow_transaction() const
+  bool is_too_long_transaction() const
   { return ObClockGenerator::getRealClock() >= ctx_create_time_ + OB_TRANS_WARN_USE_TIME; }
   bool is_readonly() const { return false; }
   void set_for_replay(const bool for_replay) { for_replay_ = for_replay; }
@@ -196,7 +196,8 @@ protected:
   void set_stc_by_now_();
   MonotonicTs get_stc_();
   ObITsMgr *get_ts_mgr_();
-  int defer_commit_callback_(const int ret, const int64_t commit_version);
+  bool has_callback_scheduler_();
+  int defer_callback_scheduler_(const int ret, const int64_t commit_version);
   int64_t get_remaining_wait_interval_us_()
   {
     return trans_need_wait_wrap_.get_remaining_wait_interval_us();
