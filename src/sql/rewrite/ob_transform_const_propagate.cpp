@@ -200,16 +200,38 @@ int ObTransformConstPropagate::ConstInfoContext::expire_const_infos()
   return ret;
 }
 
+int ObTransformConstPropagate::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryHint *query_hint = NULL;
+  const ObHint *trans_hint = NULL;
+  need_trans = false;
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
+  } else if (!query_hint->has_outline_data()) {
+    need_trans = true;
+  } else if (NULL != (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))
+             && trans_hint->get_hint_type() == get_hint_type()) {
+    // next trans hint is REPLACE_CONST, allowed collect equal pair
+    need_trans = true;
+  }
+  return ret;
+}
+
 int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
                                             bool ignore_all_select_exprs,
                                             bool &trans_happened)
 {
   int ret = OB_SUCCESS;
+  ConstInfoContext const_ctx;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
+  } else if (OB_FAIL(ObTransformRule::check_hint_status(*stmt, const_ctx.hint_allowed_trans_))) {
+    LOG_WARN("failed to check_hint_status", K(ret));
   } else {
-    ConstInfoContext const_ctx;
     bool has_rollup_or_groupingsets = false;
     bool is_happened = false;
     if (OB_SUCC(ret)) {
@@ -960,13 +982,15 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 8> parent_exprs;
-  if (OB_FAIL(recursive_replace_expr(cur_expr,
-                                     parent_exprs,
-                                     const_ctx,
-                                     used_in_compare,
-                                     trans_happened))) {
-    LOG_WARN("failed to recursive");
+  if (const_ctx.hint_allowed_trans_) {
+    ObSEArray<ObRawExpr *, 8> parent_exprs;
+    if (OB_FAIL(recursive_replace_expr(cur_expr,
+                                      parent_exprs,
+                                      const_ctx,
+                                      used_in_compare,
+                                      trans_happened))) {
+      LOG_WARN("failed to recursive");
+    }
   }
   return ret;
 }
@@ -1816,6 +1840,8 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (!const_ctx.hint_allowed_trans_) {
+    /* do nothing */
   } else {
     LOG_TRACE("begin replace check constraint exprs", K(const_ctx), K(stmt->get_check_constraint_items()));
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); ++i) {

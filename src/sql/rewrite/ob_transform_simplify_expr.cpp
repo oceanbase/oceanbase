@@ -27,6 +27,12 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   int ret = OB_SUCCESS;
   bool is_happened = false;
   UNUSED(parent_stmts);
+  if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
+    LOG_WARN("failed to flatten stmt exprs", K(is_happened));
+  } else {
+    trans_happened |= is_happened;
+    LOG_TRACE("succeed to flatten stmt exprs", K(is_happened));
+  }
   if (OB_FAIL(replace_is_null_condition(stmt, is_happened))) {
     LOG_WARN("failed to replace is null condition", K(is_happened));
   } else {
@@ -60,6 +66,90 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::flatten_stmt_exprs(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  bool where_happened = false;
+  bool having_happened = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null stmt", K(ret), K(stmt));
+  } else if (OB_FAIL(flatten_exprs(stmt->get_condition_exprs(), where_happened))) {
+    LOG_WARN("failed to flatten expr in where", K(ret));
+  } else if (stmt->is_select_stmt()
+             && OB_FAIL(flatten_exprs(static_cast<ObSelectStmt*>(stmt)->get_having_exprs(), having_happened))) {
+    LOG_WARN("failed to flatten expr in having", K(ret));
+  } else {
+    trans_happened = where_happened | having_happened;
+    ObIArray<JoinedTable*> &joined_table = stmt->get_joined_tables();
+    bool is_happened = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < joined_table.count(); i++) {
+      if (OB_FAIL(flatten_join_condition_exprs(joined_table.at(i), is_happened))) {
+        LOG_WARN("failed to flatten join condition exprs", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::flatten_join_condition_exprs(TableItem *table, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  JoinedTable *join_table = NULL;
+  trans_happened = false;
+  bool cur_happened = false;
+  bool left_happened = false;
+  bool right_happened = false;
+  if (OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table));
+  } else if (!table->is_joined_table()) {
+    /*do nothing*/
+  } else if (OB_ISNULL(join_table = static_cast<JoinedTable*>(table)) ||
+             OB_ISNULL(join_table->left_table_) || OB_ISNULL(join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(join_table));
+  } else if (OB_FAIL(flatten_exprs(join_table->join_conditions_, cur_happened))) {
+    LOG_WARN("failed to flatten expr in join conditions", K(ret));
+  } else if (OB_FAIL(SMART_CALL(flatten_join_condition_exprs(join_table->left_table_,
+                                                             left_happened)))) {
+    LOG_WARN("failed to flatten left child join condition exprs", K(ret));
+  } else if (OB_FAIL(SMART_CALL(flatten_join_condition_exprs(join_table->right_table_,
+                                                             right_happened)))) {
+    LOG_WARN("failed to flatten right child join condition exprs", K(ret));
+  } else {
+    trans_happened = cur_happened | left_happened | right_happened;
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::flatten_exprs(common::ObIArray<ObRawExpr*> &exprs, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> temp_exprs;
+  trans_happened = false;
+  if (OB_FAIL(temp_exprs.assign(exprs))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else {
+    exprs.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < temp_exprs.count(); i++) {
+      if (OB_ISNULL(temp_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::flatten_expr(temp_exprs.at(i), exprs))) {
+        LOG_WARN("failed to flatten exprs", K(ret));
+      } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret)) {
+      trans_happened = temp_exprs.count() != exprs.count();
     }
   }
   return ret;
@@ -650,18 +740,16 @@ int ObTransformSimplifyExpr::remove_dummy_filter_exprs(common::ObIArray<ObRawExp
     LOG_TRACE("expr list is not valid for removing dummy exprs", K(is_valid_type));
   } else if (OB_FAIL(inner_remove_dummy_expr(exprs, constraints))) {
     LOG_WARN("fail to remove dummy expr in exprs", K(ret));
+  } else if (exprs.empty()) {
+    /* do nothing */
   } else {
     ObSEArray<int64_t, 2> true_exprs;
     ObSEArray<int64_t, 2> false_exprs;
     ObRawExpr *transed_expr = NULL;
-    if (OB_FAIL(ObTransformUtils::flatten_expr(exprs))) {
-      LOG_WARN("failed to flatten exprs", K(ret));
-    } else if (exprs.empty()) {
-      /* do nothing */
-    } else if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx_,
-                                                                      exprs,
-                                                                      true_exprs,
-                                                                      false_exprs))) {
+    if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx_,
+                                                               exprs,
+                                                               true_exprs,
+                                                               false_exprs))) {
       LOG_WARN("failed to extract exprs info", K(ret));
     } else if (true_exprs.empty() && false_exprs.empty()) {
       /* do nothing */

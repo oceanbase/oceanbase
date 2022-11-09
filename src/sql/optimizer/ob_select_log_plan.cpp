@@ -4807,9 +4807,11 @@ int ObSelectLogPlan::get_late_materialization_operator(ObLogicalOperator *top,
     LOG_WARN("get unexpected null", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN != child_scan->get_type()) {
     /*do nothing*/
+  } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan *>(child_scan))) {
+  } else if (NULL != table_scan->get_limit_expr() || NULL != table_scan->get_offset_expr()) {
+    table_scan = NULL;
   } else {
     sort_op = static_cast<ObLogSort *>(child_sort);
-    table_scan = static_cast<ObLogTableScan *>(child_scan);
   }
   return ret;
 }

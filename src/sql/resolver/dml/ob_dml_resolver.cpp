@@ -9081,10 +9081,6 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
 
 
   switch (hint_node.type_) {
-    case T_HOTSPOT: {
-      global_hint.hotspot_ = true;
-      break;
-    }
     case T_TOPK: {
       CHECK_HINT_PARAM(hint_node, 2) {
         global_hint.merge_topk_hint(child0->value_, child1->value_);
@@ -9265,6 +9261,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     }
     case T_NO_QUERY_TRANSFORMATION: {
       global_hint.disable_transform_ = true;
+      break;
+    }
+    case T_NO_COST_BASED_QUERY_TRANSFORMATION: {
+      global_hint.disable_cost_based_transform_ = true;
       break;
     }
     default: {

@@ -68,8 +68,6 @@ int ObTransformEliminateOuterJoin::eliminate_outer_join(ObIArray<ObParentDMLStmt
     LOG_WARN("failed to get equal set conditions", K(ret));
   } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmts, stmt, conditions))) {
     LOG_WARN("failed to get null reject select", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
-    LOG_WARN("failed to change right outer join to left", K(ret));
   } else {
     common::ObArray<FromItem> from_item_list;
     common::ObArray<JoinedTable*> joined_table_list;

@@ -895,7 +895,7 @@ int ObQueryHint::get_qb_name(int64_t stmt_id, ObString &qb_name) const
   qb_name.reset();
   if (OB_UNLIKELY(stmt_id < 0 || stmt_id >= stmt_id_map_.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected stmt id", K(ret), K(stmt_id), K(stmt_id_map_));
+    LOG_WARN("unexpected stmt id", K(ret), K(stmt_id), K(stmt_id_map_.count()), K(stmt_id_map_));
   } else {
     const ObIArray<ObString> &qb_names = stmt_id_map_.at(stmt_id).qb_names_;
     if (OB_UNLIKELY(qb_names.empty() || qb_names.at(qb_names.count() - 1).empty())) {
@@ -1099,31 +1099,16 @@ int ObStmtHint::init_stmt_hint(const ObDMLStmt &stmt,
              && NULL != (qb_hints = query_hint.get_stmt_id_hints(stmt.get_stmt_id()))
              && OB_FAIL(append(all_hints, qb_hints->hints_))) {
     LOG_WARN("failed to append hints", K(ret));
-  } else if (all_hints.empty()) {
-    /* do nothing */
   } else {
-    ObHint *hint = NULL;
-    bool may_used = false;
-    ObSEArray<ObTableInHint*, 8> all_tables;
     ObSEArray<ObItemType, 4> conflict_hints;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_hints.count(); ++i) {
-      may_used = false;
-      all_tables.reuse();
-      if (OB_ISNULL(hint = all_hints.at(i))) {
+      if (OB_ISNULL(all_hints.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(hint));
-      } else if (OB_FAIL(hint->get_all_table_in_hint(all_tables))) {
-        LOG_WARN("failed to get all in hint", K(ret));
-      } else if (OB_FAIL(stmt.hint_table_may_used(query_hint.cs_type_, all_tables, may_used))) {
-        LOG_WARN("failed to check is hint table may used", K(ret));
-      } else if (!may_used) {
-        /* do nothing */
-      } else if (OB_FAIL(merge_hint(*hint, HINT_DOMINATED_EQUAL, conflict_hints))) {
+        LOG_WARN("unexpected null", K(ret), K(i), K(all_hints));
+      } else if (OB_FAIL(merge_hint(*all_hints.at(i), HINT_DOMINATED_EQUAL, conflict_hints))) {
         LOG_WARN("failed to merge hint", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
     LOG_DEBUG("finish init stmt hint", K(stmt.get_stmt_id()), K(qb_name), K(*this));
   }
   return ret;

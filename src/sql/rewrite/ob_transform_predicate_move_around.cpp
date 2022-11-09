@@ -823,8 +823,6 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   } else if (OB_ISNULL(pullup_preds)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pullup predicate array is null", K(ret));
-  } else if (enable_no_pred_deduce) {
-    //do nothing
   } else if (stmt->is_set_stmt()) {
     ObSelectStmt *sel_stmt = static_cast<ObSelectStmt*>(stmt);
     if (OB_FAIL(pushdown_into_set_stmt(sel_stmt,
@@ -845,6 +843,8 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
         LOG_WARN("failed to push down predicates", K(ret));
       } else {/*do nothing*/}
     }
+  } else if (enable_no_pred_deduce) {
+    //do nothing
   } else {
     if (OB_FAIL(stmt->has_rownum(has_rownum))) {
       LOG_WARN("failed to check stmt has rownum", K(ret));
@@ -912,10 +912,10 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
         LOG_WARN("failed to push down predicates", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_transform_happened(stmt, old_where_preds, stmt->get_condition_exprs()))) {
-      LOG_WARN("failed to check transform happened", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(check_transform_happened(stmt, old_where_preds, stmt->get_condition_exprs()))) {
+        LOG_WARN("failed to check transform happened", K(ret));
+      }
     }
   }
   return ret;
@@ -982,10 +982,6 @@ int ObTransformPredicateMoveAround::check_pushdown_predicates(ObSelectStmt *stmt
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(check_enable_no_pred_deduce(*stmt, enable_no_pred_deduce))) {
-    LOG_WARN("check_enable_no_pred_deduce failed", K(ret));
-  } else if (enable_no_pred_deduce) {
-    //do nothing
   } else if (!stmt->is_set_stmt()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is not a set stmt", K(ret));
@@ -1917,41 +1913,32 @@ int ObTransformPredicateMoveAround::check_transform_happened(ObDMLStmt *stmt,
                                                              ObIArray<ObRawExpr *> &new_conditions)
 {
   int ret = OB_SUCCESS;
-  bool recover = false;
   const ObQueryHint *query_hint = stmt->get_stmt_hint().query_hint_;
   const ObTransHint *hint = static_cast<const ObTransHint *>(get_hint(stmt->get_stmt_hint()));
   if (OB_ISNULL(query_hint)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
-  } else if (query_hint->has_outline_data()) {
-    if (hint == NULL) {
-      recover = true;
-    } 
-  }
-
-  if (OB_SUCC(ret) && recover) {
+  } else if (query_hint->has_outline_data() && hint == NULL) {
     if (OB_FAIL(new_conditions.assign(old_conditions))) {
       LOG_WARN("assign failed", K(ret));
     }
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < new_conditions.count(); ++i) {
-    if (!ObOptimizerUtil::find_equal_expr(old_conditions, new_conditions.at(i))) {
-      trans_happened_ = true;
-      if (ObOptimizerUtil::find_item(transed_stmts_, stmt)) {
-        //do nothing
-      } else if (OB_FAIL(transed_stmts_.push_back(stmt))) {
-        LOG_WARN("push back failed", K(ret));
+  } else {
+    bool is_happened = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_happened && i < new_conditions.count(); ++i) {
+      if (!ObOptimizerUtil::find_equal_expr(old_conditions, new_conditions.at(i))) {
+        is_happened = true;
       }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < old_conditions.count(); ++i) {
-    if (!ObOptimizerUtil::find_equal_expr(new_conditions, old_conditions.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_happened && i < old_conditions.count(); ++i) {
+      if (!ObOptimizerUtil::find_equal_expr(new_conditions, old_conditions.at(i))) {
+        is_happened = true;
+      }
+    }
+
+    if (OB_SUCC(ret) && is_happened) {
       trans_happened_ = true;
-      if (ObOptimizerUtil::find_item(transed_stmts_, stmt)) {
-        //do nothing
-      } else if (OB_FAIL(transed_stmts_.push_back(stmt))) {
-        LOG_WARN("push back failed", K(ret));
+      if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, stmt))) {
+        LOG_WARN("append failed", K(ret));
       }
     }
   }

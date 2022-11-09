@@ -8891,6 +8891,7 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
       path_info.force_mat_ = log_join_hint->nl_material_->is_enable_hint();
       path_info.force_no_mat_ = log_join_hint->nl_material_->is_disable_hint();
     } else if (log_hint.is_outline_data_) {
+      path_info.force_mat_ = false;
       path_info.force_no_mat_ = true;
     }
     if (NULL != log_join_hint && !log_join_hint->local_method_hints_.empty()) {

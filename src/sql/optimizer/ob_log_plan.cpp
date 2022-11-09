@@ -8146,7 +8146,6 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !is_virtual_table(table_scan->get_ref_table_id()) &&
         !(0 != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
-        !get_log_plan_hint().use_late_material() &&
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr()))) {
       if (!top->is_distributed()) {

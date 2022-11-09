@@ -5414,6 +5414,7 @@ int ObLogicalOperator::get_pushdown_op(log_op_def::ObLogOpType op_type, const Ob
     /* do nothing */
   } else if (LOG_EXCHANGE != get_type() && LOG_SORT != get_type()
              && LOG_GRANULE_ITERATOR != get_type()
+             && LOG_TOPK != get_type()
              && LOG_MATERIAL != get_type()) {
     /* do nothing */
   } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {

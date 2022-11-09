@@ -478,8 +478,6 @@ int ObTransformSimplifySubquery::push_down_outer_join_condition(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(ret), K(stmt));
-  } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
-    LOG_WARN("failed to change right join to left", K(ret));
   } else {
     ObIArray<JoinedTable *> &join_tables = stmt->get_joined_tables();
     for (int64_t i = 0; OB_SUCC(ret) && i < join_tables.count(); ++i) {

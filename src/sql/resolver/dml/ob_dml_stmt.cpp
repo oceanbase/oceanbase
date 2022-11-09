@@ -4123,65 +4123,6 @@ int ObDMLStmt::has_virtual_generated_column(int64_t table_id, bool &has_virtual_
   return ret;
 }
 
-// check all hint table may appear in stmt child stmt
-int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
-                                   const ObIArray<ObTableInHint*> &all_tables,
-                                   bool &may_used) const
-{
-  int ret = OB_SUCCESS;
-  may_used = true;
-  ObTableInHint *table = NULL;
-  for (int64_t i = 0; may_used && OB_SUCC(ret) && i < all_tables.count(); ++i) {
-    if (OB_ISNULL(table = all_tables.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(table));
-    } else if (table->db_name_.empty() && is_generate_name(table->table_name_)) {
-      /* do nohting */
-    } else if (OB_FAIL(hint_table_may_used(cs_type, *table, may_used))) {
-      LOG_WARN("get unexpected null", K(ret));
-    }
-  }
-  return ret;
-}
-
-bool ObDMLStmt::is_generate_name(ObString &name) const
-{
-  return name.prefix_match("view") ||
-         name.prefix_match("temp") ||
-         name.prefix_match("func_table");
-}
-
-int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
-                                   const ObTableInHint &hint_table,
-                                   bool &may_appear) const
-{
-  int ret = OB_SUCCESS;
-  may_appear = false;
-  if (OB_FAIL(check_hint_table_matched_table_item(cs_type, hint_table, may_appear))) {
-    LOG_WARN("failed to check hint table matched table item", K(ret));
-  } else if (may_appear) {
-    /* do nohting */
-  } else {
-    ObSEArray<ObSelectStmt*, 4> child_stmts;
-    if (is_set_stmt() && OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
-      // for set stmt, do not check union set child stmt.
-      LOG_WARN("failed to get child stmts", K(ret));
-    } else if (!is_set_stmt() && OB_FAIL(get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
-    } else {
-      for (int64_t i = 0; !may_appear && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        if (OB_ISNULL(child_stmts.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->hint_table_may_used(cs_type, hint_table, may_appear)))) {
-          LOG_WARN("failed to check hint table may used", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDMLStmt::check_hint_table_matched_table_item(ObCollationType cs_type,
                                                    const ObTableInHint &hint_table,
                                                    bool &matched) const

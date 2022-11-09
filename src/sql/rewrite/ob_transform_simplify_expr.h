@@ -79,6 +79,10 @@ private:
   int inner_remove_dummy_case_when(ObQueryCtx* query_ctx,
                                    ObCaseOpRawExpr *case_expr,
                                    bool &trans_happened);
+
+  int flatten_stmt_exprs(ObDMLStmt *stmt, bool &trans_happened);
+  int flatten_join_condition_exprs(TableItem *table, bool &trans_happened);
+  int flatten_exprs(common::ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
 };
 
 }

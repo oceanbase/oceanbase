@@ -385,7 +385,6 @@ public:
 
   static int flatten_joined_table(ObDMLStmt *stmt);
 
-  static int flatten_expr(common::ObIArray<ObRawExpr*> &exprs);
   static int flatten_expr(ObRawExpr *expr,
                           common::ObIArray<ObRawExpr*> &flattened_exprs);
 

@@ -117,7 +117,6 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(GROUPBY_PUSHDOWN)
     TRANS_TYPE_TO_STR(GROUPBY_PULLUP)
     TRANS_TYPE_TO_STR(SUBQUERY_COALESCE)
-    TRANS_TYPE_TO_STR(WIN_GROUPBY)
     TRANS_TYPE_TO_STR(PREDICATE_MOVE_AROUND)
     TRANS_TYPE_TO_STR(NL_FULL_OUTER_JOIN)
     TRANS_TYPE_TO_STR(SEMI_TO_INNER)
@@ -913,6 +912,9 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
       } else if (is_disable && OB_FAIL(ctx_->add_used_trans_hint(myhint))) {
         LOG_WARN("failed to add used transform hint", K(ret));
       }
+    } else if ((ALL_COST_BASED_RULES & (1L << get_transformer_type())) &&
+               query_hint->global_hint_.disable_cost_based_transform()) {
+      /* disable transform by NO_COST_BASED_QUERY_TRANSFORMATION hint */
     } else {
       need_trans = true;
     }
