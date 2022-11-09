@@ -6306,6 +6306,15 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("access idxs is empty", K(ret));
       } else {
+        sql::ObExprResType result_type = expr->get_result_type();
+        if (result_type.get_length() == -1) {
+          if (result_type.is_varchar() || result_type.is_nvarchar2()) {
+            result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+          } else if (result_type.is_char() || result_type.is_nchar()) {
+            result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
+          }
+        }
+        expr->set_result_type(result_type);
         ObConstRawExpr *param_expr = static_cast<ObConstRawExpr*>(expr);
         const_cast<sql::ObExprResType &>(param_expr->get_result_type())
                                           .set_param(param_expr->get_value());

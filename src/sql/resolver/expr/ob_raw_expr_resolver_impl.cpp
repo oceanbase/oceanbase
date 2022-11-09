@@ -2384,6 +2384,16 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             c_expr->set_accuracy(param.get_accuracy());
             c_expr->set_result_flag(param.get_result_flag()); // not_null etc
             c_expr->set_param(param);
+
+            sql::ObExprResType result_type = c_expr->get_result_type();
+            if (result_type.get_length() == -1) {
+              if (result_type.is_varchar() || result_type.is_nvarchar2()) {
+                result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+              } else if (result_type.is_char() || result_type.is_nchar()) {
+                result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
+              }
+            }
+            c_expr->set_result_type(result_type);
           }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;
