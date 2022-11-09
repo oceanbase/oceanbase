@@ -210,6 +210,7 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
   } else {
     ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
     ObScale scale = json_arg->datum_meta_.scale_;
+    scale = (val_type == ObBitType) ? json_arg->datum_meta_.length_semantics_ : scale;
     if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL", K(ret));
