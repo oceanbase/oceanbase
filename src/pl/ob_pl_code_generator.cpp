@@ -7669,6 +7669,8 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
       LOG_WARN("failed to init augument", K(ret));
     } else if (OB_FAIL(prepare_external())) {
       LOG_WARN("failed to prepare external", K(ret));
+    } else if (lib::is_oracle_mode() && OB_FAIL(prepare_local_user_type())) {
+      LOG_WARN("failed to prepare local user type", K(ret));
     } else if (OB_FAIL(prepare_expression(pl_func))) {
       LOG_WARN("failed to prepare expression", K(ret));
     } else if (OB_FAIL(prepare_subprogram(pl_func))) {
