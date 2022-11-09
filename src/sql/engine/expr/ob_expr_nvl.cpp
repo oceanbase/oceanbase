@@ -32,8 +32,7 @@ int ObExprNvlUtil::calc_result_type(ObExprResType& type,
     LOG_WARN("get nvl type failed", K(ret), K(type1), K(type2));
   } else if (OB_UNLIKELY(type.is_invalid())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
-  }
-  if (OB_SUCC(ret) && ob_is_string_type(type.get_type())) {
+  } else if (ob_is_string_type(type.get_type())) {
     ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
     ObCollationType res_cs_type = CS_TYPE_INVALID;
     if (share::is_oracle_mode()) {
@@ -57,9 +56,11 @@ int ObExprNvlUtil::calc_result_type(ObExprResType& type,
       type.set_collation_level(res_cs_level);
       type.set_collation_type(res_cs_type);
     }
-  } else if (OB_SUCC(ret) && ob_is_raw(type.get_type())) {
+  } else if (ob_is_raw(type.get_type())) {
     type.set_collation_level(CS_LEVEL_NUMERIC);
     type.set_collation_type(CS_TYPE_BINARY);
+  } else if (ob_is_json(type.get_type())) {
+    type.set_collation_level(CS_LEVEL_IMPLICIT);
   }
   if (OB_SUCC(ret)) {
     type.set_length(MAX(type1.get_length(), type2.get_length()));
