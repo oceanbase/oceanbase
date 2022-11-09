@@ -326,7 +326,9 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
     ctx_.get_my_session()->set_inner_session();
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      if (OB_FAIL(pool->acquire(ctx_.get_my_session(), conn))) {
+      if (lib::is_oracle_mode() && OB_FAIL(pool->acquire(ctx_.get_my_session(), conn, true))) {
+        LOG_WARN("failed to acquire inner connection", K(ret));
+      } else if (lib::is_mysql_mode() && OB_FAIL(pool->acquire(tenant_id, conn, sql_proxy))) {
         LOG_WARN("failed to acquire inner connection", K(ret));
       } else if (OB_ISNULL(conn)) {
         ret = OB_ERR_UNEXPECTED;
