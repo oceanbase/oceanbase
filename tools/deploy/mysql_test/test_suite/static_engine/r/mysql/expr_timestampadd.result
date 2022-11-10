@@ -1,5 +1,4 @@
 result_format: 4
-
 drop table if exists t1;
 create table t1 (c1 int, c2 int unsigned, 
     c3 tinyint, c4 tinyint unsigned,
