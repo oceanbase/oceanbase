@@ -1884,7 +1884,11 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
     result_mgr_.reuse();
     if (!tablet_restore_ctx_.is_leader_) {
       if (OB_FAIL(tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(tablet_restore_ctx_.tablet_id_))) {
-        LOG_WARN("failed to remove tablet info", K(ret), K(tablet_restore_ctx_));
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to remove tablet info", K(ret), K(tablet_restore_ctx_));
+        }
       }
     }
 
