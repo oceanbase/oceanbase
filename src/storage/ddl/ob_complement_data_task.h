@@ -39,7 +39,7 @@ public:
   ObComplementDataParam():
     is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), 
     source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
-    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("ComplementData"), 
+    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("CompleteDataPar"), 
     row_store_type_(common::ENCODING_ROW_STORE), schema_version_(0), snapshot_version_(0),
     concurrent_cnt_(0), task_id_(0), execution_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
   {}
@@ -70,6 +70,7 @@ public:
     }
     data_table_schema_ = nullptr;
     hidden_table_schema_ = nullptr;
+    ranges_.reset();
     allocator_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     schema_version_ = 0;
@@ -106,7 +107,7 @@ struct ObComplementDataContext final
 public:
   ObComplementDataContext():
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
-    allocator_("ComplementData"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
+    allocator_("CompleteDataCtx"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);

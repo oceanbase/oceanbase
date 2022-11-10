@@ -131,18 +131,20 @@ int ObComplementDataParam::deep_copy_table_schemas(const ObTableSchema *data_tab
     LOG_WARN("invalid arguments", K(ret), KP(data_table_schema), KP(hidden_table_schema));
   } else {
     ObIAllocator &allocator = allocator_;
-    const int64_t alloc_size = 2 * sizeof(ObTableSchema);
-    char *buf = nullptr;
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+    const int64_t alloc_size = sizeof(ObTableSchema);
+    char *buf_for_data_schema = nullptr;
+    char *buf_for_hidden_schema = nullptr;
+    if (OB_ISNULL(buf_for_data_schema = static_cast<char *>(allocator.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", K(ret));
+      LOG_WARN("alloc memory failed", K(ret));
+    } else if (OB_ISNULL(buf_for_hidden_schema = static_cast<char *>(allocator.alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
     } else {
       ObTableSchema *deep_copy_data_table_schema = nullptr;
       ObTableSchema *deep_copy_hidden_table_schema = nullptr;
-      deep_copy_data_table_schema = new (buf) ObTableSchema(&allocator);
-      buf += sizeof(ObTableSchema);
-      deep_copy_hidden_table_schema = new (buf) ObTableSchema(&allocator);
-      buf += sizeof(ObTableSchema);
+      deep_copy_data_table_schema = new (buf_for_data_schema) ObTableSchema(&allocator);
+      deep_copy_hidden_table_schema = new (buf_for_hidden_schema) ObTableSchema(&allocator);
       if (OB_FAIL(deep_copy_data_table_schema->assign(*data_table_schema))) {
         LOG_WARN("fail to assign data table schema", K(ret));
       } else if (OB_FAIL(deep_copy_hidden_table_schema->assign(*hidden_table_schema))) {
@@ -151,11 +153,23 @@ int ObComplementDataParam::deep_copy_table_schemas(const ObTableSchema *data_tab
         data_table_schema_ = deep_copy_data_table_schema;
         hidden_table_schema_ = deep_copy_hidden_table_schema;
       }
-      if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
-        deep_copy_data_table_schema->~ObTableSchema();
-        deep_copy_hidden_table_schema->~ObTableSchema();
-        allocator.free(buf);
-        buf = nullptr;
+      if (OB_FAIL(ret)) {
+        if (nullptr != deep_copy_data_table_schema) {
+          deep_copy_data_table_schema->~ObTableSchema();
+          deep_copy_data_table_schema = nullptr;
+        }
+        if (nullptr != buf_for_data_schema) {
+          allocator_.free(buf_for_data_schema);
+          buf_for_data_schema = nullptr;
+        }
+        if (nullptr != deep_copy_hidden_table_schema) {
+          deep_copy_hidden_table_schema->~ObTableSchema();
+          deep_copy_hidden_table_schema = nullptr;
+        }
+        if (nullptr != buf_for_hidden_schema) {
+          allocator_.free(buf_for_hidden_schema);
+          buf_for_hidden_schema = nullptr;
+        }
       }
     }
   }

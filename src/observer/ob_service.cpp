@@ -1846,6 +1846,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
         || DDL_COLUMN_REDEFINITION == arg.ddl_type_) {
       MTL_SWITCH(arg.tenant_id_) {
+        int saved_ret = OB_SUCCESS;
         ObTenantDagScheduler *dag_scheduler = nullptr;
         ObComplementDataDag *dag = nullptr;
         if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
@@ -1861,19 +1862,18 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         } else if (OB_FAIL(dag->create_first_task())) {
           LOG_WARN("create first task failed", K(ret));
         } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
-          if (OB_EAGAIN == ret) {
-            ret = OB_SUCCESS;
-            LOG_INFO("drop column dag already exists, no need to schedule once again");
-          } else if (OB_SIZE_OVERFLOW == ret) {
-            ret = OB_EAGAIN;
-          } else {
-            LOG_WARN("fail to add dag to queue", K(ret));
-          }
+          saved_ret = ret;
+          LOG_WARN("add dag failed", K(ret), K(arg));
         }
         if (OB_FAIL(ret) && OB_NOT_NULL(dag)) {
           (void) dag->handle_init_failed_ret_code(ret);
           dag_scheduler->free_dag(*dag);
           dag = nullptr;
+        }
+        if (OB_FAIL(ret)) {
+          // RS does not retry send RPC to tablet leader when the dag exists.
+          ret = OB_EAGAIN == saved_ret ? OB_SUCCESS : ret;
+          ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
         }
       }
       LOG_INFO("obs get rpc to build drop column dag", K(ret));
