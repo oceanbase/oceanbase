@@ -555,11 +555,9 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
       LOG_WARN("failed to check major sstable need copy", K(ret), K(param), K(tablet_handle));
     }
   } else if (param.table_key_.is_minor_sstable()) {
-    need_copy = true;
-    //TODO(muwei.ym) reuse local minor sstable
-    //if (OB_FAIL(check_minor_sstable_need_copy_(param, tablet_handle, need_copy))) {
-    //  LOG_WARN("failed to check minor sstable need copy", K(ret), K(param), K(tablet_handle));
-    //}
+    if (OB_FAIL(check_minor_sstable_need_copy_(param, tablet_handle, need_copy))) {
+      LOG_WARN("failed to check minor sstable need copy", K(ret), K(param), K(tablet_handle));
+    }
   } else if (param.table_key_.is_ddl_sstable()) {
     if (OB_FAIL(check_ddl_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check ddl sstable need copy", K(ret), K(param), K(tablet_handle));

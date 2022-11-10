@@ -113,6 +113,7 @@ ObMemtable::ObMemtable()
       state_(ObMemtableState::INVALID),
       freeze_state_(ObMemtableFreezeState::INVALID),
       timestamp_(0),
+      migration_clog_checkpoint_ts_(ObLogTsRange::MIN_TS),
       is_tablet_freeze_(false),
       is_force_freeze_(false),
       is_flushed_(false),
@@ -250,6 +251,7 @@ void ObMemtable::destroy()
   unset_active_memtable_logging_blocked_ = false;
   resolve_active_memtable_left_boundary_ = true;
   max_end_log_ts_ = ObLogTsRange::MIN_TS;
+  migration_clog_checkpoint_ts_ = ObLogTsRange::MIN_TS;
   rec_log_ts_ = INT64_MAX;
   read_barrier_ = false;
   is_tablet_freeze_ = false;
@@ -1367,7 +1369,8 @@ int64_t ObMemtable::dec_write_ref()
     } else {
       if (0 == get_unsynced_cnt()) {
         resolve_right_boundary();
-        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_log_ts(), get_snapshot_version()))) {
+        int64_t new_start_log_ts = MAX(get_end_log_ts(), get_migration_clog_checkpoint_ts());
+        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, new_start_log_ts, get_snapshot_version()))) {
           TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id), KPC(this));
         }
       }
@@ -1400,7 +1403,8 @@ int ObMemtable::dec_unsynced_cnt()
   } else if (is_frozen && 0 == write_ref_cnt && 0 == unsynced_cnt) {
     resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] dec_unsynced_cnt", K(ls_id), KPC(this));
-    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_log_ts(), get_snapshot_version()))) {
+    int64_t new_start_log_ts = MAX(get_end_log_ts(), get_migration_clog_checkpoint_ts());
+    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, new_start_log_ts, get_snapshot_version()))) {
       TRANS_LOG(WARN, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
     }
     TRANS_LOG(INFO, "memtable log synced", K(ret), K(ls_id), KPC(this));
@@ -1432,6 +1436,23 @@ int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
 {
   UNUSED(schema_version);
   return OB_NOT_SUPPORTED;
+}
+
+int ObMemtable::set_migration_clog_checkpoint_ts(const int64_t clog_checkpoint_ts)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else if (clog_checkpoint_ts <= ObLogTsRange::MIN_TS) {
+    ret = OB_LOG_TS_OUT_OF_BOUND;
+    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
+  } else {
+    ATOMIC_STORE(&migration_clog_checkpoint_ts_, clog_checkpoint_ts);
+  }
+
+  return ret;
 }
 
 int ObMemtable::set_snapshot_version(const int64_t snapshot_version)

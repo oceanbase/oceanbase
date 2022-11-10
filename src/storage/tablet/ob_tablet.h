@@ -346,10 +346,11 @@ public:
       const ObTabletTxMultiSourceDataUnit &tx_data,
       const int64_t memtable_log_ts,
       const bool for_replay,
-      const bool update_cache,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
   int set_tx_data_in_tablet_pointer();
+  int set_memtable_clog_checkpoint_ts(
+      const ObMigrationTabletParam *tablet_meta);
 
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema));
 private:
@@ -447,13 +448,13 @@ private:
   int set_tx_data(
       const ObTabletTxMultiSourceDataUnit &tx_data,
       const bool for_replay,
-      const bool update_cache,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
   int get_msd_from_memtable(memtable::ObIMultiSourceDataUnit &msd) const;
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
+
 private:
   static const int32_t TABLET_VERSION = 1;
 private:

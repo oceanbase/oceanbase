@@ -805,6 +805,7 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
       ctx_->arg_.action_, action_restore_status))) {
     LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(ctx_));
   } else {
+    ctx_->tablet_id_array_.reset();
     bool can_change = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->arg_.tablet_id_array_.count(); ++i) {
       const ObTabletID &tablet_id = ctx_->arg_.tablet_id_array_.at(i);

@@ -40,7 +40,8 @@ ObTabletTxMultiSourceDataUnit::~ObTabletTxMultiSourceDataUnit()
 }
 
 ObTabletTxMultiSourceDataUnit::ObTabletTxMultiSourceDataUnit(const ObTabletTxMultiSourceDataUnit &other)
-  : version_(other.version_),
+  : ObIMultiSourceDataUnit(other),
+    version_(other.version_),
     length_(other.length_),
     tx_id_(other.tx_id_),
     tx_log_ts_(other.tx_log_ts_),
@@ -51,6 +52,7 @@ ObTabletTxMultiSourceDataUnit::ObTabletTxMultiSourceDataUnit(const ObTabletTxMul
 ObTabletTxMultiSourceDataUnit &ObTabletTxMultiSourceDataUnit::operator=(const ObTabletTxMultiSourceDataUnit &other)
 {
   if (this != &other) {
+    ObIMultiSourceDataUnit::operator=(other);
     version_ = other.version_;
     length_ = other.length_;
     tx_id_ = other.tx_id_;

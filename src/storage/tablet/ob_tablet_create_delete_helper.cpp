@@ -296,11 +296,10 @@ int ObTabletCreateDeleteHelper::handle_special_tablets_for_replay(
         tx_data.tx_id_ = trans_flags.tx_id_;
         tx_data.tx_log_ts_ = trans_flags.log_ts_;
         tx_data.tablet_status_ = ObTabletStatus::CREATING;
-        const bool update_cache = false;
+        const MemtableRefOp ref_op = MemtableRefOp::NONE;
 
-        if (OB_FAIL(tablet_handle.get_obj()->set_tx_data(tx_data, trans_flags.for_replay_,
-            update_cache, MemtableRefOp::NONE/*ref_op*/))) {
-          LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags));
+        if (OB_FAIL(tablet_handle.get_obj()->set_tx_data(tx_data, trans_flags.for_replay_, ref_op))) {
+          LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(ref_op));
         } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
           LOG_WARN("failed to insert in tx tablet", K(ret));
         }
@@ -2291,10 +2290,9 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
     tx_data.tx_id_ = tx_id;
     tx_data.tx_log_ts_ = log_ts;
     tx_data.tablet_status_ = ObTabletStatus::CREATING;
-    const bool update_cache = trans_flags.for_replay_; // if for replay is true, we should update cache in tablet pointer
 
-    if (OB_FAIL(tablet->set_tx_data(tx_data, trans_flags.for_replay_, update_cache, ref_op))) {
-      LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(update_cache), K(ref_op));
+    if (OB_FAIL(tablet->set_tx_data(tx_data, trans_flags.for_replay_, ref_op))) {
+      LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(ref_op));
     } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
       LOG_WARN("failed to insert in tx tablet", K(ret), K(key));
     }

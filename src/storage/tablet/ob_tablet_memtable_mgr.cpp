@@ -217,7 +217,8 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
           last_frozen_memtable->resolve_right_boundary();
           TRANS_LOG(INFO, "[resolve_right_boundary] create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
-            memtable->resolve_left_boundary(last_frozen_memtable->get_end_log_ts());
+            int64_t new_start_log_ts = MAX(last_frozen_memtable->get_end_log_ts(), last_frozen_memtable->get_migration_clog_checkpoint_ts());
+            memtable->resolve_left_boundary(new_start_log_ts);
           }
         }
       // there is no frozen memtable and new sstable will not be generated,

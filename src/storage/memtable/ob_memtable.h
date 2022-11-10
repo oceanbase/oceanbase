@@ -432,6 +432,8 @@ public:
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
+  int set_migration_clog_checkpoint_ts(const int64_t clog_checkpoint_ts);
+  int64_t get_migration_clog_checkpoint_ts() { return ATOMIC_LOAD(&migration_clog_checkpoint_ts_); }
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
@@ -532,6 +534,7 @@ private:
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
+  int64_t migration_clog_checkpoint_ts_;
   bool is_tablet_freeze_;
   bool is_force_freeze_;
   bool is_flushed_;

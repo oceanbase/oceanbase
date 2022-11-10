@@ -1230,18 +1230,27 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     LOG_WARN("failed to add need add minor tables", K(ret), K(param));
   } else if (OB_FAIL(old_store.minor_tables_.get_all_tables(old_minor_tables))) {
     LOG_WARN("failed to get old minor tables", K(ret), K(old_store));
-  } else if (OB_FAIL(check_minor_tables_continue_(need_add_minor_tables.count(), need_add_minor_tables.get_data()))) {
-    LOG_WARN("failed to check minor tables continue", K(ret), K(need_add_minor_tables), K(param));
   } else if (OB_FAIL(check_old_store_minor_sstables_(old_minor_tables))) {
     LOG_WARN("failed to check old store minor sstables", K(ret), K(old_minor_tables));
   } else if (OB_FAIL(combin_ha_minor_sstables_(old_minor_tables, need_add_minor_tables, new_minor_tables))) {
     LOG_WARN("failed to combin ha minor sstables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) { // no minor tables
-    LOG_INFO("minor tables is empty, skip it", K(ret), K(new_minor_tables));
+    if (tablet_ptr_->get_tablet_meta().start_scn_ != tablet_ptr_->get_tablet_meta().clog_checkpoint_ts_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
+    } else {
+      LOG_INFO("minor tables is empty, skip it", K(ret), K(new_minor_tables));
+    }
   } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(new_minor_tables))) {
     LOG_WARN("failed to sort minor tables", K(ret));
   } else if (OB_FAIL(cut_ha_sstable_log_ts_range_(new_minor_tables))) {
     LOG_WARN("failed to cut ha sstable log ts range", K(ret), K(old_store), K(param));
+  } else if (OB_FAIL(check_minor_tables_continue_(new_minor_tables.count(), new_minor_tables.get_data()))) {
+    LOG_WARN("minor tables is not continue", K(ret), K(param), K(new_minor_tables), K(old_store));
+  } else if (new_minor_tables.at(0)->get_start_log_ts() != tablet_ptr_->get_tablet_meta().start_scn_
+      || new_minor_tables.at(new_minor_tables.count() - 1)->get_end_log_ts() != tablet_ptr_->get_tablet_meta().clog_checkpoint_ts_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
   } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, new_minor_tables, inc_pos))) {
     LOG_WARN("failed to init minor_tables", K(ret));
   } else {
