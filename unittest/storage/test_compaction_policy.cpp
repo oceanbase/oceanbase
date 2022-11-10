@@ -711,25 +711,11 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ObGetMergeTablesParam param;
   param.merge_type_ = ObMergeType::MINI_MERGE;
   ObGetMergeTablesResult result;
-  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3, result.handle_.get_count());
-
   tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_ts_ = 300;
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
-  result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(result.update_tablet_directly_, true);
-
-  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_ts_ = 280;
-  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 280;
-  result.reset();
-  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3, result.handle_.get_count());
-  ASSERT_EQ(300, result.log_ts_range_.end_log_ts_);
-  ASSERT_EQ(result.update_tablet_directly_, true);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+  ASSERT_EQ(result.update_tablet_directly_, false);
 }
 
 TEST_F(TestCompactionPolicy, check_minor_merge_basic)
@@ -877,7 +863,7 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
 int main(int argc, char **argv)
 {
   system("rm -rf test_compaction_policy.log");
-  OB_LOGGER.set_file_name("test_compaction_policy.log", true);
+  OB_LOGGER.set_file_name("test_compaction_policy.log");
   OB_LOGGER.set_log_level("DEBUG");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

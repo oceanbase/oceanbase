@@ -758,15 +758,15 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
   } else if (schema_ctx_.storage_schema_->get_schema_version() > old_tablet->get_storage_schema().get_schema_version()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can't have larger storage schema", K(ret), K(schema_ctx_.storage_schema_), K(old_tablet->get_storage_schema()));
+  } else if (OB_UNLIKELY(get_merge_table_result.log_ts_range_.end_log_ts_ > old_tablet->get_tablet_meta().clog_checkpoint_ts_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can't have larger end_log_ts", K(ret), K(get_merge_table_result), K(old_tablet->get_tablet_meta()));
   } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()) {
     // need write slog to update snapshot_version on tablet_meta
     update_table_store_flag = true;
-  } else if (get_merge_table_result.log_ts_range_.end_log_ts_ > old_tablet->get_clog_checkpoint_ts()) {
-    // need write slog to update clog_checkpoint_log_ts on tablet_meta
-    update_table_store_flag = true;
   }
 
-  const int64_t release_memtable_log_ts = get_merge_table_result.log_ts_range_.end_log_ts_;
+  const int64_t release_memtable_log_ts = old_tablet->get_clog_checkpoint_ts();
   if (OB_FAIL(ret)) {
   } else if (update_table_store_flag && OB_FAIL(update_tablet_directly(get_merge_table_result))) {
     LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result), K(update_table_store_flag));
@@ -783,7 +783,6 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
   int ret = OB_SUCCESS;
   const int64_t rebuild_seq = ls_handle_.get_ls()->get_rebuild_seq();
   log_ts_range_ = get_merge_table_result.log_ts_range_;
-  int64_t clog_checkpoint_ts = get_merge_table_result.log_ts_range_.end_log_ts_;
 
   ObTableHandleV2 empty_table_handle;
   ObUpdateTableStoreParam param(
@@ -793,7 +792,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
       schema_ctx_.storage_schema_,
       rebuild_seq,
       param_.is_major_merge(),
-      clog_checkpoint_ts);
+      0/*clog_checkpoint_ts*/);
   ObTabletHandle new_tablet_handle;
   if (OB_FAIL(ls_handle_.get_ls()->update_tablet_table_store(
       param_.tablet_id_, param, new_tablet_handle))) {
