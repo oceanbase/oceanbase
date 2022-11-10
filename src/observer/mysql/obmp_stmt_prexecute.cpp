@@ -297,7 +297,7 @@ int ObMPStmtPrexecute::before_process()
               // other exec_mode set use ==
               is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
               exec_mode_ = exec_mode_ & (0xffffffff - OB_OCI_COMMIT_ON_SUCCESS);
-              if (OB_OCI_BATCH_ERRORS == exec_mode_) {
+              if (OB_OCI_BATCH_ERRORS == exec_mode_ && !is_pl_stmt(stmt_type_)) {
                 set_save_exception(true);
               }
               if (OB_SUCC(ret)) {

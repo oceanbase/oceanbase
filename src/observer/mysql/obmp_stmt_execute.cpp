@@ -761,6 +761,10 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
     const int64_t input_param_num = ps_session_info->get_param_count();
     stmt_type_ = ps_session_info->get_stmt_type();
     int8_t new_param_bound_flag = 0;
+    if (is_pl_stmt(stmt_type_)) {
+      // pl not support save exception
+      is_save_exception_ = 0;
+    }
     // for returning into,
     // all_param_num  = input_param_num + returning_param_num
     params_num_ = (all_param_num > input_param_num) ? all_param_num : input_param_num;
