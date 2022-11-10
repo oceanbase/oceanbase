@@ -448,6 +448,12 @@ public:
   int64_t get_register_op_id() { return register_op_id_; }
   void set_register_op_id(int64_t id) { register_op_id_ = id; }
   bool is_rt_monitor_node_registered() { return OB_INVALID_ID != register_op_id_; }
+  void set_mem_attr(const common::ObMemAttr& attr)
+  {
+    sche_allocator_.set_attr(attr);
+    eval_res_allocator_.set_attr(attr);
+    eval_tmp_allocator_.set_attr(attr);
+  }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);

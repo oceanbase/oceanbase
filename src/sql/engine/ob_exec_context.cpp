@@ -65,8 +65,7 @@ void ObOpKitStore::destroy()
 }
 
 ObExecContext::ObExecContext(ObIAllocator &allocator)
-  : sche_allocator_("ExecCtx", OB_MALLOC_NORMAL_BLOCK_SIZE),
-    allocator_(allocator),
+  : allocator_(allocator),
     phy_op_size_(0),
     phy_op_ctx_store_(NULL),
     phy_op_input_store_(NULL),
