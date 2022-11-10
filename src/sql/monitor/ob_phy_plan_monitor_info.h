@@ -72,6 +72,7 @@ public:
   }
   void set_request_id(int64_t request_id) { request_id_ = request_id; }
   void set_plan_id(int64_t plan_id) {plan_id_ = plan_id; }
+  int64_t &get_request_id() { return request_id_; }
   int64_t get_request_id() const { return request_id_; }
   int64_t get_plan_id() const { return plan_id_; }
   int64_t get_execution_time() const { return execution_time_; }
