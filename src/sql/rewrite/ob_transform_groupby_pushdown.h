@@ -96,6 +96,8 @@ private:
                                ObIArray<PushDownParam> &params,
                                ObRawExpr *expr,
                                bool &is_valid);
+  
+  int is_lob_filter(ObRawExpr *expr, bool &has);
 
   int check_outer_join_aggr(ObSelectStmt *stmt,
                             JoinedTable *joined_table,
