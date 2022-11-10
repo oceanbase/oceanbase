@@ -183,7 +183,9 @@ int ObTxRetainCtxMgr::push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func)
 {
   int ret = OB_SUCCESS;
 
+  ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinWLockGuard guard(retain_ctx_lock_);
+  tg.click();
 
   if (!retain_func->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -198,7 +200,9 @@ int ObTxRetainCtxMgr::push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func)
 int ObTxRetainCtxMgr::try_gc_retain_ctx(storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
+  ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinWLockGuard guard(retain_ctx_lock_);
+  tg.click();
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -213,7 +217,9 @@ int ObTxRetainCtxMgr::force_gc_retain_ctx()
 {
   int ret = OB_SUCCESS;
 
+  ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinWLockGuard guard(retain_ctx_lock_);
+  tg.click();
 
   if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr))) {
     TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
@@ -226,7 +232,9 @@ int ObTxRetainCtxMgr::print_retain_ctx_info(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
 
+  ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinRLockGuard guard(retain_ctx_lock_);
+  tg.click();
   if (!retain_ctx_list_.empty()) {
     TRANS_LOG(INFO, "[RetainCtxMgr] print retain ctx", K(ls_id), KPC(this),
               KPC(retain_ctx_list_.get_first()), KPC(retain_ctx_list_.get_last()));
@@ -241,7 +249,9 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
   const int64_t CUR_LS_CNT = MTL(ObLSService *)->get_ls_map()->get_ls_count();
   const int64_t IDLE_GC_INTERVAL = 30 * 60 * 1000 * 1000; // 30 min
 
+  ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinRLockGuard guard(retain_ctx_lock_);
+  tg.click();
 
   const int64_t cur_time = ObTimeUtility::current_time();
 
