@@ -41,6 +41,7 @@ public:
 
   int64_t start_ts_;
   int64_t finish_ts_;
+  int64_t rebuild_seq_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -48,7 +49,8 @@ public:
       K_(arg),
       K_(task_id),
       K_(start_ts),
-      K_(finish_ts));
+      K_(finish_ts),
+      K_(rebuild_seq));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationCtx);
 };
@@ -61,10 +63,11 @@ public:
   virtual bool is_valid() const override;
   void reset();
 
-  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result));
+  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   int32_t result_;
+  int64_t rebuild_seq_;
 };
 
 class ObLSCompleteMigrationDagNet: public share::ObIDagNet

@@ -932,8 +932,7 @@ int ObLS::finish_slog_replay()
     LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status),
              K(new_migration_status));
   } else if (can_update_ls_meta(ls_meta_.ls_create_status_) &&
-             OB_FAIL(set_migration_status_without_lock(new_migration_status,
-                                                       false /* no need write slog */))) {
+             OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
   } else if (is_need_gc()) {
     LOG_INFO("this ls should be gc later", KPC(this));
@@ -1368,5 +1367,110 @@ int ObLS::diagnose(DiagnoseInfo &info) const
   STORAGE_LOG(INFO, "diagnose finish", K(ret), K(info), K(ls_id));
   return ret;
 }
+
+int ObLS::set_migration_status(
+    const ObMigrationStatus &migration_status,
+    const int64_t rebuild_seq,
+    const bool write_slog)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSRestoreStatus restore_status;
+  int64_t read_lock = LSLOCKLS;
+  int64_t write_lock = LSLOCKLOGMETA;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
+  } else if (!ObMigrationStatusHelper::is_valid(migration_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set migration status get invalid argument", K(ret), K(migration_status));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
+  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
+  } else if (ls_meta_.get_rebuild_seq() != rebuild_seq) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "rebuild seq not match, cannot update migration status", K(ret),
+        K(ls_meta_), K(rebuild_seq));
+  } else if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_meta_.set_migration_status(migration_status, write_slog))) {
+    LOG_WARN("failed to set migration status", K(ret), K(migration_status));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
+      && restore_status.is_restore_none()) {
+    ls_tablet_svr_.enable_to_read();
+  } else {
+    ls_tablet_svr_.disable_to_read();
+  }
+  return ret;
+}
+
+int ObLS::set_restore_status(
+    const share::ObLSRestoreStatus &restore_status,
+    const int64_t rebuild_seq)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  int64_t read_lock = LSLOCKLS;
+  int64_t write_lock = LSLOCKLOGMETA;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
+  } else if (!restore_status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set restore status get invalid argument", K(ret), K(restore_status));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
+  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
+  } else if (ls_meta_.get_rebuild_seq() != rebuild_seq) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "rebuild seq not match, cannot update restore status", K(ret),
+        K(ls_meta_), K(rebuild_seq));
+  } else if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_meta_.set_restore_status(restore_status))) {
+    LOG_WARN("failed to set restore status", K(ret), K(restore_status));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
+      && restore_status.is_restore_none()) {
+    ls_tablet_svr_.enable_to_read();
+  } else {
+    ls_tablet_svr_.disable_to_read();
+  }
+  return ret;
+}
+
+int ObLS::set_ls_rebuild()
+{
+  int ret = OB_SUCCESS;
+  int64_t read_lock = LSLOCKLS;
+  int64_t write_lock = LSLOCKLOGMETA;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
+  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_meta_.set_ls_rebuild())) {
+    LOG_WARN("failed to set ls rebuild", K(ret), K(ls_meta_));
+  } else {
+    ls_tablet_svr_.disable_to_read();
+  }
+  return ret;
+}
+
+
 }
 }

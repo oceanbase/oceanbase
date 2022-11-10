@@ -88,6 +88,8 @@ public:
   void stop() { ATOMIC_STORE(&is_stop_, true); } // when remove ls, set this
   int safe_to_destroy(bool &is_safe);
   bool is_stop() { return is_stop_; }
+  int update_rebuild_seq();
+  int64_t get_rebuild_seq();
 private:
   int check_before_do_restore_(bool &can_do_restore);
   int update_state_handle_();
@@ -106,6 +108,7 @@ private:
   ObTenantRestoreCtx ls_restore_arg_;
   ObILSRestoreState *state_handler_;
   common::ObFIFOAllocator allocator_;
+  int64_t rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreHandler);
 };
 
@@ -170,6 +173,9 @@ protected:
 
   int enable_replay_();
   void disable_replay_();
+  int update_restore_status_(
+      storage::ObLS &ls,
+      const share::ObLSRestoreStatus &next_status);
 
 protected:
   bool is_inited_;

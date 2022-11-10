@@ -201,20 +201,6 @@ int64_t ObLSMeta::get_rebuild_seq() const
   return rebuild_seq_;
 }
 
-int ObLSMeta::inc_rebuild_seq()
-{
-  ObSpinLockTimeGuard guard(lock_);
-  ObLSMeta tmp(*this);
-  ++tmp.rebuild_seq_;
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(write_slog_(tmp))) {
-    LOG_WARN("rebuild_lsn write slog failed", K(ret));
-  } else {
-    ++rebuild_seq_;
-  }
-  return ret;
-}
-
 int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
                                    const bool write_slog)
 {
@@ -625,6 +611,25 @@ int ObLSMeta::update_id_meta(const int64_t service_type,
   LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_log_ts),
                             K(*this));
 
+  return ret;
+}
+
+int ObLSMeta::get_migration_and_restore_status(
+    ObMigrationStatus &migration_status,
+    share::ObLSRestoreStatus &ls_restore_status)
+{
+  int ret = OB_SUCCESS;
+  migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ls_restore_status = ObLSRestoreStatus::LS_RESTORE_STATUS_MAX;
+
+  ObSpinLockTimeGuard guard(lock_);
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls meta is not valid, cannot get", K(ret), K(*this));
+  } else {
+    migration_status = migration_status_;
+    ls_restore_status = restore_status_;
+  }
   return ret;
 }
 

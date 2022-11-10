@@ -84,13 +84,14 @@ void ObLSCompleteMigrationCtx::reuse()
 ObLSCompleteMigrationParam::ObLSCompleteMigrationParam()
   : arg_(),
     task_id_(),
-    result_(OB_SUCCESS)
+    result_(OB_SUCCESS),
+    rebuild_seq_(0)
 {
 }
 
 bool ObLSCompleteMigrationParam::is_valid() const
 {
-  return arg_.is_valid() && !task_id_.is_invalid();
+  return arg_.is_valid() && !task_id_.is_invalid() && rebuild_seq_ >= 0;
 }
 
 void ObLSCompleteMigrationParam::reset()
@@ -98,6 +99,7 @@ void ObLSCompleteMigrationParam::reset()
   arg_.reset();
   task_id_.reset();
   result_ = OB_SUCCESS;
+  rebuild_seq_ = 0;
 }
 
 
@@ -129,6 +131,7 @@ int ObLSCompleteMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_.tenant_id_ = MTL_ID();
     ctx_.arg_ = init_param->arg_;
     ctx_.task_id_ = init_param->task_id_;
+    ctx_.rebuild_seq_ = init_param->rebuild_seq_;
     if (OB_SUCCESS != init_param->result_) {
       if (OB_FAIL(ctx_.set_result(init_param->result_, false /*allow_retry*/))) {
         LOG_WARN("failed to set result", K(ret), KPC(init_param));
@@ -335,7 +338,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
-        ObLSLockGuard lock_ls(ls, true/*rdlock*/);
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
           LOG_WARN("failed to get migration status", K(ret), K(ctx_));
         } else if (ctx_.is_failed()) {
@@ -359,7 +361,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         }
 
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ls->set_migration_status_without_lock(new_migration_status))) {
+        } else if (OB_FAIL(ls->set_migration_status(new_migration_status, ctx_.rebuild_seq_))) {
           LOG_WARN("failed to set migration status", K(ret), K(current_migration_status), K(new_migration_status), K(ctx_));
         } else {
           is_finish = true;
@@ -1180,6 +1182,7 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
+  int64_t rebuild_seq = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1189,7 +1192,7 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->set_migration_status(hold_status))) {
+  } else if (OB_FAIL(ls->set_migration_status(hold_status, rebuild_seq))) {
     LOG_WARN("failed to set migration status", K(ret), KPC(ls));
   } else {
 #ifdef ERRSIM

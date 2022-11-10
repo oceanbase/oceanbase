@@ -49,7 +49,6 @@ public:
   void reset();
   bool is_valid() const;
   int64_t get_rebuild_seq() const;
-  int inc_rebuild_seq();
   int set_migration_status(const ObMigrationStatus &migration_status,
                            const bool write_slog = true);
   int get_migration_status (ObMigrationStatus &migration_status) const;
@@ -82,6 +81,10 @@ public:
   int build_saved_info();
   int set_saved_info(const ObLSSavedInfo &saved_info);
   int clear_saved_info();
+  int get_migration_and_restore_status(
+      ObMigrationStatus &migration_status,
+      share::ObLSRestoreStatus &ls_restore_status);
+
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

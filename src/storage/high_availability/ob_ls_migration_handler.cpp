@@ -404,7 +404,6 @@ int ObLSMigrationHandler::add_ls_migration_task(
       ObLSMigrationTask task;
       task.task_id_ = task_id;
       task.arg_ = arg;
-
       if (OB_FAIL(task_list_.push_back(task))) {
         LOG_WARN("failed to push task into list", K(ret), K(task));
       } else {
@@ -878,6 +877,7 @@ int ObLSMigrationHandler::schedule_complete_ls_dag_net_(
     ObLSCompleteMigrationParam param;
     param.arg_ = task.arg_;
     param.task_id_ = task.task_id_;
+    param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(get_result_(result))) {
       LOG_WARN("failed to get result", K(ret), KPC(ls_), K(task));

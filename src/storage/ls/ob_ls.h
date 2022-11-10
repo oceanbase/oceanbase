@@ -320,8 +320,7 @@ public:
   int update_id_meta_without_writing_slog(const int64_t service_type,
                                           const int64_t limited_id,
                                           const int64_t latest_log_ts);
-  // int set_ls_rebuild();
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_ls_rebuild);
+  int set_ls_rebuild();
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_gc_state);
@@ -345,24 +344,18 @@ public:
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, update_ls_meta);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_ts, int64_t);
-  // set restore status
-  // @param [in] restore status.
-  // int set_restore_status(const share::ObLSRestoreStatus &status);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_restore_status);
-  // int set_restore_status_without_lock(const share::ObLSRestoreStatus &status);
-  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_restore_status);
+
+  int set_restore_status(
+      const share::ObLSRestoreStatus &restore_status,
+      const int64_t rebuild_seq);
   // get restore status
   // @param [out] restore status.
   // int get_restore_status(share::ObLSRestoreStatus &status);
   DELEGATE_WITH_RET(ls_meta_, get_restore_status, int);
-  // set migration status
-  // @param [in] migration status.
-  // int set_migration_status_without_lock(const ObMigrationStatus &migration_status,
-  //                                       const bool write_slog = true);
-  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_migration_status);
-  // int set_migration_status(const ObMigrationStatus &migration_status,
-  //                          const bool write_slog = true);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_migration_status);
+  int set_migration_status(
+      const ObMigrationStatus &migration_status,
+      const int64_t rebuild_seq,
+      const bool write_slog = true);
   // get migration status
   // @param [out] migration status.
   // int get_migration_status(ObMigrationstatus &status);
@@ -394,6 +387,7 @@ public:
   // @param [out] meta_package
   // @param [out] tablet_ids
   int get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, common::ObIArray<common::ObTabletID> &tablet_ids);
+  DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
 
   // ObLSTabletService interface:
   // create tablets in a ls
@@ -441,7 +435,8 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_restore_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_migration_tablet, int);
-
+  DELEGATE_WITH_RET(ls_tablet_svr_, enable_to_read, void);
+  DELEGATE_WITH_RET(ls_tablet_svr_, disable_to_read, void);
 
   // ObLockTable interface:
   // check whether the lock op is conflict with exist lock.
