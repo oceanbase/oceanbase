@@ -562,7 +562,25 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
           LOG_WARN("fail to find zone", KR(ret), K_(tenant_id), K(zone));
           if (OB_ENTRY_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
-          }
+          } 
+        } else if (info.broadcast_scn_ > global_broadcast_scn) {
+          // broadcast_scn of zones here may be not equal to the global_broadcast_scn above,
+          // since merge_info can be reload at any time.
+          // 1) Larger:  e.g., broadcast_scn (that has increased) of zones is reload in one
+          // new epoch, while global_broadcast_scn is the one generated in one old epoch.
+          // https://work.aone.alibaba-inc.com/issue/46027393
+          // 2) Smaller: broadcast_scn of new added zones may be smaller than global_broadcast_scn.
+          // 3) Equal:   the common case.
+
+          // The check_merge_progress above is based on global_broadcast_scn. Hence, 
+          // if broadcast_scn of one zone here is larger than global_broadcast_scn, then
+          // the check_merge_progress above is not enough. Need to recheck merge progress
+          // based on one global_broadcast_scn that is equal to or larger than broadcast_scn
+          // of all these zones. Note that, the info log below will be followed by one warn log
+          // with error code OB_FREEZE_SERVICE_EPOCH_MISMATCH.
+          all_merged = false;  // treat merged as false, thus all_merged is false too
+          LOG_INFO("broadcast_scn of this zone is larger than global_broadcast_scn, need to "
+            "recheck merge progress again", K_(tenant_id), K(zone), K(global_broadcast_scn));
         } else {
           merged = (0 == progress->unmerged_tablet_cnt_);
           if (!merged) {
