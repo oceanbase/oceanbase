@@ -25,7 +25,7 @@ ObMonitorInfoManager::ObMonitorInfoManager()
 {
   memory_limit_ = min(
       MAX_MEMORY_SIZE,
-      static_cast<int64_t>(static_cast<double>(GCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
+      static_cast<int64_t>(static_cast<double>(GMEMCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
 }
 
 ObMonitorInfoManager::~ObMonitorInfoManager()

@@ -1312,6 +1312,8 @@ int ObServer::init_config()
     // nop
   } else if (OB_FAIL(config_.strict_check_special())) {
     LOG_ERROR("some config setting is not valid", KR(ret));
+  } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {
+    LOG_ERROR("reload memory config failed", KR(ret));
   } else if (OB_FAIL(set_running_mode())) {
     LOG_ERROR("set running mode failed", KR(ret));
   } else {
@@ -1369,7 +1371,7 @@ int ObServer::init_config()
 int ObServer::set_running_mode()
 {
   int ret = OB_SUCCESS;
-  const int64_t memory_limit = GCONF.get_server_memory_limit();
+  const int64_t memory_limit = GMEMCONF.get_server_memory_limit();
   if (memory_limit < lib::ObRunningModeConfig::MINI_MEM_LOWER) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     LOG_ERROR("memory limit too small", KR(ret), K(memory_limit));
@@ -1422,7 +1424,7 @@ int ObServer::init_pre_setting()
 
   // total memory limit
   if (OB_SUCC(ret)) {
-    const int64_t limit_memory = config_.get_server_memory_limit();
+    const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
     const int64_t reserved_memory = std::min(config_.cache_wash_threshold.get_value(),
         static_cast<int64_t>(static_cast<double>(limit_memory) * KVCACHE_FACTOR));
     const int64_t reserved_urgent_memory = config_.memory_reserved;
@@ -1497,7 +1499,7 @@ int ObServer::init_io()
 
   if (OB_SUCC(ret)) {
     static const double IO_MEMORY_RATIO = 0.2;
-    if (OB_FAIL(ObIOManager::get_instance().init(GCONF.get_reserved_server_memory() * IO_MEMORY_RATIO))) {
+    if (OB_FAIL(ObIOManager::get_instance().init(GMEMCONF.get_reserved_server_memory() * IO_MEMORY_RATIO))) {
       LOG_ERROR("init io manager fail, ", KR(ret));
     } else {
       ObIOConfig io_config;
