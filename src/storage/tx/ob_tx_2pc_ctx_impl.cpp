@@ -246,8 +246,7 @@ int ObPartTransCtx::on_commit()
   if (is_local_tx_()) {
     // TODO: fill it for sp commit
   } else {
-    if (OB_FAIL(on_dist_end_(true /*commit*/
-                        ))) {
+    if (OB_FAIL(on_dist_end_(true /*commit*/))) {
       TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
     }
   }

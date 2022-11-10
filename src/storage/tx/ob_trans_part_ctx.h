@@ -245,6 +245,7 @@ private:
   void set_prev_record_lsn_(const LogOffSet &prev_record_lsn);
   int trans_clear_();
   int trans_kill_();
+  int tx_end_(const bool commit);
   int trans_replay_commit_(const int64_t commit_version,
                            const int64_t final_log_ts,
                            const uint64_t log_cluster_version,
