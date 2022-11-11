@@ -38,6 +38,7 @@ ObStorageHATabletsBuilderParam::ObStorageHATabletsBuilderParam()
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
     restore_base_info_(nullptr),
+    restore_action_(ObTabletRestoreAction::MAX),
     meta_index_store_(nullptr)
 {
 }
@@ -57,6 +58,7 @@ void ObStorageHATabletsBuilderParam::reset()
   svr_rpc_proxy_ = nullptr;
   storage_rpc_ = nullptr;
   restore_base_info_ = nullptr;
+  restore_action_ = ObTabletRestoreAction::MAX;
   meta_index_store_ = nullptr;
 }
 
@@ -72,7 +74,9 @@ bool ObStorageHATabletsBuilderParam::is_valid() const
       bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_)
           && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
     } else {
-      bool_ret = OB_NOT_NULL(restore_base_info_) && OB_NOT_NULL(meta_index_store_);
+      bool_ret = OB_NOT_NULL(restore_base_info_)
+         && ObTabletRestoreAction::is_valid(restore_action_)
+         && OB_NOT_NULL(meta_index_store_);
     }
   }
   return bool_ret;
@@ -99,6 +103,7 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
     svr_rpc_proxy_ = param.svr_rpc_proxy_;
     storage_rpc_ = param.storage_rpc_;
     restore_base_info_ = param.restore_base_info_;
+    restore_action_ = param.restore_action_;
     meta_index_store_ = param.meta_index_store_;
   }
   return ret;
@@ -397,6 +402,8 @@ int ObStorageHATabletsBuilder::build_tablets_sstable_info_(
     LOG_WARN("table should not be MEMTABLE", K(ret), K(sstable_info));
   } else if (OB_FAIL(param_.ha_table_info_mgr_->add_table_info(sstable_info.tablet_id_, sstable_info))) {
     LOG_WARN("failed to add table info", K(ret), K(sstable_info));
+  } else {
+    LOG_INFO("add table info", K(sstable_info.tablet_id_), K(sstable_info));
   }
   return ret;
 }
@@ -441,7 +448,8 @@ int ObStorageHATabletsBuilder::get_tablets_sstable_restore_reader_(ObICopySSTabl
   } else if (FALSE_IT(restore_reader = new (buf) ObCopySSTableInfoRestoreReader())) {
   } else if (FALSE_IT(reader = restore_reader)) {
   } else if (OB_FAIL(restore_reader->init(param_.ls_->get_ls_id(),
-      *param_.restore_base_info_, param_.tablet_id_array_, *param_.meta_index_store_))) {
+      *param_.restore_base_info_, param_.restore_action_,
+      param_.tablet_id_array_, *param_.meta_index_store_))) {
     LOG_WARN("failed to init restore reader", K(ret), K(param_));
   }
 
@@ -1525,6 +1533,7 @@ ObStorageHACopySSTableParam::ObStorageHACopySSTableParam()
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
     restore_base_info_(nullptr),
+    meta_index_store_(nullptr),
     second_meta_index_store_(nullptr)
 {
 }
@@ -1543,6 +1552,7 @@ void ObStorageHACopySSTableParam::reset()
   svr_rpc_proxy_ = nullptr;
   storage_rpc_ = nullptr;
   restore_base_info_ = nullptr;
+  meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
 }
 
@@ -1558,7 +1568,9 @@ bool ObStorageHACopySSTableParam::is_valid() const
       bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_)
           && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
     } else {
-      bool_ret = OB_NOT_NULL(restore_base_info_) && OB_NOT_NULL(second_meta_index_store_);
+      bool_ret = OB_NOT_NULL(restore_base_info_)
+        && OB_NOT_NULL(meta_index_store_)
+        && OB_NOT_NULL(second_meta_index_store_);
     }
   }
   return bool_ret;
@@ -1584,6 +1596,7 @@ int ObStorageHACopySSTableParam::assign(const ObStorageHACopySSTableParam &param
     svr_rpc_proxy_ = param.svr_rpc_proxy_;
     storage_rpc_ = param.storage_rpc_;
     restore_base_info_ = param.restore_base_info_;
+    meta_index_store_ = param.meta_index_store_;
     second_meta_index_store_ = param.second_meta_index_store_;
   }
   return ret;

@@ -87,7 +87,7 @@ public:
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status);
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), KPC_(restore_base_info), K_(is_leader),
-      K_(action), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
+      K_(action), KP_(meta_index_store), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
 
 public:
   uint64_t tenant_id_;
@@ -97,6 +97,7 @@ public:
   const ObRestoreBaseInfo *restore_base_info_;
   bool is_leader_;
   ObTabletRestoreAction::ACTION action_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObReplicaType replica_type_;
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
@@ -335,6 +336,7 @@ struct ObInitTabletRestoreParam final
   bool is_leader_;
   ObTabletRestoreAction::ACTION action_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
   ObHATabletGroupCtx *tablet_group_ctx_;
@@ -463,6 +465,7 @@ struct ObTabletGroupRestoreUtils
       const ObStorageHASrcInfo src_info,
       ObLS *ls,
       const ObRestoreBaseInfo *restore_base_info,
+      const ObTabletRestoreAction::ACTION &restore_action,
       backup::ObBackupMetaIndexStoreWrapper *meta_index_store,
       ObStorageHATableInfoMgr *ha_table_info_mgr,
       ObStorageHATabletsBuilder &ha_tablets_builder);

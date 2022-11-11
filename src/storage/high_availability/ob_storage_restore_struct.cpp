@@ -118,6 +118,7 @@ const char *ObTabletRestoreAction::get_action_str(const ACTION &action)
       "RESTORE_TABLET_META",
       "RESTORE_MINOR",
       "RESTORE_MAJOR",
+      "RESTORE_NONE",
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(action_strs), "action count mismatch");
   if (action < 0 || action >= MAX) {
@@ -154,6 +155,20 @@ bool ObTabletRestoreAction::is_restore_major(const ACTION &action)
     bool_ret = false;
     LOG_ERROR("restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MAJOR != action) {
+    bool_ret = false;
+  } else {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+bool ObTabletRestoreAction::is_restore_none(const ACTION &action)
+{
+  bool bool_ret = false;
+  if (!is_valid(action)) {
+    bool_ret = false;
+    LOG_ERROR("restore action is unexpected", K(action));
+  } else if (ACTION::RESTORE_NONE != action) {
     bool_ret = false;
   } else {
     bool_ret = true;

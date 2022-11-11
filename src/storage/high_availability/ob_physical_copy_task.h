@@ -41,7 +41,8 @@ struct ObPhysicalCopyCtx
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KP_(bandwidth_throttle),
-      KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info), KP_(second_meta_index_store), KP_(ha_dag),
+      KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info),
+      KP_(meta_index_store), KP_(second_meta_index_store), KP_(ha_dag),
       KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -51,6 +52,7 @@ struct ObPhysicalCopyCtx
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   bool is_leader_restore_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
@@ -79,6 +81,7 @@ struct ObPhysicalCopyTaskInitParam final
   ObLS *ls_;
   bool is_leader_restore_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
 };
@@ -207,6 +210,7 @@ public:
       const common::ObTabletID &tablet_id,
       ObLS *ls,
       observer::ObIMetaReport *reporter,
+      const ObTabletRestoreAction::ACTION &restore_action,
       const ObMigrationTabletParam *src_tablet_meta);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
@@ -216,6 +220,7 @@ public:
       ObTableHandleV2 &table_handle);
 private:
   int create_new_table_store_();
+  int create_new_table_store_restore_major_();
   int update_tablet_data_status_();
   int check_need_merge_tablet_meta_(
       ObTablet *tablet,
@@ -232,6 +237,7 @@ private:
   observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
   ObTablesHandleArray tables_handle_;
+  ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };

@@ -2481,6 +2481,7 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     param.is_leader_restore_ = false;
     param.local_rebuild_seq_ = ctx_->local_rebuild_seq_;
+    param.meta_index_store_ = nullptr;
     param.second_meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
@@ -2550,6 +2551,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   ObLS *ls = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
+  const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
   if (!is_inited_) {
@@ -2562,7 +2564,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, src_tablet_meta))) {
+  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   }
   return ret;
@@ -4034,6 +4036,7 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
     param.meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
+    param.restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
     param.src_info_ = src_info;
     param.storage_rpc_ = ls_service->get_storage_rpc();
     param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();

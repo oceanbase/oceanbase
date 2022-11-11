@@ -102,6 +102,7 @@ ObTabletRestoreCtx::ObTabletRestoreCtx()
     restore_base_info_(nullptr),
     is_leader_(false),
     action_(ObTabletRestoreAction::MAX),
+    meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
     replica_type_(ObReplicaType::REPLICA_TYPE_MAX),
     ha_table_info_mgr_(nullptr),
@@ -122,7 +123,7 @@ bool ObTabletRestoreCtx::is_valid() const
           || ObCopyTabletStatus::TABLET_NOT_EXIST == status_)
       && OB_NOT_NULL(restore_base_info_)
       && ObTabletRestoreAction::is_valid(action_)
-      && (!is_leader_ || OB_NOT_NULL(second_meta_index_store_))
+      && (!is_leader_ || (OB_NOT_NULL(meta_index_store_) && OB_NOT_NULL(second_meta_index_store_)))
       && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
       && OB_NOT_NULL(ha_table_info_mgr_);
 }
@@ -136,6 +137,7 @@ void ObTabletRestoreCtx::reset()
   restore_base_info_ = nullptr;
   is_leader_ = false;
   action_ = ObTabletRestoreAction::MAX;
+  meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
   replica_type_ = ObReplicaType::REPLICA_TYPE_MAX;
   status_ = ObCopyTabletStatus::MAX_STATUS;
@@ -1006,7 +1008,8 @@ int ObInitialTabletGroupRestoreTask::init_ha_tablets_builder_()
     LOG_WARN("initial tablet group restore task do not init", K(ret));
   } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
       ctx_->arg_.tenant_id_, ctx_->tablet_id_array_, ctx_->arg_.is_leader_, ctx_->src_,
-      ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, meta_index_store_,
+      ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_,
+      ctx_->arg_.action_, meta_index_store_,
       &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
    LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
  }
@@ -1202,7 +1205,7 @@ int ObStartTabletGroupRestoreTask::init(
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
         ctx_->arg_.tenant_id_, ctx_->tablet_id_array_, ctx_->arg_.is_leader_, ctx_->src_,
-        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, meta_index_store_,
+        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_, meta_index_store_,
         &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {
@@ -1281,6 +1284,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
     param.action_ = ctx_->arg_.action_;
     param.ha_table_info_mgr_ = &ctx_->ha_table_info_mgr_;
     param.restore_base_info_ = &ctx_->arg_.restore_base_info_;
+    param.meta_index_store_ = meta_index_store_;
     param.second_meta_index_store_ = second_meta_index_store_;
     param.tablet_group_ctx_ = &ctx_->tablet_group_ctx_;
 
@@ -1645,6 +1649,7 @@ ObInitTabletRestoreParam::ObInitTabletRestoreParam()
     is_leader_(false),
     action_(ObTabletRestoreAction::MAX),
     restore_base_info_(nullptr),
+    meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
     ha_table_info_mgr_(nullptr),
     tablet_group_ctx_(nullptr)
@@ -1665,6 +1670,7 @@ void ObInitTabletRestoreParam::reset()
   is_leader_ = false;
   action_ = ObTabletRestoreAction::MAX;
   restore_base_info_ = nullptr;
+  meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
   ha_table_info_mgr_ = nullptr;
   tablet_group_ctx_ = nullptr;
@@ -1679,7 +1685,9 @@ bool ObInitTabletRestoreParam::is_valid() const
       && OB_NOT_NULL(ha_table_info_mgr_);
   if (bool_ret) {
     if (is_leader_) {
-      bool_ret = OB_NOT_NULL(restore_base_info_) && OB_NOT_NULL(second_meta_index_store_);
+      bool_ret = OB_NOT_NULL(restore_base_info_)
+        && OB_NOT_NULL(meta_index_store_)
+        && OB_NOT_NULL(second_meta_index_store_);
     }
   }
   return bool_ret;
@@ -1834,6 +1842,7 @@ int ObTabletRestoreDag::init(
     tablet_restore_ctx_.restore_base_info_ = param.restore_base_info_;
     tablet_restore_ctx_.action_ = param.action_;
     tablet_restore_ctx_.is_leader_ = param.is_leader_;
+    tablet_restore_ctx_.meta_index_store_ = param.meta_index_store_;
     tablet_restore_ctx_.second_meta_index_store_ = param.second_meta_index_store_;
     tablet_restore_ctx_.replica_type_ = ls->get_replica_type();
     tablet_restore_ctx_.ha_table_info_mgr_ = param.ha_table_info_mgr_;
@@ -1965,6 +1974,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
         param.action_ = tablet_restore_ctx_.action_;
         param.ha_table_info_mgr_ = tablet_restore_ctx_.ha_table_info_mgr_;
         param.restore_base_info_ = tablet_restore_ctx_.restore_base_info_;
+        param.meta_index_store_ = tablet_restore_ctx_.meta_index_store_;
         param.second_meta_index_store_ = tablet_restore_ctx_.second_meta_index_store_;
         param.tablet_group_ctx_ = tablet_group_ctx_;
 
@@ -2223,6 +2233,7 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   } else if (FALSE_IT(init_param.ls_ = ls_)) {
   } else if (FALSE_IT(init_param.is_leader_restore_ = tablet_restore_ctx_->is_leader_)) {
   } else if (FALSE_IT(init_param.restore_base_info_ = tablet_restore_ctx_->restore_base_info_)) {
+  } else if (FALSE_IT(init_param.meta_index_store_ = tablet_restore_ctx_->meta_index_store_)) {
   } else if (FALSE_IT(init_param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_)) {
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_table_info(tablet_restore_ctx_->tablet_id_,
       copy_table_key, init_param.sstable_param_))) {
@@ -2398,6 +2409,7 @@ int ObTabletRestoreTask::build_copy_sstable_info_mgr_()
     param.tablet_id_ = tablet_restore_ctx_->tablet_id_;
     param.is_leader_restore_ = tablet_restore_ctx_->is_leader_;
     param.local_rebuild_seq_ = 0;
+    param.meta_index_store_ = tablet_restore_ctx_->meta_index_store_;
     param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_;
     param.need_check_seq_ = false;
     param.restore_base_info_ = tablet_restore_ctx_->restore_base_info_;
@@ -2429,7 +2441,8 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_tablet_meta(
       tablet_restore_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter, src_tablet_meta))) {
+  } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter,
+      tablet_restore_ctx_->action_, src_tablet_meta))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;
@@ -2468,7 +2481,8 @@ int ObTabletRestoreTask::try_update_tablet_()
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
       tablet_restore_ctx_->tenant_id_, tablet_id_array, tablet_restore_ctx_->is_leader_, src_info_,
-      ls, tablet_restore_ctx_->restore_base_info_, tablet_restore_ctx_->second_meta_index_store_,
+      ls, tablet_restore_ctx_->restore_base_info_, tablet_restore_ctx_->action_,
+      tablet_restore_ctx_->second_meta_index_store_,
       tablet_restore_ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(tablet_restore_ctx_));
   } else {
@@ -2721,6 +2735,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     const ObStorageHASrcInfo src_info,
     ObLS *ls,
     const ObRestoreBaseInfo *restore_base_info,
+    const ObTabletRestoreAction::ACTION &restore_action,
     backup::ObBackupMetaIndexStoreWrapper *meta_index_store,
     ObStorageHATableInfoMgr *ha_table_info_mgr,
     ObStorageHATabletsBuilder &ha_tablets_builder)
@@ -2732,6 +2747,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
   if (OB_INVALID_ID == tenant_id || tablet_id_array.empty() || OB_ISNULL(ls)
       || (!is_leader_restore && !src_info.is_valid())
       || (is_leader_restore && (OB_ISNULL(restore_base_info) || OB_ISNULL(meta_index_store)))
+      || !ObTabletRestoreAction::is_valid(restore_action)
       || OB_ISNULL(ha_table_info_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init ha tablets builder get unexpected error", K(ret), KP(tenant_id),
@@ -2750,6 +2766,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     param.meta_index_store_ = meta_index_store;
     param.need_check_seq_ = false;
     param.restore_base_info_ = restore_base_info;
+    param.restore_action_ = restore_action;
     param.src_info_ = src_info;
     param.storage_rpc_ = ls_service->get_storage_rpc();
     param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();

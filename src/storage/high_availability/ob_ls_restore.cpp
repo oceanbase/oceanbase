@@ -1285,11 +1285,13 @@ int ObSysTabletsRestoreTask::init()
     storage_rpc_ = ls_restore_dag_net->get_storage_rpc();
     meta_index_store_ = ls_restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = ls_restore_dag_net->get_second_meta_index_store();
+    const ObTabletRestoreAction::ACTION &restore_action = ObTabletRestoreAction::ACTION::RESTORE_ALL;
     if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
         ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_, ctx_->src_,
-        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, meta_index_store_, &ctx_->ha_table_info_mgr_,
+        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, restore_action,
+        meta_index_store_, &ctx_->ha_table_info_mgr_,
         ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {
@@ -1388,6 +1390,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
       param.action_ = action;
       param.restore_base_info_ = &ctx_->arg_.restore_base_info_;
       param.ha_table_info_mgr_ = &ctx_->ha_table_info_mgr_;
+      param.meta_index_store_ = meta_index_store_;
       param.second_meta_index_store_ = second_meta_index_store_;
 
       if (!param.is_valid()) {
