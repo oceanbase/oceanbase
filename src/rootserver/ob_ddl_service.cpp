@@ -18229,7 +18229,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
               if (table_schema->get_table_type() == MATERIALIZED_VIEW || table_schema->is_tmp_table()) {
                 to_recyclebin = false;
               }
-              if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(
+              if (drop_table_arg.table_type_ == USER_TABLE && OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(
                       sql_proxy_,
                       drop_table_arg.tenant_id_,
                       table_schema->get_table_id(),

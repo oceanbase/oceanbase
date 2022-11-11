@@ -1440,7 +1440,10 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
           } else if (task_record.task_id_ != task_id) {
             switch (ddl_type) {
             case ObDDLType::DDL_DROP_TABLE: {
-              has_conflict_ddl = true;
+              if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
+                LOG_WARN("conflict with ddl", K(task_record));
+                has_conflict_ddl = true;
+              } 
               break;
             }
             default: {
