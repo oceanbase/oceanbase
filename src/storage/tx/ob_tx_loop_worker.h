@@ -39,7 +39,7 @@ public:
   const static int64_t LOOP_INTERVAL = 100 * 1000;                            // 100ms
   const static int64_t KEEP_ALIVE_PRINT_INFO_INTERVAL = 5 * 60 * 1000 * 1000; // 5min
   const static int64_t TX_GC_INTERVAL = 5 * 1000 * 1000;                     // 5s
-  const static int64_t TX_RETAIN_CTX_GC_INTERVAL = 15 * 1000 * 1000;           // 15s
+  const static int64_t TX_RETAIN_CTX_GC_INTERVAL = 5 * 1000 * 1000;           // 5s
 public:
   ObTxLoopWorker() { reset(); }
   ~ObTxLoopWorker() {}

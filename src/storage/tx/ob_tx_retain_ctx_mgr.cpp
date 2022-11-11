@@ -200,6 +200,7 @@ int ObTxRetainCtxMgr::push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func)
 int ObTxRetainCtxMgr::try_gc_retain_ctx(storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
+  static const int64_t MAX_RUN_US = 500 * 1000;
   ObTimeGuard tg(__func__, 1 * 1000 * 1000);
   SpinWLockGuard guard(retain_ctx_lock_);
   tg.click();
@@ -207,7 +208,7 @@ int ObTxRetainCtxMgr::try_gc_retain_ctx(storage::ObLS *ls)
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "[RetainCtxMgr] invalid argument", K(ret), KPC(ls));
-  } else if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::try_gc_, ls))) {
+  } else if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::try_gc_, ls, MAX_RUN_US))) {
     TRANS_LOG(WARN, "[RetainCtxMgr] try gc all retain ctx failed", K(ret), KPC(ls));
   }
   return ret;
@@ -221,7 +222,7 @@ int ObTxRetainCtxMgr::force_gc_retain_ctx()
   SpinWLockGuard guard(retain_ctx_lock_);
   tg.click();
 
-  if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr))) {
+  if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr, INT64_MAX))) {
     TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
   }
 
@@ -300,10 +301,13 @@ int ObTxRetainCtxMgr::remove_ctx_func_(RetainCtxList::iterator remove_iter)
   return ret;
 }
 
-int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls)
+int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls,
+                                       const int64_t max_run_us)
 {
   int ret = OB_SUCCESS;
+  int64_t remove_count = 0;
   bool need_remove = false;
+  const int64_t start_ts = ObTimeUtility::current_time();
   RetainCtxList::iterator iter = retain_ctx_list_.end();
   RetainCtxList::iterator last_remove_iter = retain_ctx_list_.end();
 
@@ -314,6 +318,7 @@ int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler, storage
         TRANS_LOG(WARN, "[RetainCtxMgr] remove from retain_ctx_list_ failed", K(ret), KPC(*last_remove_iter),
                   KPC(this));
       } else {
+        remove_count++;
         last_remove_iter = retain_ctx_list_.end();
       }
     }
@@ -328,6 +333,11 @@ int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler, storage
     } else if (need_remove) {
       last_remove_iter = iter;
     }
+    const int64_t use_ts = ObTimeUtility::current_time() - start_ts;
+    if (use_ts > max_run_us) {
+      TRANS_LOG(WARN, "remove retain ctx use too much time", K(use_ts), K(remove_count));
+      break;
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -337,6 +347,7 @@ int ObTxRetainCtxMgr::for_each_remove_(RetainFuncHandler remove_handler, storage
       TRANS_LOG(WARN, "[RetainCtxMgr] remove from retain_ctx_list_ failed", K(ret), KPC(*last_remove_iter),
                 KPC(this));
     } else {
+      remove_count++;
       last_remove_iter = retain_ctx_list_.end();
     }
   }
