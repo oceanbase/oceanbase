@@ -1767,7 +1767,17 @@ void ObTenant::update_token_usage()
     token_usage_check_ts_ = now;
     const auto idle_us = static_cast<double>(ATOMIC_TAS(&idle_us_, 0));
     const auto tokens = static_cast<double>(token_cnt());
-    const auto total_us = duration * (tokens + nesting_worker_has_init_ - 1);
+
+    int group_worker_cnt = 0;
+    ObResourceGroupNode* iter = NULL;
+    ObResourceGroup* group = nullptr;
+    while (NULL != (iter = group_map_.quick_next(iter))) {
+      group = static_cast<ObResourceGroup*>(iter);
+      group_worker_cnt += group->workers_.get_size();
+    }
+
+    const auto total_us = duration * (tokens + group_worker_cnt +
+                                      nesting_worker_has_init_ - 1);
     token_usage_ = (total_us - idle_us) / duration;
     token_usage_ = std::max(.0, token_usage_);
   }
