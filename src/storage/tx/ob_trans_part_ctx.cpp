@@ -5724,7 +5724,7 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
     ObUndoAction undo_action(from_scn, to_scn);
     ObUndoStatusNode *undo_status = NULL;
     ObTxData *tmp_tx_data = NULL;
-    if (ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data, undo_status)) {
+    if (OB_FAIL(ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data, undo_status))) {
       TRANS_LOG(WARN, "prepare add undo action fail", K(ret), KPC(this));
     } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data))) {
       TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));

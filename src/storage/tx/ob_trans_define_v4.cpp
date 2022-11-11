@@ -352,6 +352,7 @@ void ObTxDesc::reset()
 const ObString &ObTxDesc::get_tx_state_str() const {
   static const ObString TxStateName[] =
     {
+     ObString("INVALID"),
      ObString("IDLE"),
      ObString("ACTIVE"),
      ObString("IMPLICIT_ACTIVE"),

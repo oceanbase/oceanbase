@@ -366,9 +366,9 @@ public:
   ObSpScLinkQueue replay_task_queue_arr[TASK_QUEUE_CNT];
 
   void run1() {
-    while(!stop_) {
+    while(true) {
       int64_t process_cnt = 0;
-
+      bool stop = stop_;
       if (!ATOMIC_LOAD(&pause_)) {
         for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
           while(true) {
@@ -384,8 +384,9 @@ public:
           }
         }
       }
-
-      if (0 == process_cnt && ATOMIC_BCAS(&is_sleeping_, false, true)) {
+      if (!pause_ && 0 == process_cnt && stop) {
+        break;
+      } else if (0 == process_cnt && ATOMIC_BCAS(&is_sleeping_, false, true)) {
         auto key = cond_.get_key();
         cond_.wait(key, 10 * 1000);
       }
