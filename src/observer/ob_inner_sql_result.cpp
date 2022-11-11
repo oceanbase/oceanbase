@@ -58,7 +58,6 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
       iter_end_(false),
       is_read_(true),
       has_tenant_resource_(true),
-      need_update_cnt_(0),
       tenant_(nullptr)
 
 {
@@ -111,16 +110,6 @@ ObInnerSQLResult::~ObInnerSQLResult()
   if (remote_result_set_ != nullptr) {
     remote_result_set_->~ObRemoteResultSet();
   }
-
-  if (need_update_cnt_ > 0) {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                               observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    for (int i=0; i < need_update_cnt_; i++) {
-      req_timeinfo->update_end_time();
-    }
-  }
-
   if (tenant_ != nullptr) {
     tenant_->unlock(handle_);
     tenant_ = nullptr;
