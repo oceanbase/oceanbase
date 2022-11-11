@@ -265,7 +265,7 @@ int ObCtxTxData::set_state(int32_t state)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->state_ = state;
+    ATOMIC_STORE(&tx_data_->state_, state);
   }
 
   return ret;
@@ -279,7 +279,7 @@ int ObCtxTxData::set_commit_version(int64_t commit_version)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->commit_version_ = commit_version;
+    ATOMIC_STORE(&tx_data_->commit_version_, commit_version);
   }
 
   return ret;
@@ -294,7 +294,7 @@ int ObCtxTxData::set_start_log_ts(int64_t start_ts)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->start_log_ts_ = tmp_start_ts;
+    ATOMIC_STORE(&tx_data_->start_log_ts_, tmp_start_ts);
   }
 
   return ret;
@@ -308,7 +308,7 @@ int ObCtxTxData::set_end_log_ts(int64_t end_ts)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->end_log_ts_ = end_ts;
+    ATOMIC_STORE(&tx_data_->end_log_ts_, end_ts);
   }
 
   return ret;
@@ -317,19 +317,19 @@ int ObCtxTxData::set_end_log_ts(int64_t end_ts)
 int32_t ObCtxTxData::get_state() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? tx_data_->state_: tx_commit_data_.state_);
+  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
 }
 
 int64_t ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? tx_data_->commit_version_ : tx_commit_data_.commit_version_);
+  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->commit_version_) : ATOMIC_LOAD(&tx_commit_data_.commit_version_));
 }
 
 int64_t ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
-  int64_t ctx_log_ts = (NULL != tx_data_ ? tx_data_->start_log_ts_ : tx_commit_data_.start_log_ts_);
+  int64_t ctx_log_ts = (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->start_log_ts_) : ATOMIC_LOAD(&tx_commit_data_.start_log_ts_));
   if (INT64_MAX == ctx_log_ts) {
     ctx_log_ts = OB_INVALID_TIMESTAMP;
   }
@@ -339,7 +339,7 @@ int64_t ObCtxTxData::get_start_log_ts() const
 int64_t ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
-  int64_t ctx_log_ts = (NULL != tx_data_ ? tx_data_->end_log_ts_ : tx_commit_data_.end_log_ts_);
+  int64_t ctx_log_ts = (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->end_log_ts_) : ATOMIC_LOAD(&tx_commit_data_.end_log_ts_));
   if (INT64_MAX == ctx_log_ts) {
     ctx_log_ts = OB_INVALID_TIMESTAMP;
   }

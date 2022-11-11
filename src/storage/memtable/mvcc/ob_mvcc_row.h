@@ -105,13 +105,12 @@ public:
 
   // ===================== ObMvccTransNode Flag Interface =====================
   void set_committed();
-  bool is_committed() const { return flag_ & F_COMMITTED; }
-  bool is_locked() const { return flag_ & F_MUTEX; }
+  bool is_committed() const { return ATOMIC_LOAD(&flag_) & F_COMMITTED; }
   void set_elr();
-  bool is_elr() const { return flag_ & F_ELR; }
+  bool is_elr() const { return ATOMIC_LOAD(&flag_) & F_ELR; }
   void set_aborted();
   void clear_aborted();
-  bool is_aborted() const { return (flag_ & F_ABORTED); }
+  bool is_aborted() const { return ATOMIC_LOAD(&flag_) & F_ABORTED; }
   void set_delayed_cleanout(const bool delayed_cleanout);
   bool is_delayed_cleanout() const;
 
@@ -128,10 +127,10 @@ public:
   void set_tx_end_log_ts(const int64_t tx_end_log_ts)
   {
     if (INT64_MAX != tx_end_log_ts) {
-      tx_end_log_ts_ = tx_end_log_ts;
+      ATOMIC_STORE(&tx_end_log_ts_, tx_end_log_ts);
     }
   }
-  int64_t get_tx_end_log_ts() { return tx_end_log_ts_; }
+  int64_t get_tx_end_log_ts() { return ATOMIC_LOAD(&tx_end_log_ts_); }
 
 private:
   static const uint8_t F_INIT;

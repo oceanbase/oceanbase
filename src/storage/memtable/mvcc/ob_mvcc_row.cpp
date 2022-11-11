@@ -206,13 +206,13 @@ bool ObMvccTransNode::is_delayed_cleanout() const
 
 int ObMvccTransNode::fill_trans_version(const int64_t version)
 {
-  trans_version_ = version;
+  ATOMIC_STORE(&trans_version_, version);
   return OB_SUCCESS;
 }
 
 int ObMvccTransNode::fill_log_timestamp(const int64_t log_timestamp)
 {
-  log_timestamp_ = log_timestamp;
+  ATOMIC_STORE(&log_timestamp_, log_timestamp);
   return OB_SUCCESS;
 }
 
@@ -228,7 +228,6 @@ void ObMvccTransNode::trans_abort(const int64_t tx_end_log_ts)
 {
   set_aborted();
   set_tx_end_log_ts(tx_end_log_ts);
-
 }
 
 void ObMvccTransNode::remove_callback()
@@ -695,8 +694,8 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
 
 bool ObMvccRow::is_transaction_set_violation(const int64_t snapshot_version)
 {
-  return max_trans_version_ > snapshot_version
-         || max_elr_trans_version_ > snapshot_version;
+  return ATOMIC_LOAD(&max_trans_version_) > snapshot_version
+    || ATOMIC_LOAD(&max_elr_trans_version_) > snapshot_version;
 }
 
 int ObMvccRow::elr(const ObTransID &tx_id,
@@ -921,6 +920,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
       // on the lock state of the node even the node is not delayed cleanout for
       // read operation.(If you are intereted in it, read ObMvccRow::mvcc_write)
       ObTransID data_tx_id = iter->get_tx_id();
+
       if (iter->is_delayed_cleanout()
           && !(iter->is_committed() || iter->is_aborted())
           && OB_FAIL(tx_table->cleanout_tx_node(data_tx_id,
@@ -1055,7 +1055,8 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
   int ret = OB_SUCCESS;
   lock_begin(ctx);
 
-  if (max_trans_version_ > snapshot_version || max_elr_trans_version_ > snapshot_version) {
+  if (ATOMIC_LOAD(&max_trans_version_) > snapshot_version
+      || ATOMIC_LOAD(&max_elr_trans_version_) > snapshot_version) {
     // Case 3. successfully locked while tsc
     ret = OB_TRANSACTION_SET_VIOLATION;
     TRANS_LOG(WARN, "transaction set violation", K(ret),
@@ -1067,7 +1068,8 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
     // Case1: Cannot insert because of write-write conflict
     ret = OB_TRY_LOCK_ROW_CONFLICT;
     TRANS_LOG(WARN, "mvcc write conflict", K(ret), K(ctx), K(node), K(res), K(*this));
-  } else if (max_trans_version_ > snapshot_version || max_elr_trans_version_ > snapshot_version) {
+  } else if (ATOMIC_LOAD(&max_trans_version_) > snapshot_version
+             || ATOMIC_LOAD(&max_elr_trans_version_) > snapshot_version) {
     // Case 3. successfully locked while tsc
     ret = OB_TRANSACTION_SET_VIOLATION;
     TRANS_LOG(WARN, "transaction set violation", K(ret), K(ctx), K(node), K(*this));
