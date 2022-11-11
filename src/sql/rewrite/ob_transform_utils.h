@@ -1338,12 +1338,20 @@ public:
   static int add_const_param_constraints(ObRawExpr *expr,
                                          ObTransformerCtx *ctx);
 
-  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+  static int inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                  const ParamStore *param_store,
+                                                  ObIArray<ObPCConstParamInfo>& pc_constrants,
+                                                  ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                   ObTransformerCtx *trans_ctx = NULL);
+
+  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                  ObTransformerCtx *trans_ctx,
+                                                  bool need_check_add_expr = false);
 
   static int replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
                                                   ObRawExpr *expr_r,
                                                   ObTransformerCtx *trans_ctx,
+                                                  ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                   bool &is_existed);
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
@@ -1357,8 +1365,11 @@ public:
   static int replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                         ObRawExpr *&expr,
                                         bool need_query_compare,
+                                        ObIArray<int64_t>& param_expr_idxs,
+                                        ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                         ObTransformerCtx *tran_ctx = NULL,
                                         bool in_add_expr = false);
+  static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
 
   static int add_param_not_null_constraint(ObTransformerCtx &ctx, 
                                            ObIArray<ObRawExpr *> &not_null_exprs);

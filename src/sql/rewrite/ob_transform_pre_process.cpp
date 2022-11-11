@@ -1229,7 +1229,7 @@ int ObTransformPreProcess::create_set_view_stmt(ObSelectStmt *origin_stmt,
                                   1
       so that 1 in  "select c1-1 from t1 group by grouping sets(c1,1);" share same expr.
       */
-      if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(origin_stmt, ctx_))) {
+      if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(origin_stmt, ctx_, true))) {
           LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
@@ -1269,7 +1269,7 @@ int ObTransformPreProcess::create_set_view_stmt(ObSelectStmt *origin_stmt,
           groupby_stmt->get_window_func_exprs().reset();
           ObSEArray<ObRawExpr*, 4> old_exprs;
           ObSEArray<ObRawExpr*, 4> new_exprs;
-          if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(groupby_stmt))) {
+          if (OB_FAIL(ObTransformUtils::replace_stmt_expr_with_groupby_exprs(groupby_stmt, ctx_))) {
             LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
           } else if (OB_FAIL(create_select_list_from_grouping_sets(groupby_stmt,
                                                                    groupby_exprs_list,
