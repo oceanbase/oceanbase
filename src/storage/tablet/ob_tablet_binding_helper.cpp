@@ -914,6 +914,9 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
     } else if (need_update && OB_FAIL(tablet->set_tx_data(tx_data, memtable_log_ts, for_replay,
         ref_op, false/*is_callback*/))) {
       LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(log_ts), K(for_replay), K(ref_op));
+      if (!for_replay && OB_BLOCK_FROZEN == ret) {
+        ret = OB_EAGAIN;
+      }
     } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
       LOG_WARN("failed to insert in tx tablet", K(ret), K(key));
     }
