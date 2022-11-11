@@ -211,6 +211,8 @@ public:
   int logstream_freeze();
   int tablet_freeze(const ObTabletID &tablet_id);
   int force_tablet_freeze(const ObTabletID &tablet_id);
+  int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
+  int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *imemtable);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;

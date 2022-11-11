@@ -2845,73 +2845,85 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
     const ObBatchUpdateTableStoreParam &param)
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle old_tablet_handle;
-  ObTablet *old_tablet = nullptr;
-  ObTabletHandle new_tablet_handle;
-  ObTablet *new_tablet = nullptr;
-  ObTenantMetaMemMgr *t3m = nullptr;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObMetaDiskAddr disk_addr;
   ObFreezer *freezer = nullptr;
+  memtable::ObIMemtable *imemtable = nullptr;
+  bool is_tablet_freeze = false;
 
-  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(param));
-  } else if (OB_ISNULL(t3m = MTL(ObTenantMetaMemMgr*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t3m is null", K(ret));
-  } else if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_ISNULL(freezer = ls_->get_freezer())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("freezer should not be NULL", K(ret), KP(freezer), KPC(ls_));
   } else {
-    old_tablet = old_tablet_handle.get_obj();
-    const share::ObLSID &ls_id = ls_->get_ls_id();
-    const ObTabletMapKey key(ls_id, tablet_id);
-    ObTabletTxMultiSourceDataUnit tx_data;
-    ObTabletBindingInfo ddl_data;
-    ObTabletAutoincSeq autoinc_seq;
-    //In order to merge tablet meta
-    //it is necessary to make the left side of the newly created memtable start from clog_checkpinoit_ts
-    //the new memtable can be stuck during the creation of the tablet, it is safe here
+    ObTabletHandle old_tablet_handle;
+    ObTabletHandle new_tablet_handle;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
+      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+    } else {
+      ObTablet *old_tablet = old_tablet_handle.get_obj();
+      ObTablet *new_tablet = nullptr;
+      const share::ObLSID &ls_id = ls_->get_ls_id();
+      const ObTabletMapKey key(ls_id, tablet_id);
+      ObTabletTxMultiSourceDataUnit tx_data;
+      ObTabletBindingInfo ddl_data;
+      ObTabletAutoincSeq autoinc_seq;
+      //In order to merge tablet meta
+      //it is necessary to make the left side of the newly created memtable start from clog_checkpinoit_ts
+      //the new memtable can be stuck during the creation of the tablet, it is safe here
 
-    if (OB_FAIL(old_tablet->get_tx_data(tx_data))) {
-      LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
-    } else if (OB_FAIL(old_tablet->get_ddl_data(ddl_data))) {
-      LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
-    } else if (OB_FAIL(old_tablet->get_latest_autoinc_seq(autoinc_seq))) {
-      LOG_WARN("failed to get autoinc seq from old tablet", K(ret));
-    } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
-      LOG_WARN("failed to acquire tablet", K(ret), K(key));
-    } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
-    } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
-      LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
-    } else if (old_tablet->get_tablet_meta().clog_checkpoint_ts_ < new_tablet->get_tablet_meta().clog_checkpoint_ts_
-        && OB_FAIL(freezer->tablet_freeze(tablet_id))) {
-      if (OB_ENTRY_EXIST == ret) {
-        ret = OB_SUCCESS;
+      if (OB_FAIL(old_tablet->get_tx_data(tx_data))) {
+        LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
+      } else if (OB_FAIL(old_tablet->get_ddl_data(ddl_data))) {
+        LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
+      } else if (OB_FAIL(old_tablet->get_latest_autoinc_seq(autoinc_seq))) {
+        LOG_WARN("failed to get autoinc seq from old tablet", K(ret));
+      } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
+        LOG_WARN("failed to acquire tablet", K(ret), K(key));
+      } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
+      } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
+        LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+      } else if (old_tablet->get_tablet_meta().clog_checkpoint_ts_ < new_tablet->get_tablet_meta().clog_checkpoint_ts_) {
+        if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
+          if (OB_ENTRY_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet), KPC(new_tablet));
+          }
+        } else {
+          is_tablet_freeze = true;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(new_tablet->set_memtable_clog_checkpoint_ts(param.tablet_meta_))) {
+        LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), KPC(new_tablet), K(param));
+      } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(new_tablet_handle, disk_addr))) {
+        LOG_WARN("fail to write update tablet slog", K(ret), K(new_tablet_handle), K(disk_addr));
+      } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle))) {
+        LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr));
+        ob_usleep(1000 * 1000);
+        ob_abort();
       } else {
-        LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet), KPC(new_tablet));
+        LOG_INFO("succeed to build ha tablet new table store", K(ret), K(tablet_id), K(param));
       }
     }
+  }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(new_tablet->set_memtable_clog_checkpoint_ts(param.tablet_meta_))) {
-      LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), KPC(new_tablet), K(param));
-    } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(new_tablet_handle, disk_addr))) {
-      LOG_WARN("fail to write update tablet slog", K(ret), K(new_tablet_handle), K(disk_addr));
-    } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle))) {
-      LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr));
-      ob_usleep(1000 * 1000);
-      ob_abort();
-    } else {
-      LOG_INFO("succeed to build ha tablet new table store", K(ret), K(tablet_id), K(param));
+  if (is_tablet_freeze) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(freezer->handle_frozen_memtable_for_replace_tablet_meta(tablet_id, imemtable))) {
+      LOG_WARN("failed to handle_frozen_memtable_for_replace_tablet_meta", K(tmp_ret), K(tablet_id), K(param));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
+
   return ret;
 }
 
@@ -3393,7 +3405,7 @@ int ObLSTabletService::insert_lob_tablet_row(
       const ObColDesc &column = run_ctx.col_descs_->at(i);
       ObObj &obj = row.row_val_.get_cell(i);
       if (!column.col_type_.is_lob_v2() || obj.is_null() || obj.is_nop_value()) {
-        // do nothing  
+        // do nothing
       } else {
         if (!check_lob) {
           if (OB_FAIL(check_lob_tablet_valid(data_tablet))) {
