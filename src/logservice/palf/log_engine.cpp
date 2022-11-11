@@ -135,6 +135,7 @@ int LogEngine::init(const int64_t palf_id,
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
     palf_epoch_ = palf_epoch;
+    base_lsn_for_block_gc_ = log_meta.get_log_snapshot_meta().base_lsn_;
     is_inited_ = true;
     PALF_LOG(INFO, "LogEngine init success", K(ret), K(palf_id), K(base_dir), K(palf_epoch));
   }
