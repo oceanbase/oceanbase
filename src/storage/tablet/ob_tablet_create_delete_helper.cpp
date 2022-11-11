@@ -1222,6 +1222,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   ObTabletTxMultiSourceDataUnit tx_data;
   MemtableRefOp ref_op = MemtableRefOp::NONE;
   bool is_valid = true;
+  int64_t tx_log_ts = OB_INVALID_TIMESTAMP;
 
   if (OB_FAIL(get_tablet(key, tablet_handle))) {
     // leader handle 4013 error(caused by memory not enough in load and dump procedure)
@@ -1285,7 +1286,14 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
       LOG_INFO("tablet is no valid but do nothing", K(ret), K(key), K(trans_flags));
     }
   } else {
-    const int64_t tx_log_ts = tx_data.tx_log_ts_;
+    if (trans_flags.for_replay_) {
+      tx_log_ts = trans_flags.log_ts_;
+    } else if (trans_flags.is_redo_synced()) {
+      tx_log_ts = trans_flags.log_ts_;
+    } else {
+      tx_log_ts = tx_data.tx_log_ts_;
+    }
+
     const int64_t memtable_log_ts = (OB_INVALID_TIMESTAMP == trans_flags.log_ts_) ? ObLogTsRange::MAX_TS: trans_flags.log_ts_;
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
