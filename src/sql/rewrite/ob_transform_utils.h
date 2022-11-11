@@ -1567,6 +1567,9 @@ public:
   static int rebuild_win_compare_range_expr(ObRawExprFactory* expr_factory,
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
+
+  static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
+                                             bool &is_valid);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

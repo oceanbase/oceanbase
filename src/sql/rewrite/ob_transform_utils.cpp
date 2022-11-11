@@ -11504,5 +11504,36 @@ int ObTransformUtils::rebuild_win_compare_range_expr(ObRawExprFactory* expr_fact
   return ret;
 }
 
+int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
+                                                      bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < select_exprs.count(); ++i) {
+    ObRawExpr *expr = select_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (expr->has_flag(IS_CONST) ||
+               expr->has_generalized_column()) {
+      // do nothing
+    } else if (expr->has_flag(CNT_STATE_FUNC) ||
+               expr->has_flag(CNT_USER_VARIABLE) ||
+               expr->has_flag(CNT_ALIAS) ||
+               expr->has_flag(CNT_VALUES) ||
+               expr->has_flag(CNT_SEQ_EXPR) ||
+               expr->has_flag(CNT_SYS_CONNECT_BY_PATH) ||
+               expr->has_flag(CNT_RAND_FUNC) ||
+               expr->has_flag(CNT_SO_UDF) ||
+               expr->has_flag(CNT_PRIOR) ||
+               expr->has_flag(CNT_VOLATILE_CONST) ||
+               expr->has_flag(CNT_ASSIGN_EXPR)) {
+      // the list is aligned with ObRawExprInfoExtractor::not_calculable_expr
+      is_valid = false;
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase
