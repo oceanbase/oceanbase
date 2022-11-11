@@ -1487,7 +1487,7 @@ Outputs & filters:
   3 - output([t4.c1], [t1.c1], [t2.c2]), filter(nil), rowset=256, 
       conds(nil), nl_params_(nil)
   4 - output([t4.c1]), filter(nil), rowset=256, 
-      equal_conds([t4.c2 = t5.c2], [t5.c1 = t6.c2]), other_conds(nil)
+      equal_conds([t5.c1 = t6.c2], [t4.c2 = t5.c2]), other_conds(nil)
   5 - output([t4.c1], [t4.c2], [t6.c2]), filter(nil), rowset=256, 
       conds(nil), nl_params_(nil)
   6 - output([t4.c1], [t4.c2]), filter(nil), rowset=256, 
