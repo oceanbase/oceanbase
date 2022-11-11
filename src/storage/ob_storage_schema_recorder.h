@@ -58,6 +58,7 @@ public:
       const int64_t saved_schema_version,
       logservice::ObLogHandler *log_handler);
   void reset();
+  void destroy();
   bool is_inited() const { return is_inited_; }
   bool is_valid() const
   {

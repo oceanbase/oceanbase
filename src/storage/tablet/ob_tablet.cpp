@@ -282,10 +282,6 @@ int ObTablet::init(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
-  } else if (is_update
-      && !tablet_id.is_ls_inner_tablet()
-      && OB_FAIL(init_storage_related_member(ls_id, tablet_id, param.max_sync_storage_schema_version_))) {
-    LOG_WARN("failed to init storage related member", K(ret), K(ls_id), K(tablet_id));
   } else if (!is_update && OB_FAIL(init_shared_params(ls_id, tablet_id, param.max_sync_storage_schema_version_, freezer))) {
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, param))) {
@@ -1632,7 +1628,7 @@ int ObTablet::release_memtables()
   return ret;
 }
 
-int ObTablet::destroy_storage_related_member()
+int ObTablet::reset_storage_related_member()
 {
   int ret = OB_SUCCESS;
   ObIMemtableMgr *memtable_mgr = nullptr;
@@ -1644,7 +1640,7 @@ int ObTablet::destroy_storage_related_member()
     // do nothing
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->destroy_storage_schema_recorder())) {
+  } else if (OB_FAIL(memtable_mgr->reset_storage_schema_recorder())) {
     LOG_WARN("failed to destroy storage schema recorder", K(ret), KPC(memtable_mgr));
   }
   return ret;
@@ -1729,30 +1725,6 @@ int ObTablet::init_shared_params(
     }
   }
 
-  return ret;
-}
-
-int ObTablet::init_storage_related_member(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    const int64_t max_saved_schema_version) // for init storage_schema_recorder on MemtableMgr
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!pointer_hdl_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl));
-  } else if (is_ls_inner_tablet()) {
-    // do nothing
-  } else {
-    ObIMemtableMgr *memtable_mgr = nullptr;
-    ObTabletMemtableMgr *data_memtable_mgr = nullptr;
-    if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-      LOG_WARN("failed to get memtable mgr", K(ret));
-    } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
-    } else if (OB_FAIL(data_memtable_mgr->init_storage_schema_recorder(tablet_id, ls_id, max_saved_schema_version, log_handler_))) {
-      LOG_WARN("failed to init storage schema recorder", K(ret), K(tablet_id), K(ls_id), KP(max_saved_schema_version));
-    }
-  }
   return ret;
 }
 

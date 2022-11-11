@@ -96,7 +96,7 @@ public:
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
       logservice::ObLogHandler *log_handler) override;
-  virtual int destroy_storage_schema_recorder() override;
+  virtual int reset_storage_schema_recorder() override;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

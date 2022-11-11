@@ -5583,7 +5583,7 @@ int ObLSTabletService::DestroyMemtableAndMemberOperator::operator()(const common
     }
   } else if (OB_FAIL(handle.get_obj()->release_memtables())) {
     LOG_WARN("failed to release memtables", K(tenant_id), K(tablet_id));
-  } else if (!tablet_id.is_ls_inner_tablet() && OB_FAIL(handle.get_obj()->destroy_storage_related_member())) {
+  } else if (!tablet_id.is_ls_inner_tablet() && OB_FAIL(handle.get_obj()->reset_storage_related_member())) {
     LOG_WARN("failed to destroy storage related member", K(ret), K(tenant_id), K(tablet_id));
   }
   return ret;

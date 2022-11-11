@@ -218,7 +218,7 @@ public:
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
-  int destroy_storage_related_member();
+  int reset_storage_related_member();
 
   // multi-source data operation
   int check_tx_data(bool &is_valid) const;
@@ -367,10 +367,6 @@ private:
       const common::ObTabletID &tablet_id,
       const int64_t max_saved_schema_version,
       ObFreezer *freezer);
-  int init_storage_related_member(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const int64_t max_saved_schema_version);
   int build_read_info(common::ObIAllocator &allocator);
   int create_memtable(const int64_t schema_version, const bool for_replay=false);
   int try_update_start_scn();
