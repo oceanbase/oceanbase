@@ -369,21 +369,6 @@ public:
   virtual int replay_to_commit();
   //method called when leader revoke
   virtual int commit_to_replay();
-  virtual int get_trans_status() const
-  {
-    return ATOMIC_LOAD(&end_code_);
-  }
-  int get_trans_status_retcode() const
-  {
-    auto s = get_trans_status();
-    if (PARTIAL_ROLLBACKED == s) { return OB_TRANS_KILLED; }
-    return s;
-  }
-  virtual bool is_trans_rollbacked() const
-  {
-    auto s = get_trans_status();
-    return s != OB_SUCCESS && s != OB_TRANS_COMMITED;
-  }
   virtual int fill_redo_log(char *buf,
                             const int64_t buf_len,
                             int64_t &buf_pos,
@@ -413,8 +398,6 @@ public:
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }
   uint64_t get_tenant_id() const;
   bool is_can_elr() const;
-  ObMemtableMutatorIterator *get_memtable_mutator_iter() { return mutator_iter_; }
-  ObMemtableMutatorIterator *alloc_memtable_mutator_iter();
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
@@ -454,6 +437,17 @@ public:
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
   int64_t get_checksum_log_ts() const { return trans_mgr_.get_checksum_log_ts(); }
+public:
+  // tx_status
+  enum ObTxStatus {
+    PARTIAL_ROLLBACKED = -1,
+    NORMAL = 0,
+    ROLLBACKED = 1,
+  };
+  virtual int64_t get_tx_status() const { return ATOMIC_LOAD(&tx_status_); }
+  bool is_tx_rollbacked() const { return get_tx_status() != ObTxStatus::NORMAL; }
+  inline void set_partial_rollbacked() { ATOMIC_STORE(&tx_status_, ObTxStatus::PARTIAL_ROLLBACKED); }
+  inline void set_tx_rollbacked() { ATOMIC_STORE(&tx_status_, ObTxStatus::ROLLBACKED); }
 public:
   // table lock.
   int enable_lock_table(storage::ObTableHandleV2 &handle);
@@ -511,16 +505,14 @@ private:
   {
     trans_mgr_.inc_flushed_log_size(size);
   }
-  bool is_partial_rollbacked_() { return ATOMIC_LOAD(&end_code_) == PARTIAL_ROLLBACKED; }
-  void set_partial_rollbacked_();
 public:
   inline ObRedoLogGenerator &get_redo_generator() { return log_gen_; }
 private:
-  static const int PARTIAL_ROLLBACKED = -1;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);
   RWLock rwlock_;
   common::ObByteLock lock_;
   int end_code_;
+  int64_t tx_status_;
   int64_t ref_;
   // allocate memory for callback when query executing
   ObQueryAllocator query_allocator_;
@@ -529,7 +521,6 @@ private:
   MemtableCtxStat mtstat_;
   ObTimeInterval log_conflict_interval_;
   transaction::ObPartTransCtx *ctx_;
-  ObMemtableMutatorIterator *mutator_iter_;
   transaction::ObPartitionAuditInfoCache partition_audit_info_cache_;
   int64_t truncate_cnt_;
   // the retry count of lock for read

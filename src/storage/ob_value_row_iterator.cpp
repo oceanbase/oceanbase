@@ -292,7 +292,9 @@ int ObSingleRowGetter::get_next_row(ObNewRow *&row)
     // check txn status not aborted, which cause readout incorrect result
     if (store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_.is_valid() &&
         store_ctx_->mvcc_acc_ctx_.mem_ctx_ &&
-        store_ctx_->mvcc_acc_ctx_.mem_ctx_->is_trans_rollbacked()) {
+        store_ctx_->mvcc_acc_ctx_.mem_ctx_->is_tx_rollbacked()) {
+      // The txn has been killed during normal processing. So we return
+      // OB_TRANS_KILLED to prompt this abnormal state.
       ret = OB_TRANS_KILLED;
       STORAGE_LOG(WARN, "txn has terminated", K(ret));
     }

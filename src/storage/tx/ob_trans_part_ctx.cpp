@@ -366,13 +366,15 @@ int ObPartTransCtx::trans_kill_()
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "trans killed", K(trans_id_));
 
-  mt_ctx_.trans_kill();
+  mt_ctx_.set_tx_rollbacked();
 
   if (ctx_tx_data_.get_state() == ObTxData::RUNNING) {
     if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
       TRANS_LOG(WARN, "set abort state in ctx_tx_data_ failed", K(ret));
     }
   }
+
+  mt_ctx_.trans_kill();
 
   return ret;
 }
@@ -1542,7 +1544,7 @@ int ObPartTransCtx::update_max_commit_version_()
 }
 
 // Unified interface for normal transaction end(both commit and abort). We We
-// want to integrate the following five things that all txn commits should do.
+// want to integrate the following six things that all txn commits should do.
 //
 // 1.end_log_ts: We set end_log_ts during final log state is synced which must
 // have been done, so we check the validation of end_log_ts here(Maybe set it in
@@ -1554,9 +1556,10 @@ int ObPartTransCtx::update_max_commit_version_()
 // 3.mt_ctx.tx_end: We need callback all txn ops for all data in txn after final
 // state is synced. It must be called for all txns to clean and release its data
 // resource.
-// 4.set_state: We need set state after final state is synced. It tells others
+// 4.set_status: We need set status to kill the concurrent read and write.
+// 5.set_state: We need set state after final state is synced. It tells others
 // that all data for this txn is decided and visible.
-// 5.insert_tx_data: We need insert into tx_data in order to cleanot data which
+// 6.insert_tx_data: We need insert into tx_data in order to cleanot data which
 // need be delay cleanout
 //
 // NB: You need pay much attention to the order of the following steps
@@ -1566,7 +1569,6 @@ int ObPartTransCtx::tx_end_(const bool commit)
   int ret = OB_SUCCESS;
 
   // NB: The order of the following steps is critical
-  // We need first set end_code_ for the s
   int32_t state = commit ? ObTxData::COMMIT : ObTxData::ABORT;
   int64_t commit_version = ctx_tx_data_.get_commit_version();
   int64_t end_log_ts = ctx_tx_data_.get_end_log_ts();
@@ -1585,19 +1587,23 @@ int ObPartTransCtx::tx_end_(const bool commit)
   } else if (commit && ObTransVersion::INVALID_TRANS_VERSION == commit_version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "commit version is invalid when tx end", K(ret), KPC(this));
-  // STEP3: We need invoke mt_ctx_.trans_end before state is filled in here
-  // because we relay on the end_code_ in mt_ctx_ to report the suicide before
-  // the tnode can be cleanout by concurrent read.
-  } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_log_ts))) {
-    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP3: We need set status in order to kill concurrent read and write. What
+  // you need pay attention to is that we rely on the status to report the
+  // suicide before the tnode can be cleanout by concurrent read using state in
+  // ctx_tx_data.
+  } else if (!commit && FALSE_IT(mt_ctx_.set_tx_rollbacked())) {
   // STEP4: We need set state in order to informing others of the final status
   // of my txn. What you need pay attention to is that after this action, others
-  // can cleanout the unfinished txn state and see all your data.
-  // TODO: we can move set_state before mt_ctx_.trans_end for commit state in
-  // order to accelerate users to see the data state.
+  // can cleanout the unfinished txn state and see all your data. We currently
+  // move set_state before mt_ctx_.trans_end for the commit state in order to
+  // accelerate users to see the data state.
   } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
     TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
-  // STEP5: We need insert into the tx_data after all states are filled
+  // STEP5: We need invoke mt_ctx_.trans_end before state is filled in here
+  // because we relay on the state in the ctx_tx_data_ to callback all txn ops.
+  } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_log_ts))) {
+    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP6: We need insert into the tx_data after all states are filled
   } else if (has_persisted_log_() && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
     TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
   }

@@ -559,8 +559,10 @@ int ObTableScanIterator::check_txn_status_if_read_uncommitted_()
   auto &acc_ctx = ctx_guard_.get_store_ctx().mvcc_acc_ctx_;
   auto &snapshot = acc_ctx.snapshot_;
   if (snapshot.tx_id_.is_valid() && acc_ctx.mem_ctx_) {
-    if (acc_ctx.mem_ctx_->is_trans_rollbacked()) {
-      ret = acc_ctx.mem_ctx_->get_trans_status_retcode();
+    if (acc_ctx.mem_ctx_->is_tx_rollbacked()) {
+      // The txn has been killed during normal processing. So we return
+      // OB_TRANS_KILLED to prompt this abnormal state.
+      ret = OB_TRANS_KILLED;
       STORAGE_LOG(WARN, "txn termianted when table scan", K(ret), K(acc_ctx));
     }
   }

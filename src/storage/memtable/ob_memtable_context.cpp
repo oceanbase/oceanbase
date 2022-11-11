@@ -44,12 +44,12 @@ ObMemtableCtx::ObMemtableCtx()
       rwlock_(),
       lock_(),
       end_code_(OB_SUCCESS),
+      tx_status_(ObTxStatus::NORMAL),
       ref_(0),
       query_allocator_(),
       ctx_cb_allocator_(),
       log_conflict_interval_(LOG_CONFLICT_INTERVAL),
       ctx_(NULL),
-      mutator_iter_(NULL),
       truncate_cnt_(0),
       lock_for_read_retry_count_(0),
       lock_for_read_elapse_(0),
@@ -141,10 +141,6 @@ void ObMemtableCtx::reset()
     unsubmitted_cnt_ = 0;
     partition_audit_info_cache_.reset();
     lock_mem_ctx_.reset();
-    if (OB_NOT_NULL(mutator_iter_)) {
-      ctx_cb_allocator_.free(mutator_iter_);
-      mutator_iter_ = NULL;
-    }
     //FIXME: ctx_ is not reset
     log_conflict_interval_.reset();
     mtstat_.reset();
@@ -154,6 +150,7 @@ void ObMemtableCtx::reset()
     is_master_ = true;
     is_read_only_ = false;
     end_code_ = OB_SUCCESS;
+    tx_status_ = ObTxStatus::NORMAL;
     // blocked_trans_ids_.reset();
     tx_table_guard_.reset();
     //FIXME: ObIMemtableCtx don't have resetfunction,
@@ -173,7 +170,8 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos, "{");
   pos += ObIMvccCtx::to_string(buf + pos, buf_len);
   common::databuff_printf(buf, buf_len, pos,
-                          " end_code=%d is_readonly=%s ref=%ld trans_id=%s ls_id=%ld "
+                          " end_code=%d tx_status=%ld is_readonly=%s "
+                          "ref=%ld trans_id=%s ls_id=%ld "
                           "callback_alloc_count=%ld callback_free_count=%ld "
                           "checksum=%lu tmp_checksum=%lu checksum_log_ts=%lu "
                           "redo_filled_count=%ld redo_sync_succ_count=%ld "
@@ -182,7 +180,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
                           "cb_statistics:[main=%ld, slave=%ld, merge=%ld, "
                           "tx_end=%ld, rollback_to=%ld, "
                           "fast_commit=%ld, remove_memtable=%ld]",
-                          end_code_, STR_BOOL(is_read_only_), ref_,
+                          end_code_, tx_status_, STR_BOOL(is_read_only_), ref_,
                           NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
                           NULL == ctx_ ? -1 : ctx_->get_ls_id().id(),
                           callback_alloc_count_, callback_free_count_,
@@ -250,7 +248,13 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       TRANS_LOG(ERROR, "WriteAuth: readonly trans not support update operation",
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (OB_SUCCESS != ATOMIC_LOAD(&end_code_)) {
-      ret = get_trans_status_retcode();
+      ret = ATOMIC_LOAD(&end_code_);
+      TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K_(end_code));
+    } else if (is_tx_rollbacked()) {
+      // The txn has been killed during normal processing. So we return
+      // OB_TRANS_KILLED to prompt this abnormal state.
+      ret = OB_TRANS_KILLED;
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
                 "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K_(end_code));
     } else if (!ATOMIC_LOAD(&is_master_)) {
@@ -494,13 +498,7 @@ int ObMemtableCtx::do_trans_end(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   WRLockGuard wrguard(rwlock_);
-  bool partial_rollbacked = is_partial_rollbacked_();
-  if (OB_UNLIKELY(partial_rollbacked) && commit) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "txn has partially rollbacked", K(ret), K(end_code), KPC(this));
-    ob_abort();
-  }
-  if (partial_rollbacked || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     ATOMIC_STORE(&end_code_, end_code);
     set_commit_version(trans_version);
     if (OB_FAIL(trans_mgr_.trans_end(commit))) {
@@ -673,7 +671,7 @@ int ObMemtableCtx::sync_log_succ(const int64_t log_ts, const ObCallbackScope &ca
 {
   int ret = OB_SUCCESS;
 
-  if (is_partial_rollbacked_() || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     if (OB_FAIL(log_gen_.sync_log_succ(log_ts, callbacks))) {
       TRANS_LOG(WARN, "sync log failed", K(ret));
     }
@@ -690,9 +688,9 @@ int ObMemtableCtx::sync_log_succ(const int64_t log_ts, const ObCallbackScope &ca
 void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
 {
   if (!callbacks.is_empty()) {
-    set_partial_rollbacked_();
+    set_partial_rollbacked();
   }
-  if (is_partial_rollbacked_() || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     log_gen_.sync_log_fail(callbacks);
   } else {
     if (!callbacks.is_empty()) {
@@ -919,25 +917,6 @@ bool ObMemtableCtx::is_all_redo_submitted()
 }
 
 
-ObMemtableMutatorIterator *ObMemtableCtx::alloc_memtable_mutator_iter()
-{
-  int ret = OB_SUCCESS;
-  ObMemtableMutatorIterator *mmi = NULL;
-
-  void *buf = ctx_cb_allocator_.alloc(sizeof(ObMemtableMutatorIterator));
-  if (OB_ISNULL(buf) || OB_ISNULL((mmi = new(buf) ObMemtableMutatorIterator()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "memtable mutator iter alloc fail", K(ret), KP(buf));
-  } else if (OB_ISNULL(ATOMIC_LOAD(&ctx_))) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(mmi));
-  } else {
-    ATOMIC_STORE(&mutator_iter_, mmi);
-  }
-  UNUSED(ret);
-  return ATOMIC_LOAD(&mutator_iter_);
-}
-
 int ObMemtableCtx::remove_callbacks_for_fast_commit()
 {
   int ret = OB_SUCCESS;
@@ -984,7 +963,7 @@ int ObMemtableCtx::clean_unlog_callbacks()
     }
   }
   if (removed_cnt > 0) {
-    set_partial_rollbacked_();
+    set_partial_rollbacked();
   }
   return ret;
 }
@@ -1371,16 +1350,6 @@ int ObMemtableCtx::check_tx_mem_size_overflow(bool &is_overflow)
   }
 
   return ret;
-}
-
-inline void ObMemtableCtx::set_partial_rollbacked_()
-{
-  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
-    WRLockGuard wrguard(rwlock_);
-    if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
-      ATOMIC_STORE(&end_code_, PARTIAL_ROLLBACKED);
-    }
-  }
 }
 
 }
