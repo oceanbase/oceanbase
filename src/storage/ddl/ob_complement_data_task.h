@@ -41,7 +41,8 @@ public:
     source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
     data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("CompleteDataPar"), 
     row_store_type_(common::ENCODING_ROW_STORE), schema_version_(0), snapshot_version_(0),
-    concurrent_cnt_(0), task_id_(0), execution_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
+    concurrent_cnt_(0), task_id_(0), execution_id_(0), tablet_task_id_(0),
+    compat_mode_(lib::Worker::CompatMode::INVALID)
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
@@ -52,7 +53,7 @@ public:
     return common::OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid()
            && dest_tablet_id_.is_valid() && OB_NOT_NULL(data_table_schema_) && OB_NOT_NULL(hidden_table_schema_)
            && 0 != concurrent_cnt_ && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID
-           && execution_id_ > 0;
+           && execution_id_ > 0 && tablet_task_id_ > 0;
   }
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
   void destroy()
@@ -78,10 +79,11 @@ public:
     concurrent_cnt_ = 0;
     task_id_ = 0;
     execution_id_ = 0;
+    tablet_task_id_ = 0;
     compat_mode_ = lib::Worker::CompatMode::INVALID;
   }
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-      KPC_(data_table_schema), KPC_(hidden_table_schema), K_(schema_version),
+      KPC_(data_table_schema), KPC_(hidden_table_schema), K_(schema_version), K_(tablet_task_id),
       K_(snapshot_version), K_(concurrent_cnt), K_(task_id), K_(execution_id), K_(compat_mode));
 public:
   bool is_inited_;
@@ -98,6 +100,7 @@ public:
   int64_t concurrent_cnt_;
   int64_t task_id_;
   int64_t execution_id_;
+  int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
   ObSEArray<common::ObStoreRange, 32> ranges_;
 };

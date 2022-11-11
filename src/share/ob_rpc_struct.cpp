@@ -5571,7 +5571,8 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principa
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_, 
-  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_, parallelism_);
+  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
+  parallelism_, tablet_task_id_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -5586,6 +5587,9 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   snapshot_version_ = other.snapshot_version_;
   ddl_type_ = other.ddl_type_;
   task_id_ = other.task_id_;
+  parallelism_ = other.parallelism_;
+  execution_id_ = other.execution_id_;
+  tablet_task_id_ = other.tablet_task_id_;
   return ret;
 }
 

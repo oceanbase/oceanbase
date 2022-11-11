@@ -114,6 +114,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     schema_version_ = arg.schema_version_;
     task_id_ = arg.task_id_;
     execution_id_ = arg.execution_id_;
+    tablet_task_id_ = arg.tablet_task_id_;
     FLOG_INFO("succeed to init ObComplementDataParam", K(ret), K(is_inited_), K(tenant_id_), K(ls_id_),
       K(source_tablet_id_), K(dest_tablet_id_), K(schema_version_), K(task_id_), K(arg), K(concurrent_cnt_));
   }
@@ -1094,7 +1095,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
                                                               report_col_checksums,
                                                               report_col_ids,
                                                               1/*execution_id*/,
-                                                              param_->source_tablet_id_.id()/*task_id*/,
+                                                              param_->tablet_task_id_ << 48 | task_id_,
                                                               *GCTX.sql_proxy_))) {
       LOG_WARN("fail to report origin table checksum", K(ret));
     } else {/* do nothing. */}

@@ -674,7 +674,6 @@ int ObIndexBuildTask::wait_data_complement()
     }
   }
   if (OB_SUCC(ret) && state_finished) {
-    uint64_t execution_id = OB_INVALID_ID;
     bool dummy_equal = false;
     if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
             tenant_id_, redefinition_execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
