@@ -20,6 +20,7 @@
 #include "lib/oblog/ob_log.h"
 #include "logservice/applyservice/ob_log_apply_service.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
+#include "logservice/rcservice/ob_role_change_service.h"
 #include "logservice/logrpc/ob_log_rpc_req.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/lsn.h"
@@ -37,6 +38,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                apply_status_(NULL),
                                apply_service_(NULL),
                                replay_service_(NULL),
+                               rc_service_(NULL),
                                deps_lock_(),
                                lc_cb_(NULL),
                                rpc_proxy_(NULL),
@@ -45,6 +47,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                last_check_sync_ts_(OB_INVALID_TIMESTAMP),
                                last_renew_loc_ts_(OB_INVALID_TIMESTAMP),
                                is_in_stop_state_(true),
+                               is_offline_(false),
                                is_inited_(false),
                                get_max_decided_log_ts_ns_debug_time_(OB_INVALID_TIMESTAMP)
 {
@@ -59,6 +62,7 @@ int ObLogHandler::init(const int64_t id,
                        const common::ObAddr &self,
                        ObLogApplyService *apply_service,
                        ObLogReplayService *replay_service,
+                       ObRoleChangeService *rc_service,
                        PalfHandle &palf_handle,
                        PalfEnv *palf_env,
                        PalfLocationCacheCb *lc_cb,
@@ -86,6 +90,7 @@ int ObLogHandler::init(const int64_t id,
     get_max_decided_log_ts_ns_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
     replay_service_ = replay_service;
+    rc_service_ = rc_service;
     apply_status_->inc_ref();
     id_ = id;
     self_ = self;
@@ -95,6 +100,7 @@ int ObLogHandler::init(const int64_t id,
     lc_cb_ = lc_cb;
     rpc_proxy_ = rpc_proxy;
     is_in_stop_state_ = false;
+    is_offline_ = false;
     is_inited_ = true;
     FLOG_INFO("ObLogHandler init success", K(id), K(palf_handle));
   }
@@ -161,6 +167,7 @@ void ObLogHandler::destroy()
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     is_inited_ = false;
+    is_offline_ = false;
     is_in_stop_state_ = true;
     common::ObSpinLockGuard deps_guard(deps_lock_);
     apply_service_->revert_apply_status(apply_status_);
@@ -170,6 +177,7 @@ void ObLogHandler::destroy()
     if (true == palf_handle_.is_valid()) {
       palf_env_->close(palf_handle_);
     }
+    rc_service_ = NULL;
     lc_cb_ = NULL;
     rpc_proxy_ = NULL;
     palf_env_ = NULL;
@@ -201,7 +209,7 @@ int ObLogHandler::append(const void *buffer,
       cb->set_append_start_ts(ObTimeUtility::fast_current_time());
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
-      } else if (is_in_stop_state_) {
+      } else if (is_in_stop_state_ || is_offline_) {
         ret = OB_NOT_RUNNING;
       } else if (LEADER != ATOMIC_LOAD(&role_)) {
         ret = OB_NOT_MASTER;
@@ -1320,6 +1328,52 @@ int ObLogHandler::diagnose(LogHandlerDiagnoseInfo &diagnose_info) const
   return ret;
 }
 
+int ObLogHandler::offline()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(disable_replay())) {
+    CLOG_LOG(WARN, "disable_replay failed", K(ret), KPC(this));
+  } else if (OB_FAIL(disable_sync())) {
+    CLOG_LOG(WARN, "disable_sync failed", K(ret), KPC(this));
+  } else {
+    WLockGuard guard(lock_);
+    // NB: make proposal_id_ to be invalid:
+    // 1. avoid append success.
+    // 2. make role change success(role change service require proposal_id of log_handler is not same as palf)
+    // 3. don't make role to follower at here, otherwise, role change thread will execute follower to follower.
+    proposal_id_ = INVALID_PROPOSAL_ID;
+
+    // NB: 
+    // 1. After set 'is_offline_' to true, we must prohibit apply log, otherwise,
+    // log handler may be come LEADER after offline, and the proposal id of apply
+    // is -1, update committed end ls of appy will print ERROR logs.
+    //
+    // 2. Must reset proposal_id of apply_status_ before set 'is_offline', otherwise,
+    // concurrent 'switch to follower' event may set apply status to FOLLOWER, however,
+    // there are some uncommitted logs in PALF. and before reset_proposal_id, these
+    // uncommitted logs has been committed. and then update committed end ls of apply
+    // will print ERROR logs, because the role of apply is FOLLOWER, and the proposal_id
+    // of apply is as same as PALF.
+    apply_status_->reset_proposal_id();
+    //
+    // 3. Must keep the order of set 'is_offline_' between reset the proposal id of apply.
+    //
+    MEM_BARRIER();
+    is_offline_ = true;
+    // NB: must ensure on_role_change not fail.
+    if (OB_FAIL(rc_service_->on_role_change(id_))) {
+      CLOG_LOG(ERROR, "on_role_change failed", K(ret), KPC(this));
+    } else {
+      CLOG_LOG(INFO, "LogHandler offline success", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
 int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
 {
   int ret = OB_SUCCESS;
@@ -1332,6 +1386,45 @@ int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
     // do nothing
   }
   return ret;
+}
+
+int ObLogHandler::online(const LSN &lsn, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_decided_ts_ns = OB_INVALID_TIMESTAMP;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(get_max_decided_log_ts_ns(max_decided_ts_ns))) {
+    CLOG_LOG(WARN, "get_max_decided_log_ts_ns failed", K(ret), KPC(this));
+  } else if (log_ts < max_decided_ts_ns) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "base log ts is less than max decided log ts, not supported",
+        K(ret), KPC(this), K(log_ts), K(max_decided_ts_ns));
+  } else if (OB_FAIL(enable_replay(lsn, log_ts))) {
+    CLOG_LOG(WARN, "enable_replay failed", K(ret), KPC(this), K(lsn), K(log_ts));
+  } else if (OB_FAIL(enable_sync())) {
+    CLOG_LOG(WARN, "enable_sync failed", K(ret), KPC(this));
+  } else {
+    WLockGuard guard(lock_);
+    proposal_id_ = INVALID_PROPOSAL_ID;
+    is_offline_ = false;
+    // NB: before notify role change service, we need set role to FOLLOWER,
+    // otherwise, role change service may need switch leader to leader.
+    role_ = common::FOLLOWER;
+    if (OB_FAIL(rc_service_->on_role_change(id_))) {
+      CLOG_LOG(WARN, "on_role_change failed", K(ret), KPC(this));
+    } else {
+      CLOG_LOG(INFO, "LogHander online success", K(ret), KPC(this), K(lsn), K(log_ts));
+    }
+  }
+  return ret;
+}
+
+bool ObLogHandler::is_offline() const
+{
+  return true == ATOMIC_LOAD(&is_offline_);
 }
 } // end namespace logservice
 } // end napespace oceanbase

@@ -171,6 +171,28 @@ public:
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
   int diagnose(ApplyDiagnoseInfo &diagnose_info);
+  // offline相关
+  //
+  // The constraint between palf and apply: 
+  //
+  // Palf guarantee that switch apply to follower only when there is not
+  // any uncommitted logs in previous LEADER, therefore, apply only update 
+  // 'palf_committed_end_lsn_' when 'proposal_id_' is as same as current 
+  // proposal_id of palf. 
+  //
+  // To increase robustness, apply assums that update 'palf_committed_end_lsn_'
+  // when the role of apply is LEADER execpet above constraints. otherwise,
+  // apply consider it as unexpected error.
+  //
+  // However, in rebuild scenario, apply will be reset to FOLLOWER even if there 
+  // are logs to be committed when 'proposal_id_' is as same as current proposal_id
+  // of palf.
+  //
+  // To solve above problem, add an interface which used to reset 'proposal_id_' of
+  // apply.
+  //
+  // NB: this interface only can be used in 'ObLogHandler::offline'.
+  void reset_proposal_id();
   TO_STRING_KV(K(ls_id_),
                K(role_),
                K(proposal_id_),

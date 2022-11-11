@@ -308,8 +308,6 @@ private:
   int prepare_for_safe_destroy_();
   int flush_if_need_(const bool need_flush);
   int offline_();
-  int offline_log_();
-  int online_log_();
   int offline_tx_();
   int online_tx_();
 public:

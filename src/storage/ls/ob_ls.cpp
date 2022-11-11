@@ -584,17 +584,6 @@ void ObLS::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
-int ObLS::offline_log_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(log_handler_.disable_sync())) {
-    LOG_WARN("failed to disable sync", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(log_handler_.disable_replay())) {
-    LOG_WARN("failed to disable replay", K(ret), K(ls_meta_));
-  }
-  return ret;
-}
-
 int ObLS::offline_tx_()
 {
   int ret = OB_SUCCESS;
@@ -619,7 +608,7 @@ int ObLS::offline_()
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(offline_log_())) {
+  } else if (OB_FAIL(log_handler_.offline())) {
     LOG_WARN("failed to offline log", K(ret));
   } else if (OB_FAIL(ls_ddl_log_handler_.offline())) {
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
@@ -654,18 +643,6 @@ int ObLS::offline()
   return ret;
 }
 
-int ObLS::online_log_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
-                                         ls_meta_.get_clog_checkpoint_ts()))) {
-    LOG_WARN("failed to enable replay", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(log_handler_.enable_sync())) {
-    LOG_WARN("failed to enable sync", K(ret), K(ls_meta_));
-  }
-  return ret;
-}
-
 int ObLS::online_tx_()
 {
   int ret = OB_SUCCESS;
@@ -694,7 +671,8 @@ int ObLS::online()
     LOG_WARN("ls tx online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_ddl_log_handler_.online())) {
     LOG_WARN("ddl log handler online failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(online_log_())) {
+  } else if (OB_FAIL(log_handler_.online(ls_meta_.get_clog_base_lsn(),
+                                         ls_meta_.get_clog_checkpoint_ts()))) {
     LOG_WARN("failed to online log", K(ret));
   } else if (OB_FAIL(ls_wrs_handler_.online())) {
     LOG_WARN("weak read handler online failed", K(ret), K(ls_meta_));
