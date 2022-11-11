@@ -954,9 +954,9 @@ int ObTabletTableStore::check_ready_for_read()
   int ret = OB_SUCCESS;
   is_ready_for_read_ = false;
 
-  if (IS_NOT_INIT) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("table store not init", K(ret), K(*this));
+  if (OB_UNLIKELY(!is_inited_ || nullptr == tablet_ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("table store not init", K(ret), KPC(this), KPC(tablet_ptr_));
   } else if (major_tables_.empty()) {
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
@@ -967,11 +967,19 @@ int ObTabletTableStore::check_ready_for_read()
   } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), KPC(tablet_ptr_));
-    if (OB_NOT_NULL(tablet_ptr_)) {
-      ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
-    }
-  } else {
+    ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
+  } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
+  } else {
+    const int64_t clog_checkpoint_ts = tablet_ptr_->get_clog_checkpoint_ts();
+    const int64_t last_minor_end_log_ts = minor_tables_.get_boundary_table(true/*last*/)->get_end_log_ts();
+    if (OB_UNLIKELY(clog_checkpoint_ts != last_minor_end_log_ts)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("last minor table's end_log_ts must be equal to clog_checkpoint_ts",
+          K(ret), K(last_minor_end_log_ts), K(clog_checkpoint_ts), KPC(this), KPC(tablet_ptr_));
+    } else {
+      is_ready_for_read_ = true;
+    }
   }
   return ret;
 }

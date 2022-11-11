@@ -1946,8 +1946,8 @@ int ObService::inner_fill_tablet_info_(
     int64_t data_size = 0;
     int64_t required_size = 0;
     ObArray<int64_t> column_checksums;
-    if (OB_FAIL(tablet_handle.get_obj()->get_tablet_report_info(column_checksums, data_size,
-        required_size, need_checksum))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_tablet_report_info(snapshot_version, column_checksums,
+        data_size, required_size, need_checksum))) {
       LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id), K(tablet_id));
     } else if (OB_FAIL(tablet_replica.init(
         tenant_id,

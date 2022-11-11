@@ -338,6 +338,7 @@ public:
       transaction::ObTransID &pending_tx_id);
   int replay_schema_version_change_log(const int64_t schema_version);
   int get_tablet_report_info(
+      const int64_t snapshot_version,
       common::ObIArray<int64_t> &column_checksums,
       int64_t &data_size,
       int64_t &required_size,

@@ -2339,6 +2339,7 @@ int ObTablet::replay_schema_version_change_log(const int64_t schema_version)
 }
 
 int ObTablet::get_tablet_report_info(
+    const int64_t snapshot_version,
     common::ObIArray<int64_t> &column_checksums,
     int64_t &data_size,
     int64_t &required_size,
@@ -2357,9 +2358,10 @@ int ObTablet::get_tablet_report_info(
   } else if (major_sstables.count_ == 0) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_INFO("no major sstables in this tablet, cannot report", K(ret));
-  } else if (OB_ISNULL(main_major = static_cast<ObSSTable *>(major_sstables.get_boundary_table(true)))) {
+  } else if (FALSE_IT(main_major = static_cast<ObSSTable *>(major_sstables.get_boundary_table(true)))) {
+  } else if (OB_UNLIKELY(nullptr == main_major || snapshot_version != main_major->get_snapshot_version())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("faild to get unexpected null major", K(ret));
+    LOG_WARN("get unexpected main major", K(ret), K(snapshot_version), KPC(main_major), KPC(this));
   } else if (need_checksums && OB_FAIL(column_checksums.assign(main_major->get_meta().get_col_checksum()))) {
     LOG_WARN("failed to assign column checksums", K(ret));
   }

@@ -102,12 +102,15 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     LOG_WARN("get unexpected null memtable mgr from tablet or invalid table store", K(ret), K(tablet), K(table_store));
   } else if (table_store.get_minor_sstables().count() >= MAX_SSTABLE_CNT_IN_STORAGE) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT", K(ret));
+    LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT",
+              K(ret), K(table_store), K(tablet));
     // add compaction diagnose info
     diagnose_table_count_unsafe(MINI_MERGE, tablet);
   } else if (OB_FAIL(tablet.get_memtable_mgr()->get_all_memtables(memtable_handles))) {
     LOG_WARN("failed to get all memtables from memtable mgr", K(ret));
-  } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version, table_store.get_major_sstables().get_boundary_table(true), freeze_info))) {
+  } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
+                                               table_store.get_major_sstables().get_boundary_table(true),
+                                               freeze_info))) {
     LOG_WARN("failed to get next major freeze", K(ret), K(merge_inc_base_version), K(table_store));
   } else if (OB_FAIL(find_mini_merge_tables(param, freeze_info, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -132,7 +135,6 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // TODO: @dengzhi.ldz, remove max_snapshot_version, merge all forzen memtables
   // Keep max_snapshot_version currently because major merge must be done step by step
   int64_t max_snapshot_version = freeze_info.next.freeze_ts;
-  ObITable *last_table = tablet.get_table_store().get_minor_sstables().get_boundary_table(true/*last*/);
   const int64_t clog_checkpoint_ts = tablet.get_clog_checkpoint_ts();
 
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
@@ -163,8 +165,8 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       }
     } else if (result.handle_.get_count() > 0) {
       if (result.log_ts_range_.end_log_ts_ < memtable->get_start_log_ts()) {
-        FLOG_INFO("log id not continues, reset previous minor merge tables",
-                  "last_end_log_ts", result.log_ts_range_.end_log_ts_, KPC(memtable));
+        FLOG_INFO("log ts range not continues, reset previous minor merge tables",
+                  "last_end_log_ts", result.log_ts_range_.end_log_ts_, KPC(memtable), K(tablet));
         // mini merge always use the oldest memtable to dump
         break;
       } else if (memtable->get_snapshot_version() > max_snapshot_version) {
@@ -1023,16 +1025,18 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
     // no minor sstable, skip to cut memtable's boundary
   } else if (result.log_ts_range_.start_log_ts_ > last_table->get_end_log_ts()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexpected uncontinuous log_ts_range in mini merge", K(ret), K(result), KPC(last_table));
+    LOG_ERROR("Unexpected uncontinuous log_ts_range in mini merge",
+              K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
   } else if (result.log_ts_range_.start_log_ts_ < last_table->get_end_log_ts()
       && !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet()) {
     // fix start_log_ts to make log_ts_range continuous in migrate phase for issue 42832934
     if (result.log_ts_range_.end_log_ts_ <= last_table->get_end_log_ts()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("No need mini merge memtable which is covered by existing sstable", K(ret), K(result), KPC(last_table));
+      LOG_WARN("No need mini merge memtable which is covered by existing sstable",
+               K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
     } else {
       result.log_ts_range_.start_log_ts_ = last_table->get_end_log_ts();
-      FLOG_INFO("Fix mini merge result log ts range", K(ret), K(result), KPC(last_table));
+      FLOG_INFO("Fix mini merge result log ts range", K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
     }
   }
   return ret;
