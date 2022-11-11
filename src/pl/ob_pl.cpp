@@ -311,6 +311,10 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         }
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard; //这里其实没有必要置回来，但是不置的话schema_guard的生命周期结束后会变成野指针太危险了
+        // support `SHOW WARNINGS` in mysql PL
+        if (OB_FAIL(ret)) {
+          ctx.exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+        }
       }
     }
   }
