@@ -439,7 +439,7 @@ int ObCalcColumnChecksumRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
-    ret = gctx_.ob_service_->calc_column_checksum_request(arg_);
+    ret = gctx_.ob_service_->calc_column_checksum_request(arg_, result_);
   }
   return ret;
 }

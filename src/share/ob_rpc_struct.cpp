@@ -2629,40 +2629,80 @@ DEF_TO_STRING(ObRemoveTabletRes)
 
 OB_SERIALIZE_MEMBER(ObRemoveTabletRes, ret_);
 
+OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestArg::SingleItem, ls_id_, tablet_id_, calc_table_id_);
+
+bool ObCalcColumnChecksumRequestArg::SingleItem::is_valid() const
+{
+  return ls_id_.is_valid() && tablet_id_.is_valid() && OB_INVALID_ID != calc_table_id_;
+}
+
+void ObCalcColumnChecksumRequestArg::SingleItem::reset()
+{
+  ls_id_.reset();
+  tablet_id_.reset();
+  calc_table_id_ = OB_INVALID_ID;
+}
+
+int ObCalcColumnChecksumRequestArg::SingleItem::assign(const SingleItem &other)
+{
+  int ret = OB_SUCCESS;
+  ls_id_ = other.ls_id_;
+  tablet_id_ = other.tablet_id_;
+  calc_table_id_ = other.calc_table_id_;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(
     ObCalcColumnChecksumRequestArg,
     tenant_id_,
-    ls_id_,
-    tablet_id_,
     target_table_id_,
     schema_version_,
     execution_id_,
     snapshot_version_,
     source_table_id_,
-    calc_table_id_,
-    task_id_);
+    task_id_,
+    calc_items_);
 
 bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
-  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
-      && OB_INVALID_ID != target_table_id_ && OB_INVALID_VERSION != schema_version_
-      && OB_INVALID_ID != execution_id_ && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_
-      && OB_INVALID_ID != calc_table_id_ && task_id_ > 0;
+  bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
+      && OB_INVALID_VERSION != schema_version_ && OB_INVALID_ID != execution_id_
+      && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_ && task_id_ > 0;
+  for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
+    bret = calc_items_.at(i).is_valid();
+  }
+  return bret;
 }
 
 void ObCalcColumnChecksumRequestArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  tablet_id_.reset();
   target_table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   execution_id_ = OB_INVALID_ID;
   snapshot_version_ = OB_INVALID_VERSION;
   source_table_id_ = OB_INVALID_ID;
-  calc_table_id_ = OB_INVALID_ID;
   task_id_ = 0;
+  calc_items_.reset();
 }
+
+int ObCalcColumnChecksumRequestArg::assign(const ObCalcColumnChecksumRequestArg &other)
+{
+  int ret = common::OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  target_table_id_ = other.target_table_id_;
+  schema_version_ = other.schema_version_;
+  execution_id_ = other.execution_id_;
+  snapshot_version_ = other.snapshot_version_;
+  source_table_id_ = other.source_table_id_;
+  task_id_ = other.task_id_;
+  if (OB_FAIL(calc_items_.assign(other.calc_items_))) {
+    LOG_WARN("assign calc_items failed", K(ret), K(other.calc_items_.count()));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestRes, ret_codes_);
 
 OB_SERIALIZE_MEMBER(
     ObCalcColumnChecksumResponseArg,
@@ -3041,22 +3081,56 @@ DEF_TO_STRING(ObSwitchLeaderArg)
 
 OB_SERIALIZE_MEMBER(ObSwitchLeaderArg, ls_id_, role_, tenant_id_, dest_server_);
 
-OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, ls_id_, data_tablet_id_, schema_version_, need_wait_trans_end_);
+OB_SERIALIZE_MEMBER(ObLSTabletPair, ls_id_, tablet_id_);
+OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, schema_version_, need_wait_trans_end_, tablets_);
+
+bool ObCheckSchemaVersionElapsedArg::is_valid() const
+{
+  bool bret = OB_INVALID_ID != tenant_id_ && schema_version_ > 0 && !tablets_.empty();
+  for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
+    bret = tablets_.at(i).is_valid();
+  }
+  return bret;
+}
 
 void ObCheckSchemaVersionElapsedArg::reuse()
 {
   tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  data_tablet_id_.reset();
   schema_version_ = 0;
   need_wait_trans_end_ = true;
+  tablets_.reuse();
 }
 
-OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, ls_id_, tablet_id_, sstable_exist_ts_);
+bool ObCheckModifyTimeElapsedArg::is_valid() const
+{
+  bool bret = OB_INVALID_ID != tenant_id_ && sstable_exist_ts_ > 0;
+  for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
+    bret = tablets_.at(i).is_valid();
+  }
+  return bret;
+}
 
-OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedResult, snapshot_);
+void ObCheckModifyTimeElapsedArg::reuse()
+{
+  tenant_id_ = OB_INVALID_ID;
+  sstable_exist_ts_ = 0;
+  tablets_.reuse();
+}
 
-OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedResult, snapshot_);
+OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, sstable_exist_ts_, tablets_);
+
+bool ObCheckSchemaVersionElapsedResult::is_valid() const
+{
+  bool bret = !results_.empty();
+  for (int64_t i = 0; bret && i < results_.count(); ++i) {
+    bret = (common::OB_INVALID_TIMESTAMP != results_.at(i).snapshot_);
+  }
+  return bret;
+}
+
+OB_SERIALIZE_MEMBER(ObCheckTransElapsedResult, ret_code_, snapshot_, pending_tx_id_);
+OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedResult, results_);
+
 
 OB_SERIALIZE_MEMBER(CandidateStatus, candidate_status_);
 
