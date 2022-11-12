@@ -306,7 +306,7 @@ int ObUpgradeExecutor::execute(
 
 // Python upgrade script may set enable_ddl = false before it run upgrade job.
 // TODO:
-// 1. support run upgrade post action from `COMPATIBLE` to current cluster version.
+// 1. support run upgrade post action from `COMPATIBLE` to current data version.
 int ObUpgradeExecutor::run_upgrade_post_job_(const int64_t version)
 {
   int ret = OB_SUCCESS;
@@ -314,7 +314,7 @@ int ObUpgradeExecutor::run_upgrade_post_job_(const int64_t version)
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("executor should stopped", KR(ret));
-  } else if (!ObUpgradeChecker::check_cluster_version_exist(version)) {
+  } else if (!ObUpgradeChecker::check_data_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
   } else {

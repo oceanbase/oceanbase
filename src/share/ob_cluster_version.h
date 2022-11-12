@@ -23,19 +23,28 @@ namespace common
 class ObServerConfig;
 class ObString;
 
+//TODO: Will change ObClusterVersion to ObVersion later
 class ObClusterVersion
 {
 public:
   ObClusterVersion();
   ~ObClusterVersion() { destroy(); }
-  int init(const common::ObServerConfig *config);
-  int init(const uint64_t cluster_version);
   void destroy();
   int64_t to_string(char *buf, const int64_t buf_len) const;
+
+  /* cluster version related */
+  int init(const common::ObServerConfig *config);
+  int init(const uint64_t cluster_version);
   int refresh_cluster_version(const char *verstr);
   int reload_config();
   uint64_t get_cluster_version() { return ATOMIC_LOAD(&cluster_version_); }
   void update_cluster_version(const uint64_t cluster_version);
+  /*------------------------*/
+
+  /* data version related */
+  int get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version);
+  int tenant_need_upgrade(const uint64_t tenant_id, bool &need_upgrade);
+  /*------------------------*/
 public:
   static ObClusterVersion &get_instance();
   static int is_valid(const char *verstr);
@@ -70,7 +79,7 @@ private:
 #define OB_VSN_MAJOR_PATCH(version) (static_cast<const uint8_t>((version >> OB_VSN_MAJOR_PATCH_SHIFT) & OB_VSN_MAJOR_PATCH_MASK))
 #define OB_VSN_MINOR_PATCH(version) (static_cast<const uint8_t>(version & OB_VSN_MINOR_PATCH_MASK))
 
-#define CALC_CLUSTER_VERSION(major, minor, major_patch, minor_patch) \
+#define CALC_VERSION(major, minor, major_patch, minor_patch) \
         (((major) << OB_VSN_MAJOR_SHIFT) + \
          ((minor) << OB_VSN_MINOR_SHIFT) + \
          ((major_patch) << OB_VSN_MAJOR_PATCH_SHIFT) + \
@@ -78,7 +87,7 @@ private:
 constexpr static inline uint64_t
 cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_patch, const uint64_t minor_patch)
 {
-  return CALC_CLUSTER_VERSION(major, minor, major_patch, minor_patch);
+  return CALC_VERSION(major, minor, major_patch, minor_patch);
 }
 
 #define DEF_MAJOR_VERSION 1
@@ -146,9 +155,10 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // - 4. Print: cluster version str will be printed as 4 parts.
 #define CLUSTER_VERSION_3_2_3_0 (oceanbase::common::cal_version(3, 2, 3, 0))
 #define CLUSTER_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
-//FIXME If you update the above version, please update me, CLUSTER_CURRENT_VERSION & ObUpgradeChecker!!!!!!
+#define CLUSTER_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_0_0_0
+//TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_1_0_0
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
 #define GET_UNIS_CLUSTER_VERSION() (::oceanbase::lib::get_unis_compat_version() ?: GET_MIN_CLUSTER_VERSION())
 
@@ -160,6 +170,21 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define IS_CLUSTER_VERSION_BEFORE_4_0_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_0_0_0)
 
 #define IS_CLUSTER_VERSION_AFTER_2274 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() > CLUSTER_VERSION_2274)
+
+// ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
+// 1. After 4.0, each cluster_version is corresponed to a data version.
+// 2. cluster_version and data_version is not compariable.
+// 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
+// For more detail: https://yuque.antfin-inc.com/ob/rootservice/xywr36
+#define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
+#define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
+
+// should check returned ret
+#define DATA_CURRENT_VERSION DATA_VERSION_4_1_0_0
+#define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
+#define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 } // end of namespace common
 } // end of namespace oceanbase
 

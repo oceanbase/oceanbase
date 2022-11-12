@@ -7961,7 +7961,7 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
              || ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE == arg.action_
              || ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE == arg.action_) {
     if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-        && !ObUpgradeChecker::check_cluster_version_exist(version)) {
+        && !ObUpgradeChecker::check_data_version_exist(version)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
