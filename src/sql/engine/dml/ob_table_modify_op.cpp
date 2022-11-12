@@ -1047,5 +1047,85 @@ int ObTableModifyOp::submit_all_dml_task()
   return ret;
 }
 
+//The data to be written by DML will be buffered in the DAS Write Buffer
+//When the buffer data exceeds 6M,
+//needs to be written to the storage to release the memory.
+int ObTableModifyOp::discharge_das_write_buffer()
+{
+  int ret = OB_SUCCESS;
+  if (dml_rtctx_.das_ref_.get_das_alloc().used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE) {
+    LOG_INFO("DASWriteBuffer full, now to write storage",
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used());
+    ret = submit_all_dml_task();
+  }
+  return ret;
+}
+
+int ObTableModifyOp::get_next_row_from_child()
+{
+  int ret = OB_SUCCESS;
+  clear_evaluated_flag();
+  if (OB_FAIL(child_->get_next_row())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  } else {
+    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
+  }
+  return ret;
+}
+
+int ObTableModifyOp::inner_get_next_row()
+{
+  int ret = OB_SUCCESS;
+  if (iter_end_) {
+    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
+    ret = OB_ITER_END;
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(try_check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(get_next_row_from_child())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next row", K(ret));
+        } else {
+          iter_end_ = true;
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(write_row_to_das_buffer())) {
+        LOG_WARN("write row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("discharge das write buffer failed", K(ret));
+      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
+        clear_evaluated_flag();
+        err_log_rt_def_.curr_err_log_record_num_++;
+        err_log_rt_def_.reset();
+        continue;
+      } else if (MY_SPEC.is_returning_) {
+        break;
+      }
+    }
+
+    if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
+      //DML operator reach iter end,
+      //now submit the remaining rows in the DAS Write Buffer to the storage
+      if (dml_rtctx_.need_pick_del_task_first() &&
+          OB_FAIL(dml_rtctx_.das_ref_.pick_del_task_to_first())) {
+        LOG_WARN("pick delete das task to first failed", K(ret));
+      } else if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
+        LOG_WARN("execute all dml das task failed", K(ret));
+      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+        LOG_WARN("close all das task failed", K(ret));
+      }
+    }
+    //to post process the DML info after writing all data to the storage or returning one row
+    ret = write_rows_post_proc(ret);
+    if (OB_SUCC(ret) && iter_end_) {
+      ret = OB_ITER_END;
+    }
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

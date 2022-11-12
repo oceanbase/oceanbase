@@ -100,7 +100,7 @@ int ObTableInsertAllOp::switch_iterator(ObExecContext &ctx)
   return common::OB_ITER_END;
 }
 
-int ObTableInsertAllOp::insert_all_row_to_das()
+int ObTableInsertAllOp::write_row_to_das_buffer()
 {
   int ret = OB_SUCCESS;
   //int64_t savepoint_no = 0;
@@ -267,47 +267,6 @@ int ObTableInsertAllOp::inner_open()
 int ObTableInsertAllOp::inner_rescan()
 {
   return ObTableInsertOp::inner_rescan();
-}
-
-int ObTableInsertAllOp::inner_get_next_row()
-{
-  int ret = OB_SUCCESS;
-  if (iter_end_) {
-    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
-    ret = OB_ITER_END;
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(try_check_status())) {
-        LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(ObTableInsertOp::get_next_row_from_child())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next row", K(ret));
-        } else {
-          iter_end_ = true;
-        }
-      } else if (OB_FAIL(insert_all_row_to_das())) {
-        LOG_WARN("insert row to das failed", K(ret));
-      }
-      //erro logging not support, fix it later
-      // } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
-      //   clear_evaluated_flag();
-      //   err_log_rt_def_.curr_err_log_record_num_++;
-      //   err_log_rt_def_.reset();
-      //   continue;
-      // } else if (MY_SPEC.is_returning_) {
-      //   break;
-      // }
-    }
-
-    if (OB_ITER_END == ret) {
-      if (OB_FAIL(ObTableInsertOp::ins_rows_post_proc())) {
-        LOG_WARN("do insert rows post process failed", K(ret));
-      } else {
-        ret = OB_ITER_END;
-      }
-    }
-  }
-  return ret;
 }
 
 int ObTableInsertAllOp::inner_close()

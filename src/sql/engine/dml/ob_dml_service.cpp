@@ -1239,8 +1239,6 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
       int64_t simulate_row_cnt = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
       if (OB_UNLIKELY(simulate_row_cnt > 0 && dml_op->get_row_cnt() >= simulate_row_cnt)) {
         buffer_full = true;
-      } else if (dml_rtctx.get_das_alloc().used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE) {
-        buffer_full = true;
       } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
       }
@@ -1263,13 +1261,8 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
         if (dml_rtctx.need_pick_del_task_first() &&
                    OB_FAIL(dml_rtctx.das_ref_.pick_del_task_to_first())) {
           LOG_WARN("fail to pick delete das task to first", K(ret));
-        } else if (OB_FAIL(dml_rtctx.das_ref_.execute_all_task())) {
-          LOG_WARN("execute all das task failed", K(ret));
-        } else if (OB_FAIL(dml_rtctx.das_ref_.close_all_task())) {
-          LOG_WARN("close all das task failed", K(ret));
-        } else {
-          //don't release all memory, need to reuse das ctx
-          dml_rtctx.reuse();
+        } else if (OB_FAIL(dml_rtctx.op_.submit_all_dml_task())) {
+          LOG_WARN("submit all dml task failed", K(ret));
         }
       }
     }

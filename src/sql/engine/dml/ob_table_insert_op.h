@@ -77,18 +77,17 @@ public:
   virtual ~ObTableInsertOp() {};
 protected:
   virtual int inner_open() override;
-  virtual int inner_get_next_row() override;
   virtual int inner_rescan() override;
   virtual int inner_close() override;
 protected:
   int inner_open_with_das();
   int insert_row_to_das();
-  int ins_rows_post_proc();
+  virtual int write_row_to_das_buffer() override;
+  virtual int write_rows_post_proc(int last_errno) override;
   int calc_tablet_loc(const ObInsCtDef &ins_ctdef,
                       ObInsRtDef &ins_rtdef,
                       ObDASTabletLoc *&tablet_loc);
   int open_table_for_each();
-  int get_next_row_from_child();
   int close_table_for_each();
 
   int check_insert_affected_row();

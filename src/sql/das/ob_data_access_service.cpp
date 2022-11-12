@@ -74,9 +74,12 @@ int ObDataAccessService::execute_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(das_ref.is_execute_directly())) {
+    NG_TRACE(do_local_das_task_begin);
+    FLTSpanGuard(do_local_das_task);
     if (OB_FAIL(task_op.start_das_task())) {
       LOG_WARN("start das task failed", K(ret), K(task_op));
     }
+    NG_TRACE(do_local_das_task_end);
   } else {
     ret = execute_dist_das_task(das_ref, task_op);
     task_op.errcode_ = ret;
@@ -97,6 +100,8 @@ int ObDataAccessService::execute_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_
 int ObDataAccessService::get_das_task_id(int64_t &das_id)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(get_das_id_begin);
+  FLTSpanGuard(get_das_id);
   const int MAX_RETRY_TIMES = 50;
   int64_t tmp_das_id = 0;
   bool force_renew = false;
@@ -123,6 +128,7 @@ int ObDataAccessService::get_das_task_id(int64_t &das_id)
   if (OB_SUCC(ret)) {
     das_id = tmp_das_id;
   }
+  NG_TRACE(get_das_id_end);
   return ret;
 }
 
@@ -240,6 +246,8 @@ int ObDataAccessService::end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
 int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(rescan_das_task_begin);
+  FLTSpanGuard(rescan_das_task);
   if (scan_op.is_local_task()) {
     if (OB_FAIL(scan_op.rescan())) {
       LOG_WARN("rescan das task failed", K(ret));
@@ -257,6 +265,7 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
       LOG_WARN("failed to retry das task", K(tmp_ret));
     }
   }
+  NG_TRACE(rescan_das_task_end);
   return ret;
 }
 
@@ -266,9 +275,12 @@ int ObDataAccessService::do_local_das_task(ObDASRef &das_ref, ObDASTaskArg &task
   int ret = OB_SUCCESS;
   LOG_DEBUG("begin to do local das task", K(task_arg));
   ObIDASTaskOp *task_op = task_arg.get_task_op();
+  NG_TRACE(do_local_das_task_begin);
+  FLTSpanGuard(do_local_das_task);
   if (OB_FAIL(task_op->start_das_task())) {
     LOG_WARN("start local das task failed", K(ret));
   }
+  NG_TRACE(do_local_das_task_end);
   return ret;
 }
 
@@ -276,6 +288,8 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
 {
   int ret = OB_SUCCESS;
   void *resp_buf = nullptr;
+  NG_TRACE(do_remote_das_task_begin);
+  FLTSpanGuard(do_remote_das_task);
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
@@ -338,6 +352,7 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
       }
     }
   }
+  NG_TRACE_EXT(do_remote_das_task_end, Y(ret), OB_ID(addr), task_arg.get_runner_svr());
   return ret;
 }
 

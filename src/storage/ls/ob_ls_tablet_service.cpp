@@ -714,6 +714,7 @@ void ObLSTabletService::report_tablet_to_rs(
 int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &param, ObNewRowIterator *&result)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_table_scan_begin);
   ObTabletHandle data_tablet;
   AllowToReadMgr::AllowToReadInfo read_info;
 
@@ -742,12 +743,14 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
       LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
     }
   }
+  NG_TRACE(S_table_scan_end);
   return ret;
 }
 
 int ObLSTabletService::table_rescan(ObTableScanParam &param, ObNewRowIterator *&result)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_table_rescan_begin);
   ObTabletHandle data_tablet;
   AllowToReadMgr::AllowToReadInfo read_info;
 
@@ -780,6 +783,7 @@ int ObLSTabletService::table_rescan(ObTableScanParam &param, ObNewRowIterator *&
       LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
     }
   }
+  NG_TRACE(S_table_rescan_end);
   return ret;
 }
 
@@ -2050,6 +2054,7 @@ int ObLSTabletService::insert_rows(
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_insert_rows_begin);
   ObTabletHandle tablet_handle;
   int64_t afct_num = 0;
   int64_t dup_num = 0;
@@ -2134,6 +2139,7 @@ int ObLSTabletService::insert_rows(
       EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
     }
   }
+  NG_TRACE(S_insert_rows_end);
 
   return ret;
 }
@@ -2233,6 +2239,7 @@ int ObLSTabletService::update_rows(
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_update_rows_begin);
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObTabletHandle tablet_handle;
   int64_t afct_num = 0;
@@ -2393,6 +2400,7 @@ int ObLSTabletService::update_rows(
       LOG_WARN("update rows use too much time", K(afct_num), K(got_row_count));
     }
   }
+  NG_TRACE(S_update_rows_end);
 
   return ret;
 }
@@ -2477,6 +2485,7 @@ int ObLSTabletService::delete_rows(
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_delete_rows_begin);
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObTabletHandle tablet_handle;
   ObRowReshape *row_reshape = nullptr;
@@ -2530,6 +2539,7 @@ int ObLSTabletService::delete_rows(
       EVENT_ADD(STORAGE_DELETE_ROW_COUNT, afct_num);
     }
   }
+  NG_TRACE(S_delete_rows_end);
 
   return ret;
 }
@@ -2544,6 +2554,7 @@ int ObLSTabletService::lock_rows(
     int64_t &affected_rows)
 {
   UNUSEDx(lock_flag, is_sfu);
+  NG_TRACE(S_lock_rows_begin);
   int ret = OB_SUCCESS;
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObTimeGuard timeguard(__func__, 3 * 1000 * 1000);
@@ -2613,6 +2624,7 @@ int ObLSTabletService::lock_rows(
       }
     }
   }
+  NG_TRACE(S_lock_rows_end);
   return ret;
 }
 

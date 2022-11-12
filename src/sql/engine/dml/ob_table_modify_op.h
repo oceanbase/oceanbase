@@ -205,6 +205,7 @@ public:
   void clear_dml_evaluated_flag();
   void clear_dml_evaluated_flag(int64_t parent_cnt, ObExpr **parent_exprs);
   void clear_dml_evaluated_flag(ObExpr *clear_expr);
+  int submit_all_dml_task();
 protected:
   OperatorOpenOrder get_operator_open_order() const;
   virtual int inner_open();
@@ -217,14 +218,24 @@ protected:
   int calc_single_table_loc();
 
   virtual int inner_rescan() override;
+  virtual int inner_get_next_row() override;
+  int get_next_row_from_child();
+  //Override this interface to complete the write semantics of the DML operator,
+  //and write a row to the DAS Write Buffer according to the specific DML behavior
+  virtual int write_row_to_das_buffer() { return common::OB_NOT_IMPLEMENT; }
+  //Override this interface to post process the DML info after
+  //writing all data to the storage or returning one row
+  //such as: set affected_rows to query context, rewrite some error code
+  virtual int write_rows_post_proc(int last_errno)
+  { UNUSED(last_errno); return common::OB_NOT_IMPLEMENT; }
 
-  int submit_all_dml_task();
   int init_das_dml_ctx();
   //to merge array binding cusor info when array binding is executed in batch mode
   int merge_implict_cursor(int64_t insert_rows,
                            int64_t update_rows,
                            int64_t delete_rows,
                            int64_t found_rows);
+  int discharge_das_write_buffer();
 public:
   common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;

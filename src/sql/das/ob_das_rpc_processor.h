@@ -68,7 +68,8 @@ class ObDASSyncFetchP : public ObDASSyncFetchResRpcProcessor
 public:
   ObDASSyncFetchP() {}
   ~ObDASSyncFetchP() {}
-  int process();
+  virtual int process() override;
+  virtual int after_process(int error_code);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASSyncFetchP);
 };
