@@ -656,7 +656,8 @@ struct ObObjPrintParams
       uint32_t use_memcpy_:1;
       uint32_t skip_escape_:1;
       uint32_t beginning_space_:1;
-      uint32_t reserved_:27;
+      uint32_t binary_string_print_hex_:1;
+      uint32_t reserved_:26;
     };
   };
 };

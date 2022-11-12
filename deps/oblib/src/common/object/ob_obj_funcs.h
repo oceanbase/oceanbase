@@ -1108,8 +1108,10 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     ObCharsetType src_type = ObCharset::charset_type_by_coll(obj.get_collation_type());     \
     ObCharsetType dst_type = ObCharset::charset_type_by_coll(params.cs_type_);              \
     if (src_type == CHARSET_BINARY || src_type == dst_type || src_type == CHARSET_INVALID) {\
-      if (params.use_memcpy_) {                                                             \
-        ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr()); \
+      if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_hex_) {  \
+        ret = hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos);   \
+      } else if (params.use_memcpy_) {                                                      \
+        ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr());         \
       } else {                                                                              \
         ret = databuff_printf(buffer, length, pos, "%.*s", obj.get_string_len(), obj.get_string_ptr()); \
       }                                                                                     \
@@ -2501,9 +2503,11 @@ template <>
     int ret = OB_SUCCESS;                                               \
     ObCharsetType src_type = ObCharset::charset_type_by_coll(obj.get_collation_type());     \
     ObCharsetType dst_type = ObCharset::charset_type_by_coll(params.cs_type_);              \
-    if (src_type == dst_type) {  \
+    if (src_type == CHARSET_BINARY && params.binary_string_print_hex_) {                    \
+      ret = hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos);     \
+    } else if (src_type == dst_type) {                                                      \
       if (params.use_memcpy_) {                                                             \
-        ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr()); \
+        ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr());         \
       } else {                                                                              \
         ret = databuff_printf(buffer, length, pos, "%.*s", obj.get_string_len(), obj.get_string_ptr()); \
       }                                                                                     \
@@ -2667,7 +2671,9 @@ inline int obj_print_plain_str<ObLobType>(const ObObj &obj, char *buffer, int64_
   UNUSED(params);
   int ret = OB_SUCCESS;
   ObString str = obj.get_lob_print_string(length - pos);
-  if (params.use_memcpy_) {
+  if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_hex_) {
+    ret = hex_print(str.ptr(), str.length(), buffer, length, pos);
+  } else if (params.use_memcpy_) {
     ret = databuff_memcpy(buffer, length, pos, str.length(), str.ptr());
   } else {
     ret = databuff_printf(buffer, length, pos, "%.*s", str.length(), str.ptr());

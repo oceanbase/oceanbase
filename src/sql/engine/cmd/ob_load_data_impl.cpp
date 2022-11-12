@@ -1228,7 +1228,7 @@ int ObLoadDataSPImpl::exec_insert(ObInsertTask &task, ObInsertResult& result)
   param.is_load_data_exec_ = true;
 
   if (OB_SUCC(ret) && OB_FAIL(GCTX.sql_proxy_->write(task.tenant_id_,
-                                                     sql_str.ptr(),
+                                                     sql_str.string(),
                                                      affected_rows,
                                                      get_compatibility_mode(),
                                                      &param))) {

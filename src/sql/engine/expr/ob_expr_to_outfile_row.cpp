@@ -126,6 +126,7 @@ int ObExprToOutfileRow::calc_outfile_info(const ObExpr &expr,
     LOG_WARN("fail to get timezone info", K(ret));
   } else {
     out_info.print_params_.use_memcpy_ = true;
+    out_info.print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
     out_info.is_optional_ = expr.locate_param_datum(ctx, PARAM_OPTIONAL).get_bool();
   }
 

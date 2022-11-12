@@ -371,6 +371,13 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
   return ret;
 }
 
+int ObMySQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
+                                     int64_t &affected_rows, bool is_user_sql)
+{
+  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql);
+  return OB_NOT_SUPPORTED;
+}
+
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
     int64_t &affected_rows, bool is_user_sql)
 {
