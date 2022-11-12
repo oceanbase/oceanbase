@@ -3632,7 +3632,7 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
         LOG_WARN("PLS-00430: FORALL iteration variable INDX is not allowed in this context", K(ret));
       }
       //这里控制包含非数组类型变量的forall语句直接以forloop实现, 避免forall先回退, 再forloop执行
-      can_array_binding = false;
+      can_array_binding = true;
     } else {
       bool inner_modify = false;
       bool inner_can_array_binding = true;
