@@ -1210,11 +1210,12 @@ void ObTabletMergeCtx::collect_running_info()
   }
 
   ObScheduleSuspectInfo ret_info;
-  if (OB_SUCCESS == ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(dag_key, ret_info)) {
+  int64_t suspect_info_hash = ObScheduleSuspectInfo::gen_hash(MTL_ID(), dag_key);
+  if (OB_SUCCESS == ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(suspect_info_hash, ret_info)) {
     ADD_COMPACTION_INFO_PARAM(sstable_merge_info.comment_, sizeof(sstable_merge_info.comment_),
         "add_timestamp", ret_info.add_time_,
         "suspect_schedule_info", ret_info.suspect_info_);
-    (void)ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(dag_key);
+    (void)ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(suspect_info_hash);
   }
 
   if (OB_TMP_FAIL(MTL(storage::ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(sstable_merge_info))) {
