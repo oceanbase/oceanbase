@@ -50,7 +50,7 @@ ObTenantRole::ObTenantRole(const ObString &str)
   } else {
     for (int64_t i = 0; i < ARRAYSIZEOF(TENANT_ROLE_ARRAY); i++) {
       if (0 == str.case_compare(TENANT_ROLE_ARRAY[i])) {
-        value_ = i;
+        value_ = static_cast<ObTenantRole::Role>(i);
         break;
       }
     }
@@ -60,6 +60,16 @@ ObTenantRole::ObTenantRole(const ObString &str)
     LOG_WARN("invalid tenant role", K_(value), K(str));
   }
 }
+
+#define GEN_IS_TENANT_ROLE(TENANT_ROLE_VALUE, TENANT_ROLE) \
+  bool is_##TENANT_ROLE##_tenant(const ObTenantRole::Role value) { return TENANT_ROLE_VALUE == value; }
+
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::INVALID_TENANT, invalid)
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::PRIMARY_TENANT, primary)
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::STANDBY_TENANT, standby)
+GEN_IS_TENANT_ROLE(ObTenantRole::Role::RESTORE_TENANT, restore)
+#undef GEN_IS_TENANT_ROLE
+
 
 }  // share
 }  // oceanbase

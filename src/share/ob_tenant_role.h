@@ -26,25 +26,28 @@ class ObTenantRole
   OB_UNIS_VERSION(1);
 public:
   // Tenant Role
-  static const int64_t INVALID_TENANT = 0;
-  static const int64_t PRIMARY_TENANT = 1;
-  static const int64_t STANDBY_TENANT = 2;
-  static const int64_t RESTORE_TENANT = 3;
-  static const int64_t MAX_TENANT = 4;
+  enum Role
+  {
+    INVALID_TENANT = 0,
+    PRIMARY_TENANT = 1,
+    STANDBY_TENANT = 2,
+    RESTORE_TENANT = 3,
+    MAX_TENANT = 4,
+  };
 public:
   ObTenantRole() : value_(INVALID_TENANT) {}
-  explicit ObTenantRole(const int64_t value) : value_(value) {}
+  explicit ObTenantRole(const Role value) : value_(value) {}
   explicit ObTenantRole(const ObString &str);
   ~ObTenantRole() { reset(); }
 
 public:
   void reset() { value_ = INVALID_TENANT; }
   bool is_valid() const { return INVALID_TENANT != value_; }
-  int64_t value() const { return value_; }
+  Role value() const { return value_; }
   const char* to_str() const;
 
   // assignment
-  ObTenantRole &operator=(const int64_t value) { value_ = value; return *this; }
+  ObTenantRole &operator=(const Role value) { value_ = value; return *this; }
 
   // compare operator
   bool operator == (const ObTenantRole &other) const { return value_ == other.value_; }
@@ -57,8 +60,17 @@ public:
 
   TO_STRING_KV(K_(value));
 private:
-  int64_t value_;
+  Role value_;
 };
+
+#define GEN_IS_TENANT_ROLE_DECLARE(TENANT_ROLE_VALUE, TENANT_ROLE) \
+  bool is_##TENANT_ROLE##_tenant(const ObTenantRole::Role value);
+
+GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::INVALID_TENANT, invalid)
+GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::PRIMARY_TENANT, primary)
+GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::STANDBY_TENANT, standby)
+GEN_IS_TENANT_ROLE_DECLARE(ObTenantRole::Role::RESTORE_TENANT, restore)
+#undef GEN_IS_TENANT_ROLE_DECLARE
 
 static const ObTenantRole INVALID_TENANT_ROLE(ObTenantRole::INVALID_TENANT);
 static const ObTenantRole PRIMARY_TENANT_ROLE(ObTenantRole::PRIMARY_TENANT);
