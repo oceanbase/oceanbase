@@ -3,10 +3,6 @@ os=7
 arch=x86_64
 repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/7/x86_64/
 
-[target-community]
-os=7
-arch=x86_64
-repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/
 
 [deps]
 devdeps-gtest-1.8.0-132022101316.el7.x86_64.rpm
@@ -40,4 +36,5 @@ devdeps-oblogmsg-1.0-42022101823.el7.x86_64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el7.x86_64.rpm
 
 [test-utils]
-
+ob-deploy-1.6.0-41.el7.x86_64.rpm
+obclient-2.0.2-3.el7.x86_64.rpm

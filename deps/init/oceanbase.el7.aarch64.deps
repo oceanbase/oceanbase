@@ -3,15 +3,6 @@ os=7
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/7/aarch64/
 
-[target-community]
-os=7
-arch=aarch64
-repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/7/aarch64/
-
-[target-tbsite]
-os=7
-arch=aarch64
-repo=http://yum.tbsite.net/taobao/7/aarch64/test/ob-deploy/
 
 [deps]
 devdeps-gtest-1.8.0-132022101316.el7.aarch64.rpm
@@ -44,4 +35,5 @@ devdeps-oblogmsg-1.0-42022101823.el7.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el7.aarch64.rpm
 
 [test-utils]
-#ob-deploy-1.5.0-12.el7.aarch64.rpm target=community
+ob-deploy-1.6.0-41.el7.aarch64.rpm
+obclient-2.0.2-3.el7.aarch64.rpm
