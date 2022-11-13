@@ -154,6 +154,8 @@ public:
                K(replay_hint_),
                K(is_raw_write_),
                K(first_handle_ts_),
+               K(replay_cost_),
+               K(retry_cost_),
                KP(log_buf_));
 };
 
