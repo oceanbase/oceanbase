@@ -206,6 +206,8 @@ public:
   checkpoint::ObDataCheckpoint *get_data_checkpoint() { return &data_checkpoint_; }
   transaction::ObKeepAliveLSHandler *get_keep_alive_ls_handler() { return &keep_alive_ls_handler_; }
   ObLSRestoreHandler *get_ls_restore_handler() { return &ls_restore_handler_; }
+  ObLSDDLLogHandler *get_ddl_log_handler() { return &ls_ddl_log_handler_; }
+
   // ObObLogHandler interface:
   // get the log_service pointer
   logservice::ObLogHandler *get_log_handler() { return &log_handler_; }

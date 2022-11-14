@@ -1380,6 +1380,15 @@ int ObStartMigrationTask::deal_local_restore_ls_(bool &need_generate_dag)
   } else if (ls_restore_status.is_restore_start() || ls_restore_status.is_restore_sys_tablets()) {
     if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
       LOG_WARN("failed to enable log sync", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_tablet_svr()->online())) {
+      LOG_WARN("failed to online tablet svr", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_tx_svr()->online())) {
+      LOG_WARN("failed to online tx svr", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_ddl_log_handler()->online())) {
+      LOG_WARN("failed to online ddl log handler", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_ls_wrs_handler()->online())) {
+      LOG_WARN("failed to online ls wrs handler", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FALSE_IT(ls->get_checkpoint_executor()->online())) {
     } else {
       need_generate_dag = false;
       LOG_INFO("ls restore status is in restore start or in restore sys tablets, no need generate dag",
