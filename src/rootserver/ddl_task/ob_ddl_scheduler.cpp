@@ -328,15 +328,16 @@ void ObDDLScheduler::run1()
         } else if (OB_ISNULL(task)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, task must not be NULL", K(ret));
-        } else if (task == first_retry_task) {
+        } else if (task == first_retry_task || !task->need_schedule()) {
           // add the task back to the queue
           if (OB_FAIL(task_queue_.add_task_to_last(task))) {
-            STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
+            STORAGE_LOG(ERROR, "fail to add task to last", K(ret), K(*task));
           }
           break;
         } else {
           ObCurTraceId::set(task->get_trace_id());
-          task->process();
+          int task_ret = task->process();
+          task->calc_next_schedule_ts(task_ret);
           if (task->need_retry() && !has_set_stop()) {
             if (OB_FAIL(task_queue_.add_task_to_last(task))) {
               STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));

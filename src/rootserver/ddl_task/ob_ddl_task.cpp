@@ -548,6 +548,20 @@ int ObDDLTask::batch_release_snapshot(
   return ret;
 }
 
+void ObDDLTask::calc_next_schedule_ts(int ret_code)
+{
+  if (OB_TIMEOUT == ret_code) {
+    const int64_t SEC = 1000000;
+    delay_schedule_time_ = std::min(delay_schedule_time_ * 6/5 + SEC/10, 30*SEC);
+    const int64_t max_dt = delay_schedule_time_;
+    const int64_t min_dt = std::max(0L, max_dt - 3*SEC);
+    next_schedule_ts_ = ObTimeUtility::current_time() + ObRandom::rand(min_dt, max_dt);
+  } else {
+    delay_schedule_time_ = 0;
+  }
+  return;
+}
+
 #ifdef ERRSIM
 int ObDDLTask::check_errsim_error()
 {
