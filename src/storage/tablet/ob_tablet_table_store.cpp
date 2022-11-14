@@ -790,7 +790,8 @@ int ObTabletTableStore::build_minor_tables(
             LOG_INFO("new sstable max merge trans version not equal to old sstable, "
                 "need add new sstable when table key is same", KPC(sstable), KPC(new_sstable));
           } else {
-            need_add = true; // just keep old sstable
+            ret = OB_NO_NEED_MERGE;
+            LOG_WARN("new table with old max merged trans version, no need to merge", K(ret), KPC(sstable), KPC(new_sstable));
           }
         } else if (ObTableStoreUtil::check_include_by_log_ts_range(*new_table, *table)) {
           LOG_DEBUG("table purged", K(*new_table), K(*table));
