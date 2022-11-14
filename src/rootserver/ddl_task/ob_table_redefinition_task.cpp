@@ -524,6 +524,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   int64_t finished_task_cnt = 0;
+  bool state_finish = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -541,46 +542,53 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
       LOG_WARN("copy table foreign keys failed", K(ret));
     } else {
       // copy triggers(at current, not supported, skip it)
+    }
+  }
 
-      // wait copy dependent objects to be finished
-      ObAddr unused_addr;
-      for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
-          iter != dependent_task_result_map_.end(); ++iter) {
-        const int64_t table_id = iter->first.object_id_;
-        const int64_t schema_version = iter->first.schema_version_;
-        const int64_t target_object_id = -1;
-        const int64_t child_task_id = iter->second.task_id_;
-        if (iter->second.ret_code_ == INT64_MAX) {
-          // maybe ddl already finish when switching rs
-          HEAP_VAR(ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage, error_message) {
-            int64_t unused_user_msg_len = 0;
-            if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id_, child_task_id, target_object_id,
-                    unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len))) {
-              if (OB_ENTRY_NOT_EXIST == ret) {
-                ret = OB_SUCCESS;
-                LOG_INFO("ddl task not finish", K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
-              } else {
-                LOG_WARN("fail to get ddl error message", K(ret), K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
-              }
+  if (OB_FAIL(ret)) {
+    state_finish = true;
+  } else {
+    // wait copy dependent objects to be finished
+    ObAddr unused_addr;
+    for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
+        iter != dependent_task_result_map_.end(); ++iter) {
+      const int64_t table_id = iter->first.object_id_;
+      const int64_t schema_version = iter->first.schema_version_;
+      const int64_t target_object_id = -1;
+      const int64_t child_task_id = iter->second.task_id_;
+      if (iter->second.ret_code_ == INT64_MAX) {
+        // maybe ddl already finish when switching rs
+        HEAP_VAR(ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage, error_message) {
+          int64_t unused_user_msg_len = 0;
+          if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id_, child_task_id, target_object_id,
+                  unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len))) {
+            if (OB_ENTRY_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+              LOG_INFO("ddl task not finish", K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
             } else {
-              finished_task_cnt++;
-              if (error_message.ret_code_ != OB_SUCCESS) {
-                ret = error_message.ret_code_;
-              }
+              LOG_WARN("fail to get ddl error message", K(ret), K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
+            }
+          } else {
+            finished_task_cnt++;
+            if (error_message.ret_code_ != OB_SUCCESS) {
+              ret = error_message.ret_code_;
             }
           }
-        } else {
-          finished_task_cnt++;
-          if (iter->second.ret_code_ != OB_SUCCESS) {
-            ret = iter->second.ret_code_;
-          }
+        }
+      } else {
+        finished_task_cnt++;
+        if (iter->second.ret_code_ != OB_SUCCESS) {
+          ret = iter->second.ret_code_;
         }
       }
-      if (finished_task_cnt == dependent_task_result_map_.size()) {
-        if (OB_FAIL(switch_status(next_task_status, ret))) {
-          LOG_WARN("fail to switch status", K(ret));
-        }
-      }
+    }
+    if (finished_task_cnt == dependent_task_result_map_.size()) {
+      state_finish = true;
+    }
+  }
+  if (state_finish) {
+    if (OB_FAIL(switch_status(next_task_status, ret))) {
+      LOG_WARN("fail to switch status", K(ret));
     }
   }
   return ret;
