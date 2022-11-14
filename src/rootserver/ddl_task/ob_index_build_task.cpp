@@ -532,10 +532,32 @@ int ObIndexBuildTask::hold_snapshot(const int64_t snapshot)
   } else {
     ObDDLService &ddl_service = root_service_->get_ddl_service();
     ObSEArray<ObTabletID, 2> tablet_ids;
-    if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *data_table_schema = nullptr;
+    const ObTableSchema *index_table_schema = nullptr;
+    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+    bool need_acquire_lob = false;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(object_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, index_table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(target_object_id_));
+    } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(index_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(index_table_schema));
+    } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       LOG_WARN("failed to get data table snapshot", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
       LOG_WARN("failed to get dest table snapshot", K(ret));
+    } else if (OB_FAIL(check_need_acquire_lob_snapshot(data_table_schema, index_table_schema, need_acquire_lob))) {
+      LOG_WARN("failed to check if need to acquire lob snapshot", K(ret));
+    } else if (need_acquire_lob && data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+               OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+      LOG_WARN("failed to get data lob meta table snapshot", K(ret));
+    } else if (need_acquire_lob && data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+               OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+      LOG_WARN("failed to get data lob piece table snapshot", K(ret));
     } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
             ddl_service.get_sql_proxy(), SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot, nullptr, tablet_ids))) {
       LOG_WARN("batch acquire snapshot failed", K(ret), K(tablet_ids));
@@ -554,6 +576,9 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
   } else {
     ObDDLService &ddl_service = root_service_->get_ddl_service();
     ObSEArray<ObTabletID, 2> tablet_ids;
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *data_table_schema = nullptr;
+    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -567,6 +592,29 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
         LOG_WARN("failed to get dest table snapshot", K(ret));
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(object_id_));
+    } else if (OB_ISNULL(data_table_schema)) {
+      LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema));
+    } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get data lob meta table snapshot", K(ret));
+      }
+    } else if ( data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+      }
+    }
+
     if (OB_SUCC(ret) && tablet_ids.count() > 0 && OB_FAIL(batch_release_snapshot(snapshot, tablet_ids))) {
       LOG_WARN("batch relase snapshot failed", K(ret), K(tablet_ids));
     }
@@ -730,6 +778,43 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
             LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(column_id));
           } else if (column_schema->is_generated_column_using_udf()) {
             need_verify = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIndexBuildTask::check_need_acquire_lob_snapshot(const ObTableSchema *data_table_schema,
+                                                      const ObTableSchema *index_table_schema,
+                                                      bool &need_acquire)
+{
+  int ret = OB_SUCCESS;
+  need_acquire = false;
+  ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
+  ObTableSchema::const_column_iterator iter_end = index_table_schema->column_end();
+  for (; OB_SUCC(ret) && !need_acquire && iter != iter_end; iter++) {
+    const ObColumnSchemaV2 *index_col = *iter;
+    if (OB_ISNULL(index_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", K(ret));
+    } else {
+      const ObColumnSchemaV2 *col = data_table_schema->get_column_schema(index_col->get_column_id());
+      if (OB_ISNULL(col)) {
+      } else if (col->is_generated_column()) {
+        ObSEArray<uint64_t, 8> ref_columns;
+        if (OB_FAIL(col->get_cascaded_column_ids(ref_columns))) {
+          STORAGE_LOG(WARN, "Failed to get cascaded column ids", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && !need_acquire && i < ref_columns.count(); i++) {
+            const ObColumnSchemaV2 *data_table_col = data_table_schema->get_column_schema(ref_columns.at(i));
+            if (OB_ISNULL(data_table_col)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column schema is null", K(ret));
+            } else if (is_lob_v2(data_table_col->get_data_type())) {
+              need_acquire = true;
+            }
           }
         }
       }
