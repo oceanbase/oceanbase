@@ -1,3 +1,4 @@
+--source mysql_test/include/explain_init.inc
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
@@ -346,3 +347,4 @@ drop table t2;
 --disable_warnings
 drop table if exists t2, t7, t8, t9, BB, CC;
 --enable_warnings
+--source mysql_test/include/explain_end.inc
