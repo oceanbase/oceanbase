@@ -1219,21 +1219,25 @@ int ObUserTenantBackupJobMgr::report_failed_to_initiator_()
 int ObUserTenantBackupJobMgr::check_can_backup_()
 {
   int ret = OB_SUCCESS;
-  ObTenantArchiveRoundAttr round_attr;
-  if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+  if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
+    // backup job is canceling, no need to check log archive status
+  } else {
+    ObTenantArchiveRoundAttr round_attr;
+    if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+        LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
+      } else {
+        LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
+      }
+    } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
+      if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
+        ret = OB_LOG_ARCHIVE_INTERRUPTED;
+      } else {
+        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+      }
       LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
-    } else {
-      LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
     }
-  } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
-    if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
-      ret = OB_LOG_ARCHIVE_INTERRUPTED;
-    } else {
-      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
-    }
-    LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
   }
   return ret;
 }
