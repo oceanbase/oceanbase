@@ -86,6 +86,10 @@ public:
   {
     plan_id_ = plan_id;
   }
+  int64_t &get_request_id()
+  {
+    return request_id_;
+  }
   int64_t get_request_id() const
   {
     return request_id_;
