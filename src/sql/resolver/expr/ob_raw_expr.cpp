@@ -1390,7 +1390,7 @@ int ObNonTerminalRawExpr::deep_copy(ObRawExprFactory& expr_factory, const ObNonT
   if (OB_LIKELY(this != &other)) {
     if (OB_FAIL(ObRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
       LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
-    } else if (OB_FAIL(this->input_types_.assign(other.input_types_))) {
+    } else if (OB_FAIL(set_input_types(other.input_types_))) {
       LOG_WARN("copy input types failed", K(ret));
     } else if (other.op_ != NULL) {
       ObExprOperator* this_op = get_op();
