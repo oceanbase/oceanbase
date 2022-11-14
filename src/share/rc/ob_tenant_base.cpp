@@ -41,6 +41,7 @@ ObTenantBase::ObTenantBase(const uint64_t id, bool enable_tenant_ctx_check)
     inited_(false),
     created_(false),
     mtl_init_ctx_(nullptr),
+    tenant_role_value_(share::ObTenantRole::Role::PRIMARY_TENANT),
     cgroups_(nullptr),
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0)
@@ -55,6 +56,7 @@ ObTenantBase &ObTenantBase::operator=(const ObTenantBase &ctx)
   }
   id_ = ctx.id_;
   mtl_init_ctx_ = ctx.mtl_init_ctx_;
+  tenant_role_value_ = ctx.tenant_role_value_;
 #define CONSTRUCT_MEMBER_TMP2(IDX) \
   m##IDX##_ = ctx.m##IDX##_;
 #define CONSTRUCT_MEMBER2(UNUSED, IDX) CONSTRUCT_MEMBER_TMP2(IDX)
@@ -381,7 +383,6 @@ int ObTenantBase::update_thread_cnt(double tenant_unit_cpu)
   LOG_INFO("update_thread_cnt", K(tenant_unit_cpu), K(old_thread_count), K(new_thread_count));
   return ret;
 }
-
 
 void ObTenantEnv::set_tenant(ObTenantBase *ctx)
 {

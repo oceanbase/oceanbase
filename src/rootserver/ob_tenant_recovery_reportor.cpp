@@ -276,6 +276,14 @@ int ObTenantRecoveryReportor::load_tenant_info_()
           sql_proxy_, false, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
   } else {
+    /**
+    * Only need to refer to tenant role, no need to refer to switchover status.
+    * tenant_role is primary only in <primary, normal switchoverstatus>.
+    * When switch to standby starts, it will change to <standby, prepare switch to standby>.
+    * During the master switch process, some LS may be in RO state.
+    * This also ensures the consistency of tenant_role cache and the tenant role field in all_tenant_info
+    */
+    MTL_SET_TENANT_ROLE(tenant_info.get_tenant_role().value());
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(tenant_info_.assign(tenant_info))) {
       LOG_WARN("failed to assign tenant info", KR(ret), K(tenant_info));
@@ -308,6 +316,7 @@ int ObTenantRecoveryReportor::get_tenant_info(share::ObAllTenantInfo &tenant_inf
   }
   return ret;
 }
+
 
 int ObTenantRecoveryReportor::update_replayable_point_()
 {
