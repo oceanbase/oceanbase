@@ -23,6 +23,7 @@
 #include "share/ob_define.h"
 #include "common/storage/ob_sequence.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/stat/ob_latch_define.h"
 
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
@@ -222,7 +223,8 @@ ObTxDesc::ObTxDesc()
     commit_out_(-1),
     abort_cause_(0),
     can_elr_(false),
-    lock_(),
+    lock_(common::ObLatchIds::TX_DESC_LOCK),
+    commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
     commit_cb_(NULL),
     exec_info_reap_ts_(0),
     brpc_mask_set_(),

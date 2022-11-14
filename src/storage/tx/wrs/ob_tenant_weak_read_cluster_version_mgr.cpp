@@ -14,6 +14,7 @@
 
 #include "share/ob_errno.h"
 #include "ob_tenant_weak_read_cluster_version_mgr.h"
+#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {
@@ -25,7 +26,7 @@ namespace transaction
 ObTenantWeakReadClusterVersionMgr::ObTenantWeakReadClusterVersionMgr() :
     tenant_id_(OB_INVALID_ID),
     svr_array_(),
-    rwlock_()
+    rwlock_(common::ObLatchIds::WRS_CLUSTER_VERSION_MGR_LOCK)
 {}
 
 ObTenantWeakReadClusterVersionMgr::~ObTenantWeakReadClusterVersionMgr()
