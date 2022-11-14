@@ -78,7 +78,8 @@ struct LabelItem {
   }
 };
 
-class LabelMap : public common::hash::ObHashMap<ObString, LabelItem*> {
+class LabelMap : public common::hash::ObHashMap<ObString, LabelItem*, hash::NoPthreadDefendMode>
+{
 public:
   common::ObLocalModSet* mod_set_ = nullptr;
 };

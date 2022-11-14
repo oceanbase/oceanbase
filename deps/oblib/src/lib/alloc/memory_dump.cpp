@@ -363,11 +363,12 @@ int label_stat(AChunk* chunk, ABlock* block, AObject* object, LabelMap& lmap, La
       hold = chunk->size_ + ACHUNK_HEADER_SIZE;
     }
     if (object->ident_char_ != INVISIBLE_CHARACTER) {
-      void* label = &object->label_[0];
-      void* end = memchr(label, '\0', sizeof(object->label_));
-      int len = end ? (char*)end - (char*)label : sizeof(object->label_);
-      ObString str(len, (char*)label);
-      LabelItem* litem = nullptr;
+      char label[AOBJECT_LABEL_SIZE + 1];
+      STRNCPY(label, object->label_, sizeof(label));
+      label[sizeof(label) - 1] = '\0';
+      int len = strlen(label);
+      ObString str(len, label);
+      LabelItem *litem = nullptr;
       int hash_ret = lmap.get_refactored(str, litem);
       if (OB_SUCCESS == hash_ret) {
         // exist
