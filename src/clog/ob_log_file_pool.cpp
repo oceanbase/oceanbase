@@ -105,6 +105,7 @@ int ObLogWriteFilePool::init(ObILogDir* log_dir, const int64_t file_size, const 
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "ObLogWriteFilePool init error", K(ret), KP(file_size), K(type));
   } else {
+    type_ = type;
     if (CLOG_WRITE_POOL == type || ILOG_WRITE_POOL == type) {
       disk_use_percent = ObServerConfig::get_instance().clog_disk_utilization_threshold;
     } else if (SLOG_WRITE_POOL == type) {
@@ -127,7 +128,6 @@ int ObLogWriteFilePool::init(ObILogDir* log_dir, const int64_t file_size, const 
     is_inited_ = true;
     file_size_ = file_size;
     log_dir_ = log_dir;
-    type_ = type;
     CLOG_LOG(INFO, "init log write file pool success", K(file_size), K(disk_use_percent), K(type));
   }
   return ret;
@@ -489,7 +489,7 @@ int ObLogWriteFilePool::calculate_free_quota(const char* path, const int64_t use
           used_size * 100 / (total_size + 1));
     }
     if (free_quota + 1024 * 1024 * 1024 < 0) {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      if (CLOG_WRITE_POOL == type_ && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         CLOG_LOG(ERROR,
             "clog disk is almost full",
             K(type_),
