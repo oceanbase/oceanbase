@@ -4846,11 +4846,16 @@ int ObPartTransCtx::refresh_rec_log_ts_()
     prev_rec_log_ts_ = rec_log_ts_;
 
     if (is_follower_()) {
-      // Case 1: As follower, the replay is in order, so we can simply reset it
-      // because all state changes in logs before max_durable_log_ts all
-      // successfully contained in this checkpoint and no new state changes
-      // after max_durable_log_ts is contained in the checkpoint.
-      rec_log_ts_ = OB_INVALID_TIMESTAMP;
+      // Case 1: As follower, the replay is indead in order, while we cannot
+      // simply reset it because the replay is not atomic, and it may be in the
+      // middle stage that the replay is currently on-going. So the necessary
+      // state before the log ts that is replaying may not be contained, so we
+      // need replay from the on-going log ts.
+      if (exec_info_.max_applied_log_ts_ != exec_info_.max_applying_log_ts_) {
+        rec_log_ts_ = exec_info_.max_applying_log_ts_;
+      } else {
+        rec_log_ts_ = OB_INVALID_TIMESTAMP;
+      }
     } else {
       // Case 2: As leader, the application is discrete and not in order, so we
       // rely on the first lo(we call it FCL later)g hasnot been applied as
