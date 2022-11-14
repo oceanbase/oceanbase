@@ -5,6 +5,4 @@ config:
   enable_metadb_used: 'false'
   enable_qa_mode: 'TRUE'
   location_expire_period: '1'
-version: 4.0.0
-release: 20221031174602.el7
 

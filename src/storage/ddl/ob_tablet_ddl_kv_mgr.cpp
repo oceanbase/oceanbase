@@ -23,6 +23,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::share;
 using namespace oceanbase::storage;
 
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
@@ -321,9 +322,10 @@ int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t sn
     LOG_WARN("invalid argument", K(ret), K(start_log_ts), K(snapshot_version), K(ddl_checkpoint_ts));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id_,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else {
     ObTableHandleV2 table_handle; // empty

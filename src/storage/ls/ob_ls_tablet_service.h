@@ -225,6 +225,11 @@ public:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+  int get_tablet_with_timeout(
+      const common::ObTabletID &tablet_id,
+      ObTabletHandle &handle,
+      const int64_t retry_timeout_us,
+      const int64_t get_timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
   int get_ls_min_end_log_ts_in_old_tablets(int64_t &end_log_ts);
   int get_tx_data_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
@@ -458,11 +463,6 @@ private:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
-  int get_tablet_with_timeout(
-      const common::ObTabletID &tablet_id,
-      ObTabletHandle &handle,
-      const int64_t retry_timeout_us,
-      const int64_t get_timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int direct_get_tablet(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
