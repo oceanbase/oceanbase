@@ -29,6 +29,7 @@
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_tx_stat.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_keep_alive_ls_handler.h"
 
 namespace oceanbase
 {
@@ -1093,6 +1094,7 @@ public:
   IteratePartCtxAskSchedulerStatusFunctor()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+    min_start_scn_ = INT64_MAX;
   }
 
   ~IteratePartCtxAskSchedulerStatusFunctor() { PRINT_FUNC_STAT; }
@@ -1103,14 +1105,43 @@ public:
     if (OB_UNLIKELY(!tx_id.is_valid() || OB_ISNULL(tx_ctx))) {
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
-    } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
-      TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
     } else {
-      // do nothing
+      int64_t ctx_start_scn = tx_ctx->get_start_log_ts();
+      if (ctx_start_scn < 0) {
+        ctx_start_scn = INT64_MAX;
+      }
+      if (OB_FALSE_IT(min_start_scn_ = MIN(min_start_scn_, ctx_start_scn))) {
+        // do nothing
+      } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
+        TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
+      } else {
+        // do nothing
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      min_start_scn_ = OB_INVALID_TIMESTAMP;
     }
 
     return true;
   }
+
+  int64_t get_min_start_scn() { return min_start_scn_; }
+
+  MinStartScnStatus get_min_start_status()
+  {
+    MinStartScnStatus start_status = MinStartScnStatus::HAS_CTX;
+
+    if (OB_INVALID_TIMESTAMP == min_start_scn_) {
+      start_status = MinStartScnStatus::UNKOWN;
+    } else if (INT64_MAX == min_start_scn_) {
+      start_status = MinStartScnStatus::NO_CTX;
+    }
+    return start_status;
+  }
+
+private:
+  int64_t min_start_scn_;
 };
 
 } // transaction

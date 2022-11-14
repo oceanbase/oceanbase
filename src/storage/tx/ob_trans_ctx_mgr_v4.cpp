@@ -998,7 +998,7 @@ int ObLSTxCtxMgr::get_min_undecided_log_ts(int64_t &log_ts)
   return ret;
 }
 
-int ObLSTxCtxMgr::check_scheduler_status()
+int ObLSTxCtxMgr::check_scheduler_status(int64_t &min_start_scn, MinStartScnStatus &status)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard tg("ObLSTxCtxMgr::check_scheduler_status", 100000);
@@ -1006,6 +1006,9 @@ int ObLSTxCtxMgr::check_scheduler_status()
   IteratePartCtxAskSchedulerStatusFunctor functor;
   if (OB_FAIL(ls_tx_ctx_map_.for_each(functor))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
+  } else {
+    min_start_scn = functor.get_min_start_scn();
+    status = functor.get_min_start_status();
   }
 
   return ret;
@@ -2162,6 +2165,8 @@ int ObTxCtxMgr::check_scheduler_status(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  int64_t min_start_scn = OB_INVALID_TIMESTAMP;
+  MinStartScnStatus min_status = MinStartScnStatus::UNKOWN;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObTxCtxMgr not inited");
@@ -2173,7 +2178,7 @@ int ObTxCtxMgr::check_scheduler_status(share::ObLSID ls_id)
     TRANS_LOG(WARN, "get participant transaction context mgr error", K(ls_id));
     ret = OB_PARTITION_NOT_EXIST;
   } else {
-    if (OB_FAIL(ls_tx_ctx_mgr->check_scheduler_status())) {
+    if (OB_FAIL(ls_tx_ctx_mgr->check_scheduler_status(min_start_scn, min_status))) {
       TRANS_LOG(WARN, "check_scheduler_status failed", KR(ret), K(ls_id));
     } else {
       TRANS_LOG(DEBUG, "check_scheduler_status success", K(ls_id));

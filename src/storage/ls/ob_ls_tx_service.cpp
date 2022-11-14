@@ -176,14 +176,15 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
   return ret;
 }
 
-int ObLSTxService::check_scheduler_status(share::ObLSID ls_id)
+int ObLSTxService::check_scheduler_status(int64_t &min_start_scn,
+                                          transaction::MinStartScnStatus &status)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(trans_service_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = trans_service_->check_scheduler_status(ls_id);
+    ret = mgr_->check_scheduler_status(min_start_scn, status);
   }
   return ret;
 }
