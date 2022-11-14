@@ -21,6 +21,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/rcservice/ob_role_change_handler.h"
+#include "storage/tx/ob_keep_alive_ls_handler.h"
 
 namespace oceanbase
 {
@@ -91,7 +92,7 @@ public:
   // submit next log when all trx in frozen memtable have submitted log
   int traverse_trans_to_submit_next_log();
   // check schduler status for gc
-  int check_scheduler_status(share::ObLSID ls_id);
+  int check_scheduler_status(int64_t &min_start_scn, transaction::MinStartScnStatus &status);
 
   // for ls gc
   // @return OB_SUCCESS, all the tx of this ls cleaned up
