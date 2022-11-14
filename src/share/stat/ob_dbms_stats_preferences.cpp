@@ -337,9 +337,6 @@ int ObDbmsStatsPreferences::get_sys_default_stat_options(ObExecContext &ctx,
       LOG_WARN("failed to append fmt", K(ret), K(raw_sql));
     } else if (OB_FAIL(do_get_sys_perfs(ctx, raw_sql, no_acquired_prefs, param))) {
       LOG_WARN("failed to do get sys perfs", K(ret));
-    } else {
-      LOG_TRACE("succeed to get sys default stat options", K(stat_prefs), K(no_acquired_prefs),
-                                                           K(param));
     }
   }
   return ret;
