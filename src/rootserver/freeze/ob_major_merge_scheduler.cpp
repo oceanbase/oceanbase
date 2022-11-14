@@ -660,12 +660,12 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
   return ret;
 }
 
-int ObMajorMergeScheduler::update_global_merge_info_after_merge(const int64_t expected_epaoch)
+int ObMajorMergeScheduler::update_global_merge_info_after_merge(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   // need update global merge_status
-  if (OB_FAIL(zone_merge_mgr_->update_global_merge_info_after_merge(expected_epaoch))) {
-    LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epaoch));
+  if (OB_FAIL(zone_merge_mgr_->update_global_merge_info_after_merge(expected_epoch))) {
+    LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epoch));
   }
   return ret;
 }
