@@ -790,7 +790,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
         bool param_all_same_cs_level = true;
         for (int64_t j = 0; OB_SUCC(ret) && j < in_op->get_row_dimension(); ++j) {
           param_all_const &= param1->get_param_expr(0)->get_param_expr(j)
-                                                     ->is_const_expr();
+                                                     ->is_static_const_expr();
           ObObjType first_obj_type = param1->get_param_expr(0)->get_param_expr(j)
                                                               ->get_data_type();
           ObObjType cur_obj_type = ObMaxType;
@@ -811,7 +811,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
             }
             if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
               param_all_const &= param1->get_param_expr(i)->get_param_expr(j)
-                                                          ->is_const_expr();
+                                                          ->is_static_const_expr();
               param_all_same_type &= (first_obj_type == cur_obj_type);
               param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
               param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
@@ -844,7 +844,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
       }
     }
     if (OB_SUCC(ret)) {
-      bool param_all_const = param1->get_param_expr(0)->is_const_expr();
+      bool param_all_const = param1->get_param_expr(0)->is_static_const_expr();
       bool param_all_same_type = true;
       bool param_all_same_cs_type = true;
       bool param_all_is_ext = true;
@@ -865,7 +865,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
           first_obj_cs_type = cur_obj_cs_type;
         }
         if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
-          param_all_const &= param1->get_param_expr(i)->is_const_expr();
+          param_all_const &= param1->get_param_expr(i)->is_static_const_expr();
           param_all_same_type &= (first_obj_type == cur_obj_type);
           param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
           param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
