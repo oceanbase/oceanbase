@@ -283,8 +283,8 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
           new_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "ObRestoreHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
-  } else if (false == need_execute_role_change(curr_proposal_id, new_proposal_id, 
-        is_pending_state, log_handler_is_offline)) {
+  } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
+        new_role, is_pending_state, log_handler_is_offline)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline));
   } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, only_need_change_to_follower))) {
@@ -350,8 +350,8 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
   } else if (true == is_pending_state) {
     CLOG_LOG(INFO, "curr state of palf is follower pending, need ignore this signal", K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id), K(is_pending_state));
-  } else if (false == need_execute_role_change(curr_proposal_id, new_proposal_id, 
-        is_pending_state, log_handler_is_offline)) {
+  } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
+        new_role, is_pending_state, log_handler_is_offline)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline));
   } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, only_need_change_to_follower))) {
@@ -824,14 +824,20 @@ ObRoleChangeService::RoleChangeOptType ObRoleChangeService::get_role_change_opt_
 
 // NB: 
 // 1. when log handler is offline, need execute role change;
-// 2. when proposal id are not same and is not in pending, need execute role change.
+// 2. when palf is not in pending:
+//   1. proposal_id is not same or
+//   2. role is not same.(If there are no pending logs in sliding window,
+//      leader to follower will not advance proposal_id)
 bool ObRoleChangeService::need_execute_role_change(const int64_t curr_proposal_id,
+                                                   const common::ObRole curr_role,
                                                    const int64_t new_proposal_id,
+                                                   const common::ObRole new_role,
                                                    const bool is_pending_state,
                                                    const bool is_offline) const
 {
   return is_offline 
-         || (!is_pending_state && curr_proposal_id != new_proposal_id);
+         || (!is_pending_state
+             && (curr_proposal_id != new_proposal_id || curr_role != new_role));
 }
 
 int ObRoleChangeService::diagnose(RCDiagnoseInfo &diagnose_info)
