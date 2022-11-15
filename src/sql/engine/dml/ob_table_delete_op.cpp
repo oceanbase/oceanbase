@@ -249,7 +249,7 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
         LOG_WARN("calc partition key failed", K(ret));
       } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef, del_rtdef, tablet_loc, dml_rtctx_))) {
         LOG_WARN("insert row with das failed", K(ret));
-      } else {
+      } else if (!MY_SPEC.del_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
         ++del_rtdef.cur_row_num_;
       }
     }

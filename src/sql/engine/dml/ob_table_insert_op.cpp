@@ -214,7 +214,9 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
       ObDASTabletLoc *tablet_loc = nullptr;
-      ++ins_rtdef.cur_row_num_;
+      if (!MY_SPEC.ins_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
+        ++ins_rtdef.cur_row_num_;
+      }
       if (OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {
         LOG_WARN("fail to init heap table pk to null", K(ret));
       } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
