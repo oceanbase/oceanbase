@@ -1285,8 +1285,13 @@ int ObTabletCopyFinishTask::create_new_table_store_restore_major_()
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id_));
   } else if (tables_handle_.empty()) {
     if (src_tablet_meta_->table_store_flag_.with_major_sstable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("should has major sstable", K(ret), K(tablet_id_), K(tables_handle_), KPC(tablet));
+      const ObSSTableArray &major_sstable_array = tablet->get_table_store().get_major_sstables();
+      if (major_sstable_array.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("should has major sstable", K(ret), K(tablet_id_), K(tables_handle_), KPC(tablet));
+      } else {
+        LOG_INFO("already has major sstable", K(ret), K(tablet_id_));
+      }
     } else {
       LOG_INFO("tablet do not has sstable", K(ret), K(tablet_id_), K(tables_handle_), KPC(tablet));
     }

@@ -2196,9 +2196,8 @@ int ObTabletRestoreTask::generate_ddl_restore_tasks_(
   } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
-      || ObTabletRestoreAction::is_restore_tablet_meta(tablet_restore_ctx_->action_)) {
-    LOG_INFO("tablet only restore minor, skip ddl restore tasks",
+  } else if (!ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)) {
+    LOG_INFO("tablet not restore minor, skip ddl restore tasks",
         K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
@@ -2350,11 +2349,12 @@ int ObTabletRestoreTask::generate_restore_task_(
       const ObITable::TableKey &copy_table_key = copy_table_key_array_.at(i);
       ObFakeTask *wait_finish_task = nullptr;
       bool need_copy = true;
+      const bool is_right_type = is_right_type_sstable(copy_table_key.table_type_);
 
       if (!copy_table_key.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("copy table key info is invalid", K(ret), K(copy_table_key));
-      } else if (!is_right_type_sstable(copy_table_key.table_type_)) {
+      } else if (!is_right_type) {
         //do nothing
       } else {
         if (OB_FAIL(check_need_copy_sstable_(copy_table_key, need_copy))) {
@@ -2371,7 +2371,9 @@ int ObTabletRestoreTask::generate_restore_task_(
         } else {
           parent_task = wait_finish_task;
           LOG_INFO("succeed to generate sstable restore task", "is_leader",
-              tablet_restore_ctx_->is_leader_, "src", src_info_, K(copy_table_key));
+              tablet_restore_ctx_->is_leader_, "src", src_info_, K(copy_table_key),
+              "restore_action", tablet_restore_ctx_->action_, K(is_right_type),
+              K(copy_table_key_array_), K(i));
         }
       }
     }
