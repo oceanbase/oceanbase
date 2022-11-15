@@ -730,17 +730,16 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
   } else if (OB_FAIL(get_tablet_with_timeout(param.tablet_id_, data_tablet, param.timeout_))) {
     LOG_WARN("failed to check and get tablet", K(ret), K(param));
   } else if (OB_FAIL(inner_table_scan(data_tablet, iter, param))) {
-    LOG_WARN("failed to do table scan", K(ret), K(param));
+    LOG_WARN("failed to do table scan", K(ret), KP(&iter), K(param));
   } else {
-    result = &iter;
-  }
-
-  if (OB_SUCC(ret)) {
     bool is_same = false;
     allow_to_read_mgr_.check_read_info_same(read_info, is_same);
     if (!is_same) {
       ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
+      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_), KP(&iter));
+    } else {
+      // result should be assigned at the last
+      result = &iter;
     }
   }
   NG_TRACE(S_table_scan_end);
