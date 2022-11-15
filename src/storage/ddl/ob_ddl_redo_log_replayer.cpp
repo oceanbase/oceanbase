@@ -58,7 +58,6 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const int64_t l
   ObITable::TableKey table_key = log.get_table_key();
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   bool need_replay = true;
-  LOG_INFO("start to replay ddl start log", K(log));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
@@ -81,6 +80,7 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const int64_t l
   } else {
     LOG_INFO("succeed to replay ddl start log", K(ret), K(log));
   }
+  LOG_INFO("finish replay ddl start log", K(ret), K(need_replay), K(log));
   return ret;
 }
 
@@ -94,7 +94,6 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const int64_t log
   ObDDLKV *ddl_kv = nullptr;
 
   DEBUG_SYNC(BEFORE_REPLAY_DDL_MACRO_BLOCK);
-  LOG_INFO("start to replay ddl redo log", K(log));
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -144,6 +143,7 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const int64_t log
       }
     }
   }
+  LOG_INFO("finish replay ddl redo log", K(ret), K(need_replay), K(log));
   return ret;
 }
 
@@ -158,7 +158,6 @@ int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const int64
   bool need_replay = true;
 
   DEBUG_SYNC(BEFORE_REPLAY_DDL_PREPRARE);
-  LOG_INFO("start to replay ddl prepare log", K(log));
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -182,6 +181,7 @@ int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const int64
   } else {
     LOG_INFO("replay ddl prepare log success", K(ret), K(table_key), K(log_ts));
   }
+  LOG_INFO("finish replay ddl prepare log", K(ret), K(need_replay), K(log));
   return ret;
 }
 
@@ -196,7 +196,6 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const int64_t
   bool need_replay = true;
 
   DEBUG_SYNC(BEFORE_REPLAY_DDL_COMMIT);
-  LOG_INFO("start to replay ddl commit log", K(log));
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -223,6 +222,7 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const int64_t
   } else {
     tablet_handle.get_obj()->remove_ddl_kv_mgr();
   }
+  LOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K(log));
   return ret;
 }
 
