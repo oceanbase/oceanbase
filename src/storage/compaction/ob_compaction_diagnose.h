@@ -40,6 +40,7 @@ struct ObScheduleSuspectInfo : public common::ObDLinkBase<ObScheduleSuspectInfo>
   bool is_valid() const;
   ObScheduleSuspectInfo & operator = (const ObScheduleSuspectInfo &other);
 
+  static int64_t gen_hash(int64_t tenant_id, int64_t dag_hash);
   TO_STRING_KV(K_(tenant_id), K_(merge_type), K_(ls_id), K_(tablet_id), K_(add_time), K_(suspect_info));
   int64_t tenant_id_;
   int64_t add_time_;
@@ -195,14 +196,16 @@ private:
       dag_hash.merge_type_ = type;                                                                     \
       dag_hash.ls_id_ = ls_id;                                                                           \
       dag_hash.tablet_id_ = tablet_id;                                                                   \
-      if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(dag_hash.inner_hash()))) { \
+      int64_t tenant_id = MTL_ID();                                                                     \
+      int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
+      if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(hash_value))) { \
         if (OB_HASH_NOT_EXIST != ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(dag_hash));                        \
+          STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(dag_hash), K(tenant_id));         \
         } else {                                                                                      \
           ret = OB_SUCCESS;                                                                           \
         }                                                                                            \
       } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(dag_hash));                      \
+        STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(dag_hash), K(tenant_id));       \
       }                                                                                       \
 }
 
