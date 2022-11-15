@@ -109,6 +109,7 @@ int ObBackupDataScheduler::get_need_reload_task(
         LOG_INFO("[DATA_BACKUP]no job need to reload");
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < jobs.count(); ++i) {
+          ls_tasks.reset();
           const ObBackupJobAttr &job = jobs.at(i);
           ObBackupSetTaskAttr set_task_attr;
           bool is_valid = true;
