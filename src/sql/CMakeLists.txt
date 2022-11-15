@@ -1,7 +1,3 @@
-ob_set_subtarget(ob_sql ALONE
-  resolver/ob_resolver_utils.cpp
-)
-
 ob_set_subtarget(ob_sql code_generator
   code_generator/ob_code_generator.cpp
   code_generator/ob_column_index_provider.cpp
@@ -829,6 +825,7 @@ ob_set_subtarget(ob_sql plan_cache
 
 ob_set_subtarget(ob_sql resolver
   resolver/ob_resolver.cpp
+  resolver/ob_resolver_utils.cpp
   resolver/ob_schema_checker.cpp
   resolver/ob_stmt.cpp
   resolver/ob_stmt_resolver.cpp

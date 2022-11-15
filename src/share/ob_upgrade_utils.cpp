@@ -741,6 +741,8 @@ int ObBaseUpgradeProcessor::init(
   return ret;
 }
 
+#undef FORMAT_STR
+
 /* =========== special upgrade processor start ============= */
 
 /* =========== special upgrade processor end   ============= */

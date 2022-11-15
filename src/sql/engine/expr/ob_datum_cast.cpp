@@ -9915,6 +9915,7 @@ static_assert(ObMaxTC * 2 == sizeof(OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT) / size
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT,
                    OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT,
                    sizeof(OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT) / sizeof(void *));
+#undef CAST_FAIL
+#undef EVAL_ARG
 } // namespace sql
 } // namespace oceanbase
-#undef EVAL_ARG

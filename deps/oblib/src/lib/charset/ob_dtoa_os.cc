@@ -2485,3 +2485,4 @@ ret1:
   return s0;
 }
 
+#undef P

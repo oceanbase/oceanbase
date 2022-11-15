@@ -44,7 +44,7 @@ private:
   common::ObMemAttr attr_;
 };
 template<typename T>
-struct Compare
+struct CompareT
 {
 public:
   bool operator()(const T &a, const T &b) const
@@ -164,7 +164,7 @@ private:
       int,
       common::hash::NoPthreadDefendMode,
       common::hash::hash_func<Task>,
-      Compare<Task>,
+      CompareT<Task>,
       common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, int>::AllocType,
       common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
       common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > processing_task_map_;

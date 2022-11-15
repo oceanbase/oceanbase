@@ -342,5 +342,7 @@ int ObExprOracleTrunc::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_ex
   return ret;
 }
 
+#undef GET_SCALE_FOR_CALC
+
 } //namespace sql
 } //namespace oceanbase

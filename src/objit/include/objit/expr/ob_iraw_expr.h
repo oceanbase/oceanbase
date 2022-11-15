@@ -17,7 +17,8 @@
 #include "lib/ob_errno.h"
 #include "objit/common/ob_item_type.h"
 #include "lib/container/ob_se_array.h"
-#include "objit/common/ob_expr_res_type.h"
+#include "src/sql/engine/expr/ob_expr_res_type.h"
+
 namespace oceanbase {
 namespace jit {
 namespace expr {
