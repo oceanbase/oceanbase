@@ -631,7 +631,6 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
               }
             }
           }
-
         }
       }
     }
