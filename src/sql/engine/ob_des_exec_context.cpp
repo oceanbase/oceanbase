@@ -216,6 +216,7 @@ DEFINE_DESERIALIZE(ObDesExecContext)
       LOG_WARN("init exec context expr op failed", K(ret));
     }
   }
+  use_temp_expr_ctx_cache_ = true;
   return ret;
 }
 }/* ns sql*/

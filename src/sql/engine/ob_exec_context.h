@@ -369,6 +369,8 @@ public:
   // for granule iterator
   int get_gi_task_map(GIPrepareTaskMap *&gi_prepare_task_map);
 
+  void set_use_temp_expr_ctx_cache(bool v) { use_temp_expr_ctx_cache_ = v; }
+
   // for udf
   int get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr);
 
@@ -599,6 +601,7 @@ protected:
   uint64_t admission_version_;
   hash::ObHashMap<ObAddr, int64_t> admission_addr_map_;
   // used for temp expr ctx manager
+  bool use_temp_expr_ctx_cache_;
   hash::ObHashMap<int64_t, int64_t> temp_expr_ctx_map_;
   // for pl/trigger
   ObDmlEventType dml_event_;

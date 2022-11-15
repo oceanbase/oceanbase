@@ -59,6 +59,7 @@ int ObExecutor::execute_plan(ObExecContext &ctx)
   ObSQLSessionInfo *session_info = ctx.get_my_session();
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   int64_t batched_stmt_cnt = ctx.get_sql_ctx()->multi_stmt_item_.get_batched_stmt_cnt();
+  ctx.set_use_temp_expr_ctx_cache(true);
   // If the batch execution is rewritten by insert multi values, there is no need to repack multiple times
   if (ctx.get_sql_ctx()->multi_stmt_item_.is_ins_multi_val_opt()) {
     batched_stmt_cnt = 0;

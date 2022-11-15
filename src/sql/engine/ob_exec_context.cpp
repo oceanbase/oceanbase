@@ -112,6 +112,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     px_batch_id_(0),
     admission_version_(UINT64_MAX),
     admission_addr_map_(),
+    use_temp_expr_ctx_cache_(false),
     temp_expr_ctx_map_(),
     dml_event_(ObDmlEventType::DE_INVALID),
     update_columns_(nullptr),
@@ -301,25 +302,29 @@ int ObExecContext::get_temp_expr_eval_ctx(const ObTempExpr &temp_expr,
                                           ObTempExprCtx *&temp_expr_ctx)
 {
   int ret = OB_SUCCESS;
-  if (!temp_expr_ctx_map_.created()) {
-    OZ(temp_expr_ctx_map_.create(8, ObLabel("TempExprCtx")));
-  }
-  if (OB_SUCC(ret)) {
-    int64_t ctx_ptr = 0;
-    if (OB_FAIL(temp_expr_ctx_map_.get_refactored(reinterpret_cast<int64_t>(&temp_expr),
-                                                  ctx_ptr))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
-        CK(OB_NOT_NULL(temp_expr_ctx));
-        OZ(temp_expr_ctx_map_.set_refactored(reinterpret_cast<int64_t>(&temp_expr),
-                                             reinterpret_cast<int64_t>(temp_expr_ctx)));
-      } else {
-        LOG_WARN("fail to get temp expr ctx", K(temp_expr), K(ret));
-      }
-    } else {
-      temp_expr_ctx = reinterpret_cast<ObTempExprCtx *>(ctx_ptr);
+  if (use_temp_expr_ctx_cache_) {
+    if (!temp_expr_ctx_map_.created()) {
+      OZ(temp_expr_ctx_map_.create(8, ObLabel("TempExprCtx")));
     }
+    if (OB_SUCC(ret)) {
+      int64_t ctx_ptr = 0;
+      if (OB_FAIL(temp_expr_ctx_map_.get_refactored(reinterpret_cast<int64_t>(&temp_expr),
+                                                    ctx_ptr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
+          CK(OB_NOT_NULL(temp_expr_ctx));
+          OZ(temp_expr_ctx_map_.set_refactored(reinterpret_cast<int64_t>(&temp_expr),
+                                               reinterpret_cast<int64_t>(temp_expr_ctx)));
+        } else {
+          LOG_WARN("fail to get temp expr ctx", K(temp_expr), K(ret));
+        }
+      } else {
+        temp_expr_ctx = reinterpret_cast<ObTempExprCtx *>(ctx_ptr);
+      }
+    }
+  } else {
+    OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
   }
 
   return ret;

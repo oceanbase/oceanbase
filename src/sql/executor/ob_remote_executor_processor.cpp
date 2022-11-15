@@ -422,6 +422,7 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
   ObSQLSessionInfo *session = exec_ctx.get_my_session();
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObOperator *se_op = nullptr; // static engine operator
+  exec_ctx.set_use_temp_expr_ctx_cache(true);
   if (OB_ISNULL(plan_ctx) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("op is NULL", K(ret), K(plan_ctx), K(session));
@@ -629,6 +630,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   bool enable_sql_audit = GCONF.enable_sql_audit;
   ObPhysicalPlan *plan = nullptr;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
+  exec_ctx_.set_use_temp_expr_ctx_cache(false);
   int inject_err_no = EVENT_CALL(EventTable::EN_REMOTE_EXEC_ERR);
   if (0 != inject_err_no) {
     ret = inject_err_no;
