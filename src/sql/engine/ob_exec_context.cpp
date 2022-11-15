@@ -224,6 +224,21 @@ void ObExecContext::reset_op_env()
   }
 }
 
+int ObExecContext::get_root_ctx(ObExecContext* &root_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(this->get_parent_ctx())) {
+    root_ctx = this;
+  } else if (OB_ISNULL(get_parent_ctx()->get_pl_stack_ctx())) {
+    root_ctx = this;
+  } else if (get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
+    root_ctx = this;
+  } else if (OB_FAIL( SMART_CALL(get_parent_ctx()->get_root_ctx(root_ctx)))) {
+    LOG_WARN("failed to get root ctx", K(ret));
+  }
+  return ret;
+}
+
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
 {
   int ret = OB_SUCCESS;

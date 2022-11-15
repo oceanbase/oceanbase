@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "common/ob_smart_call.h"
 #include "sql/engine/dml/ob_table_replace_op.h"
 #include "share/ob_autoincrement_service.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
@@ -92,6 +93,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   return len;
 }
+
 
 int ObTableReplaceOp::inner_open()
 {

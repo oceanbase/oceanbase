@@ -300,6 +300,7 @@ private:
   int64_t lookup_cnt_;
 };
 typedef common::ObList<ObDASTableLoc*, common::ObIAllocator> DASTableLocList;
+typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObFixedArray<uint64_t, common::ObIAllocator> UIntFixedArray;
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;

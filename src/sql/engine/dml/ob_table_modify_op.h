@@ -194,9 +194,11 @@ public:
   int execute_write(const char *sql);
   int execute_read(const char *sql, common::ObMySQLProxy::MySQLResult &res);
   int check_stack();
-  bool is_nested_session() { return is_nested_session_; }
+  bool is_nested_session() { return ObSQLUtils::is_nested_sql(&ctx_); }
+  bool is_fk_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_); }
   void set_foreign_key_checks() { foreign_key_checks_ = true; }
   bool need_foreign_key_checks() { return foreign_key_checks_; }
+  bool is_fk_root_session();
   const ObObjPrintParams &get_obj_print_params() { return obj_print_params_; }
   int init_foreign_key_operation();
   void log_user_error_inner(int ret, int64_t col_idx, int64_t row_num,
@@ -241,7 +243,6 @@ public:
   observer::ObInnerSQLConnection *inner_conn_;
   uint64_t tenant_id_;
   observer::ObInnerSQLConnection::SavedValue saved_conn_;
-  bool is_nested_session_;
   bool foreign_key_checks_;
   bool need_close_conn_;
 

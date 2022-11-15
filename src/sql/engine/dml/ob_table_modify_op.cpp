@@ -82,7 +82,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
           bool is_self_ref = false;
           if (OB_FAIL(is_self_ref_row(op.get_eval_ctx(), old_row, fk_arg, is_self_ref))) {
             LOG_WARN("is_self_ref_row failed", K(ret), K(old_row), K(fk_arg));
-          } else if (new_row.empty() && is_self_ref && op.is_nested_session()) {
+          } else if (new_row.empty() && is_self_ref && op.is_fk_nested_session()) {
             // delete self refercnced row should not cascade delete.
           } else if (OB_FAIL(cascade(op, fk_arg, old_row, new_row))) {
             LOG_WARN("failed to cascade", K(ret), K(fk_arg), K(old_row), K(new_row));
@@ -519,7 +519,6 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     inner_conn_(NULL),
     tenant_id_(0),
     saved_conn_(),
-    is_nested_session_(false),
     foreign_key_checks_(false),
     need_close_conn_(false),
     iter_end_(false),
@@ -534,6 +533,20 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
   // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
   // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
   GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), obj_print_params_.skip_escape_);
+}
+
+bool ObTableModifyOp::is_fk_root_session() {
+  bool ret = false;
+  if (OB_ISNULL(ctx_.get_parent_ctx())) {
+    if (this->need_foreign_key_checks()) {
+      ret = true;
+    }
+  } else {
+    if (!ctx_.get_parent_ctx()->get_das_ctx().is_fk_cascading_ && need_foreign_key_checks()) {
+      ret = true;
+    }
+  }
+  return ret;
 }
 
 int ObTableModifyOp::inner_open()
@@ -679,6 +692,16 @@ int ObTableModifyOp::inner_close()
       dml_rtctx_.das_ref_.reset();
     }
   }
+  // Release the hash sets created at root ctx for delete distinct check
+  if (OB_SUCC(ret) && get_exec_ctx().is_root_ctx()) {
+    DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
+    DASDelCtxList::iterator iter = del_ctx_list.begin();
+    for (;  OB_SUCC(ret)&& iter != del_ctx_list.end(); iter++) {
+      DmlRowkeyDistCtx del_ctx = *iter;
+      del_ctx.deleted_rows_->destroy();
+    }
+    del_ctx_list.destroy();
+  }
   return ret;
 }
 
@@ -813,7 +836,6 @@ int ObTableModifyOp::open_inner_conn()
   if (OB_SUCC(ret)) {
     inner_conn_ = static_cast<ObInnerSQLConnection *>(session->get_inner_conn());
     tenant_id_ = session->get_effective_tenant_id();
-    is_nested_session_ = ObSQLUtils::is_nested_sql(&ctx_);
   }
   return ret;
 }
