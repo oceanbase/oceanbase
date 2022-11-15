@@ -1021,6 +1021,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
       LOG_WARN("fail to init buffer", K(ret));
     } else if (OB_FAIL(parse_result.prepare_allocate(handle->generator.get_field_exprs().count()))) {
       LOG_WARN("fail to allocate", K(ret));
+    } else {
+      handle->exec_ctx.set_use_temp_expr_ctx_cache(true);
     }
 
     while (OB_SUCC(ret) && ptr < end) {
