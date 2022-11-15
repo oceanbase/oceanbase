@@ -80,7 +80,7 @@ public:
   }
   virtual void reset() override
   {
-    if (pos_ > MAX_RESERVE_SIZE - 1) {
+    if (allocator_.used() > 0) {
       allocator_.reset();
     }
     pos_ = 0;
@@ -88,7 +88,7 @@ public:
   }
   virtual void reuse() override
   {
-	  if (pos_ > MAX_RESERVE_SIZE - 1) {
+	  if (allocator_.used() > 0) {
       allocator_.reuse();
     }
     pos_ = 0;
