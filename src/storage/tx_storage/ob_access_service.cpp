@@ -271,18 +271,11 @@ int ObAccessService::table_rescan(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only table scan iter can be rescan", K(ret), K(result->get_type()));
   } else if (!param.need_switch_param_) {
-    if (ObNewRowIterator::ObTableScanIterator == result->get_type() &&
-        OB_FAIL(static_cast<ObTableScanIterator*>(result)->rescan(param))) {
+    if (OB_FAIL(static_cast<ObTableScanIterator*>(result)->rescan(param))) {
       LOG_WARN("rescan ObTableScanIterator failed", K(ret), K(result), K(vparam));
     }
   } else {
-    ObTableScanIterator *iter = nullptr;
-    if (ObNewRowIterator::ObTableScanIterator == result->get_type()) {
-      iter = static_cast<ObTableScanIterator*>(result);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected table iter type", K(ret), K(result->get_type()));
-    }
+    ObTableScanIterator *iter =  static_cast<ObTableScanIterator*>(result);
     const share::ObLSID &ls_id = vparam.ls_id_;
     const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
     ObLS *ls = nullptr;
