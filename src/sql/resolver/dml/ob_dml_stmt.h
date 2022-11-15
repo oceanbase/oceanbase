@@ -249,17 +249,16 @@ struct TableItem {
   }
   bool is_oracle_all_or_user_sys_view() const
   {
-    return (is_ora_sys_view_table(table_id_) &&
-            (0 == strncmp(table_name_.ptr(), "USER_", 5) || 0 == strncmp(table_name_.ptr(), "ALL_", 4)));
+    return (is_ora_sys_view_table(table_id_) && (table_name_.prefix_match("USER_") || table_name_.prefix_match("ALL_")));
   }
   bool is_oracle_dba_sys_view() const
   {
-    return (is_ora_sys_view_table(table_id_) && (0 == strncmp(table_name_.ptr(), "DBA_", 4)));
+    return (is_ora_sys_view_table(table_id_) && table_name_.prefix_match("DBA_"));
   }
   bool is_oracle_all_or_user_sys_view_for_alias() const
   {
     return ((database_name_ == OB_ORA_SYS_SCHEMA_NAME) &&
-            (0 == strncmp(table_name_.ptr(), "USER_", 5) || 0 == strncmp(table_name_.ptr(), "ALL_", 4)));
+            (table_name_.prefix_match("USER_") || table_name_.prefix_match("ALL_")));
   }
   int deep_copy(ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const TableItem& other);
   const common::ObString& get_table_name() const
