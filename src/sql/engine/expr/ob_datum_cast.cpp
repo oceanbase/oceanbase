@@ -427,7 +427,7 @@ static int common_copy_string(
   int ret = OB_SUCCESS;
   char* out_ptr = NULL;
   int64_t len = align_offset + src.length();
-  if (expr.res_buf_len_ < src.length()) {
+  if (expr.res_buf_len_ < len) {
     if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
