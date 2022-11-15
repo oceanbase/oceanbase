@@ -309,6 +309,38 @@ int ObTabletDDLKvMgr::cleanup()
   return ret;
 }
 
+int ObTabletDDLKvMgr::online()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+    ObITable::TableKey table_key;
+    table_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    table_key.tablet_id_ = tablet_meta.tablet_id_;
+    table_key.version_range_.base_version_ = 0;
+    table_key.version_range_.snapshot_version_ = tablet_meta.ddl_snapshot_version_;
+    const int64_t start_log_ts = tablet_meta.ddl_start_log_ts_;
+    if (OB_FAIL(ddl_start(table_key,
+                          start_log_ts,
+                          GET_MIN_CLUSTER_VERSION(),
+                          tablet_meta.ddl_checkpoint_ts_))) {
+      LOG_WARN("start ddl kv manager failed", K(ret), K(tablet_meta));
+    }
+  }
+  return ret;
+}
+
 int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t snapshot_version, const int64_t ddl_checkpoint_ts)
 {
   int ret = OB_SUCCESS;

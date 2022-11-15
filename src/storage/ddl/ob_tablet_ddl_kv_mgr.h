@@ -54,6 +54,7 @@ public:
   bool is_commit_success() const { return is_commit_success_; }
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   int cleanup();
+  int online();
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
