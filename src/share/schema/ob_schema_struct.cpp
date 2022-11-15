@@ -5200,6 +5200,7 @@ void ObBasePartition::reset()
   is_empty_partition_name_ = false;
   tablespace_id_ = OB_INVALID_ID;
   partition_type_ = PARTITION_TYPE_NORMAL;
+  name_.reset();
   ObSchema::reset();
 }
 
