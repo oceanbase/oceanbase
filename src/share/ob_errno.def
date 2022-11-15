@@ -562,7 +562,7 @@ DEFINE_ERROR(OB_TOO_MANY_TENANT_PARTITIONS_ERROR, -4684, -1, "HY000", "Too many 
 DEFINE_ERROR(OB_ACTIVE_MEMTBALE_NOT_EXSIT, -4685, -1, "HY000", "active memtable not exist");
 DEFINE_ERROR(OB_USE_DUP_FOLLOW_AFTER_DML, -4686, -1, "HY000", "Should use leader replica for duplicate table after DML operator");
 DEFINE_ERROR(OB_NO_DISK_NEED_REBUILD, -4687, -1, "HY000", "no disk need rebuild");
-DEFINE_ORACLE_ERROR(OB_STANDBY_WEAK_READ_ONLY, -4688, -1, "HY000", "standby cluster support weak read only", 16000, "standby cluster support weak read only");
+DEFINE_ORACLE_ERROR(OB_STANDBY_READ_ONLY, -4688, -1, "HY000", "standby tenant is read only", 16000, "standby tenant is read only");
 DEFINE_ERROR(OB_INVALD_WEB_SERVICE_CONTENT, -4689, -1, "HY000", "web service content not valid");
 DEFINE_ERROR(OB_PRIMARY_CLUSTER_EXIST, -4690, -1, "HY000", "other primary cluster already exist, can not start as primary");
 DEFINE_ERROR(OB_ARRAY_BINDING_SWITCH_ITERATOR, -4691, -1, "HY000", "array binding needs to switch iterator");

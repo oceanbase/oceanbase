@@ -38,6 +38,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/ls/ob_ls.h"
 #include "ob_xa_service.h"
+#include "rootserver/ob_tenant_recovery_reportor.h"
 
 /*  interface(s)  */
 namespace oceanbase {
@@ -2003,24 +2004,30 @@ int ObTransService::refresh_location_cache(const share::ObLSID ls)
 int ObTransService::gen_trans_id_(ObTransID &trans_id)
 {
   int ret = OB_SUCCESS;
-  const int MAX_RETRY_TIMES = 50;
+
   int retry_times = 0;
-  int64_t tx_id = 0;
-  do {
-    if (OB_SUCC(gti_source_->get_trans_id(tx_id))) {
-    } else if (OB_EAGAIN == ret) {
-      if (retry_times++ > MAX_RETRY_TIMES) {
-        ret = OB_GTI_NOT_READY;
-        TRANS_LOG(WARN, "get trans id not ready", K(ret), K(retry_times), KPC(this));
+  if (!MTL_IS_PRIMARY_TENANT()) {
+    ret = OB_STANDBY_READ_ONLY;
+    TRANS_LOG(WARN, "standby tenant support read only", K(ret));
+  } else {
+    const int MAX_RETRY_TIMES = 50;
+    int64_t tx_id = 0;
+    do {
+      if (OB_SUCC(gti_source_->get_trans_id(tx_id))) {
+      } else if (OB_EAGAIN == ret) {
+        if (retry_times++ > MAX_RETRY_TIMES) {
+          ret = OB_GTI_NOT_READY;
+          TRANS_LOG(WARN, "get trans id not ready", K(ret), K(retry_times), KPC(this));
+        } else {
+          ob_usleep(1000);
+        }
       } else {
-        ob_usleep(1000);
+        TRANS_LOG(WARN, "get trans id fail", KR(ret));
       }
-    } else {
-      TRANS_LOG(WARN, "get trans id fail", KR(ret));
+    } while (OB_EAGAIN == ret);
+    if (OB_SUCC(ret)) {
+      trans_id = ObTransID(tx_id);
     }
-  } while (OB_EAGAIN == ret);
-  if (OB_SUCC(ret)) {
-    trans_id = ObTransID(tx_id);
   }
   TRANS_LOG(TRACE, "gen trans id", K(ret), K(trans_id), K(retry_times));
   return ret;

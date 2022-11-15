@@ -378,7 +378,7 @@ constexpr int OB_TOO_MANY_TENANT_PARTITIONS_ERROR = -4684;
 constexpr int OB_ACTIVE_MEMTBALE_NOT_EXSIT = -4685;
 constexpr int OB_USE_DUP_FOLLOW_AFTER_DML = -4686;
 constexpr int OB_NO_DISK_NEED_REBUILD = -4687;
-constexpr int OB_STANDBY_WEAK_READ_ONLY = -4688;
+constexpr int OB_STANDBY_READ_ONLY = -4688;
 constexpr int OB_INVALD_WEB_SERVICE_CONTENT = -4689;
 constexpr int OB_PRIMARY_CLUSTER_EXIST = -4690;
 constexpr int OB_ARRAY_BINDING_SWITCH_ITERATOR = -4691;
@@ -2070,7 +2070,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ACTIVE_MEMTBALE_NOT_EXSIT__USER_ERROR_MSG "active memtable not exist"
 #define OB_USE_DUP_FOLLOW_AFTER_DML__USER_ERROR_MSG "Should use leader replica for duplicate table after DML operator"
 #define OB_NO_DISK_NEED_REBUILD__USER_ERROR_MSG "no disk need rebuild"
-#define OB_STANDBY_WEAK_READ_ONLY__USER_ERROR_MSG "standby cluster support weak read only"
+#define OB_STANDBY_READ_ONLY__USER_ERROR_MSG "standby tenant is read only"
 #define OB_INVALD_WEB_SERVICE_CONTENT__USER_ERROR_MSG "web service content not valid"
 #define OB_PRIMARY_CLUSTER_EXIST__USER_ERROR_MSG "other primary cluster already exist, can not start as primary"
 #define OB_ARRAY_BINDING_SWITCH_ITERATOR__USER_ERROR_MSG "array binding needs to switch iterator"
@@ -3902,7 +3902,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ACTIVE_MEMTBALE_NOT_EXSIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4685, active memtable not exist"
 #define OB_USE_DUP_FOLLOW_AFTER_DML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4686, Should use leader replica for duplicate table after DML operator"
 #define OB_NO_DISK_NEED_REBUILD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4687, no disk need rebuild"
-#define OB_STANDBY_WEAK_READ_ONLY__ORA_USER_ERROR_MSG "ORA-16000: standby cluster support weak read only"
+#define OB_STANDBY_READ_ONLY__ORA_USER_ERROR_MSG "ORA-16000: standby tenant is read only"
 #define OB_INVALD_WEB_SERVICE_CONTENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4689, web service content not valid"
 #define OB_PRIMARY_CLUSTER_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4690, other primary cluster already exist, can not start as primary"
 #define OB_ARRAY_BINDING_SWITCH_ITERATOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4691, array binding needs to switch iterator"

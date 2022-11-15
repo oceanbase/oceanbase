@@ -5661,17 +5661,17 @@ static const _error _error_OB_NO_DISK_NEED_REBUILD = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4687, no disk need rebuild",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4687, no disk need rebuild"
 };
-static const _error _error_OB_STANDBY_WEAK_READ_ONLY = {
-      .error_name            = "OB_STANDBY_WEAK_READ_ONLY",
+static const _error _error_OB_STANDBY_READ_ONLY = {
+      .error_name            = "OB_STANDBY_READ_ONLY",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "standby cluster support weak read only",
-      .str_user_error        = "standby cluster support weak read only",
+      .str_error             = "standby tenant is read only",
+      .str_user_error        = "standby tenant is read only",
       .oracle_errno          = 16000,
-      .oracle_str_error      = "ORA-16000: standby cluster support weak read only",
-      .oracle_str_user_error = "ORA-16000: standby cluster support weak read only"
+      .oracle_str_error      = "ORA-16000: standby tenant is read only",
+      .oracle_str_user_error = "ORA-16000: standby tenant is read only"
 };
 static const _error _error_OB_INVALD_WEB_SERVICE_CONTENT = {
       .error_name            = "OB_INVALD_WEB_SERVICE_CONTENT",
@@ -22446,7 +22446,7 @@ struct ObStrErrorInit
     _errors[-OB_ACTIVE_MEMTBALE_NOT_EXSIT] = &_error_OB_ACTIVE_MEMTBALE_NOT_EXSIT;
     _errors[-OB_USE_DUP_FOLLOW_AFTER_DML] = &_error_OB_USE_DUP_FOLLOW_AFTER_DML;
     _errors[-OB_NO_DISK_NEED_REBUILD] = &_error_OB_NO_DISK_NEED_REBUILD;
-    _errors[-OB_STANDBY_WEAK_READ_ONLY] = &_error_OB_STANDBY_WEAK_READ_ONLY;
+    _errors[-OB_STANDBY_READ_ONLY] = &_error_OB_STANDBY_READ_ONLY;
     _errors[-OB_INVALD_WEB_SERVICE_CONTENT] = &_error_OB_INVALD_WEB_SERVICE_CONTENT;
     _errors[-OB_PRIMARY_CLUSTER_EXIST] = &_error_OB_PRIMARY_CLUSTER_EXIST;
     _errors[-OB_ARRAY_BINDING_SWITCH_ITERATOR] = &_error_OB_ARRAY_BINDING_SWITCH_ITERATOR;
