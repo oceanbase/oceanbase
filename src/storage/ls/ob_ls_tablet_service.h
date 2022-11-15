@@ -275,11 +275,10 @@ public:
   // DAS interface
   int table_scan(
       ObTableScanIterator &iter,
-      ObTableScanParam &param,
-      common::ObNewRowIterator *&result);
+      ObTableScanParam &param);
   int table_rescan(
       ObTableScanParam &param,
-      common::ObNewRowIterator *&result);
+      common::ObNewRowIterator *result);
   int insert_rows(
       ObStoreCtx &ctx,
       const ObDMLBaseParam &dml_param,

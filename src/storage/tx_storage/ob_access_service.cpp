@@ -229,6 +229,8 @@ int ObAccessService::table_scan(
   } else if (OB_ISNULL(iter = common::sop_borrow(ObTableScanIterator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alloc table scan iterator fail", K(ret));
+  } else if (FALSE_IT(result = iter)) {
+    // upper layer responsible for releasing iter object
   } else if (OB_FAIL(check_read_allowed_(ls_id,
                                          data_tablet_id,
                                          access_type,
@@ -243,14 +245,10 @@ int ObAccessService::table_scan(
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_service->table_scan(*iter, param, result))) {
+  } else if (OB_FAIL(tablet_service->table_scan(*iter, param))) {
     LOG_WARN("Fail to scan table, ", K(ret), K(ls_id), K(param));
   } else {
     NG_TRACE(storage_table_scan_end);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(iter)) {
-    iter->reset();
-    common::sop_return(ObTableScanIterator, iter);
   }
   return ret;
 }
