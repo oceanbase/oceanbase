@@ -5592,9 +5592,9 @@ int ObDDLResolver::check_column_in_foreign_key_for_oracle(
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SQL_RESV_LOG(ERROR, "failed to allocate memory", K(ret));
             } else if (FALSE_IT(foreign_key_arg = new (tmp_ptr)ObDropForeignKeyArg())) {
-            } else if (FALSE_IT(foreign_key_arg->foreign_key_name_.assign_ptr(
-                                foreign_key_info.foreign_key_name_.ptr(),
-                                foreign_key_info.foreign_key_name_.length()))) {
+            } else if (OB_FAIL(deep_copy_str(foreign_key_info.foreign_key_name_,
+                                             foreign_key_arg->foreign_key_name_))) {
+              LOG_WARN("failed to deep copy foreign_key_name", K(ret), K(foreign_key_info));
             } else if (OB_ISNULL(alter_table_stmt)) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
