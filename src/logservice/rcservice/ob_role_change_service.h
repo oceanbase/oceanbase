@@ -113,7 +113,9 @@ private:
                                                         const share::ObLSID &ls_id,
                                                         palf::LSN &end_lsn);
   bool need_execute_role_change(const int64_t curr_proposal_id, 
+                                const common::ObRole curr_role,
                                 const int64_t new_proposal_id, 
+                                const common::ObRole new_role,
                                 const bool is_pending_state, 
                                 const bool is_offline) const;
 
