@@ -3614,6 +3614,9 @@ struct ObLSTabletPair final
   OB_UNIS_VERSION(1);
 public:
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid(); }
+  uint64_t hash() const { return ls_id_.hash() + tablet_id_.hash(); }
+  bool operator == (const ObLSTabletPair &other) const { return ls_id_ == other.ls_id_ && tablet_id_ == other.tablet_id_; }
+  bool operator < (const ObLSTabletPair &other) const { return ls_id_ != other.ls_id_ ? ls_id_ < other.ls_id_ : tablet_id_ < other.tablet_id_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id));
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
