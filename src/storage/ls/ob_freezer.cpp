@@ -205,6 +205,7 @@ ObFreezer::ObFreezer()
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     need_resubmit_log_(false),
+    enable_(true),
     is_inited_(false)
 {}
 
@@ -228,6 +229,7 @@ ObFreezer::ObFreezer(ObLSWRSHandler *ls_loop_worker,
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     need_resubmit_log_(false),
+    enable_(true),
     is_inited_(false)
 {}
 
@@ -274,6 +276,7 @@ void ObFreezer::reset()
   high_priority_freeze_cnt_ = 0;
   low_priority_freeze_cnt_ = 0;
   need_resubmit_log_ = false;
+  enable_ = true;
   is_inited_ = false;
 }
 
@@ -316,6 +319,8 @@ int ObFreezer::logstream_freeze()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
+  } else if (OB_UNLIKELY(!enable_)) {
+    LOG_WARN("freezer is offline, can not freeze now", K(ret), K_(ls_id));
   } else if (OB_FAIL(decide_max_decided_log_ts(max_decided_log_ts))) {
     TRANS_LOG(WARN, "[Freezer] decide max decided log ts failure", K(ret), K_(ls_id));
   } else if (OB_FAIL(get_ls_weak_read_ts(freeze_snapshot_version))) {
@@ -402,6 +407,8 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K_(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(!enable_)) {
+    LOG_WARN("freezer is offline, can not freeze now", K(ret), K_(ls_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
     ret = OB_SUCCESS;
@@ -478,6 +485,8 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K_(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(!enable_)) {
+    LOG_WARN("freezer is offline, can not freeze now", K(ret), K_(ls_id));
   } else if (OB_FAIL(loop_set_freeze_flag())) {
     TRANS_LOG(WARN, "[Freezer] failed to set freeze_flag", K(ret), K_(ls_id), K(tablet_id));
   } else if (FALSE_IT(stat_.state_ = ObFreezeState::NOT_SUBMIT_LOG)) {

@@ -1190,11 +1190,10 @@ int ObStartMigrationTask::update_ls_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
   } else {
-    ObLSMetaPackage local_ls_meta_package;
     ObLSLockGuard lock_ls(ls);
     const bool is_rebuild = (ctx_->arg_.type_ == ObMigrationOpType::REBUILD_LS_OP);
-    if (OB_FAIL(ls->update_ls_meta_without_lock(update_restore_status,
-                                                ctx_->src_ls_meta_package_.ls_meta_))) {
+    if (OB_FAIL(ls->update_ls_meta(update_restore_status,
+                                   ctx_->src_ls_meta_package_.ls_meta_))) {
       LOG_WARN("failed to update ls meta", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls->get_end_lsn(end_lsn))) {
       LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));

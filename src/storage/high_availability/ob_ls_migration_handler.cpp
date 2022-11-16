@@ -932,11 +932,8 @@ int ObLSMigrationHandler::report_meta_table_()
     LOG_WARN("failed ot get result", K(ret));
   } else if (OB_SUCCESS != result) {
     //do nothing
-  } else {
-    ObLSLockGuard lock_ls(ls_);
-    if (OB_FAIL(ls_->report_replica_info())) {
-      LOG_WARN("failed to report replica info", K(ret), KPC(ls_));
-    }
+  } else if (OB_FAIL(ls_->report_replica_info())) {
+    LOG_WARN("failed to report replica info", K(ret), KPC(ls_));
   }
   return ret;
 }
@@ -1179,26 +1176,25 @@ void ObLSMigrationHandler::stop()
   }
 }
 
-int ObLSMigrationHandler::safe_to_destroy(
-    bool &is_safe_to_destroy)
+void ObLSMigrationHandler::wait(bool &wait_finished)
 {
   int ret = OB_SUCCESS;
-  is_safe_to_destroy = false;
+  wait_finished = false;
   ObLSMigrationTask task;
 
   if (OB_FAIL(get_ls_migration_task_(task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      is_safe_to_destroy = true;
+      wait_finished = true;
     } else {
       LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
     }
   } else {
-    is_safe_to_destroy = false;
+    wait_finished = false;
     wakeup_();
   }
-  return ret;
 }
+
 
 
 }

@@ -40,14 +40,22 @@ public:
   ObLSMeta();
   ObLSMeta(const ObLSMeta &ls_meta);
   ~ObLSMeta() {}
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const ObReplicaType &replica_type,
+           const ObMigrationStatus &migration_status,
+           const share::ObLSRestoreStatus &restore_status,
+           const int64_t create_scn);
+  void reset();
+  bool is_valid() const;
+  void set_ls_create_status(const ObInnerLSStatus &status);
+  ObInnerLSStatus get_ls_create_status() const;
   ObLSMeta &operator=(const ObLSMeta &other);
   int64_t get_clog_checkpoint_ts() const;
   palf::LSN &get_clog_base_lsn();
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const int64_t clog_checkpoint_ts,
                           const bool write_slog = true);
-  void reset();
-  bool is_valid() const;
   int64_t get_rebuild_seq() const;
   int set_migration_status(const ObMigrationStatus &migration_status,
                            const bool write_slog = true);
@@ -73,10 +81,7 @@ public:
                      const int64_t limited_id,
                      const int64_t latest_log_ts,
                      const bool write_slog);
-  int update_id_service()
-  {
-    return all_id_meta_.update_id_service();
-  }
+  int get_all_id_meta(transaction::ObAllIDMeta &all_id_meta) const;
   int get_saved_info(ObLSSavedInfo &saved_info);
   int build_saved_info();
   int set_saved_info(const ObLSSavedInfo &saved_info);
@@ -84,14 +89,6 @@ public:
   int get_migration_and_restore_status(
       ObMigrationStatus &migration_status,
       share::ObLSRestoreStatus &ls_restore_status);
-
-  int init(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const ObReplicaType &replica_type,
-      const ObMigrationStatus &migration_status,
-      const share::ObLSRestoreStatus &restore_status,
-      const int64_t create_scn);
   class ObSpinLockTimeGuard
   {
   public:
@@ -108,14 +105,15 @@ public:
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_ts_ns_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_ts),
                K_(all_id_meta));
+private:
+  int check_can_update_();
 public:
   mutable common::ObSpinLock lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObReplicaType replica_type_;
-  ObInnerLSStatus ls_create_status_;
-
 private:
+  ObInnerLSStatus ls_create_status_;
   typedef common::ObFunction<int(ObLSMeta &)> WriteSlog;
   // for test
   void set_write_slog_func_(WriteSlog write_slog);

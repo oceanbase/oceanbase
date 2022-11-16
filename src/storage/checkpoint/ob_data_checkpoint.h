@@ -87,7 +87,7 @@ public:
   // used for virtual table
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
-  int safe_to_destroy();
+  int safe_to_destroy(bool &is_safe_destroy);
   int64_t get_rec_log_ts() override;
   // if min_rec_log_ts <= the input rec_log_ts
   // logstream freeze

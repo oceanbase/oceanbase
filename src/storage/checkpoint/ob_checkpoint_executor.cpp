@@ -173,7 +173,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
             STORAGE_LOG(ERROR, "locate lsn by logts failed", K(ret), K(ls_id),
                         K(checkpoint_ts), K(checkpoint_ts_in_ls_meta));
           }
-        } else if (OB_FAIL(ls_->set_clog_checkpoint_without_lock(clog_checkpoint_lsn, checkpoint_ts))) {
+        } else if (OB_FAIL(ls_->set_clog_checkpoint(clog_checkpoint_lsn, checkpoint_ts))) {
           STORAGE_LOG(WARN, "set clog checkpoint failed", K(ret), K(clog_checkpoint_lsn), K(checkpoint_ts), K(ls_id));
         } else if (OB_FAIL(loghandler_->advance_base_lsn(clog_checkpoint_lsn))) {
           if (OB_NOT_INIT == ret) {

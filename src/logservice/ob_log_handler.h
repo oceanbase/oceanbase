@@ -162,7 +162,7 @@ public:
   // @breif, wait cb append onto apply service all be called
   // is reentrant and should be called before destroy(),
   // protect cb will not be used when log handler destroyed
-  int safe_to_destroy();
+  int safe_to_destroy(bool &is_safe_destroy);
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
   // @param[in] const uint64_t, the length of data buffer.
