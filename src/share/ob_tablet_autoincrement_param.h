@@ -176,6 +176,7 @@ public:
   TO_STRING_KV(K_(intervals));
 private:
   common::ObSArray<ObTabletAutoincInterval> intervals_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletAutoincSeq);
 };
 
 }//end namespace share

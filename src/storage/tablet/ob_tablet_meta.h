@@ -43,6 +43,8 @@ class ObTabletMeta final
 {
 public:
   static const int64_t INIT_CLOG_CHECKPOINT_TS;
+  static const int64_t INVALID_CREATE_SCN;
+  static const int64_t INIT_CREATE_SCN;
 
 public:
   ObTabletMeta();
@@ -239,7 +241,7 @@ public:
   int64_t ddl_start_log_ts_;
   int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
-  int64_t max_sync_storage_schema_version_; 
+  int64_t max_sync_storage_schema_version_;
 };
 
 } // namespace storage

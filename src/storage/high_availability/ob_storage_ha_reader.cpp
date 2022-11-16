@@ -1012,6 +1012,7 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
     tablet_info.param_.ls_id_ = ls_id;
     tablet_info.param_.tablet_id_ = tablet_id;
     tablet_info.param_.data_tablet_id_ = tablet_id;
+    tablet_info.param_.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
     tablet_info.param_.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_TS;
     tablet_info.param_.clog_checkpoint_ts_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_TS;
     tablet_info.param_.compat_mode_ = lib::Worker::get_compatibility_mode();
@@ -1873,6 +1874,7 @@ int ObCopySSTableInfoObProducer::fake_deleted_tablet_meta_(
     tablet_meta.ls_id_ = ls_id_;
     tablet_meta.tablet_id_ = tablet_sstable_info_.tablet_id_;
     tablet_meta.data_tablet_id_ = tablet_sstable_info_.tablet_id_;
+    tablet_meta.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
     tablet_meta.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_TS;
     tablet_meta.clog_checkpoint_ts_ = INT64_MAX;
     tablet_meta.compat_mode_ = lib::Worker::get_compatibility_mode();

@@ -25,6 +25,10 @@ using namespace blocksstable;
 namespace storage
 {
 const int64_t ObTabletMeta::INIT_CLOG_CHECKPOINT_TS = 1;
+const int64_t ObTabletMeta::INVALID_CREATE_SCN = -2;
+// multi source transaction leader has no log scn when first time register
+// create tablet buffer, so the init create scn for tablet could be -1.
+const int64_t ObTabletMeta::INIT_CREATE_SCN = -1;
 
 ObTabletMeta::ObTabletMeta()
   : version_(TABLET_META_VERSION),
@@ -34,7 +38,7 @@ ObTabletMeta::ObTabletMeta()
     data_tablet_id_(),
     ref_tablet_id_(),
     has_next_tablet_(false),
-    create_scn_(OB_INVALID_TIMESTAMP),
+    create_scn_(ObTabletMeta::INVALID_CREATE_SCN),
     start_scn_(OB_INVALID_TIMESTAMP),
     clog_checkpoint_ts_(OB_INVALID_TIMESTAMP),
     ddl_checkpoint_ts_(OB_INVALID_TIMESTAMP),
@@ -301,7 +305,7 @@ int ObTabletMeta::init(
     ddl_start_log_ts_ = old_tablet_meta.ddl_start_log_ts_;
     ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    
+
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
@@ -321,7 +325,7 @@ void ObTabletMeta::reset()
   data_tablet_id_.reset();
   ref_tablet_id_.reset();
   has_next_tablet_ = false;
-  create_scn_ = OB_INVALID_TIMESTAMP;
+  create_scn_ = ObTabletMeta::INVALID_CREATE_SCN;
   start_scn_ = OB_INVALID_TIMESTAMP;
   clog_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
   ddl_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
@@ -346,7 +350,7 @@ bool ObTabletMeta::is_valid() const
   return ls_id_.is_valid()
       && tablet_id_.is_valid()
       && data_tablet_id_.is_valid()
-      //&& create_scn_ > OB_INVALID_TIMESTAMP
+      && create_scn_ >= INIT_CREATE_SCN
       && multi_version_start_ >= 0
       && multi_version_start_ <= snapshot_version_
       && compat_mode_ != lib::Worker::CompatMode::INVALID
@@ -694,7 +698,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     tablet_id_(),
     data_tablet_id_(),
     ref_tablet_id_(),
-    create_scn_(OB_INVALID_TIMESTAMP),
+    create_scn_(ObTabletMeta::INVALID_CREATE_SCN),
     start_scn_(OB_INVALID_TIMESTAMP),
     clog_checkpoint_ts_(OB_INVALID_TIMESTAMP),
     ddl_checkpoint_ts_(OB_INVALID_TIMESTAMP),
@@ -720,7 +724,7 @@ bool ObMigrationTabletParam::is_valid() const
   return ls_id_.is_valid()
       && tablet_id_.is_valid()
       && data_tablet_id_.is_valid()
-      //&& create_scn_ > OB_INVALID_TIMESTAMP
+      && create_scn_ >= ObTabletMeta::INIT_CREATE_SCN
       && multi_version_start_ >= 0
       && multi_version_start_ <= snapshot_version_
       && compat_mode_ != lib::Worker::CompatMode::INVALID
@@ -895,7 +899,7 @@ void ObMigrationTabletParam::reset()
   tablet_id_.reset();
   data_tablet_id_.reset();
   ref_tablet_id_.reset();
-  create_scn_ = OB_INVALID_TIMESTAMP;
+  create_scn_ = ObTabletMeta::INVALID_CREATE_SCN;
   start_scn_ = OB_INVALID_TIMESTAMP;
   clog_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
   ddl_checkpoint_ts_ = OB_INVALID_TIMESTAMP;

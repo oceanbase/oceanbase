@@ -1797,11 +1797,11 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.tablet_id_ = tablet_meta_.tablet_id_;
     mig_tablet_param.data_tablet_id_ = tablet_meta_.data_tablet_id_;
     mig_tablet_param.ref_tablet_id_ = tablet_meta_.ref_tablet_id_;
+    mig_tablet_param.create_scn_ = tablet_meta_.create_scn_;
     mig_tablet_param.start_scn_ = tablet_meta_.start_scn_;
     mig_tablet_param.clog_checkpoint_ts_ = tablet_meta_.clog_checkpoint_ts_;
     mig_tablet_param.snapshot_version_ = tablet_meta_.snapshot_version_;
     mig_tablet_param.multi_version_start_ = tablet_meta_.multi_version_start_;
-    mig_tablet_param.autoinc_seq_ = tablet_meta_.autoinc_seq_;
     mig_tablet_param.compat_mode_ = tablet_meta_.compat_mode_;
     mig_tablet_param.ha_status_ = tablet_meta_.ha_status_;
     mig_tablet_param.tx_data_ = tablet_meta_.tx_data_;
@@ -1816,6 +1816,8 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
       LOG_WARN("failed to copy storage schema", K(ret), K_(tablet_meta));
     } else if (OB_FAIL(mig_tablet_param.ddl_data_.assign(tablet_meta_.ddl_data_))) {
       LOG_WARN("failed to assign ddl data", K(ret), K_(tablet_meta));
+    } else if (OB_FAIL(mig_tablet_param.autoinc_seq_.assign(tablet_meta_.autoinc_seq_))) {
+      LOG_WARN("failed to assign autoinc seq", K(ret), K_(tablet_meta));
     }
   }
 
