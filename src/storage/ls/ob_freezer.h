@@ -205,6 +205,8 @@ public:
            const share::ObLSID &ls_id,
            uint32_t freeze_flag = 0);
   void reset();
+  void offline() { enable_ = false; }
+  void online() { enable_ = true; }
 
 public:
   /* freeze */
@@ -320,6 +322,7 @@ private:
   int64_t low_priority_freeze_cnt_; // freeze tablet cnt
 
   bool need_resubmit_log_;
+  bool enable_;                     // whether we can do freeze now
 
   bool is_inited_;
 };

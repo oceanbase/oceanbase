@@ -167,10 +167,11 @@ int ObDataCheckpoint::init(ObLS *ls)
   return OB_SUCCESS;
 }
 
-int ObDataCheckpoint::safe_to_destroy()
+int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
 {
   int ret = OB_SUCCESS;
 
+  is_safe_destroy = true;
   // avoid start ls_freeze again after waiting ls_freeze finish
   is_inited_ = false;
   // wait until ls_freeze finish
@@ -190,6 +191,10 @@ int ObDataCheckpoint::safe_to_destroy()
   active_list_.reset();
   prepare_list_.reset();
   ls_ = nullptr;
+
+  if (OB_FAIL(ret)) {
+    is_safe_destroy = false;
+  }
 
   return ret;
 }

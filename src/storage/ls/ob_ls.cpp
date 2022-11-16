@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "lib/utility/utility.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "storage/ls/ob_ls.h"
 #include "share/leak_checker/obj_leak_checker.h"
@@ -22,6 +23,7 @@
 #include "logservice/ob_log_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "observer/report/ob_i_meta_report.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/tx/ob_tx_log_adapter.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/slog/ob_storage_log.h"
@@ -42,6 +44,7 @@ namespace oceanbase
 {
 using namespace share;
 using namespace logservice;
+using namespace transaction;
 
 namespace storage
 {
@@ -62,6 +65,7 @@ ObLS::ObLS()
     is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     is_stopped_(false),
+    is_offlined_(false),
     ls_meta_(),
     rs_reporter_(nullptr)
 {}
@@ -339,12 +343,12 @@ int ObLS::remove_ls()
 
 void ObLS::set_create_state(const ObInnerLSStatus new_status)
 {
-  ls_meta_.ls_create_status_ = new_status;
+  ls_meta_.set_ls_create_status(new_status);
 }
 
-ObInnerLSStatus ObLS::get_create_state()
+ObInnerLSStatus ObLS::get_create_state() const
 {
-  return ls_meta_.ls_create_status_;
+  return ls_meta_.get_ls_create_status();
 }
 
 bool ObLS::is_need_gc() const
@@ -352,14 +356,15 @@ bool ObLS::is_need_gc() const
   int ret = OB_SUCCESS;
   bool bool_ret = false;
   ObMigrationStatus migration_status;
+  ObInnerLSStatus create_status = ls_meta_.get_ls_create_status();
 
   if (OB_FAIL(ls_meta_.get_migration_status(migration_status))) {
     LOG_WARN("get migration status failed", K(ret), K(ls_meta_.ls_id_));
   }
 
   bool_ret = (OB_FAIL(ret) ||
-              (ObInnerLSStatus::CREATING == ls_meta_.ls_create_status_) ||
-              (ObInnerLSStatus::REMOVED == ls_meta_.ls_create_status_) ||
+              (ObInnerLSStatus::CREATING == create_status) ||
+              (ObInnerLSStatus::REMOVED == create_status) ||
               (OB_MIGRATION_STATUS_NONE != migration_status &&
                ObMigrationStatusHelper::check_allow_gc(migration_status)));
   if (bool_ret) {
@@ -383,11 +388,13 @@ bool ObLS::is_need_load_inner_tablet() const
 
 void ObLS::finish_create(const bool is_commit)
 {
+  ObInnerLSStatus status = ObInnerLSStatus::CREATING;
   if (is_commit) {
-    ls_meta_.ls_create_status_ = ObInnerLSStatus::COMMITTED;
+    status = ObInnerLSStatus::COMMITTED;
   } else {
-    ls_meta_.ls_create_status_ = ObInnerLSStatus::ABORTED;
+    status = ObInnerLSStatus::ABORTED;
   }
+  ls_meta_.set_ls_create_status(status);
 }
 
 int ObLS::start()
@@ -408,32 +415,86 @@ int ObLS::start()
 
 int ObLS::stop()
 {
+  int64_t read_lock = 0;
+  int64_t write_lock = LSLOCKALL;
+
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(stop_())) {
+    LOG_WARN("stop ls failed", K(ret), K(ls_meta_));
   } else {
-    tx_table_.stop();
-    ls_restore_handler_.stop();
-    keep_alive_ls_handler_.stop();
-    log_handler_.reset_election_priority();
-    restore_handler_.stop();
-    if (OB_FAIL(log_handler_.stop())) {
-      LOG_WARN("stop log handler failed", K(ret), KPC(this));
-    }
-    ls_migration_handler_.stop();
-    is_stopped_ = true;
+  }
+  return ret;
+}
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_for_safe_destroy_())) {
-        LOG_WARN("fail to prepare_for_safe_destroy", K(ret));
-      } else {
-        LOG_INFO("stop_ls finish", KR(ret), KPC(this));
-      }
+int ObLS::stop_()
+{
+  int ret = OB_SUCCESS;
+  tx_table_.stop();
+  ls_restore_handler_.stop();
+  keep_alive_ls_handler_.stop();
+  log_handler_.reset_election_priority();
+  restore_handler_.stop();
+  if (OB_FAIL(log_handler_.stop())) {
+    LOG_WARN("stop log handler failed", K(ret), KPC(this));
+  }
+  ls_migration_handler_.stop();
+  is_stopped_ = true;
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(prepare_for_safe_destroy_())) {
+      LOG_WARN("fail to prepare_for_safe_destroy", K(ret));
+    } else {
+      LOG_INFO("stop_ls finish", KR(ret), KPC(this));
     }
   }
 
   return ret;
+}
+
+void ObLS::wait()
+{
+  ObTimeGuard time_guard("ObLS::wait", 10 * 1000 * 1000);
+  int64_t read_lock = LSLOCKALL;
+  int64_t write_lock = 0;
+  bool wait_finished = true;
+  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t retry_times = 0;
+
+  do {
+    retry_times++;
+    {
+      ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+      ls_migration_handler_.wait(wait_finished);
+    }
+    if (!wait_finished) {
+      ob_usleep(100 * 1000); // 100 ms
+      if (retry_times % 100 == 0) { // every 10 s
+        LOG_WARN("ls wait not finished.", K(ls_meta_), K(start_ts));
+      }
+    }
+  } while (!wait_finished);
+}
+
+void ObLS::wait_()
+{
+  ObTimeGuard time_guard("ObLS::wait", 10 * 1000 * 1000);
+  bool wait_finished = true;
+  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t retry_times = 0;
+  do {
+    retry_times++;
+    ls_migration_handler_.wait(wait_finished);
+    if (!wait_finished) {
+      ob_usleep(100 * 1000); // 100 ms
+      if (retry_times % 100 == 0) { // every 10 s
+        LOG_WARN("ls wait not finished.", K(ls_meta_), K(start_ts));
+      }
+    }
+  } while (!wait_finished);
 }
 
 // a class should implement prepare_for_safe_destroy() if it has
@@ -458,21 +519,22 @@ bool ObLS::safe_to_destroy()
   bool is_safe = false;
   bool is_ls_restore_handler_safe = false;
   bool is_tablet_service_safe = false;
-  bool is_ls_migration_handler_safe = false;
+  bool is_data_check_point_safe = false;
+  bool is_log_handler_safe = false;
 
   if (OB_FAIL(ls_tablet_svr_.safe_to_destroy(is_tablet_service_safe))) {
     LOG_WARN("ls tablet service check safe to destroy failed", K(ret), KPC(this));
-  } else if (OB_FAIL(data_checkpoint_.safe_to_destroy())) {
+  } else if (!is_tablet_service_safe) {
+  } else if (OB_FAIL(data_checkpoint_.safe_to_destroy(is_data_check_point_safe))) {
     LOG_WARN("data_checkpoint check safe to destroy failed", K(ret), KPC(this));
+  } else if (!is_data_check_point_safe) {
   } else if (OB_FAIL(ls_restore_handler_.safe_to_destroy(is_ls_restore_handler_safe))) {
     LOG_WARN("ls restore handler safe to destroy failed", K(ret), KPC(this));
   } else if (!is_ls_restore_handler_safe) {
-  } else if (OB_FAIL(log_handler_.safe_to_destroy())) {
+  } else if (OB_FAIL(log_handler_.safe_to_destroy(is_log_handler_safe))) {
     LOG_WARN("log_handler_ check safe to destroy failed", K(ret), KPC(this));
-  } else if (OB_FAIL(ls_migration_handler_.safe_to_destroy(is_ls_migration_handler_safe))) {
-    LOG_WARN("ls migration handler check safe to destroy failed", K(ret), KPC(this));
-  } else if (!is_ls_migration_handler_safe) {
-  } else if (is_tablet_service_safe) {
+  } else if (!is_log_handler_safe) {
+  } else {
     if (1 == ref_mgr_.get_total_ref_cnt()) { // only has one ref at the safe destroy task
       is_safe = true;
     }
@@ -482,8 +544,10 @@ bool ObLS::safe_to_destroy()
   if (OB_SUCC(ret)) {
     if (!is_safe) {
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-        LOG_WARN("this ls is not safe to destroy", K(is_safe), "ls_ref", ref_mgr_.get_total_ref_cnt(),
-                 K(is_tablet_service_safe), K(is_ls_restore_handler_safe), K(is_ls_migration_handler_safe),
+        LOG_WARN("this ls is not safe to destroy", K(is_safe),
+                 K(is_tablet_service_safe), K(is_data_check_point_safe),
+                 K(is_ls_restore_handler_safe), K(is_log_handler_safe),
+                 "ls_ref", ref_mgr_.get_total_ref_cnt(),
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
         PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_LS_HANDLE);
@@ -510,8 +574,10 @@ void ObLS::destroy()
   FLOG_INFO("ObLS destroy", K(this), K(*this), K(lbt()));
   if (OB_TMP_FAIL(offline_())) {
     LOG_WARN("ls offline failed.", K(tmp_ret), K(ls_meta_.ls_id_));
-  } else if (OB_TMP_FAIL(stop())) {
+  } else if (OB_TMP_FAIL(stop_())) {
     LOG_WARN("ls stop failed.", K(tmp_ret), K(ls_meta_.ls_id_));
+  } else {
+    wait_();
   }
   UNREGISTER_FROM_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
   UNREGISTER_FROM_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
@@ -597,6 +663,17 @@ int ObLS::offline_tx_()
   return ret;
 }
 
+int ObLS::offline_compaction_()
+{
+  int ret = OB_SUCCESS;
+  if (FALSE_IT(ls_freezer_.offline())) {
+  } else if (OB_FAIL(MTL(ObTenantTabletScheduler *)->
+                     check_ls_compaction_finish(ls_meta_.ls_id_))) {
+    LOG_WARN("check compaction finish failed", K(ret), K(ls_meta_));
+  }
+  return ret;
+}
+
 int ObLS::offline_()
 {
   int ret = OB_SUCCESS;
@@ -604,8 +681,11 @@ int ObLS::offline_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (FALSE_IT(is_offlined_ = true)) {
   } else if (FALSE_IT(checkpoint_executor_.offline())) {
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(offline_compaction_())) {
+    LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(log_handler_.offline())) {
@@ -654,6 +734,13 @@ int ObLS::online_tx_()
   return ret;
 }
 
+int ObLS::online_compaction_()
+{
+  int ret = OB_SUCCESS;
+  ls_freezer_.online();
+  return ret;
+}
+
 int ObLS::online()
 {
   int ret = OB_SUCCESS;
@@ -676,9 +763,12 @@ int ObLS::online()
     LOG_WARN("failed to online log", K(ret));
   } else if (OB_FAIL(ls_wrs_handler_.online())) {
     LOG_WARN("weak read handler online failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(online_compaction_())) {
+    LOG_WARN("compaction online failed", K(ret), K(ls_meta_));
   } else if (FALSE_IT(checkpoint_executor_.online())) {
     LOG_WARN("checkpoint executor online failed", K(ret), K(ls_meta_));
   } else {
+    is_offlined_ = false;
     // do nothing
   }
 
@@ -711,8 +801,13 @@ int ObLS::set_ls_meta(const ObLSMeta &ls_meta)
     LOG_WARN("ls is not inited", K(ret));
   } else {
     ls_meta_ = ls_meta;
-    if (OB_FAIL(ls_meta_.update_id_service())) {
-      LOG_WARN("update id service fail", K(ret));
+    if (IDS_LS == ls_meta_.ls_id_) {
+      ObAllIDMeta all_id_meta;
+      if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
+        LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
+      } else if (OB_FAIL(ObIDService::update_id_service(all_id_meta))) {
+        LOG_WARN("update id service fail", K(ret), K(all_id_meta), K(*this));
+      }
     }
   }
   return ret;
@@ -845,6 +940,9 @@ int ObLS::update_tablet_table_store(
     ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
+  int64_t read_lock = LSLOCKLOGMETA;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -852,9 +950,6 @@ int ObLS::update_tablet_table_store(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update tablet table store get invalid argument", K(ret), K(tablet_id), K(param));
   } else {
-    int64_t read_lock = LSLOCKSTORAGE;
-    int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
     const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
     if (param.rebuild_seq_ != rebuild_seq) {
       ret = OB_EAGAIN;
@@ -872,6 +967,10 @@ int ObLS::build_ha_tablet_new_table_store(
     const ObBatchUpdateTableStoreParam &param)
 {
   int ret = OB_SUCCESS;
+  int64_t read_lock = LSLOCKLOGMETA;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -879,10 +978,6 @@ int ObLS::build_ha_tablet_new_table_store(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build ha tablet new table store get invalid argument", K(ret), K(tablet_id), K(param));
   } else {
-    int64_t read_lock = LSLOCKSTORAGE;
-    int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-    const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
     if (param.rebuild_seq_ != rebuild_seq) {
       ret = OB_EAGAIN;
       LOG_WARN("build ha tablet new table store rebuild seq not same, need retry",
@@ -909,7 +1004,7 @@ int ObLS::finish_slog_replay()
                                                                 new_migration_status))) {
     LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status),
              K(new_migration_status));
-  } else if (can_update_ls_meta(ls_meta_.ls_create_status_) &&
+  } else if (can_update_ls_meta(ls_meta_.get_ls_create_status()) &&
              OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
   } else if (is_need_gc()) {
@@ -1203,7 +1298,7 @@ int ObLS::try_update_uppder_trans_version()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKLS | LSLOCKSTORAGE;
+  int64_t read_lock = LSLOCKLOGMETA;
   int64_t write_lock = 0;
   ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
 
@@ -1251,11 +1346,15 @@ int ObLS::try_update_uppder_trans_version()
 int ObLS::set_tablet_change_checkpoint_ts(const int64_t log_ts)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKLS;
+  int64_t read_lock = 0;
   int64_t write_lock = LSLOCKLOGMETA;
   ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-  UPDATE_LS_META_CHECK();
-  if (OB_FAIL(ret)) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
   } else if (OB_FAIL(ls_meta_.set_tablet_change_checkpoint_ts(log_ts))) {
     LOG_WARN("fail to set tablet_change_checkpoint_ts", K(ret), K(log_ts), K_(ls_meta));
   } else {
@@ -1264,47 +1363,25 @@ int ObLS::set_tablet_change_checkpoint_ts(const int64_t log_ts)
   return ret;
 }
 
-int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
-                                           const int64_t limited_id,
-                                           const int64_t latest_log_ts)
+int ObLS::update_ls_meta(const bool update_restore_status,
+                         const ObLSMeta &src_ls_meta)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKLS;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
-    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
-    ret = OB_STATE_NOT_MATCH;
-    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_log_ts, true))) {
-    STORAGE_LOG(WARN, "update id meta with slog fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_log_ts));
-  } else {
-    // do nothing
-  }
-
-  return ret;
-}
-
-int ObLS::update_id_meta_without_writing_slog(const int64_t service_type,
-                                              const int64_t limited_id,
-                                              const int64_t latest_log_ts)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_log_ts, false))) {
-    STORAGE_LOG(WARN, "update id meta fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_log_ts));
+    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(ls_meta_.update_ls_meta(update_restore_status, src_ls_meta))) {
+    LOG_WARN("update ls meta fail", K(ret), K_(ls_meta), K(update_restore_status), K(src_ls_meta));
+  } else if (IDS_LS == ls_meta_.ls_id_) {
+    ObAllIDMeta all_id_meta;
+    if (OB_FAIL(ls_meta_.get_all_id_meta(all_id_meta))) {
+      LOG_WARN("get all id meta failed", K(ret), K(ls_meta_));
+    } else if (OB_FAIL(ObIDService::update_id_service(all_id_meta))) {
+      LOG_WARN("update id service fail", K(ret), K(all_id_meta), K(*this));
+    }
   } else {
     // do nothing
   }
@@ -1363,10 +1440,9 @@ int ObLS::set_migration_status(
   } else if (!ObMigrationStatusHelper::is_valid(migration_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("set migration status get invalid argument", K(ret), K(migration_status));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+  // migration status should be update after ls stopped, to make sure migrate task
+  // will be finished later.
+  } else if (!can_update_ls_meta(ls_meta_.get_ls_create_status())) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
   } else if (ls_meta_.get_rebuild_seq() != rebuild_seq) {
@@ -1402,10 +1478,9 @@ int ObLS::set_restore_status(
   } else if (!restore_status.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("set restore status get invalid argument", K(ret), K(restore_status));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+  // restore status should be update after ls stopped, to make sure restore task
+  // will be finished later.
+  } else if (!can_update_ls_meta(ls_meta_.get_ls_create_status())) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
   } else if (ls_meta_.get_rebuild_seq() != rebuild_seq) {
@@ -1438,7 +1513,7 @@ int ObLS::set_ls_rebuild()
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
+  } else if (!can_update_ls_meta(ls_meta_.get_ls_create_status())) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_meta_.set_ls_rebuild())) {

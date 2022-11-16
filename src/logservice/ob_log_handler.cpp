@@ -140,11 +140,12 @@ int ObLogHandler::stop()
 
 //判断is_apply_done依赖log handler不能再继续append
 //所以需要is_in_stop_state_置true表示stop阶段已经不能再提交日志
-int ObLogHandler::safe_to_destroy()
+int ObLogHandler::safe_to_destroy(bool &is_safe_destroy)
 {
   int ret = OB_SUCCESS;
   bool is_done = false;
   LSN end_lsn;
+  is_safe_destroy = true;
   WLockGuard guard(lock_);
   if (IS_INIT) {
     if (palf_handle_.is_valid() || !is_in_stop_state_) {
@@ -157,6 +158,9 @@ int ObLogHandler::safe_to_destroy()
     } else {
       CLOG_LOG(INFO, "wait apply done finish", K(ret), K(is_done), K(end_lsn), KPC(apply_status_));
     }
+  }
+  if (OB_FAIL(ret)) {
+    is_safe_destroy = false;
   }
   return ret;
 }
