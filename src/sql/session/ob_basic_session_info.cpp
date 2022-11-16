@@ -3019,7 +3019,7 @@ int ObBasicSessionInfo::process_session_debug_sync(const ObObj &val,
       }
     }
   } else {
-    if (is_update_sys_var) {
+    if (!GCONF.is_debug_sync_enabled() && is_update_sys_var) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
                     "Non-system tenant or debug_sync is turned off, set debug_sync is");
