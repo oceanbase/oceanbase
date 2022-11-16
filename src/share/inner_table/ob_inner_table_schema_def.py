@@ -5114,6 +5114,7 @@ def_table_schema(
 # 429 : __all_arbitration_service
 # 430 : __all_arbitration_service_replica_task
 # 431 : __all_meta_dictionary_location;
+# 432 : __all_arbitration_service_replica_task_history
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
