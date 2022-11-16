@@ -419,6 +419,7 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   int64_t finished_task_cnt = 0;
+  bool state_finish = false;
   ObSchemaGetterGuard schema_guard;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -436,7 +437,11 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
     } else if (OB_FAIL(copy_table_foreign_keys())) {
       LOG_WARN("fail to copy table foreign keys", K(ret));
     }
+  }
 
+  if (OB_FAIL(ret)) {
+    state_finish = true;
+  } else {
     // wait copy dependent objects to be finished
     ObAddr unused_addr;
     for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
@@ -471,8 +476,11 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
         }
       }
     }
+    if (finished_task_cnt == dependent_task_result_map_.size()) {
+      state_finish = true;
+    }
   }
-  if (finished_task_cnt == dependent_task_result_map_.size()) {
+  if (state_finish) {
     if (OB_FAIL(switch_status(next_task_status, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
