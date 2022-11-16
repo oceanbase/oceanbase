@@ -7834,7 +7834,8 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join filters", K(ret));
     } else if (OB_FAIL(append(join_path->filter_, filters))) {
       LOG_WARN("failed to append join quals", K(ret));
-    } else if (OB_FAIL(generate_join_filter_infos(left_path,
+    } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
+               OB_FAIL(generate_join_filter_infos(left_path,
                                                   right_path,
                                                   join_type,
                                                   join_dist_algo,
