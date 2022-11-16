@@ -89,7 +89,7 @@ public:
     pop_count_(0)
     {}
 
-  ~ObHistogram() {}
+  ~ObHistogram() { reset(); }
 
   void reset();
 
@@ -219,7 +219,7 @@ public:
 
   explicit ObOptColumnStat(common::ObIAllocator &allocator);
 
-  ~ObOptColumnStat() {}
+  ~ObOptColumnStat() { histogram_.reset(); }
 
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(uint64_t tid) { table_id_ = tid; }
