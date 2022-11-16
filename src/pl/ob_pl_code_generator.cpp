@@ -1054,7 +1054,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
           OZ (generator_.extract_extend_from_objparam(var_value, var->get_type(), extend_value));
           OZ (var->get_type().generate_construct(generator_, *s.get_namespace(),
                                                  extend_value, &s));
-          OZ (generator_.set_var_addr_to_param_store(s.get_index_index(), extend_value));
+          OZ (generator_.set_var_addr_to_param_store(s.get_index_index(), extend_value, init_value));
           generator_.get_vars().at(s.get_index_index() + generator_.USER_ARG_OFFSET) = extend_value;
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -2588,6 +2588,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             if (OB_FAIL(generator_.get_helper().create_call(ObString("inner_pl_execute"), generator_.get_pl_execute(), args, result))) {
               LOG_WARN("failed to create_call", K(ret));
             }
+            OZ (generator_.generate_debug(ObString("debug inner pl execute"), result));
           } else {
             ObLLVMBasicBlock alter_inner_call;
 
@@ -2599,7 +2600,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               LOG_WARN("failed to set_current", K(ret));
             } else { /*do nothing*/ }
           }
-
+          OZ (generator_.generate_debug(ObString("debug inner pl execute result"), result));
           OZ (generator_.check_success(
             result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
           OZ (generator_.generate_out_params(s, s.get_params(), params));
@@ -3160,6 +3161,8 @@ int ObPLCodeGenerator::init()
       } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_index
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_addr
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int32_type))) { //int32_t init_value
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
         LOG_WARN("failed to get function type", K(ret));
@@ -4034,7 +4037,8 @@ int ObPLCodeGenerator::init_eh_service()
   return ret;
 }
 
-int ObPLCodeGenerator::set_var_addr_to_param_store(int64_t var_index, jit::ObLLVMValue &var)
+int ObPLCodeGenerator::set_var_addr_to_param_store(
+  int64_t var_index, jit::ObLLVMValue &var, jit::ObLLVMValue &init_value)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue ir_index;
@@ -4052,12 +4056,14 @@ int ObPLCodeGenerator::set_var_addr_to_param_store(int64_t var_index, jit::ObLLV
     LOG_WARN("failed to create call", K(ret));
 #endif
   } else {
-    ObSEArray<ObLLVMValue, 3> args;
+    ObSEArray<ObLLVMValue, 4> args;
     if (OB_FAIL(args.push_back(vars_.at(CTX_IDX)))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(args.push_back(ir_index))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(args.push_back(var_addr))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(args.push_back(init_value))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(helper_.create_call(ObString("set_var_addr"), get_user_type_var_func(), args))) {
       LOG_WARN("failed to create call", K(ret));
@@ -7114,12 +7120,15 @@ int ObPLCodeGenerator::init_argument()
       } else {
         ObLLVMValue arg;
         ObLLVMValue addr;
+        ObLLVMValue init_value;
         if (var->get_type().is_composite_type() || var->get_type().is_cursor_type()) {
           if (OB_FAIL(extract_objparam_from_argv(vars_.at(ARGV_IDX), i, arg))) {
             LOG_WARN("failed to extract_objparam_from_argv", K(i), K(ret));
           } else if (OB_FAIL(extract_value_from_objparam(arg, ObExtendType, addr))) {
             LOG_WARN("failed to extract_value_from_objparam", K(ret));
-          } else if (OB_FAIL(set_var_addr_to_param_store(i, addr))) {
+          } else if (OB_FAIL(helper_.get_int32(0, init_value))) {
+            LOG_WARN("failed to get_int32", K(ret));
+          } else if (OB_FAIL(set_var_addr_to_param_store(i, addr, init_value))) {
             LOG_WARN("set var addr to param store failed", K(ret));
           } else if (OB_FAIL(helper_.create_gep(ObString("obj"), arg, 0, arg))) {
             LOG_WARN("failed to create_gep", K(ret));

@@ -210,7 +210,8 @@ public:
 
   inline static bool is_object_id(uint64_t package_id)
   {
-    return 0 != (package_id & common::OB_MOCK_OBJECT_PACAKGE_ID_MASK);
+    return package_id != OB_INVALID_ID
+        && 0 != (package_id & common::OB_MOCK_OBJECT_PACAKGE_ID_MASK);
   }
   inline static uint64_t mask_object_id(uint64_t udt_id)
   {
