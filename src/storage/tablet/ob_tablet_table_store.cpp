@@ -790,10 +790,10 @@ int ObTabletTableStore::build_minor_tables(
           ObSSTable *sstable = static_cast<ObSSTable *>(table);
           ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
           if (sstable->get_meta().get_basic_meta().max_merged_trans_version_
-              < new_sstable->get_meta().get_basic_meta().max_merged_trans_version_) {
+              <= new_sstable->get_meta().get_basic_meta().max_merged_trans_version_) {
             need_add = false;
-            LOG_INFO("new sstable max merge trans version not equal to old sstable, "
-                "need add new sstable when table key is same", KPC(sstable), KPC(new_sstable));
+            LOG_INFO("new table's max merge trans version is not less than the old table, "
+                "add new table when table key is same", KPC(sstable), KPC(new_sstable));
           } else {
             ret = OB_NO_NEED_MERGE;
             LOG_WARN("new table with old max merged trans version, no need to merge", K(ret), KPC(sstable), KPC(new_sstable));
