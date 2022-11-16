@@ -21,6 +21,7 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
 #include "storage/tablelock/ob_table_lock_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -597,6 +598,13 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
 int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  SERVER_EVENT_ADD("ddl_task", "before_table_redefinition_task_effect",
+                   "tenant_id", tenant_id_,
+                   "object_id", object_id_,
+                   "target_object_id", target_object_id_);
+  DEBUG_SYNC(BEFORE_TABLE_REDEFINITION_TASK_EFFECT);
+#endif
   ObSArray<uint64_t> objs;
   alter_table_arg_.ddl_task_type_ = share::MAKE_DDL_TAKE_EFFECT_TASK;
   alter_table_arg_.table_id_ = object_id_;
