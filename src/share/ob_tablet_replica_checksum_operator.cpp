@@ -879,14 +879,12 @@ int ObTabletReplicaChecksumOperator::check_column_checksum(
     if (is_global_index) {
       if (OB_FAIL(check_global_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
           global_snapshot_version, sql_proxy))) {
-        LOG_WARN("fail to check global index column checksum", KR(ret), K(data_table_schema), 
-          K(index_table_schema), K(global_snapshot_version));
+        LOG_WARN("fail to check global index column checksum", KR(ret), K(tenant_id), K(global_snapshot_version));
       }
     } else {
       if (OB_FAIL(check_local_index_column_checksum(tenant_id, data_table_schema, index_table_schema,
           global_snapshot_version, sql_proxy))) {
-        LOG_WARN("fail to check local index column checksum", KR(ret), K(data_table_schema), 
-          K(index_table_schema), K(global_snapshot_version));
+        LOG_WARN("fail to check local index column checksum", KR(ret), K(tenant_id), K(global_snapshot_version));
       }
     }
   }
