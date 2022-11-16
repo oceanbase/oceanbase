@@ -681,7 +681,7 @@ int group_tablets_leader_addr(const uint64_t tenant_id, const ObIArray<ObTabletI
 }
 
 template<typename Proxy, typename Arg, typename Res>
-int check_trans_end(ObArray<SendItem> &send_array,
+int check_trans_end(const ObArray<SendItem> &send_array,
                     Proxy &proxy,
                     Arg &arg,
                     Res *res,
@@ -691,17 +691,22 @@ int check_trans_end(ObArray<SendItem> &send_array,
   int ret = OB_SUCCESS;
   ret_array.reuse();
   snapshot_array.reuse();
+  hash::ObHashMap<obrpc::ObLSTabletPair, obrpc::ObCheckTransElapsedResult> result_map;
+  ObArray<SendItem> tmp_send_array;
   if (OB_UNLIKELY(send_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(tmp_send_array.assign(send_array))) {
+    LOG_WARN("copy send array failed", K(ret), K(send_array.count()));
+  } else if (OB_FAIL(result_map.create(send_array.count(), "check_trans_map"))) {
+    LOG_WARN("create return code map failed", K(ret));
   } else {
     // group by leader addr and send batch rpc
-    std::sort(send_array.begin(), send_array.end());
-
+    std::sort(tmp_send_array.begin(), tmp_send_array.end());
     const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
     ObAddr last_addr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < send_array.count(); ++i) {
-      const SendItem &send_item = send_array.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_send_array.count(); ++i) {
+      const SendItem &send_item = tmp_send_array.at(i);
       if (send_item.leader_addr_ != last_addr) {
         if (arg.tablets_.count() > 0) {
           if (OB_FAIL(proxy.call(last_addr, rpc_timeout, arg.tenant_id_, arg))) {
@@ -754,11 +759,30 @@ int check_trans_end(ObArray<SendItem> &send_array,
           for (int64_t j = 0; OB_SUCC(ret) && j < cur_result->results_.count(); ++j) {
             const obrpc::ObLSTabletPair &send_item = cur_arg.tablets_.at(j);
             const obrpc::ObCheckTransElapsedResult &result_item = cur_result->results_.at(j);
-            if (OB_FAIL(ret_array.push_back(result_item.ret_code_))) {
-              LOG_WARN("push back ret code failed", K(ret), K(i), K(j), K(send_item), K(result_item));
-            } else if (OB_FAIL(snapshot_array.push_back(result_item.snapshot_))) {
-              LOG_WARN("push back snapshot failed", K(ret), K(i), K(j), K(send_item), K(result_item));
+            if (OB_FAIL(result_map.set_refactored(send_item, result_item))) {
+              LOG_WARN("insert into result map failed", K(ret));
             }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ret_array.reserve(send_array.count()))) {
+          LOG_WARN("reserve return code array failed", K(ret), K(send_array.count()));
+        } else if (OB_FAIL(snapshot_array.reserve(send_array.count()))) {
+          LOG_WARN("reserve snapshot array failed", K(ret), K(send_array.count()));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < send_array.count(); ++i) {
+          const SendItem &send_item = send_array.at(i);
+          ObLSTabletPair ls_tablet_pair;
+          ls_tablet_pair.ls_id_ = send_item.ls_id_;
+          ls_tablet_pair.tablet_id_ = send_item.tablet_id_;
+          obrpc::ObCheckTransElapsedResult result_item;
+          if (OB_FAIL(result_map.get_refactored(ls_tablet_pair, result_item))) {
+            LOG_WARN("get result failed", K(ret), K(send_item));
+          } else if (OB_FAIL(ret_array.push_back(result_item.ret_code_))) {
+            LOG_WARN("push back return code failed", K(ret), K(send_item), K(result_item));
+          } else if (OB_FAIL(snapshot_array.push_back(result_item.snapshot_))) {
+            LOG_WARN("push back snapshot failed", K(ret), K(send_item), K(result_item));
           }
         }
       }
