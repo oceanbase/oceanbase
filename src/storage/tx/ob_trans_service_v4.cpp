@@ -1392,6 +1392,10 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     // XXX In standby cluster mode, the failure to call acquire_local_snapshot_ is an
     // normal situation, no error log needs to be printed
     // TRANS_LOG(WARN, "check ls tx service leader serving state fail", K(ret), K(ls_id), K(ret));
+  } else if (OB_FAIL(ls_tx_ctx_mgr->get_ls_log_adapter()->get_role(leader, epoch))) {
+    TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
+  } else if (!leader) {
+    ret = OB_NOT_MASTER;
   } else if (0 >= (snapshot0 = tx_version_mgr_.get_max_commit_ts(true))) {
     ret = OB_EAGAIN;
   } else {
