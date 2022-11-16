@@ -4508,6 +4508,9 @@ int ObPartTransCtx::switch_to_leader(int64_t start_working_ts)
     }
     timeguard.click();
   }
+  if (OB_SUCC(ret)) {
+    (void)try_submit_next_log_();
+  }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ret), KPC(this));
   } else {
@@ -4630,7 +4633,10 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
   CtxLockGuard guard(lock_);
   timeguard.click();
   TxCtxStateHelper state_helper(role_state_);
-  if (is_exiting_) {
+  if (MTL_ID() != tenant_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tenant not match", K(ret), K(*this));
+  } else if (is_exiting_) {
     // do nothing
   } else if (sub_state_.is_force_abort()) {
     // is aborting, skip
@@ -4673,11 +4679,21 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
     if (OB_SUCC(ret) && need_submit_log) {
       // We need merge all callbacklists before submitting active info
       (void)mt_ctx_.merge_multi_callback_lists_for_changing_leader();
-      if (OB_FAIL(submit_log_impl_(log_type))) {
-        // currently, if there is no log callback, switch leader would fail,
-        // and resume leader would be called.
-        // TODO dingxi, improve this logic
-        TRANS_LOG(WARN, "submit active/commit info log failed", KR(ret), K(*this));
+      if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
+        if (OB_FAIL(submit_redo_commit_info_log_())) {
+          // currently, if there is no log callback, switch leader would fail,
+          // and resume leader would be called.
+          TRANS_LOG(WARN, "submit commit info log failed", KR(ret), K(*this));
+        }
+      } else if (ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
+        if (OB_FAIL(submit_redo_active_info_log_())) {
+          // currently, if there is no log callback, switch leader would fail,
+          // and resume leader would be called.
+          TRANS_LOG(WARN, "submit active info log failed", KR(ret), K(*this));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected log type", K(ret));
       }
     }
 
@@ -4755,6 +4771,9 @@ int ObPartTransCtx::resume_leader(int64_t start_working_ts)
     if (OB_FAIL(ret)) {
       state_helper.restore_state();
     }
+  }
+  if (OB_SUCC(ret)) {
+    (void)try_submit_next_log_();
   }
   REC_TRANS_TRACE_EXT2(tlog_, resume_leader, OB_ID(ret), ret,
                                              OB_ID(used), timeguard.get_diff(),

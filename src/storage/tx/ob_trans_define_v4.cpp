@@ -1049,6 +1049,22 @@ public:
   ObTransService &txs_;
 };
 
+class PrintTxDescFunctor
+{
+public:
+  explicit PrintTxDescFunctor(const int64_t max_print_cnt) : max_print_cnt_(max_print_cnt) {}
+  bool operator()(ObTxDesc *tx_desc)
+  {
+    bool bool_ret = false;
+    if (OB_NOT_NULL(tx_desc) && max_print_cnt_-- > 0) {
+      tx_desc->print_trace();
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+  int64_t max_print_cnt_;
+};
+
 int ObTxDescMgr::stop()
 {
   int ret = OB_SUCCESS;
@@ -1073,7 +1089,7 @@ int ObTxDescMgr::wait()
   if (inited_) {
     int i = 0;
     bool done = false;
-    while(!done && i++ < MAX_RETRY_TIMES) {
+    while (!done && i++ < MAX_RETRY_TIMES) {
       active_cnt = map_.alloc_cnt();
       if (!active_cnt) {
         TRANS_LOG(INFO, "txDescMgr.wait done.");
@@ -1084,13 +1100,16 @@ int ObTxDescMgr::wait()
       ob_usleep(SLEEP_US);
     }
     if (!done) {
-      TRANS_LOG(WARN, "txDescMgr.wait timeout");
       ret = OB_TIMEOUT;
+      TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
+      PrintTxDescFunctor fn(128);
+      (void)map_.for_each(fn);
     }
   }
   TRANS_LOG(INFO, "txDescMgr.wait", K(ret), K(inited_), K(stoped_), K(active_cnt));
   return ret;
 }
+
 void ObTxDescMgr::destroy() { inited_ = false; }
 int ObTxDescMgr::alloc(ObTxDesc *&tx_desc)
 {
