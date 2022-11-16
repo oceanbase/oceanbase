@@ -9456,7 +9456,7 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
       ObOpRawExpr *neg = NULL;
       ObPCParamEqualInfo eq_info;
       eq_info.first_param_idx_ = idx_left;
-      eq_info.first_param_idx_ = idx_right;
+      eq_info.second_param_idx_ = idx_right;
       eq_info.use_abs_cmp_ = true;
       if (OB_FAIL(expr_factory->create_raw_expr(T_OP_NEG, neg))) {
         LOG_WARN("failed to create neg expr", K(ret));
