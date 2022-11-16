@@ -1298,7 +1298,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
                     NULL, // result
                     NULL, // status
                     stack_ctx.is_top_stack(),
-                    !stack_ctx.is_top_stack(), // inner call
+                    false,
                     false)); // in function
 
         // unprepare it.
