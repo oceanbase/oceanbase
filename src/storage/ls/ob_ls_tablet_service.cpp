@@ -711,7 +711,7 @@ void ObLSTabletService::report_tablet_to_rs(
   }
 }
 
-int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &param, ObNewRowIterator *&result)
+int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &param)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle data_tablet;
@@ -736,15 +736,12 @@ int ObLSTabletService::table_scan(ObTableScanIterator &iter, ObTableScanParam &p
     if (!is_same) {
       ret = OB_REPLICA_NOT_READABLE;
       LOG_WARN("ls is not allow to read", K(ret), KPC(ls_), KP(&iter));
-    } else {
-      // result should be assigned at the last
-      result = &iter;
     }
   }
   return ret;
 }
 
-int ObLSTabletService::table_rescan(ObTableScanParam &param, ObNewRowIterator *&result)
+int ObLSTabletService::table_rescan(ObTableScanParam &param, ObNewRowIterator *result)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle data_tablet;
