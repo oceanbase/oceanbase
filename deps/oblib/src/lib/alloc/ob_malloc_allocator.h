@@ -77,7 +77,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
 
 private:
-  obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
+  common::SpinRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantCtxAllocator *allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
   int64_t reserved_;
   int64_t urgent_;

@@ -188,39 +188,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObjPoolAllocator);
 };
 
-template <uint64_t size>
-class ObjPoolTCAllocator : public BaseAllocator
-{
-public:
-  ObjPoolTCAllocator()
-  {
-
-  }
-
-  virtual void reset()
-  {
-  }
-
-  virtual void *alloc()
-  {
-    return(op_tc_alloc(TestObj<size>));
-  }
-
-  virtual void free(void *p)
-  {
-    op_tc_free((TestObj<size>*)p);
-  }
-
-  virtual ~ObjPoolTCAllocator()
-  {
-  }
-
-private:
-  int64_t size_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObjPoolTCAllocator);
-};
-
 class DirectAllocator : public BaseAllocator
 {
 public:
@@ -732,18 +699,6 @@ TEST(TestSimpleAllocate, objpool)
  ASSERT_TRUE(engine.run() >= 0);
 }
 
-TEST(TestSimpleAllocate, objpool_tc)
-{
-  int64_t max_thread = get_cpu_num() * 2;
-  Params params;
-  params.simple_param.times = ALLOC_TIME_PER_THREAD;
-
-  ObjPoolTCAllocator<ALLOC_SIZE> allocator;
-  TestEngine engine(&allocator, max_thread, &simple_worker, params);
-
-  ASSERT_TRUE(engine.run() >= 0);
-}
-
 TEST(TestSimpleAllocate, ob_malloc)
 {
   int64_t max_thread = get_cpu_num() * 2;
@@ -795,19 +750,6 @@ TEST(TestWindowAllocate, objpool)
   ASSERT_TRUE(engine.run() >= 0);
 }
 
-TEST(TestWindowAllocate, objpool_tc)
-{
-  int64_t max_thread = get_cpu_num() * 2;
-  Params params;
-  params.window_param.times = ALLOC_TIME_PER_THREAD;
-  params.window_param.window_len = WINDOW_SIZE;
-
-  ObjPoolTCAllocator<ALLOC_SIZE> allocator;
-  TestEngine engine(&allocator, max_thread, &window_worker, params);
-
-  ASSERT_TRUE(engine.run() >= 0);
-}
-
 TEST(TestWindowAllocate, ob_malloc)
 {
   int64_t max_thread = get_cpu_num() * 2;
@@ -829,21 +771,6 @@ TEST(TestPairwiseAllocate, lf_fifo)
   params.pairwise_param.addr_queue = (unsigned long int *)malloc(sizeof(unsigned long int) * MAX_THREAD * QUEUE_SIZE);
 
   LFFIFOAllocator allocator(ALLOC_SIZE);
-  TestEngine engine(&allocator, max_thread, &pairwise_worker, params, true);
-
-  ASSERT_TRUE(engine.run() >= 0);
-
-  free(params.pairwise_param.addr_queue);
-}
-
-TEST(TestPairwiseAllocate, objpool_tc)
-{
-  int64_t max_thread = get_core_num() * 2;
-  Params params;
-  params.pairwise_param.times = ALLOC_TIME_PER_THREAD;
-  params.pairwise_param.addr_queue = (unsigned long int *)malloc(sizeof(unsigned long int) * MAX_THREAD * QUEUE_SIZE);
-
-  ObjPoolTCAllocator<ALLOC_SIZE> allocator;
   TestEngine engine(&allocator, max_thread, &pairwise_worker, params, true);
 
   ASSERT_TRUE(engine.run() >= 0);

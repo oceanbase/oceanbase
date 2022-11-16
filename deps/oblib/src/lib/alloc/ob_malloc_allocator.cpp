@@ -30,13 +30,16 @@ bool ObMallocAllocator::is_inited_ = false;
 
 ObMallocAllocator::ObMallocAllocator() : locks_(), allocators_(), reserved_(0), urgent_(0)
 {
+  for (int64_t i = 0; i < PRESERVED_TENANT_COUNT; ++i) {
+   locks_[i].enable_record_stat(false);
+  }
   set_root_allocator();
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < ObCtxIds::MAX_CTX_ID; i++) {
     if (OB_FAIL(create_tenant_ctx_allocator(OB_SYS_TENANT_ID, i))) {
-      LOG_ERROR("create tenant allocator fail", K(ret), K(i));
+      //LOG_ERROR("create tenant allocator fail", K(ret), K(i));
     } else if (OB_FAIL(create_tenant_ctx_allocator(OB_SERVER_TENANT_ID, i))) {
-      LOG_ERROR("create tenant allocator fail", K(ret), K(i));
+      //LOG_ERROR("create tenant allocator fail", K(ret), K(i));
     }
   }
   is_inited_ = true;
@@ -174,7 +177,7 @@ ObTenantCtxAllocator *ObMallocAllocator::get_tenant_ctx_allocator(uint64_t tenan
   } else {
     // TODO: lock slot
     const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
-    obsys::ObRLockGuard guard(locks_[slot]);
+    SpinRLockGuard guard(locks_[slot]);
     ObTenantCtxAllocator * const *cur = &allocators_[slot][ctx_id];
     while (NULL != *cur && (*cur)->get_tenant_id() < tenant_id) {
       cur = &(*cur)->get_next();
@@ -224,7 +227,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(
         cas_succeed = ATOMIC_BCAS(&allocators_[tenant_id][ctx_id], NULL, allocator);
       } else {
         const int64_t slot = tenant_id % PRESERVED_TENANT_COUNT;
-        obsys::ObWLockGuard guard(locks_[slot]);
+        SpinWLockGuard guard(locks_[slot]);
         ObTenantCtxAllocator **cur = &allocators_[slot][ctx_id];
         while ((NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
           cur = &((*cur)->get_next());
@@ -242,7 +245,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(
       if (OB_FAIL(ret) || !cas_succeed) {
         allocator->~ObTenantCtxAllocator();
         allocer->free(buf);
-      } else {
+      } else if (OB_SYS_TENANT_ID != tenant_id && OB_SERVER_TENANT_ID != tenant_id) {
         LOG_INFO("tenant ctx allocator was created", K(tenant_id), K(ctx_id), KCSTRING(lbt()));
       }
     }
@@ -256,7 +259,7 @@ void ObMallocAllocator::set_root_allocator()
   int ret = OB_SUCCESS;
   static ObTenantCtxAllocator allocator(OB_SERVER_TENANT_ID);
   if (OB_FAIL(allocator.set_tenant_memory_mgr())) {
-    LOG_ERROR("set_tenant_memory_mgr failed", K(ret));
+    //LOG_ERROR("set_tenant_memory_mgr failed", K(ret));
   } else {
     allocators_[OB_SERVER_TENANT_ID][0] = &allocator;
   }
@@ -452,7 +455,7 @@ int ObMallocAllocator::get_chunks(AChunk **chunks, int cap, int &cnt)
 {
   int ret = OB_SUCCESS;
   for (int64_t slot = 0; OB_SUCC(ret) && slot < PRESERVED_TENANT_COUNT; ++slot) {
-    obsys::ObRLockGuard guard(locks_[slot]);
+    SpinRLockGuard guard(locks_[slot]);
     for (int64_t ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
       ObTenantCtxAllocator *ta = allocators_[slot][ctx_id];
       while (OB_SUCC(ret) && ta != nullptr) {

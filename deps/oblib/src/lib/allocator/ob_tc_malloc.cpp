@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/list/ob_free_list.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/utility.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
@@ -131,6 +132,8 @@ const ObCtxInfo &get_global_ctx_info()
 
 void  __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool()
 {
+  auto& t = EventTable::instance();
+  auto& c = get_mem_leak_checker();
   global_default_allocator = ObMallocAllocator::get_instance();
   #ifndef OB_USE_ASAN
   abort_unless(OB_SUCCESS == install_ob_signal_handler());

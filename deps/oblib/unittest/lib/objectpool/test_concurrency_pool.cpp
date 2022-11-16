@@ -27,9 +27,6 @@ class COP
 #define obj_alloc(type) op_alloc(type)
 #define obj_free(ptr) op_free(ptr)
 
-#define obj_tc_alloc(type) op_tc_alloc(type)
-#define obj_tc_free(ptr) op_tc_free(ptr)
-
 #define obj_reclaim_alloc(type) op_reclaim_alloc(type)
 #define obj_reclaim_free(ptr) op_reclaim_free(ptr)
 
@@ -38,8 +35,6 @@ struct FixedMemStruct
 {
   char data_[size];
 };
-#define fixed_mem_alloc(size) obj_tc_alloc(FixedMemStruct<size>)
-#define fixed_mem_free(ptr, size) obj_tc_free((FixedMemStruct<size> *)ptr)
 
 struct TestObject1
 {
@@ -98,13 +93,6 @@ volatile int64_t prepared3 = 0;
 volatile int64_t prepared4 = 0;
 static const int64_t THREAD_COUNT = 15;
 
-TEST(COP, test_fixed_mem_op)
-{
-  void *ptr =  fixed_mem_alloc(2048);
-  OB_ASSERT(NULL != ptr);
-  fixed_mem_free(ptr, 2048);
-}
-
 TEST(COP, test_global_op)
 {
   TestObject1 *obj = NULL;
@@ -115,47 +103,20 @@ TEST(COP, test_global_op)
   ObObjFreeListList::get_freelists().dump();
 }
 
-TEST(COP, test_tc_op)
-{
-  TestObject2 *obj2 = NULL;
-  obj2 = obj_tc_alloc(TestObject2);
-  OB_ASSERT(NULL != obj2);
-  obj_tc_free(obj2);
-
-  // reuse freelist of TestObject2
-  TestObject3 *obj3 = obj_tc_alloc(TestObject3);
-  OB_ASSERT(NULL != obj3);
-  obj_tc_free(obj3);
-
-  //double free
-  //obj_tc_free(obj3);
-
-  TestObject4 *obj4 = obj_reclaim_alloc(TestObject4);
-  OB_ASSERT(NULL != obj4);
-  obj_reclaim_free(obj4);
-  //double free
-  //obj_reclaim_free(obj4);
-
-  ObObjFreeListList::get_freelists().dump();
-}
-
 enum AllocType
 {
   GLOBAL,
-  TC,
   RECLAIM
 };
 
 template <class T>
-void alloc_objs(T &head, int64_t count, AllocType type = TC)
+void alloc_objs(T &head, int64_t count, AllocType type = RECLAIM)
 {
   T *obj = NULL;
 
   for (int64_t i = 0; i < count; i++) {
     if (GLOBAL == type) {
       obj = obj_alloc(T);
-    } else if (TC == type) {
-      obj = obj_tc_alloc(T);
     } else {
       obj = obj_reclaim_alloc(T);
     }
@@ -166,7 +127,7 @@ void alloc_objs(T &head, int64_t count, AllocType type = TC)
 }
 
 template <class T>
-void free_objs(T &head, int64_t count, AllocType type = TC)
+void free_objs(T &head, int64_t count, AllocType type = RECLAIM)
 {
   T *obj = NULL;
   for (int64_t i = 0; i < count; i++) {
@@ -177,8 +138,6 @@ void free_objs(T &head, int64_t count, AllocType type = TC)
     head.next_ = obj->next_;
     if (GLOBAL == type) {
       obj_free(obj);
-    } else if (TC == type) {
-      obj_tc_free(obj);
     } else {
       obj_reclaim_free(obj);
     }
