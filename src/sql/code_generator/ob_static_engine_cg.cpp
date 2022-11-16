@@ -2408,17 +2408,11 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
         LOG_WARN("failed to push back hash func", K(ret));
       }
     } else {
-      bool is_new_hash_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0);
       for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
         ObExpr *join_expr = spec.join_keys_.at(i);
         ObHashFunc hash_func;
-        if (is_new_hash_version) {
-          hash_func.hash_func_ = join_expr->basic_funcs_->murmur_hash_;
-          hash_func.batch_hash_func_ = join_expr->basic_funcs_->murmur_hash_batch_;
-        } else {
-          hash_func.hash_func_ = join_expr->basic_funcs_->default_hash_;
-          hash_func.batch_hash_func_ = join_expr->basic_funcs_->default_hash_batch_;
-        }
+        hash_func.hash_func_ = join_expr->basic_funcs_->murmur_hash_;
+        hash_func.batch_hash_func_ = join_expr->basic_funcs_->murmur_hash_batch_;
         if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("hash func is null, check datatype is valid", K(ret));
@@ -2612,14 +2606,13 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
           LOG_WARN("batch op type is unexpected", K(ret), K(op.get_px_batch_op_type()));
         }
       }
-      if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2276) {
-        if (OB_FAIL(coord->get_table_locations().prepare_allocate(op.get_pruning_table_locations().count(),
-            phy_plan_->get_allocator()))) {
-          LOG_WARN("fail to init pruning table locations", K(ret));
-        } else {
-          for (int i = 0; i < op.get_pruning_table_locations().count() && OB_SUCC(ret); ++i) {
-            OZ(coord->get_table_locations().at(i).assign(op.get_pruning_table_locations().at(i)));
-          }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(coord->get_table_locations().prepare_allocate(op.get_pruning_table_locations().count(),
+          phy_plan_->get_allocator()))) {
+        LOG_WARN("fail to init pruning table locations", K(ret));
+      } else {
+        for (int i = 0; i < op.get_pruning_table_locations().count() && OB_SUCC(ret); ++i) {
+          OZ(coord->get_table_locations().at(i).assign(op.get_pruning_table_locations().at(i)));
         }
       }
       LOG_TRACE("map worker to px coordinator", K(spec.get_type()),
@@ -6287,11 +6280,9 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         case NESTED_LOOP_JOIN: {
           type = CONNECT_BY_JOIN != op.get_join_type()
              ? PHY_NESTED_LOOP_JOIN
-             : (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2250
-                ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
-                : (op.get_nl_params().count() > 0
+             : (op.get_nl_params().count() > 0
                   ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
-                  : PHY_NESTED_LOOP_CONNECT_BY));
+                  : PHY_NESTED_LOOP_CONNECT_BY);
           break;
         }
         case MERGE_JOIN: {

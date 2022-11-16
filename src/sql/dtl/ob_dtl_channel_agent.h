@@ -43,7 +43,7 @@ public:
   ~ObDtlBufEncoder() {}
   void set_tenant_id(int64_t tenant_id) {
     tenant_id_ = tenant_id;
-    use_row_store_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2200;
+    use_row_store_ = true;
   }
   int switch_writer(const ObDtlMsg &msg);
   int need_new_buffer(

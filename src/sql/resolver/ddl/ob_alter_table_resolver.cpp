@@ -549,15 +549,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             break;
           }
         case T_CONVERT_TO_CHARACTER: {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("alter table convert to character not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter table convert to character");
-          } else {
-            alter_table_stmt->set_convert_to_character();
-            if (OB_FAIL(resolve_convert_to_character(*action_node))) {
-              SQL_RESV_LOG(WARN, "Resolve convert to character failed!", K(ret));
-            }
+          alter_table_stmt->set_convert_to_character();
+          if (OB_FAIL(resolve_convert_to_character(*action_node))) {
+            SQL_RESV_LOG(WARN, "Resolve convert to character failed!", K(ret));
           }
           break;
         }
@@ -2836,25 +2830,19 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
     case T_PRIMARY_KEY:
     case T_PRIMARY_KEY_ALTER: {
         ParseNode *primary_key_node = node.children_[0];
-        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
+        bool is_exist_drop = false;
+        bool is_exist_alter = false;
+        if (OB_FAIL(is_exist_item_type(action_node_list, T_PRIMARY_KEY_DROP, is_exist_drop))) {
+          SQL_RESV_LOG(WARN, "failed to check item type!", K(ret));
+        } else if (OB_FAIL(is_exist_item_type(action_node_list, T_PRIMARY_KEY_ALTER, is_exist_alter))) {
+          SQL_RESV_LOG(WARN, "failed to check item type!", K(ret));
+        } else if (!is_exist_drop && !is_exist_alter) {
           if (OB_FAIL(resolve_add_primary(*primary_key_node))) {
             SQL_RESV_LOG(WARN, "failed to resovle primary key!", K(ret));
           }
         } else {
-          bool is_exist_drop = false;
-          bool is_exist_alter = false;
-          if (OB_FAIL(is_exist_item_type(action_node_list, T_PRIMARY_KEY_DROP, is_exist_drop))) {
-            SQL_RESV_LOG(WARN, "failed to check item type!", K(ret));
-          } else if (OB_FAIL(is_exist_item_type(action_node_list, T_PRIMARY_KEY_ALTER, is_exist_alter))) {
-            SQL_RESV_LOG(WARN, "failed to check item type!", K(ret));
-          } else if (!is_exist_drop && !is_exist_alter) {
-            if (OB_FAIL(resolve_add_primary(*primary_key_node))) {
-              SQL_RESV_LOG(WARN, "failed to resovle primary key!", K(ret));
-            }
-          } else {
-            if (OB_FAIL(resolve_alter_primary(action_node_list, *primary_key_node))) {
-              SQL_RESV_LOG(WARN, "failed to resovle alter primary key!", K(ret));
-            }
+          if (OB_FAIL(resolve_alter_primary(action_node_list, *primary_key_node))) {
+            SQL_RESV_LOG(WARN, "failed to resovle alter primary key!", K(ret));
           }
         }
         break;
@@ -3524,8 +3512,7 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
 
       } else if (T_ALTER_PARTITION_PARTITIONED == node.children_[0]->type_
                  && PARTITION_LEVEL_ZERO != part_level
-                 && (lib::is_oracle_mode()
-                 || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0)) {
+                 && lib::is_oracle_mode()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a partitioned table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a patitioned table");
@@ -3560,28 +3547,18 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           break;
         }
         case T_ALTER_PARTITION_DROP: {
-            if (partition_node->num_child_ == 2
-                       && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("drop partition with update global indexes option not support yet", KR(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Drop partition with update global indexes option ");
-            } else if (OB_FAIL(resolve_drop_partition(*partition_node, *table_schema_))) {
-              SQL_RESV_LOG(WARN, "Resolve drop partition error!", K(ret));
-            } else {
-              alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
-              alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_PARTITION;
-              alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
-            }
-            break;
+          if (OB_FAIL(resolve_drop_partition(*partition_node, *table_schema_))) {
+            SQL_RESV_LOG(WARN, "Resolve drop partition error!", K(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
+            alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_PARTITION;
+            alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
+          }
+          break;
         }
         case T_ALTER_SUBPARTITION_DROP: {
           if (OB_FAIL(resolve_drop_subpartition(*partition_node, *table_schema_))) {
             LOG_WARN("failed to resolve drop subpartition", K(ret));
-          } else if (partition_node->num_child_ == 2
-                     && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("drop subpartition with update global indexes not support yet", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Drop subpartition with update global indexes option ");
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_SUB_PARTITION;
@@ -3592,14 +3569,8 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         case T_ALTER_PARTITION_PARTITIONED: {
           bool enable_split_partition = false;
           const ObPartitionLevel part_level = table_schema_->get_part_level();
-          if (PARTITION_LEVEL_ZERO == part_level &&
-              GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
-              ObAlterTableArg::PARTITIONED_TABLE;
-          } else {
-            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
-              ObAlterTableArg::REPARTITION_TABLE;
-          }
+          alter_table_stmt->get_alter_table_arg().alter_part_type_ =
+            ObAlterTableArg::REPARTITION_TABLE;
           if (OB_FAIL(get_enable_split_partition(session_info_->get_effective_tenant_id(),
                   enable_split_partition))) {
             LOG_WARN("failed to get enable split partition config", K(ret),
@@ -3661,11 +3632,7 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         }
         case T_ALTER_PARTITION_TRUNCATE: {
           ParseNode *partition_node = node.children_[0];
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("truncate partition not support yet", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Truncate partition ");
-          } else if (OB_FAIL(resolve_drop_partition(*partition_node, *table_schema_))) {
+          if (OB_FAIL(resolve_drop_partition(*partition_node, *table_schema_))) {
             LOG_WARN("failed to resolve truncate partition", KR(ret));
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
@@ -3675,11 +3642,7 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           break;
         }
         case T_ALTER_SUBPARTITION_TRUNCATE: {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("truncate subpartition not support yet", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Truncate subpartition ");
-          } else if (OB_FAIL(resolve_drop_subpartition(*partition_node, *table_schema_))) {
+          if (OB_FAIL(resolve_drop_subpartition(*partition_node, *table_schema_))) {
             LOG_WARN("failed to resolve drop subpartition", KR(ret));
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
@@ -4655,27 +4618,6 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
         }
       }
-      if (OB_SUCC(ret) && lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-        bool is_sync_ddl_user = false;
-        if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(session_info_, is_sync_ddl_user))) {
-          LOG_WARN("Failed to check sync_dll_user", K(ret));
-        } else if (is_sync_ddl_user) {
-          // skip
-        } else if (origin_col_schema->get_data_type() == alter_column_schema.get_data_type()
-                  && (origin_col_schema->get_data_type() == ObNumberType
-                      || origin_col_schema->get_data_type() == ObUNumberType)
-                  && (origin_col_schema->get_accuracy().get_precision() >
-                      alter_column_schema.get_accuracy().get_precision()
-                      || origin_col_schema->get_accuracy().get_scale() >
-                      alter_column_schema.get_accuracy().get_scale())
-                  && !ObAccuracy::is_default_number(alter_column_schema.get_accuracy())) {
-          // The number type does not specify precision, which means that it is the largest range and requires special judgment
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "Can not decrease precision or scale",
-                      K(ret), K(alter_column_schema.get_accuracy()), KPC(origin_col_schema));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease precision or scale");
-        }
-      }
       if (OB_SUCC(ret)) {
         if ((origin_col_schema->get_data_type()) != (alter_column_schema.get_data_type())) {
           // alter table change column 的时候，如果只改列名字，不改列类型，就无需检查外键约束，允许改成功
@@ -4714,7 +4656,7 @@ int ObAlterTableResolver::check_modify_column_allowed(
   const ObAccuracy &origin_col_accuracy = origin_col_schema.get_accuracy();
   const ObAccuracy &alter_col_accuracy = alter_column_schema.get_accuracy();
   // The number type does not specify precision, which means that it is the largest range and requires special judgment
-  if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0 || lib::is_oracle_mode())
+  if (lib::is_oracle_mode()
       && origin_col_type == alter_col_type
       && (origin_col_type == ObNumberType
           || origin_col_type == ObUNumberType
@@ -4728,7 +4670,7 @@ int ObAlterTableResolver::check_modify_column_allowed(
     SQL_RESV_LOG(WARN, "Can not decrease precision or scale",
                 K(ret), K(alter_col_accuracy), K(origin_col_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease precision or scale");
-  } else if ((lib::is_oracle_mode() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0)
+  } else if ((lib::is_oracle_mode())
                    && (ObTimestampNanoType == origin_col_type
                         || ObTimestampType == origin_col_type
                         || ObDateTimeType == origin_col_type

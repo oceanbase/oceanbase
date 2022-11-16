@@ -53,8 +53,7 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
                                                            in_restore))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster() ||
-             GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
+             GCTX.is_standby_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
   } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {

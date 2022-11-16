@@ -94,9 +94,6 @@ int ObExprGeneratorImpl::generate(ObRawExpr &raw_expr, ObSqlExpression &expr)
     OB_LOG(WARN, "fail to get raw expr_count", K(ret));
   } else if (OB_FAIL(expr.set_item_count(count))) {
     OB_LOG(WARN, "fail to init item count", K(ret), K(count));
-  } else if (ObSqlExpressionUtil::should_gen_postfix_expr()
-             && OB_FAIL(raw_expr.postorder_accept(*this))) {
-    LOG_WARN("failed to postorder accept", K(ret), K(raw_expr));
   } else if (OB_FAIL(generate_infix_expr(raw_expr))) {
     LOG_WARN("failed to generate infix expr", K(ret));
   } else if (OB_FAIL(expr.generate_idx_for_regexp_ops(cur_regexp_op_count_))) {
@@ -782,51 +779,48 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
       }
       //for row_type in left_param of EXPR IN
       //if min_cluster_version < 3.1, do not check params can use hash optimizition
-      if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100) {
-        bool param_all_const = true;
-        bool param_all_same_type = true;
-        bool param_all_same_cs_type = true;
-        bool param_all_is_ext = true;
-        bool param_all_same_cs_level = true;
-        for (int64_t j = 0; OB_SUCC(ret) && j < in_op->get_row_dimension(); ++j) {
-          param_all_const &= param1->get_param_expr(0)->get_param_expr(j)
-                                                     ->is_static_const_expr();
-          ObObjType first_obj_type = param1->get_param_expr(0)->get_param_expr(j)
-                                                              ->get_data_type();
-          ObObjType cur_obj_type = ObMaxType;
-          ObCollationType first_obj_cs_type = param1->get_param_expr(0)->get_param_expr(j)
-                                                                       ->get_collation_type();
-          ObCollationType cur_obj_cs_type = CS_TYPE_INVALID;
-          ObCollationLevel first_obj_cs_level = param1->get_param_expr(0)->get_param_expr(j)
-                                                                         ->get_collation_level();
-          ObCollationLevel cur_obj_cs_level = CS_LEVEL_INVALID;
-          param_all_is_ext &= (ObExtendType == first_obj_type);
-          for (int64_t i = 1; OB_SUCC(ret) && i < param_count; ++i) {
-            cur_obj_type = param1->get_param_expr(i)->get_param_expr(j)->get_data_type();
-            cur_obj_cs_type = param1->get_param_expr(i)->get_param_expr(j)->get_collation_type();
-            cur_obj_cs_level = param1->get_param_expr(i)->get_param_expr(j)->get_collation_level();
-            if (ObNullType == first_obj_type) {
-              first_obj_type = cur_obj_type;
-              first_obj_cs_type = cur_obj_cs_type;
-            }
-            if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
-              param_all_const &= param1->get_param_expr(i)->get_param_expr(j)
-                                                          ->is_static_const_expr();
-              param_all_same_type &= (first_obj_type == cur_obj_type);
-              param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
-              param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
-            }
-            param_all_is_ext &= (ObExtendType == first_obj_type);
+      bool param_all_const = true;
+      bool param_all_same_type = true;
+      bool param_all_same_cs_type = true;
+      bool param_all_is_ext = true;
+      bool param_all_same_cs_level = true;
+      for (int64_t j = 0; OB_SUCC(ret) && j < in_op->get_row_dimension(); ++j) {
+        param_all_const &= param1->get_param_expr(0)->get_param_expr(j)
+                                                    ->is_static_const_expr();
+        ObObjType first_obj_type = param1->get_param_expr(0)->get_param_expr(j)
+                                                            ->get_data_type();
+        ObObjType cur_obj_type = ObMaxType;
+        ObCollationType first_obj_cs_type = param1->get_param_expr(0)->get_param_expr(j)
+                                                                      ->get_collation_type();
+        ObCollationType cur_obj_cs_type = CS_TYPE_INVALID;
+        ObCollationLevel first_obj_cs_level = param1->get_param_expr(0)->get_param_expr(j)
+                                                                        ->get_collation_level();
+        ObCollationLevel cur_obj_cs_level = CS_LEVEL_INVALID;
+        param_all_is_ext &= (ObExtendType == first_obj_type);
+        for (int64_t i = 1; OB_SUCC(ret) && i < param_count; ++i) {
+          cur_obj_type = param1->get_param_expr(i)->get_param_expr(j)->get_data_type();
+          cur_obj_cs_type = param1->get_param_expr(i)->get_param_expr(j)->get_collation_type();
+          cur_obj_cs_level = param1->get_param_expr(i)->get_param_expr(j)->get_collation_level();
+          if (ObNullType == first_obj_type) {
+            first_obj_type = cur_obj_type;
+            first_obj_cs_type = cur_obj_cs_type;
           }
+          if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
+            param_all_const &= param1->get_param_expr(i)->get_param_expr(j)
+                                                        ->is_static_const_expr();
+            param_all_same_type &= (first_obj_type == cur_obj_type);
+            param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
+            param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
+          }
+          param_all_is_ext &= (ObExtendType == first_obj_type);
         }
-        in_op->set_param_all_const(param_all_const);
-        in_op->set_param_all_same_type(param_all_same_type);
-        in_op->set_param_all_same_cs_type(lib::is_oracle_mode()
-                                         ? param_all_same_cs_type
-                                         : (param_all_same_cs_type &= param_all_same_cs_level));
-        in_op->set_param_is_ext_type_oracle(param_all_is_ext);
-
       }
+      in_op->set_param_all_const(param_all_const);
+      in_op->set_param_all_same_type(param_all_same_type);
+      in_op->set_param_all_same_cs_type(lib::is_oracle_mode()
+                                        ? param_all_same_cs_type
+                                        : (param_all_same_cs_type &= param_all_same_cs_level));
+      in_op->set_param_is_ext_type_oracle(param_all_is_ext);
     }
   } else {
     // like a in (1, 2, 3)
@@ -1487,32 +1481,6 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
   } else {
     ObExprOperator *op = NULL;
     ObExprOperatorType type = expr.get_expr_type();
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100) {
-      switch (expr.get_expr_type()) {
-        case T_OP_AGG_ADD: {
-          type = T_OP_ADD;
-          break;
-        }
-        case T_OP_AGG_MINUS: {
-          type = T_OP_MINUS;
-          break;
-        }
-        case T_OP_AGG_MUL: {
-          type = T_OP_MUL;
-          break;
-        }
-        case T_OP_AGG_DIV: {
-          type = T_OP_DIV;
-          break;
-        }
-        default: {
-        }
-      };
-      if (type != expr.get_expr_type()) {
-        LOG_DEBUG("replace agg arithmetic op to arithmetic op for compatibility",
-                  K(type), K(expr.get_expr_type()));
-      }
-    }
     if (OB_FAIL(factory_.alloc(type, op))) {
       LOG_WARN("fail to alloc expr_op", K(ret));
     } else if (OB_UNLIKELY(NULL == op)) {

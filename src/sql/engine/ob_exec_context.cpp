@@ -730,8 +730,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       }
     }
     if (OB_SUCC(ret)) {
-      if (!plan.is_remote_plan() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2250) {
-        //从2250版本后，remote sql会发送到远端执行，本地不会再touch数据，因此不需要去分配参数空间
+      if (!plan.is_remote_plan()) {
         if (OB_FAIL(phy_plan_ctx_->reserve_param_space(plan.get_param_count()))) {
           LOG_WARN("reserve param space failed", K(ret), K(plan.get_param_count()));
         }

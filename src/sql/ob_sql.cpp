@@ -2481,8 +2481,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
     }
   }
   // execute dml in oracle mode, regardless of success or failure, always need to maintain object dependencies
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
-      && OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
     int tmp_ret = ret;
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     if (stmt->get_ref_obj_table()->is_inited()) {
@@ -3562,7 +3561,6 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       // bug: https://work.aone.alibaba-inc.com/issue/33487009
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
-          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250
           && !enable_send_plan) {
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();

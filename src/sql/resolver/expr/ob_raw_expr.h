@@ -1890,7 +1890,7 @@ public:
   bool is_date_unit() {return true == is_date_unit_; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -1936,12 +1936,12 @@ public:
   { set_expr_class(ObIRawExpr::EXPR_VAR); }
   virtual ~ObVarRawExpr() {}
 
-  int assign(const ObRawExpr &other);
+  int assign(const ObRawExpr &other) override;
 
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -1964,12 +1964,12 @@ public:
   ObUserVarIdentRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
     : ObConstRawExpr(val, expr_type), is_contain_assign_(false), query_has_udf_(false) {}
   virtual ~ObUserVarIdentRawExpr() {}
-  int assign(const ObRawExpr &other);
+  int assign(const ObRawExpr &other) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2020,12 +2020,12 @@ public:
   ObRawExpr*& get_ref_expr() { return outer_expr_; }
 
   bool is_onetime() const { return is_onetime_; }
-  int assign(const ObRawExpr &other);
+  int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context) const;
+                             ObExprEqualCheckContext *check_context) const override;
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const;
@@ -2084,7 +2084,7 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
 
   virtual void clear_child() override;
   int add_param_expr(ObRawExpr *expr);
@@ -2120,7 +2120,7 @@ public:
   bool has_nl_param() const { return has_nl_param_; }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2292,7 +2292,7 @@ public:
   inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id(); }
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2431,7 +2431,7 @@ public:
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   int assign(const ObRawExpr &other) override;
 
@@ -2489,7 +2489,7 @@ public:
   virtual uint64_t hash_internal(uint64_t seed) const;
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -2515,7 +2515,7 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
   virtual void reset() { free_op(); input_types_.reset(); }
 
   virtual ObExprOperator *get_op();
@@ -2589,10 +2589,10 @@ public:
     return T_OP_ROW == get_expr_type() ? get_param_count() : -1;
   }
 
-  virtual void clear_child();
+  virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   //used for jit expr
   virtual int64_t get_children_count() const
@@ -2752,10 +2752,10 @@ public:
   bool is_arg_case() const { return NULL != arg_expr_; }
   bool is_decode_func() const { return is_decode_func_; }
 
-  virtual void clear_child();
+  virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -2978,7 +2978,7 @@ public:
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
   int add_real_param_expr(ObRawExpr *expr);
   int replace_real_param_expr(int64_t index, ObRawExpr *expr);
   int replace_param_expr(int64_t index, ObRawExpr *expr);
@@ -2989,10 +2989,10 @@ public:
   bool is_nested_aggr() const;
   void set_in_nested_aggr(bool is_nested);
   int add_order_item(const OrderItem &order_item);
-  virtual void clear_child();
+  virtual void clear_child() override;
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int64_t get_param_count() const;
   virtual const ObRawExpr *get_param_expr(int64_t index) const;
@@ -3155,13 +3155,13 @@ public:
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   void set_func_name(const common::ObString &name);
   const common::ObString &get_func_name() const;
-  virtual void clear_child();
+  virtual void clear_child() override;
   int check_param_num();
   int check_param_num(int param_count);
   virtual ObExprOperator *get_op();
   virtual void reset();
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
@@ -3387,7 +3387,9 @@ public:
                  int64_t id2 = OB_INVALID_ID,
                  int64_t id3 = OB_INVALID_ID)
     : type_(type), id1_(id1), id2_(id2), id3_(id3) {}
-
+  OB_INLINE bool operator==(const ObUDFParamDesc &other) const {
+    return type_ == other.type_ && id1_ == other.id1_ &&
+           id2_ == other.id2_ && id3_ == other.id3_; }
   OB_INLINE bool is_out() const { return type_ != NOT_OUT; }
   OB_INLINE bool is_local_out() const { return OutType::LOCAL_OUT == type_; }
   OB_INLINE bool is_package_var_out() const { return OutType::PACKAGE_VAR_OUT == type_; }
@@ -3493,10 +3495,6 @@ public:
   {
     return params_desc_v2_.push_back(desc);
   }
-  inline ObIArray<ObUDFParamDesc>& get_params_desc()
-  {
-    return params_desc_v2_;
-  }
   inline bool is_param_out(int64_t i) const
   {
     return params_desc_v2_.at(i).is_out();
@@ -3522,17 +3520,23 @@ public:
   {
     return params_name_;
   }
+  inline const common::ObIArray<common::ObString> &get_params_name() const
+  {
+    return params_name_;
+  }
   inline void set_pkg_id(uint64_t pkg_id){ pkg_id_ = pkg_id; }
-  inline uint64_t get_pkg_id() { return pkg_id_; }
+  inline uint64_t get_pkg_id() const { return pkg_id_; }
   inline uint64_t get_udf_id() const { return udf_id_; }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return subprogram_path_; }
   inline pl::ObPLIntegerType get_pls_type() const { return pls_type_; }
   inline common::ObIArray<ObExprResType> &get_params_type() { return params_type_; }
+  inline const common::ObIArray<ObExprResType> &get_params_type() const { return params_type_; }
   inline common::ObString get_database_name() const { return database_name_; }
   inline common::ObString get_package_name() const { return package_name_; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
-
+  virtual bool inner_same_as(const ObRawExpr &expr,
+                             ObExprEqualCheckContext *check_context = NULL) const override;
   virtual ObExprOperator *get_op() override;
 
   int check_param() { return common::OB_SUCCESS; }
@@ -3549,25 +3553,26 @@ public:
   inline bool is_parallel_enable() const { return is_parallel_enable_; }
 
   inline void set_is_udt_udf(bool is_udt_udf) { is_udt_udf_ = is_udt_udf; }
-  inline bool get_is_udt_udf() { return is_udt_udf_; }
+  inline bool get_is_udt_udf() const { return is_udt_udf_; }
   inline void set_is_return_sys_cursor(bool is_ret_cursor) { is_return_sys_cursor_ = is_ret_cursor; }
   inline bool get_is_return_sys_cursor() const { return is_return_sys_cursor_; }
 
   inline void set_type_id(uint64_t type_id) { type_id_ = type_id; }
-  inline uint64_t get_type_id() { return type_id_; }
+  inline uint64_t get_type_id() const { return type_id_; }
   inline void set_is_aggregate_udf(bool is_aggregate_udf) { is_aggregate_udf_ = is_aggregate_udf; }
-  inline bool get_is_aggregate_udf() { return is_aggregate_udf_; }
+  inline bool get_is_aggregate_udf() const { return is_aggregate_udf_; }
   inline void set_is_aggr_udf_distinct(bool is_aggr_udf_distinct) {
     is_aggr_udf_distinct_ = is_aggr_udf_distinct; }
-  inline bool get_is_aggr_udf_distinct() { return is_aggr_udf_distinct_; }
+  inline bool get_is_aggr_udf_distinct() const { return is_aggr_udf_distinct_; }
 
   inline void set_loc(uint64_t loc) { loc_ = loc; }
   inline uint64_t get_loc() const { return loc_; }
   inline void set_is_udt_cons(bool flag) { is_udt_cons_ = flag; }
   inline bool get_is_udt_cons() const { return is_udt_cons_; }
-
+  inline ObIArray<ObUDFParamDesc>& get_params_desc() { return params_desc_v2_; }
+  inline const ObIArray<ObUDFParamDesc>& get_params_desc() const { return params_desc_v2_; }
   ObIArray<int64_t>& get_nocopy_params() { return nocopy_params_; }
-  const ObIArray<int64_t>& get_nocopy_prams() const { return nocopy_params_; }
+  const ObIArray<int64_t>& get_nocopy_params() const { return nocopy_params_; }
 
   inline bool need_add_dependency()
   {
@@ -3578,7 +3583,7 @@ public:
   int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
 
   inline void set_pkg_body_udf(bool v) { is_pkg_body_udf_ = v; }
-  inline bool is_pkg_body_udf() { return is_pkg_body_udf_; }
+  inline bool is_pkg_body_udf() const { return is_pkg_body_udf_; }
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
@@ -3785,7 +3790,7 @@ public:
   ObPLAssocIndexRawExpr()
     : ObOpRawExpr(), for_write_(false) {}
   virtual ~ObPLAssocIndexRawExpr() {}
-  int assign(const ObRawExpr &other);
+  int assign(const ObRawExpr &other) override;
   inline void set_write(bool for_write) { for_write_ = for_write; }
   inline bool get_write() const { return for_write_; }
   inline bool get_out_of_range_set_err() const { return out_of_range_set_err_; }
@@ -3832,7 +3837,7 @@ public:
       for_write_(false),
       property_type_(pl::ObCollectionType::INVALID_PROPERTY) {}
   virtual ~ObObjAccessRawExpr() {}
-  int assign(const ObRawExpr &other);
+  int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual bool inner_same_as(const ObRawExpr &expr,
                              ObExprEqualCheckContext *check_context = NULL) const override;
@@ -4105,9 +4110,9 @@ public:
   inline void set_pl_agg_udf_expr(ObRawExpr *udf_expr) { pl_agg_udf_expr_ = udf_expr; }
   inline ObRawExpr *get_pl_agg_udf_expr() const { return pl_agg_udf_expr_; }
 
-  virtual void clear_child();
+  virtual void clear_child() override;
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int64_t get_param_count() const
   {
@@ -4187,7 +4192,7 @@ public:
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs);
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   virtual uint64_t hash_internal(uint64_t seed) const;
@@ -4228,7 +4233,7 @@ public:
   virtual ~ObOpPseudoColumnRawExpr();
 
   int assign(const ObOpPseudoColumnRawExpr &other);
-  int inner_deep_copy(ObIRawExprCopier &copier);
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
 
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs) override;
@@ -4440,8 +4445,8 @@ public:
   }
 
   virtual ~ObPlQueryRefRawExpr() {}
-  int assign(const ObRawExpr &other);
-  int inner_deep_copy(ObIRawExprCopier &copier);
+  int assign(const ObRawExpr &other) override;
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
 
   int add_param_expr(ObRawExpr *expr);
   int64_t get_param_count() const;
@@ -4467,12 +4472,12 @@ public:
   inline bool is_ignore_fail() const { return is_ignore_fail_; }
 
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                           const common::ObIArray<ObRawExpr *> &new_exprs);
+                           const common::ObIArray<ObRawExpr *> &new_exprs) override;
 
   virtual void clear_child() override;
 
   virtual bool inner_same_as(const ObRawExpr &expr,
-                             ObExprEqualCheckContext *check_context = NULL) const;
+                             ObExprEqualCheckContext *check_context = NULL) const override;
 
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 

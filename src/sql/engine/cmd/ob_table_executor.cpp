@@ -912,9 +912,6 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
             || (obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_))) {
           if (OB_FAIL(need_check_constraint_validity(alter_table_arg, need_check))) {
             LOG_WARN("check whether need check failed", K(ret));
-          } else if (need_check && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Such ddl operation during upgrade");
           }
         }
         // 如果追加 validate 属性的外键或者 modify 外键为 validate 属性时，不立即生效
@@ -927,8 +924,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
             need_modify_fk_validate = true;
           }
         }
-        if (OB_SUCC(ret)
-            && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100)) {
+        if (OB_SUCC(ret)) {
           if (OB_FAIL(alter_table_rpc_v2(
                       alter_table_arg,
                       res,
@@ -937,17 +933,6 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                       my_session,
                       is_sync_ddl_user))) {
             LOG_WARN("Failed to alter table rpc v2", K(ret));
-          }
-        } else if (OB_SUCC(ret)
-                  && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100)) {
-          if (OB_FAIL(alter_table_rpc_v1(
-                      alter_table_arg,
-                      res,
-                      allocator,
-                      common_rpc_proxy,
-                      my_session,
-                      is_sync_ddl_user))) {
-            LOG_WARN("Failed to alter table rpc v1", K(ret));
           }
         }
       }
