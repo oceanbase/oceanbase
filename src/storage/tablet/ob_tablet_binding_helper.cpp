@@ -1035,7 +1035,6 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
   ObTablet *tablet = handle.get_obj();
   const ObTabletMapKey key(tablet->tablet_meta_.ls_id_, tablet->tablet_meta_.tablet_id_);
   ObTabletTxMultiSourceDataUnit tx_data;
-  LOG_INFO("unlock_tablet_binding", KPC(tablet), K(trans_flags));
   if (OB_FAIL(tablet->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret));
   } else {
@@ -1080,7 +1079,6 @@ int ObTabletBindingHelper::unlock_tablet_binding(const ObTabletID &tablet_id) co
 {
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
-  LOG_INFO("unlock_tablet_binding", K(tablet_id));
   if (OB_FAIL(get_tablet(tablet_id, handle))) {
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
