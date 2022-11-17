@@ -257,6 +257,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem& multi_stmt_item
         share::schema::ObSchemaGetterGuard schema_guard;
         // Guard used for mocking rowid columns
         ObSQLMockSchemaGuard mock_schema_guard;
+        retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
         if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get schema guard failed", K(ret));
         } else if (OB_FAIL(schema_guard.get_schema_version(session.get_effective_tenant_id(), tenant_version))) {
@@ -269,7 +270,6 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem& multi_stmt_item
           retry_ctrl_.set_sys_local_schema_version(sys_version);
         }
         if (OB_SUCC(ret)) {
-          retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
           ret = do_process(session, has_more_result, force_sync_resp, async_resp_used);
           session.set_session_in_retry(retry_ctrl_.need_retry());
         }
