@@ -351,7 +351,7 @@ int ObExprColumnConv::column_convert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         const int64_t max_accuracy_len = static_cast<int64_t>(expr.max_length_);
         const int64_t str_len_byte = static_cast<int64_t>(val->len_);
         if (OB_FAIL(datum_accuracy_check(expr, cast_mode, ctx, *val, datum, warning))) {
-          LOG_WARN("fail to check accuracy", K(ret), K(datum), K(expr), K(warning));
+          LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
             if (OB_ERR_DATA_TOO_LONG == ret && PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
             ObString column_info_str;
             ObDatum* column_info = NULL;
