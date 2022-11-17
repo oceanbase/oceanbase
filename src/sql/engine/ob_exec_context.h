@@ -209,7 +209,7 @@ public:
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
   //get the root execute context in nested sql
   int get_root_ctx(ObExecContext* &root_ctx);
-  bool is_root_ctx() {return parent_ctx_ == nullptr;}
+  bool is_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
