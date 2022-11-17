@@ -483,11 +483,15 @@ public:
                "state",
                State::state_str(state_),
                K_(total_tx_ctx_count),
+               K_(leader_takeover_ts),
+               K_(is_leader_serving),
+               K_(max_replay_commit_version),
                K_(ls_retain_ctx_mgr),
                K_(aggre_rec_log_ts),
                K_(prev_aggre_rec_log_ts),
+               K_(online_ts),
                "uref",
-               (!is_inited_ ? -1 : get_uref()));
+               ((!is_inited_ || NULL == hash_node_) ? -1 : get_uref()));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSTxCtxMgr);
 

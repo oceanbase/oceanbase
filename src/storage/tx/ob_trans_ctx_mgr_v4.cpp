@@ -192,7 +192,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
     prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
     online_ts_ = 0;
-    TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KP(this), K(ls_id));
+    TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KPC(this), K(ls_id));
   }
   return ret;
 }
@@ -234,7 +234,7 @@ int ObLSTxCtxMgr::offline()
 {
   aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
   prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-
+  TRANS_LOG(INFO, "ObLSTxCtxMgr offline", KPC(this));
   return OB_SUCCESS;
 }
 
@@ -588,9 +588,9 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, int64
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   ReplayTxStartWorkingLogFunctor fn(start_working_ts);
   if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    TRANS_LOG(WARN, "[LsTxCtxMgr Role Change] replay start working log failed", KR(ret), K(ls_id_));
+    TRANS_LOG(WARN, "[LsTxCtxMgr Role Change] replay start working log failed", KR(ret), KPC(this));
   } else {
-    TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_), K(ls_id_));
+    TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_), KPC(this));
   }
   return ret;
 }
@@ -652,8 +652,8 @@ int ObLSTxCtxMgr::submit_start_working_log_()
   int64_t log_ts = 0;
   const int64_t fake_epoch = 0xbaba;
   if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, log_ts))) {
-    TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
   }
+  TRANS_LOG(INFO, "submit start working log success", KR(ret), K(*this));
   return ret;
 }
 
@@ -692,9 +692,9 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   // run callback out of lock, ignore ret
   (void)process_callback_(cb_array);
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG(WARN, "switch_to_follower_forcedly use too much time", K(timeguard), KPC(this));
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] switch_to_follower_forcedly", K(ret), KPC(this));
+  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] switch_to_follower_forcedly", KR(ret), K(timeguard), KPC(this));
   return ret;
 }
 
@@ -710,7 +710,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
                                  nullptr,
                                  gts,
                                  receive_gts_ts))) {
-      if(OB_EAGAIN != ret) {
+      if (OB_EAGAIN != ret) {
         TRANS_LOG(WARN, "wait gts error", KR(ret), K_(ls_id), K_(tenant_id),
             K_(max_replay_commit_version));
       } else {
@@ -822,10 +822,10 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   }
   (void)process_callback_(cb_array);
   timeguard.click();
-  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
   if (timeguard.get_diff() > 1000000) {
     TRANS_LOG(ERROR, "use too much time", K(timeguard), K(process_count));
   }
+  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), K(timeguard), KPC(this), K(process_count));
   return ret;
 }
 
@@ -866,7 +866,9 @@ bool ObLSTxCtxMgr::in_leader_serving_state()
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
   } else if (!is_master_()) {
-    TRANS_LOG(DEBUG, "ObLSTxCtxMgr not master");
+    if (REACH_TIME_INTERVAL(100 * 1000)) {
+      TRANS_LOG(INFO, "ObLSTxCtxMgr not master", KPC(this));
+    }
   } else if (OB_FAIL(try_wait_gts_and_inc_max_commit_ts_())) {
     TRANS_LOG(WARN, "try_wait_gts_and_inc_max_commit_ts_ failed", K(ret), KPC(this));
   } else {
@@ -912,7 +914,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
     TRANS_LOG(WARN, "stop trans use too much time", K(timeguard), "manager", *this);
   }
   process_callback_(cb_array);
-  TRANS_LOG(INFO, "[LsTxCtxMgr] stop done", K(timeguard), "manager", *this);
+  TRANS_LOG(INFO, "[LsTxCtxMgr] stop done", KR(ret), K(timeguard), "manager", *this);
   return ret;
 }
 
@@ -936,7 +938,8 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
     TRANS_LOG(WARN, "kill_all_tx use too much time", K(timeguard), "manager", *this);
   }
   (void)process_callback_(cb_array);
-  TRANS_LOG(INFO, "[LsTxCtxMgr] kill_all_tx done", K(timeguard), "manager", *this);
+  TRANS_LOG(INFO, "[LsTxCtxMgr] kill_all_tx done",
+      KR(ret), K(graceful), K(is_all_tx_cleaned_up), K(timeguard), "manager", *this);
   return ret;
 }
 
@@ -951,6 +954,7 @@ int ObLSTxCtxMgr::block(bool &is_all_tx_cleaned_up)
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
   }
+  TRANS_LOG(INFO, "[LsTxCtxMgr] block tx", KR(ret), K(is_all_tx_cleaned_up), "manager", *this);
   return ret;
 }
 
@@ -965,6 +969,7 @@ int ObLSTxCtxMgr::online()
   } else {
     online_ts_ = ObTimeUtility::current_time();
   }
+  TRANS_LOG(INFO, "[LsTxCtxMgr] online", KR(ret), "manager", *this);
   return ret;
 }
 
@@ -1421,6 +1426,7 @@ int ObTxCtxMgr::remove_all_ls_()
   if (OB_FAIL(remove_if_(fn))) {
     TRANS_LOG(WARN, "remove_if ls error", KR(ret));
   }
+  TRANS_LOG(INFO, "remove all ls", KR(ret));
 
   return ret;
 }
@@ -1444,6 +1450,7 @@ int ObTxCtxMgr::stop_ls_(const ObLSID &ls_id, const bool graceful)
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+  TRANS_LOG(INFO, "stop ls", KR(ret), K(ls_id), K(graceful));
   return ret;
 }
 
@@ -1477,6 +1484,7 @@ int ObTxCtxMgr::wait_ls_(const ObLSID &ls_id)
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+  TRANS_LOG(INFO, "wait ls", KR(ret), K(ls_id));
   return ret;
 }
 
@@ -1500,8 +1508,8 @@ int ObTxCtxMgr::init(const int64_t tenant_id,
     ts_mgr_ = ts_mgr;
     txs_ = txs;
     is_inited_ = true;
-    TRANS_LOG(INFO, "ObTxCtxMgr inited success", K(*this), KP(txs));
   }
+  TRANS_LOG(INFO, "ObTxCtxMgr inited", KR(ret), K(*this), KP(ts_mgr), KP(txs));
 
   return ret;
 }
@@ -1518,8 +1526,8 @@ int ObTxCtxMgr::start()
     TRANS_LOG(WARN, "ObTxCtxMgr is already running", K(*this));
   } else {
     is_running_ = true;
-    TRANS_LOG(INFO, "ObTxCtxMgr start success", K(*this));
   }
+  TRANS_LOG(INFO, "ObTxCtxMgr start", KR(ret), K(*this));
 
   return ret;
 }
@@ -1540,9 +1548,9 @@ int ObTxCtxMgr::stop()
       TRANS_LOG(WARN, "foreach ls to stop error", KR(ret));
     } else {
       is_running_ = false;
-      TRANS_LOG(INFO, "ObTxCtxMgr stop success", K(*this));
     }
   }
+  TRANS_LOG(INFO, "ObTxCtxMgr stop", KR(ret), K(*this));
   return ret;
 }
 
@@ -1594,6 +1602,7 @@ int ObTxCtxMgr::wait()
       }
     }
   }
+  TRANS_LOG(INFO, "ObTxCtxMgr wait", KR(ret), K(*this));
 
   return ret;
 }
@@ -1782,6 +1791,7 @@ int ObTxCtxMgr::block_ls(const ObLSID &ls_id, bool &is_all_tx_cleaned_up)
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+  TRANS_LOG(INFO, "block ls", KR(ret), K(ls_id), K(is_all_tx_cleaned_up));
   return ret;
 }
 
@@ -1806,6 +1816,7 @@ int ObTxCtxMgr::clear_all_tx(const ObLSID &ls_id)
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+  TRANS_LOG(INFO, "clear all tx", KR(ret), K(ls_id));
 
   return ret;
 }
@@ -1830,6 +1841,7 @@ int ObTxCtxMgr::kill_all_tx(const ObLSID &ls_id,
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
+  TRANS_LOG(INFO, "kill all tx", KR(ret), K(ls_id), K(graceful), K(is_all_tx_cleaned_up));
 
   return ret;
 }
@@ -2063,11 +2075,11 @@ int ObTxCtxMgr::create_ls(const int64_t tenant_id,
     ATOMIC_INC(&ls_alloc_cnt_);
     // need to revert the trans ctx ref explicitly
     ls_tx_ctx_mgr_map_.revert(ls_tx_ctx_mgr);
-    TRANS_LOG(INFO, "create ls success", K(tenant_id),
-          "total_alloc", ls_alloc_cnt_,
-          "total_release", ls_release_cnt_,
-          K(ls_id), KP(ls_tx_ctx_mgr));
   }
+  TRANS_LOG(INFO, "create ls", KR(ret), K(tenant_id),
+        "total_alloc", ls_alloc_cnt_,
+        "total_release", ls_release_cnt_,
+        K(ls_id), KP(ls_tx_ctx_mgr));
 
   return ret;
 }
@@ -2156,7 +2168,7 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
       // do nothing
     }
   }
-  UNUSED(MAX_RETRY_NUM);
+  TRANS_LOG(INFO, "remove ls", KR(ret), K(ls_id), K(graceful));
 
   return ret;
 }
