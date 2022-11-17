@@ -74,7 +74,7 @@ public:
       const ObLSMeta &src_ls_meta);
   //for ha rebuild update ls meta
   int set_ls_rebuild();
-  int check_valid_for_backup();
+  int check_valid_for_backup() const;
   int64_t get_tablet_change_checkpoint_ts() const;
   int set_tablet_change_checkpoint_ts(int64_t tablet_change_checkpoint_ts);
   int update_id_meta(const int64_t service_type,
