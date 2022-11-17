@@ -947,13 +947,13 @@ public:
   {
     meta_.set_urowid();
     v_.string_ = (const char *)urowid.rowid_content_;
-    val_len_ = urowid.rowid_len_;
+    val_len_ = static_cast<int32_t>(urowid.rowid_len_);
   }
   void set_urowid(const char *ptr, const int64_t size)
   {
     meta_.set_urowid();
     v_.string_ = ptr;
-    val_len_ = size;
+    val_len_ = static_cast<int32_t>(size);
   }
   //@}
 
@@ -2080,7 +2080,7 @@ inline void ObObj::set_lob_locator(const ObLobLocator &value)
   meta_.set_type(ObLobType);
   meta_.set_collation_level(CS_LEVEL_IMPLICIT);
   v_.lob_locator_ = &value;
-  val_len_ = value.get_total_size();
+  val_len_ = static_cast<int32_t>(value.get_total_size());
 }
 
 inline void ObObj::set_lob_locator(const ObObjType type, const ObLobLocator &value)
@@ -2089,7 +2089,7 @@ inline void ObObj::set_lob_locator(const ObObjType type, const ObLobLocator &val
   meta_.set_type(ObLobType);
   meta_.set_collation_level(CS_LEVEL_IMPLICIT);
   v_.lob_locator_ = &value;
-  val_len_ = value.get_total_size();
+  val_len_ = static_cast<int32_t>(value.get_total_size());
 }
 
 inline void ObObj::set_otimestamp_value(const ObObjType type, const ObOTimestampData &value)
@@ -3143,7 +3143,7 @@ template<>
 inline void ObObj::set_obj_value<ObURowIDData>(const ObURowIDData &urowid)
 {
   v_.string_ = (const char *)urowid.rowid_content_;
-  val_len_ = urowid.rowid_len_;
+  val_len_ = static_cast<int32_t>(urowid.rowid_len_);
 }
 
 struct ParamFlag
