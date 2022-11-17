@@ -480,7 +480,7 @@ int ObLSMeta::set_ls_rebuild()
   return ret;
 }
 
-int ObLSMeta::check_valid_for_backup()
+int ObLSMeta::check_valid_for_backup() const
 {
   int ret = OB_SUCCESS;
   ObSpinLockTimeGuard guard(lock_);
