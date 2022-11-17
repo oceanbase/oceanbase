@@ -222,6 +222,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0),
+    ddl_execution_id_(0),
+    ddl_cluster_version_(0),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()
@@ -250,6 +252,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0),
+    ddl_execution_id_(0),
+    ddl_cluster_version_(0),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()
@@ -277,6 +281,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0),
+    ddl_execution_id_(0),
+    ddl_cluster_version_(0),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()

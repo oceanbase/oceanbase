@@ -87,30 +87,33 @@ int ObTabletDDLKvMgr::init(const share::ObLSID &ls_id, const common::ObTabletID 
 // ddl start from checkpoint
 //    keep ddl sstable table
 
-int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t checkpoint_log_ts)
+int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
+                                const int64_t start_log_ts,
+                                const int64_t cluster_version,
+                                const int64_t execution_id,
+                                const int64_t checkpoint_log_ts)
 {
   int ret = OB_SUCCESS;
   bool is_brand_new = false;
+  TCWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || start_log_ts <= 0 || cluster_version < 0
+  } else if (OB_UNLIKELY(!table_key.is_valid() || start_log_ts <= 0 || execution_id < 0 || cluster_version < 0
         || (checkpoint_log_ts > 0 && checkpoint_log_ts < start_log_ts))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts), K(cluster_version), K(checkpoint_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts), K(execution_id), K(cluster_version), K(checkpoint_log_ts));
   } else if (table_key.get_tablet_id() != tablet_id_) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
   } else if (0 != start_log_ts_) {
-    if (start_log_ts > start_log_ts_) {
-      LOG_INFO("start log ts changed, need cleanup", K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts));
-      if (OB_FAIL(cleanup())) {
-        LOG_WARN("clean up start log failed", K(ret));
-      } else {
-        is_brand_new = true;
-      }
+    if (execution_id >= execution_id_ && start_log_ts > start_log_ts_) {
+      LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
+      cleanup_unlock();
+      is_brand_new = true;
     } else {
-      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts));
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
     }
   } else {
     is_brand_new = true;
@@ -118,6 +121,7 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64
   if (OB_SUCC(ret) && is_brand_new) {
     table_key_ = table_key;
     cluster_version_ = cluster_version;
+    execution_id_ = execution_id;
     start_log_ts_ = start_log_ts;
     max_freeze_log_ts_ = max(start_log_ts, checkpoint_log_ts);
   }
@@ -127,14 +131,13 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
     }
   }
-  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_log_ts), K(checkpoint_log_ts), K(*this));
+  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_log_ts), K(execution_id), K(checkpoint_log_ts), K(*this));
   return ret;
 }
 
 int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
                                   const int64_t prepare_log_ts,
                                   const uint64_t table_id,
-                                  const int64_t execution_id,
                                   const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
@@ -152,7 +155,6 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
     LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_log_ts));
   } else {
     table_id_ = table_id;
-    execution_id_ = execution_id;
     ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
@@ -291,22 +293,33 @@ int ObTabletDDLKvMgr::cleanup()
     LOG_WARN("not init", K(ret));
   } else {
     TCWLockGuard guard(lock_);
-    for (int64_t pos = head_; pos < tail_; ++pos) {
-      const int64_t idx = get_idx(pos);
-      free_ddl_kv(idx);
-    }
-    head_ = 0;
-    tail_ = 0;
-    MEMSET(ddl_kvs_, 0, sizeof(ddl_kvs_));
-    table_key_.reset();
-    cluster_version_ = 0;
-    start_log_ts_ = 0;
-    max_freeze_log_ts_ = 0;
-    table_id_ = 0;
-    execution_id_ = 0;
-    is_commit_success_ = false;
+    cleanup_unlock();
   }
   return ret;
+}
+
+void ObTabletDDLKvMgr::cleanup_unlock()
+{
+  for (int64_t pos = head_; pos < tail_; ++pos) {
+    const int64_t idx = get_idx(pos);
+    free_ddl_kv(idx);
+  }
+  head_ = 0;
+  tail_ = 0;
+  MEMSET(ddl_kvs_, 0, sizeof(ddl_kvs_));
+  table_key_.reset();
+  cluster_version_ = 0;
+  start_log_ts_ = 0;
+  max_freeze_log_ts_ = 0;
+  table_id_ = 0;
+  execution_id_ = 0;
+  is_commit_success_ = false;
+}
+
+bool ObTabletDDLKvMgr::is_execution_id_older(const int64_t execution_id)
+{
+  TCRLockGuard guard(lock_);
+  return execution_id < execution_id_;
 }
 
 int ObTabletDDLKvMgr::online()
@@ -333,9 +346,14 @@ int ObTabletDDLKvMgr::online()
     const int64_t start_log_ts = tablet_meta.ddl_start_log_ts_;
     if (OB_FAIL(ddl_start(table_key,
                           start_log_ts,
-                          GET_MIN_CLUSTER_VERSION(),
+                          tablet_meta.ddl_cluster_version_,
+                          tablet_meta.ddl_execution_id_,
                           tablet_meta.ddl_checkpoint_ts_))) {
-      LOG_WARN("start ddl kv manager failed", K(ret), K(tablet_meta));
+      if (OB_TASK_EXPIRED == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("start ddl kv manager failed", K(ret), K(tablet_meta));
+      }
     }
   }
   return ret;
@@ -371,6 +389,8 @@ int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t sn
     param.ddl_start_log_ts_ = start_log_ts;
     param.ddl_snapshot_version_ = snapshot_version;
     param.ddl_checkpoint_ts_ = ddl_checkpoint_ts;
+    param.ddl_execution_id_ = execution_id_;
+    param.ddl_cluster_version_ = cluster_version_;
     if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     } else {

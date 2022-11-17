@@ -261,7 +261,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
       LOG_WARN("invalid argument", K(ret), K(table_key));
     } else if (data_sstable_redo_writer_.get_start_log_ts() > 0) {
       // ddl start log is already written, do nothing
-    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, ddl_kv_mgr_handle_))) {
+    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, build_param_.execution_id_, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
     }
   }
@@ -679,8 +679,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
                                                                  build_param_.ddl_task_id_,
                                                                  prepare_log_ts))) {
     if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired, but return success", K(ret), K(table_key), K(build_param_));
-      ret = OB_SUCCESS;
+      LOG_INFO("ddl task expired", K(ret), K(table_key), K(build_param_));
     } else {
       LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
     }
@@ -699,20 +698,17 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_log_ts,
                                                                 prepare_log_ts,
                                                                 table_schema->get_table_id(),
-                                                                build_param_.execution_id_,
                                                                 build_param_.ddl_task_id_))) {
       if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
+        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
             K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-        ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(build_param_));
       }
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
       if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
+        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
             K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-        ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_log_ts), K(build_param_));
       }

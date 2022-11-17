@@ -97,6 +97,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     schema_version_ = schema_version;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     snapshot_version_ = task_record.snapshot_version_;
+    execution_id_ = task_record.execution_id_;
     tenant_id_ = task_record.tenant_id_;
     ret_code_ = task_record.ret_code_;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
@@ -113,6 +114,7 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
   UNUSED(tablet_id);
+  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -121,8 +123,10 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   } else if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
-  } else if (execution_id != redefinition_execution_id_) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(redefinition_execution_id_));
+  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
+    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
+  } else if (!is_latest_execution_id) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
@@ -157,7 +161,7 @@ int ObTableRedefinitionTask::send_build_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
-        redefinition_execution_id_,
+        execution_id_,
         sql_mode,
         trace_id_,
         parallelism_,
@@ -250,8 +254,9 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
-    redefinition_execution_id_ = ObTimeUtility::current_time();
-    if (OB_FAIL(send_build_replica_request())) {
+    if (OB_FAIL(push_execution_id())) {
+      LOG_WARN("failed to push execution id", K(ret));
+    } else if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
       build_replica_request_time_ = ObTimeUtility::current_time();
@@ -273,7 +278,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_data_dest_tables_columns_checksum(redefinition_execution_id_))) {
+      if (OB_FAIL(check_data_dest_tables_columns_checksum(execution_id_))) {
         LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
       }
     }

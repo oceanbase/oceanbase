@@ -76,7 +76,9 @@ public:
       const int64_t clog_checkpoint_ts = 0,
       const int64_t ddl_checkpoint_ts = 0,
       const int64_t ddl_start_log_ts = 0,
-      const int64_t ddl_snapshot_version = 0);
+      const int64_t ddl_snapshot_version = 0,
+      const int64_t ddl_execution_id = 0,
+      const int64_t ddl_cluster_version = 0);
   int init(
       common::ObIAllocator &allocator,
       const ObMigrationTabletParam &param);
@@ -134,7 +136,9 @@ public:
                K_(table_store_flag),
                K_(ddl_start_log_ts),
                K_(ddl_snapshot_version),
-               K_(max_sync_storage_schema_version));
+               K_(max_sync_storage_schema_version),
+               K_(ddl_execution_id),
+               K_(ddl_cluster_version));
 
 public:
   int32_t version_;
@@ -161,6 +165,8 @@ public:
   int64_t ddl_start_log_ts_;
   int64_t ddl_snapshot_version_;
   int64_t max_sync_storage_schema_version_;
+  int64_t ddl_execution_id_;
+  int64_t ddl_cluster_version_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
@@ -242,6 +248,8 @@ public:
   int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;
+  int64_t ddl_execution_id_;
+  int64_t ddl_cluster_version_;
 };
 
 } // namespace storage

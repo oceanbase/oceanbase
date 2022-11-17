@@ -162,8 +162,7 @@ ObIndexBuildTask::ObIndexBuildTask()
   : ObDDLTask(ObDDLType::DDL_CREATE_INDEX), index_table_id_(target_object_id_),
     is_unique_index_(false), is_global_index_(false), root_service_(nullptr), snapshot_held_(false),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), sstable_complete_ts_(0),
-    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX),
-    redefinition_execution_id_(0), create_index_arg_()
+    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX), create_index_arg_()
 {
 
 }
@@ -343,6 +342,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     index_table_id_ = index_table_id;
     schema_version_ = schema_version;
     snapshot_version_ = task_record.snapshot_version_;
+    execution_id_ = task_record.execution_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status_) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
@@ -641,7 +641,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
-        redefinition_execution_id_,
+        execution_id_,
         trace_id_,
         parallelism_,
         root_service_);
@@ -706,8 +706,9 @@ int ObIndexBuildTask::wait_data_complement()
 
   // submit a job to complete sstable for the index table on snapshot_version
   if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted_) {
-    redefinition_execution_id_ = ObTimeUtility::current_time();
-    if (OB_FAIL(send_build_single_replica_request())) {
+    if (OB_FAIL(push_execution_id())) {
+      LOG_WARN("failed to push execution id", K(ret));
+    } else if (OB_FAIL(send_build_single_replica_request())) {
       LOG_WARN("fail to send build single replica request", K(ret));
     }
   }
@@ -725,7 +726,7 @@ int ObIndexBuildTask::wait_data_complement()
   if (OB_SUCC(ret) && state_finished) {
     bool dummy_equal = false;
     if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-            tenant_id_, redefinition_execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
+            tenant_id_, execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to check column checksum", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
         state_finished = true;
@@ -866,7 +867,7 @@ int ObIndexBuildTask::verify_checksum()
     bool is_column_checksum_ready = false;
     bool dummy_equal = false;
     if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(
-            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, redefinition_execution_id_, checksum_wait_timeout))) {
+            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, execution_id_, checksum_wait_timeout))) {
       LOG_WARN("init context of wait column checksum failed", K(ret), K(object_id_), K(index_table_id_));
     } else {
       if (OB_FAIL(wait_column_checksum_ctx_.try_wait(is_column_checksum_ready))) {
@@ -879,7 +880,7 @@ int ObIndexBuildTask::verify_checksum()
       // do nothing
     } else {
       if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-              tenant_id_, redefinition_execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
+              tenant_id_, execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
         if (OB_CHECKSUM_ERROR == ret && is_unique_index_) {
           ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
         }
@@ -901,6 +902,7 @@ int ObIndexBuildTask::update_column_checksum_calc_status(
     const int ret_code)
 {
   int ret = OB_SUCCESS;
+  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -925,6 +927,7 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
     const int ret_code)
 {
   int ret = OB_SUCCESS;
+  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -937,8 +940,10 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
-  } else if (execution_id != redefinition_execution_id_) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(redefinition_execution_id_));
+  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
+    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
+  } else if (!is_latest_execution_id) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     sstable_complete_ts_ = ObTimeUtility::current_time();

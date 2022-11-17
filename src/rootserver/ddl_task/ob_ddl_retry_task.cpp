@@ -581,11 +581,12 @@ int ObDDLRetryTask::update_task_status_succ(
   int64_t affected_rows = 0;
   ObSqlString sql_string;
   int64_t curr_task_status = 0;
+  int64_t execution_id = 0; /*unused*/
   const int64_t new_task_status = ObDDLTaskStatus::SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, tenant_id, task_id, new_task_status))) {
     LOG_WARN("update task status failed", K(ret));
