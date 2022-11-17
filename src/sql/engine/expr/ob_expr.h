@@ -571,6 +571,7 @@ private:
   char *alloc_str_res_mem(ObEvalCtx &ctx, const int64_t size, const int64_t idx) const;
   // reset datums pointer to reserved buffer.
   void reset_datums_ptr(char *frame, const int64_t size) const;
+  void reset_datum_ptr(char *frame, const int64_t size, const int64_t idx) const;
   int eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const;
   int do_eval_batch(ObEvalCtx &ctx, const ObBitVector &skip, const int64_t size) const;
 
