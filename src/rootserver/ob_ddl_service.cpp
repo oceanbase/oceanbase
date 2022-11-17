@@ -2161,8 +2161,13 @@ int ObDDLService::set_new_table_options(
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify character or collation");
       } else if (alter_collation && alter_charset) {
         if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid charset", K(ret), K(charset_type), K(collation_type));
+          ret = OB_ERR_COLLATION_MISMATCH;
+          const char *cs_name = ObCharset::charset_name(charset_type);
+          const char *coll_name = ObCharset::collation_name(collation_type);
+          ObString charset = ObString::make_string(cs_name);
+          ObString collation = ObString::make_string(coll_name);
+          LOG_USER_ERROR(OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(),
+                           charset.length(), charset.ptr());
         } else {
           new_table_schema.set_collation_type(collation_type);
           new_table_schema.set_charset_type(charset_type);
