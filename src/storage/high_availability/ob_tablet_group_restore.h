@@ -420,6 +420,7 @@ private:
       const ObITable::TableKey &table_key,
       bool &need_copy);
   int record_server_event_();
+  int check_src_sstable_exist_();
 
 private:
   bool is_inited_;
