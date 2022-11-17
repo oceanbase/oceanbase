@@ -144,7 +144,7 @@ int ObKeepAliveLSHandler::on_success()
 
   SpinWLockGuard guard(lock_);
 
-  durable_keep_alive_info_ = tmp_keep_alive_info_;
+  durable_keep_alive_info_.replace(tmp_keep_alive_info_);
   stat_info_.stat_keepalive_info_ = durable_keep_alive_info_;
 
   ATOMIC_STORE(&is_busy_,false);
@@ -178,10 +178,11 @@ int ObKeepAliveLSHandler::replay(const void *buffer,
     TRANS_LOG(WARN, "[Keep Alive] deserialize log body error", K(ret), K(nbytes), K(pos));
   } else {
     SpinWLockGuard guard(lock_);
-    durable_keep_alive_info_.log_ts_ = ts_ns;
-    durable_keep_alive_info_.lsn_ = lsn;
-    durable_keep_alive_info_.min_start_scn_ = log_body.get_min_start_scn();
-    durable_keep_alive_info_.min_start_status_ = log_body.get_min_start_status();
+    tmp_keep_alive_info_.log_ts_ = ts_ns;
+    tmp_keep_alive_info_.lsn_ = lsn;
+    tmp_keep_alive_info_.min_start_scn_ = log_body.get_min_start_scn();
+    tmp_keep_alive_info_.min_start_status_ = log_body.get_min_start_status();
+    durable_keep_alive_info_.replace(tmp_keep_alive_info_);
     stat_info_.stat_keepalive_info_ = durable_keep_alive_info_;
   }
 

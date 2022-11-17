@@ -80,6 +80,18 @@ struct KeepAliveLsInfo
     min_start_status_ = MinStartScnStatus::UNKOWN;
   }
 
+  void replace(KeepAliveLsInfo info)
+  {
+    log_ts_ = info.log_ts_;
+    lsn_ = info.lsn_;
+
+    if (info.min_start_status_ == MinStartScnStatus::NO_CTX
+        || info.min_start_status_ == MinStartScnStatus::HAS_CTX) {
+      min_start_scn_ = info.min_start_scn_;
+      min_start_status_ = info.min_start_status_;
+    }
+  }
+
   TO_STRING_KV(K(log_ts_), K(lsn_), K(min_start_scn_), K(min_start_status_));
 };
 

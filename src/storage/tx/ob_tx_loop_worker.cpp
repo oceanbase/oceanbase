@@ -166,7 +166,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
         do_tx_gc_(cur_ls_ptr, min_start_scn, status);
       }
 
-      if(MinStartScnStatus::UNKOWN != status) {
+      if(MinStartScnStatus::UNKOWN == status) {
         // do nothing
       } else if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, proposal_id))) {
         TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));

@@ -453,6 +453,23 @@ int ObLSTxService::flush(int64_t rec_log_ts)
   return ret;
 }
 
+int ObLSTxService::flush_ls_inner_tablet(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_ls_inner_tablet()) {
+    TRANS_LOG(INFO, "not a ls inner tablet", KR(ret), K(tablet_id));
+  } else {
+    for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
+      if (OB_NOT_NULL(common_checkpoints_[i]) && common_checkpoints_[i]->get_tablet_id() == tablet_id &&
+          OB_FAIL(common_checkpoints_[i]->flush(INT64_MAX, true))) {
+        TRANS_LOG(WARN, "obCommonCheckpoint flush failed", KR(ret), KP(common_checkpoints_[i]));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTxService::get_common_checkpoint_info(
     ObIArray<ObCommonCheckpointVTInfo> &common_checkpoint_array)
 {

@@ -513,7 +513,6 @@ int ObTxDataMemtableScanIterator::periodical_get_next_commit_version_(ObCommitVe
     node.start_log_ts_ = tx_data->start_log_ts_;
     // use cur_max_commit_version_ to keep the commit versions monotonically increasing
     node.commit_version_ = cur_max_commit_version_;
-    // STORAGE_LOG(INFO, "GENGLI ", K(iter_cnt), K(PERIODICAL_SELECT_INTERVAL_NS), K(node));
     tx_data = nullptr;
   } else if (nullptr == cur_node_) {
     ret = OB_ITER_END;

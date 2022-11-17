@@ -136,6 +136,7 @@ public:
 
   int64_t get_rec_log_ts();
   int flush(int64_t rec_log_ts);
+  int flush_ls_inner_tablet(const ObTabletID &tablet_id);
 
   int get_common_checkpoint_info(
     ObIArray<checkpoint::ObCommonCheckpointVTInfo> &common_checkpoint_array);
