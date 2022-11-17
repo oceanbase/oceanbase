@@ -161,7 +161,7 @@ void ObQueryEngine::TableIndex::destroy()
   if (OB_NOT_NULL(base_)) {
     for (uint64_t i = 0; i < capacity_; ++i) {
       node = ATOMIC_LOAD(base_ + i);
-      if (OB_NOT_NULL(node)) {
+      if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
         node->destroy();
         memstore_allocator_.free(node);
         ATOMIC_STORE(base_ + i, nullptr);
@@ -200,7 +200,7 @@ int ObQueryEngine::TableIndex::dump_keyhash(FILE* fd) const
     for (uint64_t i = 0; i < capacity_; ++i) {
       TableIndexNode* node = nullptr;
       node = ATOMIC_LOAD(base_ + i);
-      if (OB_NOT_NULL(node)) {
+      if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
         fprintf(fd, "table_id=%lu\n", node->get_table_id());
         node->get_keyhash().dump_hash(fd, print_bucket_node, print_row_value, print_row_value_verbose);
       }
@@ -216,7 +216,7 @@ int64_t ObQueryEngine::TableIndex::hash_size() const
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       arr_size += node->get_keyhash().get_arr_size();
     }
   }
@@ -229,7 +229,7 @@ int64_t ObQueryEngine::TableIndex::hash_alloc_memory() const
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       alloc_mem += node->get_keyhash().get_alloc_memory();
     }
   }
@@ -241,7 +241,7 @@ int ObQueryEngine::TableIndex::dump_keybtree(FILE* fd)
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       fprintf(fd, "table_id=%lu\n", node->get_table_id());
       node->get_keybtree().dump(fd);
     }
@@ -255,7 +255,7 @@ int64_t ObQueryEngine::TableIndex::btree_size() const
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       obj_cnt += node->get_keybtree().size();
     }
   }
@@ -268,7 +268,7 @@ int64_t ObQueryEngine::TableIndex::btree_alloc_memory() const
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       alloc_mem += sizeof(keybtree::ObKeyBtree);
     }
   }
@@ -280,7 +280,7 @@ void ObQueryEngine::TableIndex::dump2text(FILE* fd)
   for (uint64_t i = 0; i < capacity_; ++i) {
     TableIndexNode* node = nullptr;
     node = ATOMIC_LOAD(base_ + i);
-    if (OB_NOT_NULL(node)) {
+    if (OB_NOT_NULL(node) && OB_LIKELY(PLACE_HOLDER != node)) {
       node->dump2text(fd);
     }
   }
