@@ -56,6 +56,7 @@ ob_unittest(test_qsync_lock lock/test_qsync_lock.cpp)
 ob_unittest(test_ob_occam_time_guard)
 ob_unittest(test_cluster_version)
 
+add_subdirectory(allocator)
 add_subdirectory(auto_increment)
 add_subdirectory(cache)
 add_subdirectory(client_feedback)

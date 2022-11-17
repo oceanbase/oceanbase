@@ -42,6 +42,7 @@ public:
   int check_min_rowkey_boundary(const blocksstable::ObDatumRowkey &max_rowkey, bool &may_exist);
   int refine_rowkeys();
   int clear_found_rowkey(const int64_t rowkey_idx);
+  void reuse_scan_mem_allocator() { scan_mem_allocator_.reuse(); }
   OB_INLINE bool all_rows_found() { return delete_count_ == rowkeys_.count(); }
   TO_STRING_KV(K_(rowkeys), K_(min_key), K_(table_id), K_(delete_count), K_(exist_helper));
 public:
