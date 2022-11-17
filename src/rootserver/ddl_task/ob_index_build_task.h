@@ -123,6 +123,9 @@ private:
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   int check_need_verify_checksum(bool &need_verify);
+  int check_need_acquire_lob_snapshot(const ObTableSchema *data_table_schema,
+                                      const ObTableSchema *index_table_schema,
+                                      bool &need_acquire);
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
