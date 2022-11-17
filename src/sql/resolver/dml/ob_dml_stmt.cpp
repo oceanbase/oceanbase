@@ -1572,7 +1572,7 @@ int ObDMLStmt::remove_part_expr_items(ObIArray<uint64_t> &table_ids)
 int ObDMLStmt::remove_part_expr_items(uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = part_expr_items_.count() - 1; i >= 0; --i) {
+  for (int64_t i = part_expr_items_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     if (table_id == part_expr_items_.at(i).table_id_) {
       if (OB_FAIL(part_expr_items_.remove(i))) {
         LOG_WARN("fail to remove part expr item", K(table_id), K(ret));
@@ -4183,6 +4183,35 @@ int ObDMLStmt::set_check_constraint_item(CheckConstraintItem &check_constraint_i
     LOG_TRACE("check constraint item exists", K(check_constraint_item), K(check_constraint_items_));
   } else if (OB_FAIL(check_constraint_items_.push_back(check_constraint_item))) {
     LOG_WARN("failed to push back", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::remove_check_constraint_item(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = check_constraint_items_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    if (table_id == check_constraint_items_.at(i).table_id_) {
+      if (OB_FAIL(check_constraint_items_.remove(i))) {
+        LOG_WARN("failed to remove check constraint item", K(ret), K(table_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_check_constraint_items(const uint64_t table_id,
+                                          CheckConstraintItem &check_constraint_item)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < check_constraint_items_.count(); ++i) {
+    if (table_id != check_constraint_items_.at(i).table_id_) {
+      // do nothing
+    } else if (OB_FAIL(check_constraint_item.assign(check_constraint_items_.at(i)))) {
+      LOG_WARN("failed to assign check constraint item", K(ret));
+    } else {
+      break;
+    }
   }
   return ret;
 }
