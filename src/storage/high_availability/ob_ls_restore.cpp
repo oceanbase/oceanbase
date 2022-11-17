@@ -189,7 +189,7 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
       index_store_param.tenant_id_ = MTL_ID();
       index_store_param.backup_set_id_ = backup_set_file_desc.backup_set_file_.backup_set_id_;
       index_store_param.ls_id_ = init_param->arg_.ls_id_;
-      index_store_param.is_tenant_level_ = false; 
+      index_store_param.is_tenant_level_ = false;
       index_store_param.backup_data_type_ = data_type;
       index_store_param.turn_id_ = backup_set_file_desc.backup_set_file_.data_turn_id_;
       backup_set_desc.backup_set_id_ = backup_set_file_desc.backup_set_file_.backup_set_id_;
@@ -202,19 +202,19 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
       } else if (OB_FAIL(store.get_max_sys_ls_retry_id(backup_path, init_param->arg_.ls_id_, retry_id))) {
         LOG_WARN("failed to get max sys retry id", K(ret), K(backup_path), KPC(init_param));
       } else {
-        index_store_param.retry_id_ = retry_id; 
+        index_store_param.retry_id_ = retry_id;
         LOG_INFO("get max sys ls retry id", "arg", init_param->arg_, K(retry_id));
       }
     }
-    
+
     share::ObBackupDest dest;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(meta_index_store_.init(mode, index_store_param,
-        init_param->arg_.restore_base_info_.backup_dest_, 
+        init_param->arg_.restore_base_info_.backup_dest_,
         backup_set_desc, false/*is_sec_meta*/, OB_BACKUP_INDEX_CACHE))) {
       LOG_WARN("failed to init meta index store", K(ret), KPC(init_param));
     } else if (OB_FAIL(second_meta_index_store_.init(mode, index_store_param,
-        init_param->arg_.restore_base_info_.backup_dest_, 
+        init_param->arg_.restore_base_info_.backup_dest_,
         backup_set_desc, true/*is_sec_meta*/, OB_BACKUP_INDEX_CACHE))) {
       LOG_WARN("failed to init macro index store", K(ret), KPC(init_param));
     }
@@ -245,7 +245,7 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
     if (OB_FAIL(ret)) {
       LOG_WARN("init ls restore dag param failed", K(ret));
     }
-  } 
+  }
 #endif
   return ret;
 }
@@ -871,7 +871,7 @@ int ObStartLSRestoreTask::process()
   } else if (OB_FAIL(generate_tablets_restore_dag_())) {
     LOG_WARN("failed to generate tablets retore dag", K(ret), K(*ctx_));
   }
-  
+
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
@@ -1059,7 +1059,7 @@ int ObStartLSRestoreTask::update_ls_meta_()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("restore ls should not be NULL", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ls->update_ls_meta(false/*don't update restore status*/, 
+  } else if (OB_FAIL(ls->update_ls_meta(false/*don't update restore status*/,
                                         ctx_->src_ls_meta_package_.ls_meta_))) {
     LOG_WARN("fail to update ls meta", K(ret), KPC(ls), KPC(ctx_));
   } else {
@@ -2041,6 +2041,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
     param.ls_id_ = ctx_->arg_.ls_id_;
     param.tablet_id_ = tablet_id;
     param.data_tablet_id_ = tablet_id;
+    param.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
     param.clog_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
     param.compat_mode_ = lib::Worker::get_compatibility_mode();
     param.multi_version_start_ = 0;
