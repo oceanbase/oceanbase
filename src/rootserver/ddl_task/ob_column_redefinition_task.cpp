@@ -97,6 +97,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     snapshot_version_ = task_record.snapshot_version_;
     tenant_id_ = task_record.tenant_id_;
+    ret_code_ = task_record.ret_code_;
     is_inited_ = true;
   }
   return ret;

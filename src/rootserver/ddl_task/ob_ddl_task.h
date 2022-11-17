@@ -52,7 +52,7 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
-      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version));
+      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
@@ -69,6 +69,7 @@ public:
   int64_t snapshot_version_;
   ObString message_;
   int64_t task_version_;
+  int64_t ret_code_;
   ObString ddl_stmt_str_;
 };
 
@@ -119,11 +120,17 @@ public:
       const int64_t task_id,
       const int64_t snapshot_version);
 
-  static int update_message(
-      common::ObMySQLProxy &proxy,
+  static int update_ret_code(
+      common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t task_id,
-      const char *message);
+      const int64_t ret_code);
+
+  static int update_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const ObString &message);
 
   static int delete_record(
       common::ObMySQLProxy &proxy,

@@ -207,6 +207,7 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     task_type_ = task_record.ddl_type_;
     parent_task_id_ = task_record.parent_task_id_;
     task_version_ = task_record.task_version_;
+    ret_code_ = task_record.ret_code_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     if (nullptr != task_record.message_) {
       int64_t pos = 0;
