@@ -80,6 +80,7 @@ class ObDDLKVHandle;
 class ObDDLKVsHandle;
 class ObStorageSchema;
 class ObTabletTableIterator;
+class ObMetaDiskAddr;
 
 class ObTablet
 {
@@ -309,6 +310,7 @@ public:
   const ObTabletPointerHandle &get_pointer_handle() { return pointer_hdl_; }
   const compaction::ObMediumCompactionInfoList &get_medium_compaction_info_list() const { return medium_info_list_; }
 
+  int get_meta_disk_addr(ObMetaDiskAddr &addr) const;
 
   int assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl);
 

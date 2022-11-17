@@ -1459,6 +1459,26 @@ int ObTablet::choose_and_save_storage_schema(
   return ret;
 }
 
+int ObTablet::get_meta_disk_addr(ObMetaDiskAddr &addr) const
+{
+  int ret = OB_SUCCESS;
+  const ObLSID &ls_id = tablet_meta_.ls_id_;
+  const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+  ObTabletPointer *tablet_ptr = nullptr;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer is null", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    addr = tablet_ptr->get_addr();
+  }
+
+  return ret;
+}
+
 int ObTablet::assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl)
 {
   int ret = OB_SUCCESS;
@@ -1751,11 +1771,10 @@ int ObTablet::try_update_start_scn()
   int ret = OB_SUCCESS;
   ObSSTable *first_minor = static_cast<ObSSTable *>(table_store_.get_minor_sstables().get_boundary_table(false /*first*/));
   const int64_t start_scn = OB_NOT_NULL(first_minor) ? first_minor->get_start_log_ts() : tablet_meta_.clog_checkpoint_ts_;
-  if (OB_UNLIKELY(start_scn < tablet_meta_.start_scn_)) {
-    // ignore ret on purpose
-    LOG_WARN("tablet start scn can not fallback", K(start_scn), K(tablet_meta_));
-  } else {
-    tablet_meta_.start_scn_ = start_scn;
+  const int64_t tablet_meta_scn = tablet_meta_.start_scn_;
+  tablet_meta_.start_scn_ = start_scn;
+  if (OB_UNLIKELY(start_scn < tablet_meta_scn)) {
+    FLOG_INFO("tablet start scn is small than tablet meta start scn", K(start_scn), K(tablet_meta_scn), K(tablet_meta_));
   }
   return ret;
 }
