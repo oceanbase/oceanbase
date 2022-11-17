@@ -76,6 +76,25 @@ public:
     }
   };
 
+  struct CalcUpperInfo
+  {
+    CalcUpperInfo() : min_start_scn_in_ctx_(0), keep_alive_scn_(0), update_ts_(0) {}
+
+    void reset()
+    {
+      min_start_scn_in_ctx_ = 0;
+      keep_alive_scn_ = 0;
+      update_ts_ = 0;
+    }
+
+    int64_t min_start_scn_in_ctx_;
+    int64_t keep_alive_scn_;
+    int64_t update_ts_;
+    common::SpinRWLock lock_;
+
+    TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
+  };
+
   using SliceAllocator = ObSliceAlloc;
 
   static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
@@ -104,8 +123,6 @@ public:  // ObTxDataTable
   ObTxDataTable()
     : is_inited_(false),
       is_started_(false),
-      min_start_log_ts_in_ctx_(0),
-      last_update_min_start_log_ts_(0),
       tablet_id_(0),
       mem_attr_(),
       slice_allocator_(),
@@ -115,6 +132,8 @@ public:  // ObTxDataTable
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
       read_schema_(),
+      calc_upper_info_(),
+      calc_upper_trans_version_cache_(),
       memtables_cache_() {}
   ~ObTxDataTable() {}
 
@@ -215,9 +234,8 @@ public:  // ObTxDataTable
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(is_started),
-               K_(min_start_log_ts_in_ctx),
-               K_(last_update_min_start_log_ts),
                K_(tablet_id),
+               K_(calc_upper_info),
                KP_(ls),
                KP_(ls_tablet_svr),
                KP_(memtable_mgr),
@@ -285,7 +303,11 @@ private:
   int DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
                                 const int64_t sstable_end_log_ts,
                                 int64_t &tmp_upper_trans_version);
-  bool skip_this_sstable_end_log_ts_(int64_t sstable_end_log_ts);
+  bool skip_this_sstable_end_log_ts_(const int64_t sstable_end_log_ts);
+  int check_min_start_in_ctx_(const int64_t sstable_end_log_ts, const int64_t max_decided_log_ts, bool &need_skip);
+  int check_min_start_in_tx_data_(const int64_t sstable_end_log_ts,
+                                  int64_t &min_start_ts_in_tx_data_memtable,
+                                  bool &need_skip);
 
   void print_alloc_size_for_test_();
 
@@ -293,7 +315,7 @@ private:
   void free_undo_status_list_(ObUndoStatusNode *node_ptr);
 
   void clean_sstable_cache_task_(int64_t cache_keeped_time);
-
+  void update_calc_upper_info_(const int64_t max_decided_log_ts);
 
   void TEST_print_alloc_size_()
   {
@@ -317,8 +339,6 @@ private:
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
-  int64_t min_start_log_ts_in_ctx_;
-  int64_t last_update_min_start_log_ts_;
   ObTabletID tablet_id_;
   ObMemAttr mem_attr_;
   // Allocator to allocate ObTxData and ObUndoStatus
@@ -331,6 +351,7 @@ private:
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
   TxDataReadSchema read_schema_;
+  CalcUpperInfo calc_upper_info_;
   CalcUpperTransVersionCache calc_upper_trans_version_cache_;
   MemtableHandlesCache memtables_cache_;
 };  // tx_table

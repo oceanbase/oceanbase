@@ -1007,8 +1007,13 @@ int ObLSTxCtxMgr::check_scheduler_status(int64_t &min_start_scn, MinStartScnStat
   if (OB_FAIL(ls_tx_ctx_map_.for_each(functor))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
   } else {
-    min_start_scn = functor.get_min_start_scn();
-    status = functor.get_min_start_status();
+    if (0 == ls_tx_ctx_map_.count()) {
+      min_start_scn = OB_INVALID_TIMESTAMP;
+      status = MinStartScnStatus::NO_CTX;
+    } else {
+      min_start_scn = functor.get_min_start_scn();
+      status = functor.get_min_start_status();
+    }
   }
 
   return ret;
