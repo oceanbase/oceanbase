@@ -5115,6 +5115,17 @@ def_table_schema(
 # 430 : __all_arbitration_service_replica_task
 # 431 : __all_meta_dictionary_location;
 # 432 : __all_arbitration_service_replica_task_history
+
+# 433 : __all_tenant_rls_policy
+# 434 : __all_tenant_rls_policy_history
+# 435 : __all_tenant_rls_security_column
+# 436 : __all_tenant_rls_security_column_history
+# 437 : __all_tenant_rls_group
+# 438 : __all_tenant_rls_group_history
+# 439 : __all_tenant_rls_context
+# 440 : __all_tenant_rls_context_history
+# 441 : __all_tenant_rls_attribute
+# 442 : __all_tenant_rls_attribute_history
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10819,6 +10830,17 @@ def_table_schema(
 # 12346: __all_virtual_balance_task
 # 12347: __all_virtual_balance_task_history
 
+# 12348: __all_virtual_tenant_rls_policy
+# 12349: __all_virtual_tenant_rls_policy_history
+# 12350: __all_virtual_tenant_rls_security_column
+# 12351: __all_virtual_tenant_rls_security_column_history
+# 12352: __all_virtual_tenant_rls_group
+# 12353: __all_virtual_tenant_rls_group_history
+# 12354: __all_virtual_tenant_rls_context
+# 12355: __all_virtual_tenant_rls_context_history
+# 12356: __all_virtual_tenant_rls_attribute
+# 12357: __all_virtual_tenant_rls_attribute_history
+
 #
 # 余留位置
 #
@@ -11079,6 +11101,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
 # 15274: __all_virtual_show_trace
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_keywords['__all_database_privilege']))
+# 15276: all_virtual_tenant_rls_policy_real_agent
+# 15277: all_virtual_tenant_rls_security_column_real_agent
+# 15278: all_virtual_tenant_rls_group_real_agent
+# 15279: all_virtual_tenant_rls_context_real_agent
+# 15280: all_virtual_tenant_rls_attribute_real_agent
 
 ################################################################################
 # System View (20000,30000]
@@ -44796,6 +44823,19 @@ FROM (
 # 28156: DBA_TRIGGER_ORDERING
 # 28157: USER_TRIGGER_ORDERING
 # 28158: DBA_OB_SWITCHOVER_CHECKPOINTS
+
+# 28159: DBA_POLICIES
+# 28160: ALL_POLICIES
+# 28161: USER_POLICIES
+# 28162: DBA_POLICY_GROUPS
+# 28163: ALL_POLICY_GROUPS
+# 28164: USER_POLICY_GROUPS
+# 28165: DBA_POLICY_CONTEXTS
+# 28166: ALL_POLICY_CONTEXTS
+# 28167: USER_POLICY_CONTEXTS
+# 28168: DBA_SEC_RELEVANT_COLS
+# 28169: ALL_SEC_RELEVANT_COLS
+# 28170: USER_SEC_RELEVANT_COLS
 
 ################################################################################
 # Lob Table (50000, 70000)
