@@ -2122,6 +2122,8 @@ int ObTabletRestoreTask::generate_restore_tasks_()
     LOG_ERROR("not inited", K(ret));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(tablet_restore_ctx_->replica_type_)) {
     LOG_INFO("no need to generate restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(check_src_sstable_exist_())) {
+    LOG_WARN("failed to check src sstable exist", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_tablet_copy_finish_task_(tablet_copy_finish_task))) {
     LOG_WARN("failed to generate tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_minor_restore_tasks_(tablet_copy_finish_task, parent_task))) {
@@ -2560,6 +2562,52 @@ int ObTabletRestoreTask::check_need_copy_sstable_(
     LOG_WARN("failed to get table info", K(ret), KPC(tablet_restore_ctx_), K(table_key));
   } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, tablet_restore_ctx_->tablet_handle_, need_copy))) {
     LOG_WARN("failed to check need copy sstable", K(ret), KPC(tablet_restore_ctx_), K(table_key));
+  }
+  return ret;
+}
+
+int ObTabletRestoreTask::check_src_sstable_exist_()
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  bool is_remote_logical_sstable_exist = false;
+  bool is_major_sstable_exist = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration task do not init", K(ret));
+  } else if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet_restore_ctx_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_key_array_.count(); ++i) {
+      const ObITable::TableKey &table_key = copy_table_key_array_.at(i);
+      if (table_key.is_major_sstable()) {
+        is_major_sstable_exist = true;
+      } else if (table_key.is_remote_logical_minor_sstable()) {
+        is_remote_logical_sstable_exist = true;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (ObTabletRestoreAction::is_restore_all(tablet_restore_ctx_->action_)) {
+        if (is_remote_logical_sstable_exist
+            || (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable())) {
+          ret = OB_SSTABLE_NOT_EXIST;
+          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+        }
+      } else if (ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)) {
+        if (is_remote_logical_sstable_exist) {
+          ret = OB_SSTABLE_NOT_EXIST;
+          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+        }
+      } else if (ObTabletRestoreAction::is_restore_major(tablet_restore_ctx_->action_)) {
+        if (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
+          ret = OB_SSTABLE_NOT_EXIST;
+          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+        }
+      }
+    }
   }
   return ret;
 }
