@@ -1214,6 +1214,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
+  const bool need_initial_state = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1222,7 +1223,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
   } else {
-    ObLSTabletIDIterator iter(ls->get_ls_id());
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));

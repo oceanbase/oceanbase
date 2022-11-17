@@ -139,31 +139,34 @@ int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 }
 
 
-ObLSTabletIDIterator::ObLSTabletIDIterator(const share::ObLSID &ls_id)
+ObHALSTabletIDIterator::ObHALSTabletIDIterator(
+    const share::ObLSID &ls_id,
+    const bool need_initial_state)
   : ls_id_(ls_id),
     tablet_ids_(),
-    idx_(0)
+    idx_(0),
+    need_initial_state_(need_initial_state)
 {
 }
 
-ObLSTabletIDIterator::~ObLSTabletIDIterator()
+ObHALSTabletIDIterator::~ObHALSTabletIDIterator()
 {
   reset();
 }
 
-bool ObLSTabletIDIterator::is_valid() const
+bool ObHALSTabletIDIterator::is_valid() const
 {
   return ls_id_.is_valid();
 }
 
-void ObLSTabletIDIterator::reset()
+void ObHALSTabletIDIterator::reset()
 {
   ls_id_.reset();
   tablet_ids_.reset();
   idx_ = 0;
 }
 
-int ObLSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
+int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -184,7 +187,7 @@ int ObLSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
         } else {
           LOG_WARN("failed to get tx data from tablet pointer", K(ret), K(key));
         }
-      } else if (ObTabletStatus::MAX == tx_data.tablet_status_) {
+      } else if (ObTabletStatus::MAX == tx_data.tablet_status_ && !need_initial_state_ ) {
         LOG_INFO("tablet is in initial state, should skip", K(ret), K(key));
         ++idx_;
       } else {

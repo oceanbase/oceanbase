@@ -947,7 +947,7 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to update_ls_", K(ret), K(*ctx_));
   } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
+  }  else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
     LOG_WARN("failed to deal local restore ls", K(ret), KPC(ctx_));
   } else if (!need_generate_dag) {
     //do nothing
@@ -1406,6 +1406,7 @@ int ObStartMigrationTask::try_remove_unneeded_tablets_()
   int64_t bucket_num = 0;
   ObArray<ObTabletID> tablet_id_array;
   const int64_t MAX_BUCKET_NUM = 1024;
+  const bool need_initial_state = true;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1435,7 +1436,7 @@ int ObStartMigrationTask::try_remove_unneeded_tablets_()
     }
 
     if (OB_SUCC(ret)) {
-      ObLSTabletIDIterator iter(ls->get_ls_id());
+      ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
       ObTabletID tablet_id;
       if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
         LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));

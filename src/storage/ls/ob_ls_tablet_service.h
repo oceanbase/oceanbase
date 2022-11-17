@@ -83,7 +83,7 @@ class ObTableHandleV2;
 class ObTableScanIterator;
 class ObSingleRowGetter;
 class ObLSTabletIterator;
-class ObLSTabletIDIterator;
+class ObHALSTabletIDIterator;
 class ObTabletMapKey;
 struct ObStorageLogParam;
 struct ObTabletCreateSSTableParam;
@@ -346,7 +346,7 @@ public:
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter);
-  int build_tablet_iter(ObLSTabletIDIterator &iter);
+  int build_tablet_iter(ObHALSTabletIDIterator &iter);
 
   // migration section
   int trim_rebuild_tablet(

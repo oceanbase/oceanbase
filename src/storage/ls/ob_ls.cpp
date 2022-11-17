@@ -1146,7 +1146,8 @@ int ObLS::get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, comm
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLOGMETA;
   int64_t write_lock = 0;
-  ObLSTabletIDIterator iter(ls_meta_.ls_id_);
+  const bool need_initial_state = false;
+  ObHALSTabletIDIterator iter(ls_meta_.ls_id_, need_initial_state);
   ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

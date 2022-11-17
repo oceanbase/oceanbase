@@ -509,6 +509,7 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
   }
 
   if (OB_SUCC(ret)) {
+    ObMetaDiskAddr tablet_addr;
     ObMultiBucketLockGuard lock_guard(bucket_lock_, true/*is_write_lock*/);
     if (OB_FAIL(lock_guard.lock_multi_buckets(all_tablet_id_hash_array))) {
       LOG_WARN("failed to lock multi buckets", K(ret));
@@ -522,12 +523,21 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cnt; ++i) {
         const ObTabletID &tablet_id = tablet_id_array.at(i);
         key.tablet_id_ = tablet_id;
+        tablet_addr.reset();
         if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
           if (OB_TABLET_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
             LOG_INFO("tablet does not exist, maybe already deleted", K(ret), K(key));
           } else {
             LOG_WARN("failed to get tablet", K(ret), K(key));
+          }
+        } else if (OB_FAIL(tablet_handle.get_obj()->get_meta_disk_addr(tablet_addr))) {
+          LOG_WARN("failed to get tablet addr", K(ret), K(key));
+        } else if (!tablet_addr.is_disked()) {
+          if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
+            LOG_WARN("failed to remove non disked tablet from memory", K(ret), K(key));
+          } else {
+            FLOG_INFO("succeeded to remove non disked tablet from memory", K(ret), K(key));
           }
         } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
           LOG_WARN("failed to push back tablet id", K(ret), K(tablet_id));
@@ -2885,6 +2895,8 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
       } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+      } else if (tablet_id.is_ls_inner_tablet()) {
+        //do nothing
       } else if (old_tablet->get_tablet_meta().clog_checkpoint_ts_ < new_tablet->get_tablet_meta().clog_checkpoint_ts_) {
         if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
           if (OB_ENTRY_EXIST == ret) {
@@ -5367,7 +5379,7 @@ int ObLSTabletService::build_tablet_iter(ObLSTabletIterator &iter)
   return ret;
 }
 
-int ObLSTabletService::build_tablet_iter(ObLSTabletIDIterator &iter)
+int ObLSTabletService::build_tablet_iter(ObHALSTabletIDIterator &iter)
 {
   int ret = common::OB_SUCCESS;
   GetAllTabletIDOperator op(iter.tablet_ids_);
