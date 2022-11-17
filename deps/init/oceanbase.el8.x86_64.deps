@@ -40,4 +40,10 @@ devdeps-oblogmsg-1.0-42022101823.el8.x86_64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.x86_64.rpm
 
 [test-utils]
-#ob-deploy-1.5.0-12.el8.x86_64.rpm target=community
+#RANGE_IF_BUSINESS
+ob-deploy-1.5.0-12.el8.x86_64.rpm target=community
+obclient-2.0.2-3.el8.x86_64.rpm target=community
+#RANGE_ELSE
+#ob-deploy-1.6.0-41.el8.x86_64.rpm target=community
+#obclient-2.0.2-3.el8.x86_64.rpm target=community
+#RANGE_END
