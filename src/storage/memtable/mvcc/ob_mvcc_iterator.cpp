@@ -94,6 +94,7 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   if (NULL != version_iter_) {
     if (ctx_->is_weak_read()) {
       version_iter_->set_safe_read_barrier(ctx_->snapshot_.version_);
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
     }
     if (!flag.is_prewarm()
         && !version_iter_->is_elr()) {
