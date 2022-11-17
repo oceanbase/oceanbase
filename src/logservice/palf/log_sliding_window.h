@@ -304,7 +304,8 @@ private:
   void try_reset_last_fetch_log_info_(const LSN &expected_end_lsn, const int64_t log_id);
   void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn,
       const int64_t &expected_log_id,
-      const LSN &log_committed_end_lsn);
+      const LSN &log_committed_end_lsn,
+      bool &is_need_fetch);
   void try_fetch_log_streamingly_(const LSN &log_end_lsn);
   int do_fetch_log_(const FetchTriggerType &trigger_type,
                     const common::ObAddr &dest,
