@@ -5899,6 +5899,7 @@ void ObBasePartition::reset()
   part_idx_ = OB_INVALID_INDEX;
   is_empty_partition_name_ = false;
   tablespace_id_ = OB_INVALID_ID;
+  name_.reset();
   ObSchema::reset();
 }
 
