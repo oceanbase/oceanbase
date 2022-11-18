@@ -115,7 +115,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
           break;
         }
         case (CHARACTER_MAXIMUM_LENGTH): {
-          if(common::ObStringTC == param_type.get_type_class()) {
+          if(common::ObStringTC == param_type.get_type_class()
+             || common::ObTextTC == param_type.get_type_class()) {
             cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_length()));
           } else {
             cells[col_idx].set_null();
@@ -123,8 +124,9 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
           break;
         }
         case (CHARACTER_OCTET_LENGTH): {
-          if(common::ObStringTC == param_type.get_type_class() 
-             && param_type.get_charset_type() != CHARSET_ANY) {
+          if((common::ObStringTC == param_type.get_type_class()
+             && param_type.get_charset_type() != CHARSET_ANY)
+             || common::ObTextTC == param_type.get_type_class()) {
             ObCollationType coll = param_type.get_collation_type();
             int64_t mbmaxlen = 0;
             if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(coll, mbmaxlen))) {
@@ -139,7 +141,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
           break;
         }
         case (NUMERIC_PRECISION): {
-          if(common::ObNumberTC == param_type.get_type_class()) {
+          if(common::ObNumberTC == param_type.get_type_class()
+             || common::ObIntTC == param_type.get_type_class()) {
             cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_precision()));
           } else {
             cells[col_idx].set_null();
@@ -149,14 +152,18 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
         case (NUMERIC_SCALE): {
           if(common::ObNumberTC == param_type.get_type_class()) {
             cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_scale()));
+          } else if(common::ObIntTC == param_type.get_type_class()
+                    || common::ObFloatTC == param_type.get_type_class()) {
+            cells[col_idx].set_uint64(0);
           } else {
             cells[col_idx].set_null();
           }
           break;
         }
         case (DATETIME_PRECISION): {
-          if(common::ObDateTimeTC == param_type.get_type_class()) {
-            cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_precision()));
+          if(common::ObDateTimeTC == param_type.get_type_class()
+             || ObTimeTC == param_type.get_type_class()) {
+            cells[col_idx].set_uint64(static_cast<uint64_t>(param_type.get_scale()));
           } else {
             cells[col_idx].set_null();
           }
