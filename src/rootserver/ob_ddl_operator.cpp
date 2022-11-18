@@ -4083,14 +4083,14 @@ int ObDDLOperator::drop_table(
     K(table_schema.get_table_id()));
   }
   if (OB_FAIL(ret)) {
-  } else if (table_schema.is_index_table() && !is_inner_table(table_schema.get_table_id())) {
+  } else if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id())) {
     ObSnapshotInfoManager snapshot_mgr;
     ObArray<ObTabletID> tablet_ids;
     if (OB_FAIL(snapshot_mgr.init(GCTX.self_addr()))) {
       LOG_WARN("fail to init snapshot mgr", K(ret));
     } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
       LOG_WARN("fail to get tablet ids", K(ret));
-    // when a index is dropped, it should release all snapshots acquired, otherwise
+    // when a index or lob is dropped, it should release all snapshots acquired, otherwise
     // if a building index is dropped in another session, the index build task cannot release snapshots
     // because the task needs schema to know tablet ids.
     } else if (OB_FAIL(snapshot_mgr.batch_release_snapshot_in_trans(
