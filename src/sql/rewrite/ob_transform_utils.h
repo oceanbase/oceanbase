@@ -1597,6 +1597,13 @@ public:
   static int check_table_contain_in_semi(const ObDMLStmt *stmt,
                                          const TableItem *table,
                                          bool &is_contain);
+
+  static int check_has_assignment(const ObDMLStmt &stmt, bool &has_assignment);
+
+  static int check_exprs_contain_lob_type(ObIArray<ObRawExpr *> &exprs, bool &has_lob);
+
+  static int check_expr_contain_lob_type(ObRawExpr *expr, bool &has_lob);
+
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

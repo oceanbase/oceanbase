@@ -487,6 +487,7 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   bool check_status = false;
   bool is_select_expr_valid = false;
   ObSEArray<ObRawExpr*, 8> select_exprs;
+  bool has_assign = false;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
@@ -494,7 +495,13 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
     LOG_WARN("failed to check select item has subquery", K(ret));
   } else if (!check_status) {
     can_be = false;
-  } else if (view_stmt->is_contains_assignment() || select_stmt->is_contains_assignment()) {
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*view_stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
+    can_be = false;
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*select_stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
     can_be = false;
   } else if (OB_FAIL(view_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
@@ -582,6 +589,7 @@ int ObTransformQueryPushDown::check_where_condition_push_down(ObSelectStmt *sele
                                                               bool &can_be)
 {
   int ret = OB_SUCCESS;
+  bool has_assign = false;
   can_be = false;
   transform_having = false;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
@@ -589,8 +597,11 @@ int ObTransformQueryPushDown::check_where_condition_push_down(ObSelectStmt *sele
     LOG_WARN("stmt is NULL", K(view_stmt), K(ret));
   } else if (view_stmt->is_set_stmt() ||
              view_stmt->has_limit() ||
-             view_stmt->has_window_function() ||
-             view_stmt->is_contains_assignment()) {
+             view_stmt->has_window_function()) {
+    can_be = false;
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*view_stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
     can_be = false;
   } else if (view_stmt->has_group_by() || view_stmt->has_rollup()) {
     bool is_invalid = false;
