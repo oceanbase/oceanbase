@@ -47,6 +47,7 @@ public:
     void run_plan_cache_task();
     void run_ps_cache_task();
     void run_free_cache_obj_task();
+    void run_auto_flush_plan_cache_task();
   public:
     ObPlanCacheManager *plan_cache_manager_;
     int64_t run_task_counter_;

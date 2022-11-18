@@ -277,17 +277,24 @@ int ObPlanCacheManager::revert_plan_cache(const uint64_t &tenant_id)
 
 void ObPlanCacheManager::ObPlanCacheEliminationTask::runTimerTask()
 {
+#define NEED_AUTO_FLUSH_PC(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(plan_cache_manager_)) {
     ret = OB_NOT_INIT;
     SQL_PC_LOG(WARN, "plan_cache_manager not inited", K(ret));
   } else {
+    ++run_task_counter_;
+    const int64_t auto_flush_pc_interval = (int64_t)(GCONF._ob_plan_cache_auto_flush_interval) / (1000 * 1000L); // second
     {
       // 在调用plan cache接口前引用plan资源前必须定义guard
       observer::ObReqTimeGuard req_timeinfo_guard;
 
       run_plan_cache_task();
       run_ps_cache_task();
+      if (NEED_AUTO_FLUSH_PC(auto_flush_pc_interval)
+        && 0 == run_task_counter_ % auto_flush_pc_interval) {
+        run_auto_flush_plan_cache_task();
+      }
       SQL_PC_LOG(INFO, "schedule next cache evict task",
                 "evict_interval", (int64_t)(GCONF.plan_cache_evict_interval));
     }
@@ -303,6 +310,15 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::runTimerTask()
                             false))) {
       SQL_PC_LOG(WARN, "Schedule new elimination failed", K(ret));
     }
+  }
+}
+
+void ObPlanCacheManager::ObPlanCacheEliminationTask::run_auto_flush_plan_cache_task()
+{
+  if (OB_ISNULL(plan_cache_manager_)) {
+    // do nothing
+  } else {
+    IGNORE_RETURN plan_cache_manager_->flush_all_plan_cache();
   }
 }
 
