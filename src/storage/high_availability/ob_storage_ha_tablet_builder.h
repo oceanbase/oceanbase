@@ -250,9 +250,6 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
-  //TODO(muwei.ym) using config to set max macro count
-  // static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
-  //TODO(muwei.ym) too small will fail because uncorrect handling corner case
   static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 1024;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;

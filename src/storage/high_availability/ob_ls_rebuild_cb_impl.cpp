@@ -14,6 +14,7 @@
 #include "ob_ls_rebuild_cb_impl.h"
 #include "ob_storage_ha_service.h"
 #include "share/ls/ob_ls_table_operator.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -86,6 +87,11 @@ int ObLSRebuildCbImpl::on_rebuild(
     LOG_WARN("ls no need rebuild", K(ret), K(lsn), KPC(ls_));
   } else if (OB_FAIL(execute_rebuild_())) {
     LOG_WARN("failed to execute rebuild", K(ret), K(lsn), KPC(ls_));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", "on_rebuild",
+                     "ls_id", ls_id.id(),
+                     "lsn", lsn,
+                     "rebuild_seq", ls_->get_rebuild_seq());
   }
   return ret;
 }

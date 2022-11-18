@@ -37,7 +37,9 @@ ObPhysicalCopyCtx::ObPhysicalCopyCtx()
     second_meta_index_store_(nullptr),
     ha_dag_(nullptr),
     sstable_index_builder_(nullptr),
-    restore_macro_block_id_mgr_(nullptr)
+    restore_macro_block_id_mgr_(nullptr),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -50,7 +52,7 @@ bool ObPhysicalCopyCtx::is_valid() const
   bool bool_ret = false;
   bool_ret = tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid()
       && OB_NOT_NULL(bandwidth_throttle_) && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(ha_dag_)
-      && OB_NOT_NULL(sstable_index_builder_);
+      && OB_NOT_NULL(sstable_index_builder_) && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
   if (bool_ret) {
     if (!is_leader_restore_) {
       bool_ret = src_info_.is_valid();
@@ -77,6 +79,8 @@ void ObPhysicalCopyCtx::reset()
   ha_dag_ = nullptr;
   sstable_index_builder_ = nullptr;
   restore_macro_block_id_mgr_ = nullptr;
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 /******************ObPhysicalCopyTaskInitParam*********************/
@@ -91,8 +95,9 @@ ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
     ls_(nullptr),
     is_leader_restore_(false),
     restore_base_info_(nullptr),
-    meta_index_store_(nullptr),
-    second_meta_index_store_(nullptr)
+    second_meta_index_store_(nullptr),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -104,7 +109,8 @@ bool ObPhysicalCopyTaskInitParam::is_valid() const
 {
   bool bool_ret = false;
   bool_ret = tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid() && OB_NOT_NULL(sstable_param_)
-      && sstable_macro_range_info_.is_valid() && OB_NOT_NULL(tablet_copy_finish_task_) && OB_NOT_NULL(ls_);
+      && sstable_macro_range_info_.is_valid() && OB_NOT_NULL(tablet_copy_finish_task_) && OB_NOT_NULL(ls_)
+      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
   if (bool_ret) {
     if (!is_leader_restore_) {
       bool_ret = src_info_.is_valid();
@@ -131,6 +137,8 @@ void ObPhysicalCopyTaskInitParam::reset()
   restore_base_info_ = nullptr;
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 /******************ObPhysicalCopyTask*********************/
@@ -519,6 +527,8 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     init_param.second_meta_index_store_ = copy_ctx_->second_meta_index_store_;
     init_param.restore_macro_block_id_mgr_ = copy_ctx_->restore_macro_block_id_mgr_;
     init_param.copy_macro_range_info_ = copy_macro_range_info_;
+    init_param.need_check_seq_ = copy_ctx_->need_check_seq_;
+    init_param.ls_rebuild_seq_ = copy_ctx_->ls_rebuild_seq_;
     if (!init_param.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("copy macro block reader init param is invalid", K(ret), K(init_param));
@@ -609,6 +619,8 @@ int ObPhysicalCopyFinishTask::init(
     copy_ctx_.ha_dag_ = ha_dag;
     copy_ctx_.sstable_index_builder_ = &sstable_index_builder_;
     copy_ctx_.restore_macro_block_id_mgr_ = restore_macro_block_id_mgr_;
+    copy_ctx_.need_check_seq_ = init_param.need_check_seq_;
+    copy_ctx_.ls_rebuild_seq_ = init_param.ls_rebuild_seq_;
     macro_range_info_index_ = 0;
     ls_ = init_param.ls_;
     sstable_param_ = init_param.sstable_param_;

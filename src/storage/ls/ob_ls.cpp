@@ -860,6 +860,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.need_rebuild_ = is_need_rebuild;
     ls_info.checkpoint_ts_ = ls_meta_.get_clog_checkpoint_ts();
     ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
+    ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
   }
   return ret;
 }

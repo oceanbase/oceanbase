@@ -53,6 +53,8 @@ public:
   ObArray<common::ObTabletID> data_tablet_id_array_;
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObHATabletGroupMgr tablet_group_mgr_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,

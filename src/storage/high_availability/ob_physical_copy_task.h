@@ -57,6 +57,8 @@ struct ObPhysicalCopyCtx
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyCtx);
 };
 
@@ -83,6 +85,8 @@ struct ObPhysicalCopyTaskInitParam final
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
 };
 

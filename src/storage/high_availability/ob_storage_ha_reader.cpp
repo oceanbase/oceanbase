@@ -93,7 +93,9 @@ ObCopyMacroBlockReaderInitParam::ObCopyMacroBlockReaderInitParam()
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
-    restore_macro_block_id_mgr_(nullptr)
+    restore_macro_block_id_mgr_(nullptr),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -104,7 +106,8 @@ ObCopyMacroBlockReaderInitParam::~ObCopyMacroBlockReaderInitParam()
 bool ObCopyMacroBlockReaderInitParam::is_valid() const
 {
   bool bool_ret = false;
-  bool_ret = tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && OB_NOT_NULL(copy_macro_range_info_);
+  bool_ret = tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && OB_NOT_NULL(copy_macro_range_info_)
+      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
   if (bool_ret) {
     if (!is_leader_restore_) {
       bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_) && OB_NOT_NULL(svr_rpc_proxy_);
@@ -132,6 +135,8 @@ void ObCopyMacroBlockReaderInitParam::reset()
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
   restore_macro_block_id_mgr_ = nullptr;
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 int ObCopyMacroBlockReaderInitParam::assign(const ObCopyMacroBlockReaderInitParam &param)
@@ -153,6 +158,8 @@ int ObCopyMacroBlockReaderInitParam::assign(const ObCopyMacroBlockReaderInitPara
     second_meta_index_store_ = param.second_meta_index_store_;
     restore_macro_block_id_mgr_ = param.restore_macro_block_id_mgr_;
     copy_macro_range_info_ = param.copy_macro_range_info_;
+    need_check_seq_ = param.need_check_seq_;
+    ls_rebuild_seq_ = param.ls_rebuild_seq_;
   }
   return ret;
 }
@@ -205,6 +212,8 @@ int ObCopyMacroBlockObReader::init(
         //TODO(yanfeng) fix backfill tx log ts and data version
         arg.backfill_tx_log_ts_ = 0;
         arg.data_version_ = 0;
+        arg.need_check_seq_ = param.need_check_seq_;
+        arg.ls_rebuild_seq_ = param.ls_rebuild_seq_;
         LOG_INFO("init arg", K(param), K(arg));
       }
 

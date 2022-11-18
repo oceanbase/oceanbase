@@ -75,6 +75,8 @@ struct ObCopyMacroBlockReaderInitParam final
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockReaderInitParam);

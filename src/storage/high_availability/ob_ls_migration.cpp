@@ -37,7 +37,7 @@ ObMigrationCtx::ObMigrationCtx()
     tenant_id_(OB_INVALID_ID),
     arg_(),
     local_clog_checkpoint_ts_(0),
-    local_rebuild_seq_(0),
+    local_rebuild_seq_(-1),
     start_ts_(0),
     finish_ts_(0),
     task_id_(),
@@ -66,7 +66,7 @@ void ObMigrationCtx::reset()
   tenant_id_ = OB_INVALID_ID;
   arg_.reset();
   local_clog_checkpoint_ts_ = 0;
-  local_rebuild_seq_ = 0;
+  local_rebuild_seq_ = -1;
   start_ts_ = 0;
   finish_ts_ = 0;
   task_id_.reset();
@@ -110,7 +110,7 @@ int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
 void ObMigrationCtx::reuse()
 {
   local_clog_checkpoint_ts_ = 0;
-  local_rebuild_seq_ = 0;
+  local_rebuild_seq_ = -1;
   minor_src_.reset();
   major_src_.reset();
   src_ls_meta_package_.reset();
@@ -1122,6 +1122,16 @@ int ObStartMigrationTask::choose_src_()
           }
         }
       }
+#if ERRSIM
+      const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
+      if (!errsim_server.empty() && !ctx_->arg_.ls_id_.is_sys_ls() && ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP) {
+        SERVER_EVENT_ADD("storage_ha", "after_choose_src",
+                         "tenant_id", ctx_->tenant_id_,
+                         "ls_id", ctx_->arg_.ls_id_.id(),
+                         "local_rebuild_seq", ctx_->local_rebuild_seq_);
+        DEBUG_SYNC(ALTER_LS_CHOOSE_SRC);
+      }
+#endif
 
       FLOG_INFO("succeed choose src",  K(src_info),
           K(ls_info), K(ctx_->sys_tablet_id_array_), K(ctx_->data_tablet_id_array_));
@@ -1199,11 +1209,14 @@ int ObStartMigrationTask::update_ls_()
       LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));
     } else if (end_lsn >= ctx_->src_ls_meta_package_.palf_meta_.curr_lsn_) {
       LOG_INFO("end lsn is bigger than src curr lsn, skip advance base info", "end_lsn",
-          end_lsn, "src palf meta", ctx_->src_ls_meta_package_.palf_meta_);
+          end_lsn, "src palf meta", ctx_->src_ls_meta_package_.palf_meta_,
+          "ls_id", ctx_->arg_.ls_id_);
     } else if (OB_FAIL(ls->advance_base_info(ctx_->src_ls_meta_package_.palf_meta_, is_rebuild))) {
       LOG_WARN("failed to advance base lsn for migration", K(ret), KPC(ctx_));
     } else {
       ctx_->local_clog_checkpoint_ts_ = ctx_->src_ls_meta_package_.ls_meta_.get_clog_checkpoint_ts();
+      LOG_INFO("update rebuild seq", "old_ls_rebuld_seq", ctx_->local_rebuild_seq_,
+          "new_ls_rebuild_seq", ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq(), K(lbt()));
       ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
     }
   }
@@ -2418,6 +2431,8 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
   } else if (FALSE_IT(init_param.src_info_ = src_info)) {
   } else if (FALSE_IT(init_param.tablet_copy_finish_task_ = tablet_copy_finish_task)) {
   } else if (FALSE_IT(init_param.ls_ = ls)) {
+  } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
+  } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
     LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
   } else if (OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
@@ -4041,6 +4056,7 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
     param.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
     param.is_leader_restore_ = false;
     param.local_rebuild_seq_ = local_rebuild_seq;
+    param.need_check_seq_ = true;
     param.ls_ = ls;
     param.meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
