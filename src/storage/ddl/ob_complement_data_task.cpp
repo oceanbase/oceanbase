@@ -219,6 +219,9 @@ int ObComplementDataParam::split_task_ranges(
                                                              ranges,
                                                              total_size))) {
       LOG_WARN("get multi ranges cost failed", K(ret));
+      if (OB_REPLICA_NOT_READABLE == ret) {
+        ret = OB_EAGAIN;
+      }
     } else if (OB_FALSE_IT(total_size = total_size / 1024 / 1024 /* Byte -> MB */)) {
     } else if (OB_FAIL(ObGranuleUtil::compute_total_task_count(params, 
                                                                total_size,
@@ -230,6 +233,9 @@ int ObComplementDataParam::split_task_ranges(
                                                           allocator_, 
                                                           multi_range_split_array))) {
       LOG_WARN("split multi ranges failed", K(ret));
+      if (OB_REPLICA_NOT_READABLE == ret) {
+        ret = OB_EAGAIN;
+      }
     } else if (multi_range_split_array.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected range split arr", K(ret), K(total_size), K(hint_parallelism), 
