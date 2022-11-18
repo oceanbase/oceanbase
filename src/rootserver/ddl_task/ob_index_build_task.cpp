@@ -863,7 +863,7 @@ int ObIndexBuildTask::verify_checksum()
 
   // send column checksum calculation request and wait finish, then verify column checksum
   if (OB_SUCC(ret) && !state_finished && check_unique_snapshot_ > 0) {
-    static int64_t checksum_wait_timeout = max(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT / 50, 3600L * 1000L * 1000L);
+    static int64_t checksum_wait_timeout = 10 * 1000 * 1000L; // 10s
     bool is_column_checksum_ready = false;
     bool dummy_equal = false;
     if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(

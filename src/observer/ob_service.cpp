@@ -530,6 +530,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
   } else {
     // schedule unique checking task
     const uint64_t tenant_id = arg.tenant_id_;
+    int saved_ret = OB_SUCCESS;
     MTL_SWITCH(tenant_id) {
       ObGlobalUniqueIndexCallback *callback = NULL;
       ObTenantDagScheduler* dag_scheduler = nullptr;
@@ -565,13 +566,16 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
           } else if (OB_TMP_FAIL(dag->alloc_unique_checking_prepare_task(callback))) {
             STORAGE_LOG(WARN, "fail to alloc unique checking prepare task", KR(tmp_ret));
           } else if (OB_TMP_FAIL(dag_scheduler->add_dag(dag))) {
-            if (OB_EAGAIN != tmp_ret && OB_SIZE_OVERFLOW != tmp_ret) {
-              STORAGE_LOG(WARN, "fail to add dag to queue", KR(tmp_ret));
-            } else {
+            saved_ret = tmp_ret;
+            if (OB_EAGAIN == tmp_ret) {
+              tmp_ret = OB_SUCCESS;
+            } else if (OB_SIZE_OVERFLOW == tmp_ret) {
               tmp_ret = OB_EAGAIN;
+            } else {
+              STORAGE_LOG(WARN, "fail to add dag to queue", KR(tmp_ret));
             }
           }
-          if (OB_SUCCESS != tmp_ret && NULL != dag) {
+          if (OB_SUCCESS != saved_ret && NULL != dag) {
             dag_scheduler->free_dag(*dag);
             dag = NULL;
           }
