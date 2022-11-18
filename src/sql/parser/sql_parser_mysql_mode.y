@@ -15726,6 +15726,10 @@ new_or_old:
 new_or_old_column_ref:
   new_or_old '.' column_name
 {
+  if (!result->is_for_trigger_) {
+    yyerror(&@2, result, "");
+    YYERROR;
+  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, $1, $3);
   dup_node_string($3, $$, result->malloc_pool_);
 #ifndef SQL_PARSER_COMPILATION

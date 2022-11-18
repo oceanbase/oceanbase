@@ -3880,7 +3880,7 @@ int ObSchemaPrinter::print_routine_definition(
     const ObStmtNodeTree *param_list = NULL;
     const ObStmtNodeTree *return_type = NULL;
     CK (!routine_body.empty());
-    OZ (parser.parse_routine_body(routine_body, parse_tree));
+    OZ (parser.parse_routine_body(routine_body, parse_tree, false));
     CK (OB_NOT_NULL(parse_tree));
     CK (T_STMT_LIST == parse_tree->type_);
     CK (1 == parse_tree->num_child_);
