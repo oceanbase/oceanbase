@@ -63,6 +63,7 @@ public:
       block_builder_(tx_id, cluster_id),
       lsn_arr_(),
       last_record_lsn_(),
+      last_normal_lsn_(),
       trans_type_(transaction::TransType::SP_TRANS),
       addr_(),
       cluster_version_(1),
@@ -73,6 +74,7 @@ public:
       epoch_(1024),
       last_op_scn_(2048),
       checksum_(29890209),
+      has_record_log_(false),
       allocator_()
   {
     addr_.set_ip_addr("127.0.0.1", 2881);
@@ -115,8 +117,14 @@ public:
         LOG_ERROR("lsn is not valid", KR(ret));
       } else if (OB_FAIL(block_builder_.next_log_block())) {
         LOG_ERROR("next_log_block failed", "log_entry_no", block_builder_.get_log_entry_no());
+      } else if (has_record_log_) {
+        last_record_lsn_ = lsn;
+        last_normal_lsn_ = lsn;
+        has_record_log_ = false;
       } else if (OB_FAIL(lsn_arr_.push_back(lsn))) {
         LOG_ERROR("push_back lsn to lsn_arr failed", KR(ret), K(lsn));
+      } else {
+        last_normal_lsn_ = lsn;
       }
     }
 
@@ -167,6 +175,7 @@ private:
   ObTxLogBlockBuilder block_builder_;
   ObLogLSNArray lsn_arr_;
   LSN last_record_lsn_;
+  LSN last_normal_lsn_;
   int32_t trans_type_;
   ObAddr addr_;
   int64_t cluster_version_;
@@ -177,6 +186,7 @@ private:
   int64_t epoch_;
   int64_t last_op_scn_;
   int64_t checksum_;
+  bool has_record_log_;
   common::ObArenaAllocator allocator_;
 };
 
@@ -253,8 +263,9 @@ void ObTxLogGenerator::gen_record_log()
   }
   ObTxRecordLog record_log(record_log_ref);
   LOG_DEBUG("gen record", K(record_log));
-  lsn_arr_.reset();
+  has_record_log_ = true;
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(record_log));
+  lsn_arr_.reset();
 }
 
 void ObTxLogGenerator::gen_commit_info_log()
@@ -308,9 +319,14 @@ void ObTxLogGenerator::gen_commit_log()
 palf::LSN ObTxLogGenerator::last_lsn_()
 {
   palf::LSN lsn;
-  const int64_t cnt = lsn_arr_.count();
-  if (cnt > 0) {
-    lsn = lsn_arr_.at(cnt - 1);
+  if (last_record_lsn_.is_valid()) {
+    if (last_normal_lsn_.is_valid()) {
+      lsn = std::max(last_record_lsn_, last_normal_lsn_);
+    } else {
+      lsn = last_record_lsn_;
+    }
+  } else {
+    lsn = last_normal_lsn_;
   }
   return lsn;
 }
