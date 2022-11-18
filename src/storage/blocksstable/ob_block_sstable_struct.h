@@ -717,7 +717,7 @@ public:
   static int get_serialized_size() { return sizeof(ObColClusterInfoMask); }
   static bool is_valid_col_idx_type(const BYTES_LEN col_idx_type)
   {
-    return col_idx_type >= BYTES_ZERO && col_idx_type <= BYTES_UINT16;
+    return col_idx_type >= BYTES_ZERO && col_idx_type <= BYTES_UINT8;
   }
   static bool is_valid_offset_type(const BYTES_LEN column_offset_type)
   {
@@ -885,6 +885,7 @@ public:
 
   static const int64_t CLUSTER_COLUMN_BYTES = 5;
   static const int64_t CLUSTER_COLUMN_CNT = 0x1 << CLUSTER_COLUMN_BYTES; // 32
+  static const int64_t MAX_CLUSTER_COLUMN_CNT = 256;
   static const int64_t CLUSTER_COLUMN_CNT_MASK = CLUSTER_COLUMN_CNT - 1;
   static const int64_t USE_CLUSTER_COLUMN_COUNT = CLUSTER_COLUMN_CNT * 1.5; // 48
   static bool need_rowkey_independent_cluster(const int64_t rowkey_count)
