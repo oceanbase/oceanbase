@@ -331,7 +331,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
   return ret;
 }
 
-int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_addr)
+int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_addr, int64_t init_size)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
@@ -345,7 +345,9 @@ int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_add
     LOG_WARN("var_index is invalid", K(var_index), K(var_index > ctx->params_->count()));
   } else {
     ObObjParam &obj_param = ctx->params_->at(var_index);
-    obj_param.set_extend(var_addr, obj_param.get_meta().get_extend_type(), obj_param.get_val_len());
+    obj_param.set_extend(var_addr,
+                         obj_param.get_meta().get_extend_type(),
+                         (0 == obj_param.get_val_len()) ? init_size : obj_param.get_val_len());
     obj_param.set_param_meta();
   }
   if (OB_SUCC(ret)) {
@@ -2299,6 +2301,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
 int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
+  int param_cnt = OB_NOT_NULL(params) ? params->count() : 0;
+
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
   if (OB_SUCC(ret) && OB_ISNULL(ctx_.exec_ctx_->get_pl_ctx())) {
     OZ (ctx_.exec_ctx_->init_pl_ctx());
@@ -2317,6 +2321,11 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       OX (param.set_meta_type(func_.get_variables().at(i).get_data_type()->get_meta_type()));
       OX (param.set_param_meta());
       OX (param.set_accuracy(func_.get_variables().at(i).get_data_type()->get_accuracy()));
+      if (OB_SUCC(ret) && i >= param_cnt) {
+        ObObjMeta null_meta = param.get_meta();
+        param.set_null();
+        param.set_null_meta(null_meta);
+      }
     } else if (func_.get_variables().at(i).is_ref_cursor_type()) {
       OX (param.set_is_ref_cursor_type(true));
       // CURSOR初始化为NULL
@@ -2327,7 +2336,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       LOG_WARN("found subtype in variables symbol table is unexpected", K(ret), K(i));
     } else {
       param.set_type(ObExtendType);
-      param.set_extend(0, PL_INVALID_TYPE);
+      param.set_extend(0, func_.get_variables().at(i).get_type());
       param.set_param_meta();
       param.set_udt_id(func_.get_variables().at(i).get_user_type_id());
     }
@@ -3071,7 +3080,7 @@ int ObPLFunction::set_variables_debuginfo(const ObPLSymbolDebugInfoTable &symbol
     OZ (var_debuginfo->deep_copy(allocator_, *symbol_debug_info_table.get_symbol(i)));
     OZ (variables_debuginfo_.push_back(var_debuginfo));
   }
-  LOG_INFO("set variable debuginfo", K(ret), K(variables_debuginfo_));
+  LOG_INFO("set variable debuginfo", K(ret), K(variables_debuginfo_), K(symbol_debug_info_table));
   return ret;
 }
 

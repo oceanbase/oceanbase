@@ -3966,6 +3966,10 @@ int ObPLStmtBlock::generate_symbol_debuginfo(
       ObPLLoop *loop_stmt = static_cast<ObPLLoop *>(stmt);
       CK (OB_NOT_NULL(loop_stmt));
       CK (OB_NOT_NULL(loop_stmt->get_body()));
+      if (OB_SUCC(ret) && PL_CURSOR_FOR_LOOP == stmt->get_type()) {
+        OZ (loop_stmt->get_body()
+          ->get_block()->generate_symbol_debuginfo(symbol_debuginfo_table));
+      }
       OZ (loop_stmt->get_body()->generate_symbol_debuginfo(symbol_debuginfo_table));
     } else if (PL_HANDLER == stmt->get_type()) {
       ObPLDeclareHandlerStmt *handler_stmt = static_cast<ObPLDeclareHandlerStmt *>(stmt);

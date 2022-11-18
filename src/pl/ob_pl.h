@@ -497,7 +497,9 @@ public:
   {
     return is_debug_mode()
         && get_tenant_id() != OB_SYS_TENANT_ID
-        && has_debug_priv();
+        && has_debug_priv()
+        && !ObTriggerInfo::is_trigger_package_id(get_package_id())
+        && !ObUDTObjectType::is_object_id(get_package_id());
   }
   bool should_init_as_session_cursor();
   /*
@@ -1089,7 +1091,8 @@ public:
 
   static int set_user_type_var(ObPLExecCtx *ctx,
                                int64_t var_index,
-                               int64_t var_addr);
+                               int64_t var_addr,
+                               int64_t init_size);
 
   static int set_implicit_cursor_in_forall(ObPLExecCtx *ctx, bool save_exception);
   static int unset_implicit_cursor_in_forall(ObPLExecCtx *ctx);
