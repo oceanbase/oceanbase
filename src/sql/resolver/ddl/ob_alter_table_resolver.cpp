@@ -4436,6 +4436,29 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
   return ret;
 }
 
+int ObAlterTableResolver::alter_column_expr_in_part_expr(
+    const ObColumnSchemaV2 &src_col_schema,
+    const ObColumnSchemaV2 &dst_col_schema,
+    ObRawExpr *part_expr)
+{
+  int ret = OB_SUCCESS;
+  if (part_expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(part_expr);
+    if (0 == column_ref->get_column_name().case_compare(src_col_schema.get_column_name())) {
+      column_ref->set_data_type(dst_col_schema.get_data_type());
+      column_ref->set_accuracy(dst_col_schema.get_accuracy());
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
+      ObRawExpr *sub_expr = part_expr->get_param_expr(i);
+      if (OB_FAIL(alter_column_expr_in_part_expr(src_col_schema, dst_col_schema, sub_expr))) {
+        LOG_WARN("alter column expr in part expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &table_schema,
                                                       const ObColumnSchemaV2 &src_col_schema,
                                                       const ObColumnSchemaV2 &dst_col_schema) 
@@ -4482,26 +4505,8 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
     if (OB_ISNULL(part_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null part expr", K(ret));
-    } else if (part_expr->is_column_ref_expr()) {
-      ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(part_expr);
-      if (0 == column_ref->get_column_name().case_compare(src_col_schema.get_column_name())) {
-        column_ref->set_data_type(dst_col_schema.get_data_type());
-        column_ref->set_accuracy(dst_col_schema.get_accuracy());
-      }
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
-        ObRawExpr *sub_expr = part_expr->get_param_expr(i);
-        if (OB_ISNULL(sub_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sub_expr should not be null", K(ret));
-        } else if (sub_expr->is_column_ref_expr()) {
-          ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(sub_expr);
-          if (0 == column_ref->get_column_name().case_compare(src_col_schema.get_column_name())) {
-            column_ref->set_data_type(dst_col_schema.get_data_type());
-            column_ref->set_accuracy(dst_col_schema.get_accuracy());
-          }
-        }
-      }
+    } else if (OB_FAIL(alter_column_expr_in_part_expr(src_col_schema, dst_col_schema, part_expr))) {
+      LOG_WARN("fail to alter column expr in part expr", K(ret), KPC(part_expr));
     }
     OZ (part_expr->formalize(session_info_));
     if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type ||
