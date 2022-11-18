@@ -638,12 +638,8 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
         LOG_WARN("minor sstable should not be NULL", K(ret), KP(table), K(minor_sstables));
       } else if (table->get_key() == param.table_key_) {
         const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
-        if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sstable->get_meta()))) {
-          LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
-        } else {
-          need_copy = false;
-          found = true;
-        }
+        found = true;
+        need_copy = false;
       }
     }
 
