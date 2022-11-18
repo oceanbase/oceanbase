@@ -874,8 +874,8 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
         LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
-      } else if (need_dec && OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObLogTsRange::MAX_TS,
-          trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+      } else if (need_dec && OB_FAIL(tablet->set_multi_data_for_commit(tx_data, ObLogTsRange::MAX_TS,
+          trans_flags.for_replay_, MemtableRefOp::DEC_REF))) {
         LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else {
         LOG_INFO("succeeded to dec ref for memtable in roll back operation", K(ret), K(ls_id), K(tablet_id), K(cnt));
