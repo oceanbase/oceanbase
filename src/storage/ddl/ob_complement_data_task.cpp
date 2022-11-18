@@ -1182,7 +1182,6 @@ int ObComplementMergeTask::process()
 int ObComplementMergeTask::add_build_hidden_table_sstable()
 {
   int ret = OB_SUCCESS;
-  int saved_ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
@@ -1233,11 +1232,9 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
                                                                 prepare_log_ts,
                                                                 param_->hidden_table_schema_->get_table_id(),
                                                                 param_->task_id_))) {
-      saved_ret = ret;
       LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(prepare_log_ts), K(hidden_table_key),
           K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
-      saved_ret = ret;
       LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
           K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
@@ -1246,9 +1243,6 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     } else {
       tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
-  }
-  if (OB_FAIL(ret)) {
-    ret = OB_TASK_EXPIRED == saved_ret ? OB_SUCCESS : ret;
   }
   return ret;
 }
