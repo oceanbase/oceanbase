@@ -5126,6 +5126,7 @@ def_table_schema(
 # 440 : __all_tenant_rls_context_history
 # 441 : __all_tenant_rls_attribute
 # 442 : __all_tenant_rls_attribute_history
+# 443 : __all_tenant_rewrite_rules
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11106,6 +11107,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # 15278: all_virtual_tenant_rls_group_real_agent
 # 15279: all_virtual_tenant_rls_context_real_agent
 # 15280: all_virtual_tenant_rls_attribute_real_agent
+# def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 
 ################################################################################
 # System View (20000,30000]
@@ -23250,7 +23252,7 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-
+# 21340:  DBA_OB_USER_DEFINED_RULES
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -44836,6 +44838,7 @@ FROM (
 # 28168: DBA_SEC_RELEVANT_COLS
 # 28169: ALL_SEC_RELEVANT_COLS
 # 28170: USER_SEC_RELEVANT_COLS
+# 28171: DBA_OB_USER_DEFINED_RULES
 
 ################################################################################
 # Lob Table (50000, 70000)
