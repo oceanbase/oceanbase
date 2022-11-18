@@ -539,6 +539,7 @@ int ObTabletBindingHelper::fix_unsynced_cnt_for_binding_info(const ObTabletID &t
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletBindingInfo binding_info;
+  const int64_t log_ts = INT64_MAX;
 
   if (OB_FAIL(get_tablet(tablet_id, tablet_handle))) {
     if (OB_NO_NEED_UPDATE == ret) {
@@ -549,7 +550,7 @@ int ObTabletBindingHelper::fix_unsynced_cnt_for_binding_info(const ObTabletID &t
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->get_ddl_data(binding_info))) {
     LOG_WARN("failed to get ddl data", KR(ret));
-  } else if (OB_FAIL(tablet->back_fill_log_ts_for_commit(binding_info))) {
+  } else if (OB_FAIL(tablet->clear_unsynced_cnt_for_tx_end_if_need(binding_info, log_ts, trans_flags_.for_replay_))) {
     LOG_WARN("failed to prepare binding info", KR(ret), K(binding_info));
   }
 
