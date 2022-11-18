@@ -10572,6 +10572,61 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(ObSelectStm
   return ret;
 }
 
+int ObTransformUtils::check_exprs_contain_lob_type(ObIArray<ObRawExpr *> &exprs, bool &has_lob)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> col_exprs;
+  has_lob = false;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(exprs, col_exprs))) {
+    LOG_WARN("extract colum failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_lob && i < col_exprs.count(); i++) {
+    ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(col_exprs.at(i));
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("epxr is null", K(ret));
+    } else {
+      has_lob = (ObLobType == col_expr->get_result_type().get_type() ||
+		    ObLongTextType == col_expr->get_result_type().get_type());
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_expr_contain_lob_type(ObRawExpr *expr, bool &has_lob)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 1> exprs;
+  if (OB_FAIL(exprs.push_back(expr))) {
+    LOG_WARN("push back failed", K(ret));
+  } else if (OB_FAIL(check_exprs_contain_lob_type(exprs, has_lob))) {
+    LOG_WARN("expr contains lob failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_has_assignment(const ObDMLStmt &stmt, bool &has_assignment)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 4> childs;
+  has_assignment = stmt.is_contains_assignment();
+  if (has_assignment) {
+    //do nothing
+  } else if (OB_FAIL(stmt.get_child_stmts(childs))) {
+    LOG_WARN("get sel exprs failed", K(ret));
+  } else {
+    for (int64_t i=0; OB_SUCC(ret) && !has_assignment && i < childs.count(); i++) {
+      if (OB_ISNULL(childs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stmt is null", K(ret));
+      } else if (SMART_CALL(check_has_assignment(*childs.at(i), has_assignment))) {
+        LOG_WARN("check_assignment failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                             ObSelectStmt *right_query)
 {

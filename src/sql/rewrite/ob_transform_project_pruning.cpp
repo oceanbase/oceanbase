@@ -121,6 +121,63 @@ int ObTransformProjectPruning::transform_table_items(ObDMLStmt *&stmt,
   return ret;
 }
 
+int ObTransformProjectPruning::is_const_expr(ObRawExpr* expr, bool &is_const)
+{
+  int ret = OB_SUCCESS;
+  is_const = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (expr->is_const_expr()) {
+    is_const = true;
+  } else if (expr->is_set_op_expr()) {
+    is_const = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_const && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(is_const_expr(expr->get_param_expr(i), is_const)))) {
+        LOG_WARN("failed to check is const expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformProjectPruning::check_transform_validity(const ObSelectStmt &stmt, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  bool is_const = false;
+  bool has_assign = true;
+  if (stmt.has_distinct() || stmt.is_scala_group_by() ||
+      stmt.is_recursive_union() || (stmt.is_set_stmt() && stmt.is_set_distinct()) ||
+      stmt.is_hierarchical_query()) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
+    //do nothing
+  } else if (stmt.get_select_item_size() == 1
+             && OB_FAIL(is_const_expr(stmt.get_select_item(0).expr_, is_const))) {
+      LOG_WARN("failed to check is const expr", K(ret));
+  } else if (is_const) {
+    // do nothing, only with a dummy output
+  } else if (stmt.is_set_stmt()) {
+    is_valid = true;
+    const ObIArray<ObSelectStmt*> &child_stmts = stmt.get_set_query();
+    ObRawExpr *order_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child query is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_transform_validity(*child_stmts.at(i), is_valid)))) {
+        LOG_WARN("failed to check transform validity", K(ret));
+      }
+    }
+  } else {
+    is_valid = true;
+  }
+  return ret;
+}
+
 int ObTransformProjectPruning::project_pruning(const uint64_t table_id,
                                                ObSelectStmt &child_stmt,
                                                ObDMLStmt &upper_stmt,
