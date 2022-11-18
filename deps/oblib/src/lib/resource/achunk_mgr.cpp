@@ -23,6 +23,7 @@
 #include "lib/alloc/alloc_struct.h"
 #include "lib/alloc/alloc_failed_reason.h"
 #include "lib/alloc/memory_sanity.h"
+#include "lib/stat/ob_diagnose_info.h"
 
 using namespace oceanbase::lib;
 
@@ -67,6 +68,8 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
+  EVENT_INC(MMAP_COUNT);
+  EVENT_ADD(MMAP_SIZE, size);
 
   void *ptr = nullptr;
   ptr = low_alloc(size, can_use_huge_page, huge_page_used, alloc_shadow);
@@ -111,7 +114,8 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 void AChunkMgr::direct_free(const void *ptr, const uint64_t size)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
-
+  EVENT_INC(MUNMAP_COUNT);
+  EVENT_ADD(MUNMAP_SIZE, size);
   ATOMIC_FAA(&unmaps_, 1);
   if (size > INTACT_ACHUNK_SIZE) {
     ATOMIC_FAA(&large_unmaps_, 1);

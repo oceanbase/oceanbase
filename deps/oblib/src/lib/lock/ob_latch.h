@@ -228,7 +228,6 @@ public:
   inline bool is_wrlocked_by(const uint32_t *puid = NULL) const;
   inline uint32_t get_wid() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
-  void enable_record_stat(bool enable) { record_stat_ = enable; }
 
 private:
   template<typename LowTryLock>
@@ -261,7 +260,6 @@ private:
   static const uint32_t WAIT_MASK = 1<<31;
   static const uint32_t MAX_READ_LOCK_CNT = 1<<24;
   volatile uint32_t lock_;
-  bool record_stat_;
 };
 
 struct ObLDLockType

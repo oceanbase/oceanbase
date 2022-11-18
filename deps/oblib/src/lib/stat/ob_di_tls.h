@@ -14,7 +14,6 @@
 #define OB_DI_TLS_H_
 
 #include "lib/ob_define.h"
-#include "lib/allocator/ob_malloc.h"
 
 namespace oceanbase
 {
@@ -25,44 +24,92 @@ template <class T>
 class ObDITls
 {
 public:
-  static T* get_instance();
+  static ObDITls &get_di_tls();
+  void destroy();
+  T *new_instance();
+  static T *get_instance();
 private:
-  ~ObDITls();
+  ObDITls() : key_(INT32_MAX)
+  {
+    if (0 != pthread_key_create(&key_, destroy_thread_data_)) {
+    }
+  }
+  ~ObDITls() { destroy(); }
+  static void destroy_thread_data_(void *ptr);
 private:
-  T* instance_;
-  bool disable_;
+  pthread_key_t key_;
+  static TLOCAL(T *, instance_);
+  static TLOCAL(bool, disable_);
 };
+// NOTE: thread local diagnose information
+// TODO: check if multi-query execute within one thread.
+template <class T>
+TLOCAL(T *, ObDITls<T>::instance_);
+template <class T>
+TLOCAL(bool, ObDITls<T>::disable_);
 
 template <class T>
-ObDITls<T>::~ObDITls()
+void ObDITls<T>::destroy_thread_data_(void *ptr)
 {
-  if (OB_NOT_NULL(instance_)) {
-    T* tls = instance_;
-    instance_ = nullptr;
+  if (NULL != ptr) {
+    T *tls = (T *)ptr;
+    instance_ = NULL;
     disable_ = true;
-    //delete tls;
-    ob_delete(tls);
+    delete tls;
   }
 }
 
 template <class T>
-T* ObDITls<T>::get_instance()
+ObDITls<T> &ObDITls<T>::get_di_tls()
 {
-  static thread_local ObDITls<T> di_tls;
-  if (OB_ISNULL(di_tls.instance_)) {
-    if (OB_LIKELY(!di_tls.disable_)) {
-      const char* label = "DITls";
-      //if (OB_NOT_NULL(ob_get_origin_thread_name())) {
-      //  label = ob_get_origin_thread_name();
-      //}
-      di_tls.disable_ = true;
-      // add tenant
-      di_tls.instance_ = OB_NEW(T, label);
-      //instance_ = new T();
-      di_tls.disable_ = false;
+  static ObDITls<T> di_tls;
+  return di_tls;
+}
+
+template <class T>
+void ObDITls<T>::destroy()
+{
+  if (INT32_MAX != key_) {
+    void *ptr = pthread_getspecific(key_);
+    destroy_thread_data_(ptr);
+    if (0 != pthread_key_delete(key_)) {
+    } else {
+      key_ = INT32_MAX;
     }
   }
-  return di_tls.instance_;
+}
+
+template <class T>
+T *ObDITls<T>::new_instance()
+{
+  T *instance = NULL;
+  if (INT32_MAX != key_) {
+    T *tls = (T *)pthread_getspecific(key_);
+    if (NULL == tls) {
+      tls = new (std::nothrow) T();
+      if (NULL != tls && 0 != pthread_setspecific(key_, tls)) {
+        delete tls;
+        tls = NULL;
+      }
+    }
+    if (NULL != tls) {
+      instance = tls;
+    }
+  }
+  return instance;
+}
+
+template <class T>
+T *ObDITls<T>::get_instance()
+{
+  if (OB_UNLIKELY(NULL == instance_)) {
+    if (OB_LIKELY(!disable_)) {
+      disable_ = true;
+      instance_ = get_di_tls().new_instance();
+      disable_ = false;
+    }
+  }
+  return instance_;
 }
 
 }

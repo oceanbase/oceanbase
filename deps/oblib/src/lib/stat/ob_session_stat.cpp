@@ -67,5 +67,9 @@ ObSessionStatEstGuard::~ObSessionStatEstGuard()
   }
 }
 
+void  __attribute__((constructor(101))) init_SessionDIBuffer()
+{
+  oceanbase::common::ObDITls<ObSessionDIBuffer>::get_instance();
+}
 } /* namespace common */
 } /* namespace oceanbase */

@@ -543,7 +543,7 @@ void ObLockDiagnose::print()
 #endif
 
 ObLatch::ObLatch()
-  : lock_(0), record_stat_(true)
+  : lock_(0)
 {
 }
 
@@ -590,7 +590,7 @@ int ObLatch::try_rdlock(const uint32_t latch_id)
       PAUSE();
     } while (true);
 
-    TRY_LOCK_RECORD_STAT(latch_id, i, ret, record_stat_);
+    TRY_LOCK_RECORD_STAT(latch_id, i, ret, true);
   }
   HOLD_LOCK_INC();
   return ret;
@@ -610,7 +610,7 @@ int ObLatch::try_wrlock(const uint32_t latch_id, const uint32_t *puid)
       ret = OB_EAGAIN;
     }
 
-    TRY_LOCK_RECORD_STAT(latch_id, 1, ret, record_stat_);
+    TRY_LOCK_RECORD_STAT(latch_id, 1, ret, true);
   }
   HOLD_LOCK_INC();
   return ret;
@@ -791,7 +791,7 @@ OB_INLINE int ObLatch::low_lock(
       }
     }
 
-    LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt, record_stat_);
+    LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt, true);
   }
   return ret;
 }
