@@ -94,7 +94,7 @@ public:
     : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0),
                     tenant_id_(tenant_id), whole_msg_(), received_msgs_() {}
   ~ObRollupKeyPieceMsgCtx() = default;
-  void destroy()
+  virtual void destroy()
   {
     received_msgs_.reset();
   }
