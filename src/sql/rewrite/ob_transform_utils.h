@@ -1227,6 +1227,10 @@ public:
                                      const ObIArray<TableItem*> &table_items,
                                      ObRelIds &rel_ids);
 
+  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                    const TableItem *table_item,
+                                    ObRelIds &rel_ids);
+
   static int get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
                                              SemiInfo *info,
                                              ObSqlBitSet<> &rel_ids);
@@ -1590,6 +1594,9 @@ public:
   static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
                                 ObIArray<ObRawExpr *> &output_exprs);
 
+  static int check_table_contain_in_semi(const ObDMLStmt *stmt,
+                                         const TableItem *table,
+                                         bool &is_contain);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

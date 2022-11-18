@@ -696,63 +696,32 @@ int ObTransformJoinElimination::check_transform_validity_outer_join(
   } else {
     need_check_relation_exprs = true;
   }
+  if (OB_SUCC(ret) && need_check_relation_exprs) {
+    bool contained = false;
+    if (OB_FAIL(ObTransformUtils::check_table_contain_in_semi(stmt,
+                                                              joined_table->right_table_,
+                                                              contained))) {
+      LOG_WARN("failed to check table contained in semi", K(ret));
+    } else if (contained) {
+      need_check_relation_exprs = false;
+    }
+  }
 
   if (OB_SUCC(ret) && need_check_relation_exprs) {
-    ObSqlBitSet<> semi_left_rel_ids;
     ObSqlBitSet<8, int64_t> right_rel_ids;
     ObSEArray<ObRawExpr *, 8> join_conditions;
     if (OB_FAIL(join_conditions.assign(joined_table->join_conditions_))) {
       LOG_WARN("failed to push back to join conditions.", K(ret));
-    } else if (OB_FAIL(extract_semi_left_rel_ids(stmt,
-                                                 joined_table->right_table_,
-                                                 semi_left_rel_ids))) {
-      LOG_WARN("failed to extract semi info left table rel ids", K(ret));
     } else if (OB_FAIL(extract_child_conditions(stmt,
                                                 joined_table->right_table_,
                                                 join_conditions,
                                                 right_rel_ids))) {
       LOG_WARN("failed to extract right child exprs.", K(ret));
-    } else if (OB_FAIL(adjust_relation_exprs(semi_left_rel_ids,
-                                             right_rel_ids,// right table not use by any other expr
+    } else if (OB_FAIL(adjust_relation_exprs(right_rel_ids,// right table not use by any other expr
                                              join_conditions,
                                              relation_exprs,
                                              is_valid))) {
       LOG_WARN("failed to check expr in select items.", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTransformJoinElimination::extract_semi_left_rel_ids(ObDMLStmt *stmt,
-                                                          TableItem *table_item,
-                                                          ObSqlBitSet<> &semi_left_rel_ids)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_infos().count(); ++i) {
-      SemiInfo *semi = stmt->get_semi_infos().at(i);
-      ObSEArray<uint64_t, 4> r_table_ids;
-      ObSEArray<uint64_t, 4> common_table_ids;
-      if (OB_ISNULL(semi)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("semi info is null", K(ret));
-      } else if (table_item->is_joined_table() &&
-                 OB_FAIL(r_table_ids.assign(static_cast<JoinedTable *>(table_item)->single_table_ids_))) {
-      } else if (!table_item->is_joined_table() &&
-                 OB_FAIL(r_table_ids.push_back(table_item->table_id_))) {
-        LOG_WARN("failed to push back joined table", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::intersect(semi->left_table_ids_, r_table_ids, common_table_ids))) {
-        LOG_WARN("failed to intersect table ids", K(ret));
-      } else if (!common_table_ids.empty()) {
-        for (int64_t j = 0; OB_SUCC(ret) && j < common_table_ids.count(); ++j) {
-          if (OB_FAIL(semi_left_rel_ids.add_member(stmt->get_table_bit_index(common_table_ids.at(j))))) {
-            LOG_WARN("failed to add semi join left table ids", K(ret));
-          }
-        }
-      }
     }
   }
   return ret;
@@ -799,8 +768,7 @@ int ObTransformJoinElimination::extract_child_conditions(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformJoinElimination::adjust_relation_exprs(const ObSqlBitSet<> &semi_left_rel_ids,
-                                                      const ObSqlBitSet<8, int64_t> &right_rel_ids,
+int ObTransformJoinElimination::adjust_relation_exprs(const ObSqlBitSet<8, int64_t> &right_rel_ids,
                                                       const ObIArray<ObRawExpr *> &join_conditions,
                                                       ObIArray<ObRawExpr *> &relation_exprs,
                                                       bool &is_valid)
@@ -813,8 +781,6 @@ int ObTransformJoinElimination::adjust_relation_exprs(const ObSqlBitSet<> &semi_
     LOG_WARN("failed to assign to all exprs.", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(all_exprs, join_conditions))) {
     LOG_WARN("faile to remove item from all stmt exprs.", K(ret));
-  } else if (OB_FAIL(select_rel_ids.add_members2(semi_left_rel_ids))) {
-    LOG_WARN("failed to add rel ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_exprs.count(); i++) {
     if (OB_ISNULL(all_exprs.at(i))) {
