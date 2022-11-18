@@ -383,6 +383,19 @@ int ObPartTransCtx::trans_clear_()
 {
   int ret = OB_SUCCESS;
 
+  // For the purpose of the durability(ACID) of the tx ctx, we need to store the
+  // rec_log_ts even after the tx ctx has been released. So we decide to store
+  // it into aggre_rec_log_ts in the ctx_mgr.
+  //
+  // While To meet the demand, we should obey two rules:
+  // 1. We must push rec_log_ts to aggre_rec_log_ts before tx ctx has been
+  //    removed from ctx_mgr(in trans_clear_)
+  // 2. We must disallow dump tx_ctx_table after we already push rec_log_ts(in
+  //    get_tx_ctx_table_info)
+  //
+  // What's more, we need not to care about the retain tx_ctx, because it has
+  // already meet the durability requirement and is just used for multi-source
+  // data.
   if (is_ctx_table_merged_
       && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(get_rec_log_ts_()))) {
     TRANS_LOG(ERROR, "update aggre log ts wo lock failed", KR(ret), "context", *this);
@@ -1326,17 +1339,24 @@ int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
 
-  // 1. Tx ctx has no persisted log, so donot need persisting
-  if (OB_INVALID_TIMESTAMP == exec_info_.max_applying_log_ts_) {
+  // 1. Tx ctx has already exited, so it means that it may have no chance to
+  //    push its rec_log_ts to aggre_rec_log_ts, so we must not persist it
+  // NB: You need take note that retained tx ctx should be dumped due to
+  //     multi-source data.
+  if (is_exiting_ && get_retain_cause() == RetainCause::UNKOWN) {
+    ret = OB_TRANS_CTX_NOT_EXIST;
+    TRANS_LOG(INFO, "tx ctx has exited", K(ret), KPC(this));
+  // 2. Tx ctx has no persisted log, so donot need persisting
+  } else if (OB_INVALID_TIMESTAMP == exec_info_.max_applying_log_ts_) {
     ret = OB_TRANS_CTX_NOT_EXIST;
     TRANS_LOG(INFO, "tx ctx has no persisted log", K(ret), KPC(this));
-    // 2. Fetch the current state of the tx ctx table
+  // 3. Fetch the current state of the tx ctx table
   } else if (OB_FAIL(get_tx_ctx_table_info_(info))) {
     TRANS_LOG(WARN, "get tx ctx table info failed", K(ret), K(*this));
   } else if (OB_UNLIKELY(!info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx ctx info invalid", K(ret), K(info));
-    // 3. Refresh the rec_log_ts for the next checkpoint
+  // 4. Refresh the rec_log_ts for the next checkpoint
   } else if (OB_FAIL(refresh_rec_log_ts_())) {
     TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), K(*this));
   } else {

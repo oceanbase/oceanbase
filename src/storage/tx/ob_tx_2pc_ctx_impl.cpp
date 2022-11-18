@@ -303,8 +303,8 @@ int ObPartTransCtx::on_clear()
   int ret = OB_SUCCESS;
 
   (void)unregister_timeout_task_();
-  (void)set_exiting_();
   (void)trans_clear_();
+  (void)set_exiting_();
 
   return ret;
 }
