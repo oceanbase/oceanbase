@@ -5558,6 +5558,40 @@ int ObSPIService::collect_cells(ObNewRow &row,
   return ret;
 }
 
+int ObSPIService::check_package_dest_and_deep_copy(
+  ObPLExecCtx &ctx,
+  const ObSqlExpression &expr, ObIArray<ObObj> &src_array, ObIArray<ObObj> &dst_array)
+{
+  int ret = OB_SUCCESS;
+  if (is_obj_access_expression(expr)) {
+    if (expr.get_expr_items().count() > 1
+        && T_OP_GET_PACKAGE_VAR == expr.get_expr_items().at(1).get_item_type()
+        && OB_NOT_NULL(expr.get_expr_items().at(1).get_expr_operator())
+        && expr.get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
+      uint16_t param_pos = expr.get_expr_items().at(1).get_param_idx();
+      uint64_t package_id = OB_INVALID_ID;
+      ObIAllocator *allocator = NULL;
+      OX (package_id = expr.get_expr_items().at(param_pos).get_obj().get_uint64());
+      OZ (spi_get_package_allocator(&ctx, package_id, allocator));
+      CK (OB_NOT_NULL(allocator));
+      for (int64_t i = 0; OB_SUCC(ret) && i < src_array.count(); ++i) {
+        ObObj tmp;
+        if (src_array.at(i).is_pl_extend()) {
+          pl::ObUserDefinedType::deep_copy_obj(*allocator, src_array.at(i), tmp);
+        } else {
+          OZ (ob_write_obj(*allocator, src_array.at(i), tmp));
+        }
+        OZ (dst_array.push_back(tmp));
+      }
+    } else {
+      OZ (dst_array.assign(src_array));
+    }
+  } else {
+    OZ (dst_array.assign(src_array));
+  }
+  return ret;
+}
+
 int ObSPIService::store_result(ObPLExecCtx *ctx,
                                const ObSqlExpression *result_expr,
                                const ObDataType *result_types,
@@ -5700,8 +5734,10 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     ParamStore *params = ctx->params_;
     ObObjParam result_address;
     if (is_obj_access_expression(*result_expr)) { //通过ObjAccess访问得到的基础变量或record
+      ObSEArray<ObObj, 16> dst_array;
       OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
-      OZ (store_datums(result_address, *calc_array));
+      OZ (check_package_dest_and_deep_copy(*ctx, *result_expr, *calc_array, dst_array));
+      OZ (store_datums(result_address, dst_array));
     } else if (is_question_mark_expression(*result_expr)) { //通过question mark访问得到的基础变量
       int64_t param_idx = get_const_value(*result_expr).get_unknown();
       ObAccuracy accuracy;
@@ -5722,7 +5758,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       OX (params->at(param_idx).set_accuracy(accuracy));
       OZ (spi_pad_char_or_varchar(ctx->exec_ctx_->get_my_session(), result_types[0].get_obj_type(),
                                   accuracy, ctx->allocator_, &(params->at(param_idx))));
-    } else if (is_get_var_func_expression(*result_expr) || is_get_package_or_subprogram_var_expression(*result_expr)) {
+    } else if (is_get_var_func_expression(*result_expr)
+              || is_get_package_or_subprogram_var_expression(*result_expr)) {
       //通过系统函数访问的基础变量(user var/sys var) 或 访问的package/subprogram 变量
       ObObjParam value;
       OX (value = calc_array->at(0));

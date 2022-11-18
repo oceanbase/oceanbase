@@ -793,6 +793,11 @@ private:
                                      const int64_t *pl_integer_ranges,
                                      bool is_bulk,
                                      int64_t limit);
+
+  static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
+                                    const ObSqlExpression &expr,
+                                    ObIArray<ObObj> &src_array,
+                                    ObIArray<ObObj> &dst_array);
 };
 
 }
