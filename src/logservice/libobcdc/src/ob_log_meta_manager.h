@@ -301,7 +301,8 @@ private:
       const int16_t column_stored_idx,
       const bool is_usr_column,
       const int16_t usr_column_idx,
-      TableSchemaInfo &tb_schema_info);
+      TableSchemaInfo &tb_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap);
   int set_table_schema_(const int64_t version,
       const uint64_t table_id,
       const char *table_name,

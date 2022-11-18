@@ -655,8 +655,10 @@ ObLogFetcher::FetchCtxMapHBFunc::FetchCtxMapHBFunc() :
     max_progress_(OB_INVALID_TIMESTAMP),
     min_progress_ls_(),
     max_progress_ls_(),
-    part_count_(0)
-{}
+    part_count_(0),
+    ls_progress_infos_()
+{
+}
 
 bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFetchCtx *&ctx)
 {
@@ -673,9 +675,9 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
   }
   // The progress returned by the fetch log context must be valid, and its progress value must be a valid value, underlined by the fetch log progress
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == progress)) {
-    LOG_ERROR("partition dispatch progress is invalid", K(progress), K(tls_id), KPC(ctx),
-        K(dispatch_info));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("partition dispatch progress is invalid", KR(ret), K(progress), K(tls_id), KPC(ctx),
+        K(dispatch_info));
   } else {
     last_dispatch_log_lsn = dispatch_info.last_dispatch_log_lsn_;
 
@@ -690,6 +692,10 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
         data_progress_ = progress;
       } else {
         data_progress_ = std::min(data_progress_, progress);
+      }
+
+      if (OB_FAIL(ls_progress_infos_.push_back(LSProgressInfo(tls_id, progress)))) {
+        LOG_ERROR("ls_progress_infos_ push_back failed", KR(ret));
       }
     }
 
@@ -729,6 +735,7 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   static int64_t last_ddl_handle_progress = OB_INVALID_TIMESTAMP;
   static palf::LSN last_ddl_handle_lsn;
   static TenantLSID last_min_data_progress_ls;
+  static LSProgressInfoArray last_ls_progress_infos;
 
   FetchCtxMapHBFunc hb_func;
   uint64_t ddl_min_progress_tenant_id = OB_INVALID_TENANT_ID;
@@ -822,13 +829,15 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
           "ddl_handle_progress", NTS_TO_STR(ddl_handle_progress),
           "last_ddl_handle_progress", NTS_TO_STR(last_ddl_handle_progress),
           "ddl_handle_lsn", to_cstring(ddl_handle_lsn),
-          "last_ddl_handle_lsn", to_cstring(last_ddl_handle_lsn));
+          "last_ddl_handle_lsn", to_cstring(last_ddl_handle_lsn),
+          K(last_ls_progress_infos));
       ret = OB_ERR_UNEXPECTED;
     } else {
       last_data_progress = data_progress;
       last_ddl_handle_progress = ddl_handle_progress;
       last_ddl_handle_lsn = ddl_handle_lsn;
       last_min_data_progress_ls = min_progress_tls_id;
+      last_ls_progress_infos = hb_func.ls_progress_infos_;
     }
   }
   return ret;
