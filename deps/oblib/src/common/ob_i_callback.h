@@ -13,25 +13,25 @@
 #ifndef OCEANBASE_COMMON_OB_I_CALLBAK_
 #define OCEANBASE_COMMON_OB_I_CALLBAK_
 
-namespace oceanbase {
-namespace common {
-class ObICallback {
+namespace oceanbase
+{
+namespace common
+{
+class ObICallback
+{
 public:
-  ObICallback()
-  {}
-  virtual ~ObICallback()
-  {}
+  ObICallback() {}
+  virtual ~ObICallback() {}
   virtual int callback() = 0;
 };
 
-class ObICallbackHandler {
+class ObICallbackHandler
+{
 public:
-  ObICallbackHandler()
-  {}
-  virtual ~ObICallbackHandler()
-  {}
-  virtual int handle_callback(ObICallback* task) = 0;
+  ObICallbackHandler() {}
+  virtual ~ObICallbackHandler() {}
+  virtual int handle_callback(ObICallback *task) = 0;
 };
-};      // end namespace common
-};      // end namespace oceanbase
-#endif  // OCEANBASE_COMMON_OB_I_CALLBAK_
+}; // end namespace common
+}; // end namespace oceanbase
+#endif //OCEANBASE_COMMON_OB_I_CALLBAK_

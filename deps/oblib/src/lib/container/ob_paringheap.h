@@ -27,103 +27,84 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/ob_errno.h"
 
-namespace oceanbase {
-namespace container {
+namespace oceanbase
+{
+namespace container
+{
 
-template <class T>
-struct ObParingHeapNodeBase {
-  ObParingHeapNodeBase() : prev_(NULL), next_(NULL), lchild_(NULL)
-  {}
-  ~ObParingHeapNodeBase()
-  {}
-  OB_INLINE T* get_prev() const
+template<class T>
+struct ObParingHeapNodeBase
+{
+  ObParingHeapNodeBase()
+  : prev_(NULL),
+    next_(NULL),
+    lchild_(NULL) {}
+  ~ObParingHeapNodeBase() {}
+  OB_INLINE T *get_prev() const
   {
     return prev_;
   }
 
-  OB_INLINE void set_prev(T* node)
+  OB_INLINE void set_prev(T *node)
   {
     prev_ = node;
   }
 
-  OB_INLINE T* get_next() const
+  OB_INLINE T *get_next() const
   {
     return next_;
   }
 
-  OB_INLINE void set_next(T* node)
+  OB_INLINE void set_next(T *node)
   {
     next_ = node;
   }
 
-  OB_INLINE T* get_lchild() const
+  OB_INLINE T *get_lchild() const
   {
     return lchild_;
   }
 
-  OB_INLINE void set_lchild(T* node)
+  OB_INLINE void set_lchild(T *node)
   {
     lchild_ = node;
   }
 
-  T* prev_;
-  T* next_;
-  T* lchild_;
+  T *prev_;
+  T *next_;
+  T *lchild_;
 };
 
-#define PHNODE(type, phlink)                                              \
-  class ObParingHeapNode##_##phlink : public ObParingHeapNodeBase<type> { \
-  public:                                                                 \
-    OB_INLINE static type* get_next(const type* n)                        \
-    {                                                                     \
-      return n->phlink##_.get_next();                                     \
-    }                                                                     \
-    OB_INLINE static void set_next(type* s, type* t)                      \
-    {                                                                     \
-      s->phlink##_.set_next(t);                                           \
-    }                                                                     \
-    OB_INLINE static type* get_prev(const type* n)                        \
-    {                                                                     \
-      return n->phlink##_.get_prev();                                     \
-    }                                                                     \
-    OB_INLINE static void set_prev(type* s, type* t)                      \
-    {                                                                     \
-      s->phlink##_.set_prev(t);                                           \
-    }                                                                     \
-    OB_INLINE static type* get_lchild(const type* n)                      \
-    {                                                                     \
-      return n->phlink##_.get_lchild();                                   \
-    }                                                                     \
-    OB_INLINE static void set_lchild(type* s, type* t)                    \
-    {                                                                     \
-      s->phlink##_.set_lchild(t);                                         \
-    }                                                                     \
-    OB_INLINE static void mem_set(type* n)                                \
-    {                                                                     \
-      memset(&n->phlink##_, 0, sizeof(ObParingHeapNodeBase));             \
-    }                                                                     \
-  };                                                                      \
-  ObParingHeapNodeBase<type> phlink##_;
+#define PHNODE(type, phlink) class ObParingHeapNode##_##phlink : public ObParingHeapNodeBase<type> { public :\
+   OB_INLINE static type *get_next(const type * n) { return n->phlink##_.get_next(); } \
+   OB_INLINE static void set_next(type *s, type *t) { s->phlink##_.set_next(t); } \
+   OB_INLINE static type *get_prev(const type *n) { return n->phlink##_.get_prev(); } \
+   OB_INLINE static void set_prev(type *s, type *t) { s->phlink##_.set_prev(t); } \
+   OB_INLINE static type *get_lchild(const type *n) { return n->phlink##_.get_lchild(); } \
+   OB_INLINE static void set_lchild(type *s, type *t) { s->phlink##_.set_lchild(t); } \
+   OB_INLINE static void mem_set(type *n) { memset(&n->phlink##_, 0, sizeof(ObParingHeapNodeBase)); } \
+}; ObParingHeapNodeBase<type> phlink##_;
 
-template <typename Key>
-struct ObDummyCompHelper {
-  int compare(const Key* search_key, const Key* index_key) const
+template<typename Key>
+struct ObDummyCompHelper
+{
+  int compare(const Key *search_key, const Key *index_key) const
   {
     return search_key->compare(index_key);
   }
 };
 
-template <class T, class Compare, class L = typename T::ObParingHeapNode_phlink>
-class ObParingHeap {
-public:
+template<class T, class Compare, class L = typename T::ObParingHeapNode_phlink>
+class ObParingHeap
+{
+public :
   typedef Compare ObCompHepler;
   typedef ObParingHeap<T, Compare, L> Paringheap;
 
-  ObParingHeap() : root_(NULL)
-  {}
+  ObParingHeap()
+      : root_(NULL) {}
 
-  ~ObParingHeap()
-  {}
+  ~ObParingHeap() {}
 
   OB_INLINE int init()
   {
@@ -137,7 +118,7 @@ public:
     return OB_ISNULL(root_);
   }
 
-  OB_INLINE int get_first(T*& r_node)
+  OB_INLINE int get_first(T *&r_node)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(root_)) {
@@ -150,10 +131,10 @@ public:
     return ret;
   }
 
-  OB_INLINE int get_any(T*& r_node)
+  OB_INLINE int get_any(T *&r_node)
   {
     int ret = OB_SUCCESS;
-    T* aux = NULL;
+    T *aux = NULL;
     if (OB_ISNULL(root_)) {
       r_node = NULL;
     } else {
@@ -167,7 +148,7 @@ public:
     return ret;
   }
 
-  OB_INLINE int insert(T* phn)
+  OB_INLINE int insert(T *phn)
   {
     /*
      * Treat the root as an aux list during insertion, and lazily
@@ -178,7 +159,7 @@ public:
      * O(log n).
      */
     int ret = OB_SUCCESS;
-    T* t_node = NULL;
+    T *t_node = NULL;
     if (OB_ISNULL(phn)) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(ERROR, "paring heap insert fail", K(ret));
@@ -199,7 +180,7 @@ public:
     return ret;
   }
 
-  OB_INLINE int remove_first(T*& r_node)
+  OB_INLINE int remove_first(T *&r_node)
   {
     int ret = OB_SUCCESS;
 
@@ -212,10 +193,10 @@ public:
     return ret;
   }
 
-  OB_INLINE int remove_any(T*& r_node)
+  OB_INLINE int remove_any(T *&r_node)
   {
     int ret = OB_SUCCESS;
-    T* aux = NULL;
+    T *aux = NULL;
     if (OB_ISNULL(root_)) {
       r_node = NULL;
     } else {
@@ -234,13 +215,13 @@ public:
     return ret;
   }
 
-  OB_INLINE int remove(T* phn)
+  OB_INLINE int remove(T *phn)
   {
     int ret = OB_SUCCESS;
-    T* replace = NULL;
-    T* parent = NULL;
-    T* t_node = NULL;
-    T* next = NULL;
+    T *replace = NULL;
+    T *parent = NULL;
+    T *t_node = NULL;
+    T *next = NULL;
     if (OB_ISNULL(phn)) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(ERROR, "paring remove fail", K(ret));
@@ -316,13 +297,13 @@ public:
     return ret;
   }
 
-  OB_INLINE int merge_ordered(T* phn_first, T* phn_second)
+  OB_INLINE int merge_ordered(T *phn_first, T *phn_second)
   {
     int ret = OB_SUCCESS;
-    T* phn_first_child = NULL;
+    T *phn_first_child = NULL;
     if (OB_ISNULL(phn_first) || OB_ISNULL(phn_second)) {
       ret = OB_INVALID_ARGUMENT;
-      OB_LOG(ERROR, "paring heap merge ordered fail", K(ret));
+      OB_LOG(ERROR , "paring heap merge ordered fail", K(ret));
     } else {
       if (compare_.compare(phn_first, phn_second) > 0) {
         ret = OB_ERROR;
@@ -340,7 +321,7 @@ public:
     return ret;
   }
 
-  OB_INLINE int merge(T* phn_first, T* phn_second, T*& r_phn)
+  OB_INLINE int merge(T *phn_first, T *phn_second, T *&r_phn)
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(phn_first)) {
@@ -361,14 +342,14 @@ public:
     return ret;
   }
 
-  OB_INLINE int merge_siblings(T* phn, T*& r_phn)
+  OB_INLINE int merge_siblings(T *phn, T *&r_phn)
   {
     int ret = OB_SUCCESS;
-    T* head = NULL;
-    T* tail = NULL;
-    T* phn_first = NULL;
-    T* phn_second = NULL;
-    T* phnrest = NULL;
+    T *head = NULL;
+    T *tail = NULL;
+    T *phn_first = NULL;
+    T *phn_second = NULL;
+    T *phnrest = NULL;
 
     /*
      * Multipass merge, wherein the first two elements of a FIFO
@@ -418,6 +399,7 @@ public:
             tail = phn_first;
             phn_first = NULL;
           }
+
         }
         if (OB_SUCC(ret)) {
           phn_first = head;
@@ -457,7 +439,7 @@ public:
   OB_INLINE int merge_aux()
   {
     int ret = OB_SUCCESS;
-    T* phn = NULL;
+    T *phn = NULL;
     phn = get_next(root_);
     if (OB_NOT_NULL(phn)) {
       set_prev(root_, NULL);
@@ -475,10 +457,10 @@ public:
     return ret;
   }
 
-  OB_INLINE int merge_children(T* phn, T*& r_phn)
+  OB_INLINE int merge_children(T *phn, T *&r_phn)
   {
     int ret = OB_SUCCESS;
-    T* lchild = NULL;
+    T *lchild = NULL;
     if (OB_ISNULL(phn)) {
       ret = OB_ERROR;
       OB_LOG(ERROR, "paring heap merge children fail", K(ret));
@@ -493,52 +475,52 @@ public:
     return ret;
   }
 
-  OB_INLINE T* get_root() const
+  OB_INLINE T *get_root() const
   {
     return root_;
   }
 
-  OB_INLINE void mem_set(T* node)
+  OB_INLINE void mem_set(T * node)
   {
     L::mem_set(node);
   }
 
-  OB_INLINE T* get_next(const T* node) const
+  OB_INLINE T *get_next(const T *node) const
   {
     return L::get_next(node);
   }
 
-  OB_INLINE void set_next(T* node_source, T* node_target)
+  OB_INLINE void set_next(T *node_source, T *node_target)
   {
     L::set_next(node_source, node_target);
   }
 
-  OB_INLINE T* get_prev(const T* node) const
+  OB_INLINE T *get_prev(const T *node) const
   {
     return L::get_prev(node);
   }
 
-  OB_INLINE void set_prev(T* node_source, T* node_target)
+  OB_INLINE void set_prev(T *node_source, T *node_target)
   {
     L::set_prev(node_source, node_target);
   }
 
-  OB_INLINE T* get_lchild(const T* node) const
+  OB_INLINE T *get_lchild(const T *node) const
   {
     return L::get_lchild(node);
   }
 
-  OB_INLINE void set_lchild(T* node_source, T* node_target)
+  OB_INLINE void set_lchild(T *node_source, T *node_target)
   {
     L::set_lchild(node_source, node_target);
   }
 
 private:
-  T* root_;
+  T *root_;
   ObCompHepler compare_;
 };
 
-}  // namespace container
-}  // namespace oceanbase
+}//container
+}//oceanbase
 
 #endif /* PARING_HEAP_H_ */

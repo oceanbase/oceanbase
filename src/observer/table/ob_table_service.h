@@ -16,9 +16,8 @@
 #include "observer/ob_server_struct.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
 #include "share/table/ob_table_rpc_struct.h"
-#include "storage/ob_dml_param.h"
 #include "share/schema/ob_table_param.h"
-#include "common/row/ob_row_iterator.h"
+#include "storage/access/ob_dml_param.h"
 namespace oceanbase
 {
 namespace table
@@ -26,10 +25,11 @@ namespace table
 class ObHTableFilterOperator;
 class ObHColumnDescriptor;
 } // end namespace table
-namespace storage
-{
-class ObPartitionService;
-}
+
+namespace storage		
+{		
+class ObAccessService;
+} // end namespace storage
 
 namespace observer
 {
@@ -41,8 +41,6 @@ using table::ObITableBatchOperationResult;
 using table::ObTableQuery;
 using table::ObTableQueryResult;
 using table::ObTableQuerySyncResult;
-using table::ObTableTTLOperation;
-using table::ObTableTTLOperationResult;
 class ObTableApiProcessorBase;
 class ObTableService;
 class ObTableApiRowIterator;
@@ -59,9 +57,11 @@ protected:
   {
     uint64_t table_id_;
     uint64_t partition_id_;
+    common::ObTabletID tablet_id_;
+    common::ObTabletID index_tablet_id_;
+    share::ObLSID ls_id_; 
     int64_t timeout_ts_;
-    transaction::ObTransDesc *trans_desc_; 
-
+    ObTableApiProcessorBase *processor_;
     common::ObArenaAllocator *allocator_;
     bool returning_affected_rows_;
     table::ObTableEntityType entity_type_;
@@ -70,9 +70,11 @@ protected:
     bool returning_rowkey_;
     Param()
         :table_id_(common::OB_INVALID_ID),
-         partition_id_(common::OB_INVALID_ID),
+         partition_id_(0), // @dazhi: to be removed
+         tablet_id_(ObTabletID::INVALID_TABLET_ID),
+         index_tablet_id_(ObTabletID::INVALID_TABLET_ID),
          timeout_ts_(0),
-         trans_desc_(nullptr),
+         processor_(nullptr),
          allocator_(nullptr),
          returning_affected_rows_(false),
          entity_type_(table::ObTableEntityType::ET_DYNAMIC),
@@ -90,7 +92,7 @@ public:
     columns_type_.reset();
   }
   void init_param(int64_t timeout_ts,
-                  transaction::ObTransDesc &trans_desc, 
+                  ObTableApiProcessorBase *processor,
                   common::ObArenaAllocator *allocator,
                   bool returning_affected_rows,
                   table::ObTableEntityType entity_type,
@@ -99,7 +101,7 @@ public:
                   bool returning_rowkey = false)
   {
     param_.timeout_ts_ = timeout_ts;
-    param_.trans_desc_ = &trans_desc;
+    param_.processor_ = processor;
     param_.allocator_ = allocator;
     param_.returning_affected_rows_ = returning_affected_rows;
     param_.entity_type_ = entity_type;
@@ -108,7 +110,8 @@ public:
     param_.returning_rowkey_ = returning_rowkey;
   }
   uint64_t &param_table_id() { return param_.table_id_; }
-  uint64_t &param_partition_id() { return param_.partition_id_; }
+  common::ObTabletID &param_tablet_id() { return param_.tablet_id_; }
+  share::ObLSID &param_ls_id() { return param_.ls_id_; }
 };
 
 class ObTableServiceGetCtx: public ObTableServiceCtx
@@ -162,35 +165,6 @@ private:
   bool is_query_sync_;
 };
 
-class ObTableTTLDeleteRowIterator : public common::ObNewRowIterator
-{
-public:
-  ObTableTTLDeleteRowIterator():
-    is_inited_(false), max_version_(0), time_to_live_ms_(0),
-    limit_del_rows_(-1), cur_del_rows_(0), cur_version_(0), cur_rowkey_(), cur_qualifier_(),
-    max_version_cnt_(0), ttl_cnt_(0), scan_cnt_(0), is_last_row_ttl_(true) {}
-  ~ObTableTTLDeleteRowIterator() {}
-  int init(const ObTableTTLOperation &ttl_operation);
-  virtual int get_next_row(ObNewRow*& row);
-  void set_scan_result(common::ObNewRowIterator *scan_result) { scan_result_ = scan_result; }
-  virtual void reset() override;
-public:
-  bool is_inited_;
-  common::ObNewRowIterator *scan_result_;
-  int32_t max_version_;
-  int64_t time_to_live_ms_; // ttl in millisecond
-  uint64_t limit_del_rows_; // maximum delete row
-  uint64_t cur_del_rows_; // current delete row
-  uint64_t cur_version_;
-  ObString cur_rowkey_; // K
-  ObString cur_qualifier_; // Q
-  uint64_t max_version_cnt_;
-  uint64_t ttl_cnt_;
-  uint64_t scan_cnt_;
-  bool is_last_row_ttl_; // false indicate row del by max version
-};
-
-
 struct ObTableServiceQueryCtx: public ObTableServiceGetCtx
 {
 public:
@@ -202,29 +176,16 @@ public:
        normal_result_iterator_(NULL),
        htable_result_iterator_(NULL)
   {}
-  void reset_query_ctx(storage::ObPartitionService *part_service)
+  void reset_query_ctx(storage::ObAccessService *access_service)
   {
-    destroy_result_iterator(part_service);
+    destroy_result_iterator(access_service);
     ObTableServiceGetCtx::reset_get_ctx();
   }
   ObNormalTableQueryResultIterator *get_normal_result_iterator(const ObTableQuery &query,
                                                                table::ObTableQueryResult &one_result);
   table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
                                                             table::ObTableQueryResult &one_result);
-  void destroy_result_iterator(storage::ObPartitionService *part_service);
-};
-
-struct ObTableServiceTTLCtx : public ObTableServiceGetCtx
-{
-public:
-  ObTableServiceTTLCtx(common::ObArenaAllocator &alloc): ObTableServiceGetCtx(alloc) {}
-  void destroy_scan_iterator(storage::ObPartitionService *part_service);
-
-  void reset_ttl_ctx(storage::ObPartitionService *part_service)
-  {
-    destroy_scan_iterator(part_service);
-    ObTableServiceGetCtx::reset_get_ctx();
-  }
+  void destroy_result_iterator(storage::ObAccessService *access_service);
 };
 
 /// table service
@@ -234,8 +195,7 @@ public:
   friend class TestBatchExecute_obj_increment_Test;
 public:
   ObTableService()
-      :part_service_(NULL),
-       schema_service_(NULL)
+      : schema_service_(NULL)
   {}
   virtual ~ObTableService() = default;
   int init(ObGlobalContext &gctx);
@@ -257,10 +217,10 @@ public:
   int multi_replace(ObTableServiceCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
   int multi_update(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
 
-  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query, table::ObTableQueryResult &one_result,
-      table::ObTableQueryResultIterator *&query_result, bool for_update = false);
   int batch_execute(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
-  int execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result);
+  int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query,
+                    table::ObTableQueryResult &one_result, table::ObTableQueryResultIterator *&query_result,
+                    bool for_update = false);
 private:
   static int cons_rowkey_infos(const share::schema::ObTableSchema &table_schema,
                                common::ObIArray<uint64_t> *column_ids,
@@ -272,7 +232,8 @@ private:
   static int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema, sql::ObExprResType &column_type);
   static int check_column_type(const sql::ObExprResType &column_type, common::ObObj &obj);
   static int add_index_columns_if_missing(share::schema::ObSchemaGetterGuard &schema_guard,
-                                          uint64_t data_table_id,
+                                          const uint64_t tenant_id,
+                                          const uint64_t data_table_id,
                                           const share::schema::ObTableSchema *index_schema,
                                           common::ObIArray<uint64_t> &column_ids,
                                           common::ObIArray<sql::ObExprResType> *columns_type);
@@ -313,7 +274,6 @@ private:
   // for replace
   int do_replace(
       ObTableServiceCtx &ctx,
-      common::ObPartitionKey &part_key,
       storage::ObDMLBaseParam &dml_param,
       common::ObIArray<uint64_t> &column_ids,
       common::ObIArray<uint64_t> &rowkey_column_ids,
@@ -322,7 +282,6 @@ private:
   // for replace delete duplicate row
   int do_replace_delete(
       ObTableServiceCtx &ctx,
-      common::ObPartitionKey &part_key,
       storage::ObDMLBaseParam &dml_param,
       common::ObIArray<uint64_t> &column_ids,
       common::ObNewRowIterator *duplicated_rows,
@@ -332,11 +291,13 @@ private:
                           const share::schema::ObTableSchema *index_schema,
                           uint64_t data_table_id,
                           common::ObIArray<sql::ObExprResType> &columns_type);
-  int get_index_id_by_name(share::schema::ObSchemaGetterGuard &schema_guard, uint64_t base_table_id,
+  int get_index_id_by_name(share::schema::ObSchemaGetterGuard &schema_guard,
+                           const uint64_t tenant_id, uint64_t base_table_id,
                            const ObString &index_name, uint64_t &index_id,
                            common::ObIArray<sql::ObExprResType> &columns_type,
                            const share::schema::ObTableSchema *&index_schema);
-  int fill_query_table_param(uint64_t table_id,
+  int fill_query_table_param(const uint64_t tenant_id,
+                             const uint64_t table_id,
                              const common::ObIArray<ObString> &properties,
                              const ObString &index_name,
                              share::schema::ObTableParam &table_param,
@@ -376,13 +337,15 @@ private:
   int execute_increment_by_update(ObTableServiceGetCtx &ctx,
                                   const ObTableOperation &table_operation,
                                   ObTableOperationResult &result);
-  int generate_ttl_query(const ObTableTTLOperation &ttl_operation, ObTableServiceCtx &ctx, ObTableQuery &query);
+  int build_table_param(
+      const uint64_t table_id,
+      const common::ObIArray<uint64_t> &column_ids,
+      ObTableDMLParam &table_param);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableService);
 private:
   static const int64_t COMMON_COLUMN_NUM = 16;
-  storage::ObPartitionService *part_service_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
 };
 

@@ -15,14 +15,17 @@
 
 #include "common/ob_record_header.h"
 
-namespace oceanbase {
-namespace common {
-extern const char* DEFAULT_CKPT_EXTENSION;
+namespace oceanbase
+{
+namespace common
+{
+extern const char *DEFAULT_CKPT_EXTENSION;
 
-enum LogCommand {
+enum LogCommand
+{
   //// Base command ... ////
-  OB_LOG_SWITCH_LOG = 101,  // Log switch command
-  OB_LOG_CHECKPOINT = 102,  // checkpoint operation
+  OB_LOG_SWITCH_LOG = 101,  //Log switch command
+  OB_LOG_CHECKPOINT = 102,  //checkpoint operation
   OB_LOG_NOP = 103,
 
   //// UpdateServer ... 200 - 399 ////
@@ -69,32 +72,33 @@ enum LogCommand {
   OB_RT_LMS_REGIST = 432,
   OB_RT_SET_LAST_MERGED_VERSION = 433,
 
+
   //// ChunkServer ... 600 - 799 ////
-  OB_LOG_CS_DAILY_MERGE = 600,              // Daily consolidation
-  OB_LOG_CS_MIGRATE_PARTITION = 601,        // Migrate tablet
-  OB_LOG_CS_BYPASS_LOAD_PARTITION = 603,    // Bypass import
-  OB_LOG_CS_MERGE_PARTITION = 604,          // Merge tablet
-  OB_LOG_CS_DEL_PARTITION = 605,            // Delete tablet
-  OB_LOG_CS_DEL_TABLE = 606,                // Delete table
-  OB_LOG_CS_CREATE_PARTITION = 607,         // Create tablet
-  OB_LOG_CS_DISK_MAINTAIN = 608,            // Disk maintenance
-  OB_LOG_CS_NORMAL_MACRO_BLOCK_META = 609,  // Write a single macro block meta
+  OB_LOG_CS_DAILY_MERGE = 600,                //Daily consolidation
+  OB_LOG_CS_MIGRATE_PARTITION = 601,        //Migrate tablet
+  OB_LOG_CS_BYPASS_LOAD_PARTITION = 603,        //Bypass import
+  OB_LOG_CS_MERGE_PARTITION = 604,              //Merge tablet
+  OB_LOG_CS_DEL_PARTITION = 605,                  //Delete tablet
+  OB_LOG_CS_DEL_TABLE = 606,                   //Delete table
+  OB_LOG_CS_CREATE_PARTITION = 607,            //Create tablet
+  OB_LOG_CS_DISK_MAINTAIN = 608,            //Disk maintenance
+  OB_LOG_CS_NORMAL_MACRO_BLOCK_META = 609,  //Write a single macro block meta
   OB_LOG_CS_DISK_BALANCE = 610,
 
-  OB_LOG_CS_MERGE_MACRO_BLOCK_META = 611,    // merge macro block meta
-  OB_LOG_CS_BALANCE_MACRO_BLOCK_META = 612,  // balance macro block meta
-  OB_LOG_CS_MIGRATE_MACRO_BLOCK_META = 613,  // migrate macro block meta
+  OB_LOG_CS_MERGE_MACRO_BLOCK_META = 611,   //merge macro block meta
+  OB_LOG_CS_BALANCE_MACRO_BLOCK_META = 612, //balance macro block meta
+  OB_LOG_CS_MIGRATE_MACRO_BLOCK_META = 613, //migrate macro block meta
 
-  OB_LOG_CS_SCHEMA_MACRO_BLOCK_META = 614,      // schema macro block meta
-  OB_LOG_CS_COMPRESSOR_MACRO_BLOCK_META = 615,  // compressor macro block meta
-  OB_LOG_CS_PARTITION_MACRO_BLOCK_META = 616,   // tablet meta image macro block meta
-  OB_LOG_CS_MACRO_MACRO_BLOCK_META = 617,       // macro meta image macro block meta
+  OB_LOG_CS_SCHEMA_MACRO_BLOCK_META = 614,  //schema macro block meta
+  OB_LOG_CS_COMPRESSOR_MACRO_BLOCK_META = 615, //compressor macro block meta
+  OB_LOG_CS_PARTITION_MACRO_BLOCK_META = 616,   //tablet meta image macro block meta
+  OB_LOG_CS_MACRO_MACRO_BLOCK_META = 617, //macro meta image macro block meta
   OB_LOG_BUILD_LOCAL_INDEX = 618,
   OB_LOG_CS_DUMP = 619,
-  OB_LOG_CS_REVERT_PARTITION = 620,  // revert a partition to a specified version
-  OB_LOG_CS_MINOR_MERGE = 621,       // Dump minor version merge
+  OB_LOG_CS_REVERT_PARTITION = 620, //revert a partition to a specified version
+  OB_LOG_CS_MINOR_MERGE = 621, //Dump minor version merge
 
-  OB_LOG_CS_MIGRATE_MACRO_BLOCK = 622,  // Write a single macro block in the migration tablet
+  OB_LOG_CS_MIGRATE_MACRO_BLOCK = 622,        //Write a single macro block in the migration tablet
   OB_LOG_CS_CREATE_PARTITION_STORAGE = 623,
   OB_LOG_CS_DEL_PARTITION_STORAGE = 624,
 
@@ -130,19 +134,32 @@ enum LogCommand {
   OB_LOG_REMOVE_BACKUP_META_DATA = 653,
   OB_LOG_ADD_RECOVERY_POINT_DATA = 654,
   OB_LOG_REMOVE_RECOVERY_POINT_DATA = 655,
+  OB_LOG_UPDATE_BLOCK_MGR = 656,
+  OB_LOG_UPDATE_DDL_BARRIER_LOG_STATE = 657,
+  OB_PG_LOG_ARCHIVE_PERSIST = 658,
+  OB_UPDATE_STORAGE_SCHEMA = 659,
+
+  // ls 680 - 700
+  OB_LOG_CREATE_LS = 680,
+  OB_LOG_REMOVE_LS = 681,
+
+  // tablet 701 - 720
+  OB_LOG_UPDATE_TABLET = 701,
+  OB_LOG_DELETE_TABLET = 702,
 
   //// Base command ... ////
   OB_LOG_UNKNOWN = 199
 };
 
 /**
- * A log entry consists of four parts:
- * ObRecordHeader + log serial number + LogCommand + log content
- * ObRecordHeader, log serial number, and LogCommand are saved in ObLogEntry
- * The data_checksum_ item in ObLogEntry is the verification of the "log serial number", "LogCommand", and "log content"
- * parts
+ * @brief 日志项
+ * 一条日志项由四部分组成:
+ *     ObRecordHeader + 日志序号 + LogCommand + 日志内容
+ * ObLogEntry中保存ObRecordHeader, 日志序号, LogCommand 三部分
+ * ObLogEntry中的data_checksum_项是对"日志序号", "LogCommand", "日志内容" 部分的校验
  */
-struct ObLogEntry {
+struct ObLogEntry
+{
   ObRecordHeader header_;
   uint64_t seq_;
   int32_t cmd_;
@@ -155,7 +172,7 @@ struct ObLogEntry {
     memset(this, 0x00, sizeof(ObLogEntry));
   }
 
-  int64_t to_string(char* buf, const int64_t buf_len) const
+  int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "[LogEntry] ");
@@ -165,25 +182,29 @@ struct ObLogEntry {
   }
 
   /**
-   * Set log sequence number
+   * @brief 设置日志序号
    */
   int set_log_seq(const uint64_t seq);
 
   /**
-   * set log command
+   * @brief 设置LogCommand
    */
   int set_log_command(const int32_t cmd);
 
   /**
-   * fill all fields of ObRecordHeader
-   * Calling this function needs to ensure that the set_log_seq function has been called
+   * @brief fill all fields of ObRecordHeader
+   * 调用该函数需要保证set_log_seq函数已经被调用
+   * @param [in] log_data 日志内容缓冲区地址
+   * @param [in] data_len 缓冲区长度
    */
-  int fill_header(const char* log_data, const int64_t data_len, const int64_t timestamp = 0);
+  int fill_header(const char *log_data, const int64_t data_len, const int64_t timestamp = 0);
 
   /**
-   * Calculate the checksum of log serial number + LogCommand + log content
+   * @brief 计算日志序号+LogCommand+日志内容的校验和
+   * @param [in] buf 日志内容缓冲区地址
+   * @param [in] len 缓冲区长度
    */
-  int64_t calc_data_checksum(const char* log_data, const int64_t data_len) const;
+  int64_t calc_data_checksum(const char *log_data, const int64_t data_len) const;
 
   /**
    * After deserialization, this function get the length of log
@@ -196,18 +217,16 @@ struct ObLogEntry {
   int check_header_integrity(const bool dump_content = true) const;
 
   /**
-   * After calling deserialization, call this function to check the correctness of the data
+   * 调用deserialization之后, 调用该函数检查数据正确性
+   * @param [in] log 日志内容缓冲区地址
    */
-  int check_data_integrity(const char* log_data, const bool dump_content = true) const;
+  int check_data_integrity(const char *log_data, const bool dump_content = true) const;
 
-  static int get_header_size()
-  {
-    return sizeof(ObRecordHeader) + sizeof(uint64_t) + sizeof(LogCommand);
-  }
+  static int get_header_size() {return sizeof(ObRecordHeader) + sizeof(uint64_t) + sizeof(LogCommand);}
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_LOG_OB_LOG_ENTRY_
+#endif  //OCEANBASE_SHARE_LOG_OB_LOG_ENTRY_

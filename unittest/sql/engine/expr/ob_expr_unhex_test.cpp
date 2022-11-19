@@ -17,32 +17,35 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprUnhexTest : public ::testing::Test {
+class ObExprUnhexTest : public ::testing::Test
+{
 public:
   ObExprUnhexTest();
   virtual ~ObExprUnhexTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprUnhexTest(const ObExprUnhexTest& other);
-  ObExprUnhexTest& operator=(const ObExprUnhexTest& other);
-
+  ObExprUnhexTest(const ObExprUnhexTest &other);
+  ObExprUnhexTest& operator=(const ObExprUnhexTest &other);
 private:
   // data members
 };
 ObExprUnhexTest::ObExprUnhexTest()
-{}
+{
+}
 
 ObExprUnhexTest::~ObExprUnhexTest()
-{}
+{
+}
 
 void ObExprUnhexTest::SetUp()
-{}
+{
+}
 
 void ObExprUnhexTest::TearDown()
-{}
+{
+}
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define F(obj, t1, v1, ref_type, ref_value) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -77,6 +80,7 @@ TEST_F(ObExprUnhexTest, fail_test)
   F(unhex, bool, true, null, 0);
   F(unhex, bool, false, null, 0);
 
+
   F(unhex, max, 0, null, 0);
   F(unhex, min, 0, null, 0);
 
@@ -87,9 +91,10 @@ TEST_F(ObExprUnhexTest, fail_test)
   T(unhex, varchar, "4e4", null, 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

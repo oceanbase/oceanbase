@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_contains.
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_contains.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -66,86 +65,14 @@ int ObExprJsonContains::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-int ObExprJsonContains::calc_resultN(common::ObObj &result,
-                                     const common::ObObj *params,
-                                     int64_t param_num,
-                                     common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  
-  if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    ObIJsonBase *json_target = NULL;
-    ObIJsonBase *json_candidate = NULL;
-    bool is_null_result = false;
-    if (OB_FAIL(ObJsonExprHelper::get_json_doc(params, allocator,
-                                               0, json_target,
-                                               is_null_result, false))) {
-      LOG_WARN("get_json_doc failed", K(ret));
-    } else if (!is_null_result && OB_FAIL(ObJsonExprHelper::get_json_doc(params, allocator,
-                                                                         1, json_candidate,
-                                                                         is_null_result, false))) {
-      LOG_WARN("get_json_doc failed", K(ret));
-    }
-
-    bool is_contains = false;
-    if (!is_null_result && OB_SUCC(ret)) {
-      if (param_num == 3) {
-        // json_path
-        ObJsonPathCache ctx_cache(allocator);
-        ObJsonPathCache* path_cache = &ctx_cache;
-        ObObjType val_type = params[2].get_type();
-        if (val_type == ObNullType || params[2].is_null()) {
-          is_null_result = true;
-        } else {
-          ObJsonBaseVector sub_json_targets;
-          ObString path_val = params[2].get_string();
-          ObJsonPath *json_path;
-          if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 2, false))) {
-            LOG_WARN("parse path failed", K(path_val), K(ret));
-          } else if (OB_FAIL(json_target->seek(*json_path, json_path->path_node_cnt(), true, false, sub_json_targets))) {
-            LOG_WARN("json seek failed", K(path_val), K(ret));
-          } else {
-            // use the first of results as candidate
-            if (sub_json_targets.size() > 0) {
-              if (OB_FAIL(json_contains(sub_json_targets[0], json_candidate, &is_contains))) {
-                LOG_WARN("json contain in sub_json_targets failed", K(ret));
-              }
-            } else {
-              is_null_result = true;
-            }
-          }
-        }
-      } else {
-        if (OB_FAIL(json_contains(json_target, json_candidate, &is_contains))) {
-          LOG_WARN("json contain in sub_json_targets failed", K(ret));
-        } else {
-        }
-      }
-    }
-
-    // set result
-    if (OB_FAIL(ret)) {
-      LOG_WARN("json_contains failed", K(ret));
-    } else if (is_null_result) {
-      result.set_null();
-    } else {
-      result.set_int(static_cast<int64_t>(is_contains));
-    }
-  }
-  return ret;
-}
-
 int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObIJsonBase *json_target = NULL;
   ObIJsonBase *json_candidate = NULL;
   bool is_null_result = false;
-  common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_target, is_null_result))) {
     LOG_WARN("get_json_doc failed", K(ret));

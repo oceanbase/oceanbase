@@ -20,26 +20,33 @@
 #include "observer/ob_server_struct.h"
 #include "share/system_variable/ob_system_variable.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace observer;
 using namespace share;
 using namespace share::schema;
-namespace sql {
+namespace sql
+{
 
-ObExprGetSysVar::ObExprGetSysVar(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_OP_GET_SYS_VAR, N_GET_SYS_VAR, 2, NOT_ROW_DIMENSION)
-{}
+ObExprGetSysVar::ObExprGetSysVar(ObIAllocator &alloc)
+    :ObFuncExprOperator(alloc, T_OP_GET_SYS_VAR, N_GET_SYS_VAR, 2, NOT_ROW_DIMENSION,
+                        INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprGetSysVar::~ObExprGetSysVar()
-{}
+{
+}
 
-int ObExprGetSysVar::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const
+int ObExprGetSysVar::calc_result_type2(ObExprResType &type,
+                                       ObExprResType &type1,
+                                       ObExprResType &type2,
+                                       common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type2);
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = type_ctx.get_session();
+  const ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session is NULL");
@@ -51,13 +58,16 @@ int ObExprGetSysVar::calc_result_type2(
       LOG_WARN("failed to check if sys variable exists", K(var_name), K(ret));
     } else {
       if (is_exist) {
-        ObBasicSysVar* sys_var_ptr = NULL;
+        ObBasicSysVar *sys_var_ptr = NULL;
         if (OB_FAIL(session->get_sys_variable_by_name(var_name, sys_var_ptr))) {
           LOG_WARN("fail to get sys var from session", K(var_name), K(ret));
         } else if (OB_ISNULL(sys_var_ptr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sys var is NULL", K(var_name), K(ret));
         } else if (sys_var_ptr->is_enum_type()) {
+          // 用户在select enum类型的系统变量时，ObBasicSysVar将其记录为ObIntType
+          // 但是为了方便展示，最终都会以字符串的形式返回，这种行为也与MySQL兼容
+          // 所以这里显式设置返回类型为varchar
           data_type = ObVarcharType;
         } else {
           data_type = sys_var_ptr->get_meta_type();
@@ -72,6 +82,7 @@ int ObExprGetSysVar::calc_result_type2(
             type.set_length(OB_MAX_SYS_VAR_VAL_LENGTH);
             if (is_oracle_mode()) {
               type.set_collation_type(session->get_nls_collation());
+              type.set_length_semantics(session->get_actual_nls_length_semantics());
             } else {
               ObCollationType conn_coll = CS_TYPE_INVALID;
               OZ(session->get_collation_connection(conn_coll));
@@ -88,34 +99,12 @@ int ObExprGetSysVar::calc_result_type2(
   return ret;
 }
 
-int ObExprGetSysVar::calc_result2(
-    ObObj& result, const ObObj& name, const ObObj& scope, common::ObExprCtx& expr_ctx) const
+int ObExprGetSysVar::calc_(ObObj &result, const ObString &var_name, const int64_t var_scope,
+                           ObSQLSessionInfo *session, ObExecContext *exec_ctx, ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
-  ObString var_name;
-  int64_t var_scope = 0;
-  if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_) || OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN(
-        "session or exec_ctx or expr_ctx.calc_buf_ is NULL", K(expr_ctx.my_session_), K(expr_ctx.exec_ctx_), K(ret));
-  } else if (OB_FAIL(name.get_varchar(var_name))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid name type, expect varchar", K(name), K(ret));
-  } else if (OB_FAIL(scope.get_int(var_scope))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid scope type, expect varchar", K(scope), K(ret));
-  } else if (OB_FAIL(
-                 calc_(result, var_name, var_scope, expr_ctx.my_session_, expr_ctx.exec_ctx_, *(expr_ctx.calc_buf_)))) {
-    LOG_WARN("calc_ failed", K(ret), K(name), K(scope));
-  }
-  return ret;
-}
-
-int ObExprGetSysVar::calc_(ObObj& result, const ObString& var_name, const int64_t var_scope, ObSQLSessionInfo* session,
-    ObExecContext* exec_ctx, ObIAllocator& alloc)
-{
-  int ret = OB_SUCCESS;
-  ObBasicSysVar* sys_var_ptr = NULL;
+  ObBasicSysVar *sys_var_ptr = NULL;
+  // 先从session中取出(session中包含所有的系统变量，包括only global的)
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -125,6 +114,7 @@ int ObExprGetSysVar::calc_(ObObj& result, const ObString& var_name, const int64_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys var is NULL", K(var_name), K(ret));
   } else if (ObSetVar::SET_SCOPE_NEXT_TRANS == static_cast<ObSetVar::SetScopeType>(var_scope)) {
+    // 如果没指定scope，如果是session变量，直接从session中拿，如果是only global的，则从内部表中拿
     if (sys_var_ptr->is_session_scope()) {
       // get session variable
       if (OB_FAIL(get_session_var(result, var_name, alloc, session, exec_ctx))) {
@@ -141,10 +131,10 @@ int ObExprGetSysVar::calc_(ObObj& result, const ObString& var_name, const int64_
     }
   } else if (ObSetVar::SET_SCOPE_GLOBAL == static_cast<ObSetVar::SetScopeType>(var_scope)) {
     if (!sys_var_ptr->is_global_scope()) {
+      // 不是global变量，也不是global and session变量，是only session变量
       ret = OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR;
       ObString scope_name("SESSION");
-      LOG_USER_ERROR(
-          OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR, var_name.length(), var_name.ptr(), scope_name.length(), scope_name.ptr());
+      LOG_USER_ERROR(OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR, var_name.length(), var_name.ptr(), scope_name.length(), scope_name.ptr());
     } else {
       // get global variable
       if (OB_FAIL(get_sys_var_disp_obj(alloc, *session, var_name, result))) {
@@ -153,10 +143,10 @@ int ObExprGetSysVar::calc_(ObObj& result, const ObString& var_name, const int64_
     }
   } else if (ObSetVar::SET_SCOPE_SESSION == static_cast<ObSetVar::SetScopeType>(var_scope)) {
     if (!sys_var_ptr->is_session_scope()) {
+      // 不是session变量，也不是global and session变量，是only global变量
       ret = OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR;
       ObString scope_name("GLOBAL");
-      LOG_USER_ERROR(
-          OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR, var_name.length(), var_name.ptr(), scope_name.length(), scope_name.ptr());
+      LOG_USER_ERROR(OB_ERR_INCORRECT_GLOBAL_LOCAL_VAR, var_name.length(), var_name.ptr(), scope_name.length(), scope_name.ptr());
     } else {
       // get session variable
       if (OB_FAIL(get_session_var(result, var_name, alloc, session, exec_ctx))) {
@@ -170,8 +160,11 @@ int ObExprGetSysVar::calc_(ObObj& result, const ObString& var_name, const int64_
   return ret;
 }
 
-int ObExprGetSysVar::get_session_var(
-    ObObj& result, const ObString& var_name, ObIAllocator& alloc, ObSQLSessionInfo* session, ObExecContext* exec_ctx)
+int ObExprGetSysVar::get_session_var(ObObj &result,
+                                     const ObString &var_name,
+                                     ObIAllocator &alloc,
+                                     ObSQLSessionInfo *session,
+                                     ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
@@ -199,16 +192,15 @@ int ObExprGetSysVar::get_session_var(
         } else {
           number::ObNumber value;
           if (OB_FAIL(nmb.div(nmb_unit, value, alloc))) {
-            LOG_WARN("failed to get the result of 'timestamp div 1000000'", K(ret));
+            LOG_WARN( "failed to get the result of 'timestamp div 1000000'", K(ret));
           } else {
             result.set_number(value);
           }
         }
       }
     } else {
-      ObBasicSysVar* sys_var = NULL;
+      ObBasicSysVar *sys_var = NULL;
       if (OB_FAIL(session->get_sys_variable_by_name(var_name, sys_var))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sys var from session", K(var_name), K(ret));
       } else if (OB_ISNULL(sys_var)) {
         ret = OB_ERR_UNEXPECTED;
@@ -218,14 +210,19 @@ int ObExprGetSysVar::get_session_var(
       }
     }
   }
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && result.is_null_oracle()) {
+    result.set_null();
+  }
   return ret;
 }
 
-int ObExprGetSysVar::get_sys_var_disp_obj(
-    common::ObIAllocator& allocator, const ObSQLSessionInfo& session, const ObString& var_name, ObObj& disp_obj)
+int ObExprGetSysVar::get_sys_var_disp_obj(common::ObIAllocator &allocator,
+                                          const ObSQLSessionInfo &session,
+                                          const ObString &var_name,
+                                          ObObj &disp_obj)
 {
   int ret = OB_SUCCESS;
-  ObBasicSysVar* sys_var = NULL;
+  ObBasicSysVar *sys_var = NULL;
   ObSysVarFactory sysvar_fac;
   ObObj value;
   ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
@@ -245,31 +242,39 @@ int ObExprGetSysVar::get_sys_var_disp_obj(
       LOG_WARN("to select obj in sys_var failed", K(ret), K(var_name));
     }
   }
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && disp_obj.is_null_oracle()) {
+    disp_obj.set_null();
+  }
   return ret;
 }
 
 // for engine 3.0
-int ObExprGetSysVar::calc_get_sys_val_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int ObExprGetSysVar::calc_get_sys_val_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* name = NULL;
-  ObDatum* scope = NULL;
+  ObDatum *name = NULL;
+  ObDatum *scope = NULL;
   if (OB_UNLIKELY(2 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg cnt", K(ret), K(expr.arg_cnt_));
   } else if (OB_FAIL(expr.eval_param_value(ctx, name, scope))) {
     LOG_WARN("eval param failed", K(ret));
   } else {
-    const ObString& var_name = name->get_string();
+    const ObString &var_name = name->get_string();
     int64_t var_scope = scope->get_int();
     ObObj result;
-    ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
-    if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(), &ctx.exec_ctx_, calc_alloc))) {
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    if (OB_FAIL(calc_(result, var_name, var_scope, ctx.exec_ctx_.get_my_session(),
+                      &ctx.exec_ctx_, calc_alloc))) {
       LOG_WARN("calc_ failed", K(ret), K(name), K(scope));
     } else {
-      const ObObjType& obj_type = result.get_type();
-      const ObObjType& res_type = expr.datum_meta_.type_;
+      const ObObjType &obj_type = result.get_type();
+      const ObObjType &res_type = expr.datum_meta_.type_;
       if (!result.is_null() && OB_UNLIKELY(obj_type != res_type)) {
+        // 确保下编译期结果类型跟实际结果类型是一致的，否则从datum的内存空间可能会因为类型
+        // 不一致出现问题
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("compile type and calc res type is different", K(ret), K(obj_type), K(res_type));
       } else if (ob_is_string_type(obj_type)) {
@@ -290,7 +295,8 @@ int ObExprGetSysVar::calc_get_sys_val_expr(const ObExpr& expr, ObEvalCtx& ctx, O
   return ret;
 }
 
-int ObExprGetSysVar::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprGetSysVar::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -298,5 +304,5 @@ int ObExprGetSysVar::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr
   rt_expr.eval_func_ = calc_get_sys_val_expr;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

@@ -78,6 +78,20 @@ insert into t1 values('11:11:11.123456');
 select cast(c1 as time), concat(c1, 'abc') from t1;
 
 drop table t1;
+create table t1(col_utf8  varchar(100) collate utf8_general_ci,
+                col_utf16 varchar(100) collate utf16_bin,
+                col_gbk   varchar(100) collate gbk_chinese_ci);
+insert into t1 values('123.123', '123.123', '123.123');
+select cast(col_utf8 as char(10)), cast(col_utf16 as char(10)), cast(col_gbk as char(10)) from t1;
+select length(cast(col_utf8 as char(10))), length(cast(col_utf16 as char(10))), length(cast(col_gbk as char(10))) from t1;
+
+select cast(col_utf8 as decimal(10, 1)), cast(col_utf16 as decimal(10, 5)), cast(col_gbk as decimal(10, 1)) from t1;
+
+--echo // binary/varbinary test, check if padding char is ok
+select col_utf16, cast(col_utf16 as binary(20)), hex(cast(col_utf16 as binary(20))) from t1;
+select col_utf8, cast(col_utf8 as binary(20)), hex(cast(col_utf8 as binary(20))) from t1;
+
+drop table t1;
 create table t1(c1 bigint unsigned);
 insert into t1 values(18446744073709551615);
 select cast(c1 as signed) from t1;

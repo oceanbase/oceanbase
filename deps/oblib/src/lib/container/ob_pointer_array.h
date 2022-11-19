@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_COMMON_POINTER_ARRAY_H_
-#define OCEANBASE_COMMON_POINTER_ARRAY_H_
+#ifndef  OCEANBASE_COMMON_POINTER_ARRAY_H_
+#define  OCEANBASE_COMMON_POINTER_ARRAY_H_
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,10 +23,13 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/ob_mod_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 template <typename T, int64_t SIZE>
-class ObPointerArray {
+class ObPointerArray
+{
 public:
   ObPointerArray()
   {
@@ -41,28 +44,28 @@ public:
       }
     }
   };
-
 public:
-  T* operator[](const int64_t index)
+  T *operator [](const int64_t index)
   {
-    T* ret = NULL;
-    if (0 <= index && SIZE > index) {
+    T *ret = NULL;
+    if (0 <= index
+        && SIZE > index) {
       if (NULL == (ret = array_[index])) {
-        char* buffer = allocator_.alloc(sizeof(T));
+        char *buffer = allocator_.alloc(sizeof(T));
         if (NULL != buffer) {
-          array_[index] = new (buffer) T();
+          array_[index] = new(buffer) T();
           ret = array_[index];
         }
       }
     }
     return ret;
   };
-
 private:
-  T* array_[SIZE];
+  T *array_[SIZE];
   PageArena<char> allocator_;
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_COMMON_POINTER_ARRAY_H_
+#endif // OCEANBASE_COMMON_POINTER_ARRAY_H_
+

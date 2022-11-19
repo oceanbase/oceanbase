@@ -19,23 +19,23 @@ namespace oceanbase {
 namespace rpc {
 namespace frame {
 class ObReqTransport;
-}  // namespace frame
-}  // namespace rpc
+}  // frame
+}  // rpc
 
 namespace share {
-extern rpc::frame::ObReqTransport* g_obrpc_transport;
+extern rpc::frame::ObReqTransport *g_obrpc_transport;
 
-OB_INLINE void set_obrpc_transport(rpc::frame::ObReqTransport* obrpc_transport)
+OB_INLINE void set_obrpc_transport(rpc::frame::ObReqTransport *obrpc_transport)
 {
   g_obrpc_transport = obrpc_transport;
 }
 
-OB_INLINE int init_obrpc_proxy(obrpc::ObRpcProxy& proxy)
+OB_INLINE int init_obrpc_proxy(obrpc::ObRpcProxy &proxy)
 {
   return proxy.init(g_obrpc_transport);
 }
 
-}  // namespace share
-}  // namespace oceanbase
+}  // share
+}  // oceanbase
 
 #endif /* OB_RPC_SHARE_H */

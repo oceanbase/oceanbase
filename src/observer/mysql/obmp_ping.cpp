@@ -15,16 +15,21 @@
 #include "observer/mysql/obmp_ping.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace obmysql;
 
-namespace observer {
-ObMPPing::ObMPPing(const ObGlobalContext& gctx) : ObMPBase(gctx), sql_()
-{}
+namespace observer
+{
+ObMPPing::ObMPPing(const ObGlobalContext &gctx)
+    : ObMPBase(gctx), sql_()
+{
+}
 
 ObMPPing::~ObMPPing()
-{}
+{
+}
 
 int ObMPPing::deserialize()
 {
@@ -34,7 +39,7 @@ int ObMPPing::deserialize()
 int ObMPPing::process()
 {
   int ret = OB_SUCCESS;
-  sql::ObSQLSessionInfo* session = NULL;
+  sql::ObSQLSessionInfo *session = NULL;
   if (OB_FAIL(get_session(session))) {
     LOG_WARN("get session fail", K(ret));
   } else if (OB_ISNULL(session)) {
@@ -43,7 +48,7 @@ int ObMPPing::process()
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
-    ObOKPParam ok_param;  // use default values
+    ObOKPParam ok_param; // use default values
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {
       LOG_WARN("fail to send ok pakcet in ping response", K(ok_param), K(ret));
     }
@@ -52,10 +57,10 @@ int ObMPPing::process()
     revert_session(session);
   }
   if (OB_FAIL(ret)) {
-    disconnect();
+    force_disconnect();
   }
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

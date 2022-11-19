@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 #include <string.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
@@ -20,10 +20,12 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-int ObBigEndian::put_uint16(unsigned char* b, uint16_t v)
+int ObBigEndian::put_uint16(unsigned char *b, uint16_t v)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(b)) {
@@ -35,7 +37,7 @@ int ObBigEndian::put_uint16(unsigned char* b, uint16_t v)
   }
   return ret;
 }
-int ObBigEndian::put_uint32(unsigned char* b, uint32_t v)
+int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(b)) {
@@ -55,6 +57,7 @@ ObUUIDNode::ObUUIDNode()
   is_inited_ = false;
   (void)init();
 }
+
 
 /*
  * get and set mac address
@@ -78,8 +81,8 @@ int ObUUIDNode::init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error. ioctl failed", K(ret), K(errno));
     } else {
-      ifreq* it = ifc.ifc_req;
-      ifreq* end = it + (ifc.ifc_len / sizeof(ifreq));
+      ifreq *it = ifc.ifc_req;
+      ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
       bool mac_addr_found = false;
       for (; it != end && OB_SUCC(ret); ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
@@ -96,7 +99,7 @@ int ObUUIDNode::init()
             }
           }
         }
-      }  // end for
+      }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
         ret = OB_ERR_UNEXPECTED;
@@ -110,7 +113,8 @@ int ObUUIDNode::init()
   return ret;
 }
 
-int ObUUIDTime::get_time(uint64_t& time, uint16_t& seq)
+
+int ObUUIDTime::get_time(uint64_t &time, uint16_t &seq)
 {
   int ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
@@ -132,7 +136,7 @@ int ObUUIDTime::get_time(uint64_t& time, uint16_t& seq)
   return ret;
 }
 
-int ObUUIDTime::time_now(uint64_t& now)
+int ObUUIDTime::time_now(uint64_t &now)
 {
   int ret = OB_SUCCESS;
   struct timespec ts;
@@ -156,50 +160,30 @@ void ObUUIDTime::reset_clock_seq()
   clock_seq_ = static_cast<uint16_t>((seq & 0x3fff) | 0x8000);
 }
 
-ObExprUuid::ObExprUuid(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_UUID, N_UUID, 0, NOT_ROW_DIMENSION)
-{}
+
+ObExprUuid::ObExprUuid(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID, N_UUID, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprUuid::ObExprUuid(
-    ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, dimension)
-{}
+  ObIAllocator &alloc,
+  ObExprOperatorType type,
+  const char *name,
+  int32_t param_num,
+  int32_t dimension)
+  : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+{
+}
 
 ObExprUuid::~ObExprUuid()
-{}
-
-int ObExprUuid::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
 {
-  int ret = OB_SUCCESS;
-  char* buffer = NULL;
-  unsigned char scratch[ObExprUuid::LENGTH_UUID];
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is null", K(ret), K(expr_ctx.calc_buf_));
-  } else if (OB_UNLIKELY(NULL == (buffer = static_cast<char*>(expr_ctx.calc_buf_->alloc(ObExprUuid::LENGTH_UUID))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory failed", K(ret));
-  } else if (OB_FAIL(calc(scratch))) {
-    LOG_WARN("calc failed", K(ret));
-  } else {
-    // to string
-    char* start = buffer;
-    for (int64_t i = 0; i < 16; ++i) {
-      if (4 == i || 6 == i || 8 == i || 10 == i) {
-        sprintf(buffer++, "-");
-      }
-      sprintf(buffer, "%02x", scratch[i]);
-      buffer += 2;
-    }
-    result.set_varchar(start, ObExprUuid::LENGTH_UUID);
-    result.set_collation(result_type_);
-  }
-  return ret;
 }
 
 int ObExprUuid::init()
 {
-  // will be inited once when and only when server starts
-  // so, please do not worry too much about the contention even we use ob_malloc here.
+  //will be inited once when and only when server starts
+  //so, please do not worry too much about the contention even we use ob_malloc here.
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
   mem_attr.label_ = ObModIds::OB_SQL_EXPR;
@@ -209,13 +193,13 @@ int ObExprUuid::init()
     LOG_ERROR("allocate memory failed", K(ret));
   } else if (OB_FAIL(uuid_node->init())) {
     LOG_WARN("init uuid node failed", K(ret));
-    ob_free(uuid_node);  // very important ! do not forget this !
-    uuid_node = NULL;    // very important ! do not forget this !
+    ob_free(uuid_node);//very important ! do not forget this !
+    uuid_node = NULL;//very important ! do not forget this !
   }
   return ret;
 }
 
-int ObExprUuid::calc(unsigned char* scratch)
+int ObExprUuid::calc(unsigned char *scratch)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(scratch)) {
@@ -225,7 +209,7 @@ int ObExprUuid::calc(unsigned char* scratch)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error. uuid node is not inited", K(ret), K(uuid_node));
   } else {
-    unsigned char* mac_addr = uuid_node->mac_addr_;
+    unsigned char *mac_addr = uuid_node->mac_addr_;
     uint64_t time = 0;
     uint16_t seq = 0;
     if (OB_FAIL(ObUUIDTime::get_time(time, seq))) {
@@ -257,9 +241,10 @@ uint64_t ObUUIDTime::lasttime_ = 0;
 uint16_t ObUUIDTime::clock_seq_ = 0;
 ObLatch ObUUIDTime::lock_;
 
-ObUUIDNode* ObExprUuid::uuid_node = NULL;
+ObUUIDNode *ObExprUuid::uuid_node = NULL;
 
-int ObExprUuid::eval_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprUuid::eval_uuid(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
@@ -267,14 +252,14 @@ int ObExprUuid::eval_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datu
   if (OB_FAIL(calc(scratch))) {
     LOG_WARN("calc failed", K(ret));
   } else {
-    char* buf = expr.get_str_res_mem(ctx, LENGTH_UUID);
+    char *buf = expr.get_str_res_mem(ctx, LENGTH_UUID);
     int64_t pos = 0;
     if (OB_ISNULL(buf)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "buff is null", K(ret));
     } else {
-      // to string
-      const char* HEXCHARS = "0123456789abcdef";
+      //to string
+      const char *HEXCHARS = "0123456789abcdef";
       for (int64_t i = 0; pos < LENGTH_UUID && i < 16; ++i) {
         if (4 == i || 6 == i || 8 == i || 10 == i) {
           buf[pos++] = '-';
@@ -290,7 +275,8 @@ int ObExprUuid::eval_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datu
   return ret;
 }
 
-int ObExprUuid::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprUuid::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -298,42 +284,59 @@ int ObExprUuid::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExp
   return OB_SUCCESS;
 }
 
-ObExprSysGuid::ObExprSysGuid(ObIAllocator& alloc) : ObExprUuid(alloc, T_FUN_SYS_GUID, N_SYS_GUID, 0, NOT_ROW_DIMENSION)
-{}
-
-ObExprSysGuid::~ObExprSysGuid()
-{}
-
-int ObExprSysGuid::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
+ObExprSysGuid::ObExprSysGuid(ObIAllocator &alloc)
+  : ObExprUuid(alloc, T_FUN_SYS_GUID, N_SYS_GUID, 0, NOT_ROW_DIMENSION)
 {
-  int ret = OB_SUCCESS;
-  unsigned char* buffer = NULL;
-  CK(OB_NOT_NULL(expr_ctx.calc_buf_));
-  if (OB_SUCC(ret) &&
-      OB_ISNULL(buffer = static_cast<unsigned char*>(expr_ctx.calc_buf_->alloc(ObExprUuid::LENGTH_UUID)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory for sys guid failed", K(ret));
-  }
-  OZ(calc(buffer));
-  OX(result.set_raw(reinterpret_cast<char*>(buffer), ObExprSysGuid::LENGTH_SYS_GUID));
-  OX(result.set_collation(result_type_));
-  return ret;
 }
 
-int ObExprSysGuid::eval_sys_guid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+ObExprSysGuid::~ObExprSysGuid()
+{
+}
+
+int ObExprSysGuid::eval_sys_guid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  unsigned char* buf = reinterpret_cast<unsigned char*>(expr.get_str_res_mem(ctx, LENGTH_UUID));
+  unsigned char *buf = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, LENGTH_UUID));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("buff is null", K(ret));
   } else if (OB_FAIL(calc(buf))) {
     LOG_WARN("calc uuid failed", K(ret));
   } else {
-    expr_datum.set_string(reinterpret_cast<char*>(buf), LENGTH_SYS_GUID);
+    expr_datum.set_string(reinterpret_cast<char *>(buf), LENGTH_SYS_GUID);
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator calc_buf(ObModIds::OB_SQL_EXPR);
+  unsigned char scratch[ObExprUuid::LENGTH_UUID] = {0};
+  if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != ObExprUuid::LENGTH_UUID)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(server_uuid), K(uuid_len));
+  } else if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else if (OB_FAIL(uuid_node->init())) {
+    LOG_WARN("failed to init", K(ret));
+  } else if (OB_FAIL(calc(scratch))) {
+    LOG_WARN("failed to calc", K(ret));
+  } else {
+    //to string
+    int64_t pos = 0;
+    const char *HEXCHARS = "0123456789abcdef";
+    for (int64_t i = 0; pos < LENGTH_UUID && i < 16; ++i) {
+      if (4 == i || 6 == i || 8 == i || 10 == i) {
+        server_uuid[pos++] = '-';
+      }
+      server_uuid[pos++] = HEXCHARS[scratch[i] >> 4 & 0xF];
+      server_uuid[pos++] = HEXCHARS[scratch[i] & 0xF];
+    }
+  }
+  return ret;
+}
+
+} //namespace sql
+} //namespace oceanbase

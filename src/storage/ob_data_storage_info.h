@@ -19,22 +19,23 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace storage {
+namespace oceanbase
+{
+namespace storage
+{
 
-class ObDataStorageInfo {
+class ObDataStorageInfo
+{
 public:
   ObDataStorageInfo()
-      : last_replay_log_id_(0),
-        publish_version_(0),
-        schema_version_(0),
-        for_filter_log_compat_(0),
-        created_by_new_minor_freeze_(false),
-        last_replay_log_ts_(0)
-  {}
+    : last_replay_log_id_(0),
+    publish_version_(0),
+    schema_version_(0),
+    for_filter_log_compat_(0),
+    created_by_new_minor_freeze_(false),
+    last_replay_log_ts_(0) {}
 
-  ~ObDataStorageInfo()
-  {}
+  ~ObDataStorageInfo() {}
 
   bool is_valid() const;
   void reset();
@@ -47,21 +48,17 @@ public:
   void set_schema_version(const int64_t schema_version);
   int64_t get_schema_version() const;
   void inc_update_schema_version(const int64_t schema_version);
-  bool is_created_by_new_minor_freeze() const
-  {
-    return created_by_new_minor_freeze_;
-  }
-  void set_created_by_new_minor_freeze()
-  {
-    created_by_new_minor_freeze_ = true;
-  }
+  bool is_created_by_new_minor_freeze() const { return created_by_new_minor_freeze_; }
+  void set_created_by_new_minor_freeze() { created_by_new_minor_freeze_ = true; }
   int64_t get_last_replay_log_ts() const;
   void set_last_replay_log_ts(const int64_t last_replay_log_ts);
 
-  TO_STRING_KV("last_replay_log_id", last_replay_log_id_, "last_replay_log_ts", last_replay_log_ts_, "publish_version",
-      publish_version_, "schema_version", schema_version_, "created_by_new_minor_freeze", created_by_new_minor_freeze_);
+  TO_STRING_KV("last_replay_log_id", last_replay_log_id_,
+               "last_replay_log_ts", last_replay_log_ts_,
+               "publish_version", publish_version_,
+               "schema_version", schema_version_,
+               "created_by_new_minor_freeze", created_by_new_minor_freeze_);
   OB_UNIS_VERSION(1);
-
 private:
   // Log point to start replay.
   uint64_t last_replay_log_id_;
@@ -75,7 +72,8 @@ private:
 
 inline bool ObDataStorageInfo::is_valid() const
 {
-  return (common::is_valid_trans_version(publish_version_) && schema_version_ >= 0);
+  return (common::is_valid_trans_version(publish_version_)
+          && schema_version_ >= 0);
 }
 
 inline void ObDataStorageInfo::set_last_replay_log_id(const uint64_t last_replay_log_id)
@@ -125,7 +123,7 @@ inline void ObDataStorageInfo::set_last_replay_log_ts(const int64_t last_replay_
   last_replay_log_ts_ = last_replay_log_ts;
 }
 
-}  // namespace storage
-}  // namespace oceanbase
+}
+}
 
 #endif /* OCEANBASE_STORAGE_OB_DATA_STORAGE_INFO_ */

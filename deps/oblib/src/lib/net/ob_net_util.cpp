@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #define USING_LOG_PREFIX LIB
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"

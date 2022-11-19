@@ -18,13 +18,16 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/ob_sql_context.h"
 #include "common/ob_smart_call.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
-ObRawExprCanonicalizerImpl::ObRawExprCanonicalizerImpl(ObExprResolveContext& ctx) : ctx_(ctx)
+namespace sql
+{
+ObRawExprCanonicalizerImpl::ObRawExprCanonicalizerImpl(ObExprResolveContext &ctx)
+    : ctx_(ctx)
 {}
 
-int ObRawExprCanonicalizerImpl::canonicalize(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::canonicalize(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(push_not(expr))) {
@@ -39,7 +42,7 @@ int ObRawExprCanonicalizerImpl::canonicalize(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   bool is_overflow = false;
@@ -52,8 +55,8 @@ int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
     if (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR) {
       ObRawExpr::ExprClass expr_class = expr->get_expr_class();
       if (ObRawExpr::EXPR_OPERATOR == expr_class) {
-        ObOpRawExpr* parent_expr = static_cast<ObOpRawExpr*>(expr);
-        ObOpRawExpr* tmp = NULL;
+        ObOpRawExpr *parent_expr = static_cast<ObOpRawExpr *>(expr);
+        ObOpRawExpr *tmp = NULL;
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(parent_expr->get_expr_type(), tmp))) {
           LOG_WARN("create op raw expr failed", KPC(parent_expr));
         } else if (OB_FAIL(tmp->assign(*parent_expr))) {
@@ -61,7 +64,7 @@ int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
         }
         parent_expr->clear_child();
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp->get_param_count(); i++) {
-          ObRawExpr* sub_expr = tmp->get_param_expr(i);
+          ObRawExpr *sub_expr = tmp->get_param_expr(i);
           if (OB_ISNULL(sub_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("sub expr is null");
@@ -71,7 +74,7 @@ int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
             // and(and(a,b),c) -> and(a,b,c)
             ObRawExpr::ExprClass sub_expr_class = sub_expr->get_expr_class();
             if (ObRawExpr::EXPR_OPERATOR == sub_expr_class) {
-              ObOpRawExpr* child_expr = static_cast<ObOpRawExpr*>(sub_expr);
+              ObOpRawExpr *child_expr = static_cast<ObOpRawExpr *>(sub_expr);
               for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); ++j) {
                 if (OB_FAIL(parent_expr->add_param_expr(child_expr->get_param_expr(j)))) {
                   LOG_WARN("Cluster AND or OR expression failed", K(ret));
@@ -88,11 +91,11 @@ int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
               LOG_WARN("failed to add param expr", K(ret));
             }
           }
-        }  // end for
+        } // end for
         if (tmp != NULL) {
           tmp->reset();
         }
-      } else {
+      }else{
         LOG_WARN("expression type mismatch , expect ObOpRawExpr", K(expr_class));
       }
     } else {
@@ -102,12 +105,12 @@ int ObRawExprCanonicalizerImpl::cluster_and_or(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::pull_similar_expr(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::pull_similar_expr(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (expr != NULL) {
     if (expr->get_expr_type() == T_OP_OR) {
-      ObOpRawExpr* m_expr = static_cast<ObOpRawExpr*>(expr);
+      ObOpRawExpr *m_expr = static_cast<ObOpRawExpr *>(expr);
       for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
         if (OB_FAIL(SMART_CALL(pull_similar_expr(m_expr->get_param_expr(i))))) {
           LOG_WARN("pull child similar expr failed", K(ret));
@@ -117,7 +120,7 @@ int ObRawExprCanonicalizerImpl::pull_similar_expr(ObRawExpr*& expr)
         LOG_WARN("pull and facotr failed", K(ret));
       }
     } else if (expr->get_expr_type() == T_OP_AND) {
-      ObOpRawExpr* m_expr = static_cast<ObOpRawExpr*>(expr);
+      ObOpRawExpr *m_expr = static_cast<ObOpRawExpr *>(expr);
       for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
         if (OB_FAIL(SMART_CALL(pull_similar_expr(m_expr->get_param_expr(i))))) {
           LOG_WARN("pull child similar expr failed", K(ret));
@@ -135,17 +138,17 @@ int ObRawExprCanonicalizerImpl::pull_similar_expr(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (expr && T_OP_OR == expr->get_expr_type()) {
-    ObRawExpr* short_expr = NULL;
+    ObRawExpr *short_expr = NULL;
     int64_t factor_num = INT64_MAX;
     // continue processing when one 'and'(ObOpRawExpr) exist at least
     bool do_handle = false;
-    ObOpRawExpr* m_expr = static_cast<ObOpRawExpr*>(expr);
+    ObOpRawExpr *m_expr = static_cast<ObOpRawExpr *>(expr);
     for (int64_t i = 0; OB_SUCC(ret) && i < m_expr->get_param_count(); ++i) {
-      const ObRawExpr* and_expr = m_expr->get_param_expr(i);
+      const ObRawExpr *and_expr = m_expr->get_param_expr(i);
       // at least one 'and' expr
       if (OB_ISNULL(and_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -170,14 +173,15 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
     }
     if (OB_SUCC(ret) && do_handle) {
       bool is_match = false;
-      ObQueryCtx* query_ctx = NULL;
+      ObQueryCtx *query_ctx = NULL;
       ObStmtCompareContext stmt_compare_context;
-      ObArray<ObRawExpr*> candidate_factors;
-      if (OB_ISNULL(short_expr) || OB_ISNULL(ctx_.stmt_) || OB_ISNULL(query_ctx = ctx_.stmt_->get_query_ctx())) {
+      ObArray<ObRawExpr *> candidate_factors;
+      if (OB_ISNULL(short_expr) ||
+          OB_ISNULL(ctx_.stmt_) ||
+          OB_ISNULL(query_ctx = ctx_.stmt_->get_query_ctx())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(short_expr), K(ctx_.stmt_), K(query_ctx));
-      } else if (OB_FAIL(stmt_compare_context.init(query_ctx))) {
-        LOG_WARN("failed to init query ctx", K(ret));
+        LOG_WARN("get unexpected null", K(ret), K(short_expr),
+            K(ctx_.stmt_), K(query_ctx));
       } else if (T_OP_AND == short_expr->get_expr_type()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < short_expr->get_param_count(); ++i) {
           if (OB_FAIL(candidate_factors.push_back(short_expr->get_param_expr(i)))) {
@@ -188,7 +192,8 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
         LOG_WARN("cons candidate factors failed", K(ret));
       }
       if (OB_SUCC(ret)) {
-        ObOpRawExpr* new_and = NULL;
+        ObOpRawExpr *new_and = NULL;
+        stmt_compare_context.init(&query_ctx->calculable_items_);
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_AND, new_and))) {
           LOG_WARN("alloc ObOpRawExpr failed", K(ret));
         } else if (OB_ISNULL(new_and)) {
@@ -208,7 +213,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
             LOG_WARN("candidate factor param expr is null", K(i));
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < m_expr->get_param_count(); ++j) {
-            ObOpRawExpr* and_expr = NULL;
+            ObOpRawExpr *and_expr = NULL;
             // 1. ignore NULL 'or expr'
             if (OB_ISNULL(m_expr->get_param_expr(j))) {
               ret = OB_ERR_UNEXPECTED;
@@ -217,28 +222,37 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
             // 2. seem whole none-'or expr' as integrity
             //     E.g.  A or (A and B) ==> A
             else if (T_OP_AND != m_expr->get_param_expr(j)->get_expr_type()) {
-              if (OB_FAIL(ObStmtComparer::is_same_condition(
-                      candidate_factors.at(i), m_expr->get_param_expr(j), stmt_compare_context, is_match))) {
+              if (OB_FAIL(ObStmtComparer::is_same_condition(candidate_factors.at(i),
+                                                            m_expr->get_param_expr(j),
+                                                            stmt_compare_context,
+                                                            is_match))) {
                 LOG_WARN("failed to check is condition equal", K(ret));
               } else if (!is_match) {
                 /*do nothing*/
-              } else if (OB_FAIL(append(equal_params, stmt_compare_context.equal_param_info_))) {
+              } else if (m_expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
+                /* don't eliminate or expr in (+), to keep the error information compatible with oracle
+                *  e,g,. select * from t1,t2 where t1.c1(+) = t2.c1 or t1.c1(+) = t2.c1 should raise ORA-1719 
+                */
+              } else if (OB_FAIL(append(equal_params,
+                                        stmt_compare_context.equal_param_info_))) {
                 LOG_WARN("failed to append expr", K(ret));
               } else if (OB_FAIL(idxs.push_back(-1 /*and factor index*/))) {
                 LOG_WARN("failed to push back pos", K(ret));
-              } else { /*do nothing*/
-              }
+              } else { /*do nothing*/ }
             }
             // 3. find factor in and list
-            else {  // and_expr != NULL
-              and_expr = static_cast<ObOpRawExpr*>(m_expr->get_param_expr(j));
+            else { // and_expr != NULL
+              and_expr = static_cast<ObOpRawExpr *>(m_expr->get_param_expr(j));
               for (int64_t k = 0; OB_SUCC(ret) && k < and_expr->get_param_count(); ++k) {
-                if (OB_FAIL(ObStmtComparer::is_same_condition(
-                        candidate_factors.at(i), and_expr->get_param_expr(k), stmt_compare_context, is_match))) {
+                if (OB_FAIL(ObStmtComparer::is_same_condition(candidate_factors.at(i),
+                                                              and_expr->get_param_expr(k),
+                                                              stmt_compare_context,
+                                                              is_match))) {
                   LOG_WARN("failed to check is condition equal", K(ret));
                 } else if (!is_match) {
                   /*do nothing*/
-                } else if (OB_FAIL(append(equal_params, stmt_compare_context.equal_param_info_))) {
+                } else if (OB_FAIL(append(equal_params,
+                                          stmt_compare_context.equal_param_info_))) {
                   LOG_WARN("failed to append expr", K(ret));
                 } else if (OB_FAIL(idxs.push_back(k))) {
                   LOG_WARN("failed to push back pos", K(ret));
@@ -256,7 +270,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
             }
             // 2. remove from or
             for (int64_t j = 0; OB_SUCC(ret) && j < idxs.count(); ++j) {
-              ObOpRawExpr* and_expr = NULL;
+              ObOpRawExpr *and_expr = NULL;
               if (OB_ISNULL(m_expr->get_param_expr(j))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("m_expr is null");
@@ -270,7 +284,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
                 ret = OB_ERR_UNEXPECTED;
               } else {
                 // must be and factor in and list
-                and_expr = static_cast<ObOpRawExpr*>(m_expr->get_param_expr(j));
+                and_expr = static_cast<ObOpRawExpr *>(m_expr->get_param_expr(j));
                 if (OB_FAIL(and_expr->remove_param_expr(idxs.at(j)))) {
                   LOG_WARN("remove param expr failed", K(ret));
                 } else if (1 == and_expr->get_param_count()) {
@@ -278,6 +292,7 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
                 }
               }
             }
+            //这里会导致m_expr的树形结构发生变化，所以and or关系也有可能发生变化，所以需要做一次相邻 and or的提升
             if (OB_SUCC(ret)) {
               if (OB_FAIL(append(query_ctx->all_equal_param_constraints_, equal_params))) {
                 LOG_WARN("failed to append expr", K(ret));
@@ -296,9 +311,9 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
             } else {
               expr = new_and;
             }
-          } else if (1 == new_and->get_param_count()) {
+          } else if (1 == new_and->get_param_count() && !expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
             ObRawExpr *const_false = NULL;
-            ObSEArray<ObRawExpr *, 2> new_exprs;
+            ObSEArray<ObRawExpr*,2> new_exprs;
             if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(&ctx_.expr_factory_, const_false, false))) {
               LOG_WARN("failed to build const expr", K(ret));
             } else if (OB_FAIL(new_exprs.push_back(const_false))) {
@@ -318,18 +333,18 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::pull_parallel_expr(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::pull_parallel_expr(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (expr && (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR)) {
     bool has_sub = false;
     ObRawExpr::ExprClass expr_class = expr->get_expr_class();
-    if (ObRawExpr::EXPR_OPERATOR != expr_class) {
+    if (ObRawExpr::EXPR_OPERATOR != expr_class){
       LOG_WARN("Unexpected expression type", K(expr_class));
     } else {
-      ObOpRawExpr* parent_expr = static_cast<ObOpRawExpr*>(expr);
+      ObOpRawExpr *parent_expr = static_cast<ObOpRawExpr *>(expr);
       for (int64_t i = 0; OB_SUCC(ret) && i < parent_expr->get_param_count(); ++i) {
-        ObRawExpr* sub_expr = parent_expr->get_param_expr(i);
+        ObRawExpr *sub_expr = parent_expr->get_param_expr(i);
         if (sub_expr->get_expr_type() == parent_expr->get_expr_type()) {
           if (OB_FAIL(SMART_CALL(pull_parallel_expr(sub_expr)))) {
             LOG_WARN("Cluster AND or OR expression failed");
@@ -339,35 +354,43 @@ int ObRawExprCanonicalizerImpl::pull_parallel_expr(ObRawExpr*& expr)
         }
       }
       if (OB_SUCC(ret) && has_sub) {
-        ObSEArray<ObRawExpr*, 2> param_exprs;
-        ObRawExpr *sub_expr = NULL;
-        if (OB_FAIL(param_exprs.assign(parent_expr->get_param_exprs()))) {
-          LOG_WARN("failed to assign exprs", K(ret));
+        ObOpRawExpr* tmp = nullptr;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(parent_expr->get_expr_type(), tmp))) {
+          LOG_WARN("failed to create raw expr", K(ret));
+        } else if (OB_ISNULL(tmp)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null expr", K(ret));
+        } else if (OB_FAIL(tmp->assign(*parent_expr))) {
+          LOG_WARN("failed to assign expr", K(ret));
         } else {
           parent_expr->clear_child();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
-          if (OB_ISNULL(sub_expr = param_exprs.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sub_expr is null", K(i));
-          } else if (sub_expr->get_expr_type() == parent_expr->get_expr_type()) {
-            ObRawExpr::ExprClass sub_expr_class = sub_expr->get_expr_class();
-            if (ObRawExpr::EXPR_OPERATOR != sub_expr_class) {
-              LOG_WARN("Unexpect Expression class", K(sub_expr_class));
-            } else {
-              ObOpRawExpr* child_expr = static_cast<ObOpRawExpr*>(sub_expr);
-              for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); j++) {
-                if (OB_FAIL(parent_expr->add_param_expr(child_expr->get_param_expr(j)))) {
-                  LOG_WARN("Pull AND or OR expression failed", K(ret));
+          for (int64_t i = 0; OB_SUCC(ret) && i < tmp->get_param_count(); ++i) {
+            ObRawExpr *sub_expr = tmp->get_param_expr(i);
+            if (OB_ISNULL(sub_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sub_expr is null", K(i));
+            } else if (sub_expr->get_expr_type() == parent_expr->get_expr_type()) {
+              ObRawExpr::ExprClass sub_expr_class = sub_expr->get_expr_class();
+              if (ObRawExpr::EXPR_OPERATOR != sub_expr_class) {
+                LOG_WARN("Unexpect Expression class", K(sub_expr_class));
+              } else {
+                ObOpRawExpr *child_expr = static_cast<ObOpRawExpr *>(sub_expr);
+                for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); j++) {
+                  if (OB_FAIL(parent_expr->add_param_expr(child_expr->get_param_expr(j)))) {
+                    LOG_WARN("Pull AND or OR expression failed", K(ret));
+                  }
                 }
+                child_expr->reset();
               }
-              child_expr->reset();
-            }
-          } else {
-            if (OB_FAIL(parent_expr->add_param_expr(sub_expr))) {
-              LOG_WARN("Pull AND or OR expression failed");
+            } else {
+              if (OB_FAIL(parent_expr->add_param_expr(sub_expr))) {
+                LOG_WARN("Pull AND or OR expression failed");
+              }
             }
           }
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(tmp)) {
+          tmp->reset();
         }
       }
       if (OB_SUCC(ret)) {
@@ -380,7 +403,7 @@ int ObRawExprCanonicalizerImpl::pull_parallel_expr(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::push_not(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::push_not(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (expr != NULL && expr->has_flag(CNT_NOT)) {
@@ -393,7 +416,7 @@ int ObRawExprCanonicalizerImpl::push_not(ObRawExpr*& expr)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::do_push_not(ObRawExpr*& expr)
+int ObRawExprCanonicalizerImpl::do_push_not(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   if (expr->get_expr_type() != T_OP_NOT) {
@@ -401,15 +424,16 @@ int ObRawExprCanonicalizerImpl::do_push_not(ObRawExpr*& expr)
   } else {
     ObItemType opp_ty = T_MIN_OP;
     ObRawExpr::ExprClass expr_class = expr->get_expr_class();
-    if (ObRawExpr::EXPR_OPERATOR != expr_class) {
+    if (ObRawExpr::EXPR_OPERATOR != expr_class){
       LOG_WARN("Unexpected expression type", K(expr_class));
     } else {
-      ObOpRawExpr* not_expr = static_cast<ObOpRawExpr*>(expr);
-      ObRawExpr* child_expr = not_expr->get_param_expr(0);
+      ObOpRawExpr *not_expr = static_cast<ObOpRawExpr *>(expr);
+      ObRawExpr *child_expr = not_expr->get_param_expr(0);
       if (OB_ISNULL(child_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child expr is null");
-      } else if (child_expr->get_expr_type() == T_OP_NOT && ObRawExpr::EXPR_OPERATOR == child_expr->get_expr_class()) {
+      } else if (child_expr->get_expr_type() == T_OP_NOT &&
+        ObRawExpr::EXPR_OPERATOR == child_expr->get_expr_class()) {
         // not(not(X)) => X
         // X must be a boolean operator
         if (OB_ISNULL(child_expr->get_param_expr(0))) {
@@ -422,38 +446,45 @@ int ObRawExprCanonicalizerImpl::do_push_not(ObRawExpr*& expr)
           ret = push_not(expr);
         }
       } else if (ObRawExpr::EXPR_OPERATOR == child_expr->get_expr_class() &&
-                 (child_expr->get_expr_type() == T_OP_AND || child_expr->get_expr_type() == T_OP_OR)) {
+                (child_expr->get_expr_type() == T_OP_AND || child_expr->get_expr_type() == T_OP_OR)) {
         // not(and(A, B)) => or(not(A), not(B))
         // not(or(A, B)) => and(not(A), not(B))
-        child_expr->set_expr_type(child_expr->get_expr_type() == T_OP_AND ? T_OP_OR : T_OP_AND);
-        // child_expr->free_op(); @todo
+        ObItemType op_type = child_expr->get_expr_type() == T_OP_AND ? T_OP_OR : T_OP_AND;
+        child_expr->set_expr_type(op_type);
+        //child_expr->free_op(); @todo
         expr = child_expr;
         ObOpRawExpr *m_expr = static_cast<ObOpRawExpr *>(child_expr); // and, or
-        ObSEArray<ObRawExpr*, 2> param_exprs;
-        if (OB_FAIL(param_exprs.assign(m_expr->get_param_exprs()))) {
+        ObSEArray<ObRawExpr*, 4> tmp_param_exprs;
+        if (OB_FAIL(tmp_param_exprs.assign(m_expr->get_param_exprs()))) {
           LOG_WARN("failed to assign exprs", K(ret));
+        } else if (OB_UNLIKELY(tmp_param_exprs.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect empty exprs", K(ret));
         } else {
           not_expr->reset();
           m_expr->clear_child();
-          not_expr->set_expr_type(T_OP_NOT); // reuse not
-          not_expr->set_param_expr(param_exprs.at(0));
-          if (OB_FAIL(not_expr->add_flag(IS_NOT))) {
-            LOG_WARN("failed to add flag IS_NOT", K(ret));
-          } else if (OB_FAIL(m_expr->add_param_expr(not_expr))) {
-            LOG_WARN("failed to add param expr", K(ret));
-          } else if (OB_FAIL(SMART_CALL(do_push_not(m_expr->get_param_expr(0))))) {
-            LOG_WARN("failed to do push not", K(ret));
-          }
+          // reuse not
+          not_expr->set_expr_type(T_OP_NOT);
+          not_expr->set_param_expr(tmp_param_exprs.at(0));
         }
-        for (int64_t i = 1; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
-          ObOpRawExpr* another = NULL;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to assigin expr", K(ret));
+        } else if (OB_FAIL(not_expr->add_flag(IS_NOT))) {
+          LOG_WARN("failed to add flag IS_NOT", K(ret));
+        } else if (OB_FAIL(m_expr->add_param_expr(not_expr))) {
+          LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(SMART_CALL(do_push_not(m_expr->get_param_expr(0))))) {
+          LOG_WARN("failed to do push not", K(ret));
+        }
+        for (int64_t i = 1; OB_SUCC(ret) && i < tmp_param_exprs.count(); ++i) {
+          ObOpRawExpr *another = NULL;
           if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_NOT, another))) {
             LOG_WARN("create ObOpRawExpr failed", K(ret));
           } else if (OB_ISNULL(another)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is null");
           } else {
-            another->set_param_expr(param_exprs.at(i));
+            another->set_param_expr(tmp_param_exprs.at(i));
             if (OB_FAIL(another->add_flag(IS_NOT))) {
               LOG_WARN("failed to add flag IS_NOT", K(ret));
             } else if (OB_FAIL(m_expr->add_param_expr(another))) {
@@ -476,24 +507,25 @@ int ObRawExprCanonicalizerImpl::do_push_not(ObRawExpr*& expr)
   return ret;
 }
 
-ObRawExprCanonicalizerImpl::ObOppositeOpPair ObRawExprCanonicalizerImpl::OPPOSITE_PAIRS[] = {
-    // T_MIN_OP means no opposite operator
-    {T_OP_EQ, T_OP_NE},
-    {T_OP_LE, T_OP_GT},
-    {T_OP_LT, T_OP_GE},
-    {T_OP_GE, T_OP_LT},
-    {T_OP_GT, T_OP_LE},
-    {T_OP_NE, T_OP_EQ},
-    {T_OP_IS, T_OP_IS_NOT},
-    {T_OP_IS_NOT, T_OP_IS},
-    {T_OP_BTW, T_OP_NOT_BTW},
-    {T_OP_NOT_BTW, T_OP_BTW},
-    {T_OP_NOT, T_MIN_OP},
-    {T_OP_AND, T_MIN_OP},
-    {T_OP_OR, T_MIN_OP},
-    {T_OP_IN, T_OP_NOT_IN},
-    {T_OP_NOT_IN, T_OP_IN},
-    {T_OP_NSEQ, T_MIN_OP},
+ObRawExprCanonicalizerImpl::ObOppositeOpPair ObRawExprCanonicalizerImpl::OPPOSITE_PAIRS[] =
+{
+  // T_MIN_OP means no opposite operator
+  {T_OP_EQ, T_OP_NE},
+  {T_OP_LE, T_OP_GT},
+  {T_OP_LT, T_OP_GE},
+  {T_OP_GE, T_OP_LT},
+  {T_OP_GT, T_OP_LE},
+  {T_OP_NE, T_OP_EQ},
+  {T_OP_IS, T_OP_IS_NOT},
+  {T_OP_IS_NOT, T_OP_IS},
+  {T_OP_BTW, T_OP_NOT_BTW},
+  {T_OP_NOT_BTW, T_OP_BTW},
+  {T_OP_NOT, T_MIN_OP},
+  {T_OP_AND, T_MIN_OP},
+  {T_OP_OR, T_MIN_OP},
+  {T_OP_IN, T_OP_NOT_IN},
+  {T_OP_NOT_IN, T_OP_IN},
+  {T_OP_NSEQ, T_MIN_OP},
 };
 
 ObItemType ObRawExprCanonicalizerImpl::get_opposite_op(ObItemType type)
@@ -516,7 +548,7 @@ ObItemType ObRawExprCanonicalizerImpl::get_opposite_op(ObItemType type)
   return ret;
 }
 
-int ObRawExprCanonicalizerImpl::process_children(ObRawExpr*& expr, process_action trave_action)
+int ObRawExprCanonicalizerImpl::process_children(ObRawExpr *&expr, process_action trave_action)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {

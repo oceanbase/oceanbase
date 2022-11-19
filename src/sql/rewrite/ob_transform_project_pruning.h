@@ -16,31 +16,46 @@
 #include "lib/container/ob_bit_set.h"
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObTransformProjectPruning : public ObTransformRule {
+class ObTransformProjectPruning : public ObTransformRule
+{
 public:
-  explicit ObTransformProjectPruning(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::PRE_ORDER)
-  {}
-  virtual ~ObTransformProjectPruning()
-  {}
-  virtual int transform_one_stmt(
-      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
-
+  explicit ObTransformProjectPruning(ObTransformerCtx *ctx)
+    : ObTransformRule(ctx, TransMethod::PRE_ORDER, T_PROJECT_PRUNE) {}
+  virtual ~ObTransformProjectPruning() {}
+  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObDMLStmt *&stmt,
+                                 bool &trans_happened) override;
+  virtual int transform_one_stmt_with_outline(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObDMLStmt *&stmt,
+                                              bool &trans_happened) override;
 private:
-  int project_pruning(const uint64_t table_id, ObSelectStmt& child_stmt, ObDMLStmt& upper_stmt, bool& trans_happened);
+  int transform_table_items(ObDMLStmt *&stmt,
+                            bool with_outline,
+                            bool &trans_happened);
+  //对can_prune_select_item的subquery做project pruning
+  int project_pruning(const uint64_t table_id,
+                      ObSelectStmt &child_stmt,
+                      ObDMLStmt &upper_stmt,
+                      bool &trans_happened);
 
-  int is_const_expr(ObRawExpr* expr, bool& is_const);
+  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;                                                                                                                                                                                 
+  virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 
-  int check_transform_validity(const ObSelectStmt& stmt, bool& is_valid);
-  int check_need_remove(ObSelectStmt* stmt, const int64_t idx, bool& need_remove);
+  int is_const_expr(ObRawExpr* expr, bool &is_const);
 
+  int check_transform_validity(const ObSelectStmt &stmt, bool &is_valid);
+
+  int check_hint_allowed_prune(ObSelectStmt &ref_query, bool &allowed);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformProjectPruning);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif

@@ -15,8 +15,13 @@
 
 #include "ob_table_service.h"
 #include "common/row/ob_row_iterator.h"
+#include "share/schema/ob_table_param.h"
+#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase {
+namespace sql {
+  struct ObTempExpr;
+}
 namespace observer {
 
 class ObTableApiRowIterator : public common::ObNewRowIterator {
@@ -24,7 +29,7 @@ public:
   ObTableApiRowIterator();
   virtual ~ObTableApiRowIterator();
   int init(
-      storage::ObPartitionService &partition_service,
+      storage::ObAccessService &access_service,
       share::schema::ObMultiVersionSchemaService &schema_service,
       ObTableServiceCtx &ctx);
   virtual void reset();
@@ -59,7 +64,7 @@ private:
   int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema, sql::ObExprResType &column_type);
 protected:
   static const int64_t COMMON_COLUMN_NUM = 16;
-  storage::ObPartitionService *part_service_;
+  storage::ObAccessService *access_service_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   ObTableServiceCtx *ctx_;
   share::schema::ObSchemaGetterGuard schema_guard_;
@@ -74,7 +79,7 @@ protected:
   common::ObSEArray<share::schema::ObColDesc, COMMON_COLUMN_NUM> column_descs_;
   common::ObSEArray<common::ObObj, COMMON_COLUMN_NUM> row_objs_;
   common::ObSEArray<common::ObObj, COMMON_COLUMN_NUM> missing_default_objs_;
-  common::ObSEArray<common::ObISqlExpression*, COMMON_COLUMN_NUM> generate_column_exprs_;
+  common::ObSEArray<sql::ObTempExpr *, COMMON_COLUMN_NUM> generate_column_exprs_;
   common::ObSEArray<int64_t, COMMON_COLUMN_NUM> generate_column_idxs_;
   common::ObExprCtx expr_ctx_;
   common::ObNewRow row_;
@@ -135,12 +140,12 @@ private:
   int obj_increment(
       const common::ObObj &delta,
       const common::ObObj &src,
-      const sql::ObExprResType &target_type,
+      const sql::ObExprResType target_type,
       common::ObObj &target);
   int obj_append(
       const common::ObObj &delta,
       const common::ObObj &src,
-      const sql::ObExprResType &target_type,
+      const sql::ObExprResType target_type,
       common::ObObj &target);
   int int_add_int_with_check(
       int64_t old_int,

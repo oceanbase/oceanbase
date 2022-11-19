@@ -52,7 +52,7 @@ protected:
 class ThreadGuard
 {
 public:
-  ThreadGuard(ThreadMutex *mutex)
+  [[nodiscard]] ThreadGuard(ThreadMutex *mutex)
   {
     mutex_ = NULL;
     if (mutex) {
@@ -70,7 +70,7 @@ private:
   ThreadMutex *mutex_;
 };
 
-}  // namespace obsys
-}  // namespace oceanbase
+}
+}
 
 #endif /*THREAD_MUTEX_H_*/

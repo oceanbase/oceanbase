@@ -17,16 +17,17 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-class MyRunnable : public TGRunnable {
+class MyRunnable : public TGRunnable
+{
 public:
   void run1() override
   {
     run_count_++;
     while (!has_set_stop()) {
-      this_routine::usleep(50000);
+      ::usleep(50000);
     }
   }
-  int64_t run_count_ = 0;
+  int64_t run_count_=0;
 };
 
 TEST(TG, ob_th)
@@ -36,7 +37,7 @@ TEST(TG, ob_th)
   // start
   ASSERT_EQ(OB_SUCCESS, TG_SET_RUNNABLE(tg_id, runnable));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
-  this_routine::usleep(50000);
+  ::usleep(50000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(1, runnable.run_count_);
@@ -44,7 +45,7 @@ TEST(TG, ob_th)
   // restart
   ASSERT_EQ(OB_SUCCESS, TG_SET_RUNNABLE(tg_id, runnable));
   ASSERT_EQ(OB_SUCCESS, TG_START(tg_id));
-  this_routine::usleep(50000);
+  ::usleep(50000);
   ASSERT_EQ(OB_SUCCESS, TG_STOP_R(tg_id));
   ASSERT_EQ(OB_SUCCESS, TG_WAIT_R(tg_id));
   ASSERT_EQ(2, runnable.run_count_);
@@ -54,7 +55,7 @@ TEST(TG, ob_th)
   ASSERT_FALSE(TG_EXIST(tg_id));
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

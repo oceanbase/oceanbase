@@ -15,20 +15,24 @@
 
 #include "lib/string/ob_string.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-struct ObZoneStatus {
-  enum Status {
+struct ObZoneStatus
+{
+  enum Status
+  {
     INACTIVE = 1,
-    ACTIVE = 2,  // zone is working
-    UNKNOWN,     // not a status, just the max limit value
+    ACTIVE = 2, // zone is working
+    UNKNOWN, // not a status, just the max limit value
   };
-  static const char* get_status_str(const Status status);
-  static Status get_status(const common::ObString& status_str);
+  static const char *get_status_str(const Status status);
+  static Status get_status(const common::ObString &status_str);
 };
 
-inline ObZoneStatus::Status ObZoneStatus::get_status(const common::ObString& status_str)
+inline ObZoneStatus::Status ObZoneStatus::get_status(const common::ObString &status_str)
 {
   Status ret_status = UNKNOWN;
   if (status_str == common::ObString::make_string(get_status_str(INACTIVE))) {
@@ -41,9 +45,9 @@ inline ObZoneStatus::Status ObZoneStatus::get_status(const common::ObString& sta
   return ret_status;
 }
 
-inline const char* ObZoneStatus::get_status_str(const ObZoneStatus::Status status)
+inline const char *ObZoneStatus::get_status_str(const ObZoneStatus::Status status)
 {
-  const char* str = "UNKNOWN";
+  const char *str = "UNKNOWN";
   switch (status) {
     case ACTIVE:
       str = "ACTIVE";
@@ -59,6 +63,6 @@ inline const char* ObZoneStatus::get_status_str(const ObZoneStatus::Status statu
   return str;
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
-#endif  // OCEANBASE_SHARE_OB_ZONE_STATUS_H_
+} // end namespace share
+} // end namespace oceanbase
+#endif  //OCEANBASE_SHARE_OB_ZONE_STATUS_H_

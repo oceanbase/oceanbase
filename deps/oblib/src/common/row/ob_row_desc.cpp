@@ -19,27 +19,32 @@
 #include "lib/utility/utility.h"
 #include "lib/utility/serialization.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 using namespace serialization;
 
 uint64_t ObRowDesc::HASH_COLLISIONS_COUNT = 0;
 
-ObRowDesc::ObRowDesc() : cells_desc_count_(0), rowkey_cell_count_(0), hash_map_(cells_desc_)
+ObRowDesc::ObRowDesc()
+    : cells_desc_count_(0), rowkey_cell_count_(0), hash_map_(cells_desc_)
 {
-  // avoid to call default constructor of Desc
-  cells_desc_ = reinterpret_cast<Desc*>(cells_desc_buf_);
+  //avoid to call default constructor of Desc
+  cells_desc_ = reinterpret_cast<Desc *>(cells_desc_buf_);
 }
 
 ObRowDesc::~ObRowDesc()
-{}
+{
+}
 
 int64_t ObRowDesc::get_idx(const uint64_t table_id, const uint64_t column_id) const
 {
   int64_t idx = OB_INVALID_INDEX;
   if (OB_LIKELY(cells_desc_count_ > 0 && 0 != table_id && 0 != column_id)) {
     int64_t index = 0;
-    if (OB_SUCCESS == hash_map_.get_index(Desc(table_id, column_id), reinterpret_cast<uint64_t&>(index))) {
+    if (OB_SUCCESS == hash_map_.get_index(Desc(table_id, column_id),
+                                          reinterpret_cast<uint64_t &>(index))) {
       if (OB_LIKELY(index < cells_desc_count_)) {
         idx = index;
       }
@@ -66,7 +71,7 @@ int ObRowDesc::add_column_desc(const uint64_t table_id, const uint64_t column_id
   return ret;
 }
 
-int64_t ObRowDesc::to_string(char* buf, const int64_t buf_len) const
+int64_t ObRowDesc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
@@ -79,14 +84,15 @@ int64_t ObRowDesc::to_string(char* buf, const int64_t buf_len) const
     if (0 != i) {
       J_COMMA();
     }
-    J_OW(J_KV(N_TID, cells_desc_[i].table_id_, N_CID, cells_desc_[i].column_id_));
+    J_OW(J_KV(N_TID, cells_desc_[i].table_id_,
+              N_CID, cells_desc_[i].column_id_));
   }
   J_ARRAY_END();
   J_OBJ_END();
   return pos;
 }
 
-ObRowDesc& ObRowDesc::operator=(const ObRowDesc& other)
+ObRowDesc &ObRowDesc::operator = (const ObRowDesc &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -97,14 +103,15 @@ ObRowDesc& ObRowDesc::operator=(const ObRowDesc& other)
   return *this;
 }
 
-ObRowDesc::ObRowDesc(const ObRowDesc& other) : cells_desc_count_(0), rowkey_cell_count_(0), hash_map_(cells_desc_)
+ObRowDesc::ObRowDesc(const ObRowDesc &other)
+    : cells_desc_count_(0), rowkey_cell_count_(0), hash_map_(cells_desc_)
 {
-  // avoid to call default constructor of Desc
-  cells_desc_ = reinterpret_cast<Desc*>(cells_desc_buf_);
+  //avoid to call default constructor of Desc
+  cells_desc_ = reinterpret_cast<Desc *>(cells_desc_buf_);
   *this = other;
 }
 
-int ObRowDesc::assign(const ObRowDesc& other)
+int ObRowDesc::assign(const ObRowDesc &other)
 {
   int ret = OB_SUCCESS;
 
@@ -208,5 +215,5 @@ DEFINE_GET_SERIALIZE_SIZE(ObRowDesc)
   return size;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

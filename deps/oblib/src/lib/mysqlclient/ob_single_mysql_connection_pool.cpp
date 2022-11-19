@@ -11,24 +11,30 @@
  */
 
 #define USING_LOG_PREFIX LIB_MYSQLC
+#include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_server_connection_pool.h"
 #include "lib/mysqlclient/ob_single_mysql_connection_pool.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
 ObSingleMySQLServerProvider::ObSingleMySQLServerProvider()
-{}
+{
+}
 
-void ObSingleMySQLServerProvider::init(const ObAddr& server)
+void ObSingleMySQLServerProvider::init(const ObAddr &server)
 {
   server_ = server;
 }
 
-int ObSingleMySQLServerProvider::get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server)
+int ObSingleMySQLServerProvider::get_server(
+    const int64_t svr_idx,
+    common::ObAddr &server)
 {
   int ret = OB_SUCCESS;
-  UNUSED(cluster_id);
   if (svr_idx != 0) {
     ret = OB_ARRAY_OUT_OF_RANGE;
     LOG_WARN("server index out of range", K(ret));
@@ -40,31 +46,21 @@ int ObSingleMySQLServerProvider::get_server(const int64_t cluster_id, const int6
   return ret;
 }
 
-int ObSingleMySQLServerProvider::get_cluster_list(common::ObIArray<int64_t>& cluster_list)
-{
-  int ret = OB_SUCCESS;
-  if (!server_.is_valid()) {
-    // skip
-  } else if (OB_FAIL(cluster_list.push_back(OB_INVALID_ID))) {
-    LOG_WARN("fail to push back cluster_id", K(ret));
-  }
-  return ret;
-}
-
-int64_t ObSingleMySQLServerProvider::get_cluster_count() const
-{
-  return (server_.is_valid()) ? 1 : 0;
-}
-
 int64_t ObSingleMySQLServerProvider::get_server_count() const
 {
   return (server_.is_valid()) ? 1 : 0;
 }
 
-int64_t ObSingleMySQLServerProvider::get_server_count(const int64_t cluster_id) const
+int ObSingleMySQLServerProvider::get_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 {
-  UNUSED(cluster_id);
-  return (server_.is_valid()) ? 1 : 0;
+  tenant_ids.reset();
+  return OB_SUCCESS;
+}
+
+int ObSingleMySQLServerProvider::get_tenant_servers(const uint64_t tenant_id, ObIArray<ObAddr> &tenant_servers)
+{
+  tenant_servers.reset();
+  return OB_SUCCESS;
 }
 
 int ObSingleMySQLServerProvider::refresh_server_list(void)
@@ -77,23 +73,30 @@ int ObSingleMySQLServerProvider::prepare_refresh()
   return OB_SUCCESS;
 }
 
+int ObSingleMySQLServerProvider::end_refresh()
+{
+  return OB_SUCCESS;
+}
+
 ObSingleMySQLConnectionPool::ObSingleMySQLConnectionPool()
-{}
+{
+}
 
 ObSingleMySQLConnectionPool::~ObSingleMySQLConnectionPool()
-{}
+{
+}
 
-int ObSingleMySQLConnectionPool::init(const ObAddr& server, const ObConnPoolConfigParam& config)
+int ObSingleMySQLConnectionPool::init(const ObAddr &server, const ObConnPoolConfigParam &config)
 {
   provider_.init(server);
-  set_server_provider(&provider_);  // just fake
+  set_server_provider(&provider_);//just fake
   update_config(config);
-  // init the single server connection
+  //init the single server connection
   int64_t cluster_id = OB_INVALID_ID;
-  int ret = create_server_connection_pool(cluster_id, server);
+  int ret = create_server_connection_pool(server);
   return ret;
 }
 
-}  // end namespace sqlclient
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace sqlclient
+} // end namespace common
+} // end namespace oceanbase

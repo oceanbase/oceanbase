@@ -15,21 +15,29 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_SET_PASSWORD), tenant_id_(false), need_enc_(false), for_current_user_(false),
-      modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID)
-{}
+ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
+    : ObDDLStmt(name_pool, stmt::T_SET_PASSWORD),
+      masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
+      modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
+      max_user_connections_(OB_INVALID_ID)
+{
+}
 
 ObSetPasswordStmt::ObSetPasswordStmt()
-    : ObDDLStmt(NULL, stmt::T_SET_PASSWORD), tenant_id_(false), need_enc_(false), for_current_user_(false),
-      modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID)
-{}
+    : ObDDLStmt(NULL, stmt::T_SET_PASSWORD),
+      masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
+      modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
+      max_user_connections_(OB_INVALID_ID)
+{
+}
 
 ObSetPasswordStmt::~ObSetPasswordStmt()
-{}
+{
+}
 
-int ObSetPasswordStmt::set_user_password(
-    const common::ObString& user_name, const common::ObString& host_name, const common::ObString& password)
+int ObSetPasswordStmt::set_user_password(const common::ObString &user_name,
+                                         const common::ObString &host_name,
+                                         const common::ObString &password)
 {
   int ret = OB_SUCCESS;
   if (0 != user_pwd_.count()) {
@@ -42,13 +50,15 @@ int ObSetPasswordStmt::set_user_password(
   } else if (OB_FAIL(user_pwd_.add_string(password))) {
     LOG_WARN("failed to add string", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int ObSetPasswordStmt::add_ssl_info(const common::ObString& ssl_type, const common::ObString& ssl_cipher,
-    const common::ObString& x509_issuer, const common::ObString& x509_subject)
+int ObSetPasswordStmt::add_ssl_info(const common::ObString &ssl_type,
+                                    const common::ObString &ssl_cipher,
+                                    const common::ObString &x509_issuer,
+                                    const common::ObString &x509_subject)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(user_pwd_.add_string(ssl_type))) {
@@ -60,17 +70,18 @@ int ObSetPasswordStmt::add_ssl_info(const common::ObString& ssl_type, const comm
   } else if (OB_FAIL(user_pwd_.add_string(x509_subject))) {
     LOG_WARN("failed to add x509_subject", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int64_t ObSetPasswordStmt::to_string(char* buf, const int64_t buf_len) const
+int64_t ObSetPasswordStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (NULL != buf) {
     J_OBJ_START();
-    J_KV(N_STMT_TYPE, ((int)stmt_type_), "user_pwd", user_pwd_);
+    J_KV(N_STMT_TYPE, ((int)stmt_type_),
+         "user_pwd", user_pwd_);
     J_OBJ_END();
   }
   return pos;

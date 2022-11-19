@@ -14,21 +14,25 @@
 
 #include "sql/executor/ob_remote_job_control.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 ObRemoteJobControl::ObRemoteJobControl()
-{}
+{
+}
 
 ObRemoteJobControl::~ObRemoteJobControl()
-{}
+{
+}
 
-int ObRemoteJobControl::get_ready_jobs(ObIArray<ObJob*>& jobs, bool serial_sched) const
+int ObRemoteJobControl::get_ready_jobs(ObIArray<ObJob*> &jobs, bool serial_sched) const
 {
   int ret = OB_SUCCESS;
   UNUSED(serial_sched);
   for (int64_t i = 0; OB_SUCC(ret) && i < jobs_.count(); ++i) {
-    ObJob* job = jobs_.at(i);
+    ObJob *job = jobs_.at(i);
     if (OB_ISNULL(job)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("job is NULL", K(ret));
@@ -45,5 +49,5 @@ int ObRemoteJobControl::get_ready_jobs(ObIArray<ObJob*>& jobs, bool serial_sched
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */

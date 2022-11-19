@@ -1,9 +1,10 @@
+--source mysql_test/include/explain_init.inc
 # owner: dachuan.sdc
 # owner group: sql2
+# tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
---explain_protocol 0
 
 connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
 connection conn_admin;
@@ -77,7 +78,6 @@ insert into t2 values('GG1',3,'DD1',0.053,date'1974-03-19');
 
 --sleep 1
 
---explain_protocol 2
 select sign(null) from dual;
 
 let $cnt=22;
@@ -113,9 +113,12 @@ select sign(count(*)) from t2;
 --replace_column 5 timestamp
 select * from t2 where sign( length(a1) ) = 1;
 #cast
+--disable_warnings
 select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2;
 select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2;
+--enable_warnings
 # sign in join
+--sorted_result
 select * from t2 as t21 join t2 as t22 on sign(t21.a2) = sign(t22.a4);
 #col alias
 select tmp.a1 , sign(tmp.a2) , tmp.a3 , sign(tmp.a4) from t2 as tmp;
@@ -141,3 +144,8 @@ select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 f
 
 
 --sleep 2
+
+--echo #https://work.aone.alibaba-inc.com/issue/32398792
+select sign(1E-300) from dual;
+select sign(1E-400) from dual;
+--source mysql_test/include/explain_end.inc

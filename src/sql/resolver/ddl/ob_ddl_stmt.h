@@ -15,33 +15,39 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/ob_cmd.h"
-namespace oceanbase {
-namespace sql {
-class ObDDLStmt : public ObStmt, public ObICmd {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDDLStmt : public ObStmt, public ObICmd
+{
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
-
 public:
-  ObDDLStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObStmt(name_pool, type)
-  {}
-  explicit ObDDLStmt(stmt::StmtType type) : ObStmt(type)
-  {}
-  virtual ~ObDDLStmt()
-  {}
-  virtual int get_cmd_type() const
+  ObDDLStmt(common::ObIAllocator *name_pool, stmt::StmtType type)
+    : ObStmt(name_pool, type), parallelism_(1L)
   {
-    return get_stmt_type();
   }
-  virtual obrpc::ObDDLArg& get_ddl_arg() = 0;
-  typedef common::ObSEArray<ObRawExpr*, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> array_t;
-  typedef common::ObSEArray<array_t, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> array_array_t;
-  virtual bool cause_implicit_commit() const
+  explicit ObDDLStmt(stmt::StmtType type): ObStmt(type)
   {
-    return true;
   }
-  virtual int get_first_stmt(common::ObString& first_stmt);
-
+  virtual ~ObDDLStmt() {}
+  virtual int get_cmd_type() const { return get_stmt_type(); }
+  virtual obrpc::ObDDLArg &get_ddl_arg() = 0;
+  typedef common::ObSEArray<ObRawExpr *,
+                            OB_DEFAULT_ARRAY_SIZE,
+                            common::ModulePageAllocator,
+                            true> array_t;
+  typedef common::ObSEArray<array_t,
+                            OB_DEFAULT_ARRAY_SIZE,
+                            common::ModulePageAllocator,
+                            true> array_array_t;
+  virtual bool cause_implicit_commit() const { return true; }
+  virtual int get_first_stmt(common::ObString &first_stmt);
+  void set_parallelism(const int64_t parallelism) { parallelism_ = parallelism; }
+  int64_t &get_parallelism() { return parallelism_; }
 private:
   ObArenaAllocator allocator_;
+  int64_t parallelism_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLStmt);
 };
 }  // namespace sql

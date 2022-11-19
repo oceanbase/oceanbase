@@ -1,5 +1,6 @@
 #owner: luofan.zp
 #owner group: sql2
+#tags: optimizer
 # description: quote/interval/make_set/concat_ws/sys_op_opnsize
 
 --result_format 4

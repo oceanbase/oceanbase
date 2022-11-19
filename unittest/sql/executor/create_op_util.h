@@ -12,8 +12,12 @@
 
 #ifndef __CREATE_OP_UTIL_TEST_H__
 #define __CREATE_OP_UTIL_TEST_H__
-namespace oceanbase {
-namespace sql {}
-}  // namespace oceanbase
+namespace oceanbase
+{
+namespace sql
+{
+
+}
+}
 #endif /* __CREATE_OP_UTIL_TEST_H__ */
 //// end of header file

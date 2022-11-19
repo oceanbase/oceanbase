@@ -16,11 +16,14 @@
 #include "lib/ob_define.h"
 #include "lib/json/ob_json_print_utils.h"
 
-namespace oceanbase {
-namespace json {
+namespace oceanbase
+{
+namespace json
+{
 using namespace common;
 
-void check_converted_json(const char* json, const char* std_json)
+
+void check_converted_json(const char *json, const char *std_json)
 {
   ObStdJsonConvertor convertor;
   const int64_t buf_len = strlen(json) * 2 + 1;
@@ -36,7 +39,7 @@ void check_converted_json(const char* json, const char* std_json)
 
 TEST(TestStdJsonConvertor, all)
 {
-  const char* json = "";
+  const char *json = "";
   check_converted_json(json, json);
   ASSERT_FALSE(HasFailure());
 
@@ -49,7 +52,7 @@ TEST(TestStdJsonConvertor, all)
   ASSERT_FALSE(HasFailure());
 
   json = " { abc : 123,   \"abc2\"   : \"xxxxxxxxx   x\" ,  xyz: [] }  ";
-  const char* std_json = " { \"abc\" : 123,   \"abc2\"   : \"xxxxxxxxx   x\" ,  \"xyz\": [] }  ";
+  const char * std_json = " { \"abc\" : 123,   \"abc2\"   : \"xxxxxxxxx   x\" ,  \"xyz\": [] }  ";
   check_converted_json(json, std_json);
   ASSERT_FALSE(HasFailure());
 
@@ -75,12 +78,12 @@ TEST(TestStdJsonConvertor, all)
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, convertor.convert(len));
   ASSERT_TRUE(strncmp(std_json, buf, buf_len) == 0);
 }
-}  // end namespace json
-}  // namespace oceanbase
+} // end namespace json
+} // end namespace oceanase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

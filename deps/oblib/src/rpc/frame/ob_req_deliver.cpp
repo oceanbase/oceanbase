@@ -16,7 +16,8 @@
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
 
-ObReqQDeliver::ObReqQDeliver(ObiReqQHandler& qhandler) : qhandler_(qhandler)
+ObReqQDeliver::ObReqQDeliver(ObiReqQHandler &qhandler)
+    : qhandler_(qhandler)
 {
   // empty
 }

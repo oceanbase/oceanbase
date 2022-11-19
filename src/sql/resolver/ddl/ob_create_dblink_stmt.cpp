@@ -17,17 +17,25 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
-ObCreateDbLinkStmt::ObCreateDbLinkStmt() : ObDDLStmt(stmt::T_CREATE_DBLINK), create_dblink_arg_()
-{}
+namespace oceanbase
+{
+namespace sql
+{
+ObCreateDbLinkStmt::ObCreateDbLinkStmt()
+   : ObDDLStmt(stmt::T_CREATE_DBLINK),
+    create_dblink_arg_()
+{
+}
 
-ObCreateDbLinkStmt::ObCreateDbLinkStmt(common::ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_CREATE_DBLINK), create_dblink_arg_()
-{}
+ObCreateDbLinkStmt::ObCreateDbLinkStmt(common::ObIAllocator *name_pool)
+  : ObDDLStmt(name_pool, stmt::T_CREATE_DBLINK),
+    create_dblink_arg_()
+{
+}
 
 ObCreateDbLinkStmt::~ObCreateDbLinkStmt()
-{}
+{
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase

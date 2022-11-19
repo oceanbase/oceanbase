@@ -20,47 +20,52 @@
 #include "rpc/obmysql/ob_mysql_compress_protocol_processor.h"
 #include "rpc/obmysql/ob_2_0_protocol_processor.h"
 
-namespace oceanbase {
-namespace rpc {
+namespace oceanbase
+{
+namespace rpc
+{
 class ObPacket;
 }
-namespace obmysql {
+namespace obmysql
+{
 class OMPKHandshake;
 class ObCompressedPktContext;
 class ObMysqlPktContext;
 class ObProto20PktContext;
 class ObVirtualCSProtocolProcessor;
 
-class ObMySQLHandler : public rpc::frame::ObReqHandler {
+class ObMySQLHandler
+    : public rpc::frame::ObReqHandler
+{
 public:
-  explicit ObMySQLHandler(rpc::frame::ObReqDeliver& deliver);
+  explicit ObMySQLHandler(rpc::frame::ObReqDeliver &deliver);
   virtual ~ObMySQLHandler();
 
-  void* decode(easy_message_t* m);
-  int encode(easy_request_t* r, void* packet);
-  int process(easy_request_t* r);
-  int on_connect(easy_connection_t* c);
-  int on_disconnect(easy_connection_t* c);
-  int cleanup(easy_request_t* r, void* apacket);
+  void *decode(easy_message_t *m);
+  int encode(easy_request_t *r, void *packet);
+  int process(easy_request_t *r);
+  int on_connect(easy_connection_t *c);
+  int on_disconnect(easy_connection_t *c);
+  int cleanup(easy_request_t *r, void *apacket);
 
-  char* easy_alloc(easy_pool_t* pool, int64_t size) const;
-  int send_handshake(int fd, const OMPKHandshake& hsp) const;
+  char *easy_alloc(easy_pool_t *pool, int64_t size) const;
+  int send_handshake(int fd, const OMPKHandshake &hsp) const;
 
-  virtual bool is_in_connected_phase(easy_connection_t* c) const = 0;
-  virtual bool is_in_ssl_connect_phase(easy_connection_t* c) const = 0;
-  virtual bool is_in_authed_phase(easy_connection_t* c) const = 0;
-  virtual bool is_compressed(easy_connection_t* c) const = 0;
-  virtual void set_ssl_connect_phase(easy_connection_t* c) = 0;
-  virtual void set_connect_phase(easy_connection_t* c) = 0;
-  virtual rpc::ConnectionPhaseEnum get_connection_phase(easy_connection_t* c) const = 0;
-  virtual uint32_t get_sessid(easy_connection_t* c) const = 0;
-  virtual ObMysqlPktContext* get_mysql_pkt_context(easy_connection_t* c) = 0;
-  virtual ObCompressedPktContext* get_compressed_pkt_context(easy_connection_t* c) = 0;
-  virtual ObProto20PktContext* get_proto20_pkt_context(easy_connection_t* c) = 0;
+  virtual bool is_in_connected_phase(easy_connection_t *c) const = 0;
+  virtual bool is_in_ssl_connect_phase(easy_connection_t *c) const = 0;
+  virtual bool is_in_authed_phase(easy_connection_t *c) const = 0;
+  virtual bool is_compressed(easy_connection_t *c) const = 0;
+  virtual void set_ssl_connect_phase(easy_connection_t *c) = 0;
+  virtual void set_connect_phase(easy_connection_t *c) = 0;
+  virtual rpc::ConnectionPhaseEnum get_connection_phase(easy_connection_t *c) const = 0;
+  virtual uint32_t get_sessid(easy_connection_t *c) const = 0;
+  virtual ObMysqlPktContext *get_mysql_pkt_context(easy_connection_t *c) = 0;
+  virtual ObCompressedPktContext *get_compressed_pkt_context(easy_connection_t *c) = 0;
+  virtual ObProto20PktContext *get_proto20_pkt_context(easy_connection_t *c) = 0;
 
-  virtual common::ObCSProtocolType get_cs_protocol_type(easy_connection_t* c) const = 0;
+  virtual common::ObCSProtocolType get_cs_protocol_type(easy_connection_t *c) const = 0;
 
-  inline ObVirtualCSProtocolProcessor* get_protocol_processor(easy_connection_t* c);
+  inline ObVirtualCSProtocolProcessor *get_protocol_processor(easy_connection_t *c);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLHandler);
@@ -71,8 +76,8 @@ private:
    * @param buffer   data to send
    * @param length   length of data
    */
-  int write_data(int fd, char* buffer, size_t length) const;
-  int read_data(int fd, char* buffer, size_t length) const;
+  int write_data(int fd, char *buffer, size_t length) const;
+  int read_data(int fd, char *buffer, size_t length) const;
 
 protected:
   ObMysqlProtocolProcessor mysql_processor_;
@@ -80,10 +85,10 @@ protected:
   Ob20ProtocolProcessor ob_2_0_processor_;
 
 private:
-  rpc::frame::ObReqDeliver& deliver_;
-};  // end of class ObMySQLHandler
+  rpc::frame::ObReqDeliver &deliver_;
+}; // end of class ObMySQLHandler
 
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_MYSQL_HANDLER_H_ */

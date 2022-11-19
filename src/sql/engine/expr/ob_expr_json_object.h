@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains declare of the json_object.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_OBJECT_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_OBJECT_H_
 
@@ -27,7 +26,6 @@ class ObExprJsonObject : public ObFuncExprOperator
 public:
   explicit ObExprJsonObject(common::ObIAllocator &alloc);
   virtual ~ObExprJsonObject();
-  int calc_resultN(ObObj &result, const ObObj *objs, int64_t param_num, ObExprCtx &expr_ctx) const;
   virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types, int64_t param_num, 
     common::ObExprTypeCtx& type_ctx) const override;
   static int eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

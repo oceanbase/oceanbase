@@ -13,94 +13,105 @@
 #ifndef OCEANBASE_SQL_ENGINE_TABLE_OB_TABLE_LOOKUP_OP_
 #define OCEANBASE_SQL_ENGINE_TABLE_OB_TABLE_LOOKUP_OP_
 
-#include "sql/engine/table/ob_table_lookup.h"
+#include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/ob_operator.h"
-#include "sql/engine/table/ob_lookup_task_builder.h"
 #include "sql/executor/ob_mini_task_executor.h"
 #include "sql/executor/ob_task.h"
+#include "sql/das/ob_das_ref.h"
+#include "sql/das/ob_data_access_service.h"
 
-namespace oceanbase {
-namespace sql {
-class ObTableLookupSpec : public ObOpSpec {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDASScanOp;
+class ObTableLookupSpec: public ObOpSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTableLookupSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-      : ObOpSpec(alloc, type), remote_tsc_spec_(NULL), lookup_info_(), calc_part_id_expr_(NULL)
-  {}
+  ObTableLookupSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+      calc_part_id_expr_(NULL),
+      loc_meta_(alloc),
+      scan_ctdef_(alloc),
+      flashback_item_(),
+      batch_rescan_(false),
+      rowkey_exprs_(alloc)
+  { }
 
-  virtual ~ObTableLookupSpec(){};
-
+  virtual ~ObTableLookupSpec() { }
 public:
-  ObOpSpec* remote_tsc_spec_;
-  ObLookupInfo lookup_info_;
-
-  ObExpr* calc_part_id_expr_;
-
+  ObExpr *calc_part_id_expr_;
+  ObDASTableLocMeta loc_meta_;
+  ObDASScanCtDef scan_ctdef_;
+  FlashBackItem flashback_item_;
+  bool batch_rescan_;
+  ExprFixedArray rowkey_exprs_;
 public:
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
+                       KPC_(calc_part_id_expr),
+                       K_(loc_meta),
+                       K_(scan_ctdef),
+                       K_(flashback_item),
+                       K_(batch_rescan),
+                       K_(rowkey_exprs));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLookupSpec);
 };
 
-class ObTableLookupOp : public ObOperator {
+class ObTableLookupOp : public ObOperator
+{
 public:
-  ObTableLookupOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
-  ~ObTableLookupOp()
-  {
-    destroy();
-  };
+  ObTableLookupOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
+  ~ObTableLookupOp() { destroy(); }
 
   int inner_open() override;
   int rescan() override;
   int inner_get_next_row() override;
+  int inner_get_next_batch(const int64_t max_row_cnt) override;
   int inner_close() override;
   void destroy() override;
-
 private:
-  enum LookupState { INDEX_SCAN, DISTRIBUTED_LOOKUP, OUTPUT_ROWS, EXECUTION_FINISHED };
-  int process_row(int64_t& part_row_cnt);
-  int store_row(int64_t part_id, const common::ObNewRow* row);
-  int store_row(
-      int64_t part_id, const common::ObIArray<ObExpr*>& row, const bool table_has_hidden_pk, int64_t& part_row_cnt);
-  int execute();
-  int get_store_next_row();
-  void set_end(bool end)
-  {
-    end_ = end;
-  }
-  bool end()
-  {
-    return end_;
-  }
-  // int init_partition_ranges(int64_t part_cnt);
-  int clean_mem();
-  void reset();
-  int set_partition_cnt(int64_t partition_cnt);
-  bool is_target_partition(int64_t pid);
-  int wait_all_task(ObPhysicalPlanCtx* plan_ctx);
-
+  enum LookupState {
+    INDEX_SCAN,
+    DISTRIBUTED_LOOKUP,
+    OUTPUT_ROWS,
+    EXECUTION_FINISHED
+  };
+  void set_index_end(bool end) { index_end_ = end; }
+  bool need_next_index_batch() const;
+  void reset_for_rescan();
+  int process_data_table_rowkey();
+  int process_data_table_rowkeys(const ObBatchRows *brs, ObEvalCtx::BatchInfoScopeGuard &guard);
+  int build_data_table_range(common::ObNewRange &lookup_range);
+  int do_table_lookup();
+  int get_next_data_table_row();
+  int get_next_data_table_rows(int64_t &count, const int64_t capacity);
+  int init_pushdown_storage_filter();
+  int init_das_lookup_rtdef();
+  int init_das_group_range(int64_t cur_group_idx, int64_t group_size);
+  int switch_lookup_result_iter();
+  bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
+  int check_lookup_row_cnt();
 private:
-  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1024l * 1024;
-  const static int64_t DEFAULT_PARTITION_BATCH_ROW_COUNT = 1000L;
+  const static int64_t DEFAULT_BATCH_ROW_COUNT = 10000;
+  const static int64_t MAX_ROWKEY_GROUP_CNT = 1000;
 
+  ObDASScanRtDef scan_rtdef_;
   common::ObArenaAllocator allocator_;
-  ObMiniTaskResult result_;
-  // common::ObRowStore::Iterator result_iter_;
-  ObChunkDatumStore::Iterator result_iter_;
+  ObDASRef das_ref_;
+  DASOpResultIter lookup_result_;
+  int64_t index_group_cnt_;  // number of groups fetched from index table
+  int64_t lookup_group_cnt_; // number of groups fetched from lookup table
+  int64_t lookup_rowkey_cnt_; // number of rows fetched from index table
+  int64_t lookup_row_cnt_;
   LookupState state_;
-  bool end_;
-  ObLookupMiniTaskExecutor lookup_task_executor_;
-  ObLookupTaskBuilder task_builder_;
-  // ranges
-  ObMultiPartitionsRangesWarpper partitions_ranges_;
-  // partition count
-  int64_t partition_cnt_;
-  share::schema::ObSchemaGetterGuard* schema_guard_;
+  bool index_end_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLookupOp);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 #endif

@@ -17,83 +17,64 @@
 #include "lib/hash/ob_hashutils.h"
 #include "lib/allocator/ob_malloc.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 
 template <typename K, typename V>
-class ObReferedMap {
+class ObReferedMap
+{
 public:
-  struct Item {
+  struct Item
+  {
   public:
-    struct GetKey {
-      const K& operator()(const Item& item)
-      {
-        return item.v_.get_key();
-      }
+    struct GetKey
+    {
+      const K &operator ()(const Item &item) { return item.v_.get_key(); }
     };
 
-    Item() : ref_cnt_(0), map_(NULL), v_()
-    {}
-    int64_t get_ref_cnt() const
-    {
-      return ref_cnt_;
-    }
-    void ref()
-    {
-      ref_cnt_++;
-    }
+    Item() : ref_cnt_(0), map_(NULL), v_() {}
+    int64_t get_ref_cnt() const { return ref_cnt_; }
+    void ref() { ref_cnt_++; }
     void unref();
-    void set_map(ObReferedMap* map)
-    {
-      map_ = map;
-    }
-    int assign(const Item& other);
+    void set_map(ObReferedMap *map) { map_ = map; }
+    int assign(const Item &other);
 
     TO_STRING_KV(K_(ref_cnt), K_(map), K_(v));
 
   private:
     int64_t ref_cnt_;
-    ObReferedMap* map_;
-
+    ObReferedMap *map_;
   public:
     V v_;
   };
-  typedef common::hash::ObHashTable<K, Item, common::hash::hash_func<K>, common::hash::equal_to<K>,
-      typename Item::GetKey, common::hash::SimpleAllocer<typename common::hash::HashTableTypes<Item>::AllocType>,
-      common::hash::NoPthreadDefendMode, common::hash::NormalPointer, common::ObMalloc>
-      HashTable;
+  typedef common::hash::ObHashTable<K, Item, common::hash::hash_func<K>,
+          common::hash::equal_to<K>, typename Item::GetKey,
+          common::hash::SimpleAllocer<typename common::hash::HashTableTypes<Item>::AllocType>,
+          common::hash::NoPthreadDefendMode,
+          common::hash::NormalPointer, common::ObMalloc> HashTable;
 
-  ObReferedMap() : inited_(false), allocator_(), bucket_allocator_(), hash_table_()
-  {
-    allocator_.set_attr(ObMemAttr(common::OB_SERVER_TENANT_ID, common::ObModIds::OB_REBALANCE_TASK_MGR));
-  }
-  virtual ~ObReferedMap()
-  {}
+  ObReferedMap() : inited_(false), allocator_(),
+    bucket_allocator_(), hash_table_()
+  { allocator_.set_attr(ObMemAttr(common::OB_SERVER_TENANT_ID, common::ObModIds::OB_REBALANCE_TASK_MGR)); }
+  virtual ~ObReferedMap() {}
 
   int init(const int64_t bucket_num);
-  bool is_inited() const
-  {
-    return inited_;
-  }
-  const HashTable& get_hash_table() const
-  {
-    return hash_table_;
-  }
+  bool is_inited() const { return inited_; }
+  const HashTable &get_hash_table() const { return hash_table_; }
 
   // return exist item or create a new one.
-  int locate(const K& key, Item*& value);
+  int locate(const K &key, Item *&value);
 
   // return OB_HASH_NOT_EXIST if not found
-  int get(const K& key, V& value) const;
+  int get(const K&key, V &value) const;
 
-  void reuse()
-  {
-    hash_table_.reuse();
-  }
+  void reuse() { hash_table_.reuse(); }
 
   TO_STRING_EMPTY();
-
 private:
   bool inited_;
   common::hash::SimpleAllocer<typename common::hash::HashTableTypes<Item>::AllocType> allocator_;
@@ -104,7 +85,7 @@ private:
 };
 
 template <typename K, typename V>
-int ObReferedMap<K, V>::Item::assign(const ObReferedMap<K, V>::Item& other)
+int ObReferedMap<K, V>::Item::assign(const ObReferedMap<K, V>::Item &other)
 {
   int ret = OB_SUCCESS;
   ref_cnt_ = other.ref_cnt_;
@@ -120,7 +101,7 @@ void ObReferedMap<K, V>::Item::unref()
 {
   ref_cnt_--;
   if (ref_cnt_ <= 0 && NULL != map_) {
-    ObReferedMap* map = map_;
+    ObReferedMap *map = map_;
     map_ = NULL;
     // ignore erase value
     map->hash_table_.erase_refactored(v_.get_key());
@@ -139,7 +120,8 @@ int ObReferedMap<K, V>::init(const int64_t bucket_num)
     LIB_LOG(WARN, "invalid bucket num", K(ret), K(bucket_num));
   } else {
     bucket_allocator_.set_label(common::ObModIds::OB_REBALANCE_TASK_MGR);
-    if (OB_FAIL(hash_table_.create(common::hash::cal_next_prime(bucket_num), &allocator_, &bucket_allocator_))) {
+    if (OB_FAIL(hash_table_.create(common::hash::cal_next_prime(bucket_num),
+        &allocator_, &bucket_allocator_))) {
       LIB_LOG(WARN, "create hash table failed", K(bucket_num), K(ret));
     } else {
       inited_ = true;
@@ -149,10 +131,10 @@ int ObReferedMap<K, V>::init(const int64_t bucket_num)
 }
 
 template <typename K, typename V>
-int ObReferedMap<K, V>::locate(const K& key, ObReferedMap<K, V>::Item*& value)
+int ObReferedMap<K, V>::locate(const K &key, ObReferedMap<K, V>::Item *&value)
 {
   int ret = OB_SUCCESS;
-  const Item* const_value = NULL;
+  const Item *const_value = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LIB_LOG(WARN, "not init", K(ret));
@@ -170,9 +152,10 @@ int ObReferedMap<K, V>::locate(const K& key, ObReferedMap<K, V>::Item*& value)
       ret = hash_table_.get_refactored(key, const_value);
       if (OB_FAIL(ret) || NULL == const_value) {
         ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
-        LIB_LOG(WARN, "get again from hash failed", K(ret), K(const_value), K(key));
+        LIB_LOG(WARN, "get again from hash failed",
+            K(ret), K(const_value), K(key));
       } else {
-        const_cast<Item*>(const_value)->set_map(this);
+        const_cast<Item *>(const_value)->set_map(this);
       }
     }
   } else {
@@ -183,21 +166,22 @@ int ObReferedMap<K, V>::locate(const K& key, ObReferedMap<K, V>::Item*& value)
       ret = OB_ERR_UNEXPECTED;
       LIB_LOG(WARN, "NULL value", K(ret));
     } else {
-      value = const_cast<Item*>(const_value);
+      value = const_cast<Item *>(const_value);
     }
   }
   return ret;
 }
 
 template <typename K, typename V>
-int ObReferedMap<K, V>::get(const K& key, V& value) const
+int ObReferedMap<K, V>::get(const K &key, V &value) const
 {
   int ret = OB_SUCCESS;
-  const Item* item = NULL;
+  const Item *item = NULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LIB_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(const_cast<HashTable&>(hash_table_).get_refactored(key, item)) || NULL == item) {
+  } else if (OB_FAIL(const_cast<HashTable &>(hash_table_).get_refactored(key, item))
+      || NULL == item) {
     ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
     if (OB_HASH_NOT_EXIST != ret) {
       LIB_LOG(WARN, "get from hash table failed", K(ret), K(value), K(key));
@@ -208,7 +192,7 @@ int ObReferedMap<K, V>::get(const K& key, V& value) const
   return ret;
 }
 
-}  // namespace hash
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_HASH_OB_REFERED_MAP_H_
+}
+}
+}
+#endif // OCEANBASE_HASH_OB_REFERED_MAP_H_

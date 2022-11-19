@@ -13,19 +13,18 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_bit_or.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace oceanbase::common;
 
-ObExprBitOr::ObExprBitOr(ObIAllocator& alloc)
-    : ObBitwiseExprOperator(alloc, T_OP_BIT_OR, N_BIT_OR, 2, NOT_ROW_DIMENSION){};
+ObExprBitOr::ObExprBitOr(ObIAllocator &alloc):
+  ObBitwiseExprOperator(alloc, T_OP_BIT_OR, N_BIT_OR, 2, NOT_ROW_DIMENSION) {};
 
-int ObExprBitOr::calc_result2(ObObj& res, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
-{
-  return ObBitwiseExprOperator::calc_(res, obj1, obj2, expr_ctx, ObBitwiseExprOperator::BIT_OR);
-}
 
-int ObExprBitOr::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprBitOr::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   const BitOperator op = BIT_OR;
@@ -36,5 +35,5 @@ int ObExprBitOr::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, Ob
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

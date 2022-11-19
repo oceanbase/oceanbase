@@ -10,13 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_type.
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_type.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/json_type/ob_json_tree.h"
 
@@ -180,42 +179,7 @@ int ObExprJsonType::calc(const T &data, ObObjType type, ObCollationType cs_type,
   }
 
   return ret;
-}
-
-// for old sql engine
-int ObExprJsonType::calc_result1(common::ObObj &result, const common::ObObj &obj,
-                                 common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-
-  if (OB_ISNULL(allocator)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    uint32_t type_idx = 0;
-    bool is_null = false;
-    if (OB_FAIL(calc(obj, obj.get_type(), obj.get_collation_type(), allocator, type_idx, is_null))) {
-      LOG_WARN("fail to calc json valid result", K(ret), K(obj.get_type()));
-    } else if (is_null) {
-      result.set_null();
-    } else {
-      const char *j_type_str = json_type_string_map[type_idx];
-      uint32_t j_type_str_len = strlen(j_type_str);
-      char *buf = reinterpret_cast<char *>(allocator->alloc(j_type_str_len));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory for result buf", K(ret), K(j_type_str), K(j_type_str_len));
-      } else {
-        MEMMOVE(buf, j_type_str, j_type_str_len);
-        result.set_collation_type(result_type_.get_collation_type());
-        result.set_string(ObLongTextType, buf, j_type_str_len);
-      }
-    }
-  }
-
-  return ret;
-}                          
+}                      
 
 // for new sql engine
 int ObExprJsonType::eval_json_type(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
@@ -230,7 +194,8 @@ int ObExprJsonType::eval_json_type(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   } else {
     uint32_t type_idx = 0;
     bool is_null = false;
-    common::ObIAllocator &tmp_allocator = ctx.get_reset_tmp_alloc();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
     if (OB_FAIL(calc(*datum, arg->datum_meta_.type_, cs_type, &tmp_allocator, type_idx, is_null))) {
       LOG_WARN("fail to calc json type result", K(ret), K(arg->datum_meta_.type_));
     } else if (is_null) {

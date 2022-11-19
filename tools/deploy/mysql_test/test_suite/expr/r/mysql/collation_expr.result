@@ -502,3 +502,50 @@ select collation(cast('A' as char)), cast('A' as char) < 'a';
 collation(cast('A' as char))	cast('A' as char) < 'a'
 utf8mb4_bin	1
 drop table coll_test;
+select CAST('Ab123人' AS char CHAR SET utf8mb4);
+CAST('Ab123人' AS char CHAR SET utf8mb4)
+Ab123人
+SELECT collation(CAST('Ab123人' AS char CHAR SET utf8mb4));
+collation(CAST('Ab123人' AS char CHAR SET utf8mb4))
+utf8mb4_general_ci
+SELECT length(CAST('Ab123人' AS char CHAR SET utf8mb4));
+length(CAST('Ab123人' AS char CHAR SET utf8mb4))
+8
+select CAST('Ab123人' AS char CHAR SET binary);
+CAST('Ab123人' AS char CHAR SET binary)
+Ab123人
+SELECT collation(CAST('Ab123人' AS char CHAR SET binary));
+collation(CAST('Ab123人' AS char CHAR SET binary))
+binary
+SELECT length(CAST('Ab123人' AS char CHAR SET binary));
+length(CAST('Ab123人' AS char CHAR SET binary))
+8
+select CAST('Ab123人' AS char CHAR SET gbk);
+CAST('Ab123人' AS char CHAR SET gbk)
+Ab123人
+SELECT collation(CAST('Ab123人' AS char CHAR SET gbk));
+collation(CAST('Ab123人' AS char CHAR SET gbk))
+gbk_chinese_ci
+SELECT length(CAST('Ab123人' AS char CHAR SET gbk));
+length(CAST('Ab123人' AS char CHAR SET gbk))
+7
+create table coll_test(c1 char(10) collate utf8mb4_bin, c2 char(10) collate gbk_bin, c3 char(10) char set binary);
+insert into coll_test values('Ab123人', 'Ab123人', 'Ab123人');
+select cast(c1 as char(20)), cast(c2 as char(20)), cast(c3 as char(20)) from coll_test;
+cast(c1 as char(20))	cast(c2 as char(20))	cast(c3 as char(20))
+Ab123人	Ab123人	Ab123人  
+select collation(cast(c1 as char(20))), collation(cast(c2 as char(20))), collation(cast(c3 as char(20))) from coll_test;
+collation(cast(c1 as char(20)))	collation(cast(c2 as char(20)))	collation(cast(c3 as char(20)))
+utf8mb4_bin	utf8mb4_bin	utf8mb4_bin
+create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char), cast('abc' as char char set utf8mb4),
+cast('abc' as char char set binary),  cast('abc' as binary);
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select cast('abc' as char charset utf8mb4) AS `c1`,cast('abc' as char charset utf8mb4) AS `c2`,cast('abc' as char charset binary) AS `c3`,cast('abc' as char charset binary) AS `c4`	utf8mb4	utf8mb4_bin
+create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char(10)), cast('abc' as char(10) char set utf8mb4),
+cast('abc' as char(10) char set binary),  cast('abc' as binary(10));
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select cast('abc' as char(10) charset utf8mb4) AS `c1`,cast('abc' as char(10) charset utf8mb4) AS `c2`,cast('abc' as char(10) charset binary) AS `c3`,cast('abc' as char(10) charset binary) AS `c4`	utf8mb4	utf8mb4_bin
+drop table coll_test;
+drop view v1;

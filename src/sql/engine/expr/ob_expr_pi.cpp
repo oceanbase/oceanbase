@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-//
-// This file is for implementation of func pi
-
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_pi.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
@@ -43,14 +41,6 @@ int ObExprPi::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) co
   type.set_precision(-1);
   type.set_scale(6);
   return OB_SUCCESS;
-}
-
-int ObExprPi::calc_result0(ObObj &result, ObExprCtx &expr_ctx) const
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-  result.set_double(mysql_pi_);
-  return ret;
 }
 
 int ObExprPi::eval_pi(const ObExpr &expr, ObEvalCtx &ctx,

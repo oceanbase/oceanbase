@@ -15,10 +15,12 @@
 
 #include "common/ob_string_buf.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 typedef ObIAllocator ObExprStringBuf;
-}  // namespace common
-}  // namespace oceanbase
+} /* common */
+} /* oceanbase */
 
 #endif /* OCEANBASE_COMMON_EXPR_STRING_BUF_ */

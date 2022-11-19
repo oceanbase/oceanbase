@@ -17,48 +17,22 @@
 #include "sql/engine/expr/ob_expr_less_equal.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprSubQueryLessEqual::ObExprSubQueryLessEqual(ObIAllocator& alloc)
-    : ObSubQueryRelationalExpr(alloc, T_OP_SQ_LE, N_SQ_LESS_EQUAL, 2, NOT_ROW_DIMENSION)
-{}
+ObExprSubQueryLessEqual::ObExprSubQueryLessEqual(ObIAllocator &alloc)
+  : ObSubQueryRelationalExpr(alloc, T_OP_SQ_LE, N_SQ_LESS_EQUAL, 2, NOT_ROW_DIMENSION,
+                             INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
 
 ObExprSubQueryLessEqual::~ObExprSubQueryLessEqual()
-{}
-
-int ObExprSubQueryLessEqual::compare_single_row(
-    const ObNewRow& left_row, const ObNewRow& right_row, ObExprCtx& expr_ctx, ObObj& result) const
 {
-  int ret = OB_SUCCESS;
-  int32_t cmp = 0;
-  if (OB_UNLIKELY(left_row.get_count() != right_row.get_count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("right and left row is not equal", K(ret));
-  } else {
-    const ObIArray<ObExprCalcType>& cmp_types = result_type_.get_row_calc_cmp_types();
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_row.get_count(); ++i) {
-      const ObObj& left_param = left_row.get_cell(i);
-      const ObObj& right_param = right_row.get_cell(i);
-      if (OB_FAIL(ObSubQueryRelationalExpr::compare_obj(
-              expr_ctx, left_param, right_param, cmp_types.at(i), false, result))) {
-        LOG_WARN("compare subquery obj failed", K(ret));
-      } else if (OB_UNLIKELY(result.is_null())) {
-        break;
-      } else if (OB_FAIL(result.get_int32(cmp))) {
-        LOG_WARN("get int value from result failed", K(result), K(ret));
-      } else if (0 != cmp) {
-        result.set_int32(cmp < 0);
-        break;
-      } else if (i == left_row.get_count() - 1) {
-        result.set_int32(true);
-        break;
-      }
-    }
-  }
-
-  return ret;
 }
+
+
 }  // namespace sql
 }  // namespace oceanbase

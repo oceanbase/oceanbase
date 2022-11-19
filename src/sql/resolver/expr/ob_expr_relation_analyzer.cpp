@@ -15,118 +15,61 @@
 #include "lib/oblog/ob_log_module.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "common/ob_smart_call.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 ObExprRelationAnalyzer::ObExprRelationAnalyzer() : query_exprs_()
-{}
+{
+}
 
 /**
  * @brief ObExprRelationAnalyzer::pull_expr_relation_id_and_levels
- * Assume that the following expression is the expression of the i-th level
+ * 假定以下表达式是第 i 层的表达式
  * ObQueryRefRawExpr:
-     expr levels: the expr level of all columns (include aggr, set, column) referenced by this subquery
-     relation ids: all i-th level columns referenced by the subquery
+     expr levels:  该子查询引用到的 ObExecParamRawExpr 的 expr level
+     relation ids: 该子查询引用的所有第 i 层列的 relation id 集合
  * ObColumnRefRawExpr:
-     expr levels:  contains only i
-     relation ids: the relation bit index of the corresponding table
+     expr levels:  仅包含 i
+     relation ids: 对应表的 relation bit index
  * ObSetOpRawExpr
-     expr levels:  contains only i
-     relation ids: empty
+     expr levels:  仅包含 i
+     relation ids: 空
  * ObAggRawExpr
-     expr levels:  contains only i
-     relation ids: the set of relation id of all i-th level columns referenced by this expression
+     expr levels:  仅包含 i
+     relation ids: 该表达式引用的所有第 i 层列的 relation id 集合
  * Others
-     expr levels:  the expr level of all columns referenced by the expression
-     relation ids: the set of relation id of all i-th level columns referenced by this expression
+     expr levels:  该表达式引用到的所有列的 expr level
+     relation ids: 该表达式引用的所有第 i 层列的 relation id 集合
  * @return
  */
-int ObExprRelationAnalyzer::pull_expr_relation_id_and_levels(ObRawExpr* expr, int32_t cur_stmt_level)
+int ObExprRelationAnalyzer::pull_expr_relation_id_and_levels(ObRawExpr *expr,
+                                                             int32_t cur_stmt_level)
 {
   int ret = OB_SUCCESS;
-  UNUSED(cur_stmt_level);
-  int64_t expr_level = -1;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (OB_FAIL(visit_expr(*expr, expr_level))) {
+  } else if (OB_FAIL(visit_expr(*expr, cur_stmt_level))) {
     LOG_WARN("failed to pull expr relation id and levels", K(ret));
   }
   return ret;
 }
 
-int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr, int64_t &expr_level)
+int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr, int32_t stmt_level)
 {
   int ret = OB_SUCCESS;
-  // corner case: select min(t1.c1) from t1 group by c2 order by (select avg(t1.c1) from t2);
-  // avg(t1.1) exists in the subquery, but belongs to the main query
-  expr_level = -1;
-  int64_t param_count = expr.get_param_count();
-  if (OB_FAIL(init_expr_info(expr, expr_level))) {
+  if (OB_FAIL(init_expr_info(expr))) {
     LOG_WARN("failed into init expr level and relation ids", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-    ObRawExpr *param = NULL;
-    int64_t param_level = -1;
-    if (OB_ISNULL(param = expr.get_param_expr(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param expr is null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(visit_expr(*param, param_level)))) {
-      LOG_WARN("failed to visit param", K(ret));
-    } else if (param_level > expr_level) {
-      expr.get_relation_ids().reuse();
-      expr_level = param_level;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(expr.get_expr_levels().add_members(param->get_expr_levels()))) {
-      LOG_WARN("failed to add expr levels", K(ret));
-    } else if (expr_level != param_level || expr_level < 0) {
-      // skip
-    } else if (OB_FAIL(expr.get_relation_ids().add_members(param->get_relation_ids()))) {
-      LOG_WARN("failed to add relation ids", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObExprRelationAnalyzer::init_expr_info(ObRawExpr &expr, int64_t &expr_level)
-{
-  int ret = OB_SUCCESS;
-  expr.get_expr_levels().reuse();
-  if (!expr.is_column_ref_expr() && T_ORA_ROWSCN != expr.get_expr_type()) {
-    expr.get_relation_ids().reuse();
-  }
-
-  if (expr.is_column_ref_expr() || expr.is_aggr_expr() || expr.is_set_op_expr() || expr.is_win_func_expr() ||
-      T_ORA_ROWSCN == expr.get_expr_type()) {
-    expr_level = expr.get_expr_level();
-    if (OB_UNLIKELY(expr_level >= OB_MAX_SUBQUERY_LAYER_NUM || expr_level < 0)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("the subquery nested layers is out of range", K(ret), K(expr_level));
-    } else if (OB_FAIL(expr.get_expr_levels().add_member(expr_level))) {
-      LOG_WARN("failed to add expr level", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < query_exprs_.count(); ++i) {
-      if (OB_ISNULL(query_exprs_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query expr is null", K(ret));
-      } else if (OB_FAIL(query_exprs_.at(i)->get_expr_levels().add_member(expr_level))) {
-        LOG_WARN("failed to add expr level", K(ret));
-      } else if (expr_level != query_exprs_.at(i)->get_expr_level() || !expr.is_column_ref_expr()) {
-        // do nothing
-      } else if (OB_FAIL(query_exprs_.at(i)->add_relation_ids(expr.get_relation_ids()))) {
-        // the column and the query ref comes from the same stmt
-        LOG_WARN("failed to add relation ids", K(ret));
-      }
-    }
   } else if (expr.is_query_ref_expr()) {
     ObQueryRefRawExpr &query = static_cast<ObQueryRefRawExpr &>(expr);
-    expr_level = query.get_expr_level();
+    if (!query.has_nl_param()) {
+      // do not rebuild exec param array if the subquery contains nlparams.
+      query.get_exec_params().reset();
+    }
     if (OB_FAIL(query_exprs_.push_back(&query))) {
       LOG_WARN("failed to push back query ref", K(ret));
-    } else if (OB_UNLIKELY(!query.is_ref_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query is expected to use stmt", K(ret));
     } else if (OB_FAIL(visit_stmt(query.get_ref_stmt()))) {
       LOG_WARN("failed to visit subquery stmt", K(ret));
     } else if (OB_UNLIKELY(query_exprs_.empty())) {
@@ -136,13 +79,74 @@ int ObExprRelationAnalyzer::init_expr_info(ObRawExpr &expr, int64_t &expr_level)
       query_exprs_.pop_back();
     }
   }
+  int64_t param_count = expr.has_flag(IS_ONETIME) ? 1 : expr.get_param_count();
+  // not sure whether we should visit onetime exec param
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
+    ObRawExpr *param = expr.has_flag(IS_ONETIME) ?
+          static_cast<ObExecParamRawExpr &>(expr).get_ref_expr() :
+          expr.get_param_expr(i);
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret), K(param), K(i), K(expr));
+    } else if (OB_FAIL(SMART_CALL(visit_expr(*param, stmt_level)))) {
+      LOG_WARN("failed to visit param", K(ret));
+    } else if (OB_FAIL(expr.get_expr_levels().add_members(param->get_expr_levels()))) {
+      LOG_WARN("failed to add expr levels", K(ret));
+    } else if (!param->get_expr_levels().has_member(stmt_level)) {
+      // skip
+    } else if (OB_FAIL(expr.get_relation_ids().add_members(param->get_relation_ids()))) {
+      LOG_WARN("failed to add relation ids", K(ret));
+    }
+  }
   return ret;
 }
 
-int ObExprRelationAnalyzer::visit_stmt(ObDMLStmt* stmt)
+int ObExprRelationAnalyzer::init_expr_info(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 8> relation_exprs;
+  expr.get_expr_levels().reuse();
+  if (!expr.is_column_ref_expr() &&
+      T_ORA_ROWSCN != expr.get_expr_type()) {
+    expr.get_relation_ids().reuse();
+  }
+  if (expr.is_column_ref_expr() || expr.is_aggr_expr() || expr.is_set_op_expr() ||
+      expr.is_win_func_expr() || expr.is_exec_param_expr() ||
+      T_ORA_ROWSCN == expr.get_expr_type()) {
+    int32_t expr_level = expr.get_expr_level();
+    if (OB_UNLIKELY(expr_level >= OB_MAX_SUBQUERY_LAYER_NUM || expr_level < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the subquery nested layers is out of range", K(ret), K(expr_level));
+    } else if (OB_FAIL(expr.get_expr_levels().add_member(expr_level))) {
+      LOG_WARN("failed to add expr level", K(ret));
+    } else if (expr.is_exec_param_expr() && !expr.has_flag(IS_ONETIME)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < query_exprs_.count(); ++i) {
+        if (OB_FAIL(query_exprs_.at(i)->get_expr_levels().add_member(expr.get_expr_level()))) {
+          LOG_WARN("failed to add expr level", K(ret));
+        } else if (query_exprs_.at(i)->has_nl_param()) {
+          // does not rebuild exec param for the subquery expr
+        } else if (expr.get_expr_level() == query_exprs_.at(i)->get_expr_level()) {
+          bool found = false;
+          for (int64_t j = 0; j < query_exprs_.at(i)->get_exec_params().count(); ++j) {
+            if (query_exprs_.at(i)->get_exec_param(j) == &expr) {
+              found = true;
+              break;
+            }
+          }
+          if (!found && OB_FAIL(query_exprs_.at(i)->add_exec_param_expr(
+                                  static_cast<ObExecParamRawExpr *>(&expr)))) {
+            LOG_WARN("failed to add exec param expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRelationAnalyzer::visit_stmt(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> relation_exprs;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
@@ -151,22 +155,25 @@ int ObExprRelationAnalyzer::visit_stmt(ObDMLStmt* stmt)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
       ObRawExpr *expr = NULL;
-      int64_t expr_level = -1;
       if (OB_ISNULL(expr = relation_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("relation expr is null", K(ret), K(expr));
-      } else if (OB_FAIL(visit_expr(*expr, expr_level))) {
+      } else if (OB_FAIL(visit_expr(*expr, stmt->get_current_level()))) {
         LOG_WARN("failed to visit expr", K(ret));
+      } else if (OB_FAIL(expr->extract_info())) {
+        LOG_WARN("failed to extract expr info");
       }
     }
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
-      ObIArray<ObSelectStmt*>& child_stmts = static_cast<ObSelectStmt*>(stmt)->get_set_query();
+      ObIArray<ObSelectStmt*> &child_stmts = static_cast<ObSelectStmt*>(stmt)->get_set_query();
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        ret = SMART_CALL(visit_stmt(child_stmts.at(i)));
+        if (OB_FAIL(SMART_CALL(visit_stmt(child_stmts.at(i))))) {
+          LOG_WARN("failed to visit stmt", K(ret));
+        }
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
-      TableItem* table = NULL;
+      TableItem *table = NULL;
       if (OB_ISNULL(table = stmt->get_table_item(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret), K(table));

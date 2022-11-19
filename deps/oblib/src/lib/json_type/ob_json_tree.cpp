@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation support for the JSON_V1 tree abstraction.
-
 #define USING_LOG_PREFIX SQL
 #include "ob_json_tree.h"
 #include "ob_json_bin.h"
@@ -630,9 +628,6 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param value is NULL", K(ret));
-  } else if (key.empty()) {
-    ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
-    LOG_WARN("key is NULL", K(ret));
   } else {
     value->set_parent(this);
     ObJsonObjectPair pair(key, value);
@@ -847,7 +842,6 @@ int ObJsonArray::remove(uint64_t index)
   }
   return ret;
 }
-
 ObJsonNode *ObJsonArray::operator[](uint64_t index) const
 {
   ObJsonNode *node = NULL;

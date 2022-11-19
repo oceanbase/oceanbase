@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_length.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_LENGTH_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_LENGTH_H_
 
@@ -32,10 +31,6 @@ public:
                                 ObExprResType* types_stack,
                                 int64_t param_num,
                                 ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_resultN(common::ObObj &result,
-                           const common::ObObj *objs,
-                           int64_t param_num,
-                           common::ObExprCtx &expr_ctx) const;
   template <typename T>
   static int calc(const T &data1, ObObjType type1, ObCollationType cs_type, const T *data2, 
                   ObObjType type2, ObIAllocator *allocator, T &res,

@@ -16,7 +16,6 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/timezone/ob_timezone_info.h"
-#include "lib/charset/ob_mysql_global.h"
 #undef private
 
 #include <sys/time.h>    
@@ -47,9 +46,9 @@ private:
 
 };
 
-// rapidjson parse json text including string only
-// input: json text
-// result: parse whole json tree
+// rapidjson 解析仅包含字符串的json text测试
+// 输入: json text
+// 预期: 解析完整json tree
 TEST_F(TestJsonBin, test_tree_to_bin)
 {
   common::ObString j_text("{ \"greeting\" : 1, \"farewell\" : 2, \"json_text\" : 3 }");
@@ -362,7 +361,7 @@ TEST_F(TestJsonBin, test_bin_lookup)
 
 TEST_F(TestJsonBin, test_wrapper_to_string_object)
 {
-  // json text to json tree
+  // json text 转 json tree
   common::ObString json_text("{ \"greeting\" : \"Hello!\", \"farewell\" : \"bye-bye!\", \"json_text\" : \"test!\" }");
   common::ObArenaAllocator allocator(ObModIds::TEST);
   const char *syntaxerr = NULL;
@@ -377,7 +376,7 @@ TEST_F(TestJsonBin, test_wrapper_to_string_object)
   ObJsonBuffer buf(&allocator);
   ASSERT_EQ(OB_SUCCESS, j_base->print(buf, true));
   std::cout << buf.ptr() << std::endl;
-  
+  // 由于构建树的过程，进行了排序，顺序已经打乱，所以输出的顺序和用户的输入顺序不一样
   EXPECT_STREQ(buf.ptr(), "{\"farewell\": \"bye-bye!\", \"greeting\": \"Hello!\", \"json_text\": \"test!\"}");
 }
 

@@ -1,0 +1,8 @@
+Repository: git@github.com:google/googletest.git
+Commit: d62d6c6556d96dda924382547c54a4b3afedb22c
+
+built with:
+  g++ (GCC) 5.2.0
+  cmake version 3.3.2
+
+cxx11 supported with new stdc++ ABI

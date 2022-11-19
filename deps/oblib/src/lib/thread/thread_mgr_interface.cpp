@@ -15,8 +15,8 @@
 namespace oceanbase {
 namespace lib {
 
-__thread uint64_t TGRunnable::thread_idx_ = 0;
-__thread uint64_t TGTaskHandler::thread_idx_ = 0;
+TLOCAL(uint64_t, TGRunnable::thread_idx_) = 0;
+TLOCAL(uint64_t, TGTaskHandler::thread_idx_) = 0;
 
-}  // end of namespace lib
-}  // end of namespace oceanbase
+} // end of namespace lib
+} // end of namespace oceanbase

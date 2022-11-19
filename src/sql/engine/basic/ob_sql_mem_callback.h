@@ -15,17 +15,22 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObSqlMemoryCallback {
+class ObSqlMemoryCallback
+{
 public:
+  virtual ~ObSqlMemoryCallback() = default;
+
   virtual void alloc(int64_t size) = 0;
   virtual void free(int64_t size) = 0;
   virtual void dumped(int64_t size) = 0;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_BASIC_OB_SQL_MEMM_CALLBACK_H_
+#endif // OCEANBASE_BASIC_OB_SQL_MEMM_CALLBACK_H_

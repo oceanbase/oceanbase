@@ -25,6 +25,7 @@ create table ts(c1 int primary key, c2 timestamp default current_timestamp on up
     update t1 set c2=1
     update t1 set t1.c2=1
 
+##alias 别名
 	update t1 vt1 set c2=1
 	update t1 vt1 set vt1.c2=1 
 #resolve error
@@ -40,6 +41,7 @@ update test set c5 = 1
 #### column not in index or rowkey
 update test set c7 = 3 where c1 = 0
 
+##expr 表达式             
 	update t1 set c2=c1+1 
 	update t1 set c2=2*c1,c2=c2+1 
 	update t1 set c2=c2                           
@@ -66,15 +68,17 @@ update test set c7 = 3 where c1 = 0
 #resolve error
 #update t1 set c2=1 order by 1 desc 
 	update t1 set c2=1 order by c1 desc                                
-
+####以下关于order_by的语句是否支持
     update t1 set c2=1 order by c2   
 	update t1 set c2=1 order by c1,c2 
 #parse error
 #	update t1 set c2=1 order by 2 2 
 
+##subquery 子查询                  
 #	update t1 set c2 = 6 where c1 = (select max(c1) from t1)   //parse error
 #	update t1 set c2 = (select max(c1) from t1) where c1 = 1   //parse error             
 
+##hint 注释                  
 	update/*+query_timeout(2000)*/ t1 set c1=1
 	update/*+index(t1 i1)*/ t1 set c1=1
 
@@ -84,8 +88,10 @@ update test set c7 = 3 where c1 = 0
 #	update t1 set 1=2   
 #	update t1 set 2=2 
 
+##特殊语法
 	update t2 set c2 = c3 like '%h%' where c1 = 1                                       
 
+##复杂测试语句
     update/*+index(t2 i2)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=2 where c1>0 and vt2.c2<2 order by vt2.c1 asc, vt2.c2 desc limit 2 offset 10  
     update/*+index(t2 i2),query_timeout(2000)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=10 where c1>0 and vt2.c2<10 order by vt2.c1 asc,c2 desc limit 10,10
 
@@ -93,7 +99,9 @@ update test set c7 = 3 where c1 = 0
 UPDATE t1 SET c1=c1+(SELECT MAX(C1) FROM (SELECT 1) t) WHERE c1=(SELECT MAX(c1));
 
 
+#更新索引列
 update test set c4 = 1 where c1 =0
+#更新rowkey列
 update test set c1 = 1 where c1 = 0
 
 ## default and not null

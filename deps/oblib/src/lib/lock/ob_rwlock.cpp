@@ -9,9 +9,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #include "lib/lock/ob_rwlock.h"
 
-using namespace oceanbase::obsys;
+using namespace oceanbase;
+using namespace obsys;
 
 int ObRLock::lock() const
 {

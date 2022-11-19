@@ -16,12 +16,16 @@ namespace oceanbase {
 namespace common {
 
 #define _ATTR_STR(enum_str) #enum_str
-#define _ATTR(enum_name) [enum_name] = _ATTR_STR(enum_name)
+#define _ATTR(enum_name)                                                       \
+  [enum_name] = _ATTR_STR(enum_name)
 
-#define DEF_ATTR_VALUES(ATTR_CLS, args...) const char* ATTR_CLS::VALUES[] = {LST_DO(_ATTR, (, ), args)}
+#define DEF_ATTR_VALUES(ATTR_CLS, args...)                                     \
+const char * ATTR_CLS::VALUES[] = {                                            \
+  LST_DO(_ATTR, (,), args)                                                     \
+}
 
-DEF_ATTR_VALUES(Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE, SSTABLE, CLOG, CACHE, TRANS, TENANT,
-    RPC, OBPROXY, OBSERVER);
+DEF_ATTR_VALUES(Section, ROOT_SERVICE, LOAD_BALANCE, DAILY_MERGE, LOCATION_CACHE,
+         SSTABLE, LOGSERVICE, CACHE, TRANS, TENANT, RPC, OBPROXY, OBSERVER);
 DEF_ATTR_VALUES(Scope, CLUSTER, TENANT);
 DEF_ATTR_VALUES(Source, DEFAULT, FILE, OBADMIN, CMDLINE, CLUSTER, TENANT);
 DEF_ATTR_VALUES(Session, NO, YES);
@@ -44,5 +48,5 @@ bool ObParameterAttr::is_invisible() const
   return visible_level_ == VisibleLevel::INVISIBLE;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase

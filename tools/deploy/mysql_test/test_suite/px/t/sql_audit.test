@@ -41,4 +41,4 @@ connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection obsys;
 
 --sorted_result
-eval select query_sql, EXPECTED_WORKER_COUNT, USED_WORKER_COUNT from oceanbase.gv\$sql_audit where EXPECTED_WORKER_COUNT > 0 AND query_sql like '%TEST_SQL_AUDIT%' order by request_time desc limit 10;
+eval select query_sql, EXPECTED_WORKER_COUNT, USED_WORKER_COUNT from oceanbase.GV\$OB_SQL_AUDIT where EXPECTED_WORKER_COUNT > 0 AND query_sql like '%TEST_SQL_AUDIT%' order by request_time desc limit 10;

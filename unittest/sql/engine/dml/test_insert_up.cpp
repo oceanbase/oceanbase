@@ -15,25 +15,24 @@
 #include "sql/engine/dml/ob_table_update.h"
 #include "sql/engine/dml/ob_table_replace.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
-class TestInsertUp : public ::testing::Test {
+namespace oceanbase
+{
+namespace sql
+{
+class TestInsertUp : public ::testing::Test
+{
 public:
-  TestInsertUp()
-  {}
-  virtual ~TestInsertUp()
-  {}
-  virtual void SetUp()
-  {}
-  virtual void TearDown()
-  {}
+  TestInsertUp() {}
+  virtual ~TestInsertUp() {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
 };
 
 TEST_F(TestInsertUp, test_reset)
 {
   ObArenaAllocator alloc;
   ObTableInsertUp insert_up(alloc);
-  const int64_t COUNT = 5;
+  const int64_t COUNT=5;
   EXPECT_EQ(OB_SUCCESS, insert_up.init_scan_column_id_array(COUNT));
   EXPECT_EQ(OB_SUCCESS, insert_up.init_update_related_column_array(COUNT));
   EXPECT_EQ(OB_SUCCESS, insert_up.init_column_ids_count(COUNT));
@@ -52,10 +51,10 @@ TEST_F(TestInsertUp, test_reset)
   replace.reset();
   replace.reuse();
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

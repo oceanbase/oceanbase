@@ -15,28 +15,29 @@
 
 #include "observer/mysql/obmp_base.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObMPQuit : public ObMPBase {
+class ObMPQuit
+    : public ObMPBase
+{
 public:
-  static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_QUIT;
+  static const obmysql::ObMySQLCmd COM = obmysql::COM_QUIT;
 
-  explicit ObMPQuit(const ObGlobalContext& gctx) : ObMPBase(gctx)
+  explicit ObMPQuit(const ObGlobalContext &gctx)
+      : ObMPBase(gctx)
   {}
-  virtual ~ObMPQuit()
-  {}
+  virtual ~ObMPQuit() {}
 
 protected:
   int process();
-  int deserialize()
-  {
-    return common::OB_SUCCESS;
-  }
+  int deserialize() { return common::OB_SUCCESS; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuit);
-};  // end of class ObMPQuit
+}; // end of class ObMPQuit
 
 int ObMPQuit::process()
 {
@@ -45,7 +46,7 @@ int ObMPQuit::process()
   return ret;
 }
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_MYSQL_OBMP_QUIT_H_
+#endif // OCEANBASE_OBSERVER_MYSQL_OBMP_QUIT_H_

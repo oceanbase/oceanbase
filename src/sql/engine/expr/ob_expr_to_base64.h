@@ -16,21 +16,33 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "share/object/ob_obj_cast.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprToBase64 : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprToBase64 : public ObFuncExprOperator
+{
 public:
   explicit ObExprToBase64(common::ObIAllocator &alloc);
   virtual ~ObExprToBase64();
-  virtual int calc_result1(common::ObObj &result, const common::ObObj &obj, common::ObExprCtx &expr_ctx) const;
-  virtual int calc_result_type1(ObExprResType &type, ObExprResType &str, common::ObExprTypeCtx &type_ctx) const;
-  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const;
+  virtual int calc_result_type1(ObExprResType &type,
+                           ObExprResType &str,
+                           common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const;
   static int eval_to_base64(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_to_base64_batch(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const int64_t batch_size);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToBase64);
 
-  static int calc(common::ObObj &result, const common::ObObj &obj1, common::ObIAllocator *allocator);
+  static int calc(common::ObObj &result,
+                  const common::ObObj &obj1,
+                  common::ObIAllocator *allocator);
   static const int64_t NCHAR_PER_BASE64 = 4;
   static const int64_t NCHAR_PER_BASE64_GROUP = 3;
   static const int64_t NCHAR_PER_STR_PAD = 2;
@@ -47,7 +59,7 @@ private:
            1;                           /* NUL termination of string */
   }
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_SQL_ENGINE_OB_EXPR_TO_BASE64_
+#endif //OCEANBASE_SQL_ENGINE_OB_EXPR_TO_BASE64_

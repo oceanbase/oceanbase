@@ -22,13 +22,13 @@ namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-int ObDtlAsynSender::calc_batch_buffer_cnt(int64_t& max_batch_size, int64_t& max_loop_cnt)
+int ObDtlAsynSender::calc_batch_buffer_cnt(int64_t &max_batch_size, int64_t &max_loop_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t dop = 0;
   int64_t server_cnt = 0;
   int64_t total_task_cnt = 0;
-  ObIArray<int64_t>* prefix_task_counts = nullptr;
+  ObIArray<int64_t> *prefix_task_counts = nullptr;
   if (is_transmit_) {
     dop = ch_info_->transmit_exec_server_.total_task_cnt_;
     prefix_task_counts = &ch_info_->receive_exec_server_.prefix_task_counts_;
@@ -65,14 +65,10 @@ int ObDtlAsynSender::calc_batch_buffer_cnt(int64_t& max_batch_size, int64_t& max
       }
     }
     max_batch_size = min(max_batch_size, max_loop_cnt);
-    LOG_DEBUG("calc batch size",
-        K(max_batch_size),
-        K(dop),
-        K(server_cnt),
-        K(max_loop_cnt),
-        K(max_buffer_cnt),
-        K(dop_per_server),
-        K(lbt()));
+    LOG_DEBUG("calc batch size", K_(is_transmit), K(prefix_task_counts),
+              K(server_cnt), K(total_task_cnt), K(prefix_task_counts->count()),
+              K(max_batch_size), K(dop), K(server_cnt),
+              K(max_loop_cnt), K(max_buffer_cnt), K(dop_per_server), K(lbt()));
   }
   return ret;
 }
@@ -80,7 +76,7 @@ int ObDtlAsynSender::calc_batch_buffer_cnt(int64_t& max_batch_size, int64_t& max
 int ObDtlAsynSender::syn_send()
 {
   int ret = OB_SUCCESS;
-  dtl::ObDtlChannel* ch = NULL;
+  dtl::ObDtlChannel *ch = NULL;
   for (int64_t slice_idx = 0; (OB_SUCCESS == ret) && slice_idx < channels_.count(); ++slice_idx) {
     if (NULL == (ch = channels_.at(slice_idx))) {
       ret = OB_ERR_UNEXPECTED;
@@ -103,19 +99,23 @@ int ObDtlAsynSender::asyn_send()
   if (OB_ISNULL(ch_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: ch info is null", K(ret));
-  } else if (0 == channels_.count()) {
-    // do nothing
-  } else if (OB_FAIL(calc_batch_buffer_cnt(max_batch_size, max_loop_times))) {
-    // try sync mode
+  } else if (0 == channels_.count() || OB_FAIL(calc_batch_buffer_cnt(max_batch_size, max_loop_times))) {
+    // px coord rescan, channels is cleared and it's empty
+    // max_loop_times表示需要进行多少轮才能把所有channels发送完，该值等于接收端每个sqc最大的线程个数
+    // max_batch_size表示每次批量发送的channel个数
+    // 如 假设接收端2个server，sqc0: 10个task sqc1: 12个task,即channel有22(10+12)
+    //    则max_loop_times = 22, 如果max_batch_size=5,则表示需要发送3轮(12/5+1)
+    //    如果max_batch_size等于(不会大于max_loop_times)max_loop_times，表示一次性发送完所有channel的数据
+    // 回退到同步发送
     if (OB_FAIL(syn_send())) {
       LOG_WARN("failed to syn send message", K(ret));
     }
     LOG_TRACE("failed to calc batch buffer cnt", K(ret));
   } else {
-    dtl::ObDtlChannel* ch = NULL;
+    dtl::ObDtlChannel *ch = NULL;
     int tmp_ret = OB_SUCCESS;
     ObArray<ObDtlChannel*> wait_channels;
-    ObIArray<int64_t>* prefix_task_counts = nullptr;
+    ObIArray<int64_t> *prefix_task_counts = nullptr;
     int64_t total_task_cnt = 0;
     if (is_transmit_) {
       prefix_task_counts = &ch_info_->receive_exec_server_.prefix_task_counts_;
@@ -163,19 +163,16 @@ int ObDtlAsynSender::asyn_send()
           if (OB_NOT_NULL(ch) && OB_FAIL(ch->flush())) {
             tmp_ret = ret;
             ret = OB_SUCCESS;
-            LOG_WARN("failed to wait", K(ret), K(loop), K(max_loop_times), K(max_batch_size), K(channels_.count()));
+            LOG_WARN("failed to wait", K(ret), K(loop), K(max_loop_times), K(max_batch_size),
+              K(channels_.count()));
           }
         }
       }
     }
     if (OB_SUCC(ret) && send_eof_cnt != channels_.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: send eof failed",
-          K(ret),
-          K(send_eof_cnt),
-          K(channels_.count()),
-          K(max_batch_size),
-          K(max_loop_times));
+      LOG_WARN("unexpected status: send eof failed", K(ret),
+        K(send_eof_cnt), K(channels_.count()), K(max_batch_size), K(max_loop_times));
     }
     if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
       ret = tmp_ret;
@@ -211,7 +208,7 @@ int ObDfcDrainAsynSender::action(ObDtlChannel* ch)
   return ret;
 }
 
-int ObDfcUnblockAsynSender::action(ObDtlChannel* ch)
+int ObDfcUnblockAsynSender::action(ObDtlChannel *ch)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dfc_.notify_channel_unblocking(ch, unblock_cnt_))) {
@@ -220,6 +217,6 @@ int ObDfcUnblockAsynSender::action(ObDtlChannel* ch)
   return ret;
 }
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase

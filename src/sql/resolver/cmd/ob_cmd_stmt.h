@@ -16,21 +16,17 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/ob_cmd.h"
-namespace oceanbase {
-namespace sql {
-class ObCMDStmt : public ObStmt, public ObICmd {
+namespace oceanbase
+{
+namespace sql
+{
+class ObCMDStmt : public ObStmt, public ObICmd
+{
 public:
-  ObCMDStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObStmt(name_pool, type)
-  {}
-  explicit ObCMDStmt(stmt::StmtType type) : ObStmt(type)
-  {}
-  virtual ~ObCMDStmt()
-  {}
-  virtual int get_cmd_type() const
-  {
-    return get_stmt_type();
-  }
-
+  ObCMDStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObStmt(name_pool, type) {}
+  explicit ObCMDStmt(stmt::StmtType type) : ObStmt(type) {}
+  virtual ~ObCMDStmt() {}
+  virtual int get_cmd_type() const { return get_stmt_type(); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCMDStmt);
 };

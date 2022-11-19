@@ -1,0 +1,57 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#define USING_LOG_PREFIX STORAGE
+
+#include "ob_ls_saved_info.h"
+
+namespace oceanbase
+{
+namespace storage
+{
+
+ObLSSavedInfo::ObLSSavedInfo()
+  : clog_checkpoint_ts_(0),
+    clog_base_lsn_(palf::PALF_INITIAL_LSN_VAL),
+    replayable_point_(0),
+    tablet_change_checkpoint_ts_(0)
+{
+}
+
+void ObLSSavedInfo::reset()
+{
+  clog_checkpoint_ts_ = 0;
+  clog_base_lsn_ = palf::PALF_INITIAL_LSN_VAL;
+  replayable_point_ = 0;
+  tablet_change_checkpoint_ts_ = 0;
+}
+
+bool ObLSSavedInfo::is_valid() const
+{
+  return clog_checkpoint_ts_ >= 0
+      && clog_base_lsn_.is_valid()
+      && replayable_point_ >= 0
+      && tablet_change_checkpoint_ts_ >= 0;
+}
+
+bool ObLSSavedInfo::is_empty() const
+{
+  return 0 == clog_checkpoint_ts_
+      && palf::PALF_INITIAL_LSN_VAL == clog_base_lsn_
+      && 0 == replayable_point_
+      && 0 == tablet_change_checkpoint_ts_;
+}
+
+OB_SERIALIZE_MEMBER(ObLSSavedInfo, clog_checkpoint_ts_, clog_base_lsn_, replayable_point_, tablet_change_checkpoint_ts_);
+
+}
+}

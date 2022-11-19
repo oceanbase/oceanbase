@@ -16,19 +16,19 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::json;
-// using namespace oceanbase::sql;
+//using namespace oceanbase::sql;
 
-class TestJsonFormat : public ::testing::Test {
+class TestJsonFormat : public ::testing::Test
+{
 public:
-  TestJsonFormat(){};
-  virtual ~TestJsonFormat(){};
-  virtual void SetUp(){};
-  virtual void TearDown(){};
-
+  TestJsonFormat() {};
+  virtual ~TestJsonFormat() {};
+  virtual void SetUp() {};
+  virtual void TearDown() {};
 private:
   // disallow copy and assign
-  TestJsonFormat(const TestJsonFormat& other);
-  TestJsonFormat& operator=(const TestJsonFormat& ohter);
+  TestJsonFormat(const TestJsonFormat &other);
+  TestJsonFormat& operator=(const TestJsonFormat &ohter);
 };
 
 TEST_F(TestJsonFormat, basic)
@@ -51,7 +51,7 @@ TEST_F(TestJsonFormat, basic)
   ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
   Parser parser;
   parser.init(&allocator, NULL);
-  Value* root = NULL;
+  Value *root = NULL;
   parser.parse(json, length, root);
   Tidy tidy(root);
   char output_buf[OB_MAX_LOG_BUFFER_SIZE];
@@ -61,9 +61,9 @@ TEST_F(TestJsonFormat, basic)
   _OB_LOG(INFO, "%.*s", static_cast<int32_t>(pos + 2), output_buf);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

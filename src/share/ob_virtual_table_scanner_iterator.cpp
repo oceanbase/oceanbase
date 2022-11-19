@@ -12,15 +12,22 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 ObVirtualTableScannerIterator::ObVirtualTableScannerIterator()
-    : ObVirtualTableIterator(), scanner_(), scanner_it_(), start_to_read_(false)
-{}
+    : ObVirtualTableIterator(),
+      scanner_(),
+      scanner_it_(),
+      start_to_read_(false)
+{
+}
 
 ObVirtualTableScannerIterator::~ObVirtualTableScannerIterator()
-{}
+{
+}
 
 void ObVirtualTableScannerIterator::reset()
 {
@@ -30,5 +37,5 @@ void ObVirtualTableScannerIterator::reset()
   ObVirtualTableIterator::reset();
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

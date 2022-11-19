@@ -14,19 +14,21 @@
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace rootserver {
-void ob_parse_case_file(ObArenaAllocator& allocator, const char* case_file, json::Value*& root)
+namespace oceanbase
+{
+namespace rootserver
+{
+void ob_parse_case_file(ObArenaAllocator &allocator, const char* case_file, json::Value *&root)
 {
   json::Parser json_parser;
   ASSERT_EQ(OB_SUCCESS, json_parser.init(&allocator));
-  FILE* fp = fopen(case_file, "r");
+  FILE *fp = fopen(case_file, "r");
   ASSERT_TRUE(NULL != fp);
-  char* content = NULL;
+  char *content = NULL;
   size_t len = 0;
   ssize_t bytes_read = getdelim(&content, &len, '\0', fp);
   ASSERT_NE(-1, bytes_read);
-  char* content_clone = (char*)allocator.alloc(len);
+  char *content_clone = (char*)allocator.alloc(len);
   ASSERT_TRUE(NULL != content_clone);
   memcpy(content_clone, content, len);
   root = NULL;
@@ -35,7 +37,8 @@ void ob_parse_case_file(ObArenaAllocator& allocator, const char* case_file, json
   if (NULL != content) {
     free(content);
   }
-  if (NULL != fp) {
+  if (NULL != fp)
+  {
     fclose(fp);
   }
 }
@@ -59,5 +62,5 @@ void ob_check_result(const char* base_dir, const char* casename)
   ASSERT_EQ(0, ret);
 }
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase

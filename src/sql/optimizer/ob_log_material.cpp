@@ -14,67 +14,68 @@
 #include "ob_log_material.h"
 #include "ob_log_operator_factory.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
+#include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObLogMaterial::allocate_exchange_post(AllocExchContext* ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  UNUSED(ctx);
-  if (OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-    LOG_WARN("failed to copy sharding info from children", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
-int ObLogMaterial::allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator* child = NULL;
-  if (OB_ISNULL(ctx) || OB_ISNULL(child = get_child(first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx), K(get_child(first_child)));
-  } else if (OB_FAIL(child->allocate_exchange(ctx, exch_info))) {
-    LOG_WARN("failed to allocate exchange", K(ret));
-  } else { /*do nothing*/
-  }
-  return ret;
-}
-
 int ObLogMaterial::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator* child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child)) {
+  int64_t parallel = 0;
+  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is null", K(ret));
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else {
-    double op_cost = ObOptEstCost::cost_material(child->get_card(), child->get_width());
-    set_cost(child->get_cost() + op_cost);
+    double op_cost = 0.0;
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    op_cost += ObOptEstCost::cost_material(child->get_card() / parallel, 
+                                           child->get_width(),
+                                           opt_ctx.get_cost_model_type());
     set_op_cost(op_cost);
+    set_cost(child->get_cost() + op_cost);
     set_card(child->get_card());
-    set_width(child->get_width());
   }
   return ret;
 }
 
-int ObLogMaterial::re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est)
+int ObLogMaterial::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
 {
   int ret = OB_SUCCESS;
-  UNUSED(parent);
-  re_est = false;
-  if (need_row_count >= get_card()) {
-    /*do nothing*/
+  int64_t parallel = 0;
+  double child_card = 0.0;
+  double child_cost = 0.0;
+  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
+  } else if (OB_FALSE_IT(param.need_row_count_ = child->get_card())) {
+  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est cost", K(ret));
   } else {
-    set_card(need_row_count);
-    re_est = true;
+    double op_cost = 0.0;
+    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+    op_cost += ObOptEstCost::cost_material(child_card / parallel, 
+                                           child->get_width(),
+                                           opt_ctx.get_cost_model_type());
+    cost = child_cost + op_cost;
+    card = child_card;
+    if (param.override_) {
+      set_op_cost(op_cost);
+      set_cost(cost);
+      set_card(card);
+    }
   }
   return ret;
 }

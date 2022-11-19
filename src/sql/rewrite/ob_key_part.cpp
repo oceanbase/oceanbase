@@ -16,10 +16,12 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace sql {
+namespace sql
+{
 void ObKeyPart::reset()
 {
   common::ObDLinkBase<ObKeyPart>::reset();
@@ -30,27 +32,31 @@ void ObKeyPart::reset()
   item_next_ = NULL;
   or_next_ = NULL;
   and_next_ = NULL;
+  rowid_column_idx_ = OB_INVALID_ID;
+  is_phy_rowid_key_part_ = false;
 }
 
-bool ObKeyPart::has_intersect(const ObKeyPart* other) const
+bool ObKeyPart::has_intersect(const ObKeyPart *other) const
 {
   bool bret = true;
-  if (OB_UNLIKELY(NULL == other) || OB_UNLIKELY(!is_normal_key()) || OB_UNLIKELY(!other->is_normal_key())) {
+  if (OB_UNLIKELY(NULL == other)
+      || OB_UNLIKELY(!is_normal_key())
+      || OB_UNLIKELY(!other->is_normal_key())) {
     bret = false;
   } else {
-    ObObj& s1 = normal_keypart_->start_;
-    ObObj& e1 = normal_keypart_->end_;
+    ObObj &s1 = normal_keypart_->start_;
+    ObObj &e1 = normal_keypart_->end_;
     bool s1_flag = normal_keypart_->include_start_;
     bool e1_flag = normal_keypart_->include_end_;
-    ObObj& s2 = other->normal_keypart_->start_;
+    ObObj &s2 = other->normal_keypart_->start_;
     bool s2_flag = other->normal_keypart_->include_start_;
-    ObObj& e2 = other->normal_keypart_->end_;
+    ObObj &e2 = other->normal_keypart_->end_;
     bool e2_flag = other->normal_keypart_->include_end_;
     int cmp_s2_e1 = 0;
     int cmp_e2_s1 = 0;
-    if ((cmp_s2_e1 = s2.compare(e1)) > 0 || (cmp_e2_s1 = e2.compare(s1)) < 0 ||
-        (0 == cmp_s2_e1 && (false == s2_flag || false == e1_flag)) ||
-        (0 == cmp_e2_s1 && (false == e2_flag || false == s1_flag))) {
+    if ((cmp_s2_e1 = s2.compare(e1)) > 0 || (cmp_e2_s1 = e2.compare(s1)) < 0
+        || (0 == cmp_s2_e1 && (false == s2_flag || false == e1_flag))
+        || (0 == cmp_e2_s1 && (false == e2_flag || false == s1_flag))) {
       bret = false;
     }
   }
@@ -59,20 +65,27 @@ bool ObKeyPart::has_intersect(const ObKeyPart* other) const
 
 // can be unioned as one
 // ignore the edge, k1 >= 0 or k1 < 0 can union as (min, max)
-bool ObKeyPart::can_union(const ObKeyPart* other) const
+bool ObKeyPart::can_union(const ObKeyPart *other) const
 {
   bool bret = true;
-  if (OB_UNLIKELY(NULL == other) || OB_UNLIKELY(!is_normal_key()) || OB_UNLIKELY(!other->is_normal_key())) {
+  if (OB_UNLIKELY(NULL == other)
+      || OB_UNLIKELY(!is_normal_key())
+      || OB_UNLIKELY(!other->is_normal_key())) {
     bret = false;
   } else {
-    if (is_question_mark() || other->is_question_mark() || NULL != item_next_ || NULL != other->item_next_ ||
-        is_always_false() || other->is_always_false()) {
+    if (is_question_mark()
+        || other->is_question_mark()
+        || NULL != item_next_
+        || NULL != other->item_next_
+        || is_always_false()
+        || other->is_always_false()
+        || (is_phy_rowid_key_part() != other->is_phy_rowid_key_part())) {
       bret = false;
     } else {
-      ObObj& s1 = normal_keypart_->start_;
-      ObObj& e1 = normal_keypart_->end_;
-      ObObj& s2 = other->normal_keypart_->start_;
-      ObObj& e2 = other->normal_keypart_->end_;
+      ObObj &s1 = normal_keypart_->start_;
+      ObObj &e1 = normal_keypart_->end_;
+      ObObj &s2 = other->normal_keypart_->start_;
+      ObObj &e2 = other->normal_keypart_->end_;
       int cmp_s2_e1 = 0;
       int cmp_e2_s1 = 0;
       if ((cmp_s2_e1 = s2.compare(e1)) > 0 || (cmp_e2_s1 = e2.compare(s1)) < 0) {
@@ -85,21 +98,21 @@ bool ObKeyPart::can_union(const ObKeyPart* other) const
         if (!normal_keypart_->include_start_ && !other->normal_keypart_->include_end_) {
           bret = false;
         }
-      }  // a < 0 or a > 0 can't be union as (MIN, MAX)
+      } // a < 0 or a > 0 can't be union as (MIN, MAX)
     }
   }
   return bret;
 }
 
-bool ObKeyPart::equal_to(const ObKeyPart* other)
+bool ObKeyPart::equal_to(const ObKeyPart *other)
 {
   bool bret = true;
   if (OB_UNLIKELY(NULL == other)) {
     bret = false;
   } else {
     // 1. check item list
-    ObKeyPart* item_this = this;
-    const ObKeyPart* item_other = other;
+    ObKeyPart *item_this = this;
+    const ObKeyPart *item_other = other;
     bool is_done = false;
     while (!is_done && NULL != item_this && NULL != item_other) {
       if (!item_this->normal_key_is_equal(item_other)) {
@@ -151,19 +164,33 @@ bool ObKeyPart::equal_to(const ObKeyPart* other)
   return bret;
 }
 
-int ObKeyPart::intersect(ObKeyPart* other, bool contain_row)
+int ObKeyPart::intersect(ObKeyPart *other, bool contain_row)
 {
   UNUSED(contain_row);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == other)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_REWRITE_LOG(WARN, "other should not be null");
-  } else if (OB_UNLIKELY((id_ != other->id_) || (pos_ != other->pos_)) || OB_UNLIKELY(!is_normal_key()) ||
-             OB_UNLIKELY(!other->is_normal_key())) {
+  } else if (OB_UNLIKELY((id_ != other->id_) || (pos_ != other->pos_))
+      || OB_UNLIKELY(!is_normal_key()) || OB_UNLIKELY(!other->is_normal_key())) {
     ret = OB_INVALID_ARGUMENT;
     SQL_REWRITE_LOG(WARN, "ObKeyPart not equal", K(*this), K(*other));
   } else {
-    if (!has_intersect(other)) {
+    //bug:https://work.aone.alibaba-inc.com/issue/41147694
+    ObObj &s1 = normal_keypart_->start_;
+    ObObj &e1 = normal_keypart_->end_;
+    ObObj &s2 = other->normal_keypart_->start_;
+    ObObj &e2 = other->normal_keypart_->end_;
+    if ((is_phy_rowid_key_part() && !other->is_phy_rowid_key_part()) ||
+        (!is_phy_rowid_key_part() && other->is_phy_rowid_key_part())) {
+      if (other->is_phy_rowid_key_part()) {
+        normal_keypart_->start_ = other->normal_keypart_->start_;
+        normal_keypart_->end_ = other->normal_keypart_->end_;
+        normal_keypart_->include_start_ = other->normal_keypart_->include_start_;
+        normal_keypart_->include_end_ =  other->normal_keypart_->include_end_;
+        is_phy_rowid_key_part_ = true;
+      } else {/*do nothing*/}
+    } else if (!has_intersect(other)) {
       // update this
       normal_keypart_->start_.set_max_value();
       normal_keypart_->end_.set_min_value();
@@ -171,17 +198,18 @@ int ObKeyPart::intersect(ObKeyPart* other, bool contain_row)
       normal_keypart_->include_end_ = false;
       normal_keypart_->always_false_ = true;
     } else {
-      ObObj* s1 = &(normal_keypart_->start_);
-      ObObj* e1 = &(normal_keypart_->end_);
+      ObObj *s1 = &(normal_keypart_->start_);
+      ObObj *e1 = &(normal_keypart_->end_);
       bool s1_flag = normal_keypart_->include_start_;
       bool e1_flag = normal_keypart_->include_end_;
-      ObObj* s2 = &(other->normal_keypart_->start_);
+      ObObj *s2 = &(other->normal_keypart_->start_);
       bool s2_flag = other->normal_keypart_->include_start_;
-      ObObj* e2 = &(other->normal_keypart_->end_);
+      ObObj *e2 = &(other->normal_keypart_->end_);
       bool e2_flag = other->normal_keypart_->include_end_;
       int cmp = 0;
       SQL_REWRITE_LOG(DEBUG, "has intersect");
 
+      //取大
       cmp = s1->compare(*s2);
       if (cmp > 0) {
         // do nothing
@@ -192,6 +220,7 @@ int ObKeyPart::intersect(ObKeyPart* other, bool contain_row)
         s1_flag = (s1_flag && s2_flag);
       }
 
+      // 取小
       cmp = e1->compare(*e2);
       if (cmp > 0) {
         e1 = e2;
@@ -213,7 +242,7 @@ int ObKeyPart::intersect(ObKeyPart* other, bool contain_row)
         normal_keypart_->always_false_ = false;
       }
 
-      // set data
+      //set data
       if (s1 != &normal_keypart_->start_) {
         normal_keypart_->start_ = *s1;
       }
@@ -227,19 +256,23 @@ int ObKeyPart::intersect(ObKeyPart* other, bool contain_row)
   return ret;
 }
 
-ObKeyPart* ObKeyPart::general_or_next()
+/*
+ * 整个链都可以表示成and，没有多余的东西
+ */
+
+ObKeyPart *ObKeyPart::general_or_next()
 {
-  ObKeyPart* gt_or = or_next_;
+  ObKeyPart *gt_or = or_next_;
   while (NULL != gt_or && gt_or->and_next_ == and_next_) {
     gt_or = gt_or->or_next_;
   }
   return gt_or;
 }
 
-ObKeyPart* ObKeyPart::cut_general_or_next()
+ObKeyPart *ObKeyPart::cut_general_or_next()
 {
-  ObKeyPart* prev_or = this;
-  ObKeyPart* gt_or = or_next_;
+  ObKeyPart *prev_or = this;
+  ObKeyPart *gt_or = or_next_;
   while (NULL != gt_or && gt_or->and_next_ == and_next_) {
     prev_or = gt_or;
     gt_or = gt_or->or_next_;
@@ -248,21 +281,23 @@ ObKeyPart* ObKeyPart::cut_general_or_next()
   return gt_or;
 }
 
-void ObKeyPart::link_gt(ObKeyPart* and_next)
+void ObKeyPart::link_gt(ObKeyPart *and_next)
 {
-  ObKeyPart* cur = this;
+  ObKeyPart *cur = this;
   while (NULL != cur) {
     cur->and_next_ = and_next;
     cur = cur->or_next_;
   }
 }
 
-int ObKeyPart::deep_node_copy(const ObKeyPart& other)
+int ObKeyPart::deep_node_copy(const ObKeyPart &other)
 {
   int ret = OB_SUCCESS;
   id_ = other.id_;
   pos_ = other.pos_;
   null_safe_ = other.null_safe_;
+  rowid_column_idx_ = other.rowid_column_idx_;
+  is_phy_rowid_key_part_ = other.is_phy_rowid_key_part_;
   item_next_ = NULL;
   or_next_ = NULL;
   and_next_ = NULL;
@@ -295,8 +330,8 @@ OB_SERIALIZE_MEMBER(ObKeyPartId, table_id_, column_id_);
 
 OB_SERIALIZE_MEMBER(ObKeyPartPos, offset_, column_type_, enum_set_values_);
 
-int ObKeyPartPos::set_enum_set_values(
-    common::ObIAllocator& allocator, const common::ObIArray<common::ObString>& enum_set_values)
+int ObKeyPartPos::set_enum_set_values(common::ObIAllocator &allocator,
+                                      const common::ObIArray<common::ObString> &enum_set_values)
 {
   int ret = OB_SUCCESS;
   ObString value;
@@ -304,7 +339,7 @@ int ObKeyPartPos::set_enum_set_values(
     value.reset();
     if (OB_FAIL(ob_write_string(allocator, enum_set_values.at(i), value))) {
       LOG_WARN("fail to copy obstring", K(enum_set_values), K(value), K(ret));
-    } else if (OB_FAIL(enum_set_values_.push_back(value))) {
+    } else if (OB_FAIL(enum_set_values_.push_back(value))){
       LOG_WARN("fail to push back value", K(enum_set_values), K(value), K(ret));
     }
   }
@@ -334,6 +369,8 @@ OB_DEF_SERIALIZE(ObKeyPart)
     }
   }
   OB_UNIS_ENCODE(null_safe_);
+  OB_UNIS_ENCODE(rowid_column_idx_);
+  OB_UNIS_ENCODE(is_phy_rowid_key_part_);
   return ret;
 }
 
@@ -341,6 +378,8 @@ OB_DEF_DESERIALIZE(ObKeyPart)
 {
   int ret = OB_SUCCESS;
   int64_t key_type = 0;
+  //要做到向前兼容，因为null_safe的范围比范围比not null safe的范围更大，对于老版本没有去filter的plan
+  //宁愿range变得更大，不能接受range被缩小，所以这里将null_safe_初始化为true
   null_safe_ = true;
   OB_UNIS_DECODE(id_);
   OB_UNIS_DECODE(pos_);
@@ -369,6 +408,8 @@ OB_DEF_DESERIALIZE(ObKeyPart)
     }
   }
   OB_UNIS_DECODE(null_safe_);
+  OB_UNIS_DECODE(rowid_column_idx_);
+  OB_UNIS_DECODE(is_phy_rowid_key_part_);
   return ret;
 }
 
@@ -390,6 +431,8 @@ OB_DEF_SERIALIZE_SIZE(ObKeyPart)
     OB_UNIS_ADD_LEN(like_keypart_->escape_);
   }
   OB_UNIS_ADD_LEN(null_safe_);
+  OB_UNIS_ADD_LEN(rowid_column_idx_);
+  OB_UNIS_ADD_LEN(is_phy_rowid_key_part_);
   return len;
 }
 
@@ -404,11 +447,7 @@ int ObKeyPart::formalize_keypart(bool contain_row)
   } else if (!normal_keypart_->start_.can_compare(normal_keypart_->end_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("start obj can not compare with end obj",
-        "start",
-        normal_keypart_->start_,
-        "end",
-        normal_keypart_->end_,
-        K(ret));
+             "start", normal_keypart_->start_, "end", normal_keypart_->end_, K(ret));
   } else {
     int cmp = normal_keypart_->start_.compare(normal_keypart_->end_);
     if ((cmp > 0) || (0 == cmp && (!normal_keypart_->include_start_ || !normal_keypart_->include_end_))) {
@@ -425,21 +464,22 @@ int ObKeyPart::formalize_keypart(bool contain_row)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams& dtc_params, bool contain_row)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool contain_row)
 {
   int ret = OB_SUCCESS;
   ObObj cast_obj;
-  const ObObj* dest_val = NULL;
+  const ObObj *dest_val = NULL;
 
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (!normal_keypart_->start_.is_min_value() && !normal_keypart_->start_.is_max_value() &&
-             !normal_keypart_->start_.is_unknown() &&
-             !ObSQLUtils::is_same_type_for_compare(
-                 normal_keypart_->start_.get_meta(), pos_.column_type_.get_obj_meta())) {
+  } else if (!normal_keypart_->start_.is_min_value()
+      && !normal_keypart_->start_.is_max_value()
+      && !normal_keypart_->start_.is_unknown()
+      && !ObSQLUtils::is_same_type_for_compare(normal_keypart_->start_.get_meta(),
+                                               pos_.column_type_.get_obj_meta())) {
     ObCastCtx cast_ctx(&allocator_, &dtc_params, CM_WARN_ON_FAIL, pos_.column_type_.get_collation_type());
-    ObObj& tmp_start = normal_keypart_->start_;
+    ObObj &tmp_start = normal_keypart_->start_;
     ObExpectType expect_type;
     expect_type.set_type(pos_.column_type_.get_type());
     expect_type.set_collation_type(pos_.column_type_.get_collation_type());
@@ -448,21 +488,19 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams& dtc_params, bool cont
     if (OB_FAIL(ret)) {
       SQL_REWRITE_LOG(WARN, "cast obj to dest type failed", K_(normal_keypart_->start), K_(pos_.column_type));
     } else {
+      // 下面这个比较目的是检查上面的cast有没有丢失数值的精度
       int64_t cmp = 0;
       ObObjType cmp_type = ObMaxType;
-      if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(
-              cmp_type, normal_keypart_->start_.get_type(), dest_val->get_type()))) {
+      if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, normal_keypart_->start_.get_type(),
+                                                                dest_val->get_type()))) {
         LOG_WARN("get compare type failed", K(ret));
-      } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp,
-                     normal_keypart_->start_,
-                     *dest_val,
-                     cast_ctx,
-                     cmp_type,
-                     pos_.column_type_.get_collation_type()))) {
+      } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, normal_keypart_->start_, *dest_val, cast_ctx,
+                                                                    cmp_type, pos_.column_type_.get_collation_type()))) {
         SQL_REWRITE_LOG(WARN, "compare obj value failed", K(ret));
       } else if (cmp < 0) {
+        //转换后精度发生变化，结果更大，需要将原来的开区间变为闭区间
         normal_keypart_->include_start_ = true;
-      } else if (cmp > 0) {
+      } else if (cmp > 0) { //结果变为更小，原来的闭区间变为开区间
         normal_keypart_->include_start_ = false;
       }
       normal_keypart_->start_ = *dest_val;
@@ -470,34 +508,34 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams& dtc_params, bool cont
   }
 
   if (OB_SUCC(ret)) {
-    if (!normal_keypart_->end_.is_min_value() && !normal_keypart_->end_.is_max_value() &&
-        !normal_keypart_->end_.is_unknown() &&
-        !ObSQLUtils::is_same_type_for_compare(normal_keypart_->end_.get_meta(), pos_.column_type_.get_obj_meta())) {
+    if (!normal_keypart_->end_.is_min_value()
+        && !normal_keypart_->end_.is_max_value()
+        && !normal_keypart_->end_.is_unknown()
+        && !ObSQLUtils::is_same_type_for_compare(normal_keypart_->end_.get_meta(),
+                                                 pos_.column_type_.get_obj_meta())) {
       ObCastCtx cast_ctx(&allocator_, &dtc_params, CM_WARN_ON_FAIL, pos_.column_type_.get_collation_type());
       ObExpectType expect_type;
       expect_type.set_type(pos_.column_type_.get_type());
       expect_type.set_collation_type(pos_.column_type_.get_collation_type());
       expect_type.set_type_infos(&pos_.get_enum_set_values());
-      ObObj& tmp_end = normal_keypart_->end_;
+      ObObj &tmp_end = normal_keypart_->end_;
       EXPR_CAST_OBJ_V2(expect_type, tmp_end, dest_val);
       if (OB_FAIL(ret)) {
         SQL_REWRITE_LOG(WARN, "cast obj to dest type failed", K_(normal_keypart_->end), K_(pos_.column_type));
       } else {
         int64_t cmp = 0;
         ObObjType cmp_type = ObMaxType;
-        if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(
-                cmp_type, normal_keypart_->end_.get_type(), dest_val->get_type()))) {
+        if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, normal_keypart_->end_.get_type(),
+                                                                  dest_val->get_type()))) {
           LOG_WARN("get compare type failed", K(ret));
-        } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp,
-                       normal_keypart_->end_,
-                       *dest_val,
-                       cast_ctx,
-                       cmp_type,
-                       pos_.column_type_.get_collation_type()))) {
+        } else if (OB_FAIL(ObRelationalExprOperator::compare_nullsafe(cmp, normal_keypart_->end_, *dest_val, cast_ctx,
+                                                                      cmp_type, pos_.column_type_.get_collation_type()))) {
           SQL_REWRITE_LOG(WARN, "compare obj value failed", K(ret));
         } else if (cmp > 0) {
+          //转换后精度发生变化，结果变为更小，需要将原来的开区间变为闭区间
           normal_keypart_->include_end_ = true;
         } else if (cmp < 0) {
+          //转换后结果变为更大，原来的闭区间变为开区间
           normal_keypart_->include_end_ = false;
         }
         normal_keypart_->end_ = *dest_val;
@@ -518,13 +556,13 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams& dtc_params, bool cont
 int ObKeyPart::create_normal_key()
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObNormalKeyPart))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed");
   } else {
     key_type_ = T_NORMAL_KEY;
-    normal_keypart_ = new (ptr) ObNormalKeyPart();
+    normal_keypart_ = new(ptr) ObNormalKeyPart();
   }
   return ret;
 }
@@ -532,13 +570,13 @@ int ObKeyPart::create_normal_key()
 int ObKeyPart::create_like_key()
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObLikeKeyPart))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed");
   } else {
     key_type_ = T_LIKE_KEY;
-    like_keypart_ = new (ptr) ObLikeKeyPart();
+    like_keypart_ = new(ptr) ObLikeKeyPart();
   }
   return ret;
 }
@@ -547,27 +585,26 @@ DEF_TO_STRING(ObKeyPart)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(N_INDEX_ID, id_, N_POS, pos_, K_(key_type), K_(null_safe));
+  J_KV(N_INDEX_ID, id_,
+       N_POS, pos_,
+       K_(key_type),
+       K_(null_safe),
+       K_(rowid_column_idx));
   if (is_normal_key()) {
     J_COMMA();
-    J_KV(N_START_VAL,
-        normal_keypart_->start_,
-        N_END_VAL,
-        normal_keypart_->end_,
-        N_INCLUDE_START,
-        normal_keypart_->include_start_,
-        N_INCLUDE_END,
-        normal_keypart_->include_end_,
-        N_ALWAYS_TRUE,
-        normal_keypart_->always_true_,
-        N_ALWAYS_FALSE,
-        normal_keypart_->always_false_);
+    J_KV(N_START_VAL, normal_keypart_->start_,
+         N_END_VAL, normal_keypart_->end_,
+         N_INCLUDE_START, normal_keypart_->include_start_,
+         N_INCLUDE_END, normal_keypart_->include_end_,
+         N_ALWAYS_TRUE, normal_keypart_->always_true_,
+         N_ALWAYS_FALSE, normal_keypart_->always_false_);
   } else if (is_like_key()) {
     J_COMMA();
-    J_KV(N_PATTERN_VAL, like_keypart_->pattern_, N_ESCAPE_VAL, like_keypart_->escape_);
+    J_KV(N_PATTERN_VAL, like_keypart_->pattern_,
+         N_ESCAPE_VAL, like_keypart_->escape_);
   }
   J_OBJ_END();
   return pos;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase

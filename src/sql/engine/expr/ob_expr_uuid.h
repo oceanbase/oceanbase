@@ -15,67 +15,80 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObBigEndian {
+class ObBigEndian
+{
 public:
-  static int put_uint16(unsigned char* b, uint16_t v);
-  static int put_uint32(unsigned char* b, uint32_t v);
-
-private:
-  // disallow copy
+  static int put_uint16(unsigned char *b, uint16_t v);
+  static int put_uint32(unsigned char *b, uint32_t v);
+private :
+  //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObBigEndian);
 };
 
-struct ObUUIDNode {
+struct ObUUIDNode
+{
   ObUUIDNode();
   int init();
   unsigned char mac_addr_[6];
   bool is_inited_;
 };
 
-class ObUUIDTime {
+class ObUUIDTime
+{
 public:
-  static int get_time(uint64_t& time, uint16_t& seq);
-
+  static int get_time(uint64_t &time, uint16_t &seq);
 private:
-  static int time_now(uint64_t& now);
+  static int time_now(uint64_t &now);
   static void reset_clock_seq();
-  static const uint64_t LILLIAN = 2299160;              // Julian day of 15 Oct 1582
-  static const uint64_t UNIXX = 2440587;                // Julian day of 1 Jan 1970
-  static const uint64_t EPOCH = UNIXX - LILLIAN;        // Days between EPOCHs
-  static const uint64_t G1582 = EPOCH * 86400;          // seconds between EPOCHs
-  static const uint64_t G1582NS100 = G1582 * 10000000;  // 100s of a nanoseconds between EPOCHs
+  static const uint64_t LILLIAN = 2299160; // Julian day of 15 Oct 1582
+  static const uint64_t UNIXX = 2440587; // Julian day of 1 Jan 1970
+  static const uint64_t EPOCH = UNIXX - LILLIAN; // Days between EPOCHs
+  static const uint64_t G1582 = EPOCH * 86400; // seconds between EPOCHs
+  static const uint64_t G1582NS100 = G1582 * 10000000; // 100s of a nanoseconds between EPOCHs
 
   static uint64_t lasttime_;
   static uint16_t clock_seq_;
   static common::ObLatch lock_;
 };
 
-class ObExprUuid : public ObFuncExprOperator {
-public:
-  explicit ObExprUuid(common::ObIAllocator& alloc);
-  explicit ObExprUuid(
-      common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
-  virtual ~ObExprUuid();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int init();
-  static int eval_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
+class ObExprUuid : public ObFuncExprOperator
+{
+public:
+  explicit ObExprUuid(common::ObIAllocator &alloc);
+  explicit ObExprUuid(
+    common::ObIAllocator &alloc,
+    ObExprOperatorType type,
+    const char *name,
+    int32_t param_num,
+    int32_t dimension);
+  virtual ~ObExprUuid();
+  virtual int calc_result_type0(ObExprResType &type,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int init();
+  static int eval_uuid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  //used to generate uuid for server_uuid system variable.
+  static int gen_server_uuid(char *server_uuid, const int64_t uuid_len);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  //aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  static const common::ObLength LENGTH_UUID = 36;//chars not bytes
 protected:
-  static int calc(unsigned char* scratch);
-  // aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-  static const common::ObLength LENGTH_UUID = 36;  // chars not bytes
+  static int calc(unsigned char *scratch);
 private:
-  static ObUUIDNode* uuid_node;
-  // disallow copy
+  static ObUUIDNode *uuid_node;
+  //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprUuid);
 };
 
-inline int ObExprUuid::calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprUuid::calc_result_type0(ObExprResType &type,
+                                         common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_varchar();
@@ -85,28 +98,30 @@ inline int ObExprUuid::calc_result_type0(ObExprResType& type, common::ObExprType
   return common::OB_SUCCESS;
 }
 
-class ObExprSysGuid : public ObExprUuid {
+class ObExprSysGuid : public ObExprUuid
+{
 public:
-  explicit ObExprSysGuid(common::ObIAllocator& alloc);
+  explicit ObExprSysGuid(common::ObIAllocator &alloc);
   virtual ~ObExprSysGuid();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type0(
+    ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
 
-  static int eval_sys_guid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx&, const ObRawExpr&, ObExpr& rt_expr) const override
+  static int eval_sys_guid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &,
+                      const ObRawExpr &,
+                      ObExpr &rt_expr) const override
   {
     rt_expr.eval_func_ = eval_sys_guid;
     return common::OB_SUCCESS;
   }
-
 private:
   static const common::ObLength LENGTH_SYS_GUID = 16;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysGuid);
 };
 
-inline int ObExprSysGuid::calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprSysGuid::calc_result_type0(
+  ObExprResType &type, common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_raw();
@@ -114,7 +129,8 @@ inline int ObExprSysGuid::calc_result_type0(ObExprResType& type, common::ObExprT
   return common::OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
 
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR_UUID_H_ */

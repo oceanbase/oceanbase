@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-//This file is for define of func json_array
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_ARRAY_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_ARRAY_H_
 
@@ -32,11 +31,6 @@ public:
                                 ObExprResType* types,
                                 int64_t param_num, 
                                 common::ObExprTypeCtx& type_ctx) const override;
-
-  virtual int calc_resultN(common::ObObj &result,
-                           const common::ObObj *objs,
-                           int64_t param_num,
-                           common::ObExprCtx &expr_ctx) const;
                           
   static int eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   

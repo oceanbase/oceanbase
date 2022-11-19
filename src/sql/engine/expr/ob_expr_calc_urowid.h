@@ -15,27 +15,33 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprCalcURowID : public ObExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprCalcURowID: public ObExprOperator
+{
 public:
-  explicit ObExprCalcURowID(common::ObIAllocator& alloc);
+  explicit ObExprCalcURowID(common::ObIAllocator &alloc);
   virtual ~ObExprCalcURowID();
 
-  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types_statck, int64_t param_num,
-      common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_statck,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_resultN(common::ObObj& result, const common::ObObj* obj_stack, int64_t param_num,
-      common::ObExprCtx& expr_ctx) const override;
+  virtual int cg_expr(ObExprCGCtx &cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
-  virtual int cg_expr(ObExprCGCtx& cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
-  static int calc_urowid(const ObExpr& rt_expr, ObEvalCtx& eva_ctx, ObDatum& expr_datum);
-
+  static int calc_urowid(const ObExpr &rt_expr,
+                         ObEvalCtx &eva_ctx,
+                         ObDatum &expr_datum);
 private:
+  static bool all_pk_is_null(int64_t version, ObIArray<ObObj> &pk_vals);
   DISALLOW_COPY_AND_ASSIGN(ObExprCalcURowID);
 };
-}  // namespace sql
-}  // end namespace oceanbase
+} // end namespace
+} // end namespace oceanbase
 
-#endif  // !OB_EXPR_CALC_UROWID_H
+#endif // !OB_EXPR_CALC_UROWID_H

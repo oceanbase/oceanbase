@@ -14,18 +14,28 @@
 #include "ob_restore_point_service.h"
 #include "share/ob_snapshot_table_proxy.h"
 #include "rootserver/ob_snapshot_info_manager.h"
-#include "storage/transaction/ob_ts_mgr.h"
+#include "storage/tx/ob_ts_mgr.h"
 
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 
-ObRestorePointService::ObRestorePointService() : is_inited_(false), ddl_service_(NULL), freeze_info_mgr_(NULL)
-{}
+ObRestorePointService::ObRestorePointService()
+  : is_inited_(false),
+    ddl_service_(NULL)/*,
+    freeze_info_mgr_(NULL)*/
+{
+}
 
 ObRestorePointService::~ObRestorePointService()
-{}
+{
+}
 
-int ObRestorePointService::init(rootserver::ObDDLService& ddl_service, rootserver::ObFreezeInfoManager& freeze_info_mgr)
+
+int ObRestorePointService::init(
+    rootserver::ObDDLService &ddl_service/*,
+    rootserver::ObFreezeInfoManager &freeze_info_mgr*/)
 {
   int ret = OB_SUCCESS;
 
@@ -34,13 +44,13 @@ int ObRestorePointService::init(rootserver::ObDDLService& ddl_service, rootserve
     LOG_WARN("restore point service init twice", K(ret));
   } else {
     ddl_service_ = &ddl_service;
-    freeze_info_mgr_ = &freeze_info_mgr;
+    //freeze_info_mgr_ = &freeze_info_mgr;
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const char* name)
+int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const char *name)
 {
   int ret = OB_SUCCESS;
   int64_t snapshot_version = 0;
@@ -58,18 +68,18 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create recovery point get invalid argument", K(ret), KP(name));
   } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().get_snapshot_count(ddl_service_->get_sql_proxy(),
-                 tenant_id,
-                 share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT,
-                 snapshot_count))) {
+                                                                         tenant_id,
+                                                                         share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT,
+                                                                         snapshot_count))) {
     LOG_WARN("fail to get snapshot count", K(ret), K(tenant_id), K(name));
   } else if (snapshot_count >= MAX_RESTORE_POINT) {
     ret = OB_ERR_RESTORE_POINT_TOO_MANY;
     LOG_INFO("too many restore points", K(tenant_id), K(snapshot_count));
   } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
-                          tenant_id,
-                          share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT,
-                          name,
-                          tmp_info))) {
+      tenant_id,
+      share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT,
+      name,
+      tmp_info))) {
   } else if (OB_SUCCESS == get_snapshot_ret) {
     ret = OB_ERR_RESTORE_POINT_EXIST;
     char tmp_name[OB_MAX_RESERVED_POINT_NAME_LENGTH + 2];
@@ -90,7 +100,7 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
       if (THIS_WORKER.get_timeout_remain() < 0) {
         ret = OB_TIMEOUT;
         LOG_WARN("create restore point timeout", K(ret), K(tenant_id), K(name));
-      } else if (OB_FAIL(OB_TS_MGR.get_local_trans_version(tenant_id, stc, NULL, snapshot_version, ts))) {
+      } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL, snapshot_version, ts))) {
         LOG_WARN("failed to get publish version", K(ret), K(tenant_id));
       } else {
         if (retry_cnt > RETRY_CNT) {
@@ -101,15 +111,16 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
         info.snapshot_ts_ = snapshot_version;
         info.schema_version_ = schema_version;
         info.tenant_id_ = tenant_id;
-        info.table_id_ = 0;
+        info.tablet_id_ = 0;
         info.comment_ = name;
         ObMySQLTransaction trans;
-        common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
-        if (OB_FAIL(trans.start(&proxy))) {
+        common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
+        if (OB_FAIL(trans.start(&proxy, tenant_id))) {
           LOG_WARN("fail to start trans", K(ret));
-        } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info))) {
+        } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(
+            trans, tenant_id, info))) {
           if (OB_SNAPSHOT_DISCARDED != ret) {
-            LOG_WARN("fail to acquire snapshot", K(ret), K(info));
+            LOG_WARN("fail to acquire snapshot", K(ret), K(tenant_id), K(info));
           } else {
             retry_cnt++;
           }
@@ -136,11 +147,12 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
 }
 
 int ObRestorePointService::create_backup_point(
-    const uint64_t tenant_id, const char *name, const int64_t snapshot_version, const int64_t schema_version, 
-    common::ObMySQLTransaction &trans)
+    const uint64_t tenant_id,
+    const char *name,
+    const int64_t snapshot_version,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  int64_t retry_cnt = 0;
   share::ObSnapshotInfo tmp_info;
   int64_t snapshot_gc_ts = 0;
   int get_snapshot_ret = OB_SUCCESS;
@@ -148,12 +160,14 @@ int ObRestorePointService::create_backup_point(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("restore point service do not init", K(ret));
-  } else if (OB_ISNULL(name) || OB_INVALID_ID == tenant_id || snapshot_version <= 0 || !trans.is_started()) {
+  } else if (OB_ISNULL(name) || OB_INVALID_ID == tenant_id || snapshot_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create recovery point get invalid argument", K(ret), KP(name), K(snapshot_version));
-  } else if (FALSE_IT(
-                 get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(
-                     trans, tenant_id, share::ObSnapShotType::SNAPSHOT_FOR_BACKUP_POINT, snapshot_version, tmp_info))) {
+  } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
+      tenant_id,
+      share::ObSnapShotType::SNAPSHOT_FOR_BACKUP_POINT,
+      snapshot_version,
+      tmp_info))) {
   } else if (OB_SUCCESS == get_snapshot_ret) {
     ret = OB_ERR_BACKUP_POINT_EXIST;
     char tmp_name[OB_MAX_RESERVED_POINT_NAME_LENGTH + 2];
@@ -162,9 +176,9 @@ int ObRestorePointService::create_backup_point(
   } else if (OB_ITER_END != get_snapshot_ret) {
     ret = get_snapshot_ret;
     LOG_WARN("failed to get snapshot", K(ret), K(name), K(tenant_id));
-  } else if (OB_FAIL(freeze_info_mgr_->get_latest_snapshot_gc_ts(snapshot_gc_ts))) {
+  } /*else if (OB_FAIL(freeze_info_mgr_->get_latest_snapshot_gc_ts(snapshot_gc_ts))) {
     LOG_WARN("failed to get latest snapshot gc ts", K(ret));
-  } else if (snapshot_gc_ts >= snapshot_version) {
+  } */else if (snapshot_gc_ts >= snapshot_version) {
     ret = OB_BACKUP_CAN_NOT_START;
     LOG_WARN("can not create backup point", K(ret), K(snapshot_gc_ts), K(snapshot_version));
   } else {
@@ -173,32 +187,49 @@ int ObRestorePointService::create_backup_point(
     info.snapshot_ts_ = snapshot_version;
     info.schema_version_ = schema_version;
     info.tenant_id_ = tenant_id;
-    info.table_id_ = 0;
+    info.tablet_id_ = 0;
     info.comment_ = name;
 
-    if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(trans, info))) {
-      LOG_WARN("fail to acquire snapshot", K(ret), K(info));
+    ObMySQLTransaction trans;
+    common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
+      LOG_WARN("fail to start trans", K(ret));
+    } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(
+        trans, tenant_id, info))) {
+      LOG_WARN("fail to acquire snapshot", K(ret), K(tenant_id), K(info));
+    }
+    if (trans.is_started()) {
+      bool is_commit = (ret == OB_SUCCESS);
+      int tmp_ret = trans.end(is_commit);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to end trans", K(ret), K(is_commit));
+        if (OB_SUCC(ret)) {
+          ret = tmp_ret;
+        }
+      }
     }
   }
   return ret;
 }
 
-int ObRestorePointService::drop_restore_point(const uint64_t tenant_id, const char* name)
+int ObRestorePointService::drop_restore_point(const uint64_t tenant_id, const char *name)
 {
   int ret = OB_SUCCESS;
   share::ObSnapshotInfo tmp_info;
   int get_snapshot_ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("restore point service do not init", K(ret));
-  } else if (NULL == name || OB_INVALID_ID == tenant_id) {
+  } else if (NULL == name || OB_INVALID_ID  == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(name));
-  } else if (FALSE_IT(
-                 get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(
-                     ddl_service_->get_sql_proxy(), tenant_id, share::SNAPSHOT_FOR_RESTORE_POINT, name, tmp_info))) {
+  } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
+                                                                                       tenant_id,
+                                                                                       share::SNAPSHOT_FOR_RESTORE_POINT,
+                                                                                       name,
+                                                                                       tmp_info))) {
   } else if (OB_ITER_END == get_snapshot_ret) {
     ret = OB_ERR_RESTORE_POINT_NOT_EXIST;
     LOG_WARN("entry not exist", K(ret), K(tmp_info));
@@ -211,12 +242,13 @@ int ObRestorePointService::drop_restore_point(const uint64_t tenant_id, const ch
   }
 
   ObMySQLTransaction trans;
-  common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
+  common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(trans.start(&proxy))) {
+  } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
     LOG_WARN("fail to start trans", K(ret));
-  } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().release_snapshot(trans, tmp_info))) {
-    LOG_WARN("fail to release snapshot", K(ret), K(tmp_info));
+  } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().release_snapshot(
+      trans, tenant_id, tmp_info))) {
+    LOG_WARN("fail to release snapshot", K(ret), K(tenant_id), K(tmp_info));
   }
   if (trans.is_started()) {
     bool is_commit = (ret == OB_SUCCESS);
@@ -231,7 +263,9 @@ int ObRestorePointService::drop_restore_point(const uint64_t tenant_id, const ch
   return ret;
 }
 
-int ObRestorePointService::drop_backup_point(const uint64_t tenant_id, const int64_t snapshot_version)
+int ObRestorePointService::drop_backup_point(
+    const uint64_t tenant_id,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   share::ObSnapshotInfo tmp_info;
@@ -243,10 +277,10 @@ int ObRestorePointService::drop_backup_point(const uint64_t tenant_id, const int
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(snapshot_version));
   } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
-                          tenant_id,
-                          share::SNAPSHOT_FOR_BACKUP_POINT,
-                          snapshot_version,
-                          tmp_info))) {
+                                                                   tenant_id,
+                                                                   share::SNAPSHOT_FOR_BACKUP_POINT,
+                                                                   snapshot_version,
+                                                                   tmp_info))) {
   } else if (OB_ITER_END == get_snapshot_ret) {
     ret = OB_ERR_BACKUP_POINT_NOT_EXIST;
     LOG_WARN("entry not exist", K(ret), K(tmp_info), K(snapshot_version));
@@ -256,12 +290,13 @@ int ObRestorePointService::drop_backup_point(const uint64_t tenant_id, const int
   }
 
   ObMySQLTransaction trans;
-  common::ObMySQLProxy& proxy = ddl_service_->get_sql_proxy();
+  common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(trans.start(&proxy))) {
+  } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
     LOG_WARN("fail to start trans", K(ret));
-  } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().release_snapshot(trans, tmp_info))) {
-    LOG_WARN("fail to release snapshot", K(ret), K(tmp_info));
+  } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().release_snapshot(
+      trans, tenant_id, tmp_info))) {
+    LOG_WARN("fail to release snapshot", K(ret), K(tenant_id), K(tmp_info));
   }
   if (trans.is_started()) {
     bool is_commit = (ret == OB_SUCCESS);
@@ -276,7 +311,7 @@ int ObRestorePointService::drop_backup_point(const uint64_t tenant_id, const int
   return ret;
 }
 
-void ObRestorePointService::convert_name(const char* name, char* tmp_name, const int64_t length)
+void ObRestorePointService::convert_name(const char *name, char *tmp_name, const int64_t length)
 {
   int tmp_ret = OB_SUCCESS;
   const int64_t name_length = strlen(name);
@@ -289,5 +324,6 @@ void ObRestorePointService::convert_name(const char* name, char* tmp_name, const
   }
 }
 
-}  // namespace rootserver
-}  // namespace oceanbase
+
+}
+}

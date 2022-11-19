@@ -17,5 +17,5 @@ namespace lib {
 
 bool g_runtime_enabled = false;
 
-}  // namespace lib
-}  // namespace oceanbase
+}  // lib
+}  // oceanbase

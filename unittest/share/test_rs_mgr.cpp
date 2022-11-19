@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
@@ -26,23 +27,26 @@
 #include "lib/container/ob_array_iterator.h"
 //#include "rpc/mock_ob_common_rpc_proxy.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 using namespace common;
 using namespace obrpc;
 using namespace schema;
 using namespace host;
 
 using testing::_;
-using ::testing::Invoke;
 using ::testing::Return;
+using ::testing::Invoke;
 
 static ObArray<ObRootAddr> global_rs_list;
 static ObArray<ObRootAddr> global_readonly_rs_list;
 
-class FakeRootAddrAgent : public ObRootAddrAgent {
+class FakeRootAddrAgent : public ObRootAddrAgent
+{
 public:
-  virtual int store(const ObRootAddrList& addr_list, const ObRootAddrList& readonly_addr_list, const bool force)
+  virtual int store(const ObRootAddrList &addr_list, const ObRootAddrList &readonly_addr_list, const bool force)
   {
     int ret = OB_SUCCESS;
     UNUSED(force);
@@ -56,7 +60,7 @@ public:
     return ret;
   }
 
-  virtual int fetch(ObRootAddrList& addr_list, ObRootAddrList& readonly_addr_list)
+  virtual int fetch(ObRootAddrList &addr_list, ObRootAddrList &readonly_addr_list)
   {
     int ret = OB_SUCCESS;
     addr_list.reuse();
@@ -68,22 +72,28 @@ public:
     }
     return ret;
   }
+
 };
 
-class FakeSrvRpcProxy : public ObCommonRpcProxy {
+class FakeSrvRpcProxy : public  ObCommonRpcProxy
+{
 public:
   FakeSrvRpcProxy() : ObCommonRpcProxy(this)
-  {}
+  {
+  }
 
-  virtual int get_rootserver_role(ObGetRootserverRoleResult& role, const ObRpcOpts&)
+  virtual int get_rootserver_role(ObGetRootserverRoleResult &role, const ObRpcOpts &)
   {
     int ret = OB_SUCCESS;
-    role.role_ = ObRoleMgr::SLAVE;
-    FOREACH(r, global_rs_list)
-    {
+    if (OB_FAIL(role.init(FOLLOWER, role.get_status()))) {
+      LOG_WARN("fail to init a ObGetRootserverRoleResult", KR(ret));
+    }
+    FOREACH(r, global_rs_list) {
       LOG_INFO("dst", K(dst_));
-      if (r->server_ == dst_ && r->role_ == LEADER) {
-        role.role_ = ObRoleMgr::MASTER;
+      if (r->server_ == dst_
+          && r->role_ == LEADER
+          && OB_FAIL(role.init(LEADER, role.get_status()))) {
+        LOG_WARN("fail to init a ObGetRootserverRoleResult", KR(ret));
       }
     }
     ret = dst_.is_valid() ? ret : OB_BAD_ADDRESS;
@@ -91,12 +101,11 @@ public:
   }
 };
 
-class TestRsMgr : public ::testing::Test {
+class TestRsMgr : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
-
+  virtual void TearDown() {}
 private:
   ObServerConfig config_;
   DBInitializer db_initer_;
@@ -164,10 +173,10 @@ TEST_F(TestRsMgr, common)
   ASSERT_EQ(B, rs);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

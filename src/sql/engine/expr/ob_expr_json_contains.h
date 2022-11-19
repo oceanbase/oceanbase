@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_contains.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_CONTAINS_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_CONTAINS_H_
 
@@ -33,10 +32,6 @@ public:
                               int64_t param_num, 
                               common::ObExprTypeCtx& type_ctx)
                               const override;
-  virtual int calc_resultN(common::ObObj &result,
-                           const common::ObObj *params,
-                           int64_t param_num,
-                           common::ObExprCtx &expr_ctx) const;
   static int eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                     ObExpr &rt_expr) const override;

@@ -44,7 +44,7 @@ protected:
 private:
   int check_arg2() const;
   int revert_get_ctx();
-  int get_partition_id(uint64_t table_id, const ObRowkey &rowkey, uint64_t &partition_id);
+  int get_tablet_id(uint64_t table_id, const ObRowkey &rowkey, common::ObTabletID &tablet_id);
   int process_get();
   int process_insert();
   int process_del();

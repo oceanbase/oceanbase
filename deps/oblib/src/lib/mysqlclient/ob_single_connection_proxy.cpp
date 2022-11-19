@@ -19,15 +19,21 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
 ObSingleConnectionProxy::ObSingleConnectionProxy()
-    : errno_(OB_SUCCESS), statement_count_(0), conn_(NULL), pool_(NULL), sql_client_(NULL), oracle_mode_(false)
-{}
+    :errno_(OB_SUCCESS),
+     statement_count_(0),
+     conn_(NULL),
+     pool_(NULL),
+     sql_client_(NULL),
+     oracle_mode_(false)
+{
+}
 
 ObSingleConnectionProxy::~ObSingleConnectionProxy()
 {
   (void)close();
 }
 
-int ObSingleConnectionProxy::connect(ObISQLClient* sql_client)
+int ObSingleConnectionProxy::connect(const uint64_t tenant_id, ObISQLClient *sql_client)
 {
   int ret = OB_SUCCESS;
   if (NULL == sql_client || NULL == sql_client->get_pool()) {
@@ -35,21 +41,22 @@ int ObSingleConnectionProxy::connect(ObISQLClient* sql_client)
     LOG_WARN("invalid argument", K(sql_client));
   } else if (NULL != pool_ || NULL != conn_) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("transaction can only be started once", K(pool_), K(conn_));
+    LOG_WARN("transaction can only be started once", K(tenant_id), K(pool_), K(conn_));
   } else {
-    oracle_mode_ = sql_client->is_oracle_mode();
+    oracle_mode_ =  sql_client->is_oracle_mode();
     pool_ = sql_client->get_pool();
-    if (OB_FAIL(pool_->acquire(conn_, sql_client))) {
-      LOG_WARN("acquire connection failed", K(ret), K(pool_));
+
+    if (OB_FAIL(pool_->acquire(tenant_id, conn_, sql_client))) {
+      LOG_WARN("acquire connection failed", K(ret), K(tenant_id), K(pool_));
     } else if (NULL == conn_) {
       ret = OB_INNER_STAT_ERROR;
-      LOG_WARN("connection can not be NULL");
-    } else if (!sql_client->is_active()) {  // check client active after connection acquired
+      LOG_WARN("connection can not be NULL", K(tenant_id), K_(pool));
+    } else if (!sql_client->is_active()) { // check client active after connection acquired
       ret = OB_INACTIVE_SQL_CLIENT;
       LOG_WARN("inactive sql client", K(ret));
       int tmp_ret = pool_->release(conn_, OB_SUCCESS == ret);
       if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("release connection failed", K(tmp_ret));
+        LOG_WARN("release connection failed", K(tmp_ret), K(tenant_id));
       }
       conn_ = NULL;
     } else {
@@ -64,7 +71,8 @@ int ObSingleConnectionProxy::connect(ObISQLClient* sql_client)
   return ret;
 }
 
-int ObSingleConnectionProxy::read(ReadResult& res, const uint64_t tenant_id, const char* sql)
+int ObSingleConnectionProxy::read(ReadResult &res,
+    const uint64_t tenant_id, const char *sql)
 {
   int ret = OB_SUCCESS;
   res.reset();
@@ -75,9 +83,31 @@ int ObSingleConnectionProxy::read(ReadResult& res, const uint64_t tenant_id, con
     errno_ = ret;
     const int ER_LOCK_WAIT_TIMEOUT = -1205;
     if (ER_LOCK_WAIT_TIMEOUT == ret) {
-      LOG_INFO("execute query failed", K(ret), K(sql), K_(conn));
+      LOG_INFO("execute query failed", K(ret), KCSTRING(sql), K_(conn));
     } else {
-      LOG_WARN("execute query failed", K(ret), K(sql), K_(conn));
+      LOG_WARN("execute query failed", K(ret), KCSTRING(sql), K_(conn));
+    }
+  }
+  ++statement_count_;
+  LOG_TRACE("execute sql", KCSTRING(sql), K(ret));
+  return ret;
+}
+int ObSingleConnectionProxy::read(ReadResult &res,
+    const int64_t cluster_id,
+    const uint64_t tenant_id, const char *sql)
+{
+  int ret = OB_SUCCESS;
+  res.reset();
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("check inner stat failed");
+  } else if (OB_FAIL(conn_->execute_read(cluster_id, tenant_id, sql, res))) {
+    errno_ = ret;
+    const int ER_LOCK_WAIT_TIMEOUT = -1205;
+    if (ER_LOCK_WAIT_TIMEOUT == ret) {
+      LOG_INFO("execute query failed", K(ret), K(sql), K_(conn), K(cluster_id));
+    } else {
+      LOG_WARN("execute query failed", K(ret), K(sql), K_(conn), K(cluster_id));
     }
   }
   ++statement_count_;
@@ -85,7 +115,8 @@ int ObSingleConnectionProxy::read(ReadResult& res, const uint64_t tenant_id, con
   return ret;
 }
 
-int ObSingleConnectionProxy::write(const uint64_t tenant_id, const char* sql, int64_t& affected_rows)
+int ObSingleConnectionProxy::write(
+    const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
@@ -93,16 +124,16 @@ int ObSingleConnectionProxy::write(const uint64_t tenant_id, const char* sql, in
     LOG_WARN("check inner stat failed");
   } else if (NULL == sql_client_) {
     ret = OB_INACTIVE_SQL_CLIENT;
-    LOG_WARN("sql_client_ is NULL", K(ret), K(sql));
+    LOG_WARN("sql_client_ is NULL", K(ret), KCSTRING(sql));
   } else if (!sql_client_->is_active()) {
     ret = OB_INACTIVE_SQL_CLIENT;
-    LOG_WARN("inactive sql client can't execute write sql", K(ret), K(sql));
+    LOG_WARN("inactive sql client can't execute write sql", K(ret), KCSTRING(sql));
   } else if (OB_FAIL(conn_->execute_write(tenant_id, sql, affected_rows))) {
     errno_ = ret;
-    LOG_WARN("execute sql failed", K(ret), K(sql), K_(conn));
+    LOG_WARN("execute sql failed", K(ret), KCSTRING(sql), K_(conn));
   }
   ++statement_count_;
-  LOG_TRACE("execute sql", K(sql), K(ret));
+  LOG_TRACE("execute sql", KCSTRING(sql), K(ret));
   return ret;
 }
 
@@ -116,8 +147,8 @@ void ObSingleConnectionProxy::close()
   errno_ = OB_SUCCESS;
 }
 
-int ObSingleConnectionProxy::escape(
-    const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size)
+int ObSingleConnectionProxy::escape(const char *from, const int64_t from_size,
+    char *to, const int64_t to_size, int64_t &out_size)
 {
   int ret = OB_SUCCESS;
   if (NULL == pool_) {
@@ -125,12 +156,8 @@ int ObSingleConnectionProxy::escape(
     LOG_WARN("transcation not started");
   } else if (OB_FAIL(pool_->escape(from, from_size, to, to_size, out_size))) {
     LOG_WARN("escape string failed",
-        "from",
-        ObString(from_size, from),
-        K(from_size),
-        "to",
-        static_cast<void*>(to),
-        K(to_size));
+        "from", ObString(from_size, from), K(from_size),
+        "to", static_cast<void *>(to), K(to_size));
   }
   return ret;
 }

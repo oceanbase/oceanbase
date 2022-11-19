@@ -14,25 +14,31 @@
 #define OCEANBASE_COMMON_COMPRESS_SNAPPY_COMPRESSOR_H_
 #include "lib/compress/ob_compressor.h"
 
-namespace oceanbase {
-namespace common {
-class ObSnappyCompressor : public ObCompressor {
+namespace oceanbase
+{
+namespace common
+{
+class ObSnappyCompressor : public ObCompressor
+{
 public:
-  ObSnappyCompressor()
-  {}
-  virtual ~ObSnappyCompressor()
-  {}
-  virtual int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
-      const int64_t dst_buffer_size, int64_t& dst_data_size);
-  virtual int decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
-      const int64_t dst_buffer_size, int64_t& dst_data_size);
-  virtual const char* get_compressor_name() const;
-  virtual int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
-
-private:
-  static const char* compressor_name;
+  ObSnappyCompressor() {}
+  virtual ~ObSnappyCompressor() {}
+  virtual int compress(const char *src_buffer,
+               const int64_t src_data_size,
+               char *dst_buffer,
+               const int64_t dst_buffer_size,
+               int64_t &dst_data_size);
+  virtual int decompress(const char *src_buffer,
+                 const int64_t src_data_size,
+                 char *dst_buffer,
+                 const int64_t dst_buffer_size,
+                 int64_t &dst_data_size);
+  virtual const char *get_compressor_name() const;
+  virtual ObCompressorType get_compressor_type() const;
+  virtual int get_max_overflow_size(const int64_t src_data_size,
+                            int64_t &max_overflow_size) const;
 };
 
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_COMMON_COMPRESS_SNAPPY_COMPRESSOR_H_
+}//namespace common
+}//namespace oceanbase
+#endif //OCEANBASE_COMMON_COMPRESS_SNAPPY_COMPRESSOR_H_

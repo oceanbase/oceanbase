@@ -14,22 +14,22 @@
 #define OCEANBASE_SQL_ENGINE_EMPTY_QUERY_EXECUTOR_H__
 
 #include "share/ob_define.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObEmptyQueryStmt;
 
-class ObEmptyQueryExecutor {
+class ObEmptyQueryExecutor
+{
 public:
-  ObEmptyQueryExecutor()
-  {}
-  virtual ~ObEmptyQueryExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObEmptyQueryStmt& stmt);
-
+  ObEmptyQueryExecutor() {}
+  virtual ~ObEmptyQueryExecutor() {}
+  int execute(ObExecContext &ctx, ObEmptyQueryStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyQueryExecutor);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EMPTY_QUERY_EXECUTOR_H__ */

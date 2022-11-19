@@ -15,16 +15,21 @@
 #include <cmath>  // exp
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/atomic/ob_atomic.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 // See https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
 template <int64_t TICK_INTERVAL_IN_SEC, int64_t SAMPLING_WINDOWN_IN_SEC>
-class ObExponentialMovingAverage {
+class ObExponentialMovingAverage
+{
 public:
-  ObExponentialMovingAverage() : inited_(false), ema_(0.0), uncounted_(0)
+  ObExponentialMovingAverage()
+      :inited_(false),
+       ema_(0.0),
+       uncounted_(0)
   {}
-  ~ObExponentialMovingAverage()
-  {}
+  ~ObExponentialMovingAverage() {}
 
   void update(uint64_t n)
   {
@@ -48,7 +53,7 @@ public:
   {
     uint64_t value = ATOMIC_SET(&uncounted_, 0);
     if (inited_) {
-      double new_ema = 0;  // count from 0
+      double new_ema = 0; // count from 0
       ATOMIC_STORE(reinterpret_cast<int64_t*>(&ema_), *reinterpret_cast<int64_t*>(&new_ema));
     } else {
       const double instant_rate = static_cast<double>(value) / TICK_INTERVAL_IN_USEC;
@@ -60,16 +65,14 @@ public:
   {
     return ATOMIC_LOAD64(&ema_) * static_cast<double>(rate_unit);
   }
-
 private:
   // TICK_INTERVAL_IN_USEC is microsecond.
   // if need per_sec, set rate_unit = PER_SECOND when get_rate
   static const int64_t TICK_INTERVAL_IN_USEC = TICK_INTERVAL_IN_SEC * 1000000LL;
   static const double ALPHA;
-
 private:
-  bool inited_;         // atomic
-  double ema_;          // atomic
+  bool inited_;  // atomic
+  double ema_;  // atomic
   uint64_t uncounted_;  // atomic
   //
   DISALLOW_COPY_AND_ASSIGN(ObExponentialMovingAverage);
@@ -79,7 +82,8 @@ template <int64_t TICK_INTERVAL_IN_SEC, int64_t SAMPLING_WINDOWN_IN_SEC>
 const double ObExponentialMovingAverage<TICK_INTERVAL_IN_SEC, SAMPLING_WINDOWN_IN_SEC>::ALPHA =
     1 - std::exp(static_cast<double>(-(TICK_INTERVAL_IN_SEC)) / SAMPLING_WINDOWN_IN_SEC);
 
-}  // end namespace common
-}  // end namespace oceanbase
+
+} // end namespace common
+} // end namespace oceanbase
 
 #endif /* _OB_EMA_H */

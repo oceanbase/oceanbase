@@ -1818,42 +1818,42 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([cte1.a], [cte1.b]), filter(nil), 
+  0 - output([cte1.a], [cte1.b]), filter(nil), rowset=256, 
       conds([cte1.a < cte3.c]), nl_params_(nil)
-  1 - output([cte3.c]), filter(nil), 
+  1 - output([cte3.c]), filter(nil), rowset=256, 
       access([cte3.c])
-  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
-  3 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
-  4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   5 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions(nil)
-  7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), 
-      access([cte2.a], [cte2.b], [cte2.c]), partitions(nil)
-  8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), 
+  6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
+      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
+  7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256, 
+      access([cte2.a], [cte2.b], [cte2.c]), partitions is NULL, 
+  8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256, 
       conds([cte3.a < cte2.b]), nl_params_(nil)
-  9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), 
-      access([cte3.a], [cte3.b], [cte3.c]), partitions(nil)
-  10 - output([cte2.b]), filter(nil)
-  11 - output([cte2.b]), filter([cte2.a < 3]), 
+  9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256, 
+      access([cte3.a], [cte3.b], [cte3.c]), partitions is NULL, 
+  10 - output([cte2.b]), filter(nil), rowset=256
+  11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256, 
       access([cte2.a], [cte2.b])
-  12 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
-  13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  12 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+  13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   14 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions(nil)
-  16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), 
-      access([cte2.a], [cte2.b], [cte2.c]), partitions(nil)
-  17 - output([cte1.a], [cte1.b]), filter(nil)
-  18 - output([cte1.a], [cte1.b]), filter(nil), 
+  15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
+      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
+  16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256, 
+      access([cte2.a], [cte2.b], [cte2.c]), partitions is NULL, 
+  17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
+  18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256, 
       access([cte1.a], [cte1.b])
-  19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   20 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions(nil)
+  21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
+      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
 
 
 set ob_query_timeout = 100000000;

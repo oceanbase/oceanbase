@@ -29,8 +29,7 @@ ObInfoSchemaQueryResponseTimeTable::ObInfoSchemaQueryResponseTimeTable()
  addr_(NULL),
  ipstr_(),
  port_(0),
- tenant_id_(OB_INVALID_ID),
- collector_iter_(),
+ time_collector_(nullptr),
  utility_iter_(0)
 {
 }
@@ -42,13 +41,14 @@ ObInfoSchemaQueryResponseTimeTable::~ObInfoSchemaQueryResponseTimeTable()
 
 void ObInfoSchemaQueryResponseTimeTable::reset()
 {
-  ObVirtualTableScannerIterator::reset();
+  omt::ObMultiTenantOperator::reset();
   addr_ = NULL;
   port_ = 0;
   ipstr_.reset();
-  tenant_id_ = OB_INVALID_ID;
-  collector_iter_ = common::hash::ObHashMap<uint64_t, ObRSTTimeCollector*>::iterator();
+  start_to_read_ = false;
+  time_collector_ = nullptr;
   utility_iter_ = 0;
+  ObVirtualTableScannerIterator::reset();
 }
 
 int ObInfoSchemaQueryResponseTimeTable::set_ip(common::ObAddr* addr)
@@ -70,17 +70,30 @@ int ObInfoSchemaQueryResponseTimeTable::set_ip(common::ObAddr* addr)
   return ret;
 }
 
+int ObInfoSchemaQueryResponseTimeTable::init(ObIAllocator *allocator, common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(start_to_read_)) {
+    ret = OB_INIT_TWICE;
+    SERVER_LOG(WARN, "cannot init twice", K(ret));
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "invalid argument", K(ret));
+  } else {
+    allocator_ = allocator;
+    addr_ = &addr;
+    start_to_read_ = true;
+  }
+  return ret;
+}
+
 int ObInfoSchemaQueryResponseTimeTable::inner_open()
 {
   int ret = OB_SUCCESS;
-  auto& collector = ObRSTCollector::get_instance();
-  if(0 == collector.collector_map_.size()){
-    SERVER_LOG(WARN, "query response time size is 0");
+  if (OB_FAIL(set_ip(addr_))) {
+    SERVER_LOG(WARN, "can't get ip", K(ret));
   } else {
-    collector_iter_ = collector.collector_map_.begin();
-    if (OB_FAIL(ret = set_ip(addr_))) {
-      SERVER_LOG(WARN, "can't get ip", K(ret));
-    }
+    start_to_read_ = true;
   }
   return ret;
 }
@@ -88,75 +101,112 @@ int ObInfoSchemaQueryResponseTimeTable::inner_open()
 int ObInfoSchemaQueryResponseTimeTable::inner_get_next_row(common::ObNewRow*& row)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(execute(row))) {
+    SERVER_LOG(WARN, "fail to execute", K(ret));
+  }
+  return ret;
+}
 
+bool ObInfoSchemaQueryResponseTimeTable::is_need_process(uint64_t tenant_id)
+{
+  if (!is_virtual_tenant_id(tenant_id) &&
+      (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)){
+    return true;
+  }
+  return false;
+}
+
+int ObInfoSchemaQueryResponseTimeTable::process_curr_tenant(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
   ObObj* cells = cur_row_.cells_;
-  if (OB_UNLIKELY(NULL == allocator_)) {
+  if (OB_UNLIKELY(!start_to_read_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "allocator is NULL", K(ret));
-  } else if (OB_UNLIKELY(NULL == schema_guard_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "schema manager is NULL", K(ret));
+    SERVER_LOG(WARN, "not inited", K(start_to_read_), K(ret));
+  } else if (OB_ISNULL(cur_row_.cells_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
   } else if(0 == ObRSTCollector::get_instance().collector_map_.size()){
-      ret = OB_ITER_END;
-      SERVER_LOG(WARN, "query response time size is 0");
-  } else if (collector_iter_ == ObRSTCollector::get_instance().collector_map_.end()){
-      ret = OB_ITER_END;
+    ret = OB_ITER_END;
+    SERVER_LOG(WARN, "query response time size is 0", K(MTL_ID()), K(time), K(ret));
   } else {
-    const int64_t col_count = output_column_ids_.count();
-    if (OB_SUCC(ret)){
-      uint64_t cell_idx = 0;
-      for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
-        uint64_t col_id = output_column_ids_.at(j);
-        switch (col_id){
-          case TENANT_ID:{
-            tenant_id_ = collector_iter_->first;
-            cells[cell_idx].set_int(tenant_id_);
-            break;
-          }
-          case SVR_IP: {
-            cells[cell_idx].set_varchar(ipstr_);
-            break;
-          }
-          case SVR_PORT: {
-            cells[cell_idx].set_int(port_);
-            break;
-          }
-          case QUERY_RESPPONSE_TIME:{
-            cells[cell_idx].set_int(collector_iter_->second->bound(utility_iter_));
-            break;
-          }
-          case COUNT: {
-            cells[cell_idx].set_int(collector_iter_->second->count(utility_iter_));
-            break;
-          }
-          case TOTAL: {
-            cells[cell_idx].set_int(collector_iter_->second->total(utility_iter_));
-            break;
-          }
-          default: {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
-            break;
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          cell_idx++;
-        }
+    if (utility_iter_ == 0){
+      if (OB_FAIL(ObRSTCollector::get_instance().collector_map_.get_refactored(MTL_ID(), time_collector_))){
+          SERVER_LOG(WARN, "time collector of the tenant does not exist", K(MTL_ID()), K(time), K(ret));
+          ret = OB_ITER_END;
+      } else {
+        if (OB_FAIL(process_row_data(row, cells))){
+          SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(time), K(ret));
+        } 
       }
-    }
-
-
-    if (OB_SUCC(ret)) {
-      row = &cur_row_;
-      utility_iter_++;
-      if(utility_iter_ == collector_iter_->second->bound_count()){
-        collector_iter_++;
-        utility_iter_ = 0;
-      }
+    } else if (utility_iter_ == time_collector_->bound_count()){
+      ret = OB_ITER_END;
+    } else {
+      if (OB_FAIL(process_row_data(row, cells))){
+        SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(time), K(ret));
+      } 
     }
   }
   return ret;
+}
+
+int ObInfoSchemaQueryResponseTimeTable::process_row_data(ObNewRow *&row, ObObj* cells)
+{
+  int ret = OB_SUCCESS;
+  const int64_t col_count = output_column_ids_.count();
+  if (OB_SUCC(ret)){
+    uint64_t cell_idx = 0;
+    for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
+      uint64_t col_id = output_column_ids_.at(j);
+      switch (col_id){
+        case TENANT_ID:{
+          cells[cell_idx].set_int(MTL_ID());
+          break;
+        }
+        case SVR_IP: {
+          cells[cell_idx].set_varchar(ipstr_);
+          break;
+        }
+        case SVR_PORT: {
+          cells[cell_idx].set_int(port_);
+          break;
+        }
+        case QUERY_RESPPONSE_TIME:{
+          cells[cell_idx].set_int(time_collector_->bound(utility_iter_));
+          break;
+        }
+        case COUNT: {
+          cells[cell_idx].set_int(time_collector_->count(utility_iter_));
+          break;
+        }
+        case TOTAL: {
+          cells[cell_idx].set_int(time_collector_->total(utility_iter_));
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+          break;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        cell_idx++;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    row = &cur_row_;
+    utility_iter_++;
+  }
+  return ret;
+}
+
+void ObInfoSchemaQueryResponseTimeTable::release_last_tenant()
+{
+  time_collector_ = nullptr;
+  utility_iter_ = 0;
 }
 
 }  // namespace observer

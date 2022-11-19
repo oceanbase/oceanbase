@@ -15,8 +15,10 @@
 #include "ob_atomic_event.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 const char* const ObAtomicOpEventPerfConfig::data_filename_ = "atomic_op.pfda";
 bool ObAtomicOpEventPerfConfig::enabled_ = false;
 int64_t ObAtomicOpEventPerfConfig::sampling_period_ = 10;
@@ -24,7 +26,7 @@ int64_t ObAtomicOpEventPerfConfig::sampling_period_ = 10;
 void ObAtomicOpEventPerfConfig::start()
 {
   int err = OB_SUCCESS;
-  ObAtomicOpEventWriter& perf_writer = get_the_atomic_event_writer();
+  ObAtomicOpEventWriter &perf_writer = get_the_atomic_event_writer();
   if (!perf_writer.is_opened()) {
     if (OB_SUCCESS != (err = perf_writer.open(data_filename_))) {
       LOG_WARN("failed to open obperf data file", K(err));
@@ -37,7 +39,7 @@ void ObAtomicOpEventPerfConfig::start()
 void ObAtomicOpEventPerfConfig::stop()
 {
   enabled_ = false;
-  ObAtomicOpEventWriter& perf_writer = get_the_atomic_event_writer();
+  ObAtomicOpEventWriter &perf_writer = get_the_atomic_event_writer();
   int err = OB_SUCCESS;
   if (perf_writer.is_opened()) {
     if (OB_SUCCESS != (err = perf_writer.close())) {
@@ -46,25 +48,26 @@ void ObAtomicOpEventPerfConfig::stop()
   }
 }
 
-int64_t ObAtomicOpEventRecorder::to_string(char* buf, const int64_t buf_len) const
+int64_t ObAtomicOpEventRecorder::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   int64_t prev_ts = 0;
   int64_t total_time = 0;
   const char* event_name = NULL;
   for (int64_t i = 0; i < next_idx_; ++i) {
-    const ObAtomicOpEvent& ev = events_[i];
+    const ObAtomicOpEvent &ev = events_[i];
     event_name = NAME(ev.id_);
     if (prev_ts == 0) {
-      (void)::oceanbase::common::databuff_printf(buf, buf_len, pos, "cat_id=%lu begin_ts=%ld ", cat_id_, ev.timestamp_);
+      (void)::oceanbase::common::databuff_printf(buf, buf_len, pos, "cat_id=%lu begin_ts=%ld ",
+                                                 cat_id_, ev.timestamp_);
       prev_ts = ev.timestamp_;
     }
     if (NULL == event_name) {
-      (void)::oceanbase::common::databuff_printf(
-          buf, buf_len, pos, "|[%hu] u=%ld @%s:%d", ev.id_, ev.timestamp_ - prev_ts, ev.filename_, ev.line_);
+      (void)::oceanbase::common::databuff_printf(buf, buf_len, pos, "|[%hu] u=%ld @%s:%d",
+                                                 ev.id_, ev.timestamp_ - prev_ts, ev.filename_, ev.line_);
     } else {
-      (void)::oceanbase::common::databuff_printf(
-          buf, buf_len, pos, "|[%s] u=%ld @%s:%d", event_name, ev.timestamp_ - prev_ts, ev.filename_, ev.line_);
+      (void)::oceanbase::common::databuff_printf(buf, buf_len, pos, "|[%s] u=%ld @%s:%d",
+                                                 event_name, ev.timestamp_ - prev_ts, ev.filename_, ev.line_);
     }
     total_time += ev.timestamp_ - prev_ts;
     prev_ts = ev.timestamp_;
@@ -80,7 +83,7 @@ char ObAtomicOpEventWriter::ATOMIC_MAGIC[8] = {'#', 'a', 't', 'p', 'f', 'd', 'a'
 int ObAtomicOpEventWriter::open(const char* filename)
 {
   int ret = OB_SUCCESS;
-  if (-1 == (fd_ = ::open(filename, O_CREAT | O_TRUNC | O_WRONLY | O_APPEND, S_IWUSR | S_IRUSR | S_IRGRP))) {
+  if (-1 == (fd_ = ::open(filename, O_CREAT|O_TRUNC|O_WRONLY|O_APPEND, S_IWUSR|S_IRUSR|S_IRGRP))) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to open perf data file", K(ret), K(filename), K(errno));
   } else {
@@ -95,21 +98,21 @@ int ObAtomicOpEventWriter::open(const char* filename)
   return ret;
 }
 
-int ObAtomicOpEventWriter::write(const ObAtomicOpEventRecorder& rec)
+int ObAtomicOpEventWriter::write(const ObAtomicOpEventRecorder &rec)
 {
   int ret = OB_SUCCESS;
   if (-1 != fd_) {
-    static __thread char* rec_buf = NULL;
+    RLOCAL(char *, rec_buf);
     if (NULL == rec_buf) {
-      rec_buf = new char[40 * ObAtomicOpEventRecorder::MAX_EVENT_COUNT];  // never free
+      rec_buf = new char[40*ObAtomicOpEventRecorder::MAX_EVENT_COUNT];  // never free
     }
-    char* p = rec_buf;
-    char* p_end = rec_buf + 8192;
+    char *p = rec_buf;
+    char *p_end = rec_buf + 8192;
     int64_t N = rec.count();
     int64_t namelen = 0;
     const char* basename = NULL;
     for (int64_t i = 0; i < N && (p + 40 <= p_end); i++) {
-      const ObAtomicOpEvent& ev = rec.get_event(i);
+      const ObAtomicOpEvent &ev = rec.get_event(i);
       (*(int32_t*)(p)) = ev.id_;
       p += sizeof(int32_t);  // 4
       (*(int32_t*)(p)) = ev.line_;
@@ -137,7 +140,7 @@ int ObAtomicOpEventWriter::write(const ObAtomicOpEventRecorder& rec)
       if (len < 0) {
         ret = OB_ERR_SYS;
         LOG_WARN("failed to write file", K(ret), K_(fd), K(errno));
-      } else if (len != (SIZEOF(rec_size) + SIZEOF(cat_id) + rec_size)) {
+      } else if (len != (SIZEOF(rec_size)+SIZEOF(cat_id)+rec_size)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to write file", K(ret), K_(fd), K(len), K(rec_size));
       }
@@ -186,7 +189,7 @@ int ObAtomicOpEventReader::open(const char* filename)
   return ret;
 }
 
-int ObAtomicOpEventReader::read(ObAtomicOpEventRecorder& rec)
+int ObAtomicOpEventReader::read(ObAtomicOpEventRecorder &rec)
 {
   int ret = OB_SUCCESS;
   int64_t rec_len = 0;
@@ -200,7 +203,7 @@ int ObAtomicOpEventReader::read(ObAtomicOpEventRecorder& rec)
   ssize_t len = ::readv(fd_, buf2, 2);
   if (0 == len) {
     ret = OB_ITER_END;
-  } else if (len != sizeof(rec_len) + sizeof(cat_id)) {
+  } else if (len != sizeof(rec_len)+sizeof(cat_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to read record length", K(ret), K(len), "expected", sizeof(rec_len));
   } else {
@@ -210,7 +213,8 @@ int ObAtomicOpEventReader::read(ObAtomicOpEventRecorder& rec)
     } else if (rec_len > REC_BUF_SIZE) {
       off_t offset = lseek(fd_, 0, SEEK_CUR);
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("read buffer is not enough", K(ret), K(rec_len), K(offset));
+      LOG_WARN("read buffer is not enough",
+               K(ret), K(rec_len), K(offset));
     } else {
       len = ::read(fd_, rec_buf_, rec_len);
       if (len < 0) {
@@ -222,10 +226,10 @@ int ObAtomicOpEventReader::read(ObAtomicOpEventRecorder& rec)
         LOG_WARN("failed to read record", K(ret), K(len), K(rec_len), K(offset));
       } else {
         rec.set_cat_id(cat_id);
-        char* p = rec_buf_;
+        char *p = rec_buf_;
         int64_t N = rec_len / 40;
         for (int64_t i = 0; i < N; ++i) {
-          ObAtomicOpEvent& ev = rec.add_event();
+          ObAtomicOpEvent &ev = rec.add_event();
           ev.id_ = static_cast<ObEventID>((*(int32_t*)(p)));
           p += sizeof(int32_t);  // 4
           ev.line_ = (*(int32_t*)(p));
@@ -256,7 +260,7 @@ int ObAtomicOpEventReader::close()
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
 #endif

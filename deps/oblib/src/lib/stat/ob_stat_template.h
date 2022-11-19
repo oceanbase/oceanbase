@@ -16,10 +16,13 @@
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class DIRWLock {
+class DIRWLock
+{
 public:
   DIRWLock();
   ~DIRWLock();
@@ -29,82 +32,75 @@ public:
   void wrlock();
   void wr2rdlock();
   void unlock();
-  inline uint32_t get_lock()
-  {
-    return lock_;
-  }
-
+  inline uint32_t get_lock() {return lock_;}
 private:
-  static const uint32_t WRITE_MASK = 1 << 30;
+  static const uint32_t WRITE_MASK = 1<<30;
   volatile uint32_t lock_;
 };
 /**
- * ----------------------------------------------------template
- * define---------------------------------------------------------
+ * ----------------------------------------------------template define---------------------------------------------------------
  */
-// NOTE the class T must be a POD type
-template <class T, int64_t N>
-class ObStatArrayIter {
+//NOTE the class T must be a POD type
+template<class T, int64_t N>
+class ObStatArrayIter
+{
 public:
   ObStatArrayIter();
-  int init(T* item, const int64_t curr_idx, int64_t max_item_idx);
-  int get_next(const T*& item);
-
+  int init(T *item, const int64_t curr_idx, int64_t max_item_idx);
+  int get_next(const T *&item);
 private:
-  T* items_;
+  T *items_;
   int64_t curr_idx_;
   int64_t max_item_idx_;
 };
 
-// NOTE the class T must be a POD type
-template <class T, int64_t N>
-class ObStatArray {
+//NOTE the class T must be a POD type
+template<class T, int64_t N>
+class ObStatArray
+{
 public:
   typedef ObStatArrayIter<T, N> Iterator;
-
 public:
   ObStatArray();
-  int add(const ObStatArray& other);
-  T* get(const int64_t idx);
-  int get_iter(Iterator& iter);
+  int add(const ObStatArray &other);
+  T *get(const int64_t idx);
+  int get_iter(Iterator &iter);
   void reset();
-
 private:
   T items_[N];
   int64_t min_item_idx_;
   int64_t max_item_idx_;
 };
 
-// NOTE the class T must be a POD type
-template <class T, int64_t N>
-class ObStatHistoryIter {
+//NOTE the class T must be a POD type
+template<class T, int64_t N>
+class ObStatHistoryIter
+{
 public:
   ObStatHistoryIter();
-  int init(T* items, const int64_t start_pos, int64_t item_cnt);
-  int get_next(T*& item);
+  int init(T *items, const int64_t start_pos, int64_t item_cnt);
+  int get_next(T *&item);
   void reset();
-
 private:
-  T* items_;
+  T *items_;
   int64_t curr_;
   int64_t start_pos_;
   int64_t item_cnt_;
 };
 
-// NOTE the class T must be a POD type
-template <class T, int64_t N>
-class ObStatHistory {
+//NOTE the class T must be a POD type
+template<class T, int64_t N>
+class ObStatHistory
+{
 public:
   typedef ObStatHistoryIter<T, N> Iterator;
-
 public:
   ObStatHistory();
-  int push(const T& item);
-  int add(const ObStatHistory& other);
-  int get_iter(Iterator& iter);
-  int get_last(T*& item);
+  int push(const T &item);
+  int add(const ObStatHistory &other);
+  int get_iter(Iterator &iter);
+  int get_last(T *&item);
   void reset();
-
 private:
   T items_[N];
   int64_t curr_pos_;
@@ -112,18 +108,19 @@ private:
 };
 
 /**
- * ----------------------------------------------------template
- * implementation---------------------------------------------------------
+ * ----------------------------------------------------template implementation---------------------------------------------------------
  */
-// ObStatArray
-template <class T, int64_t N>
-ObStatArray<T, N>::ObStatArray() : min_item_idx_(N), max_item_idx_(-1)
+//ObStatArray
+template<class T, int64_t N>
+ObStatArray<T, N>::ObStatArray()
+  : min_item_idx_(N),
+    max_item_idx_(-1)
 {
   memset(items_, 0, sizeof(items_));
 }
 
-template <class T, int64_t N>
-int ObStatArray<T, N>::add(const ObStatArray& other)
+template<class T, int64_t N>
+int ObStatArray<T, N>::add(const ObStatArray &other)
 {
   int ret = common::OB_SUCCESS;
   int64_t i = 0;
@@ -137,10 +134,10 @@ int ObStatArray<T, N>::add(const ObStatArray& other)
   return ret;
 }
 
-template <class T, int64_t N>
-T* ObStatArray<T, N>::get(const int64_t idx)
+template<class T, int64_t N>
+T *ObStatArray<T, N>::get(const int64_t idx)
 {
-  T* item = NULL;
+  T *item = NULL;
   if (idx >= 0 && idx < N) {
     item = &items_[idx];
     if (idx < min_item_idx_) {
@@ -153,8 +150,8 @@ T* ObStatArray<T, N>::get(const int64_t idx)
   return item;
 }
 
-template <class T, int64_t N>
-int ObStatArray<T, N>::get_iter(Iterator& iter)
+template<class T, int64_t N>
+int ObStatArray<T, N>::get_iter(Iterator &iter)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(iter.init(items_, min_item_idx_, max_item_idx_))) {
@@ -163,7 +160,7 @@ int ObStatArray<T, N>::get_iter(Iterator& iter)
   return ret;
 }
 
-template <class T, int64_t N>
+template<class T, int64_t N>
 void ObStatArray<T, N>::reset()
 {
   if (min_item_idx_ < N) {
@@ -173,13 +170,18 @@ void ObStatArray<T, N>::reset()
   }
 }
 
-// ObStatArrayIter
-template <class T, int64_t N>
-ObStatArrayIter<T, N>::ObStatArrayIter() : items_(NULL), curr_idx_(0), max_item_idx_(0)
-{}
 
-template <class T, int64_t N>
-int ObStatArrayIter<T, N>::init(T* item, const int64_t curr_idx, int64_t max_item_idx)
+//ObStatArrayIter
+template<class T, int64_t N>
+ObStatArrayIter<T, N>::ObStatArrayIter()
+  : items_(NULL),
+    curr_idx_(0),
+    max_item_idx_(0)
+{
+}
+
+template<class T, int64_t N>
+int ObStatArrayIter<T, N>::init(T *item, const int64_t curr_idx, int64_t max_item_idx)
 {
   int ret = common::OB_SUCCESS;
   if (NULL == item || curr_idx < 0 || max_item_idx < 0) {
@@ -193,8 +195,8 @@ int ObStatArrayIter<T, N>::init(T* item, const int64_t curr_idx, int64_t max_ite
   return ret;
 }
 
-template <class T, int64_t N>
-int ObStatArrayIter<T, N>::get_next(const T*& item)
+template<class T, int64_t N>
+int ObStatArrayIter<T, N>::get_next(const T *&item)
 {
   int ret = common::OB_SUCCESS;
   if (NULL == items_) {
@@ -213,15 +215,18 @@ int ObStatArrayIter<T, N>::get_next(const T*& item)
   return ret;
 }
 
-// ObStatHistory
-template <class T, int64_t N>
-ObStatHistory<T, N>::ObStatHistory() : curr_pos_(0), item_cnt_(0)
+
+//ObStatHistory
+template<class T, int64_t N>
+ObStatHistory<T, N>::ObStatHistory()
+  : curr_pos_(0),
+    item_cnt_(0)
 {
   memset(items_, 0, sizeof(items_));
 }
 
-template <class T, int64_t N>
-int ObStatHistory<T, N>::push(const T& item)
+template<class T, int64_t N>
+int ObStatHistory<T, N>::push(const T &item)
 {
   int ret = common::OB_SUCCESS;
   items_[curr_pos_] = item;
@@ -232,8 +237,9 @@ int ObStatHistory<T, N>::push(const T& item)
   return ret;
 }
 
-template <class T, int64_t N>
-int ObStatHistory<T, N>::add(const ObStatHistory& other)
+
+template<class T, int64_t N>
+int ObStatHistory<T, N>::add(const ObStatHistory &other)
 {
   int ret = common::OB_SUCCESS;
   int64_t i = 0, j = 0, cnt = 0;
@@ -267,8 +273,8 @@ int ObStatHistory<T, N>::add(const ObStatHistory& other)
   return ret;
 }
 
-template <class T, int64_t N>
-int ObStatHistory<T, N>::get_iter(Iterator& iter)
+template<class T, int64_t N>
+int ObStatHistory<T, N>::get_iter(Iterator &iter)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(iter.init(items_, (curr_pos_ - 1 + N) % N, item_cnt_))) {
@@ -277,8 +283,8 @@ int ObStatHistory<T, N>::get_iter(Iterator& iter)
   return ret;
 }
 
-template <class T, int64_t N>
-int ObStatHistory<T, N>::get_last(T*& item)
+template<class T, int64_t N>
+int ObStatHistory<T, N>::get_last(T *&item)
 {
   int ret = common::OB_SUCCESS;
   if (0 == item_cnt_) {
@@ -290,7 +296,7 @@ int ObStatHistory<T, N>::get_last(T*& item)
   return ret;
 }
 
-template <class T, int64_t N>
+template<class T, int64_t N>
 void ObStatHistory<T, N>::reset()
 {
   if (item_cnt_ > 0) {
@@ -300,13 +306,19 @@ void ObStatHistory<T, N>::reset()
   }
 }
 
-// ObStatHistoryIter
-template <class T, int64_t N>
-ObStatHistoryIter<T, N>::ObStatHistoryIter() : items_(NULL), curr_(0), start_pos_(0), item_cnt_(0)
-{}
+//ObStatHistoryIter
+template<class T, int64_t N>
+ObStatHistoryIter<T, N>::ObStatHistoryIter()
+  : items_(NULL),
+    curr_(0),
+    start_pos_(0),
+    item_cnt_(0)
+{
+}
 
-template <class T, int64_t N>
-int ObStatHistoryIter<T, N>::init(T* items, const int64_t start_pos, int64_t item_cnt)
+
+template<class T, int64_t N>
+int ObStatHistoryIter<T, N>::init(T *items, const int64_t start_pos, int64_t item_cnt)
 {
   int ret = common::OB_SUCCESS;
   if (NULL == items || start_pos < 0 || item_cnt < 0) {
@@ -321,8 +333,8 @@ int ObStatHistoryIter<T, N>::init(T* items, const int64_t start_pos, int64_t ite
   return ret;
 }
 
-template <class T, int64_t N>
-int ObStatHistoryIter<T, N>::get_next(T*& item)
+template<class T, int64_t N>
+int ObStatHistoryIter<T, N>::get_next(T *&item)
 {
   int ret = common::OB_SUCCESS;
   if (curr_ >= item_cnt_) {
@@ -334,7 +346,7 @@ int ObStatHistoryIter<T, N>::get_next(T*& item)
   return ret;
 }
 
-template <class T, int64_t N>
+template<class T, int64_t N>
 void ObStatHistoryIter<T, N>::reset()
 {
   items_ = NULL;
@@ -343,7 +355,7 @@ void ObStatHistoryIter<T, N>::reset()
   curr_ = 0;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}//common
+}//oceanbase
 
 #endif /* OB_STAT_TEMPLATE_H_ */

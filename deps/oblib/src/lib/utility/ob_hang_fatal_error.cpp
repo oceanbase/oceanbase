@@ -11,6 +11,7 @@
  */
 
 #include "lib/utility/ob_hang_fatal_error.h"
+#include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_common_utility.h"
 
@@ -21,25 +22,26 @@ void right_to_die_or_duty_to_live_c()
 }
 }
 
-namespace oceanbase {
-namespace common {
-RLOCAL(bool, in_try_stmt);
+namespace oceanbase
+{
+namespace common
+{
+_RLOCAL(bool, in_try_stmt);
 
 // To die or to live, it's a problem.
 void right_to_die_or_duty_to_live()
 {
   const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
   while (true) {
-    BACKTRACE(
-        ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
-#ifndef FATAL_ERROR_HANG
+    BACKTRACE(ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
+  #ifndef FATAL_ERROR_HANG
     if (in_try_stmt) {
       throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
     }
-#endif
+  #endif
     sleep(60);
   }
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} //common
+} //oceanbase

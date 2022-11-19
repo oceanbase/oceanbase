@@ -18,72 +18,67 @@
 #include "sql/optimizer/ob_sharding_info.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
-namespace sql {
-struct ObTempTableSqcInfo {
+namespace oceanbase
+{
+namespace sql
+{
+struct ObTempTableResultInfo
+{
+  OB_UNIS_VERSION(1);
 public:
-  ObTempTableSqcInfo()
-      : sqc_id_(0),
-        temp_sqc_addr_(),
-        interm_result_ids_(),
-        min_task_count_(0),
-        max_task_count_(0),
-        task_count_(0),
-        part_count_(0)
-  {}
-  virtual ~ObTempTableSqcInfo()
-  {}
+  ObTempTableResultInfo() : addr_(),
+                         interm_result_ids_() {}
+  virtual ~ObTempTableResultInfo() {}
 
-  TO_STRING_KV(K_(sqc_id), K_(temp_sqc_addr), K_(interm_result_ids), K_(min_task_count), K_(max_task_count),
-      K_(task_count), K_(part_count));
-
-  uint64_t sqc_id_;
-  ObAddr temp_sqc_addr_;
-  ObSEArray<uint64_t, 1> interm_result_ids_;
-  uint64_t min_task_count_;
-  uint64_t max_task_count_;
-  uint64_t task_count_;
-  uint64_t part_count_;
+  TO_STRING_KV(K_(addr),
+               K_(interm_result_ids));
+  //数据所在server
+  ObAddr addr_;
+  //数据集的key
+  ObSEArray<uint64_t, 2> interm_result_ids_;
 };
 
-class ObSqlTempTableCtx {
+class ObSqlTempTableCtx
+{
+  OB_UNIS_VERSION(1);
 public:
-  ObSqlTempTableCtx() : temp_table_id_(0)
-  {}
-  virtual ~ObSqlTempTableCtx()
-  {}
+  ObSqlTempTableCtx() : interm_result_infos_(),
+                        temp_table_id_(0),
+                        is_local_interm_result_(true) {}
+  virtual ~ObSqlTempTableCtx() {}
 
-  TO_STRING_KV(K_(temp_table_id), K_(temp_table_infos));
+  TO_STRING_KV(K_(interm_result_infos),
+               K_(temp_table_id),
+               K_(is_local_interm_result));
 
-  // private:
+  //结果集的分布信息：所在机器及KEY
+  ObSEArray<ObTempTableResultInfo, 2> interm_result_infos_;
+  //结果集所属的temp table
   uint64_t temp_table_id_;
-  ObSEArray<ObTempTableSqcInfo, 1, common::ModulePageAllocator, true> temp_table_infos_;
+  //结果集是否在本地
+  bool is_local_interm_result_;
 };
 
-class ObSqlTempTableInfo {
+class ObSqlTempTableInfo
+{
 public:
-  ObSqlTempTableInfo() : ref_table_id_(OB_INVALID_ID), table_name_(), table_query_(NULL), table_plan_(NULL)
-  {}
-  virtual ~ObSqlTempTableInfo()
-  {}
+  ObSqlTempTableInfo() : temp_table_id_(OB_INVALID_ID),
+                         table_name_(),
+                         table_query_(NULL),
+                         table_plan_(NULL) {}
+  virtual ~ObSqlTempTableInfo() {}
 
-  inline static uint64_t generate_temp_table_id()
-  {
-    int64_t start_id = (common::ObTimeUtility::current_time() / 1000000) << 20;
-    static volatile uint64_t sequence = start_id;
-    const uint64_t svr_id = GCTX.server_id_;
-    return ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
-  }
-  TO_STRING_KV(K_(ref_table_id), K_(table_name));
+  TO_STRING_KV(K_(temp_table_id),
+               K_(table_name));
 
 public:
-  uint64_t ref_table_id_;
+  uint64_t temp_table_id_;
   common::ObString table_name_;
-  ObSelectStmt* table_query_;
-  ObLogicalOperator* table_plan_;
+  ObSelectStmt *table_query_;
+  ObLogicalOperator *table_plan_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} /* ns sql*/
+} /* ns oceanbase */
 
-#endif  // OCEANBASE_SQL_TEMP_TABLE_
+#endif //OCEANBASE_SQL_TEMP_TABLE_

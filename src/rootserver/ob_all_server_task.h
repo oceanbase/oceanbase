@@ -16,38 +16,43 @@
 #include "lib/net/ob_addr.h"
 #include "lib/thread/ob_async_task_queue.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObMySQLProxy;
 class ObServerConfig;
-}  // namespace common
-namespace share {
-class ObServerStatus;
-class ObPartitionTableOperator;
-}  // namespace share
+}
+namespace share
+{
+struct ObServerStatus;
+}
 
-namespace rootserver {
+namespace rootserver
+{
 class ObServerManager;
-class ObRebalanceTaskMgr;
-class ObAllServerTask : public share::ObAsyncTask {
+class ObDRTaskMgr;
+class ObAllServerTask : public share::ObAsyncTask
+{
 public:
-  ObAllServerTask(ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_task_mgr, const common::ObAddr& server,
-      bool with_rootserver);
+  ObAllServerTask(ObServerManager &server_manager,
+                  ObDRTaskMgr &disaster_recovery_task_mgr,
+                  const common::ObAddr &server,
+                  bool with_rootserver);
   virtual ~ObAllServerTask();
 
   int process();
   int64_t get_deep_copy_size() const;
-  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
-
+  share::ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const;
 private:
-  ObServerManager& server_manager_;
-  ObRebalanceTaskMgr& rebalance_task_mgr_;
+  ObServerManager &server_manager_;
+  ObDRTaskMgr &disaster_recovery_task_mgr_;
   common::ObAddr server_;
   bool with_rootserver_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAllServerTask);
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+}//end namespace rootserver
+}//end namespace oceanbase
 #endif

@@ -15,33 +15,36 @@
 #include "ob_expr_test_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
-class ObExprEqualTest : public ::testing::Test {
-public:
-  ObExprEqualTest();
-  virtual ~ObExprEqualTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprEqualTest(const ObExprEqualTest& other);
-  ObExprEqualTest& operator=(const ObExprEqualTest& other);
-
-protected:
-  // data members
+class ObExprEqualTest: public ::testing::Test
+{
+  public:
+    ObExprEqualTest();
+    virtual ~ObExprEqualTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprEqualTest(const ObExprEqualTest &other);
+    ObExprEqualTest& operator=(const ObExprEqualTest &other);
+  protected:
+    // data members
 };
 
 ObExprEqualTest::ObExprEqualTest()
-{}
+{
+}
 
 ObExprEqualTest::~ObExprEqualTest()
-{}
+{
+}
 
 void ObExprEqualTest::SetUp()
-{}
+{
+}
 
 void ObExprEqualTest::TearDown()
-{}
+{
+}
 
 #define T(t1, v1, t2, v2, res) COMPARE_EXPECT(ObExprEqual, &buf, calc_result2, t1, v1, t2, v2, res)
 #define T_BIN(t1, v1, t2, v2, res) COMPARE_EXPECT_BIN(ObExprEqual, &buf, calc_result2, t1, v1, t2, v2, res)
@@ -149,9 +152,9 @@ TEST_F(ObExprEqualTest, float_test)
   T(float, 23451.1f, double, 23451.0, MY_FALSE);
   T(float, 12345.0f, number, nmb, MY_TRUE);
   T(float, 12345.1f, number, nmb, MY_FALSE);
-  // T(float, 23451.0f, varchar, "23451.0", MY_TRUE);
+  //T(float, 23451.0f, varchar, "23451.0", MY_TRUE);
   T(float, 34512.0f, char, "-34512.1", MY_FALSE);
-  // T(float, 45123.0f, varbinary, "45123.0", MY_TRUE);
+  //T(float, 45123.0f, varbinary, "45123.0", MY_TRUE);
   T(float, 51234.0f, binary, "-51234.1", MY_FALSE);
   T(float, 12345.0f, ext, MIN_VALUE, MY_FALSE);
 }
@@ -176,9 +179,9 @@ TEST_F(ObExprEqualTest, double_test)
   T(double, 23451.1f, double, 23451.0f, MY_FALSE);
   T(double, 12345.0f, number, nmb, MY_TRUE);
   T(double, 12345.1f, number, nmb, MY_FALSE);
-  // T(double, 23451.0f, varchar, "23451.0", MY_TRUE);
+  //T(double, 23451.0f, varchar, "23451.0", MY_TRUE);
   T(double, 34512.0f, char, "-34512.1", MY_FALSE);
-  // T(double, 45123.0f, varbinary, "45123.0", MY_TRUE);
+  //T(double, 45123.0f, varbinary, "45123.0", MY_TRUE);
   T(double, 51234.0f, binary, "-51234.1", MY_FALSE);
   T(double, 12345.0f, ext, MIN_VALUE, MY_FALSE);
 }
@@ -221,9 +224,9 @@ TEST_F(ObExprEqualTest, number_test)
   T(number, nmb23451_1, double, 23451.0f, MY_FALSE);
   T(number, nmb12345_0, number, nmb12345_0, MY_TRUE);
   T(number, nmb12345_1, number, nmb12345_0, MY_FALSE);
-  // T(number, nmb23451_0, varchar, "23451.0", MY_TRUE);
+  //T(number, nmb23451_0, varchar, "23451.0", MY_TRUE);
   T(number, nmb34512_0, char, "-34512.1", MY_FALSE);
-  // T(number, nmb45123_0, varbinary, "45123.0", MY_TRUE);
+  //T(number, nmb45123_0, varbinary, "45123.0", MY_TRUE);
   T(number, nmb51234_0, binary, "-51234.1", MY_FALSE);
   T(number, nmb12345_0, ext, MIN_VALUE, MY_FALSE);
 }
@@ -236,17 +239,17 @@ TEST_F(ObExprEqualTest, string_test)
   T(varchar, "12345.0", null, , MY_NULL);
   T(char, "23451.0", int32, 23451, MY_FALSE);
   T(char, "23451.1", int32, 23451, MY_FALSE);
-  // T(varbinary, "34512.0", int, 34512, MY_TRUE);
+  //T(varbinary, "34512.0", int, 34512, MY_TRUE);
   T(varbinary, "34512.1", int, 34512, MY_FALSE);
-  // T(binary, "45123.0", uint32, 45123, MY_TRUE);
+  //T(binary, "45123.0", uint32, 45123, MY_TRUE);
   T(binary, "45123.1", uint32, 45123, MY_FALSE);
-  // T(varchar, "51234.0", uint64, 51234, MY_TRUE);
+  //T(varchar, "51234.0", uint64, 51234, MY_TRUE);
   T(varchar, "51234.1", uint64, 51234, MY_FALSE);
-  // T(char, "12345.0", float, 12345.0, MY_TRUE);
+  //T(char, "12345.0", float, 12345.0, MY_TRUE);
   T(char, "12345.1", float, 12345.0, MY_FALSE);
-  // T(varbinary, "23451.0", double, 23451.0, MY_TRUE);
+  //T(varbinary, "23451.0", double, 23451.0, MY_TRUE);
   T(varbinary, "23451.1", double, 23451.0, MY_FALSE);
-  // T(binary, "12345.0", number, nmb, MY_TRUE);
+  //T(binary, "12345.0", number, nmb, MY_TRUE);
   T(binary, "12345.1", number, nmb, MY_FALSE);
   // string vs string, see collation_test.
   T(varchar, "12345.0", ext, MIN_VALUE, MY_FALSE);
@@ -1465,8 +1468,8 @@ TEST_F(ObExprEqualTest, row2_basic_test)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

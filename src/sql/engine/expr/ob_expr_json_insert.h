@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for define of func json_insert
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_INSERT_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_INSERT_H_
 
@@ -29,7 +28,6 @@ public:
   explicit ObExprJsonInsert(common::ObIAllocator &alloc);
   virtual ~ObExprJsonInsert();
 
-  int calc_resultN(ObObj &result, const ObObj *objs, int64_t param_num, ObExprCtx &expr_ctx) const;
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
                                 int64_t param_num, 

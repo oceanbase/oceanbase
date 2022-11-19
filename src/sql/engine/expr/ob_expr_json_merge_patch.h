@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for define of func json_merge_patch
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_MERGE_PATCH_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_MERGE_PATCH_H_
 
@@ -27,7 +26,6 @@ class ObExprJsonMergePatch : public ObFuncExprOperator
 public:
   explicit ObExprJsonMergePatch(common::ObIAllocator &alloc);
   virtual ~ObExprJsonMergePatch();
-  int calc_resultN(ObObj &result, const ObObj *objs, int64_t param_num, ObExprCtx &expr_ctx) const;
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
                                 int64_t param_num, 

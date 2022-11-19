@@ -14,27 +14,28 @@
 #include <gtest/gtest.h>
 
 using namespace oceanbase::common;
-class TestObThreadLease : public ::testing::Test {
+class TestObThreadLease: public ::testing::Test
+{
 public:
-  TestObThreadLease()
-  {}
-  virtual ~TestObThreadLease()
-  {}
+  TestObThreadLease() {}
+  virtual ~TestObThreadLease(){}
   virtual void SetUp()
-  {}
+  {
+  }
   virtual void TearDown()
-  {}
+  {
+  }
 
   static void SetUpTestCase()
-  {}
+  {
+  }
 
   static void TearDownTestCase()
-  {}
-
+  {
+  }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestObThreadLease);
-
 protected:
   // function members
 protected:
@@ -50,7 +51,7 @@ TEST_F(TestObThreadLease, smoke_test)
   ASSERT_EQ(true, lease.revoke());
   ASSERT_EQ(ObThreadLease::IDLE, lease.value());
 
-  // Revoke directly, expect to return success
+  // 直接revoke，期望返回成功
   ASSERT_EQ(true, lease.revoke());
   ASSERT_EQ(ObThreadLease::IDLE, lease.value());
 }
@@ -64,42 +65,43 @@ TEST_F(TestObThreadLease, simulate_multi_thread)
     ASSERT_EQ(true, lease.acquire());
     ASSERT_EQ(ObThreadLease::HANDLING, lease.value());
 
-    // Acquire again, expect to return failed, status change to READY
+    // 再次acquire，期望失败，状态变更为READY
     ASSERT_EQ(false, lease.acquire());
     ASSERT_EQ(ObThreadLease::READY, lease.value());
 
-    // Acquire again, expect to return failed, status change to READY
+    // 再次acquire，期望失败，状态变更为READY
     ASSERT_EQ(false, lease.acquire());
     ASSERT_EQ(ObThreadLease::READY, lease.value());
 
-    // Acquire again, expect to return failed, status change to READY
+    // 再次acquire，期望失败，状态变更为READY
     ASSERT_EQ(false, lease.acquire());
     ASSERT_EQ(ObThreadLease::READY, lease.value());
 
-    // Revoke once, expect to return failed, status change to HANDLING
+    // revoke一次，期望失败，状态变更为HANDLING
     ASSERT_EQ(false, lease.revoke());
     ASSERT_EQ(ObThreadLease::HANDLING, lease.value());
 
-    // Acquire again, expect to return failed, status change to READY
+    // 再次acquire，期望失败，状态变更为READY
     ASSERT_EQ(false, lease.acquire());
     ASSERT_EQ(ObThreadLease::READY, lease.value());
 
-    // Acquire again, expect to return failed, status change to READY
+    // 再次acquire，期望失败，状态变更为READY
     ASSERT_EQ(false, lease.acquire());
     ASSERT_EQ(ObThreadLease::READY, lease.value());
 
-    // Revoke once, expect to return failed, status change to HANDLING
+    // revoke一次，期望失败，状态变更为HANDLING
     ASSERT_EQ(false, lease.revoke());
     ASSERT_EQ(ObThreadLease::HANDLING, lease.value());
 
-    // Revoke again, expect to return success, status change to IDLE
+    // 再次revoke，期望成功，状态变更为IDLE
     ASSERT_EQ(true, lease.revoke());
     ASSERT_EQ(ObThreadLease::IDLE, lease.value());
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

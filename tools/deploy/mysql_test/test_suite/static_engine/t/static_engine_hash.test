@@ -28,12 +28,12 @@ connection conn_admin;
 --sleep 2
 connection default;
 
-select c1, partition_key_v2(null), partition_key_v2(c1), partition_key_v2(c2), partition_key_v2(c3), partition_key_v2(c4), partition_key_v2(c5), partition_key_v2(c6), partition_key_v2(c7), partition_key_v2(c8), partition_key_v2(c9), partition_key_v2(c10), partition_key_v2(c11), partition_key_v2(c12), partition_key_v2(c13), partition_key_v2(c14) from t1;
-select partition_key_v2(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14) from t1;
-select c1, partition_key_v2(c1), partition_key_v2(c2), partition_key_v2(c3), partition_key_v2(c4), partition_key_v2(c5) from t2;
-select partition_key_v2(c1, c2, c3, c4, c5 from t2;
-select c1, partition_key_v2(c1), partition_key_v2(c2), partition_key_v2(c3), partition_key_v2(c4), partition_key_v2(c5), partition_key_v2(c6), partition_key_v2(c7), partition_key_v2(c8) from t3;
-select partition_key_v2(c1, c2, c3, c4, c5, c6, c7, c8) from t3;
+select c1, partition_key(null), partition_key(c1), partition_key(c2), partition_key(c3), partition_key(c4), partition_key(c5), partition_key(c6), partition_key(c7), partition_key(c8), partition_key(c9), partition_key(c10), partition_key(c11), partition_key(c12), partition_key(c13), partition_key(c14) from t1;
+select partition_key(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14) from t1;
+select c1, partition_key(c1), partition_key(c2), partition_key(c3), partition_key(c4), partition_key(c5) from t2;
+select partition_key(c1, c2, c3, c4, c5 from t2;
+select c1, partition_key(c1), partition_key(c2), partition_key(c3), partition_key(c4), partition_key(c5), partition_key(c6), partition_key(c7), partition_key(c8) from t3;
+select partition_key(c1, c2, c3, c4, c5, c6, c7, c8) from t3;
 connection conn_admin;
 connection default;
 drop table t1;

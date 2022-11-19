@@ -17,37 +17,38 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprSubstringIndexTest : public ::testing::Test {
+class ObExprSubstringIndexTest : public ::testing::Test
+{
 public:
   ObExprSubstringIndexTest();
   virtual ~ObExprSubstringIndexTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprSubstringIndexTest(const ObExprSubstringIndexTest& other);
-  ObExprSubstringIndexTest& operator=(const ObExprSubstringIndexTest& other);
-
+  ObExprSubstringIndexTest(const ObExprSubstringIndexTest &other);
+  ObExprSubstringIndexTest& operator=(const ObExprSubstringIndexTest &other);
 private:
   // data members
 };
 ObExprSubstringIndexTest::ObExprSubstringIndexTest()
-{}
+{
+}
 
 ObExprSubstringIndexTest::~ObExprSubstringIndexTest()
-{}
+{
+}
 
 void ObExprSubstringIndexTest::SetUp()
-{}
+{
+}
 
 void ObExprSubstringIndexTest::TearDown()
-{}
+{
+}
 
-#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
-#define F(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define F(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_FAIL_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
 
 TEST_F(ObExprSubstringIndexTest, basic_test)
 {
@@ -153,9 +154,9 @@ TEST_F(ObExprSubstringIndexTest, fail_test)
   F(substr_index, min, 0, varchar, "abc", min, 0, varchar, "");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

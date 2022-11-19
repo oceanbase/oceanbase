@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "share/ob_define.h"
 #include "sql/resolver/ddl/ob_flashback_resolver.h"
-#include "sql/resolver/ob_schema_checker.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "rootserver/ob_ddl_service.h"
 
@@ -86,8 +85,8 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
       }
     }
 
-    // flashback table with origin table name from recyclebin is supported now
-    // reuse the unused origin_db_name to specify the database which the table was drop from
+    // 现在支持了用原表名 flashback 回收站中的表
+    // 复用一个以前 unused 的 origin_db_name, 指定需要 flashback 的表是从哪个库删除的
     if (OB_SUCC(ret)) {
       if (origin_db_name.empty()) {
         if (OB_ISNULL(session_info_)) {
@@ -110,6 +109,105 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
                             session_info_->get_enable_role_array()));
     }
   }
+  return ret;
+}
+
+int ObFlashBackTableToScnResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObFlashBackTableToScnStmt *stmt = nullptr;
+  if (OB_ISNULL(session_info_) ||
+      (T_FLASHBACK_TABLE_TO_TIMESTAMP != parse_tree.type_ && T_FLASHBACK_TABLE_TO_SCN != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (nullptr == (stmt = create_stmt<ObFlashBackTableToScnStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to create flsahbck stmt", K(ret));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    stmt->set_tenant_id(tenant_id);
+    obrpc::ObFlashBackTableToScnArg &arg = stmt->flashback_table_to_scn_arg_;
+    ParseNode *table_node = parse_tree.children_[TABLE_NODES];
+    ObString db_name;
+    ObString table_name;
+    obrpc::ObTableItem table_item;
+    if (nullptr == table_node) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_node is null", K(ret));
+    } else {
+      int64_t table_num = parse_tree.children_[TABLE_NODES]->num_child_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_num; i++) {
+        ParseNode *node = parse_tree.children_[TABLE_NODES]->children_[i];
+        if (nullptr == node) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table node is null", K(ret));
+        } else if (OB_FAIL(resolve_table_relation_node(node, table_name, db_name))) {
+          LOG_WARN("failed to resolve table relaiton node", K(ret));
+        } else if (OB_FAIL(session_info_->get_name_case_mode(table_item.mode_))) {
+          LOG_WARN("failed to get name case mode", K(ret));
+        } else {
+          const share::schema::ObTableSchema *table_schema = NULL;
+          table_item.database_name_ = db_name;
+          table_item.table_name_ = table_name;
+          OZ (arg.tables_.push_back(table_item));
+          OZ (schema_checker_->get_table_schema(tenant_id,
+                                                db_name,
+                                                table_name,
+                                                false, /*is_index*/
+                                                table_schema));
+          if (OB_SUCC(ret) && table_schema == NULL) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table_shema is null", K(ret), K(db_name), K(table_name));
+          }
+          if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+            OZ (schema_checker_->check_ora_ddl_priv(
+                  tenant_id,
+                  session_info_->get_priv_user_id(),
+                  db_name,
+                  table_schema->get_table_id(),
+                  static_cast<uint64_t>(share::schema::ObObjectType::TABLE),
+                  stmt::T_FLASHBACK_TABLE_TO_SCN,
+                  session_info_->get_enable_role_array()));
+          }
+        }
+      }
+    } 
+
+    if (OB_SUCC(ret)) {
+      ParseNode *time_node = parse_tree.children_[TIME_NODE];
+      ObRawExpr *expr = nullptr;
+      if (nullptr == time_node) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("time_node is null", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::resolve_const_expr(
+              params_, *time_node, expr, nullptr))) {
+        LOG_WARN("resolve sql expr failed");
+      } else if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else {
+        stmt->set_time_expr(expr);
+        if (T_FLASHBACK_TABLE_TO_SCN == parse_tree.type_) {
+          stmt->set_time_type(ObFlashBackTableToScnStmt::TIME_SCN);
+        } else if (T_FLASHBACK_TABLE_TO_TIMESTAMP == parse_tree.type_) {
+          stmt->set_time_type(ObFlashBackTableToScnStmt::TIME_TIMESTAMP);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        }
+
+        if (OB_SUCC(ret)) {
+          int64_t start_time = session_info_->get_query_start_time();
+          int64_t query_timeout = 0;
+          // get_query_timeout里面肯定返回OB_SUCCESS，所以后面代码不需要在判断
+          // 返回值了
+          OZ(session_info_->get_query_timeout(query_timeout));
+          stmt->set_query_end_time(start_time + query_timeout);
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -157,10 +255,11 @@ int ObFlashBackIndexResolver::resolve(const ParseNode &parser_tree)
       LOG_WARN("flashback index db.xx should not specified with db name", K(ret));
     } else {
       UNUSED(schema_checker_->get_table_schema(flashback_index_stmt->get_tenant_id(),
-                                               combine_id(flashback_index_stmt->get_tenant_id(), OB_RECYCLEBIN_SCHEMA_ID),
+                                               OB_RECYCLEBIN_SCHEMA_ID,
                                                origin_table_name,
                                                true, /*is_index*/
                                                false, /*cte_table_fisrt*/
+                                               false/*is_hidden*/,
                                                table_schema));
       flashback_index_stmt->set_origin_table_name(origin_table_name);
       flashback_index_stmt->set_origin_table_id(OB_NOT_NULL(table_schema) ? table_schema->get_table_id() : OB_INVALID_ID);
@@ -187,7 +286,9 @@ int ObFlashBackDatabaseResolver::resolve(const ParseNode &parser_tree)
   int ret = OB_SUCCESS;
   ObFlashBackDatabaseStmt *flashback_database_stmt = NULL;
   /**
-   * the length of database name should less than 127 bytes because of compatibility
+   * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
+   * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
+   * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
    */
   int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
               OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
@@ -255,7 +356,9 @@ int ObFlashBackTenantResolver::resolve(const ParseNode &parser_tree)
   int ret = OB_SUCCESS;
   ObFlashBackTenantStmt *flashback_tenant_stmt = NULL;
   /**
-   * the length of database name should less than 127 bytes because of compatibility
+   * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
+   * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
+   * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
    */
   int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
               OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
@@ -310,6 +413,5 @@ int ObFlashBackTenantResolver::resolve(const ParseNode &parser_tree)
   }
   return ret;
 }
-
-} //namespace sql
-} // namespace oceanbase
+} //namespace common
+}

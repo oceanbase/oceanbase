@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation support for the JSON path abstraction.
-
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_json_path.h"
 #include "ob_json_tree.h"
@@ -487,7 +485,7 @@ int ObJsonPathUtil::append_array_index(uint64_t index, bool from_end, ObJsonBuff
       LOG_WARN("fail to append the 'last' ", K(ret));
     } else {
       // if index > 0, it should have '-' after 'last' 
-      // such as: $[last-3 to last-1]
+      // such as：$[last-3 to last-1]
       if (index>0) {
         if (OB_FAIL(str.append("-"))) {
           LOG_WARN("fail to append the '-' ", K(ret));
@@ -764,7 +762,7 @@ int ObJsonPath::parse_ellipsis_node()
   return ret;
 }
 
-// get array index, range:
+// get array index, range：
 // start from expression[index_] until non-digit char
 // parse str to int32_t, return index
 int ObJsonPathUtil::get_index_num(const ObString& expression, uint64_t& idx, uint64_t& array_idx)
@@ -840,7 +838,7 @@ int ObJsonPath::parse_array_index(uint64_t& array_index, bool& from_end)
     }
   }
 
-  // Here will be three situation:
+  // Here will be three situation：
   // 'last' : get the last
   // 'last-num', such as 'last-3' : get the last number
   // 'num' : get the first number
@@ -873,7 +871,7 @@ int ObJsonPath::parse_array_index(uint64_t& array_index, bool& from_end)
 
 // parse **(JPN_ARRAY_CELL & RANGE)
 // @return  the error code.
-// three situation:
+// three situation：
 // '[*]' : just build ObJsonPathNode with type JPN_ARRAY_CELL_WILDCARD, and append to JsonPath
 // otherwise call parse_array_index() to do parse
 // if type is CELL, process one arg
@@ -1043,15 +1041,15 @@ int ObJsonPath::parse_name_with_rapidjson(char*& str, uint64_t& len)
   ObJsonNode* dom = NULL;
 
   if (OB_FAIL(ObJsonParser::parse_json_text(allocator_, str, len, syntaxerr, offset, dom))) {
-    LOG_WARN("fail to parse_name_with_rapidjson.", K(ret), K(str), K(syntaxerr), K(offset));
+    LOG_WARN("fail to parse_name_with_rapidjson.", K(ret), KCSTRING(str), KCSTRING(syntaxerr), K(offset));
   } else if (dom->json_type() != ObJsonNodeType::J_STRING) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected json type.", K(ret), K(str), K(dom->json_type()));
+    LOG_WARN("unexpected json type.", K(ret), KCSTRING(str), K(dom->json_type()));
   } else {
     ObJsonString *val = static_cast<ObJsonString *>(dom);
     len = val->value().length();
     str = static_cast<char*> (allocator_->alloc(len));
-    if (OB_ISNULL(str)) {
+    if (len > 0 && OB_ISNULL(str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory for member_name.",
         K(ret), K(len), K(val->value()));
@@ -1163,7 +1161,7 @@ int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted
         if (OB_ISNULL(str)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory for member_name.",
-              K(ret), K(len),K(start_ptr));
+              K(ret), K(len),KCSTRING(start_ptr));
         } else {
           str[0] = ObJsonPathItem::DOUBLE_QUOTE;
           MEMCPY(str+1, start_ptr, len);
@@ -1175,7 +1173,7 @@ int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted
         if (OB_ISNULL(str)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to allocate memory for member_name.",
-                K(ret), K(len),K(start_ptr));
+                K(ret), K(len),KCSTRING(start_ptr));
         } else {
           MEMCPY(str, start_ptr, len);
         }
@@ -1239,14 +1237,14 @@ int ObJsonPath::parse_member_node()
         } else {
           if (OB_FAIL(parse_name_with_rapidjson(name, name_len))) {
             LOG_WARN("fail to parse name with rapidjson",
-            K(ret), K(index_), K(expression_),K(name));
+            K(ret), K(index_), K(expression_),KCSTRING(name));
           }
 
           if (OB_SUCC(ret) && !is_quoted) {
             if (!ObJsonPathUtil::is_ecmascript_identifier(name, name_len)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("the key name isn't ECMAScript identifier!",
-                K(ret), K(name));
+                K(ret), KCSTRING(name));
             }
           }
 
@@ -1381,7 +1379,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     if (!rapidjson::UTF8<char>::Decode(input_stream, &codepoint)) { 
       ret_bool = false;
       LOG_WARN("fail to decode.", 
-          K(ret_bool), K(codepoint), K(input_stream.Tell()), K(name));
+          K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
       break;
     }
 
@@ -1401,7 +1399,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     if (first_codepoint) {
       ret_bool = false;
       LOG_WARN("first character must be $, _ or letter.", 
-          K(ret_bool), K(codepoint), K(input_stream.Tell()), K(name));
+          K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
       break;
     } else {
       // unicode combining mark
@@ -1419,7 +1417,7 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     // nope
     ret_bool = false;
     LOG_WARN("not ecmascript identifier.",
-         K(ret_bool), K(codepoint), K(input_stream.Tell()), K(name));
+         K(ret_bool), K(codepoint), K(input_stream.Tell()), KCSTRING(name));
     break;
   }
 

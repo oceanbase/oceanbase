@@ -13,35 +13,39 @@
 #ifndef SRC_SQL_ENGINE_EXPR_OB_EXPR_CONCAT_WS_H_
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_CONCAT_WS_H_
 #include "sql/engine/expr/ob_expr_operator.h"
-namespace oceanbase {
-namespace sql {
-// stands for Concatenate With Separator and is a special form of CONCAT()
-class ObExprConcatWs : public ObStringExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+//stands for Concatenate With Separator and is a special form of CONCAT()
+class ObExprConcatWs: public ObStringExprOperator
+{
 public:
   ObExprConcatWs();
-  explicit ObExprConcatWs(common::ObIAllocator& alloc);
+  explicit  ObExprConcatWs(common::ObIAllocator &alloc);
   virtual ~ObExprConcatWs();
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
+   virtual int calc_result_typeN(ObExprResType &type,
+                                 ObExprResType *types,
+                                 int64_t param_num,
+                                 common::ObExprTypeCtx &type_ctx) const;
   // connect two strings by separator
-  static int concat_ws(
-      const common::ObString obj1, const common::ObString obj2, const int64_t buf_len, char** string_buf, int64_t& pos);
-  // connect any strings by separator
-  static int calc(common::ObObj& result, const common::ObString& sep_str, const common::ObObj* objs,
-      const int64_t param_num, common::ObExprCtx& expr_ctx);
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int calc_concat_ws_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-  static int calc(const common::ObString& sep_str, const common::ObIArray<common::ObString>& words,
-      common::ObIAllocator& alloc, common::ObString& res_str);
-
+  static int concat_ws(const common::ObString obj1,
+                       const common::ObString obj2,
+                       const int64_t buf_len,
+                       char **string_buf,
+                       int64_t &pos);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override;
+  static int calc_concat_ws_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObDatum &res);
+  static int calc(const common::ObString &sep_str, const common::ObIArray<common::ObString> &words,
+                        common::ObIAllocator &alloc, common::ObString &res_str);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcatWs);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* SRC_SQL_ENGINE_EXPR_OB_EXPR_CONCAT_WS_H_ */

@@ -1,5 +1,6 @@
 # owner: bin.lb
 # owner group: sql2
+# tags: optimizer
 
 --disable_abort_on_error
 --result_format 4

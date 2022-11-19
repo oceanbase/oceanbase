@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for define of func json_unquote
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_UNQUOTE_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_UNQUOTE_H_
 
@@ -27,9 +26,6 @@ class ObExprJsonUnquote : public ObFuncExprOperator
 public:
   explicit ObExprJsonUnquote(common::ObIAllocator &alloc);
   virtual ~ObExprJsonUnquote();
-
-  int calc_result1(common::ObObj &result, const common::ObObj &obj, common::ObExprCtx &expr_ctx) const override;
-
   template <typename T>
   static int calc(const T &data, ObObjType type, ObCollationType cs_type,
                   ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null);

@@ -526,7 +526,7 @@ delete from t1 where c2 > 10 order by c1 limit 0, 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_RANGE_COND"
       ],
       "rel_id": [
@@ -602,9 +602,9 @@ delete from t1 where c2 > 10 order by c1 limit 0, 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -716,9 +716,9 @@ delete from t1 where c2 > 10 order by c1 limit 0, 1
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -1037,7 +1037,7 @@ delete from t1 where c1 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -1113,9 +1113,9 @@ delete from t1 where c1 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -1441,7 +1441,7 @@ delete from t1 partition(p0) where c1 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -1517,9 +1517,9 @@ delete from t1 partition(p0) where c1 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -1850,10 +1850,10 @@ delete from t1 where 2 = 1
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -1932,7 +1932,7 @@ delete from t1 where 2 = 1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -1962,9 +1962,9 @@ delete from t1 where 2 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -1994,9 +1994,9 @@ delete from t1 where 2 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -2278,7 +2278,7 @@ delete from t1 where c1 = 0
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -2354,9 +2354,9 @@ delete from t1 where c1 = 0
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -2681,10 +2681,10 @@ delete from t1 where 1 = 1
       },
       "expr_info": [
         "IS_CONST",
-        "IS_PARAM",
+        "IS_STATIC_PARAM",
         "CNT_CONST",
-        "CNT_PARAM",
-        "IS_EXEC_PARM"
+        "CNT_STATIC_PARAM",
+        "IS_DYNAMIC_PARAM"
       ],
       "rel_id": [
       ],
@@ -2763,7 +2763,7 @@ delete from t1 where 1 = 1
             "IS_CALCULABLE_EXPR",
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM",
+            "CNT_STATIC_PARAM",
             "CNT_CALCULABLE_EXPR"
           ],
           "rel_id": [
@@ -2793,9 +2793,9 @@ delete from t1 where 1 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -2825,9 +2825,9 @@ delete from t1 where 1 = 1
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -3692,7 +3692,7 @@ delete from t2 order by c2/2
         "expr_info": [
           "CNT_CONST",
           "CNT_COLUMN",
-          "CNT_PARAM"
+          "CNT_STATIC_PARAM"
         ],
         "rel_id": [
           1
@@ -3767,10 +3767,10 @@ delete from t2 order by c2/2
             },
             "expr_info": [
               "IS_CONST",
-              "IS_PARAM",
+              "IS_STATIC_PARAM",
               "CNT_CONST",
-              "CNT_PARAM",
-              "IS_EXEC_PARM"
+              "CNT_STATIC_PARAM",
+              "IS_DYNAMIC_PARAM"
             ],
             "rel_id": [
             ],
@@ -4170,10 +4170,10 @@ delete from t1 order by 1+1
         },
         "expr_info": [
           "IS_CONST",
-          "IS_PARAM",
+          "IS_STATIC_PARAM",
           "CNT_CONST",
-          "CNT_PARAM",
-          "IS_EXEC_PARM"
+          "CNT_STATIC_PARAM",
+          "IS_DYNAMIC_PARAM"
         ],
         "rel_id": [
         ],
@@ -4947,9 +4947,9 @@ delete from t1 limit 2, 10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -5300,9 +5300,9 @@ delete from t1 limit 2 offset 10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -5975,9 +5975,9 @@ delete from t1 limit 1,0
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -6328,9 +6328,9 @@ delete from t1 limit 2,10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -6681,9 +6681,9 @@ delete from t1 limit 1,10
     },
     "expr_info": [
       "IS_CONST",
-      "IS_PARAM",
+      "IS_STATIC_PARAM",
       "CNT_CONST",
-      "CNT_PARAM"
+      "CNT_STATIC_PARAM"
     ],
     "rel_id": [
     ],
@@ -7002,7 +7002,7 @@ delete /*+ INDEX(t1 idx1)*/ from t1 where c1 =1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -7078,9 +7078,9 @@ delete /*+ INDEX(t1 idx1)*/ from t1 where c1 =1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -7870,7 +7870,7 @@ delete from test where c1 = 1
       "expr_info": [
         "CNT_CONST",
         "CNT_COLUMN",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "IS_SIMPLE_COND"
       ],
       "rel_id": [
@@ -7946,9 +7946,9 @@ delete from test where c1 = 1
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],

@@ -15,9 +15,9 @@
 
 #include <stdint.h>
 #include "ob_block_sstable_struct.h"
+#include "ob_index_block_row_struct.h"
 #include "ob_macro_block_common_header.h"
-#include "ob_micro_block_index_mgr.h"
-#include "ob_lob_struct.h"
+#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 
 #define NONE_COLOR "\033[m"
 #define RED "\033[0;32;31m"
@@ -36,39 +36,49 @@
 #define LIGHT_GRAY "\033[0;37m"
 //#define WHITE "\033[1;37m"
 
-namespace oceanbase {
-namespace blocksstable {
-class ObSSTablePrinter {
+namespace oceanbase
+{
+namespace blocksstable
+{
+class ObSSTablePrinter
+{
 public:
-  static void print_title(const char* name, const int64_t value, const int64_t level = 1);
-  static void print_title(const char* name, const int64_t level = 1);
-  static void print_line(const char* name, const int32_t value, const int64_t level = 1);
-  static void print_line(const char* name, const int64_t value, const int64_t level = 1);
-  static void print_line(const char* name, const uint32_t value, const int64_t level = 1);
-  static void print_line(const char* name, const uint64_t value, const int64_t level = 1);
-  static void print_line(const char* name, const char* value, const int64_t level = 1);
-  static void print_row_title(const storage::ObStoreRow* row, const int64_t row_index);
-  static void print_cell(const common::ObObj& cell);
+  static void print_title(const char *name, const int64_t value, const int64_t level = 1);
+  static void print_title(const char *name, const int64_t level = 1);
+  static void print_line(const char *name, const int32_t value, const int64_t level = 1);
+  static void print_line(const char *name, const int64_t value, const int64_t level = 1);
+  static void print_line(const char *name, const uint32_t value, const int64_t level = 1);
+  static void print_line(const char *name, const uint64_t value, const int64_t level = 1);
+  static void print_line(const char *name, const char *value, const int64_t level = 1);
+  static void print_row_title(const blocksstable::ObDatumRow *row, const int64_t row_index);
+  static void print_cell(const common::ObObj &cell);
   static void print_end_line(const int64_t level = 1);
-  static void print_cols_info_start(const char* n1, const char* n2, const char* n3, const char* n4);
-  static void print_cols_info_line(const int32_t& v1, const common::ObObjType v2, const int64_t& v3, const int64_t& v4);
+  static void print_cols_info_start(const char *n1, const char *n2, const char *n3, const char *n4, const char *n5);
+  static void print_cols_info_line(const int32_t &v1, const common::ObObjType v2, const common::ObOrderType v3, const int64_t &v4, const int64_t & v5);
 
-  static void print_common_header(const ObMacroBlockCommonHeader* common_header);
-  static void print_macro_block_header(const ObSSTableMacroBlockHeader* sstable_header);
-  static void print_macro_block_header(const ObLobMacroBlockHeader* lob_macro_header);
-  static void print_macro_block_header(const ObBloomFilterMacroBlockHeader* bf_macro_header);
-  static void print_micro_index(const common::ObStoreRowkey& endkey, const ObMicroBlockInfo& block_info);
-  static void print_linked_header(const ObLinkedMacroBlockHeader* linked_header);
-  static void print_store_row(const storage::ObStoreRow* row, const bool is_trans_sstable);
-  static void print_micro_header(const ObMicroBlockHeader* micro_block_header);
-  static void print_encoding_micro_header(const ObMicroBlockHeaderV2* micro_header);
-  static void print_lob_micro_header(const ObLobMicroBlockHeader* micro_block_header);
-  static void print_lob_micro_block(const char* micro_block_buf, const int64_t micro_block_size);
-  static void print_bloom_filter_micro_header(const ObBloomFilterMicroBlockHeader* micro_block_header);
+  static void print_hex_micro_block_header(const ObMicroBlockData &block_data);
+  static void print_hex_micro_block(const ObMicroBlockData &block_data, char *hex_print_buf, const int64_t buf_size);
+  static void print_common_header(const ObMacroBlockCommonHeader *common_header);
+  static void print_macro_block_header(const ObSSTableMacroBlockHeader *sstable_header);
+  static void print_macro_block_header(const ObBloomFilterMacroBlockHeader *bf_macro_header);
+  static void print_macro_block_header(const storage::ObLinkedMacroBlockHeader *linked_macro_header);
+  static void print_index_row_header(const ObIndexBlockRowHeader *idx_row_header);
+  static void print_index_minor_meta(const ObIndexBlockRowMinorMetaInfo *minor_meta);
+  static void print_store_row(
+      const blocksstable::ObDatumRow *row,
+      const ObObjMeta *obj_metas,
+      const int64_t rowkey_column_cnt,
+      const bool is_index_block,
+      const bool is_trans_sstable);
+  static void print_store_row_hex(const blocksstable::ObDatumRow *row, const ObObjMeta *obj_metas, const int64_t buf_size, char *hex_print_buf);
+  static void print_micro_header(const ObMicroBlockHeader *micro_block_header);
+  static void print_encoding_micro_header(const ObMicroBlockHeader *micro_header);
+  static void print_encoding_column_header(const ObColumnHeader *col_header, const int64_t col_id);
+  static void print_bloom_filter_micro_header(const ObBloomFilterMicroBlockHeader *micro_block_header);
   static void print_bloom_filter_micro_block(const char* micro_block_buf, const int64_t micro_block_size);
 };
 
-}  // namespace blocksstable
-}  // namespace oceanbase
+}
+}
 
 #endif /* OB_SSTABLE_PRINTER_H_ */

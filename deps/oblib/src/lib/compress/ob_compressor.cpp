@@ -16,8 +16,10 @@
 #include <dlfcn.h>
 #include "lib/compress/ob_compressor.h"
 
-namespace oceanbase {
-namespace common {
-const char* ObCompressor::none_compressor_name = "none";
-}  // namespace common
-}  // namespace oceanbase*/
+namespace oceanbase
+{
+namespace common
+{
+const char *ObCompressor::none_compressor_name = "none";
+}//namespace common
+}//namespace oceanbase*/

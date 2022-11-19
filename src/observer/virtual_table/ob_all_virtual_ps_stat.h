@@ -15,28 +15,29 @@
 
 #include "observer/virtual_table/ob_all_plan_cache_stat.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObPsCache;
 }
-namespace observer {
+namespace observer
+{
 
-class ObAllVirtualPsStat : public ObAllPlanCacheBase {
+class ObAllVirtualPsStat : public ObAllPlanCacheBase
+{
 public:
-  ObAllVirtualPsStat() : ObAllPlanCacheBase()
-  {}
-  virtual ~ObAllVirtualPsStat()
-  {}
+  ObAllVirtualPsStat() : ObAllPlanCacheBase() {}
+  virtual ~ObAllVirtualPsStat() {}
 
   virtual int inner_get_next_row() override;
   virtual int inner_open() override;
-
 private:
-  int fill_cells(sql::ObPsCache& ps_cache, uint64_t tenant_id);
+  int fill_cells(sql::ObPsCache &ps_cache, uint64_t tenant_id);
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPsStat);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_ALL_VIRTUAL_PS_STAT_H */

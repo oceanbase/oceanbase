@@ -15,31 +15,35 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObExprUtlInaddrGetHostAddr : public ObExprOperator {
+class ObExprUtlInaddrGetHostAddr : public ObExprOperator
+{
 public:
-  explicit ObExprUtlInaddrGetHostAddr(common::ObIAllocator& alloc);
+  explicit ObExprUtlInaddrGetHostAddr(common::ObIAllocator &alloc);
   virtual ~ObExprUtlInaddrGetHostAddr();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlInaddrGetHostAddr);
 };
 
-class ObExprUtlInaddrGetHostName : public ObExprOperator {
+class ObExprUtlInaddrGetHostName : public ObExprOperator
+{
 public:
-  explicit ObExprUtlInaddrGetHostName(common::ObIAllocator& alloc);
+  explicit ObExprUtlInaddrGetHostName(common::ObIAllocator &alloc);
   virtual ~ObExprUtlInaddrGetHostName();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
-
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlInaddrGetHostName);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_UTL_INADDR_ */

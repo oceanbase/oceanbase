@@ -20,30 +20,29 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_unit_getter.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
 using namespace share::host;
-namespace share {
-class TestUnitGetter : public ::testing::Test {
+namespace share
+{
+class TestUnitGetter : public ::testing::Test
+{
 public:
-  TestUnitGetter()
-  {}
-  virtual ~TestUnitGetter()
-  {}
+  TestUnitGetter() {}
+  virtual ~TestUnitGetter() {}
 
   virtual void SetUp();
-  virtual void TearDown()
-  {}
-
+  virtual void TearDown() {}
 protected:
-  void check_unit(const ObUnit& l, const ObUnit& r);
-  void check_config(const ObUnitConfig& l, const ObUnitConfig& r);
-  void check_pool(const ObResourcePool& l, const ObResourcePool& r);
+  void check_unit(const ObUnit &l, const ObUnit &r);
+  void check_config(const ObUnitConfig &l, const ObUnitConfig &r);
+  void check_pool(const ObResourcePool &l, const ObResourcePool &r);
   DBInitializer db_initer_;
 };
 
-void TestUnitGetter::check_unit(const ObUnit& l, const ObUnit& r)
+void TestUnitGetter::check_unit(const ObUnit &l, const ObUnit &r)
 {
   ASSERT_EQ(l.unit_id_, r.unit_id_);
   ASSERT_EQ(l.resource_pool_id_, r.resource_pool_id_);
@@ -52,17 +51,17 @@ void TestUnitGetter::check_unit(const ObUnit& l, const ObUnit& r)
   ASSERT_EQ(l.migrate_from_server_, r.migrate_from_server_);
 }
 
-void TestUnitGetter::check_config(const ObUnitConfig& l, const ObUnitConfig& r)
+void TestUnitGetter::check_config(const ObUnitConfig &l, const ObUnitConfig &r)
 {
   // only check resource
   ASSERT_EQ(l.max_cpu_, r.max_cpu_);
   ASSERT_EQ(l.max_memory_, r.max_memory_);
   ASSERT_EQ(l.max_iops_, r.max_iops_);
-  ASSERT_EQ(l.max_disk_size_, r.max_disk_size_);
+  ASSERT_EQ(l.log_disk_size_, r.log_disk_size_);
   ASSERT_EQ(l.max_session_num_, r.max_session_num_);
 }
 
-void TestUnitGetter::check_pool(const ObResourcePool& l, const ObResourcePool& r)
+void TestUnitGetter::check_pool(const ObResourcePool &l, const ObResourcePool &r)
 {
   ASSERT_EQ(l.resource_pool_id_, r.resource_pool_id_);
   ASSERT_EQ(l.name_, r.name_);
@@ -91,9 +90,10 @@ TEST_F(TestUnitGetter, basic)
   ASSERT_EQ(OB_SUCCESS, zone_list.push_back("zone1"));
   builder.add_config(1, 50).add_config(2, 40);
   builder.add_pool(1, 2, 1, zone_list).add_pool(2, 2, 2, zone_list);
-  builder.add_unit(1, 1, 1, A).add_unit(2, 1, 2, B).add_unit(3, 2, 1, A).add_unit(4, 2, 1, B);
+  builder.add_unit(1, 1, 1, A).add_unit(2, 1, 2, B)
+      .add_unit(3, 2, 1, A).add_unit(4, 2, 1, B);
   ASSERT_EQ(OB_SUCCESS, builder.write_table());
-  ObIArray<ObUnitConfig>& configs = builder.get_configs();
+  ObIArray<ObUnitConfig> &configs = builder.get_configs();
 
   ObUnitInfoGetter getter;
   ASSERT_EQ(OB_SUCCESS, getter.init(db_initer_.get_sql_proxy()));
@@ -113,7 +113,7 @@ TEST_F(TestUnitGetter, basic)
 
   ObArray<ObUnitInfoGetter::ObServerConfig> server_configs;
   ASSERT_EQ(OB_SUCCESS, getter.get_tenant_server_configs(OB_SYS_TENANT_ID, server_configs));
-  ASSERT_EQ(3, server_configs.count());  // include pre_server E
+  ASSERT_EQ(3, server_configs.count()); //include pre_server E
   ASSERT_EQ(A, server_configs.at(0).server_);
   check_config(configs.at(0) + configs.at(1), server_configs.at(0).config_);
   ASSERT_EQ(E, server_configs.at(1).server_);
@@ -128,18 +128,16 @@ TEST_F(TestUnitGetter, check_tenant_small)
   ObArray<ObZone> zone_list;
   ASSERT_EQ(OB_SUCCESS, zone_list.push_back("zone1"));
   builder.add_config(1, 50);
-  builder
-      .add_pool(1, 1, 1, zone_list, 1)  // invalid pool, change unit_count zero with sql then
-      .add_pool(2, 2, 1, zone_list, 2)  // pool with unit_count 2
-      .add_pool(3, 1, 1, zone_list, 3)  // big tenant with two pools
+  builder.add_pool(1, 1, 1, zone_list, 1)     // invalid pool, change unit_count zero with sql then
+      .add_pool(2, 2, 1, zone_list, 2)        // pool with unit_count 2
+      .add_pool(3, 1, 1, zone_list, 3)        // big tenant with two pools
       .add_pool(4, 1, 1, zone_list, 3)
-      .add_pool(5, 1, 1, zone_list, 4);  // small tenant
+      .add_pool(5, 1, 1, zone_list, 4);       // small tenant
   ASSERT_EQ(OB_SUCCESS, builder.write_table());
 
   int64_t affected_rows = 0;
-  ASSERT_EQ(OB_SUCCESS,
-      db_initer_.get_sql_proxy().write(
-          "update __all_resource_pool set unit_count = 0 where resource_pool_id = 1", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, db_initer_.get_sql_proxy().write(
+      "update __all_resource_pool set unit_count = 0 where resource_pool_id = 1", affected_rows));
   ASSERT_EQ(1, affected_rows);
 
   ObUnitInfoGetter getter;
@@ -165,11 +163,10 @@ TEST_F(TestUnitGetter, unit_stat)
   ObAddr empty_server;
   ASSERT_EQ(OB_SUCCESS, zone_list.push_back("zone1"));
   builder.add_config(1, 50).add_config(2, 40);
-  builder.add_pool(1, 2, 1, zone_list, 1).add_pool(2, 2, 2, zone_list, 2).add_pool(3, 1, 1, zone_list, 3);
-  builder.add_unit(1, 1, 1, A, zone, empty_server)
-      .add_unit(2, 1, 2, B)
-      .add_unit(3, 2, 1, A, zone, E)
-      .add_unit(4, 3, 1, D, zone, A);
+  builder.add_pool(1, 2, 1, zone_list, 1).add_pool(2, 2, 2, zone_list, 2)
+      .add_pool(3, 1, 1, zone_list, 3);
+  builder.add_unit(1, 1, 1, A, zone, empty_server).add_unit(2, 1, 2, B)
+      .add_unit(3, 2, 1, A, zone, E).add_unit(4, 3, 1, D, zone, A);
   ASSERT_EQ(OB_SUCCESS, builder.write_table());
 
   ObUnitInfoGetter getter;
@@ -192,13 +189,13 @@ TEST_F(TestUnitGetter, unit_stat)
   }
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   oceanbase::common::ObClusterVersion::get_instance().init(CLUSTER_VERSION_2200);
   return RUN_ALL_TESTS();
 }

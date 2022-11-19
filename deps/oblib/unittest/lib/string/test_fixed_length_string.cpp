@@ -17,8 +17,10 @@
 #include "lib/ob_define.h"
 #include "lib/string/ob_fixed_length_string.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 TEST(TestFixedLengthString, common)
 {
   // construct functions
@@ -77,12 +79,12 @@ TEST(TestFixedLengthString, error)
   ASSERT_EQ(data_len, pos);
   ASSERT_EQ(str3, str4);
 }
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

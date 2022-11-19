@@ -17,49 +17,65 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprLengthTest : public ::testing::Test {
+class ObExprLengthTest : public ::testing::Test
+{
 public:
   ObExprLengthTest();
   virtual ~ObExprLengthTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprLengthTest(const ObExprLengthTest& other);
-  ObExprLengthTest& operator=(const ObExprLengthTest& other);
-
+  ObExprLengthTest(const ObExprLengthTest &other);
+  ObExprLengthTest& operator=(const ObExprLengthTest &other);
 private:
   // data members
 };
 ObExprLengthTest::ObExprLengthTest()
-{}
+{
+}
 
 ObExprLengthTest::~ObExprLengthTest()
-{}
+{
+}
 
 void ObExprLengthTest::SetUp()
-{}
+{
+}
 
 void ObExprLengthTest::TearDown()
-{}
+{
+}
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define F(obj, t1, v1) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1)
 #define F0(obj, t1) EXPECT_FAIL_RESULT0(obj, &buf, calc_result1, t1)
-#define T0(obj, t1, ref_type, ref_value) EXPECT_RESULT0(obj, &buf, calc_result1, t1, ref_type, ref_value)
+#define T0(obj, t1, ref_type, ref_value)  EXPECT_RESULT0(obj, &buf, calc_result1, t1, ref_type, ref_value)
 
 TEST_F(ObExprLengthTest, basic_test)
 {
   ObArenaAllocator buf(ObModIds::OB_SQL_SESSION);
   ObExprLength length(buf);
+  //ObExprStringBuf buf;
   ASSERT_EQ(1, length.get_param_num());
 
+  // null
+  //T0(length, max_value, int, 0);
+  //T0(length, min_value, int, 0);
   T0(length, null, null, 0);
   T(length, varchar, "helo", int, 4);
   T(length, varchar, "", int, 0);
+ //转义字符依赖sql_parser的过程
+  //T(length, varchar, "\\_", int, 2);
+  //T(length, varchar, "\\%", int, 2);
+  //T(length, varchar, "\\\\", int, 1);
+  //T(length, varchar, "\\t", int, 1);
+  //T(length, varchar, "\\v", int, 1);
   T(length, int, 1, int, 1);
   T(length, int, 12, int, 2);
+  //与精度有管，暂时不予处理
+  //T(length, double, 12.32, int, 5);
+  //T(length, double, 0.00, int, 4);
   T(length, varchar, "好", int, 3);
 }
 
@@ -70,9 +86,10 @@ TEST_F(ObExprLengthTest, fail_test)
   ASSERT_EQ(1, length.get_param_num());
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

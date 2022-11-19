@@ -13,19 +13,23 @@
 #ifndef __OB_COMMON_SQLCLIENT_OB_MYSQL_PREPARED_RESULT__
 #define __OB_COMMON_SQLCLIENT_OB_MYSQL_PREPARED_RESULT__
 
-#include <mariadb/mysql.h>
+#include <mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObIAllocator;
-namespace sqlclient {
+namespace sqlclient
+{
 class ObMySQLPreparedStatement;
-class ObMySQLPreparedResult {
+class ObMySQLPreparedResult
+{
 public:
-  explicit ObMySQLPreparedResult(ObMySQLPreparedStatement& stmt);
+  explicit ObMySQLPreparedResult(ObMySQLPreparedStatement &stmt);
   ~ObMySQLPreparedResult();
   int init();
   int bind_result_param();
@@ -40,24 +44,24 @@ public:
   /*
    * get result values
    */
-  int get_int(const int64_t col_idx, int64_t& int_val) const;
-  int get_varchar(const int64_t col_idx, common::ObString& varchar_val) const;
+  int get_int(const int64_t col_idx, int64_t &int_val) const;
+  int get_varchar(const int64_t col_idx, common::ObString &varchar_val) const;
   // TODO: more types
 
   /*
    * bind data output buffer
    */
-  int bind_result(
-      const int64_t col_idx, enum_field_types buf_type, char* out_buf, const int64_t buf_len, unsigned long& res_len);
-
+  int bind_result(const int64_t col_idx, enum_field_types buf_type, char *out_buf, const int64_t buf_len,
+                  unsigned long &res_len);
 private:
-  ObMySQLPreparedStatement& stmt_;
-  common::ObIAllocator& alloc_;
+  ObMySQLPreparedStatement &stmt_;
+  common::ObIAllocator &alloc_;
   int64_t result_column_count_;
-  MYSQL_BIND* bind_;
+  MYSQL_BIND *bind_;
 };
-}  // namespace sqlclient
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+}
 
 #endif
+

@@ -1,11 +1,12 @@
 /**
- * 
- * Attenation: we only use left style join to generate conflict rules, 
- * ignore all right style join
+ * 注意点！！！
+ * 为了可以直接使用join_type枚举类型，这里的表格列举了所有类型
+ * 的join，但是实际只使用了left style join去生成冲突检测器
+ * 所有的right style join默认不符合所有的规则
  */
 
 /**
- * define join comm rule
+ * 定义join类型的交换律
  */
 static bool COMM_PROPERTY[MAX_JOIN_TYPE] = 
 {
@@ -22,7 +23,7 @@ static bool COMM_PROPERTY[MAX_JOIN_TYPE] =
 };
 
 /**
- * define assoc rule
+ * 定义join类型的结合律
  */
 static bool ASSOC_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
 //UNKNOWN_JOIN
@@ -158,7 +159,7 @@ static bool ASSOC_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
 };
 
 /**
- * define join l-asscom rule
+ * 定义join类型的l-asscom规律
  */
 static bool L_ASSCOM_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
 //UNKNOWN_JOIN
@@ -294,7 +295,7 @@ static bool L_ASSCOM_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
 };
 
 /**
- * define join r-asscom rule
+ * 定义join类型的r-asscom规律
  */
 static bool R_ASSCOM_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
 //UNKNOWN_JOIN

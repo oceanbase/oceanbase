@@ -20,7 +20,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
-class ObEmptyTableScanTest : public ::testing::Test {
+class ObEmptyTableScanTest : public ::testing::Test
+{
 public:
   const static int64_t TEST_COL_NUM = 2;
 
@@ -32,30 +33,33 @@ public:
   const static int64_t TEST_LIMIT = 10;
   const static int64_t TEST_OFFSET = 0;
 
+
   ObEmptyTableScanTest();
   virtual ~ObEmptyTableScanTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObEmptyTableScanTest(const ObEmptyTableScanTest& other);
-  ObEmptyTableScanTest& operator=(const ObEmptyTableScanTest& other);
-
+  ObEmptyTableScanTest(const ObEmptyTableScanTest &other);
+  ObEmptyTableScanTest& operator=(const ObEmptyTableScanTest &other);
 private:
   // data members
 };
 ObEmptyTableScanTest::ObEmptyTableScanTest()
-{}
+{
+}
 
 ObEmptyTableScanTest::~ObEmptyTableScanTest()
-{}
+{
+}
 
 void ObEmptyTableScanTest::SetUp()
-{}
+{
+}
 
 void ObEmptyTableScanTest::TearDown()
-{}
+{
+}
 
 TEST_F(ObEmptyTableScanTest, basic_test)
 {
@@ -69,32 +73,33 @@ TEST_F(ObEmptyTableScanTest, basic_test)
   partition_loc.set_partition_id(9);
   table_loc.set_table_location_key(TEST_TABLE_ID, TEST_TABLE_ID);
   ASSERT_EQ(OB_SUCCESS, session.test_init(0, 0, 0, &allocator));
+  ASSERT_EQ(OB_SUCCESS, session.load_default_configs_in_pc());
   ASSERT_EQ(OB_SUCCESS, table_loc.add_partition_location(partition_loc));
   ASSERT_EQ(OB_SUCCESS, table_locs.push_back(table_loc));
   exec_ctx.set_my_session(&session);
   exec_ctx.create_physical_plan_ctx();
-  ObPhysicalPlanCtx* plan_ctx = exec_ctx.get_physical_plan_ctx();
+  ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ASSERT_TRUE(NULL != plan_ctx);
   plan_ctx->set_timeout_timestamp(::oceanbase::common::ObTimeUtility::current_time() + 2000L * 1000L);
-  ObTaskExecutorCtx* task_exe_ctx = exec_ctx.get_task_executor_ctx();
+  ObTaskExecutorCtx *task_exe_ctx = exec_ctx.get_task_executor_ctx();
   ASSERT_TRUE(NULL != task_exe_ctx);
   ASSERT_EQ(OB_SUCCESS, task_exe_ctx->init_table_location(table_locs.count()));
   ASSERT_EQ(OB_SUCCESS, task_exe_ctx->set_table_locations(table_locs));
 
-  ObPhysicalPlan* local_phy_plan = NULL;
+  ObPhysicalPlan *local_phy_plan = NULL;
   ASSERT_EQ(OB_SUCCESS, ObCacheObjectFactory::alloc(local_phy_plan, OB_SYS_TENANT_ID));
-  ObPhyOperator* tmp_op = NULL;
-  ObTableScan* scan_op = NULL;
+  ObPhyOperator *tmp_op = NULL;
+  ObTableScan *scan_op = NULL;
   ASSERT_TRUE(NULL != local_phy_plan);
   ASSERT_EQ(OB_SUCCESS, local_phy_plan->alloc_operator_by_type(PHY_TABLE_SCAN, tmp_op));
-  // tmp_op->set_column_count(TEST_COL_NUM);
+  //tmp_op->set_column_count(TEST_COL_NUM);
   ASSERT_TRUE(NULL != (scan_op = static_cast<ObTableScan*>(tmp_op)));
   scan_op->set_table_location_key(TEST_TABLE_ID);
   scan_op->set_ref_table_id(TEST_TABLE_ID);
   scan_op->set_index_table_id(TEST_INDEX_ID);
   SQL_ENG_LOG(INFO, "op info", "op_id", scan_op->get_id(), "op_type", scan_op->get_type());
 
-  ObTableScanInput* scan_input = NULL;
+  ObTableScanInput *scan_input = NULL;
   ASSERT_EQ(OB_SUCCESS, exec_ctx.init_phy_op(local_phy_plan->get_phy_operator_size()));
   ASSERT_EQ(OB_SUCCESS, exec_ctx.init_expr_op(local_phy_plan->get_expr_operator_size()));
   ASSERT_EQ(OB_SUCCESS, scan_op->create_operator_input(exec_ctx));
@@ -102,11 +107,15 @@ TEST_F(ObEmptyTableScanTest, basic_test)
   scan_input->set_location_idx(OB_INVALID_INDEX);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  // TBSYS_LOGGER.setLogLevel("INFO");
+  //TBSYS_LOGGER.setLogLevel("INFO");
   OB_LOGGER.set_log_level("INFO");
   ::oceanbase::sql::init_sql_factories();
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+
+
+
+
