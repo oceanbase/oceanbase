@@ -10842,6 +10842,7 @@ def_table_schema(
 # 12355: __all_virtual_tenant_rls_context_history
 # 12356: __all_virtual_tenant_rls_attribute
 # 12357: __all_virtual_tenant_rls_attribute_history
+# 12358: __all_virtual_tenant_mysql_sys_agent
 
 #
 # 余留位置
@@ -11109,6 +11110,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # 15279: all_virtual_tenant_rls_context_real_agent
 # 15280: all_virtual_tenant_rls_attribute_real_agent
 # def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
+# 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
+# 15283: __all_virtual_tenant_info_agent
 
 ################################################################################
 # System View (20000,30000]
@@ -39820,6 +39823,8 @@ def_table_schema(
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " "),
 )
+
+# 25208: DBA_OB_TENANTS
 
 #### End Data Dictionary View
 ################################################################################
