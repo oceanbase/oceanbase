@@ -595,7 +595,6 @@ int ObDynamicSamplePieceMsgCtx::on_message(
         LOG_WARN("failed to wait response", K(ret));
       }
     }
-    IGNORE_RETURN destroy();
   }
   return ret;
 }
