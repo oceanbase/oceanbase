@@ -36,7 +36,9 @@ ObLSRestoreCtx::ObLSRestoreCtx()
     sys_tablet_id_array_(),
     data_tablet_id_array_(),
     ha_table_info_mgr_(),
-    tablet_group_mgr_()
+    tablet_group_mgr_(),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -46,7 +48,8 @@ ObLSRestoreCtx::~ObLSRestoreCtx()
 
 bool ObLSRestoreCtx::is_valid() const
 {
-  return arg_.is_valid() && !task_id_.is_invalid();
+  return arg_.is_valid() && !task_id_.is_invalid()
+        && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);;
 }
 
 void ObLSRestoreCtx::reset()
@@ -60,6 +63,8 @@ void ObLSRestoreCtx::reset()
   ha_table_info_mgr_.reuse();
   tablet_group_mgr_.reuse();
   ObIHADagNetCtx::reset();
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 
@@ -90,6 +95,8 @@ void ObLSRestoreCtx::reuse()
   data_tablet_id_array_.reset();
   ha_table_info_mgr_.reuse();
   tablet_group_mgr_.reuse();
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 /******************ObLSRestoreDagNet*********************/
@@ -964,6 +971,8 @@ int ObStartLSRestoreTask::choose_follower_src_()
     } else {
       ctx_->src_ = src_info;
       ctx_->src_ls_meta_package_ = ls_info.ls_meta_package_;
+      ctx_->need_check_seq_ = true;
+      ctx_->ls_rebuild_seq_ = ls_info.ls_meta_package_.ls_meta_.get_rebuild_seq();
 
       if (OB_FAIL(generate_tablet_id_array_(ls_info.tablet_id_array_))) {
         LOG_WARN("failed to generate tablet id array", K(ret), K(ls_info));
@@ -1010,6 +1019,8 @@ int ObStartLSRestoreTask::choose_leader_src_()
       } else {
         FLOG_INFO("succeed get backup ls meta info and tablet id array", K(ls_meta_package), K(tablet_id_array));
         ctx_->src_ls_meta_package_ = ls_meta_package;
+        ctx_->need_check_seq_ = false;
+        ctx_->ls_rebuild_seq_ = -1;
         if (OB_FAIL(generate_tablet_id_array_(tablet_id_array))) {
           LOG_WARN("failed to generate tablet id array", K(ret), K(ls_meta_package), K(tablet_id_array));
         }
@@ -1289,7 +1300,8 @@ int ObSysTabletsRestoreTask::init()
     if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
-        ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_, ctx_->src_,
+        ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_,
+        ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
         ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, restore_action,
         meta_index_store_, &ctx_->ha_table_info_mgr_,
         ha_tablets_builder_))) {

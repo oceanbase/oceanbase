@@ -80,6 +80,7 @@ struct ObLSVTInfo
   int64_t checkpoint_ts_;
   //TODO SCN
   int64_t checkpoint_lsn_;
+  int64_t rebuild_seq_;
 };
 
 // 诊断虚表统计信息

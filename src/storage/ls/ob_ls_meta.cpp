@@ -52,7 +52,7 @@ ObLSMeta::ObLSMeta()
     ls_create_status_(ObInnerLSStatus::CREATING),
     clog_checkpoint_ts_(0),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
-    rebuild_seq_(0),
+    rebuild_seq_(-1),
     migration_status_(ObMigrationStatus::OB_MIGRATION_STATUS_MAX),
     gc_state_(LSGCState::INVALID_LS_GC_STATE),
     offline_ts_ns_(OB_INVALID_TIMESTAMP),
@@ -126,7 +126,7 @@ void ObLSMeta::reset()
   replica_type_ = REPLICA_TYPE_MAX;
   clog_base_lsn_.reset();
   clog_checkpoint_ts_ = 0;
-  rebuild_seq_ = 0;
+  rebuild_seq_ = -1;
   migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   gc_state_ = LSGCState::INVALID_LS_GC_STATE;
   offline_ts_ns_ = OB_INVALID_TIMESTAMP;
@@ -211,7 +211,8 @@ bool ObLSMeta::is_valid() const
       && REPLICA_TYPE_MAX != replica_type_
       && OB_MIGRATION_STATUS_MAX != migration_status_
       && ObGCHandler::is_valid_ls_gc_state(gc_state_)
-      && restore_status_.is_valid();
+      && restore_status_.is_valid()
+      && rebuild_seq_ >= 0;
 }
 
 int64_t ObLSMeta::get_rebuild_seq() const

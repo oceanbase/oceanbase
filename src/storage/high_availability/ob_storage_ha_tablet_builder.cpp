@@ -29,8 +29,8 @@ ObStorageHATabletsBuilderParam::ObStorageHATabletsBuilderParam()
     ls_(nullptr),
     tablet_id_array_(),
     src_info_(),
-    local_rebuild_seq_(0),
-    need_check_seq_(true),
+    local_rebuild_seq_(-1),
+    need_check_seq_(false),
     is_leader_restore_(false),
     need_keep_old_tablet_(false),
     ha_table_info_mgr_(nullptr),
@@ -49,8 +49,8 @@ void ObStorageHATabletsBuilderParam::reset()
   ls_ = nullptr;
   tablet_id_array_.reset();
   src_info_.reset();
-  local_rebuild_seq_ = 0;
-  need_check_seq_ = true;
+  local_rebuild_seq_ = -1;
+  need_check_seq_ = false;
   is_leader_restore_ = false;
   need_keep_old_tablet_ = false;
   ha_table_info_mgr_ = nullptr;
@@ -67,7 +67,7 @@ bool ObStorageHATabletsBuilderParam::is_valid() const
   bool bool_ret = false;
   bool_ret = OB_INVALID_ID != tenant_id_
       && OB_NOT_NULL(ls_)
-      && local_rebuild_seq_ >= 0
+      && ((need_check_seq_ && local_rebuild_seq_ >= 0) || !need_check_seq_)
       && OB_NOT_NULL(ha_table_info_mgr_);
   if (bool_ret) {
     if (!is_leader_restore_) {
@@ -95,7 +95,7 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
     ls_ = param.ls_;
     src_info_ = param.src_info_;
     local_rebuild_seq_ = param.local_rebuild_seq_;
-    need_check_seq_ = param.local_rebuild_seq_;
+    need_check_seq_ = param.need_check_seq_;
     is_leader_restore_ = param.is_leader_restore_;
     need_keep_old_tablet_ = param.need_keep_old_tablet_;
     ha_table_info_mgr_ = param.ha_table_info_mgr_;
@@ -256,7 +256,7 @@ int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage tablets restore task do not init", K(ret));
-  } else if (param_.is_leader_restore_) {
+  } else if (param_.is_leader_restore_ || !param_.need_check_seq_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get follower tablet info reader get invalid argument", K(ret), K(param_));
   } else if (FALSE_IT(buf = ob_malloc(sizeof(ObCopyTabletInfoObReader), "TabletObReader"))) {
@@ -269,9 +269,9 @@ int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
     LOG_WARN("failed to assign tablet id array", K(ret), K(param_));
   } else {
     arg.tenant_id_ = param_.tenant_id_;
-    arg.ls_rebuild_scn_ = param_.local_rebuild_seq_;
+    arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;
     arg.ls_id_ = param_.ls_->get_ls_id();
-    arg.need_check_scn_ = param_.need_check_seq_;
+    arg.need_check_seq_ = param_.need_check_seq_;
     if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.svr_rpc_proxy_, *param_.bandwidth_throttle_))) {
       LOG_WARN("failed to init copy tablet info ob reader", K(ret), K(param_));
     }
@@ -513,6 +513,9 @@ int ObStorageHATabletsBuilder::build_copy_tablets_sstable_info_arg_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (!param_.need_check_seq_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K_(param));
   } else {
     arg.tenant_id_ = param_.tenant_id_;
     arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;
@@ -1526,8 +1529,8 @@ ObStorageHACopySSTableParam::ObStorageHACopySSTableParam()
     tablet_id_(),
     copy_table_key_array_(),
     src_info_(),
-    local_rebuild_seq_(0),
-    need_check_seq_(true),
+    local_rebuild_seq_(-1),
+    need_check_seq_(false),
     is_leader_restore_(false),
     bandwidth_throttle_(nullptr),
     svr_rpc_proxy_(nullptr),
@@ -1545,8 +1548,8 @@ void ObStorageHACopySSTableParam::reset()
   tablet_id_.reset();
   copy_table_key_array_.reset();
   src_info_.reset();
-  local_rebuild_seq_ = 0;
-  need_check_seq_ = true;
+  local_rebuild_seq_ = -1;
+  need_check_seq_ = false;
   is_leader_restore_ = false;
   bandwidth_throttle_ = nullptr;
   svr_rpc_proxy_ = nullptr;
@@ -1562,7 +1565,7 @@ bool ObStorageHACopySSTableParam::is_valid() const
   bool_ret = OB_INVALID_ID != tenant_id_
       && ls_id_.is_valid()
       && tablet_id_.is_valid()
-      && local_rebuild_seq_ >= 0;
+      && ((need_check_seq_ && local_rebuild_seq_ >= 0) || !need_check_seq_);
   if (bool_ret) {
     if (!is_leader_restore_) {
       bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_)
@@ -1590,7 +1593,7 @@ int ObStorageHACopySSTableParam::assign(const ObStorageHACopySSTableParam &param
     tablet_id_ = param.tablet_id_;
     src_info_ = param.src_info_;
     local_rebuild_seq_ = param.local_rebuild_seq_;
-    need_check_seq_ = param.local_rebuild_seq_;
+    need_check_seq_ = param.need_check_seq_;
     is_leader_restore_ = param.is_leader_restore_;
     bandwidth_throttle_ = param.bandwidth_throttle_;
     svr_rpc_proxy_ = param.svr_rpc_proxy_;
@@ -1733,7 +1736,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_ob_reader_(
   obrpc::ObCopySSTableMacroRangeInfoArg arg;
   ObCopySSTableMacroObReader *ob_reader = nullptr;
 
-  if (!param_.is_valid() || param_.is_leader_restore_) {
+  if (!param_.is_valid() || param_.is_leader_restore_ || !param_.need_check_seq_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param should not be invalid", K(ret), K(param_));
   } else if (FALSE_IT(buf = mtl_malloc(sizeof(ObCopySSTableMacroObReader), "MacroInfoObRead"))) {
@@ -1749,6 +1752,8 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_ob_reader_(
     arg.ls_id_ = param_.ls_id_;
     arg.tablet_id_ = param_.tablet_id_;
     arg.macro_range_max_marco_count_ = MACRO_RANGE_MAX_MACRO_COUNT;
+    arg.need_check_seq_ = param_.need_check_seq_;
+    arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -1809,6 +1814,8 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_restore_reader_(
     arg.ls_id_ = param_.ls_id_;
     arg.tablet_id_ = param_.tablet_id_;
     arg.macro_range_max_marco_count_ = MACRO_RANGE_MAX_MACRO_COUNT;
+    arg.need_check_seq_ = false;
+    arg.ls_rebuild_seq_ = -1;
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     ret = E(EventTable::EN_RESTORE_COPY_MACRO_BLOCK_NUM) OB_SUCCESS;
@@ -1857,7 +1864,6 @@ int ObStorageHACopySSTableInfoMgr::get_copy_sstable_maro_range_info(
   }
   return ret;
 }
-
 
 }
 }

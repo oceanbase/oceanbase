@@ -10147,6 +10147,7 @@ def_table_schema(
   ('checkpoint_scn', 'uint'),
   ('checkpoint_lsn', 'uint'),
   ('migrate_status', 'int'),
+  ('rebuild_seq', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

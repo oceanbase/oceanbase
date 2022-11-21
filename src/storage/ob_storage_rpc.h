@@ -94,6 +94,8 @@ public:
   int64_t data_version_;
   int64_t backfill_tx_log_ts_;
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
@@ -120,13 +122,13 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_scn), 
-      K_(ls_rebuild_scn), K_(is_only_copy_major));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_seq),
+      K_(ls_rebuild_seq), K_(is_only_copy_major));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_id_list_;
-  bool need_check_scn_;
-  int64_t ls_rebuild_scn_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
   bool is_only_copy_major_;
 };
 
@@ -301,6 +303,8 @@ public:
   common::ObTabletID tablet_id_;
   common::ObSArray<ObITable::TableKey> copy_table_key_array_;
   int64_t macro_range_max_marco_count_;
+  bool need_check_seq_;
+  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfoArg);
 };
 
