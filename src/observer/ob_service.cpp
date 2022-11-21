@@ -544,6 +544,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
           const ObCalcColumnChecksumRequestArg::SingleItem &calc_item = arg.calc_items_.at(i);
           ObUniqueCheckingDag *dag = NULL;
           int tmp_ret = OB_SUCCESS;
+          saved_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(dag_scheduler->alloc_dag(dag))) {
             STORAGE_LOG(WARN, "fail to alloc dag", KR(tmp_ret));
           } else if (OB_TMP_FAIL(dag->init(arg.tenant_id_,
