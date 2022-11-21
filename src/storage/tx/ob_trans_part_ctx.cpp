@@ -685,7 +685,10 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     } else {
       set_stc_by_now_();
     }
-    if (parts.count() == 1 && parts[0] == ls_id_) {
+    if (parts.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "the size of participant is 0 when commit", KPC(this));
+    } else if (parts.count() == 1 && parts[0] == ls_id_) {
       exec_info_.trans_type_ = TransType::SP_TRANS;
       if (OB_FAIL(one_phase_commit_())) {
         TRANS_LOG(WARN, "start sp coimit fail", K(ret), KPC(this));
