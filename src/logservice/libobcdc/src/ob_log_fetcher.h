@@ -144,6 +144,18 @@ private:
   int next_heartbeat_timestamp_(int64_t &hb_ts, const int64_t last_hb_ts);
 
 private:
+  struct LSProgressInfo
+  {
+    LSProgressInfo() : tls_id_(), progress_(0) {}
+    LSProgressInfo(const TenantLSID &tls_id, const int64_t progress) : tls_id_(tls_id), progress_(progress) {}
+
+    TenantLSID tls_id_;
+    int64_t progress_;
+    TO_STRING_KV(K_(tls_id), K_(progress));
+  };
+  // Used to diagnosis and monitoring
+  typedef common::ObSEArray<LSProgressInfo, 16> LSProgressInfoArray;
+
   struct FetchCtxMapHBFunc
   {
     FetchCtxMapHBFunc();
@@ -157,8 +169,11 @@ private:
     TenantLSID              min_progress_ls_;
     TenantLSID              max_progress_ls_;
     int64_t                 part_count_;
+    LSProgressInfoArray     ls_progress_infos_;
 
-    TO_STRING_KV(K_(data_progress), K_(ddl_progress), K_(ddl_last_dispatch_log_lsn),
+    TO_STRING_KV(K_(data_progress),
+        K_(ddl_progress),
+        K_(ddl_last_dispatch_log_lsn),
         K_(min_progress),
         K_(max_progress),
         K_(min_progress_ls),

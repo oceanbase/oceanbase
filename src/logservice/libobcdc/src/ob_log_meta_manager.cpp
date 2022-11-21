@@ -27,6 +27,7 @@
 #include "ob_obj2str_helper.h"                    // ObObj2strHelper
 #include "ob_log_adapt_string.h"                  // ObLogAdaptString
 #include "ob_log_config.h"                        // TCONF
+#include "ob_log_instance.h"                      // TCTX
 
 #define DEFAULT_ENCODING  ""
 
@@ -579,12 +580,20 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
   common::ObArray<share::schema::ObColDesc> column_ids;
   column_ids.reset();
   const bool ignore_virtual_column = true;
+  const uint64_t tenant_id = table_schema->get_tenant_id();
+  IObLogTenantMgr *tenant_mgr_ = TCTX.tenant_mgr_;
+  ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
 
   if (OB_ISNULL(table_meta) || OB_ISNULL(table_schema)) {
     LOG_ERROR("invalid argument", K(table_meta), K(table_schema));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(table_schema->get_column_ids(column_ids, ignore_virtual_column))) {
     LOG_ERROR("get column_ids from table_schema failed", KR(ret), KPC(table_schema));
+  } else if (OB_ISNULL(tenant_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_mgr_ is nullptr", KR(ret), K(tenant_mgr_));
+  } else if (OB_FAIL(tenant_mgr_->get_tenant_tz_wrap(tenant_id, tz_info_wrap))) {
+    LOG_ERROR("get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
   } else {
     int64_t version = table_schema->get_schema_version();
     uint64_t table_id = table_schema->get_table_id();
@@ -652,7 +661,8 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
             column_stored_idx,
             is_usr_column,
             usr_column_idx,
-            tb_schema_info))) {
+            tb_schema_info,
+            tz_info_wrap))) {
           LOG_ERROR("set_column_schema_info_ fail", KR(ret), KPC(table_schema), K(tb_schema_info),
               K(column_stored_idx), K(usr_column_idx), KPC(column_table_schema));
         } else if (is_usr_column) {
@@ -1530,7 +1540,8 @@ int ObLogMetaManager::set_column_schema_info_(
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,
-    TableSchemaInfo &tb_schema_info)
+    TableSchemaInfo &tb_schema_info,
+    const ObTimeZoneInfoWrap *tz_info_wrap)
 {
   int ret = OB_SUCCESS;
 
@@ -1546,6 +1557,7 @@ int ObLogMetaManager::set_column_schema_info_(
       column_stored_idx,
       is_usr_column,
       usr_column_idx,
+      tz_info_wrap,
       *obj2str_helper_))) {
     LOG_ERROR("tb_schema_info init_column_schema_info fail", KR(ret),
         "table_id", table_schema.get_table_id(),

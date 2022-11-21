@@ -217,6 +217,7 @@ public:
       ObObj2strHelper *obj2str_helper = NULL,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
       const TableSchemaInfo *tb_schema_info = NULL,
+      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
 
@@ -249,6 +250,7 @@ private:
       ObObj2strHelper *obj2str_helper,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const TableSchemaInfo *tb_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       ColValueList &cols);
@@ -258,6 +260,7 @@ private:
       ObObj2strHelper *obj2str_helper,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const TableSchemaInfo *tb_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key);
   // 1. get column_id and column_schema_info for user table;
   // 2. get column_id for all_ddl_operation_table
@@ -275,6 +278,7 @@ private:
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const ColumnSchemaInfo *column_schema,
       const ObObj2strHelper *obj2str_helper,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
       ColValueList &cols);
   int set_obj_propertie_(
       const uint64_t column_id,
@@ -401,9 +405,10 @@ public:
       ObObj2strHelper *obj2str_helper = NULL,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
       const TableSchemaInfo *tb_schema_info = NULL,
+      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false)
   {
-    return row_.parse_cols(obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key);
+    return row_.parse_cols(obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key);
   }
 
   int parse_aux_meta_table_cols(

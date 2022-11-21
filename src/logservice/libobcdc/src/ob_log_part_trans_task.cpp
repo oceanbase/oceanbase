@@ -189,6 +189,7 @@ int MutatorRow::parse_cols(
     ObObj2strHelper *obj2str_helper /* = NULL */,
     const ObSimpleTableSchemaV2 *simple_table_schema /* = NULL */,
     const TableSchemaInfo *tb_schema_info /* = NULL */,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key /*  = false */,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */)
 {
@@ -209,7 +210,7 @@ int MutatorRow::parse_cols(
           "mutator_row", (const ObMemtableMutatorRow &)(*this));
       new_cols_.reset();
     } else if (OB_FAIL(parse_columns_(true/*is_parse_new_col*/, new_row_.data_, new_row_.size_,
-        obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key,
+        obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info, new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(new_row_), K(obj2str_helper), K(simple_table_schema),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -224,7 +225,7 @@ int MutatorRow::parse_cols(
       // no old cols
       old_cols_.reset();
     } else if (OB_FAIL(parse_columns_(false/*is_parse_new_col*/, old_row_.data_, old_row_.size_,
-        obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key,
+        obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info, old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(old_row_), K(obj2str_helper), K(simple_table_schema),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -238,7 +239,7 @@ int MutatorRow::parse_cols(
     rowkey_cols_.reset();
 
     if (OB_FAIL(parse_rowkey_(rowkey_cols_, rowkey_, obj2str_helper, simple_table_schema, tb_schema_info,
-            enable_output_hidden_primary_key))) {
+            tz_info_wrap, enable_output_hidden_primary_key))) {
       LOG_ERROR("parse_rowkey_ fail", KR(ret), K(rowkey_), K(obj2str_helper),
           K(enable_output_hidden_primary_key));
     } else {
@@ -319,6 +320,7 @@ int MutatorRow::parse_columns_(
     ObObj2strHelper *obj2str_helper,
     const ObSimpleTableSchemaV2 *table_schema,
     const TableSchemaInfo *tb_schema_info,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
     ColValueList &cols)
@@ -448,6 +450,7 @@ int MutatorRow::parse_columns_(
                 table_schema,
                 column_schema_info,
                 obj2str_helper,
+                tz_info_wrap,
                 cols))) {
               LOG_ERROR("add_column_ fail", KR(ret), K(cols), K(column_stored_idx), K(column_id), K(obj),
                 K(obj2str_helper), K(table_schema), K(column_schema_info));
@@ -502,6 +505,7 @@ int MutatorRow::add_column_(
     const share::schema::ObSimpleTableSchemaV2 *simple_table_schema, /*NULL if parse all_ddl_operation_table  columns*/
     const ColumnSchemaInfo *column_schema_info,
     const ObObj2strHelper *obj2str_helper/*NULL if parse all_ddl_operation_table  columns*/,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -569,7 +573,8 @@ int MutatorRow::add_column_(
         false,
         extended_type_info,
         accuracy,
-        collation_type))) {
+        collation_type,
+        tz_info_wrap))) {
       LOG_ERROR("obj2str fail", KR(ret), "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
     } else if (OB_FAIL(cols.add(cv_node))) {
       LOG_ERROR("add column into ColValueList fail", KR(ret), "column_value", *cv_node, K(cols));
@@ -627,6 +632,7 @@ int MutatorRow::parse_rowkey_(
     ObObj2strHelper *obj2str_helper,
     const ObSimpleTableSchemaV2 *simple_table_schema,
     const TableSchemaInfo *tb_schema_info,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key)
 {
   int ret = OB_SUCCESS;
@@ -682,6 +688,7 @@ int MutatorRow::parse_rowkey_(
             simple_table_schema,
             column_schema_info,
             obj2str_helper,
+            tz_info_wrap,
             rowkey_cols))) {
           LOG_ERROR("add_column_ fail", K(rowkey_cols), KR(ret), K(column_id),
               K(index), K(rowkey_objs[index]), K(obj2str_helper), K(simple_table_schema), K(column_schema_info));
@@ -1176,7 +1183,7 @@ int DdlStmtTask::parse_ddl_info(
   }
   // parses the column data
   // but does not convert the column data to a string
-  else if (OB_FAIL(row_.parse_cols(nullptr, nullptr, nullptr, false, &all_ddl_operation_table_schema_info))) {
+  else if (OB_FAIL(row_.parse_cols(nullptr, nullptr, nullptr, nullptr, false, &all_ddl_operation_table_schema_info))) {
     LOG_ERROR("parse columns fail", KR(ret), K(row_));
   } else if (OB_FAIL(parse_ddl_info_(contain_ddl_stmt, update_schema_version, stop_flag))) {
     if (OB_INVALID_DATA == ret) {
