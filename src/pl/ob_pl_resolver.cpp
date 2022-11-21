@@ -10380,7 +10380,7 @@ int ObPLResolver::resolve_routine_accessible_by(
   const ObStmtNodeTree *routine_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
   CK (lib::is_oracle_mode());
-  OZ (parser.parse_routine_body(source, parse_tree), source);
+  OZ (parser.parse_routine_body(source, parse_tree, false), source);
   CK (OB_NOT_NULL(parse_tree->children_));
   CK (1 == parse_tree->num_child_);
   CK (OB_NOT_NULL(parse_tree->children_[0]));
