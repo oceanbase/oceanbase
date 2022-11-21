@@ -553,6 +553,7 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     is_table_hidden_ = table_schema->is_user_hidden_table();
+    ret_code_ = task_record.ret_code_;
     is_inited_ = true;
   }
   return ret;
