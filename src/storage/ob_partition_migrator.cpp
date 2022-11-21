@@ -5664,7 +5664,8 @@ int ObMigrateDag::online_for_rebuild()
                    data_info.get_publish_version(),
                    restore_snapshot_version,
                    last_restore_log_id,
-                   last_restore_log_ts))) {
+                   last_restore_log_ts,
+                   true /*restore trans ctx*/))) {
       STORAGE_LOG(WARN,
           "online partition failed",
           K(ret),
@@ -8339,7 +8340,15 @@ int ObMigrateUtil::enable_replay_with_new_partition(ObMigrateCtx &ctx)
   int ret = OB_SUCCESS;
   ObIPartitionGroup *partition = NULL;
 
-  LOG_INFO("enable_replay_with_new_partition");
+  LOG_INFO("enable_replay_with_new_partition", K(ctx.replica_op_arg_.type_));
+  bool need_restore_trans = true;
+  // add replica while restore. the new parition no need to restore trans ctx;
+  // trans ctx will be restored by restore to avoid trans ctx being inited twice.
+  need_restore_trans =
+      !((ADD_REPLICA_OP == ctx.replica_op_arg_.type_ || MIGRATE_REPLICA_OP == ctx.replica_op_arg_.type_) &&
+          (REPLICA_RESTORE_DATA == ctx.is_restore_ || REPLICA_RESTORE_ARCHIVE_DATA == ctx.is_restore_ ||
+              REPLICA_RESTORE_STANDBY == ctx.is_restore_));
+
   if (OB_ISNULL(partition = ctx.get_partition())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition should not be null", K(ret));
@@ -8349,7 +8358,8 @@ int ObMigrateUtil::enable_replay_with_new_partition(ObMigrateCtx &ctx)
                  ctx.pg_meta_.storage_info_.get_data_info().get_publish_version(),
                  ctx.pg_meta_.restore_snapshot_version_,
                  ctx.pg_meta_.last_restore_log_id_,
-                 ctx.pg_meta_.last_restore_log_ts_))) {
+                 ctx.pg_meta_.last_restore_log_ts_,
+                 need_restore_trans))) {
     STORAGE_LOG(WARN, "add partition to manager failed", K(ctx.replica_op_arg_), K(ret));
   }
 
@@ -8529,7 +8539,8 @@ int ObMigrateUtil::enable_replay_with_old_partition(ObMigrateCtx &ctx)
                        data_info.get_publish_version(),
                        restore_snapshot_version,
                        last_restore_log_id,
-                       last_restore_log_ts))) {
+                       last_restore_log_ts,
+                       true /*restore trans ctx*/))) {
           STORAGE_LOG(WARN, "online partition failed", K(ctx.replica_op_arg_), K(meta), K(ret));
         } else if (OB_PERMANENT_OFFLINE_REPLICA == ctx.replica_state_ &&
                    F_WORKING != ctx.get_partition()->get_partition_state() &&

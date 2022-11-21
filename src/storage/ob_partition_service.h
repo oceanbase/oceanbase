@@ -353,7 +353,8 @@ public:
   VIRTUAL_FOR_UNITTEST int remove_partition_from_pg(
       const bool for_replay, const ObPartitionKey& pg_key, const ObPartitionKey& pkey, const uint64_t log_id);
   VIRTUAL_FOR_UNITTEST int online_partition(const common::ObPartitionKey& pkey, const int64_t publish_version,
-      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
+      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts,
+      const bool need_restore_trans_ctx);
   // before building the index, wait for all transactions with lower schema version to finish
   // max_commit_version is the max commit version of those transactions
   VIRTUAL_FOR_UNITTEST int check_schema_version_elapsed(const ObPartitionKey& partition, const int64_t schema_version,

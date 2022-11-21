@@ -3192,8 +3192,9 @@ int ObPartitionService::remove_partition(const ObPartitionKey& pkey, const bool 
   return ret;
 }
 
-int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64_t publish_version,
-    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
+int ObPartitionService::online_partition(const ObPartitionKey &pkey, const int64_t publish_version,
+    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts,
+    const bool need_restore_trans_ctx)
 {
   int ret = OB_SUCCESS;
   bool txs_add_success = false;
@@ -3262,7 +3263,7 @@ int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64
     (void)guard.get_partition_group()->set_migrating_flag(true);
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(pg->get_pg_storage().restore_mem_trans_table())) {
+      if (need_restore_trans_ctx && OB_FAIL(pg->get_pg_storage().restore_mem_trans_table())) {
         LOG_WARN("failed to restore trans table in memory", K(ret), K(pkey));
       }
     }
