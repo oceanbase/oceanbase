@@ -184,14 +184,6 @@ protected:
   void print_trace_log_if_necessary_();
   bool is_trans_expired_() const { return ObClockGenerator::getRealClock() >= trans_expired_time_; }
   bool is_slow_query_() const;
-  bool cluster_version_after_2200_() const { return cluster_version_ >= CLUSTER_VERSION_2200; }
-  bool cluster_version_after_2230_() const { return cluster_version_ >= CLUSTER_VERSION_2230; }
-  bool cluster_version_after_2250_() const { return cluster_version_ >= CLUSTER_VERSION_2250; }
-  bool cluster_version_before_2271_() const { return cluster_version_ < CLUSTER_VERSION_2271; }
-  bool cluster_version_before_3200_() const { return cluster_version_ < CLUSTER_VERSION_3200; }
-  bool cluster_version_after_3200_() const { return cluster_version_ >= CLUSTER_VERSION_3200; }
-  inline bool cluster_version_before_400_() const { return cluster_version_ < CLUSTER_VERSION_4_0_0_0; }
-  inline bool cluster_version_after_400_() const { return cluster_version_ >= CLUSTER_VERSION_4_0_0_0; }
   void set_stc_(const MonotonicTs stc);
   void set_stc_by_now_();
   MonotonicTs get_stc_();

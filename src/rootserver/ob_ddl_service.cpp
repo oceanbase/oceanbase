@@ -1791,8 +1791,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
           LOG_WARN("failed to create table schema, ", K(ret));
         } else if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, table_schema))) {
           LOG_WARN("failed to insert_temp_table_info!", K(ret));
-        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
-          && table_schema.is_view_table() && dep_infos != nullptr && 0 == i) {
+        } else if (table_schema.is_view_table() && dep_infos != nullptr && 0 == i) {
           for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos->count(); ++i) {
             ObDependencyInfo dep;
             if (OB_FAIL(dep.assign(dep_infos->at(i)))) {
@@ -2156,10 +2155,7 @@ int ObDDLService::set_new_table_options(
     if (OB_SUCC(ret) && (alter_collation || alter_charset)) {
       ObCharsetType charset_type = alter_table_schema.get_charset_type();
       ObCollationType collation_type = alter_table_schema.get_collation_type();
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify character or collation");
-      } else if (alter_collation && alter_charset) {
+      if (alter_collation && alter_charset) {
         if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
           ret = OB_ERR_COLLATION_MISMATCH;
           const char *cs_name = ObCharset::charset_name(charset_type);
@@ -3131,23 +3127,18 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
               orig_table_schema, schema_guard, *orig_column_schema, *alter_column_schema, is_offline))) {
             LOG_WARN("failed to check is offline", K(ret));
           } else if (is_offline) {
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unsupported type modification");
-            } else {
-              if (alter_column_schema->is_primary_key_) {
-                if (orig_table_schema.get_rowkey_column_num() > 0) {
-                  if (!orig_table_schema.is_heap_table()) {
-                    ret = OB_ERR_MULTIPLE_PRI_KEY;
-                    RS_LOG(WARN, "multiple primary key defined", K(ret));
-                  } else {
-                    add_pk = true;
-                  }
+            if (alter_column_schema->is_primary_key_) {
+              if (orig_table_schema.get_rowkey_column_num() > 0) {
+                if (!orig_table_schema.is_heap_table()) {
+                  ret = OB_ERR_MULTIPLE_PRI_KEY;
+                  RS_LOG(WARN, "multiple primary key defined", K(ret));
                 } else {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("rowkey_column_num must be greater than 0", K(ret),
-                  K(orig_table_schema.get_rowkey_column_num()));
+                  add_pk = true;
                 }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("rowkey_column_num must be greater than 0", K(ret),
+                K(orig_table_schema.get_rowkey_column_num()));
               }
             }
           }
@@ -3323,19 +3314,14 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
           break;
         }
         case ObIndexArg::ALTER_PRIMARY_KEY: {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
+          if (!is_invalid_ddl_type(ddl_type)) {
             ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter primary key");
+            (void)snprintf(err_msg, sizeof(err_msg), "%s and %s in single statment",
+                          ObIndexArg::to_type_str(last_type), ObIndexArg::to_type_str(type));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
           } else {
-            if (!is_invalid_ddl_type(ddl_type)) {
-              ret = OB_NOT_SUPPORTED;
-              (void)snprintf(err_msg, sizeof(err_msg), "%s and %s in single statment",
-                            ObIndexArg::to_type_str(last_type), ObIndexArg::to_type_str(type));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
-            } else {
-              ddl_type = DDL_ALTER_PRIMARY_KEY;
-              last_type = type;
-            }
+            ddl_type = DDL_ALTER_PRIMARY_KEY;
+            last_type = type;
           }
           break;
         }
@@ -3410,10 +3396,7 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   ObCharsetType charset_type = alter_table_schema.get_charset_type();
   ObCollationType collation_type = alter_table_schema.get_collation_type();
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify character or collation");
-  } else if (CS_TYPE_INVALID == collation_type) {
+  if (CS_TYPE_INVALID == collation_type) {
     // If collation_type is not given, the default collation_type of charset_type is used
     collation_type = ObCharset::get_default_collation(charset_type);
     alter_table_schema.set_collation_type(collation_type);
@@ -3513,8 +3496,7 @@ int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alte
   const uint64_t tablegroup_id = orig_table_schema.get_tablegroup_id();
   const ObPartitionLevel part_level = orig_table_schema.get_part_level();
   if (obrpc::ObAlterTableArg::REPARTITION_TABLE == alter_table_arg.alter_part_type_) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0
-        || (is_oracle_mode && PARTITION_LEVEL_ZERO != part_level)) {
+    if (is_oracle_mode && PARTITION_LEVEL_ZERO != part_level) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "re-partition a patitioned table");
     } else if (OB_INVALID_ID != tablegroup_id) {
@@ -3756,49 +3738,43 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
         }
         case ObIndexArg::ADD_PRIMARY_KEY:
         case ObIndexArg::ALTER_PRIMARY_KEY: {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("alter primary key not support yet", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter primary key ");
+          if (ObIndexArg::ADD_PRIMARY_KEY == type) {
+            if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+              ret = OB_ERR_TOO_MANY_KEYS;
+              LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
+              LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+            } else if (!new_table_schema.is_heap_table()) {
+              ret = OB_ERR_MULTIPLE_PRI_KEY;
+              LOG_WARN("multiple primary key defined", K(ret));
+            }
           } else {
-            if (ObIndexArg::ADD_PRIMARY_KEY == type) {
-              if (OB_MAX_INDEX_PER_TABLE <= index_count) {
-                ret = OB_ERR_TOO_MANY_KEYS;
-                LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-                LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
-              } else if (!new_table_schema.is_heap_table()) {
-                ret = OB_ERR_MULTIPLE_PRI_KEY;
-                LOG_WARN("multiple primary key defined", K(ret));
-              }
-            } else {
-              if (new_table_schema.is_heap_table()) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("primary key does not exist!", K(ret));
+            if (new_table_schema.is_heap_table()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("primary key does not exist!", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+            ObSArray<ObString> index_columns;
+            for (int32_t i = 0; OB_SUCC(ret)
+                && i < create_index_arg->index_columns_.count(); ++i) {
+              const ObColumnSortItem &col_item = create_index_arg->index_columns_.at(i);
+              if (OB_FAIL(index_columns.push_back(col_item.column_name_))) {
+                LOG_WARN("failed to add index column name", K(ret));
               }
             }
-            if (OB_SUCC(ret)) {
-              ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
-              ObSArray<ObString> index_columns;
-              for (int32_t i = 0; OB_SUCC(ret)
-                  && i < create_index_arg->index_columns_.count(); ++i) {
-                const ObColumnSortItem &col_item = create_index_arg->index_columns_.at(i);
-                if (OB_FAIL(index_columns.push_back(col_item.column_name_))) {
-                  LOG_WARN("failed to add index column name", K(ret));
-                }
-              }
-              if (OB_SUCC(ret) &&
-                  OB_FAIL(create_hidden_table_with_pk_changed(alter_table_arg,
-                                                              index_columns,
-                                                              origin_table_schema,
-                                                              new_table_schema,
-                                                              frozen_version,
-                                                              schema_guard,
-                                                              ddl_operator,
-                                                              trans,
-                                                              allocator,
-                                                              type))) {
-                LOG_WARN("failed to add primary key", K(ret));
-              }
+            if (OB_SUCC(ret) &&
+                OB_FAIL(create_hidden_table_with_pk_changed(alter_table_arg,
+                                                            index_columns,
+                                                            origin_table_schema,
+                                                            new_table_schema,
+                                                            frozen_version,
+                                                            schema_guard,
+                                                            ddl_operator,
+                                                            trans,
+                                                            allocator,
+                                                            type))) {
+              LOG_WARN("failed to add primary key", K(ret));
             }
           }
           break;
@@ -9079,11 +9055,7 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
         } else if (!index_table_schema->can_read_index()) {
           // If the index is not available, the partition operation will not do any intervention
         } else if (index_table_schema->is_global_index_table()) {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("drop/truncate partition with global indexes not support", KR(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop/truncate partition with global indexes ");
-          } else if (!arg.is_update_global_indexes_) {
+          if (!arg.is_update_global_indexes_) {
             if (OB_FAIL(ddl_operator.update_index_status(
                   tenant_id,
                   index_table_schema->get_data_table_id(),
@@ -10587,10 +10559,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
   const ObDDLType ddl_type = res.ddl_type_;
   ObRootService *root_service = GCTX.root_service_;
   bool need_redistribute_column_id = false;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Unsupported ddl operation");
-  } else if (OB_UNLIKELY(DDL_INVALID == ddl_type)) {
+  if (OB_UNLIKELY(DDL_INVALID == ddl_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected ddl type", K(ret), K(ddl_type), K(alter_table_arg));
   } else if (OB_ISNULL(root_service)) {
@@ -11140,11 +11109,7 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     }
     is_drop_or_truncate = true;
   } else if (obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_part_type) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("truncate subpartition in update not support", KR(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate subpartition in update ");
-    } else if (OB_FAIL(check_alter_drop_subpartitions(orig_table_schema, alter_table_arg))) {
+    if (OB_FAIL(check_alter_drop_subpartitions(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check drop partition", KR(ret), K(orig_table_schema), K(alter_table_arg));
     }
     is_drop_or_truncate = true;
@@ -11168,19 +11133,11 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
       LOG_WARN("failed to check add paritions", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
   } else if (is_oracle_mode && obrpc::ObAlterTableArg::SET_INTERVAL == alter_part_type) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("interval partition less than 4.0 not support", K(ret), K(GET_MIN_CLUSTER_VERSION()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition less than 4.0");
-    } else if (OB_FAIL(check_alter_set_interval(orig_table_schema, alter_table_arg))) {
+    if (OB_FAIL(check_alter_set_interval(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check set interval", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
   } else if (is_oracle_mode && obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_part_type) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("interval partition less than 4.0 not support", K(ret), K(GET_MIN_CLUSTER_VERSION()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition less than 4.0");
-    } else if (PARTITION_FUNC_TYPE_INTERVAL != orig_table_schema.get_part_option().get_part_func_type()) {
+    if (PARTITION_FUNC_TYPE_INTERVAL != orig_table_schema.get_part_option().get_part_func_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("type is unexpected when interval to range", K(orig_table_schema), K(alter_table_arg), KR(ret));
     }

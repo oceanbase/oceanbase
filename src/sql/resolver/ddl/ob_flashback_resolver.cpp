@@ -285,13 +285,7 @@ int ObFlashBackDatabaseResolver::resolve(const ParseNode &parser_tree)
 {
   int ret = OB_SUCCESS;
   ObFlashBackDatabaseStmt *flashback_database_stmt = NULL;
-  /**
-   * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
-   * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
-   * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
-   */
-  int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
-              OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
+  int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
@@ -355,13 +349,7 @@ int ObFlashBackTenantResolver::resolve(const ParseNode &parser_tree)
 {
   int ret = OB_SUCCESS;
   ObFlashBackTenantStmt *flashback_tenant_stmt = NULL;
-  /**
-   * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
-   * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
-   * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
-   */
-  int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
-              OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
+  int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));

@@ -45,8 +45,6 @@ public:
   static int insert_zone_info(common::ObISQLClient &sql_client, ObZoneInfo &info);
 
   static int remove_zone_info(common::ObISQLClient &sql_client, const common::ObZone &zone);
-  static int select_gc_timestamp_for_update(common::ObISQLClient &sql_client,
-                                   int64_t &gc_timestmp);
   static int get_region_list(
       common::ObISQLClient &sql_client, common::ObIArray<common::ObRegion> &region_list);
 private:

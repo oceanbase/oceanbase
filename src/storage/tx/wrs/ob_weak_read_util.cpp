@@ -12,7 +12,6 @@
 
 #include "ob_weak_read_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"  // ObTenantConfigGuard
-#include "share/ob_cluster_version.h"           // GET_MIN_CLUSTER_VERSION
 #include <algorithm>
 #include <stdarg.h>
 #include <stdint.h>

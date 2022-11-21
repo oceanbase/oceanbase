@@ -567,7 +567,6 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
 
   if (commit
       && 0 != checksum
-      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100
       && log_cluster_version >= CLUSTER_VERSION_3100
       && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
     const uint64_t checksum4 = calc_checksum_all();

@@ -1481,7 +1481,7 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.start_replay_scn_ = 0;
     backup_set_desc.min_restore_scn_ = 0;
     backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_1;
-    backup_set_desc.tenant_compatible_ = ObClusterVersion::get_instance().get_cluster_version();
+    backup_set_desc.tenant_compatible_ = GET_MIN_CLUSTER_VERSION();
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;
   }
   return ret;

@@ -417,10 +417,7 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cache_size().format(), "cache_size", "%s");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_order_flag(), "order_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cycle_flag(), "cycle_flag", "%d");
-
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200) {
-        SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
-      }
+      SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
       if (0 == STRCMP(tname[i], OB_ALL_SEQUENCE_OBJECT_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }

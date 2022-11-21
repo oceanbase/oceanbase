@@ -445,8 +445,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   bool enable_batch_opt = session.is_enable_batched_multi_statement();
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   optimization_done = false;
-  if (queries.count() <= 1 || parse_stat.parse_fail_ ||
-      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2230) {
+  if (queries.count() <= 1 || parse_stat.parse_fail_) {
     /*do nothing*/
   } else if (!enable_batch_opt) {
     // 未打开batch开关

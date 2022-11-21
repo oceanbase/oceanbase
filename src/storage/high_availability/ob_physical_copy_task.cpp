@@ -785,7 +785,7 @@ int ObPhysicalCopyFinishTask::get_cluster_version_(
       }
     } else {
       // TODO(yangyi.yyy): refine get cluster version later
-      cluster_version = static_cast<int64_t>(ObClusterVersion::get_instance().get_cluster_version());
+      cluster_version = static_cast<int64_t>(GET_MIN_CLUSTER_VERSION());
     }
   }
   return ret;

@@ -1147,30 +1147,19 @@ int ObSchemaGetterGuard::get_user_profile_failed_login_limits(
   } else {
     uint64_t default_profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
     profile_id = user_info->get_profile_id();
-
-    if (GET_MIN_CLUSTER_VERSION() <  CLUSTER_VERSION_2250 && !is_valid_id(profile_id)) {
-      if (OB_FAIL(ObProfileSchema::get_default_value(ObProfileSchema::FAILED_LOGIN_ATTEMPTS,
-                                                     failed_login_limit_num))) {
-        LOG_WARN("fail to get default value", KR(ret));
-      } else if (OB_FAIL(ObProfileSchema::get_default_value(ObProfileSchema::PASSWORD_LOCK_TIME,
-                                                            failed_login_limit_time))) {
-        LOG_WARN("fail to get default value", KR(ret));
-      }
+    if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
+                                         is_valid_id(profile_id) ? profile_id : default_profile_id,
+                                         profile_info))) {
+       LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
+    } else if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
+                                                default_profile_id,
+                                                default_profile))) {
+      LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
     } else {
-      if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
-                                           is_valid_id(profile_id) ? profile_id : default_profile_id,
-                                           profile_info))) {
-         LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
-      } else if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
-                                                  default_profile_id,
-                                                  default_profile))) {
-        LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
-      } else {
-        failed_login_limit_num = combine_default_value(profile_info->get_failed_login_attempts(),
-                                                       default_profile->get_failed_login_attempts());
-        failed_login_limit_time = combine_default_value(profile_info->get_password_lock_time(),
-                                                        default_profile->get_password_lock_time());
-      }
+      failed_login_limit_num = combine_default_value(profile_info->get_failed_login_attempts(),
+                                                     default_profile->get_failed_login_attempts());
+      failed_login_limit_time = combine_default_value(profile_info->get_password_lock_time(),
+                                                      default_profile->get_password_lock_time());
     }
   }
 
@@ -1200,33 +1189,22 @@ int ObSchemaGetterGuard::get_user_password_expire_times(
     uint64_t default_profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
     profile_id = user_info->get_profile_id();
     password_last_change = user_info->get_password_last_changed();
-
-    if (GET_MIN_CLUSTER_VERSION() <  CLUSTER_VERSION_2250 && !is_valid_id(profile_id)) {
-      if (OB_FAIL(ObProfileSchema::get_default_value(ObProfileSchema::PASSWORD_LIFE_TIME,
-                                                     password_life_time))) {
-        LOG_WARN("fail to get default value", KR(ret));
-      } else if (OB_FAIL(ObProfileSchema::get_default_value(ObProfileSchema::PASSWORD_GRACE_TIME,
-                                                            password_grace_time))) {
-        LOG_WARN("fail to get default value", KR(ret));
-      }
+    if (!is_valid_id(profile_id)) {
+      profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
+    }
+    if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
+                                         is_valid_id(profile_id) ? profile_id : default_profile_id,
+                                         profile_info))) {
+       LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
+    } else if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
+                                                default_profile_id,
+                                                default_profile))) {
+      LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
     } else {
-      if (!is_valid_id(profile_id)) {
-        profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
-      }
-      if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
-                                           is_valid_id(profile_id) ? profile_id : default_profile_id,
-                                           profile_info))) {
-         LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
-      } else if (OB_FAIL(get_profile_schema_by_id(user_info->get_tenant_id(),
-                                                  default_profile_id,
-                                                  default_profile))) {
-        LOG_WARN("fail to get profile info", KR(ret), KPC(user_info));
-      } else {
-        password_life_time = combine_default_value(profile_info->get_password_life_time(),
-                                                   default_profile->get_password_life_time());
-        password_grace_time = combine_default_value(profile_info->get_password_grace_time(),
-                                                    default_profile->get_password_grace_time());
-      }
+      password_life_time = combine_default_value(profile_info->get_password_life_time(),
+                                                 default_profile->get_password_life_time());
+      password_grace_time = combine_default_value(profile_info->get_password_grace_time(),
+                                                  default_profile->get_password_grace_time());
     }
     password_life_time = (password_life_time == -1) ? INT64_MAX : password_life_time;
     password_grace_time = (password_grace_time == -1) ? INT64_MAX : password_grace_time;
@@ -1243,25 +1221,20 @@ int ObSchemaGetterGuard::get_user_profile_function_name(const uint64_t tenant_id
   const ObProfileSchema *profile_info = nullptr;
   const ObProfileSchema *default_profile = nullptr;
 
-  if (GET_MIN_CLUSTER_VERSION() <  CLUSTER_VERSION_2250 && !is_valid_id(profile_id)) {
-    //do nothing
-    function_name.reset();
-  } else {
-    uint64_t default_profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
+  uint64_t default_profile_id = OB_ORACLE_TENANT_INNER_PROFILE_ID;
 
-    if (OB_FAIL(get_profile_schema_by_id(tenant_id,
-                                         is_valid_id(profile_id) ? profile_id : default_profile_id,
-                                         profile_info))) {
-       LOG_WARN("fail to get profile info", KR(ret));
-    } else if (OB_FAIL(get_profile_schema_by_id(tenant_id,
-                                                default_profile_id,
-                                                default_profile))) {
-      LOG_WARN("fail to get profile info", KR(ret));
-    } else {
-      function_name = profile_info->get_password_verify_function_str();
-      if (0 == function_name.case_compare("DEFAULT")) {
-        function_name = default_profile->get_password_verify_function_str();
-      }
+  if (OB_FAIL(get_profile_schema_by_id(tenant_id,
+                                       is_valid_id(profile_id) ? profile_id : default_profile_id,
+                                       profile_info))) {
+     LOG_WARN("fail to get profile info", KR(ret));
+  } else if (OB_FAIL(get_profile_schema_by_id(tenant_id,
+                                              default_profile_id,
+                                              default_profile))) {
+    LOG_WARN("fail to get profile info", KR(ret));
+  } else {
+    function_name = profile_info->get_password_verify_function_str();
+    if (0 == function_name.case_compare("DEFAULT")) {
+      function_name = default_profile->get_password_verify_function_str();
     }
   }
   return ret;
@@ -2803,8 +2776,7 @@ int ObSchemaGetterGuard::check_db_access(
       // check db level privilege
       lib::Worker::CompatMode compat_mode;
       OZ (get_tenant_compat_mode(session_priv.tenant_id_, compat_mode));
-      if (OB_SUCC(ret) && (compat_mode == lib::Worker::CompatMode::ORACLE)
-          && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260)) {
+      if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
         /* For compatibility_mode, check if user has been granted all privileges first */
         if (((session_priv.user_priv_set_ | db_priv_set) & OB_PRIV_DB_ACC)
             || is_grant) {

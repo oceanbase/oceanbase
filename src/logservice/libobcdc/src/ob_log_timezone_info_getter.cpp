@@ -213,7 +213,7 @@ int ObLogTimeZoneInfoGetter::refresh_timezone_info_()
 
 bool ObLogTimeZoneInfoGetter::need_fetch_timezone_info_by_tennat_() const
 {
-  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260;
+  return true;
 }
 
 int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(const uint64_t tenant_id)

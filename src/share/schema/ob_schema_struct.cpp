@@ -11554,7 +11554,6 @@ int ObProfileSchema::set_default_values()
 int ObProfileSchema::set_default_values_v2()
 {
   int ret = OB_SUCCESS;
-  //GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_2250
   for (int i = 0; OB_SUCC(ret) && i < MAX_PARAMS; ++i) {
     if (PASSWORD_VERIFY_FUNCTION == i) {
       password_verify_function_ = "DEFAULT";

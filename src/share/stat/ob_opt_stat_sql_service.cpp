@@ -1125,15 +1125,6 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, partition_id, stat, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, object_type, stat, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, row_count, stat, int64_t);
-    // if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
-    //   EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);  
-    // } else {
-    //   EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, double);
-    // }
-    // why not use GET_MIN_CLUSTER_VERSION to check result is int64_t or double?
-    // Because there has a corner case. When execute inner sql, min cluster verion is 3100.
-    // inner sql will select __all_table_stat and avg_row_size is int64_t. When fill table
-    // min cluster version is 3200, but avg_row_size result is int64_t, not double.
     if (OB_SUCC(ret)) {
       if (OB_FAIL(result.get_type("avg_row_size", obj_type))) {
         LOG_WARN("failed to get type", K(ret));

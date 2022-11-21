@@ -195,26 +195,7 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id,
             }
           }
           if (OB_SUCC(ret)) {
-            // This column type is changed from varchar to longtext in ver 3.1.0.
-            // For compatibility, column type should be determined by schema before cluster is in upgrade mode.
-            bool type_is_lob = true;
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100) {
-              const ObColumnSchemaV2 *column_schema = NULL;
-              if (OB_ISNULL(table_schema_) ||
-                  OB_ISNULL(column_schema = table_schema_->get_column_schema(col_id))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("table or column schema is null", K(ret), KP(table_schema_), KP(column_schema));
-              } else {
-                type_is_lob = column_schema->get_meta_type().is_lob();
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (type_is_lob) {
-              cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType, table_def_buf, static_cast<int32_t>(pos));
-            } else {
-              ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), table_def_buf);
-              cur_row_.cells_[cell_idx].set_varchar(value_str);
-            }
+            cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType, table_def_buf, static_cast<int32_t>(pos));
             cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;

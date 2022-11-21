@@ -1502,11 +1502,7 @@ bool ObTableSchema::is_valid() const
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())) {
               ObLength max_length = 0;
-              if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
-                max_length = ObAccuracy::MAX_ACCURACY_OLD[column->get_data_type()].get_length();
-              } else {
-                max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
-              }
+              max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
               if (max_length < column->get_data_length()) {
                 LOG_WARN("length of text/blob column is larger than the max allowed length, ",
                     "data_length", column->get_data_length(), "column_name",
@@ -1514,11 +1510,7 @@ bool ObTableSchema::is_valid() const
                 valid_ret = false;
               } else if (!column->is_shadow_column()) {
                 // TODO @hanhui need seperate inline memtable length from store length
-                if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
-                  varchar_col_total_length += column->get_data_length();
-                } else {
-                  varchar_col_total_length += min(column->get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
-                }
+                varchar_col_total_length += min(column->get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
               }
             }
           }

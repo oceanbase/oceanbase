@@ -1178,7 +1178,7 @@ int ObLogTenantMgr::get_tenant_tz_wrap(const uint64_t tenant_id, ObTimeZoneInfoW
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
+  const uint64_t tz_tenant_id = tenant_id;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {
     tz_info_wrap = &TCTX.tz_info_wrap_;
@@ -1208,7 +1208,7 @@ int ObLogTenantMgr::get_tenant_tz_map(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  //const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
+  //TODO:(madoll.tw) should use tenant_id as tz_tenant_id
   const uint64_t tz_tenant_id = OB_SYS_TENANT_ID;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {

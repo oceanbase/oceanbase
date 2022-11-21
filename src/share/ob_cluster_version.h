@@ -160,16 +160,6 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
 #define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_1_0_0
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
-#define GET_UNIS_CLUSTER_VERSION() (::oceanbase::lib::get_unis_compat_version() ?: GET_MIN_CLUSTER_VERSION())
-
-#define IS_CLUSTER_VERSION_BEFORE_1472 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_1472)
-#define IS_CLUSTER_VERSION_BEFORE_2200 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2200)
-#define IS_CLUSTER_VERSION_BEFORE_2240 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2240)
-#define IS_CLUSTER_VERSION_BEFORE_3000 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3000)
-#define IS_CLUSTER_VERSION_BEFORE_3100 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3100)
-#define IS_CLUSTER_VERSION_BEFORE_4_0_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_0_0_0)
-
-#define IS_CLUSTER_VERSION_AFTER_2274 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() > CLUSTER_VERSION_2274)
 
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // 1. After 4.0, each cluster_version is corresponed to a data version.

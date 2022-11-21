@@ -251,9 +251,8 @@ int ObServerReloadConfig::operator()()
   }
 
   get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2100) {
-    lib::g_runtime_enabled = true;
-  }
+  lib::g_runtime_enabled = true;
+
   common::ObKVGlobalCache::get_instance().reload_wash_interval();
   {
     int tmp_ret = OB_SUCCESS;

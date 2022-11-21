@@ -2693,39 +2693,6 @@ int ObSchemaChecker::check_access_to_obj(
   return ret;
 }
 
-/* 为or repalce ddl定制，如果有replace选项，则需要增加一个drop的权限*/
-// int ObSchemaChecker::check_ora_ddl_priv(
-//     const uint64_t tenant_id,
-//     const uint64_t user_id,
-//     const common::ObString &database_name,
-//     const bool is_replace,
-//     const stmt::StmtType stmt_type,
-//     const stmt::StmtType stmt_type2)
-// {
-//   int ret = OB_SUCCESS;
-//   if (IS_NOT_INIT) {
-//     ret = OB_NOT_INIT;
-//     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
-//   } else if (FALSE_IT(schema_mgr_ == NULL)) {
-//   } else {
-//     OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
-//                                             tenant_id,
-//                                             user_id,
-//                                             database_name,
-//                                             stmt_type),
-//         K(tenant_id), K(user_id), K(database_name), K(stmt_type));
-//     if (OB_SUCC(ret) && is_replace) {
-//       OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
-//                                             tenant_id,
-//                                             user_id,
-//                                             database_name,
-//                                             stmt_type2),
-//         K(tenant_id), K(user_id), K(database_name), K(stmt_type2));
-//     }
-//   }
-//   return ret;
-// }
-
 /* 对于一些ddl，系统权限可以，对象权限也可以。
 例如：alter table
      create index

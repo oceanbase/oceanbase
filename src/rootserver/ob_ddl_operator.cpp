@@ -1176,7 +1176,6 @@ int ObDDLOperator::drop_database_to_recyclebin(const ObDatabaseSchema &database_
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table is NULL", K(ret));
         } else if (table_schema->is_view_table()
-                  && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
                   && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                             trans,
                             tenant_id,
@@ -1612,11 +1611,6 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
       ObColumnSchemaV2 &column_schema = (**iter);
       if (!column_schema.is_identity_column()) {
         continue;
-      }
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("create identity column on table is not allowed now", K(ret));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create identity column on table");
       } else {
         ObSequenceDDLProxy ddl_operator(schema_service_);
         char temp_sequence_name[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
@@ -1728,56 +1722,50 @@ int ObDDLOperator::create_sequence_in_add_column(const ObTableSchema &table_sche
 {
   int ret = OB_SUCCESS;
   if (column_schema.is_identity_column()) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("create identity column on table is not allowed now", K(ret));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create identity column on table");
+    ObSequenceDDLProxy ddl_operator(schema_service_);
+    ObSequenceSchema sequence_schema = sequence_ddl_arg.sequence_schema();
+    char temp_sequence_name[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
+    int32_t len = snprintf(temp_sequence_name, sizeof(temp_sequence_name), "%s%lu%c%lu",
+                          "ISEQ$$_",
+                          ObSchemaUtils::get_extract_schema_id(column_schema.get_tenant_id(), column_schema.get_table_id()),
+                          '_',
+                          column_schema.get_column_id());
+    if (OB_UNLIKELY(len < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("create sequence name fail", K(ret), K(column_schema));
     } else {
-      ObSequenceDDLProxy ddl_operator(schema_service_);
-      ObSequenceSchema sequence_schema = sequence_ddl_arg.sequence_schema();
-      char temp_sequence_name[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
-      int32_t len = snprintf(temp_sequence_name, sizeof(temp_sequence_name), "%s%lu%c%lu",
-                            "ISEQ$$_",
-                            ObSchemaUtils::get_extract_schema_id(column_schema.get_tenant_id(), column_schema.get_table_id()),
-                            '_',
-                            column_schema.get_column_id());
-      if (OB_UNLIKELY(len < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("create sequence name fail", K(ret), K(column_schema));
+      ObString sequence_name = ObString::make_string(temp_sequence_name);
+      sequence_schema.set_database_id(table_schema.get_database_id());
+      sequence_schema.set_sequence_name(sequence_name);
+      if (OB_FAIL(ddl_operator.create_sequence(sequence_schema,
+                                              sequence_ddl_arg.option_bitset_,
+                                              trans,
+                                              schema_guard,
+                                              NULL))) {
+        LOG_WARN("create sequence fail", K(ret));
       } else {
-        ObString sequence_name = ObString::make_string(temp_sequence_name);
-        sequence_schema.set_database_id(table_schema.get_database_id());
-        sequence_schema.set_sequence_name(sequence_name);
-        if (OB_FAIL(ddl_operator.create_sequence(sequence_schema,
-                                                sequence_ddl_arg.option_bitset_,
-                                                trans,
-                                                schema_guard,
-                                                NULL))) {
-          LOG_WARN("create sequence fail", K(ret));
+        column_schema.set_sequence_id(sequence_schema.get_sequence_id());
+        char sequence_string[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
+        uint64_t pure_sequence_id = ObSchemaUtils::get_extract_schema_id(column_schema.get_tenant_id(), column_schema.get_sequence_id());
+        len = snprintf(sequence_string, sizeof(sequence_string), "%lu", pure_sequence_id);
+        if (OB_UNLIKELY(len < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create sequence name fail", K(ret), K(column_schema));
         } else {
-          column_schema.set_sequence_id(sequence_schema.get_sequence_id());
-          char sequence_string[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
-          uint64_t pure_sequence_id = ObSchemaUtils::get_extract_schema_id(column_schema.get_tenant_id(), column_schema.get_sequence_id());
-          len = snprintf(sequence_string, sizeof(sequence_string), "%lu", pure_sequence_id);
-          if (OB_UNLIKELY(len < 0)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create sequence name fail", K(ret), K(column_schema));
-          } else {
-            ObObjParam cur_default_value;  // for desc table
-            ObObjParam orig_default_value; // for store pure_sequence_id
-            cur_default_value.set_varchar("SEQUENCE.NEXTVAL");
-            cur_default_value.set_collation_type(ObCharset::get_system_collation());
-            cur_default_value.set_collation_level(CS_LEVEL_IMPLICIT);
-            cur_default_value.set_param_meta();
-            orig_default_value.set_varchar(sequence_string);
-            orig_default_value.set_collation_type(ObCharset::get_system_collation());
-            orig_default_value.set_collation_level(CS_LEVEL_IMPLICIT);
-            orig_default_value.set_param_meta();
-            if (OB_FAIL(column_schema.set_cur_default_value(cur_default_value))) {
-              LOG_WARN("set current default value fail", K(ret));
-            } else if (OB_FAIL(column_schema.set_orig_default_value(orig_default_value))) {
-              LOG_WARN("set origin default value fail", K(ret), K(column_schema));
-            }
+          ObObjParam cur_default_value;  // for desc table
+          ObObjParam orig_default_value; // for store pure_sequence_id
+          cur_default_value.set_varchar("SEQUENCE.NEXTVAL");
+          cur_default_value.set_collation_type(ObCharset::get_system_collation());
+          cur_default_value.set_collation_level(CS_LEVEL_IMPLICIT);
+          cur_default_value.set_param_meta();
+          orig_default_value.set_varchar(sequence_string);
+          orig_default_value.set_collation_type(ObCharset::get_system_collation());
+          orig_default_value.set_collation_level(CS_LEVEL_IMPLICIT);
+          orig_default_value.set_param_meta();
+          if (OB_FAIL(column_schema.set_cur_default_value(cur_default_value))) {
+            LOG_WARN("set current default value fail", K(ret));
+          } else if (OB_FAIL(column_schema.set_orig_default_value(orig_default_value))) {
+            LOG_WARN("set origin default value fail", K(ret), K(column_schema));
           }
         }
       }
@@ -4072,7 +4060,6 @@ int ObDDLOperator::drop_table(
               drop_table_set, is_drop_db))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
   } else if (table_schema.is_view_table()
-            && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                       trans,
                       tenant_id,
@@ -4299,7 +4286,6 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   } else if (OB_FAIL(cleanup_autoinc_cache(table_schema))) {
     LOG_WARN("fail cleanup auto inc global cache", K(ret));
   } else if (table_schema.is_view_table()
-            && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                       trans,
                       tenant_id,
@@ -10331,21 +10317,11 @@ int ObDDLOperator::handle_profile_function(
           if (schema.get_password_lock_time() == ObProfileSchema::INVALID_VALUE) {
             schema.set_password_lock_time(old_schema->get_password_lock_time());
           }
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276) {
-            if (schema.get_password_life_time() != ObProfileSchema::INVALID_VALUE) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Password_life_time of profile");
-            } else if (schema.get_password_grace_time() != ObProfileSchema::INVALID_VALUE) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Password_grace_time of profile");
-            }
-          } else {
-            if (schema.get_password_life_time() == ObProfileSchema::INVALID_VALUE) {
-              schema.set_password_life_time(old_schema->get_password_life_time());
-            }
-            if (schema.get_password_grace_time() == ObProfileSchema::INVALID_VALUE) {
-              schema.set_password_grace_time(old_schema->get_password_grace_time());
-            }
+          if (schema.get_password_life_time() == ObProfileSchema::INVALID_VALUE) {
+            schema.set_password_life_time(old_schema->get_password_life_time());
+          }
+          if (schema.get_password_grace_time() == ObProfileSchema::INVALID_VALUE) {
+            schema.set_password_grace_time(old_schema->get_password_grace_time());
           }
         }
         break;
@@ -10553,9 +10529,6 @@ int ObDDLOperator::insert_dependency_infos(common::ObMySQLTransaction &trans,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
                                                    K(owner_id), K(dep_obj_id));
-  } else if (IS_CLUSTER_VERSION_BEFORE_3100) {
-    // do nothing
-    LOG_DEBUG("all_dependency schema only support after version 3.1");
   } else {
     for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
       ObDependencyInfo & dep = dep_infos.at(i);

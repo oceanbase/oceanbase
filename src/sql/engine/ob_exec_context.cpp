@@ -197,7 +197,7 @@ void ObExecContext::clean_resolve_ctx()
 
 uint64_t ObExecContext::get_ser_version() const
 {
-  return GET_UNIS_CLUSTER_VERSION() < CLUSTER_VERSION_2250 ? SER_VERSION_0 : SER_VERSION_1;
+  return SER_VERSION_1;
 }
 
 void ObExecContext::reset_op_ctx()

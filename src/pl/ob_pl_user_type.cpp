@@ -1125,10 +1125,8 @@ int ObRecordType::get_serialize_size(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    OX (size += record->get_serialize_size());
-    OX (size += serialization::encoded_length(record->get_count()));
-  }
+  OX (size += record->get_serialize_size());
+  OX (size += serialization::encoded_length(record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
@@ -1146,10 +1144,8 @@ int ObRecordType::serialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    OX (record->serialize(dst, dst_len, dst_pos));
-    OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
-  }
+  OX (record->serialize(dst, dst_len, dst_pos));
+  OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
@@ -1168,12 +1164,10 @@ int ObRecordType::deserialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(dst);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    int64_t count = OB_INVALID_COUNT;
-    OX (record->deserialize(src, src_len, src_pos));
-    OZ (serialization::decode(src, src_len, src_pos, count));
-    OX (record->set_count(count));
-  }
+  int64_t count = OB_INVALID_COUNT;
+  OX (record->deserialize(src, src_len, src_pos));
+  OZ (serialization::decode(src, src_len, src_pos, count));
+  OX (record->set_count(count));
 
   dst = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {

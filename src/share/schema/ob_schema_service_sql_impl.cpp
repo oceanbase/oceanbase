@@ -886,7 +886,7 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_schema_from_inner_table(
 
 #define FETCH_ALL_TENANT_HISTORY_SQL3           "SELECT * from %s where 1 = 1"
 #define FETCH_ALL_TABLE_HISTORY_SQL3            COMMON_SQL_WITH_TENANT
-#define FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA     "SELECT /*+ leading(b a) use_nl(b a) %s*/ a.* FROM %s AS a JOIN "\
+#define FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA     "SELECT /*+ leading(b a) use_nl(b a) no_rewrite() */ a.* FROM %s AS a JOIN "\
                                                 "(SELECT tenant_id, table_id, MAX(schema_version) AS schema_version FROM %s "\
                                                 "WHERE tenant_id = %lu AND schema_version <= %ld GROUP BY tenant_id, table_id) AS b "\
                                                 "ON a.tenant_id = b.tenant_id AND a.table_id = b.table_id AND a.schema_version = b.schema_version "\
@@ -1119,49 +1119,18 @@ GET_ALL_SCHEMA_FUNC_DEFINE(sequence, ObSequenceSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(dblink, ObDbLinkSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(context, ObContextSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
-
-#define GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(SCHEMA, SCHEMA_TYPE, CLUSTER_VERSION) \
-  int ObSchemaServiceSQLImpl::get_all_##SCHEMA##s(ObISQLClient &client, \
-                                                  const ObRefreshSchemaStatus &schema_status, \
-                                                  const int64_t schema_version, \
-                                                  const uint64_t tenant_id, \
-                                                  ObIArray<SCHEMA_TYPE> &schema_array) \
-  {                                                         \
-    int ret = OB_SUCCESS;                                   \
-    schema_array.reset();                                   \
-    if (!check_inner_stat()) {                              \
-      ret = OB_NOT_INIT;                                    \
-      LOG_WARN("check inner stat fail");                    \
-    } else if (!ObSchemaService::g_liboblog_mode_           \
-               && GCONF.in_upgrade_mode()                 \
-               && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION) { \
-      /* system table in tenant space will be created in upgrade post stage after ver 2.2.1.*/ \
-      /* To avoid error while restart observer in upgrade stage, we skip refresh of new schema */ \
-      /* when cluster is still in upgrade stage. */ \
-      /* In addition, new schema history can be recorded after upgradation. */ \
-      LOG_INFO("ignore "#SCHEMA" schema table NOT EXIST error while upgrade", K(ret), K(schema_status), K(schema_version), K(tenant_id)); \
-    } else if (OB_FAIL(fetch_##SCHEMA##s(client, schema_status, schema_version, tenant_id, schema_array))) { \
-      LOG_WARN("fetch "#SCHEMA"s failed", K(ret), K(schema_status), K(schema_version), K(tenant_id)); \
-      /* for liboblog compatibility */ \
-      if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) { \
-        LOG_WARN("liboblog mode, ignore "#SCHEMA" schema table NOT EXIST error", K(ret), K(schema_status), K(schema_version), K(tenant_id)); \
-        ret = OB_SUCCESS;                                   \
-      }                                                     \
-    }                                                       \
-    return ret;                                             \
-  }
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(keystore, ObKeystoreSchema, CLUSTER_VERSION_2220);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(tablespace, ObTablespaceSchema, CLUSTER_VERSION_2220);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(trigger, ObSimpleTriggerSchema, CLUSTER_VERSION_2220);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(label_se_policy, ObLabelSePolicySchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(label_se_component, ObLabelSeComponentSchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(label_se_label, ObLabelSeLabelSchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(label_se_user_level, ObLabelSeUserLevelSchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(profile, ObProfileSchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(audit, ObSAuditSchema, CLUSTER_VERSION_2230);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(sys_priv, ObSysPriv, CLUSTER_VERSION_2250);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(obj_priv, ObObjPriv, CLUSTER_VERSION_2260);
-GET_ALL_SCHEMA_IGNORE_FAIL_FUNC_DEFINE(directory, ObDirectorySchema, CLUSTER_VERSION_4_0_0_0); // TODO: change version to 3200
+GET_ALL_SCHEMA_FUNC_DEFINE(keystore, ObKeystoreSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(tablespace, ObTablespaceSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(trigger, ObSimpleTriggerSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(label_se_policy, ObLabelSePolicySchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(label_se_component, ObLabelSeComponentSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(label_se_label, ObLabelSeLabelSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(label_se_user_level, ObLabelSeUserLevelSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(profile, ObProfileSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(audit, ObSAuditSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(sys_priv, ObSysPriv);
+GET_ALL_SCHEMA_FUNC_DEFINE(obj_priv, ObObjPriv);
+GET_ALL_SCHEMA_FUNC_DEFINE(directory, ObDirectorySchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -3730,52 +3699,46 @@ int ObSchemaServiceSQLImpl::fetch_all_udt_object_info(
     ObMySQLResult *result = NULL;
     ObSqlString sql;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    if ((ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270)
-       || (GCONF.in_upgrade_mode() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270)) {
-      LOG_WARN("in upgrade mode, table maybe not ready, just skip",
-                 K(ret), K(schema_status), K(tenant_id), K(schema_version));
-    } else {
-      if (OB_FAIL(sql.append_fmt(FETCH_ALL_OBJECT_TYPE_HISTORY_SQL,
-                                OB_ALL_TENANT_OBJECT_TYPE_HISTORY_TNAME,
-                                fill_extract_tenant_id(schema_status, tenant_id)))) {
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_OBJECT_TYPE_HISTORY_SQL,
+                              OB_ALL_TENANT_OBJECT_TYPE_HISTORY_TNAME,
+                              fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != object_ids && object_ids_size > 0) {
+      if (OB_FAIL(sql.append_fmt(" AND OBJECT_TYPE_ID IN ("))) {
         LOG_WARN("append sql failed", K(ret));
-      } else if (NULL != object_ids && object_ids_size > 0) {
-        if (OB_FAIL(sql.append_fmt(" AND OBJECT_TYPE_ID IN ("))) {
-          LOG_WARN("append sql failed", K(ret));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < object_ids_size; ++i) {
-            const uint64_t object_type_id = fill_extract_schema_id(schema_status, object_ids[i]);
-            if (OB_FAIL(sql.append_fmt("%s%lu", 0 == i ? "" : ", ", object_type_id))) {
-              LOG_WARN("append sql failed", K(ret), K(i));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(sql.append(")"))) {
-              LOG_WARN("append sql failed", K(ret));
-            }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < object_ids_size; ++i) {
+          const uint64_t object_type_id = fill_extract_schema_id(schema_status, object_ids[i]);
+          if (OB_FAIL(sql.append_fmt("%s%lu", 0 == i ? "" : ", ", object_type_id))) {
+            LOG_WARN("append sql failed", K(ret), K(i));
           }
         }
-      } else { }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
-          LOG_WARN("append failed", K(ret));
-        } else if (OB_FAIL(
-          sql.append(" ORDER BY TENANT_ID ASC, OBJECT_TYPE_ID ASC, TYPE ASC, SCHEMA_VERSION DESC"))) {
-          LOG_WARN("sql append failed", K(ret));
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append(")"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
         }
       }
-      if (OB_SUCC(ret)) {
-        const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
-        DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
-        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-          LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
-        } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Fail to get result", K(ret));
-        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_udt_object_schema(tenant_id,
-                                                                            *result, udt_infos))) {
-          LOG_WARN("Failed to retrieve udt object type infos", K(ret));
-        }
+    } else { }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(
+        sql.append(" ORDER BY TENANT_ID ASC, OBJECT_TYPE_ID ASC, TYPE ASC, SCHEMA_VERSION DESC"))) {
+        LOG_WARN("sql append failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_udt_object_schema(tenant_id,
+                                                                          *result, udt_infos))) {
+        LOG_WARN("Failed to retrieve udt object type infos", K(ret));
       }
     }
   }
@@ -3903,12 +3866,7 @@ int ObSchemaServiceSQLImpl::fetch_all_user_info(
       }
     }
     if (OB_SUCC(ret)) {
-      if (!ObSchemaService::g_liboblog_mode_
-          && GCONF.in_upgrade_mode()
-          && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2260) {
-        LOG_WARN("in upgrade mode, table maybe not ready, just skip",
-                 K(ret), K(schema_status), K(tenant_id), K(schema_version));
-      } else if (OB_FAIL(fetch_role_grantee_map_info(schema_status,
+      if (OB_FAIL(fetch_role_grantee_map_info(schema_status,
               schema_version,
               tenant_id,
               sql_client,
@@ -4270,15 +4228,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
                                                                schema_service_))) {
     LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
   } else if (!is_increase_schema) {
-    /* no_rewrite() hint for the following sql stmt is needed since ver 2.2.1.
-     * Otherwise, the following sql stmt will run in low performance.
-     * To avoid possible problem (no_rewrite() hint may cause error in ver 1.4.21),
-     * no_rewrite() hint is only added since ver 2.2.1.
-     */
-    const char *addition_hint = GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2210 ?
-                                "" : " no_rewrite() ";
     if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_FULL_SCHEMA,
-                addition_hint, table_name, table_name,
+                table_name, table_name,
                 fill_extract_tenant_id(schema_status, tenant_id),
                 schema_version,
                 fill_extract_schema_id(schema_status, OB_ALL_CORE_TABLE_TID)))) {
@@ -4940,11 +4891,7 @@ int ObSchemaServiceSQLImpl::get_not_core_table_schema(
     }
   }
   if (OB_SUCCESS == ret) {
-    if (!ObSchemaService::g_liboblog_mode_ &&
-        GCONF.in_upgrade_mode() &&
-        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2220) {
-      LOG_WARN("skip fetch trigger list while upgrade in process from 221 to 222", K(tenant_id));
-    } else if (OB_FAIL(fetch_trigger_list(schema_status, tenant_id, table_id,
+    if (OB_FAIL(fetch_trigger_list(schema_status, tenant_id, table_id,
                                           schema_version, sql_client, *table_schema))) {
       LOG_WARN("Failed to fetch trigger list", K(ret));
       if (-ER_NO_SUCH_TABLE == ret && ObSchemaService::g_liboblog_mode_) {
@@ -5126,13 +5073,7 @@ int ObSchemaServiceSQLImpl::fetch_constraint_column_info(const ObRefreshSchemaSt
       LOG_WARN("append table_id and foreign key id and schema version",
                K(ret), K(table_id), K(cst->get_constraint_id()), K(schema_version));
     } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-      if ((OB_TABLE_NOT_EXIST == ret) && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100)) {
-        LOG_INFO("cluster version is earlier than 3.1.0, ignore OB_TABLE_NOT_EXIST",
-                 K(ret), K(GET_MIN_CLUSTER_VERSION()), K(sql));
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("execute sql failed", K(ret), K(GET_MIN_CLUSTER_VERSION()), K(sql));
-      }
+      LOG_WARN("execute sql failed", K(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result. ", K(ret));
@@ -5327,13 +5268,7 @@ int ObSchemaServiceSQLImpl::fetch_part_info(
         const bool check_deleted = true;
         DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
         if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-          if ((OB_TABLE_NOT_EXIST == ret) && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100)) {
-            LOG_INFO("cluster version is earlier than 3.1.0, ignore OB_TABLE_NOT_EXIST",
-                     K(ret), K(GET_MIN_CLUSTER_VERSION()), K(sql));
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("execute sql failed", K(ret), K(GET_MIN_CLUSTER_VERSION()), K(sql));
-          }
+          LOG_WARN("execute sql failed", K(ret), K(sql));
         } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get result. ", K(sql), K(ret));
@@ -5884,18 +5819,9 @@ int ObSchemaServiceSQLImpl::fetch_foreign_key_column_info(
     if (OB_FAIL(sql.append_fmt(FETCH_ALL_FOREIGN_KEY_COLUMN_HISTORY_SQL, OB_ALL_FOREIGN_KEY_COLUMN_HISTORY_TNAME,
                                fill_extract_tenant_id(schema_status, tenant_id)))) {
       LOG_WARN("append sql failed", K(ret));
-    } else if ((!ObSchemaService::g_liboblog_mode_
-                || (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250))
-               && OB_FAIL(sql.append_fmt(" AND foreign_key_id = %lu AND schema_version <= %ld ORDER BY position ASC, schema_version DESC",
-                          fill_extract_schema_id(schema_status, foreign_key_info.foreign_key_id_),
-                          schema_version))) {
-      LOG_WARN("append table_id and foreign key id and schema version",
-               K(ret), K(foreign_key_info.foreign_key_id_), K(schema_version));
-    } else if (ObSchemaService::g_liboblog_mode_
-               && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2250
-               && OB_FAIL(sql.append_fmt(" AND foreign_key_id = %lu AND schema_version <= %ld",
-                          fill_extract_schema_id(schema_status, foreign_key_info.foreign_key_id_),
-                          schema_version))) {
+    } else if (OB_FAIL(sql.append_fmt(" AND foreign_key_id = %lu AND schema_version <= %ld ORDER BY position ASC, schema_version DESC",
+               fill_extract_schema_id(schema_status, foreign_key_info.foreign_key_id_),
+               schema_version))) {
       LOG_WARN("append table_id and foreign key id and schema version",
                K(ret), K(foreign_key_info.foreign_key_id_), K(schema_version));
     } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
@@ -5928,10 +5854,7 @@ int ObSchemaServiceSQLImpl::fetch_foreign_key_array_for_simple_table_schemas(
       DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
       const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
       // FIXME: The following SQL will cause full table scan, which it's poor performance when the amount of table data is large.
-      if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-        LOG_INFO("liboblog mode, ignore");
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(sql.append_fmt(FETCH_TABLE_ID_AND_NAME_FROM_ALL_FOREIGN_KEY_SQL, OB_ALL_FOREIGN_KEY_HISTORY_TNAME,
+      if (OB_FAIL(sql.append_fmt(FETCH_TABLE_ID_AND_NAME_FROM_ALL_FOREIGN_KEY_SQL, OB_ALL_FOREIGN_KEY_HISTORY_TNAME,
                          fill_extract_tenant_id(schema_status, tenant_id)))) {
         LOG_WARN("failed to append sql", K(ret), K(tenant_id));
       } else if (OB_FAIL(sql.append_fmt(" AND child_table_id IN "))) {
@@ -6081,10 +6004,7 @@ int ObSchemaServiceSQLImpl::fetch_constraint_array_for_simple_table_schemas(cons
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
       DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
-      if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-        LOG_INFO("liboblog mode, ignore");
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(sql.append_fmt(FETCH_TABLE_ID_AND_CST_NAME_FROM_ALL_CONSTRAINT_HISTORY_SQL, OB_ALL_CONSTRAINT_HISTORY_TNAME,
+      if (OB_FAIL(sql.append_fmt(FETCH_TABLE_ID_AND_CST_NAME_FROM_ALL_CONSTRAINT_HISTORY_SQL, OB_ALL_CONSTRAINT_HISTORY_TNAME,
                          fill_extract_tenant_id(schema_status, tenant_id)))) {
         LOG_WARN("failed to append sql", K(ret), K(tenant_id));
       } else if (OB_FAIL(sql.append_fmt(" AND table_id IN "))) {
@@ -8058,7 +7978,7 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(const ObDbLinkSchema &dblink_s
         int16_t scale = 0;
         int32_t length = 0;
         ObString column_name;
-        bool old_max_length = (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_;
+        bool old_max_length = false;
         if (OB_FAIL(result->get_col_meta(i, old_max_length, column_name, type, precision, scale, length))) {
           LOG_WARN("failed to get column meta", K(i), K(old_max_length), K(ret));
         } else if (OB_FAIL(column_schema.set_column_name(column_name))) {

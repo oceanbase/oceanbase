@@ -175,13 +175,7 @@ int ObPurgeDatabaseResolver::resolve(const ParseNode &parser_tree)
     purge_database_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     ObString db_name;
     ParseNode *dbname_node = parser_tree.children_[DATABASE_NODE];
-    /**
-     * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
-     * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
-     * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
-     */
-    int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
-                OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
+    int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
     if (OB_ISNULL(dbname_node) || OB_UNLIKELY(T_IDENT != dbname_node->type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
@@ -228,13 +222,7 @@ int ObPurgeTenantResolver::resolve(const ParseNode &parser_tree)
     purge_tenant_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     ObString tenant_name;
     ParseNode *tenant_node = parser_tree.children_[TENANT_NODE];
-    /**
-     * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
-     * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
-     * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
-     */
-    int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
-                OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
+    int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
     if (OB_ISNULL(tenant_node) || OB_UNLIKELY(T_IDENT != tenant_node->type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));

@@ -4890,8 +4890,7 @@ int ObDbmsStats::check_statistic_table_writeable(sql::ObExecContext &ctx)
                                                            in_restore))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster() ||
-             GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_321) {
+             GCTX.is_standby_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use dbms_stats during restore or standby cluster");
   }
