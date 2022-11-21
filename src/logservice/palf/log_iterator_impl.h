@@ -283,6 +283,13 @@ int LogIteratorImpl<ENTRY>::next()
     // NB: if get_next_entry_ failed, set 'curr_entry_size_' to 0, ensure 'is_valid'
     // return false.
     curr_entry_size_ = 0;
+    // NB: if the data which has been corrupted, clean cache.
+    if (OB_INVALID_DATA == ret) {
+      PALF_LOG(ERROR, "read invalid data, need clean cache", K(ret), KPC(this));
+      log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_));
+      curr_read_buf_end_pos_ = curr_read_buf_start_pos_ = curr_read_pos_ = 0;
+      PALF_LOG(ERROR, "read invalid data, has clean cache", K(ret), KPC(this));
+    }
     if (OB_ITER_END != ret) {
       PALF_LOG(WARN, "get_next_entry_ failed", K(ret), KPC(this));
     }
@@ -418,7 +425,10 @@ bool LogIteratorImpl<ENTRY>::check_is_the_last_entry()
   // (log entry header or group entry header), we just only need check from
   // `curr_read_lsn_ + 1`, if there isn't any valid group entry header, this entry
   // is the last entry.
-  advance_read_lsn_(1);
+  // 1. reset start position of LogIteratorStorage to 'curr_read_lsn_ + 1';
+  // 2. reset current cursor of LogIteratorImpl.
+  log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_+1));
+  curr_read_buf_end_pos_ = curr_read_buf_start_pos_ = curr_read_pos_ = 0;
   while (OB_SUCC(ret)) {
     using LogEntryHeaderType = typename ENTRY::LogEntryHeaderType;
     LogEntryHeaderType header;
