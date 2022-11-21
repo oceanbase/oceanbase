@@ -1232,6 +1232,10 @@ public:
                                      const ObIArray<TableItem*> &table_items,
                                      ObRelIds &rel_ids);
 
+  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                    const TableItem *table_item,
+                                    ObRelIds &rel_ids);
+
   static int get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
                                              SemiInfo *info,
                                              ObSqlBitSet<> &rel_ids);

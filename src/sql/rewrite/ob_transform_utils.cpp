@@ -8284,14 +8284,25 @@ int ObTransformUtils::get_rel_ids_from_tables(const ObDMLStmt *stmt,
   }
   TableItem *table = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-    if (OB_ISNULL(table = table_items.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null.", K(ret));
-    } else if (table->is_joined_table()) {
-      ret = get_rel_ids_from_join_table(stmt, static_cast<JoinedTable*>(table),rel_ids);
-    } else if (OB_FAIL(rel_ids.add_member(stmt->get_table_bit_index(table_items.at(i)->table_id_)))) {
-      LOG_WARN("failed to add member", K(ret), K(table_items.at(i)->table_id_));
+    if (OB_FAIL(get_rel_ids_from_table(stmt, table_items.at(i), rel_ids))) {
+      LOG_WARN("failed to get rel ids from table", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTransformUtils::get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                             const TableItem *table_item,
+                                             ObRelIds &rel_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (table_item->is_joined_table()) {
+    ret = get_rel_ids_from_join_table(stmt, static_cast<const JoinedTable*>(table_item), rel_ids);
+  } else if (OB_FAIL(rel_ids.add_member(stmt->get_table_bit_index(table_item->table_id_)))) {
+    LOG_WARN("failed to add member", K(ret), K(table_item->table_id_));
   }
   return ret;
 }
@@ -11707,6 +11718,31 @@ int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &sele
       // the list is aligned with ObRawExprInfoExtractor::not_calculable_expr
       is_valid = false;
     }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_table_contain_in_semi(const ObDMLStmt *stmt,
+                                                  const TableItem *table,
+                                                  bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  ObRelIds table_rel_ids;
+  ObSqlBitSet<> semi_left_rel_ids;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(get_rel_ids_from_table(stmt, table, table_rel_ids))) {
+    LOG_WARN("failed to get rel ids from table", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_info_size(); ++i) {
+    if (OB_FAIL(get_left_rel_ids_from_semi_info(stmt, stmt->get_semi_infos().at(i),
+                                                semi_left_rel_ids))) {
+      LOG_WARN("failed to get left table ids from semi info", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_contain = table_rel_ids.overlap2(semi_left_rel_ids);
   }
   return ret;
 }
