@@ -222,6 +222,7 @@ private:
   // data before the flushed_log_ts_ have been flushed
   int64_t flushed_log_ts_;
   int64_t rec_log_ts_;
+  int64_t pre_rec_log_ts_;
   int64_t max_committed_log_ts_;
   bool is_frozen_;
 
