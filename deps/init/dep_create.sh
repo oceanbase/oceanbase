@@ -86,6 +86,9 @@ function get_os_release() {
       rocky)
         version_ge "8.0" && compat_centos8 && return
         ;;
+      tencentos)
+        version_ge "3.1" && compat_centos8 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
@@ -115,7 +118,7 @@ DEP_FILE="oceanbase.${OS_TAG}.deps"
 
 MD5=`md5sum ${DEP_FILE} | cut -d" " -f1`
 
-# 是否需要共享依赖缓存，默认为ON，在特定条件将OFF
+# 是否霢�要共享依赖缓存，默认为ON，在特定条件将OFF
 NEED_SHARE_CACHE=ON
 
 WORKSACPE_DEPS_DIR="$(cd $(dirname $0); cd ..; pwd)"
@@ -123,7 +126,7 @@ WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
 WORKSAPCE_DEPS_3RD_DONE=${WORKSPACE_DEPS_3RD}/DONE
 WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
 
-# 开始判断本地目录依赖目录是否存在
+# 弢�始判断本地目录依赖目录是否存圄1�7
 if [ -f ${WORKSAPCE_DEPS_3RD_MD5} ]; then
     if [ -f ${WORKSAPCE_DEPS_3RD_DONE} ]; then
         echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5} and ${WORKSAPCE_DEPS_3RD_DONE} exists"
@@ -159,7 +162,7 @@ UUID=`cat /proc/sys/kernel/random/uuid`
 TARGET_DIR=${DEP_CACHE_DIR}/${MD5}.${UUID}
 TARGET_DIR_3RD=${DEP_CACHE_DIR}/${MD5}.${UUID}/3rd
 
-# 保留环境变量入口，停止共享依赖缓存
+# 保留环境变量入口，停止共享依赖缓孄1�7
 if [ "x${DISABLE_SHARE_DEP_CACHE}" == "x1" ]; then
     NEED_SHARE_CACHE=OFF
     echo_log "disable share deps cache due to env DISABLE_SHARE_DEP_CACHE=1"
@@ -225,7 +228,7 @@ do
 done < $DEP_FILE 
 save_content
 
-# 真正开始下载
+# 真正弢�始下轄1�7
 echo_log "start to download dependencies..."
 mkdir -p "${TARGET_DIR_3RD}/pkg"
 for sect in "${!packages[@]}"
@@ -283,7 +286,7 @@ LINK_CHACE_DIRECT=OFF
 # 链接当前目标目录
 LINK_TARGET_DIRECT=OFF
 
-# 下载完成之后，发现目标已经存在，直接进行软链接
+# 下载完成之后，发现目标已经存在，直接进行软链掄1�7
 if [ -d ${CACHE_DEPS_DIR} ]; then
     echo_log "found ${CACHE_DEPS_DIR} exists"
     if [ -f ${CACHE_DEPS_DIR_3RD_DONE} ]; then
@@ -296,7 +299,7 @@ if [ -d ${CACHE_DEPS_DIR} ]; then
 fi
 
 if [ -f ${CACHE_DEPS_LOCKFILE} ];then
-    # 超过一分钟的锁文件将失效，也将重新初始化缓存
+    # 超过丢�分钟的锁文件将失效，也将重新初始化缓孄1�7
     echo_log "found lock file ${CACHE_DEPS_LOCKFILE}"
     LINK_TARGET_DIRECT=ON
     if test `find "${CACHE_DEPS_LOCKFILE}" -mmin +1`; then
@@ -322,7 +325,7 @@ if [ ${LINK_CHACE_DIRECT}  == "ON" ]; then
 fi
 
 if [ ${LINK_TARGET_DIRECT} == "ON" ]; then
-    # 放弃缓存，直接软链接该目录
+    # 放弃缓存，直接软链接该目彄1�7
     echo_log "give up mv and link dirct, ${WORKSPACE_DEPS_3RD} -> ${TARGET_DIR_3RD}"
     ln -sf ${TARGET_DIR_3RD} ${WORKSPACE_DEPS_3RD}
     if [ $? -ne 0 ]; then
