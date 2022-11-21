@@ -1043,7 +1043,8 @@ int ObTransformPostProcess::extract_onetime_subquery(ObRawExpr *&expr,
         !expr->has_flag(CNT_AGG) &&
         !expr->has_flag(CNT_WINDOW_FUNC) &&
         !expr->has_flag(CNT_ONETIME) &&
-        !expr->has_flag(CNT_ALIAS);
+        !expr->has_flag(CNT_ALIAS) &&
+        !expr->has_flag(CNT_SET_OP);
 
     if (is_valid) {
       int64_t ref_count = 0;
