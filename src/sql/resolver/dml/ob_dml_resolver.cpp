@@ -916,6 +916,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       ObString col_def;
       ObRawExpr *ref_expr = NULL;
       if (col_schema->is_generated_column()) {
+        column_item.set_default_value(ObObj()); // set null to generated default value
         if (OB_FAIL(col_schema->get_cur_default_value().get_string(col_def))) {
           LOG_WARN("get generated column definition failed", K(ret), K(*col_schema));
         } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_,
