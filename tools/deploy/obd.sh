@@ -333,8 +333,6 @@ function deploy_cluster {
       esac
     done
   fi
-  get_init_sql
-  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS
 }
 
 function get_init_sql {
