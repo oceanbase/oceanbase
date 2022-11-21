@@ -1787,8 +1787,13 @@ int ObTablet::try_update_ddl_checkpoint_ts()
   if (OB_NOT_NULL(last_ddl_sstable)) {
     const int64_t ddl_checkpoint_ts = last_ddl_sstable->get_end_log_ts();
     if (OB_UNLIKELY(ddl_checkpoint_ts < tablet_meta_.ddl_checkpoint_ts_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected clog checkpoint ts", K(ret), K(ddl_checkpoint_ts), K(tablet_meta_));
+      if (ddl_checkpoint_ts < tablet_meta_.ddl_start_log_ts_) {
+        ret = OB_TASK_EXPIRED;
+        LOG_INFO("ddl checkpoint ts is less than ddl start log ts, task expired", K(ret), K(ddl_checkpoint_ts), K(tablet_meta_));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected clog checkpoint ts", K(ret), K(ddl_checkpoint_ts), K(tablet_meta_));
+      }
     } else {
       tablet_meta_.ddl_checkpoint_ts_ = ddl_checkpoint_ts;
     }
