@@ -4360,8 +4360,7 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
                                const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ValueItemExpr vie;
-  OB_UNIS_DECODE(vie.type_);
+  OB_UNIS_DECODE(type_);
   if (CONST_OBJ_TYPE == type_) {
     OB_UNIS_DECODE(obj_);
   } else if (CONST_EXPR_TYPE == type_) {
@@ -4372,14 +4371,12 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_DECODE(idx_);
   }
-  if (ob_is_enum_or_set_type(dst_type_)) {
-    OB_UNIS_DECODE(enum_set_values_cnt_);
-    if (enum_set_values_cnt_ > 0) {
-      enum_set_values_ =
-        static_cast<ObString *>(allocator.alloc(sizeof(ObString) * enum_set_values_cnt_));
-      CK(OB_NOT_NULL(enum_set_values_));
-      OB_UNIS_DECODE_ARRAY(enum_set_values_, enum_set_values_cnt_)
-    }
+  OB_UNIS_DECODE(enum_set_values_cnt_);
+  if (enum_set_values_cnt_ > 0) {
+    enum_set_values_ =
+      static_cast<ObString *>(allocator.alloc(sizeof(ObString) * enum_set_values_cnt_));
+    CK(OB_NOT_NULL(enum_set_values_));
+    OB_UNIS_DECODE_ARRAY(enum_set_values_, enum_set_values_cnt_)
   }
 
   return ret;
