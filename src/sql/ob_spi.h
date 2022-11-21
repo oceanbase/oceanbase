@@ -118,9 +118,9 @@ public:
       result_set_(NULL),
       sql_ctx_(),
       schema_guard_(share::schema::ObSchemaMgrItem::MOD_SPI_RESULT_SET),
-      orign_nested_count_(-1),
+      origin_nested_count_(-1),
       cursor_nested_count_(-1),
-      orign_session_value_(NULL),
+      origin_session_value_(NULL),
       cursor_session_value_(NULL),
       nested_session_value_(NULL),
       out_params_() {
@@ -139,10 +139,10 @@ public:
     sql_ctx_.reset();
     schema_guard_.reset();
     need_end_nested_stmt_ = EST_NEED_NOT;
-    orign_nested_count_ = -1;
+    origin_nested_count_ = -1;
     cursor_nested_count_ = -1;
-    if (orign_session_value_ != NULL) {
-      orign_session_value_->reset();
+    if (origin_session_value_ != NULL) {
+      origin_session_value_->reset();
     }
     if (cursor_session_value_ != NULL) {
       cursor_session_value_->reset();
@@ -150,7 +150,7 @@ public:
     if (nested_session_value_ != NULL) {
       nested_session_value_->reset();
     }
-    orign_session_value_ = NULL;
+    origin_session_value_ = NULL;
     cursor_session_value_ = NULL;
     nested_session_value_ = NULL;
     out_params_.reset();
@@ -190,9 +190,9 @@ private:
   int restore_session(ObSQLSessionInfo *session,
                       sql::ObSQLSessionInfo::StmtSavedValue *value,
                       int64_t nested_count);
-  int store_orign_session(ObSQLSessionInfo *session);
+  int store_origin_session(ObSQLSessionInfo *session);
   int store_cursor_session(ObSQLSessionInfo *session);
-  int restore_orign_session(ObSQLSessionInfo *session);
+  int restore_origin_session(ObSQLSessionInfo *session);
   int restore_cursor_session(ObSQLSessionInfo *session);
   int begin_nested_session(ObSQLSessionInfo &session);
   int end_nested_session(ObSQLSessionInfo &session);
@@ -223,9 +223,9 @@ private:
   sql::ObResultSet *result_set_;
   sql::ObSqlCtx sql_ctx_; // life period follow result_set_
   share::schema::ObSchemaGetterGuard schema_guard_;
-  int64_t orign_nested_count_;
+  int64_t origin_nested_count_;
   int64_t cursor_nested_count_;
-  sql::ObSQLSessionInfo::StmtSavedValue *orign_session_value_;
+  sql::ObSQLSessionInfo::StmtSavedValue *origin_session_value_;
   sql::ObSQLSessionInfo::StmtSavedValue *cursor_session_value_;
   sql::ObSQLSessionInfo::StmtSavedValue *nested_session_value_;
   ObSPIOutParams out_params_; // 用于记录function的返回值
@@ -311,11 +311,11 @@ public:
     share::schema::ObSchemaGetterGuard schema_guard_;
   };
 
-  enum ObCusorDeclareLoc {
+  enum ObCursorDeclareLoc {
     DECL_LOCAL, // a local cursor
     DECL_SUBPROG, // a cursor may access by subprogram
     DECL_PKG, // a cursor in pkg, ref cursor is impossible
-    DECL_CLIENT, // a ref cursor used by meddleware
+    DECL_CLIENT, // a ref cursor used by middleware
   };
 
 public:
@@ -408,7 +408,7 @@ public:
                          const ObDataType *column_types,
                          int64_t type_count,
                          const bool *exprs_not_null_flag,
-                         const int64_t *pl_integer_rangs,
+                         const int64_t *pl_integer_ranges,
                          bool is_bulk = false,
                          bool is_forall = false,
                          bool is_type_record = false,
@@ -424,7 +424,7 @@ public:
                                    const ObDataType *column_types,
                                    int64_t type_count,
                                    const bool *exprs_not_null_flag,
-                                   const int64_t *pl_integer_rangs,
+                                   const int64_t *pl_integer_ranges,
                                    bool is_bulk = false,
                                    bool is_returning = false,
                                    bool is_type_record = false);
@@ -447,7 +447,7 @@ public:
                                  int64_t index,
                                  pl::ObPLCursorInfo *&cursor,
                                  common::ObObjParam &param,
-                                 ObCusorDeclareLoc &location);
+                                 ObCursorDeclareLoc &location);
   static int spi_get_cursor_info(pl::ObPLExecCtx *ctx,
                                  int64_t index,
                                  pl::ObPLCursorInfo *&cursor,
@@ -462,7 +462,7 @@ public:
                                    int64_t cursor_index,
                                    pl::ObPLCursorInfo *&cursor,
                                    common::ObObjParam &obj,
-                                   ObCusorDeclareLoc loc);
+                                   ObCursorDeclareLoc loc);
   static int spi_cursor_open(pl::ObPLExecCtx *ctx,
                              const char *sql,
                              const char *ps_sql,
@@ -504,7 +504,7 @@ public:
                               const ObDataType *column_types,
                               int64_t type_count,
                               const bool *exprs_not_null_flag,
-                              const int64_t *pl_integer_rangs,
+                              const int64_t *pl_integer_ranges,
                               bool is_bulk,
                               int64_t limit,
                               const ObDataType *return_types,
@@ -527,7 +527,7 @@ public:
 
   static int spi_extend_collection(pl::ObPLExecCtx *ctx,
                                    const ObSqlExpression *collection_expr,
-                                   int64_t coluln_count,
+                                   int64_t column_count,
                                    const ObSqlExpression *n_expr,
                                    const ObSqlExpression *i_expr = NULL,
                                    uint64_t package_id = OB_INVALID_ID);
@@ -728,8 +728,8 @@ public:
                                       ParamStore &exec_params);
 #endif
 private:
-  static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
-  static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);
+  static int recreate_implicit_savepoint_if_need(pl::ObPLExecCtx *ctx, int &result);
+  static int recreate_implicit_savepoint_if_need(sql::ObExecContext &ctx, int &result);
 
   static int calc_obj_access_expr(pl::ObPLExecCtx *ctx, const ObSqlExpression &expr, ObObjParam &result);
 
@@ -791,7 +791,7 @@ private:
                                const ObDataType *column_types,
                                int64_t type_count,
                                const bool *exprs_not_null_flag,
-                               const int64_t *pl_integer_rangs,
+                               const int64_t *pl_integer_ranges,
                                int64_t is_bulk,
                                bool is_forall = false,
                                bool is_type_record = false,
@@ -1057,7 +1057,7 @@ private:
                                     ObSQLSessionInfo &session_info,
                                     uint64_t package_id,
                                     uint64_t routine_id,
-                                    ObCusorDeclareLoc loc,
+                                    ObCursorDeclareLoc loc,
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
