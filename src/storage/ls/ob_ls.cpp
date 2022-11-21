@@ -698,6 +698,7 @@ int ObLS::offline_()
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
+  } else if (FALSE_IT(tablet_gc_handler_.offline())) {
   } else {
     // do nothing
   }
@@ -766,7 +767,7 @@ int ObLS::online()
   } else if (OB_FAIL(online_compaction_())) {
     LOG_WARN("compaction online failed", K(ret), K(ls_meta_));
   } else if (FALSE_IT(checkpoint_executor_.online())) {
-    LOG_WARN("checkpoint executor online failed", K(ret), K(ls_meta_));
+  } else if (FALSE_IT(tablet_gc_handler_.online())) {
   } else {
     is_offlined_ = false;
     // do nothing
