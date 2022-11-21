@@ -1702,10 +1702,24 @@ int ObTablet::get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_creat
   return ret;
 }
 
-void ObTablet::remove_ddl_kv_mgr()
+int ObTablet::set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
+  int ret = OB_SUCCESS;
   ObTabletPointer *tablet_pointer = static_cast<ObTabletPointer *>(pointer_hdl_.get_resource_ptr());
-  tablet_pointer->remove_ddl_kv_mgr();
+  if (OB_FAIL(tablet_pointer->set_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    LOG_WARN("set ddl kv mgr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTablet::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *tablet_pointer = static_cast<ObTabletPointer *>(pointer_hdl_.get_resource_ptr());
+  if (OB_FAIL(tablet_pointer->remove_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    LOG_WARN("remove ddl kv mgr failed", K(ret));
+  }
+  return ret;
 }
 
 
