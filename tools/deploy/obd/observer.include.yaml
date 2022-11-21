@@ -15,6 +15,7 @@ env:
   ASAN_OPTIONS: 'abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1:log_path=./log/asan.log'
   ASAN_SYMBOLIZER_PATH: ./tools/llvm-symbolizer
 config:
+  production_mode: false
   cluster_id: 1
   # datafile_disk_percentage: '50'
   datafile_size: '20G'
