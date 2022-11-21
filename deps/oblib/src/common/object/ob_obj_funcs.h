@@ -1550,8 +1550,10 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
-    COMMON_LOG(WARN, "fail to print \"\'\"", K(ret), K(length), K(pos));
-  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%s", jbuf.ptr()))) {
+    COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "%.*s",
+                                     static_cast<int>(MIN(jbuf.length(), length - pos)),
+                                     jbuf.ptr()))) {
     COMMON_LOG(WARN, "fail to print json doc", K(ret), K(length), K(pos), K(jbuf.length()));
   } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
     COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
@@ -1583,8 +1585,9 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
   } else if (params.use_memcpy_) {
     ret = databuff_memcpy(buffer, length, pos, jbuf.length(), jbuf.ptr());
   } else {
-    int32_t length = jbuf.length();
-    ret = databuff_printf(buffer, length, pos, "%.*s", length, jbuf.ptr());
+    ret = databuff_printf(buffer, length, pos, "%.*s",
+                          static_cast<int>(MIN(jbuf.length(), length - pos)),
+                          jbuf.ptr());
   }
   return ret;
 }
@@ -1603,7 +1606,9 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", jbuf.ptr()))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%.*s",
+                                     static_cast<int>(MIN(jbuf.length(), buf_len - pos)),
+                                     jbuf.ptr()))) {
     COMMON_LOG(WARN, "fail to print json doc", K(ret), K(buf_len), K(pos), K(jbuf.length()));
   }
   return ret;
