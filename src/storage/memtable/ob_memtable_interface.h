@@ -72,7 +72,7 @@ public:
                                const uint64_t checksum = 0) = 0;
   virtual void print_callbacks() = 0;
   //method called when leader takeover
-  virtual int replay_to_commit() = 0;
+  virtual int replay_to_commit(const bool is_resume) = 0;
   //method called when leader revoke
   virtual int commit_to_replay() = 0;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx) = 0;

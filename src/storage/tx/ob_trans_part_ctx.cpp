@@ -4481,7 +4481,7 @@ int ObPartTransCtx::switch_to_leader(int64_t start_working_ts)
     const bool contain_table_lock = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK);
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_table_lock) {
-        if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+        if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
@@ -4495,7 +4495,7 @@ int ObPartTransCtx::switch_to_leader(int64_t start_working_ts)
         }
       }
     } else {
-      if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+      if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
         TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
       }
     }
@@ -4753,7 +4753,7 @@ int ObPartTransCtx::resume_leader(int64_t start_working_ts)
   } else if (OB_FAIL(state_helper.switch_state(TxCtxOps::RESUME))) {
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
-    if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+    if (OB_FAIL(mt_ctx_.replay_to_commit(true /*is_resume*/))) {
       TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
     } else {
       if (ObTxState::INIT == exec_info_.state_) {

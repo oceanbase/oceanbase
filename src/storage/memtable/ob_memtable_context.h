@@ -366,7 +366,7 @@ public:
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0);
   //method called when leader takeover
-  virtual int replay_to_commit();
+  virtual int replay_to_commit(const bool is_resume);
   //method called when leader revoke
   virtual int commit_to_replay();
   virtual int fill_redo_log(char *buf,
