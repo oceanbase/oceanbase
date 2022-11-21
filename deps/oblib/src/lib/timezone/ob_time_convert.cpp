@@ -1855,7 +1855,10 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
     ObTimeDelims delims[DATETIME_PART_CNT];
     // find first digit and delimiter.
     for (; pos < end && isspace(*pos); ++pos) {}
-    if (!isdigit(*pos)) {
+    if (pos >= end) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument, all spaces", K(ret));
+    } else if (!isdigit(*pos)) {
       ret = OB_INVALID_DATE_FORMAT;
     } else {
       const char *first_digit = pos;
