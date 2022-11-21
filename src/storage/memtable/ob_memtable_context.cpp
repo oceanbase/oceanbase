@@ -590,21 +590,21 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
 }
 
 //leader takeover actions
-int ObMemtableCtx::replay_to_commit()
+int ObMemtableCtx::replay_to_commit(const bool is_resume)
 {
   int ret = OB_SUCCESS;
   ATOMIC_STORE(&is_master_, true);
   ObByteLockGuard guard(lock_);
   trans_mgr_.set_for_replay(false);
-  trans_mgr_.clear_pending_log_size();
+  if (!is_resume) {
+    trans_mgr_.clear_pending_log_size();
+  }
   if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
   } else {
     // do nothing
   }
-  if (OB_SUCCESS == ret) {
-    TRANS_LOG(INFO, "replay to commit success", K(this));
-  } else {
+  if (OB_FAIL(ret)) {
     TRANS_LOG(ERROR, "replay to commit failed", K(ret), K(this));
   }
   return ret;
