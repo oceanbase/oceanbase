@@ -588,7 +588,7 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         if (OB_FAIL(ret)) {
         } 
         // skip updating max_end_log_ts of frozen memtable for commit/abort when replay clog.
-        else if ((ObLogTsRange::MAX_TS == get_end_log_ts() || !for_replay || !is_callback) 
+        else if ((!for_replay || !is_callback)
                  && OB_FAIL(set_max_end_log_ts(log_ts))) {
           TRANS_LOG(WARN, "failed to set max_end_log_ts", K(ret), K(log_ts), KPC(this));
         } else if (OB_FAIL(set_rec_log_ts(log_ts))) {
