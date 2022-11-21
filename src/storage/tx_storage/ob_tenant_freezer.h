@@ -42,6 +42,9 @@ friend ObTenantTxDataFreezeGuard;
   const static int FREEZE_TRIGGER_THREAD_NUM= 1;
   const static int64_t FREEZE_TRIGGER_INTERVAL = 2_s;
   const static int64_t UPDATE_INTERVAL = 100_ms;
+  // replay use 1G/s
+  const static int64_t REPLAY_RESERVE_MEMSTORE_BYTES = 100 * 1024 * 1024; // 100 MB
+  const static int64_t MEMSTORE_USED_CACHE_REFRESH_INTERVAL = 100_ms;
 public:
   ObTenantFreezer();
   ~ObTenantFreezer();
@@ -58,6 +61,8 @@ public:
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
+  // used for replay to check whether can enqueue another replay task
+  bool is_replay_pending_log_too_large(const int64_t pending_size);
   // If the tenant's freeze process is slowed, we will only freeze one time every
   // SLOW_FREEZE_INTERVAL.
   // set the tenant freeze process slowed. used while the tablet's max memtablet
