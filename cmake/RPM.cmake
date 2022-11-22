@@ -75,7 +75,7 @@ install(
   COMPONENT server)
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE)
+if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
 include(GNUInstallDirs)
 install(
   TARGETS obcdc obcdc_tailf
@@ -103,11 +103,13 @@ install(
 endif()
 
 ## oceanbase-sql-parser
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-  DESTINATION lib
-  COMPONENT sql-parser
-  )
+if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+    DESTINATION lib
+    COMPONENT sql-parser
+    )
+endif()
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -118,13 +120,6 @@ install(FILES
   src/sql/parser/parse_node.h
   DESTINATION include
   COMPONENT sql-parser)
-
-## oceanbase-sql-parser
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-  DESTINATION lib
-  COMPONENT sql-parser
-  )
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -296,20 +291,22 @@ install(FILES
   COMPONENT table)
 
 install(FILES
-  src/libtable//examples/ob_pstore_example.cpp
-  src/libtable//examples/ob_kvtable_example.cpp
-  src/libtable//examples/ob_table_example.cpp
-  src/libtable//examples/example_makefile.mk
+  src/libtable/examples/ob_pstore_example.cpp
+  src/libtable/examples/ob_kvtable_example.cpp
+  src/libtable/examples/ob_table_example.cpp
+  src/libtable/examples/example_makefile.mk
   DESTINATION examples
   COMPONENT table)
 
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
-  DESTINATION lib
-  COMPONENT table)
+if (OB_BUILD_LIBOBTABLE)
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
+    DESTINATION lib
+    COMPONENT table)
+endif()
 
 ## oceanbase-libs
 install(PROGRAMS
@@ -321,13 +318,15 @@ install(PROGRAMS
   DESTINATION lib
   COMPONENT libs
 )
-## oceanbase-utils
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-  ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-  DESTINATION /usr/bin
-  COMPONENT utils
-)
+if(OB_BUILD_OBMAIN)
+    ## oceanbase-utils
+    install(PROGRAMS
+      ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+      ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+      DESTINATION /usr/bin
+      COMPONENT utils
+    )
+  endif()
 
 # install cpack to make everything work
 include(CPack)
