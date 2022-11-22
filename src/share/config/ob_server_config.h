@@ -50,6 +50,8 @@ const char* const EXTERNAL_KMS_INFO = "external_kms_info";
 const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const CLUSTER_ID = "cluster_id";
 const char* const CLUSTER_NAME = "cluster";
+const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
+const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
