@@ -40,6 +40,7 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
 %undefine __brp_mangle_shebangs
+%global __requires_exclude ^\(/bin/bash\|/usr/bin/\.*\)$
 %define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
 %if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
 %debug_package
