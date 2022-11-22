@@ -529,7 +529,23 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
                                        K(prefs.get_stat_pref_default_value()));
-    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s')",
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s'),",
+                                            prefs.get_stat_pref_name(),
+                                            null_str,
+                                            time_str,
+                                            prefs.get_stat_pref_default_value()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else {
+      ++ total_rows;
+    }
+  }
+  if (OB_SUCC(ret)) {//init estimate_block
+    ObEstimateBlockPrefs prefs;
+    if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                       K(prefs.get_stat_pref_default_value()));
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s');",
                                             prefs.get_stat_pref_name(),
                                             null_str,
                                             time_str,
@@ -1028,6 +1044,26 @@ int ObApproximateNdvPrefs::check_pref_value_validity(ObTableStatParam *param/*de
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Illegal value for APPROXIMATE_NDV", K(ret), K(pvalue_));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Illegal value for APPROXIMATE_NDV: must be {TRUE, FALSE}");
+  }
+  return ret;
+}
+
+int ObEstimateBlockPrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
+{
+  int ret = OB_SUCCESS;
+  if (pvalue_.empty() ||
+      0 == pvalue_.case_compare("TRUE")) {
+    if (param != NULL) {
+      param->need_estimate_block_ = true;
+    }
+  } else if (0 == pvalue_.case_compare("FALSE")) {
+    if (param != NULL) {
+      param->need_estimate_block_ = false;
+    }
+  } else {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("Illegal value for ESTIMATE_BLOCK", K(ret), K(pvalue_));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Illegal value for ESTIMATE_BLOCK: must be {TRUE, FALSE}");
   }
   return ret;
 }

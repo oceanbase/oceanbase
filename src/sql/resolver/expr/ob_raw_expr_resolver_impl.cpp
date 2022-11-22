@@ -6486,6 +6486,7 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
       tmp_node.num_child_ = 0;
       tmp_node.str_len_ = time_str.length();
       tmp_node.str_value_ = time_str.ptr();
+      tmp_node.is_date_unit_ = false;
       if (OB_FAIL(process_datatype_or_questionmark(tmp_node, expr))) {
         if (ret == OB_ERR_WRONG_VALUE) {//invalid time str, go back default way like Mysql.
           ret = OB_SUCCESS;
