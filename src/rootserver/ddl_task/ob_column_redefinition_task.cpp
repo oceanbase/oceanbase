@@ -66,6 +66,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     task_version_ = OB_COLUMN_REDEFINITION_TASK_VERSION;
     task_id_ = task_id;
     parallelism_ = parallelism;
+    execution_id_ = 1L;
     is_inited_ = true;
   }
   return ret;

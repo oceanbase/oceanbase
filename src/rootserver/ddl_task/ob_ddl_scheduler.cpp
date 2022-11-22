@@ -1113,8 +1113,6 @@ int ObDDLScheduler::schedule_column_redefinition_task(const ObDDLTaskRecord &tas
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else if (OB_FAIL(redefinition_task->push_execution_id())) {
-    LOG_WARN("failed to push execution id", K(ret));
   }
   if (OB_FAIL(ret) && nullptr != redefinition_task) {
     redefinition_task->~ObColumnRedefinitionTask();
