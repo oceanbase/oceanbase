@@ -11972,6 +11972,9 @@ int ObPartTransCtx::clear_trans_after_restore(const int64_t restore_version, con
         K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
+  } else if (is_logging_()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(INFO, "transaction is logging", K(*this), K(restore_version), K(fake_terminate_log_ts));
   } else if (!need_clear) {
     // skip new transactions after restore completes
     ret = OB_SUCCESS;
