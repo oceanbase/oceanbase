@@ -17,6 +17,6 @@ namespace oceanbase
 {
 namespace common
 {
-
+constexpr const char ObMemLeakChecker::MOD_INFO_MAP_STR[];
 }  // end of namespace common
 }  // end of namespace oceanbase
