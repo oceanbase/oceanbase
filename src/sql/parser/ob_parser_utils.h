@@ -15,6 +15,9 @@
 #include "lib/utility/ob_print_utils.h"
 #include "sql/parser/parse_node.h"
 #include "lib/ob_name_def.h"
+#include "common/ob_smart_call.h"
+#include "lib/utility/ob_hang_fatal_error.h"
+#include "share/ob_errno.h"
 const char* get_type_name(int type);
 
 namespace oceanbase {
@@ -31,8 +34,9 @@ inline void databuff_print_stmt_location(char* buf, int64_t buf_len, int64_t& po
   }
 }
 
-inline void databuff_print_obj(char* buf, const int64_t buf_len, int64_t& pos, const ParseNode& obj)
+inline int databuff_print_obj(char *buf, const int64_t buf_len, int64_t &pos, const ParseNode &obj)
 {
+  int ret = OB_SUCCESS;
   J_OBJ_START();
   J_KV(N_TYPE,
       get_type_name(obj.type_),
@@ -47,14 +51,11 @@ inline void databuff_print_obj(char* buf, const int64_t buf_len, int64_t& pos, c
     J_COMMA();
     J_NAME(N_CHILDREN);
     J_COLON();
-
     J_ARRAY_START();
-
     for (int64_t i = 0; i < obj.num_child_; ++i) {
       if (NULL == obj.children_[i]) {
         J_EMPTY_OBJ();
-      } else {
-        databuff_print_obj(buf, buf_len, pos, *obj.children_[i]);
+      } else if (OB_FAIL(SMART_CALL(databuff_print_obj(buf, buf_len, pos, *obj.children_[i])))) {
       }
       if (i != obj.num_child_ - 1) {
         common::databuff_printf(buf, buf_len, pos, ", ");
@@ -63,6 +64,7 @@ inline void databuff_print_obj(char* buf, const int64_t buf_len, int64_t& pos, c
     J_ARRAY_END();
   }
   J_OBJ_END();
+  return ret;
 }
 
 inline void print_indent(char* buf, const int64_t buf_len, int64_t& pos, const int level)
@@ -122,7 +124,21 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
-    databuff_print_obj(buf, buf_len, pos, parse_tree_);
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(SMART_CALL(databuff_print_obj(buf, buf_len, pos, parse_tree_)))) {
+      pos = 0;
+      J_OBJ_START();
+      J_KV(N_TYPE,
+          get_type_name(parse_tree_.type_),
+          N_INT_VALUE,
+          parse_tree_.value_,
+          N_STR_VALUE_LEN,
+          parse_tree_.str_len_,
+          N_STR_VALUE,
+          common::ObString(parse_tree_.str_len_, parse_tree_.str_value_));
+      databuff_print_stmt_location(buf, buf_len, pos, parse_tree_.stmt_loc_);
+      J_OBJ_END();
+    }
     return pos;
   }
 
