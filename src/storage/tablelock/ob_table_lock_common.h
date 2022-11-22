@@ -427,8 +427,6 @@ typedef common::ObSimpleIterator<ObLockID, ObSimpleIteratorModIds::OB_OBJ_LOCK_M
 // Is used to store and traverse all lock op
 typedef common::ObSimpleIterator<ObTableLockOp, ObSimpleIteratorModIds::OB_OBJ_LOCK, 16> ObLockOpIterator;
 
-// whether use lock wait mgr or not.
-static const bool ENABLE_USE_LOCK_WAIT_MGR = true;
 // the threshold of timeout interval which will enable the deadlock avoid.
 static const int64_t MIN_DEADLOCK_AVOID_TIMEOUT_US = 60 * 1000 * 1000; // 1 min
 bool is_deadlock_avoid_enabled(const int64_t expire_time);
