@@ -32,6 +32,7 @@ set(CPACK_RPM_DEFAULT_GROUP "admin")
 set(CPACK_RPM_SPEC_MORE_DEFINE
   "%global _missing_build_ids_terminate_build 0
 %global _find_debuginfo_opts -g
+%global __requires_exclude ^\(/bin/bash\|/usr/bin/\.*\)$
 %define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
 %define debug_package %{nil}")
 
