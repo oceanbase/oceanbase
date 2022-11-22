@@ -259,7 +259,6 @@ public:
   OB_INLINE void set_start_log_ts(const int64_t start_log_ts) { ATOMIC_SET(&start_log_ts_, start_log_ts); }
   OB_INLINE int64_t get_start_log_ts() const { return ATOMIC_LOAD(&start_log_ts_); }
 private:
-  bool need_remote_write(int ret_code);
   int switch_to_remote_write();
 private:
   bool is_inited_;

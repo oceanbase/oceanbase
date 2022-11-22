@@ -656,6 +656,10 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                                         lsn,
                                         log_ts))) {
     LOG_WARN("fail to submit ddl start log", K(ret), K(buffer_size));
+    if (ObDDLUtil::need_remote_write(ret)) {
+      ret = OB_NOT_MASTER;
+      LOG_INFO("overwrite return to OB_NOT_MASTER");
+    }
   } else {
     ObDDLClogCb *tmp_cb = cb;
     cb = nullptr;
@@ -996,7 +1000,7 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
     LOG_WARN("allocate memory failed", K(ret), K(BUF_SIZE));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLMacroBlockRedoWriter::write_macro_redo(redo_info, ls->get_ls_id(), ls->get_log_handler(), macro_block_id, buffer_, ddl_redo_handle_))) {
-      if (need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret));
         }
@@ -1073,7 +1077,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_PREPARE_LOG, ls->get_log_handler(), handle))) {
-      if (need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
@@ -1127,7 +1131,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_COMMIT_LOG, ls->get_log_handler(), handle))) {
-      if (need_remote_write(ret)) {
+      if (ObDDLUtil::need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
@@ -1152,13 +1156,6 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     }
   }
   return ret;
-}
-
-bool ObDDLSSTableRedoWriter::need_remote_write(int ret_code)
-{
-  return OB_NOT_MASTER == ret_code
-    || OB_NOT_RUNNING == ret_code
-    || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code;
 }
 
 int ObDDLSSTableRedoWriter::switch_to_remote_write()

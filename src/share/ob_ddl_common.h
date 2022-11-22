@@ -274,6 +274,7 @@ public:
     return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
            || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret;
   }
+  static bool need_remote_write(const int ret_code);
 
 private:
   static int generate_column_name_str(
