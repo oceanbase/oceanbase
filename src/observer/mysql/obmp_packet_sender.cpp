@@ -802,7 +802,8 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
         } else {
           // try again with larger buf size
           const int64_t new_alloc_size = TRY_EZ_BUF_SIZES[try_steps++];
-          if (OB_SIZE_OVERFLOW != last_ret) {
+          // refer to doc: https://work.aone.alibaba-inc.com/issue/46055888
+          if (OB_SIZE_OVERFLOW != last_ret && OB_BUF_NOT_ENOUGH != last_ret) {
             ret = last_ret;
             LOG_WARN("last_ret is not size overflow, need check code", K(last_ret));
           } else {

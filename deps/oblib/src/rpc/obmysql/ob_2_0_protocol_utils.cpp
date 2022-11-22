@@ -483,6 +483,9 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
       }
     } else {
       if (easy_buffer.read_avail_size() == proto20_context.header_len_) {
+        ret = OB_SIZE_OVERFLOW;
+        param.encode_ret_ = ret;
+        ret = OB_SUCCESS;
         easy_buffer.fall_back(proto20_context.header_len_); // reset buffer to alloc more mem
         proto20_context.next_step_ = START_TO_FILL_STEP;
         param.need_flush_ = true; // break, alloc more memory
