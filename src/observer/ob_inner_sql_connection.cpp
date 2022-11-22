@@ -352,6 +352,8 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
     } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                                           ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT))) {
       LOG_WARN("update sys variables failed", K(ret));
+    } else if (OB_FAIL(inner_session_.gen_configs_in_pc_str())) {
+      LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
     } else {
       ObString database_name(OB_SYS_DATABASE_NAME);
       if (OB_FAIL(inner_session_.set_default_database(database_name))) {

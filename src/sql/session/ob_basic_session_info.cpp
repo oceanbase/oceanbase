@@ -980,6 +980,8 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
   if (OB_SUCC(ret)) {
     if (OB_FAIL(gen_sys_var_in_pc_str())) { //将影响plan的系统变量序列化并缓存
       LOG_INFO("fail to generate system variables in pc str");
+    } else if (OB_FAIL(gen_configs_in_pc_str())) {
+      LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
     }
@@ -1637,37 +1639,42 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
   const int64_t MAX_CONFIG_STR_SIZE = 512;
   char *buf = NULL;
   int64_t pos = 0;
-  int64_t cluster_config_version = GCONF.get_current_version();
-  int64_t tenant_config_version = (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(tenant_id_);
-
-  if (!inf_pc_configs_.is_out_of_date(cluster_config_version, tenant_config_version)) {
-    // unupdated configs do nothing
+  if (!GCONF.is_valid()) {
+    // do nothing
   } else {
-    // update out-dated cached configs
-    // first time to generate configuaration strings, init allocator
-    if (is_first_gen_config_) {
-      inf_pc_configs_.init(tenant_id_);
-      if (NULL == (buf = (char *)name_pool_.alloc(MAX_CONFIG_STR_SIZE))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(MAX_CONFIG_STR_SIZE));
-      }
-      is_first_gen_config_ = false;
-    } else {
-      // reuse memory
-      buf = config_in_pc_str_.ptr();
-      MEMSET(buf, 0, config_in_pc_str_.length());
-      config_in_pc_str_.reset();
-    }
+    int64_t cluster_config_version = GCONF.get_current_version();
+    int64_t tenant_config_version = (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(tenant_id_);
 
-    // update configs
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(inf_pc_configs_.load_influence_plan_config())) {
-      LOG_WARN("failed to load configurations that will influence executions plan.", K(ret));
-    } else if (OB_FAIL(inf_pc_configs_.serialize_configs(buf, MAX_CONFIG_STR_SIZE, pos))) {
-      LOG_WARN("failed to serialize configs", K(ret));
+    if (!config_in_pc_str_.empty() &&
+          !inf_pc_configs_.is_out_of_date(cluster_config_version, tenant_config_version)) {
+      // unupdated configs do nothing
     } else {
-      (void)config_in_pc_str_.assign(buf, int32_t(pos));
-      inf_pc_configs_.update_version(cluster_config_version, tenant_config_version);
+      // update out-dated cached configs
+      // first time to generate configuaration strings, init allocator
+      if (is_first_gen_config_) {
+        inf_pc_configs_.init(tenant_id_);
+        if (NULL == (buf = (char *)name_pool_.alloc(MAX_CONFIG_STR_SIZE))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(MAX_CONFIG_STR_SIZE));
+        }
+        is_first_gen_config_ = false;
+      } else {
+        // reuse memory
+        buf = config_in_pc_str_.ptr();
+        MEMSET(buf, 0, config_in_pc_str_.length());
+        config_in_pc_str_.reset();
+      }
+
+      // update configs
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(inf_pc_configs_.load_influence_plan_config())) {
+        LOG_WARN("failed to load configurations that will influence executions plan.", K(ret));
+      } else if (OB_FAIL(inf_pc_configs_.serialize_configs(buf, MAX_CONFIG_STR_SIZE, pos))) {
+        LOG_WARN("failed to serialize configs", K(ret));
+      } else {
+        (void)config_in_pc_str_.assign(buf, int32_t(pos));
+        inf_pc_configs_.update_version(cluster_config_version, tenant_config_version);
+      }
     }
   }
   return ret;
@@ -4113,6 +4120,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   release_to_pool_ = OB_SUCC(ret);
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
+    OZ (gen_configs_in_pc_str());
   }
   return ret;
 }
