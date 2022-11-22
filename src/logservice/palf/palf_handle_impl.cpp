@@ -1243,29 +1243,41 @@ int PalfHandleImpl::handle_learner_req(const LogLearner &server, const LogLearne
 int PalfHandleImpl::set_base_lsn(
     const LSN &lsn)
 {
-  // NB: 必须加读锁, 否则和迁移并发会有问题
-  // thread1(迁移):
-  // 1. 判断迁移源端的base_lsn是否比本地的大, 如果不满足, 迁移失败;
-  // 2. 提交truncate_prefix任务, 目的是将base_lsn之前的日志全部删除, 防止文件存在空洞;
-  // 3. 提交更新meta的任务.
-  // thread2(checkpoint线程):
-  // 1. 发现磁盘空间不足，推大base_lsn
+  // NB: Guarded by lock is important, otherwise there are some problems concurrent with rebuild or migrate.
   //
-  // 如果在thread1的step1之后, thread2推大了自己的base_lsn, 同时迁移远端的base_lsn相对小, 底层无法处理,
-  // 因此需要加读锁, 避免并发问题.
+  // Thread1(assume it's migrate thread)
+  // 1. if the 'base_lsn' of data source is greater than or equal to local, and then
+  // 2. avoid the hole between blocks, delete all blocks before 'base_lsn', submit truncate prefix blocks task
+  // 3. to update base lsn, submit update snpshot meta task.
+  //
+  // Execute above steps in 'advance_base_info'
+  //
+  // Thread2(checkpoint thread)
+  // 1. the clog disk is not enough, and update it via 'set_base_lsn'
+  //
+  // Consider that:
+  //
+  // Time1: thread1 has executed step1, assume the base lsn of data source is 100, local base lsn is 50,
+  // and then thread2 execute 'set_base_lsn', the local base lsn set to 150
+  //
+  // Time2: thread1 submit truncate prefix blocks, and this task will be failed because the base lsn in this task
+  // is smaller than local base lsn.
+  //
+  // Therefore, we need guarded by lock.
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   LSN end_lsn = get_end_lsn();
+  const LSN &curr_base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
+  const LSN new_base_lsn(lsn_2_block(lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!lsn.is_valid() || lsn > end_lsn) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), KPC(this), K(end_lsn), K(lsn));
+  } else if (curr_base_lsn >= new_base_lsn) {
+    PALF_LOG(WARN, "no need to set new base lsn, curr base lsn is greater than or equal to new base lsn",
+        KPC(this), K(curr_base_lsn), K(new_base_lsn), K(lsn));
   } else {
-    // palf持久化的base_lsn中，block内的offset均置为0
-    const LSN &curr_base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-    LSN new_base_lsn;
-    new_base_lsn.val_ = lsn_2_block(lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE;
     LogSnapshotMeta log_snapshot_meta;
     FlushMetaCbCtx flush_meta_cb_ctx;
     flush_meta_cb_ctx.type_ = SNAPSHOT_META;
@@ -1274,7 +1286,7 @@ int PalfHandleImpl::set_base_lsn(
       PALF_LOG(WARN, "LogSnapshotMeta generate failed", K(ret), KPC(this));
     } else if (OB_FAIL(log_engine_.submit_flush_snapshot_meta_task(flush_meta_cb_ctx, log_snapshot_meta))) {
       PALF_LOG(WARN, "submit_flush_snapshot_meta_task failed", K(ret), KPC(this));
-    } else if (new_base_lsn != curr_base_lsn) {
+    } else {
       PALF_EVENT("set_base_lsn success", palf_id_, K(ret), K_(palf_id), K(self_), K(lsn),
           K(log_snapshot_meta), K(new_base_lsn), K(flush_meta_cb_ctx));
     }
