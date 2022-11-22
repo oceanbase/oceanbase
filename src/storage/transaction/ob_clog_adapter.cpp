@@ -172,49 +172,71 @@ void ObClogAdapter::handle(void* task)
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unexpected error, ctx is NULL", KR(ret), KP(ctx), K(log_task));
       } else {
-        log_task->process_begin();
-        CtxLockGuard ctx_guard;
-        ctx->get_ctx_guard(ctx_guard);
-        if (with_need_update_version) {
-          ret = submit_log_(
-              partition, version, clog_buf, clog_size, local_trans_version, cb, NULL, cur_log_id, cur_log_timestamp);
-        } else if (with_base_ts) {
-          ret = submit_log_(partition, version, clog_buf, clog_size, base_ts, cb, NULL, cur_log_id, cur_log_timestamp);
+        const ObTransID trans_id = ctx->get_trans_id();
+        bool need_revert_ctx = false;
+        if (OB_FAIL(ctx->get_partition_mgr()->acquire_ctx_ref(trans_id))) {
+          TRANS_LOG(WARN, "acquire ctx ref failed", K(ret), K(trans_id));
         } else {
-          ret = submit_log_(partition, version, clog_buf, clog_size, cb, NULL, cur_log_id, cur_log_timestamp);
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(cb->on_submit_log_success(with_need_update_version, cur_log_id, cur_log_timestamp))) {
-            TRANS_LOG(WARN, "submit log success callback error", KR(ret), K(log_task));
+          need_revert_ctx = true;
+          log_task->process_begin();
+          CtxLockGuard ctx_guard;
+          ctx->get_ctx_guard(ctx_guard);
+          if (with_need_update_version) {
+            ret = submit_log_(
+                partition, version, clog_buf, clog_size, local_trans_version, cb, NULL, cur_log_id, cur_log_timestamp);
+          } else if (with_base_ts) {
+            ret = submit_log_(partition, version, clog_buf, clog_size, base_ts, cb, NULL, cur_log_id, cur_log_timestamp);
+          } else {
+            ret = submit_log_(partition, version, clog_buf, clog_size, cb, NULL, cur_log_id, cur_log_timestamp);
           }
-          SubmitLogTaskFactory::release(log_task);
-          log_task = NULL;
-          task = NULL;
-        } else {
-          if (EXECUTE_COUNT_PER_SEC(16)) {
-            TRANS_LOG(WARN, "submit log error", KR(ret), K(log_task));
-          }
-          if (!need_retry(ret)) {
-            if (OB_FAIL(cb->on_submit_log_fail(ret))) {
-              TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(cb->on_submit_log_success(with_need_update_version, cur_log_id, cur_log_timestamp))) {
+              TRANS_LOG(WARN, "submit log success callback error", KR(ret), K(log_task));
             }
             SubmitLogTaskFactory::release(log_task);
             log_task = NULL;
             task = NULL;
           } else {
-            if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
-              TRANS_LOG(ERROR, "push submit log task failed", K(ret), K(log_task));
-              if (OB_FAIL(cb->on_submit_log_fail(ret))) {
-                TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
+            if (EXECUTE_COUNT_PER_SEC(16)) {
+              TRANS_LOG(WARN, "submit log error", KR(ret), K(log_task));
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(cb->on_submit_log_success(with_need_update_version, cur_log_id, cur_log_timestamp))) {
+                TRANS_LOG(WARN, "submit log success callback error", KR(ret), K(log_task));
               }
               SubmitLogTaskFactory::release(log_task);
               log_task = NULL;
               task = NULL;
             } else {
-              if (REACH_TIME_INTERVAL(100 * 1000)) {
-                TRANS_LOG(INFO, "push submit log task success", K(log_task));
+              if (EXECUTE_COUNT_PER_SEC(16)) {
+                TRANS_LOG(WARN, "submit log error", KR(ret), K(log_task));
+              }
+              if (!need_retry(ret)) {
+                if (OB_FAIL(cb->on_submit_log_fail(ret))) {
+                  TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
+                }
+                SubmitLogTaskFactory::release(log_task);
+                log_task = NULL;
+                task = NULL;
+              } else {
+                if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
+                  TRANS_LOG(ERROR, "push submit log task failed", K(ret), K(log_task));
+                  if (OB_FAIL(cb->on_submit_log_fail(ret))) {
+                    TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
+                  }
+                  SubmitLogTaskFactory::release(log_task);
+                  log_task = NULL;
+                  task = NULL;
+                } else {
+                  if (REACH_TIME_INTERVAL(100 * 1000)) {
+                    TRANS_LOG(INFO, "push submit log task success", K(log_task));
+                  }
+                }
               }
             }
+          }
+          if (need_revert_ctx) {
+            ctx->get_partition_mgr()->release_ctx_ref(ctx);
           }
         }
       }
