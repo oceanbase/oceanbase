@@ -10833,6 +10833,7 @@ int ObPartTransCtx::mark_frozen_data(
   CtxLockGuard guard(lock_);
 
   bool marked = false;
+  int64_t freeze_ts = frozen_memtable->get_freeze_log_ts();
   cb_cnt = 0;
 
   if (OB_FAIL(mt_ctx_.mark_frozen_data(frozen_memtable, active_memtable, marked, cb_cnt))) {
@@ -10853,12 +10854,12 @@ int ObPartTransCtx::mark_frozen_data(
           OB_ID(arg2),
           (int64_t)active_memtable);
     }
-  } else {
-    int freeze_ts = frozen_memtable->get_freeze_log_ts();
-    if (min_log_ts_ <= freeze_ts && freeze_ts < end_log_ts_) {
-      mark_dirty_trans();
-      TRANS_LOG(INFO, "mark dirty crossed freeze", K(*this), K(*frozen_memtable));
-    }
+  } else if (min_log_ts_ <= freeze_ts && freeze_ts < end_log_ts_) {
+    mark_dirty_trans();
+    TRANS_LOG(INFO, "mark dirty crossed freeze", K(*this), K(*frozen_memtable));
+  } else if (is_in_2pc_()) {
+    mark_dirty_trans();
+    TRANS_LOG(INFO, "mark dirty for txn in 2pc", K(*this), K(*frozen_memtable));
   }
 
   if (cb_cnt > 0 && !for_replay_ && !batch_commit_trans_) {
