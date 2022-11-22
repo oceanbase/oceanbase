@@ -285,10 +285,10 @@ int LogIteratorImpl<ENTRY>::next()
     curr_entry_size_ = 0;
     // NB: if the data which has been corrupted, clean cache.
     if (OB_INVALID_DATA == ret) {
-      PALF_LOG(ERROR, "read invalid data, need clean cache", K(ret), KPC(this));
+      PALF_LOG(WARN, "read invalid data, need clean cache", K(ret), KPC(this));
       log_storage_->reuse(log_storage_->get_lsn(curr_read_pos_));
       curr_read_buf_end_pos_ = curr_read_buf_start_pos_ = curr_read_pos_ = 0;
-      PALF_LOG(ERROR, "read invalid data, has clean cache", K(ret), KPC(this));
+      PALF_LOG(WARN, "read invalid data, has clean cache", K(ret), KPC(this));
     }
     if (OB_ITER_END != ret) {
       PALF_LOG(WARN, "get_next_entry_ failed", K(ret), KPC(this));
