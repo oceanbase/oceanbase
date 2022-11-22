@@ -107,12 +107,15 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
   } else if (0 != start_log_ts_) {
-    if (execution_id >= execution_id_ && start_log_ts > start_log_ts_) {
+    if (execution_id >= execution_id_ && start_log_ts >= start_log_ts_) {
       LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
       cleanup_unlock();
       is_brand_new = true;
     } else {
-      ret = OB_TASK_EXPIRED;
+      if (checkpoint_log_ts <= 0) {
+        // only return error code when not start from checkpoint.
+        ret = OB_TASK_EXPIRED;
+      }
       LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
     }
   } else {
