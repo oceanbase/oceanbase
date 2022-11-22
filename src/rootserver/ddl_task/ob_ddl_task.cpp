@@ -621,6 +621,68 @@ void ObDDLTask::calc_next_schedule_ts(int ret_code)
   return;
 }
 
+// check if the current replica build task should be scheduled again.
+bool ObDDLTask::is_replica_build_need_retry(
+    const int ret_code)
+{
+  int ret = OB_SUCCESS;
+  bool need_retry = true;
+  bool is_table_exist = false;
+  ObSchemaGetterGuard schema_guard;
+  if (ObIDDLTask::in_ddl_retry_white_list(ret_code)
+    || OB_REPLICA_NOT_READABLE == ret_code
+    || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
+    // need retry.
+  } else if (OB_TABLE_NOT_EXIST == ret_code) {
+    // Sometimes, the tablet leader has not refreshed the latest schema.
+    // Thus, check whether the table really does not exist.
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_INFO("table schema not exist", K(ret), K(tenant_id_), K(object_id_));
+    } else {
+      if (ObDDLType::DDL_CHECK_CONSTRAINT == task_type_ || ObDDLType::DDL_ADD_NOT_NULL_COLUMN == task_type_) {
+        // need retry.
+      } else if (ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT == task_type_) {
+        // check whether the parent/child table does not exist.
+        bool found = false;
+        const ObIArray<ObForeignKeyInfo> &fk_infos = table_schema->get_foreign_key_infos();
+        for (int64_t i = 0; OB_SUCC(ret) && !found && i < fk_infos.count(); ++i) {
+          if (target_object_id_ != fk_infos.at(i).foreign_key_id_) {
+          } else {
+            found = true;
+            if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, fk_infos.at(i).parent_table_id_, is_table_exist))) {
+              LOG_WARN("check schema exist failed", K(ret), K(tenant_id_), K(fk_infos.at(i)));
+            } else if (!is_table_exist) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_INFO("table schema not exist", K(ret), K(tenant_id_), K(object_id_), K(fk_infos.at(i)));
+            } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, fk_infos.at(i).child_table_id_, is_table_exist))) {
+              LOG_WARN("check schema exist failed", K(ret), K(tenant_id_), K(fk_infos.at(i)));
+            } else if (!is_table_exist) {
+              ret = OB_TABLE_NOT_EXIST;
+              LOG_INFO("table schema not exist", K(ret), K(tenant_id_), K(object_id_), K(fk_infos.at(i)));
+            }
+          }
+        }
+      } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_table_exist))) {
+        LOG_WARN("check table exist failed", K(ret), K(tenant_id_), K(target_object_id_));
+      } else if (!is_table_exist) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("not exist", K(ret), K(tenant_id_), K(target_object_id_));
+      }
+    }
+  } else {
+    // ret_code is not in some predefined error code list.
+    need_retry = false;
+  }
+  need_retry = OB_TABLE_NOT_EXIST == ret ? false : need_retry;
+  return need_retry;
+}
+
 #ifdef ERRSIM
 int ObDDLTask::check_errsim_error()
 {

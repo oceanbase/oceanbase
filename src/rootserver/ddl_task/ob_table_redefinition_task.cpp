@@ -205,7 +205,7 @@ int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
     ret_code_ = complete_sstable_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (ObIDDLTask::in_ddl_retry_white_list(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
+    if (is_replica_build_need_retry(ret_code_)) {
       build_replica_request_time_ = 0;
       complete_sstable_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;

@@ -313,6 +313,7 @@ public:
   void calc_next_schedule_ts(int ret_code);
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   int push_execution_id();
+  bool is_replica_build_need_retry(const int ret_code);
   #ifdef ERRSIM
   int check_errsim_error();
   #endif

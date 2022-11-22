@@ -138,7 +138,6 @@ private:
   int set_alter_constraint_ddl_stmt_str_for_fk(
       obrpc::ObAlterTableArg &alter_table_arg,
       common::ObIAllocator &allocator);
-  int check_table_exist(bool &exist);
   int check_replica_end(bool &is_end);
   int check_health();
 private:
