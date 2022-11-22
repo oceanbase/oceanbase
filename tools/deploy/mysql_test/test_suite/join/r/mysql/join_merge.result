@@ -8,7 +8,7 @@ delete from aa;
 insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
 delete from bb;
 insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
-alter system minor freeze tenant = all;
+alter system minor freeze;
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
 a2	b3
 10	14

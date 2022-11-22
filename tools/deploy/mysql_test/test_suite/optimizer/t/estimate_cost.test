@@ -53,8 +53,7 @@ explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
 select count(*) from test_table where name = 'name22';
 explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
 
---source mysql_test/include/minorfreeze.inc
---source mysql_test/include/wait_minor_merge.inc
+--source mysql_test/include/minor_merge_tenant.inc
 call dbms_stats.gather_table_stats('TEST', 'test_table');
 
 # case 2: all data in sstable, not memtable data
