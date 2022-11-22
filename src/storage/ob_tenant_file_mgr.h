@@ -57,6 +57,7 @@ public:
   int remove_pg(const ObTenantFileKey& file_key, const common::ObPGKey& pg_key);
   int clear_replay_map();
   int is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& from_svr_skpt) const;
+  int is_file_normal(const ObTenantFileKey& file_key, bool& is_normal) const;
 
 public:
   static const int64_t START_FILE_ID = 1L;
@@ -117,6 +118,7 @@ public:
   int write_remove_pg_slog(const ObTenantFileKey& file_key, const common::ObPGKey& pg_key);
   int remove_pg(const ObTenantFileKey& file_key, const common::ObPGKey& pg_key);
   int is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& from_svr_skpt);
+  int is_file_normal(const ObTenantFileKey& file_key, bool& is_normal);
 
 private:
   typedef common::hash::ObHashMap<int64_t, ObTenantFileMgr*> TENANT_MGR_MAP;

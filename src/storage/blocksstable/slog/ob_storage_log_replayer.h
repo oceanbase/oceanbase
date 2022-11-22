@@ -138,7 +138,7 @@ private:
   int revise_log(const char* log_dir);
 
 private:
-  static const int64_t RECOVERY_TRANS_CNT = 10000;
+  static const int64_t RECOVERY_TRANS_CNT = 1000000;
   common::ObArenaAllocator allocator_;
   common::hash::ObHashMap<int64_t, ObStorageLogCommittedTrans> committed_trans_map_;
   int64_t min_log_file_id_;

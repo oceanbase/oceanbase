@@ -690,7 +690,7 @@ int ObTenantFileMgr::is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& fro
 {
   int ret = OB_SUCCESS;
   ObTenantFileValue* file_value = nullptr;
-  TCWLockGuard guard(lock_);
+  TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantFileMgr has not been inited", K(ret));
@@ -705,6 +705,30 @@ int ObTenantFileMgr::is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& fro
     }
   } else {
     from_svr_skpt = file_value->from_svr_ckpt_;
+  }
+  return ret;
+}
+
+int ObTenantFileMgr::is_file_normal(const ObTenantFileKey& file_key, bool& is_normal) const
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileValue *file_value = nullptr;
+  is_normal = false;
+  TCRLockGuard guard(lock_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantFileMgr has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!file_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(file_key));
+  } else if (OB_FAIL(tenant_file_map_.get_refactored(file_key, file_value))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      LOG_WARN("fail to get from tenant file map", K(ret), K(file_key));
+    }
+  } else {
+    is_normal = file_value->file_info_.is_normal_status();
   }
   return ret;
 }
@@ -1680,10 +1704,28 @@ int ObBaseFileMgr::is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& from_
   return ret;
 }
 
+int ObBaseFileMgr::is_file_normal(const ObTenantFileKey& file_key, bool& is_normal)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileMgr *tenant_mgr = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBaseFileMgr has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!file_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(file_key));
+  } else if (OB_FAIL(get_tenant_mgr(file_key.tenant_id_, tenant_mgr))) {
+    LOG_WARN("fail to get tenant mgr", K(ret), K(file_key));
+  } else if (OB_FAIL(tenant_mgr->is_file_normal(file_key, is_normal))) {
+    LOG_WARN("fail to check is file owner", K(ret), K(file_key));
+  }
+  return ret;
+}
+
 int ObBaseFileMgr::get_macro_meta_replay_map(const ObTenantFileKey& tenant_file_key, ObMacroMetaReplayMap*& replay_map)
 {
   int ret = OB_SUCCESS;
-  ObTenantFileMgr* tenant_mgr = nullptr;
+  ObTenantFileMgr *tenant_mgr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBaseFileMgr has not been inited", K(ret));
@@ -1888,21 +1930,20 @@ void ObServerFileMgr::wait()
 int ObTenantFileSLogFilter::filter(const ObISLogFilter::Param& param, bool& is_filtered) const
 {
   int ret = OB_SUCCESS;
-  ObTenantFileInfo file_info;
   if (ObPartitionService::get_instance().is_replay_old()) {
     // do nothing
   } else if (OB_VIRTUAL_DATA_FILE_ID == param.attr_.data_file_id_) {
     is_filtered = false;
   } else {
     ObTenantFileKey file_key(param.attr_.tenant_id_, param.attr_.data_file_id_);
-    ObTenantFileInfo file_info;
-    if (OB_FAIL(OB_SERVER_FILE_MGR.get_tenant_file_info(file_key, file_info))) {
+    bool is_normal = false;
+    if (OB_FAIL(OB_SERVER_FILE_MGR.is_file_normal(file_key, is_normal))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         is_filtered = true;
         ret = OB_SUCCESS;
       }
     } else {
-      is_filtered = !file_info.is_normal_status();
+      is_filtered = !is_normal;
     }
   }
   return ret;

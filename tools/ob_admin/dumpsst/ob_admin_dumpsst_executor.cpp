@@ -737,14 +737,14 @@ int ObAdminSlogReplayer::PGMetaSLogFilter::filter(
       is_filtered = false;
     } else {
       ObTenantFileKey file_key(param.attr_.tenant_id_, param.attr_.data_file_id_);
-      ObTenantFileInfo file_info;
-      if (OB_FAIL(file_mgr_.get_tenant_file_info(file_key, file_info))) {
+      bool is_normal = false;
+      if (OB_FAIL(file_mgr_.is_file_normal(file_key, is_normal))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           is_filtered = true;
           ret = OB_SUCCESS;
         }
       } else {
-        is_filtered = !file_info.is_normal_status();
+        is_filtered = !is_normal;
       }
     }
   }
