@@ -1842,7 +1842,7 @@
   "undo_retention": {
     "id": 10053,
     "name": "undo_retention",
-    "value": "0",
+    "value": "1800",
     "data_type": "int",
     "info": "specifies (in seconds) the low threshold value of undo retention.",
     "flags": "GLOBAL",
