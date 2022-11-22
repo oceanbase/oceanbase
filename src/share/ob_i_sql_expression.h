@@ -148,7 +148,8 @@ public:
      session_(NULL),
      udf_meta_(NULL),
      cast_mode_(CM_NONE),
-     raw_expr_(NULL)
+     raw_expr_(NULL),
+     cur_row_idx_(0)
   {}
 
   inline ObCollationType get_coll_type() const {
@@ -196,6 +197,9 @@ public:
   void set_raw_expr(sql::ObRawExpr *expr) { raw_expr_ = expr; }
   sql::ObRawExpr *get_raw_expr() { return raw_expr_; }
 
+  inline void set_cur_row_idx(int64_t cur_row_idx) { cur_row_idx_ = cur_row_idx; }
+  inline int64_t get_cur_row_idx() { return cur_row_idx_; }
+
   TO_STRING_KV(K_(coll_type),
                K_(div_precision_increment),
                K_(ob_max_allowed_packet),
@@ -215,6 +219,8 @@ private:
    // Usually need to override get_cast_mode() of ObExprOperator which works for non_static engine
    common::ObCastMode cast_mode_;
    sql::ObRawExpr *raw_expr_;
+   //used to switch params in subquery comparison operators
+   int64_t cur_row_idx_;
 };
 
 class ObISqlExpression
