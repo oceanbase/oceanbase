@@ -1767,7 +1767,10 @@ int ObTablet::build_read_info(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObSEArray<share::schema::ObColDesc, 16> cols_desc;
-  if (OB_FAIL(storage_schema_.get_multi_version_column_descs(cols_desc))) {
+  if (OB_UNLIKELY(storage_schema_.get_compat_mode() != tablet_meta_.compat_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compat mode of schema and tablet_meta is not equal", K(ret), K_(storage_schema), K_(tablet_meta));
+  } else if (OB_FAIL(storage_schema_.get_multi_version_column_descs(cols_desc))) {
     LOG_WARN("Fail to get rowkey column ids", K(ret));
   } else if (OB_FAIL(full_read_info_.init(allocator,
       storage_schema_.get_column_count(),

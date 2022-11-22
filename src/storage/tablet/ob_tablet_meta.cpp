@@ -1027,6 +1027,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema(
   storage_schema.block_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
   storage_schema.progressive_merge_round_ = 0;
   storage_schema.master_key_id_ = OB_INVALID_ID;
+  storage_schema.compat_mode_ = static_cast<uint32_t>(lib::Worker::get_compatibility_mode());
 
   ObStorageRowkeyColumnSchema rowkey_schema;
   rowkey_schema.meta_type_.set_tinyint();
