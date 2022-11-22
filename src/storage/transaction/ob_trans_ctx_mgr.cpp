@@ -4984,6 +4984,9 @@ int ObPartTransCtxMgr::remove_callback_for_uncommited_txn(const ObPartitionKey& 
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = NULL;
 
+  ObTimeGuard tg("ObPartTransCtxMgr::remove_callback_for_uncommited_txn", 1000 * 1000);
+  DRWLock::RDLockGuard guard(rwlock_);
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
     ret = OB_NOT_INIT;
@@ -5005,6 +5008,9 @@ int ObPartTransCtxMgr::remove_mem_ctx_for_trans_ctx(const ObPartitionKey& partit
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = NULL;
+
+  ObTimeGuard tg("ObPartTransCtxMgr::remove_mem_ctx_for_trans_ctx", 1000 * 1000);
+  DRWLock::RDLockGuard guard(rwlock_);
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
