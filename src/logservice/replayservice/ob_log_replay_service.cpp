@@ -716,25 +716,9 @@ int ObLogReplayService::get_replay_status_(const share::ObLSID &id,
 bool ObLogReplayService::is_tenant_out_of_memory_() const
 {
   bool bool_ret = true;
-  int ret = OB_SUCCESS;
-  int64_t active_memstore_used = 0;
-  int64_t total_memstore_used = 0;
-  int64_t memstore_freeze_trigger = 0;
-  int64_t memstore_limit = 0;
-  int64_t freeze_cnt = 0;
-  if (OB_FAIL((MTL(ObTenantFreezer *)->get_tenant_memstore_cond(active_memstore_used,
-                                                                total_memstore_used,
-                                                                memstore_freeze_trigger,
-                                                                memstore_limit,
-                                                                freeze_cnt,
-                                                                false)))) {
-    CLOG_LOG(WARN, "get_tenant_memstore_cond failed", K(ret));
-  } else {
-    // Estimate the size of memstore based on 16 times expansion
-    int64_t memstore_left = memstore_limit - total_memstore_used;
-    int64_t pending_replay_task_mem_limit = std::min(memstore_left >> 4, PENDING_TASK_MEMORY_LIMIT);
-    bool_ret = (get_pending_task_size() >= pending_replay_task_mem_limit);
-  }
+  int64_t pending_size = get_pending_task_size();
+  bool is_pending_too_large = MTL(ObTenantFreezer *)->is_replay_pending_log_too_large(pending_size);
+  bool_ret = (pending_size >= PENDING_TASK_MEMORY_LIMIT || is_pending_too_large);
   return bool_ret;
 }
 
