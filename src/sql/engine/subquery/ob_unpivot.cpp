@@ -140,14 +140,16 @@ int ObUnpivot::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
       input_row = unpivot_ctx->last_input_row_;
     }
 
-    LOG_DEBUG("arrive unpivot",
-        K(ret),
-        KPC(input_row),
-        K(output_row),
-        K(output_indexs_),
-        K(unpivot_ctx->curr_part_idx_),
-        K(max_part_count),
-        K(unpivot_info_));
+    if (OB_SUCC(ret)) {
+      LOG_DEBUG("arrive unpivot",
+          K(ret),
+          KPC(input_row),
+          K(output_row),
+          K(output_indexs_),
+          K(unpivot_ctx->curr_part_idx_),
+          K(max_part_count),
+          K(unpivot_info_));
+    }
 
     if (!unpivot_info_.is_include_null_) {
       bool need_try_next_part = true;
