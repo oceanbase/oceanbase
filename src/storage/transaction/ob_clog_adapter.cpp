@@ -200,18 +200,16 @@ void ObClogAdapter::handle(void* task)
             if (EXECUTE_COUNT_PER_SEC(16)) {
               TRANS_LOG(WARN, "submit log error", KR(ret), K(log_task));
             }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(cb->on_submit_log_success(with_need_update_version, cur_log_id, cur_log_timestamp))) {
-                TRANS_LOG(WARN, "submit log success callback error", KR(ret), K(log_task));
+            if (!need_retry(ret)) {
+              if (OB_FAIL(cb->on_submit_log_fail(ret))) {
+                TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
               }
               SubmitLogTaskFactory::release(log_task);
               log_task = NULL;
               task = NULL;
             } else {
-              if (EXECUTE_COUNT_PER_SEC(16)) {
-                TRANS_LOG(WARN, "submit log error", KR(ret), K(log_task));
-              }
-              if (!need_retry(ret)) {
+              if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
+                TRANS_LOG(ERROR, "push submit log task failed", K(ret), K(log_task));
                 if (OB_FAIL(cb->on_submit_log_fail(ret))) {
                   TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
                 }
@@ -219,25 +217,15 @@ void ObClogAdapter::handle(void* task)
                 log_task = NULL;
                 task = NULL;
               } else {
-                if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
-                  TRANS_LOG(ERROR, "push submit log task failed", K(ret), K(log_task));
-                  if (OB_FAIL(cb->on_submit_log_fail(ret))) {
-                    TRANS_LOG(WARN, "submit log fail callback error", KR(ret), K(log_task));
-                  }
-                  SubmitLogTaskFactory::release(log_task);
-                  log_task = NULL;
-                  task = NULL;
-                } else {
-                  if (REACH_TIME_INTERVAL(100 * 1000)) {
-                    TRANS_LOG(INFO, "push submit log task success", K(log_task));
-                  }
+                if (REACH_TIME_INTERVAL(100 * 1000)) {
+                  TRANS_LOG(INFO, "push submit log task success", K(log_task));
                 }
               }
             }
           }
-          if (need_revert_ctx) {
-            ctx->get_partition_mgr()->release_ctx_ref(ctx);
-          }
+        }
+        if (need_revert_ctx) {
+          ctx->get_partition_mgr()->release_ctx_ref(ctx);
         }
       }
     } else if (tmp_task->get_task_type() == ObTransRetryTaskType::BACKFILL_NOP_LOG) {
