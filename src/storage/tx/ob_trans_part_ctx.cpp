@@ -212,7 +212,11 @@ void ObPartTransCtx::destroy()
     // Defensive Check 3 : missing to callback scheduler
     if (!is_follower_() && need_callback_scheduler_()) {
       int ret = OB_TRANS_UNKNOWN;
-      TRANS_LOG(ERROR, "missing callback scheduler, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      if (0 == start_working_log_ts_) {
+        TRANS_LOG(ERROR, "missing callback scheduler, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      } else {
+        TRANS_LOG(WARN, "missing callback scheduler maybe, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      }
       // NOTE: callback scheduler may introduce deadlock, need take care
       trans_service_->handle_tx_commit_result(trans_id_, OB_TRANS_UNKNOWN, -1);
       FORCE_PRINT_TRACE(tlog_, "[missing callback scheduler] ");
