@@ -403,7 +403,7 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len, uint8_t 
     }
     const char *iter_input = input;
     int64_t skipped_spaces = 0;
-    for (; OB_SUCC(ret) && '=' != *iter_input && iter_input < input + input_len; iter_input++) {
+    for(; OB_SUCC(ret) && iter_input < (input + input_len) && '=' != *iter_input; iter_input++) {
       if (OB_UNLIKELY(!is_base64_char(*iter_input))) {
         if (skip_spaces) {
           if (my_base64_decoder_skip_spaces(*iter_input)) {
