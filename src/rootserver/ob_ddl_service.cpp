@@ -3374,19 +3374,6 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
   return ret;
 }
 
-int ObDDLService::check_can_convert_to_character(const share::schema::ObColumnSchemaV2 &column_schema, bool &can_convert)
-{
-  int ret = OB_SUCCESS;
-  can_convert = false;
-  if (OB_UNLIKELY(!column_schema.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(column_schema));
-  } else {
-    can_convert = (column_schema.is_string_type() || column_schema.is_enum_or_set()) && CS_TYPE_BINARY != column_schema.get_collation_type();
-  }
-  return ret;
-}
-
 int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                              const ObTableSchema &orig_table_schema,
                                              ObDDLType &ddl_type)
@@ -3421,9 +3408,7 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
         if (OB_ISNULL(col)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("col is NULL", K(ret));
-        } else if (OB_FAIL(check_can_convert_to_character(*col, can_convert))) {
-          LOG_WARN("check can convert to character", K(ret));
-        } else if (can_convert) {
+        } else if (ObDDLUtil::check_can_convert_character(col->get_meta_type())) {
           if (orig_table_schema.is_column_in_foreign_key(col->get_column_id())) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column charset or collation with foreign key");
@@ -3577,6 +3562,93 @@ int ObDDLService::alter_table_partition_by(
   return ret;
 }
 
+// convert character set for ObBasePartition, inluding high_bound_val and list_row_values.
+int ObDDLService::convert_to_character_for_partition(
+    const ObCollationType &to_collation,
+    ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = new_table_schema.get_part_level();
+  const ObPartitionFuncType part_func_type = new_table_schema.get_part_option().get_part_func_type();
+  const ObPartitionFuncType subpart_func_type = new_table_schema.get_sub_part_option().get_sub_part_func_type();
+  if (PARTITION_LEVEL_MAX <= part_level) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(part_level), K(new_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    // non-partitioned, do nothing.
+  } else {
+    const int64_t part_num = new_table_schema.get_partition_num();
+    ObPartition **part_array = new_table_schema.get_part_array();
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null first part array", K(ret), K(part_level), K(part_num), K(part_func_type));
+    }
+    // for the first-level part.
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+      ObPartition *partition = part_array[i];
+      if (OB_ISNULL(partition)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret));
+      } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type
+        && OB_FAIL(partition->convert_character_for_range_columns_part(to_collation))) {
+          LOG_WARN("convert charset failed", K(ret), K(to_collation));
+      } else if (PARTITION_FUNC_TYPE_LIST_COLUMNS == part_func_type
+        && OB_FAIL(partition->convert_character_for_list_columns_part(to_collation))) {
+        LOG_WARN("convert charset failed", K(ret), K(to_collation));
+      } else if (PARTITION_LEVEL_TWO == part_level) {
+        // for the second-level part.
+        const int64_t subpart_num = partition->get_subpartition_num();
+        ObSubPartition **subpart_array = partition->get_subpart_array();
+        if (OB_ISNULL(subpart_array)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part array is null", K(ret));
+        } else if (subpart_num < 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sub_part_num less than 1", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < subpart_num; j++) {
+            ObSubPartition *subpart = subpart_array[j];
+            if (OB_ISNULL(subpart)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected err", K(ret));
+            } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_func_type
+              && OB_FAIL(subpart->convert_character_for_range_columns_part(to_collation))) {
+                LOG_WARN("convert charset failed", K(ret), K(to_collation));
+            } else if (PARTITION_FUNC_TYPE_LIST_COLUMNS == subpart_func_type
+              && OB_FAIL(subpart->convert_character_for_list_columns_part(to_collation))) {
+              LOG_WARN("convert charset failed", K(ret), K(to_collation));
+            }
+          }
+        }
+      }
+    }
+  }
+  // for def subpartition array.
+  if (OB_SUCC(ret) && new_table_schema.has_sub_part_template_def()) {
+    ObSubPartition **def_subpart_array = new_table_schema.get_def_subpart_array();
+    const int64_t def_subpart_num = new_table_schema.get_def_sub_part_num();
+    if (OB_ISNULL(def_subpart_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err, def subpart arr is null", K(ret), K(new_table_schema));
+    } else {
+      ObSubPartition *subpart_info = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < def_subpart_num; i++) {
+        if (OB_ISNULL(subpart_info = def_subpart_array[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sub part is nullptr", K(ret));
+        } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_func_type
+          && OB_FAIL(subpart_info->convert_character_for_range_columns_part(to_collation))) {
+            LOG_WARN("convert charset failed", K(ret), K(to_collation));
+        } else if (PARTITION_FUNC_TYPE_LIST_COLUMNS == subpart_func_type
+          && OB_FAIL(subpart_info->convert_character_for_list_columns_part(to_collation))) {
+          LOG_WARN("convert charset failed", K(ret), K(to_collation));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::convert_to_character(
     obrpc::ObAlterTableArg &alter_table_arg,
     const ObTableSchema &orig_table_schema,
@@ -3599,15 +3671,16 @@ int ObDDLService::convert_to_character(
   ObTableSchema::const_column_iterator tmp_end = orig_table_schema.column_end();
   if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to get oracle mode", K(ret));
+  } else if (is_oracle_mode) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected compat mode", K(ret), K(orig_table_schema));
   } else {
     for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
       ObColumnSchemaV2 *orig_col = (*tmp_begin);
       if (OB_ISNULL(orig_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col is NULL", K(ret));
-      } else if (OB_FAIL(check_can_convert_to_character(*orig_col, can_convert))) {
-        LOG_WARN("check can convert to character", K(ret));
-      } else if (can_convert) {
+      } else if (ObDDLUtil::check_can_convert_character(orig_col->get_meta_type())) {
         ObColumnSchemaV2 *col = new_table_schema.get_column_schema(orig_col->get_column_name());
         if (OB_ISNULL(col)) {
           ret = OB_ERR_UNEXPECTED;
@@ -3625,6 +3698,13 @@ int ObDDLService::convert_to_character(
         }
       }
     }
+    // convert character set for partition.
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(convert_to_character_for_partition(collation_type, new_table_schema))) {
+        LOG_WARN("convert collation type for partition failed", K(ret));
+      }
+    }
+
     OZ (create_user_hidden_table(orig_table_schema,
                                 new_table_schema,
                                 &alter_table_arg.sequence_ddl_arg_,
