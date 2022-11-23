@@ -56,6 +56,10 @@ private:
     {
       allocator_.set_tenant_id(tenant_id);
     }
+    void set_ctx_id(int64_t ctx_id)
+    {
+      allocator_.set_ctx_id(ctx_id);
+    }
   private:
     common::ObArenaAllocator allocator_;
     int64_t alloc_cnt_;
