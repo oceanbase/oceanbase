@@ -303,6 +303,7 @@ int ObTabletDDLKvMgr::cleanup()
 
 void ObTabletDDLKvMgr::cleanup_unlock()
 {
+  LOG_INFO("cleanup ddl kv mgr", K(*this));
   for (int64_t pos = head_; pos < tail_; ++pos) {
     const int64_t idx = get_idx(pos);
     free_ddl_kv(idx);
@@ -385,7 +386,12 @@ int ObTabletDDLKvMgr::register_to_tablet(const int64_t ddl_start_log_ts, ObDDLKv
       ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
     } else if (ddl_start_log_ts > start_log_ts_) {
-      ret = OB_ERR_SYS;
+      if (0 == start_log_ts_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
       LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
     } else {
       if (OB_FAIL(tablet_handle.get_obj()->set_ddl_kv_mgr(kv_mgr_handle))) {
@@ -419,7 +425,12 @@ int ObTabletDDLKvMgr::unregister_from_tablet(const int64_t ddl_start_log_ts, ObD
       ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
     } else if (ddl_start_log_ts > start_log_ts_) {
-      ret = OB_ERR_SYS;
+      if (0 == start_log_ts_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
       LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
     } else {
       if (OB_FAIL(tablet_handle.get_obj()->remove_ddl_kv_mgr(kv_mgr_handle))) {
