@@ -830,8 +830,6 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
-  } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
-      LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
   } else {
