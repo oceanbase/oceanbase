@@ -2424,7 +2424,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                           phy_plan,
                                           result.get_exec_context(),
                                           stmt))) { //rewrite stmt
-          LOG_WARN("Failed to transforme stmt", K(ret));
+          LOG_WARN("Failed to transform stmt", K(ret));
         } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
         } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
                                          *stmt, logical_plan))) { //gen logical plan
