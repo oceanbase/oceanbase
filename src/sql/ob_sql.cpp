@@ -3705,7 +3705,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   ObSQLSessionInfo &session = result.get_session();
   ObPlanCache *plan_cache = session.get_plan_cache();
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
-  // recorde whether needs to do parameterization at this time,
+  // record whether needs to do parameterization at this time,
   // if exact mode is on, not do parameterizaiton
   bool is_enable_transform_tree = !session.get_enable_exact_mode();
   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
@@ -4284,7 +4284,7 @@ int ObSql::get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObStri
 //   ObString outlined_stmt = trimed_stmt;
 //   bool add_plan_to_pc = false;
 //   ObSQLSessionInfo &session = result.get_session();
-//   // recorde whether needs to do parameterization at this time,
+//   // record whether needs to do parameterization at this time,
 //   // if exact mode is on, not do parameterizaiton
 //   bool is_enable_transform_tree = !session.get_enable_exact_mode();
 //   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
