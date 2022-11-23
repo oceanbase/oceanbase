@@ -678,6 +678,7 @@ int ObTabletTableOperator::fill_remove_dml_splicer_(
 }
 
 int ObTabletTableOperator::remove_residual_tablet(
+    ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObAddr &server,
     const int64_t limit,
@@ -688,7 +689,7 @@ int ObTabletTableOperator::remove_residual_tablet(
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   ObSqlString sql;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(
@@ -708,7 +709,7 @@ int ObTabletTableOperator::remove_residual_tablet(
       server.get_port(),
       limit))) {
     LOG_WARN("assign sql string failed", KR(ret), K(sql));
-  } else if (OB_FAIL(sql_proxy_->write(sql_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(sql), K(sql_tenant_id));
   } else if (affected_rows > 0) {
     LOG_INFO("finish to remove residual tablet", KR(ret), K(tenant_id), K(affected_rows));

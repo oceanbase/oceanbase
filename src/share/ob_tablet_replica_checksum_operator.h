@@ -127,6 +127,12 @@ public:
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const common::ObIArray<share::ObTabletReplica> &tablet_replicas);
+  static int remove_residual_checksum(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObAddr &server,
+      const int64_t limit,
+      int64_t &affected_rows);
 
   static int check_column_checksum(
       const uint64_t tenant_id,
