@@ -140,10 +140,12 @@ int ObBitmap::load_blocks_from_array(size_type *block_data, size_type num_bits)
         walk_ptr = walk_ptr->next_;
       }
       // Set bits in the same block after @valid_bits_ to false
-      size_type inner_pos = valid_bits_;
-      walk_ptr = find_block(valid_bits_, inner_pos);
-      for (size_type i = bit_index(inner_pos); i < BITS_PER_BLOCK; ++i) {
-        walk_ptr->bits_[block_index(inner_pos)] &= ~bit_mask(i);
+      if (0 != (valid_bits_ & BLOCK_MOD_MASK)) {
+        size_type inner_pos = valid_bits_;
+        walk_ptr = find_block(valid_bits_, inner_pos);
+        for (size_type i = bit_index(inner_pos); i < BITS_PER_BLOCK; ++i) {
+          walk_ptr->bits_[block_index(inner_pos)] &= ~bit_mask(i);
+        }
       }
     }
   }
