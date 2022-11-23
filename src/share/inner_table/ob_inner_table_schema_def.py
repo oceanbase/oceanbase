@@ -10844,6 +10844,10 @@ def_table_schema(
 # 12357: __all_virtual_tenant_rls_attribute_history
 # 12358: __all_virtual_tenant_mysql_sys_agent
 
+# 12359: __all_virtual_sql_plan
+# 12360: __all_virtual_plan_table
+# 12361: __all_virtual_plan_real_info
+
 #
 # 余留位置
 #
@@ -11112,6 +11116,10 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 # 15282: ALL_VIRTUAL_TENANT_SYS_AGENT
 # 15283: __all_virtual_tenant_info_agent
+
+# 15284: __all_virtual_sql_plan
+# 15285: __all_virtual_plan_table
+# 15286: __all_virtual_plan_real_info
 
 ################################################################################
 # System View (20000,30000]
@@ -23257,6 +23265,11 @@ def_table_schema(
 )
 
 # 21340:  DBA_OB_USER_DEFINED_RULES
+
+# 21341: GV$OB_SQL_PLAN
+# 21342: V$OB_SQL_PLAN
+# 21343: GV$OB_PLAN_REAL_INFO
+# 21344: V$OB_PLAN_REAL_INFO
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -44845,6 +44858,11 @@ FROM (
 # 28169: ALL_SEC_RELEVANT_COLS
 # 28170: USER_SEC_RELEVANT_COLS
 # 28171: DBA_OB_USER_DEFINED_RULES
+
+# 28172: GV$OB_SQL_PLAN
+# 28173: V$OB_SQL_PLAN
+# 28174: GV$OB_PLAN_REAL_INFO
+# 28175: V$OB_PLAN_REAL_INFO
 
 ################################################################################
 # Lob Table (50000, 70000)
