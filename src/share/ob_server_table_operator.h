@@ -53,6 +53,7 @@ public:
   virtual int update_stop_time(const common::ObAddr &server,
       const int64_t stop_time);
   virtual int update_with_partition(const common::ObAddr &server, bool with_partition);
+  int get_start_service_time(const common::ObAddr &server, int64_t &start_service_time) const;
 
 private:
   int build_server_status(const common::sqlclient::ObMySQLResult &res,
