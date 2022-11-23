@@ -63,6 +63,7 @@ select 20*1/1000 * 0.95(min_distinct 20);
 select c1 from t1 where c1 <= 500;
 select 20*1/1000 * 0.95;
 select c1 from t1 where c1 >= 10000;
+#T_OP_NE 未做处理
 select 1 - 1/1000*0.95 - 100/10000
 select c1 from t1 where c1 != 500;
 select 1 - 1/1000*0.95 - 100/10000
@@ -75,6 +76,7 @@ select 1 - 1/1000*0.95 - 100/10000
 select c1 from t1 where c1 * 2 != 50;
 select 0.5
 select c1 from t1 where c1 / 2 != 50;
+# and && or 混合 A and B: A*B, A OR B : A + B - A*B
 select (10000-2000)/(10000-1000)*0.95;
 select c1 from t1 where c1 > 2000;
 select (3000-1000)/(10000-1000)*0.95;
@@ -91,6 +93,7 @@ select (10000-9000)/(10000-1000)*0.95;
 select c1 from t1 where c1 > 9000;
 select (8000-1000)/(10000-1000)*0.95;
 select c1 from t1 where c1 < 8000;
+#以上为所需单个条件的选择率
 select (3000-2000)/(10000-1000)*0.95;
 select c1 from t1 where c1 > 2000 and c1 < 3000;
 select 0.019;
@@ -183,7 +186,7 @@ select 1/1000*0.95;
 select c1 from t1 where c1 between 1000 and 1000;
 select 0.95;
 select c1 from t1 where c1 not between 1000 and 1000;
-select 0;#bug 8551829 :6;
+select 0;考虑设最低选择率;#bug 8551829 :6;
 select c1 from t1 where c1 between 10000 and 1000;
 select 1;
 select c1 from t1 where c1 not between 10000 and 1000;
@@ -197,12 +200,12 @@ select (2000-1000)/(10000-1000)*0.95;
 select c1 from t1 where 2000 between c1 and 10000;
 select (10000-8000)/(10000-1000)*0.95;
 select c1 from t1 where 2000 not between c1 and 10000;
-
+#btw的最小选择率暂时未设置，这里会直接为0
 select 0;
 select c1 from t1 where 1000 between 10000 and c1;
 select (10000-2000)/(10000-1000)*0.95;
 select c1 from t1 where 2000 between 1000 and c1;
-
+#常量这种情况暂时未做计算 #bug 8551829 :5;
 select 1;
 select c1 from t1 where 1 between 0 and 1;
 select 0;

@@ -20,23 +20,30 @@
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_define.h"
 using oceanbase::common::OB_APP_MIN_COLUMN_ID;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace common {
-class ObStatManager;
+namespace common
+{
 class ObMySQLProxy;
 class ObSqlString;
-}  // namespace common
-namespace share {
-namespace schema {
+}
+namespace share
+{
+namespace schema
+{
 class ObTableSchema;
 }
-}  // namespace share
-namespace observer {
-class ObTenantAllTables : public common::ObVirtualTableIterator {
-  enum TENANT_ALL_TABLES_COLUMN {
+}
+namespace observer
+{
+class ObTenantAllTables : public common::ObVirtualTableIterator
+{
+  enum TENANT_ALL_TABLES_COLUMN
+  {
     DATABASE_ID = OB_APP_MIN_COLUMN_ID,
     TABLE_NAME = OB_APP_MIN_COLUMN_ID + 1,
     TABLE_TYPE = OB_APP_MIN_COLUMN_ID + 2,
@@ -58,13 +65,19 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
     CREATE_OPTIONS = OB_APP_MIN_COLUMN_ID + 18,
     COMMENT = OB_APP_MIN_COLUMN_ID + 19
   };
-  class TableStatistics {
+  class TableStatistics
+  {
   public:
-    TableStatistics()
-        : row_count_(0), data_size_(0), data_version_(0), data_checksum_(0), create_time_(0), update_time_(0)
-    {}
-    ~TableStatistics()
-    {}
+    TableStatistics():
+        row_count_(0),
+        data_size_(0),
+        data_version_(0),
+        data_checksum_(0),
+        create_time_(0),
+        update_time_(0)
+        {
+        }
+    ~TableStatistics() {}
     void reset()
     {
       row_count_ = 0;
@@ -81,45 +94,29 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
     int64_t create_time_;
     int64_t update_time_;
   };
-
 public:
   ObTenantAllTables();
   virtual ~ObTenantAllTables();
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_tenant_id(uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-  inline void set_sql_proxy(common::ObMySQLProxy* sql_proxy)
-  {
-    sql_proxy_ = sql_proxy;
-  }
-
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_sql_proxy(common::ObMySQLProxy *sql_proxy) { sql_proxy_ = sql_proxy; }
 private:
   int inner_get_next_row();
-  int get_tables_stat();
   int get_sequence_value();
-  int fill_table_statistics(const common::ObSqlString& sql, uint64_t sql_tenant_id);
-  int get_all_table_ids(common::ObIArray<uint64_t>& table_ids);
-  int construct_fill_user_table_sql(const common::ObIArray<uint64_t>& table_ids, int64_t begin_idx, int64_t end_idx,
-      const char* meta_table_name, common::ObSqlString& sql);
-  int fill_user_table_statistics(
-      const common::ObIArray<uint64_t>& table_ids, const char* meta_table_name, uint64_t sql_tenant_id);
-
 private:
-  common::ObMySQLProxy* sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_;
   uint64_t tenant_id_;
   uint64_t database_id_;
-  common::ObSEArray<const share::schema::ObTableSchema*, 128> table_schemas_;
+  common::ObSEArray<const share::schema::ObTableSchema *, 128> table_schemas_;
   int64_t table_schema_idx_;
   common::hash::ObHashMap<share::AutoincKey, uint64_t> seq_values_;
   common::hash::ObHashMap<uint64_t, TableStatistics> tables_statistics_;
-  char* option_buf_;
+  char *option_buf_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantAllTables);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}// observer
+}// oceanbase
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_TENANT_ALL_TABLES_ */

@@ -12,26 +12,30 @@
 
 #include "lib/compress/ob_compressor_pool.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 ObCompressorPool::ObCompressorPool()
-    : none_compressor(),
-      lz4_compressor(),
-      lz4_compressor_1_9_1(),
-      snappy_compressor(),
-      zlib_compressor(),
-      zstd_compressor_1_3_8(),
-      lz4_stream_compressor(),
-      zstd_stream_compressor(),
-      zstd_stream_compressor_1_3_8()
-{}
-ObCompressorPool& ObCompressorPool::get_instance()
+    :none_compressor(),
+     lz4_compressor(),
+     lz4_compressor_1_9_1(),
+     snappy_compressor(),
+     zlib_compressor(),
+     zstd_compressor_1_3_8(),
+     lz4_stream_compressor(),
+     zstd_stream_compressor(),
+     zstd_stream_compressor_1_3_8()
+{
+}
+ObCompressorPool &ObCompressorPool::get_instance()
 {
   static ObCompressorPool instance_;
   return instance_;
 }
 
-int ObCompressorPool::get_compressor(const char* compressor_name, ObCompressor*& compressor)
+int ObCompressorPool::get_compressor(const char *compressor_name,
+                                     ObCompressor *&compressor)
 {
   int ret = OB_SUCCESS;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
@@ -40,17 +44,18 @@ int ObCompressorPool::get_compressor(const char* compressor_name, ObCompressor*&
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid compressor name argument, ", K(ret), KP(compressor_name));
   } else if (OB_FAIL(get_compressor_type(compressor_name, compressor_type))) {
-    LIB_LOG(WARN, "fail to get compressor type, ", K(ret), K(compressor_name));
+    LIB_LOG(WARN, "fail to get compressor type, ", K(ret), KCSTRING(compressor_name));
   } else if (OB_FAIL(get_compressor(compressor_type, compressor))) {
     LIB_LOG(WARN, "fail to get compressor", K(ret), K(compressor_type));
   }
   return ret;
 }
 
-int ObCompressorPool::get_compressor(const ObCompressorType& compressor_type, ObCompressor*& compressor)
+int ObCompressorPool::get_compressor(const ObCompressorType &compressor_type,
+                                     ObCompressor *&compressor)
 {
   int ret = OB_SUCCESS;
-  switch (compressor_type) {
+  switch(compressor_type) {
     case NONE_COMPRESSOR:
       compressor = &none_compressor;
       break;
@@ -80,7 +85,8 @@ int ObCompressorPool::get_compressor(const ObCompressorType& compressor_type, Ob
   return ret;
 }
 
-int ObCompressorPool::get_compressor_type(const char* compressor_name, ObCompressorType& compressor_type) const
+int ObCompressorPool::get_compressor_type(const char *compressor_name,
+                                          ObCompressorType &compressor_type) const
 {
   int ret = OB_SUCCESS;
   if (NULL == compressor_name) {
@@ -96,24 +102,43 @@ int ObCompressorPool::get_compressor_type(const char* compressor_name, ObCompres
     compressor_type = ZLIB_COMPRESSOR;
   } else if (!strcmp(compressor_name, "zstd_1.0")) {
     compressor_type = ZSTD_COMPRESSOR;
+  } else if (!strcmp(compressor_name, "zstd_1.3.8")) {
+    compressor_type = ZSTD_1_3_8_COMPRESSOR;
+  } else if (!strcmp(compressor_name, "lz4_1.9.1")) {
+    compressor_type = LZ4_191_COMPRESSOR;
   } else if (!strcmp(compressor_name, "stream_lz4_1.0")) {
     compressor_type = STREAM_LZ4_COMPRESSOR;
   } else if (!strcmp(compressor_name, "stream_zstd_1.0")) {
     compressor_type = STREAM_ZSTD_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "zstd_1.3.8")) {
-    compressor_type = ZSTD_1_3_8_COMPRESSOR;
   } else if (!strcmp(compressor_name, "stream_zstd_1.3.8")) {
     compressor_type = STREAM_ZSTD_1_3_8_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "lz4_1.9.1")) {
-    compressor_type = LZ4_191_COMPRESSOR;
   } else {
     ret = OB_NOT_SUPPORTED;
-    LIB_LOG(WARN, "no support compressor type, ", K(ret), K(compressor_name));
+    LIB_LOG(WARN, "no support compressor type, ", K(ret), KCSTRING(compressor_name));
   }
   return ret;
 }
 
-int ObCompressorPool::get_stream_compressor(const char* compressor_name, ObStreamCompressor*& stream_compressor)
+int ObCompressorPool::get_compressor_type(const ObString &compressor_name,
+                                          ObCompressorType &compressor_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(compressor_name.ptr()) || compressor_name.length() == 0) {
+    compressor_type = ObCompressorType::NONE_COMPRESSOR;
+  } else {
+    int64_t len = compressor_name.length() + 1;
+    char comp_name[len];
+    MEMCPY(comp_name, compressor_name.ptr(), len - 1);
+    comp_name[len - 1] = '\0';
+    if (OB_FAIL(get_compressor_type(comp_name, compressor_type))) {
+      LIB_LOG(ERROR, "no support compressor name", K(ret), K(compressor_name));
+    }
+  }
+  return ret;
+}
+
+int ObCompressorPool::get_stream_compressor(const char *compressor_name,
+                                            ObStreamCompressor *&stream_compressor)
 {
   int ret = OB_SUCCESS;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
@@ -122,19 +147,18 @@ int ObCompressorPool::get_stream_compressor(const char* compressor_name, ObStrea
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid compressor name argument, ", K(ret), KP(compressor_name));
   } else if (OB_FAIL(get_compressor_type(compressor_name, compressor_type))) {
-    LIB_LOG(WARN, "fail to get compressor type, ", K(ret), K(compressor_name));
+    LIB_LOG(WARN, "fail to get compressor type, ", K(ret), KCSTRING(compressor_name));
   } else if (OB_FAIL(get_stream_compressor(compressor_type, stream_compressor))) {
     LIB_LOG(WARN, "fail to get stream compressor", K(ret), K(compressor_type));
-  } else { /*do nothing*/
-  }
+  } else {/*do nothing*/}
   return ret;
 }
 
-int ObCompressorPool::get_stream_compressor(
-    const ObCompressorType& compressor_type, ObStreamCompressor*& stream_compressor)
+int ObCompressorPool::get_stream_compressor(const ObCompressorType &compressor_type,
+                                            ObStreamCompressor *&stream_compressor)
 {
   int ret = OB_SUCCESS;
-  switch (compressor_type) {
+  switch(compressor_type) {
     case STREAM_LZ4_COMPRESSOR:
       stream_compressor = &lz4_stream_compressor;
       break;
@@ -152,7 +176,7 @@ int ObCompressorPool::get_stream_compressor(
   return ret;
 }
 
-int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size)
+int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t &max_overflow_size)
 {
   int ret = OB_SUCCESS;
   int64_t lz4_overflow_size = 0;
@@ -162,17 +186,17 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
   int64_t zstd_overflow_size = 0;
   int64_t zstd_138_overflow_size = 0;
   if (OB_FAIL(lz4_compressor.get_max_overflow_size(src_data_size, lz4_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of lz4", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of lz4", K(ret), K(src_data_size));
   } else if (OB_FAIL(lz4_compressor_1_9_1.get_max_overflow_size(src_data_size, lz4_191_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of lz4", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of lz4", K(ret), K(src_data_size));
   } else if (OB_FAIL(snappy_compressor.get_max_overflow_size(src_data_size, snappy_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of snappy", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of snappy", K(ret), K(src_data_size));
   } else if (OB_FAIL(zlib_compressor.get_max_overflow_size(src_data_size, zlib_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of zlib", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of zlib", K(ret), K(src_data_size));
   } else if (OB_FAIL(zstd_compressor.get_max_overflow_size(src_data_size, zstd_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of zstd", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of zstd", K(ret), K(src_data_size));
   } else if (OB_FAIL(zstd_compressor_1_3_8.get_max_overflow_size(src_data_size, zstd_138_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of zstd_138", K(ret), K(src_data_size));
+      LIB_LOG(WARN, "failed to get_max_overflow_size of zstd_138", K(ret), K(src_data_size));
   } else {
     max_overflow_size = std::max(lz4_overflow_size, lz4_191_overflow_size);
     max_overflow_size = std::max(max_overflow_size, snappy_overflow_size);

@@ -13,19 +13,23 @@
 #ifndef __OB_COMMON_SQLCLIENT_MYSQL_PREPARED_PARAM__
 #define __OB_COMMON_SQLCLIENT_MYSQL_PREPARED_PARAM__
 
-#include <mariadb/mysql.h>
+#include <mysql.h>
 #include "lib/string/ob_string.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObIAllocator;
-namespace sqlclient {
+namespace sqlclient
+{
 class ObMySQLPreparedStatement;
-class ObMySQLPreparedParam {
+class ObMySQLPreparedParam
+{
 public:
-  explicit ObMySQLPreparedParam(ObMySQLPreparedStatement& stmt);
+  explicit ObMySQLPreparedParam(ObMySQLPreparedStatement &stmt);
   ~ObMySQLPreparedParam();
   int init();
   int bind_param();
@@ -34,16 +38,17 @@ public:
   /*
    * bind data output buffer
    */
-  int bind_param(
-      const int64_t col_idx, enum_field_types buf_type, char* out_buf, const int64_t buf_len, unsigned long& res_len);
+  int bind_param(const int64_t col_idx, enum_field_types buf_type, char *out_buf, const int64_t buf_len,
+                 unsigned long &res_len);
+
 
 private:
-  ObMySQLPreparedStatement& stmt_;
-  common::ObIAllocator& alloc_;
+  ObMySQLPreparedStatement &stmt_;
+  common::ObIAllocator &alloc_;
   int64_t param_count_;
-  MYSQL_BIND* bind_;
+  MYSQL_BIND *bind_;
 };
-}  // namespace sqlclient
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+}
 #endif

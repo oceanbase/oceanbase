@@ -1,0 +1,73 @@
+#owner: dachuan.sdc
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn_admin;
+--sleep 2
+alter system set enable_async_syslog = false;
+
+connection default;
+
+--disable_warnings
+drop view if exists v1;
+--enable_warnings
+
+#--enable_metadata
+#select connection_id() from dual limit 10;
+#select utc_timestamp() from dual limit 10;
+#select utc_timestamp(3) from dual limit 10;
+#select current_timestamp() from dual limit 10;
+#select current_timestamp(3) from dual limit 10;
+#select sysdate() from dual limit 10;
+#select sysdate(3) from dual limit 10;
+#select cur_date() from dual limit 10;
+#select curtime() from dual limit 10;
+#select current_user() from dual limit 10;
+#select database() from dual limit 10;
+#select effective_tenant_id() from dual limit 10;
+#select effective_tenant() from dual limit 10;
+#select found_rows() from dual limit 10;
+#select host_ip() from dual limit 10;
+#select last_execution_id() from dual limit 10;
+#select last_trace_id() from dual limit 10;
+#select mysql_port() from dual limit 10;
+#select rpc_port() from dual limit 10;
+#select row_count() from dual limit 10;
+#select uuid() from dual limit 10;
+#select user() from dual limit 10;
+#select version() from dual limit 10;
+#--disable_metadata
+
+create view v1 as select connection_id() from dual limit 10;desc v1;drop view v1;
+create view v1 as select utc_timestamp() from dual limit 10;desc v1;drop view v1;
+create view v1 as select utc_timestamp(3) from dual limit 10;desc v1;drop view v1;
+create view v1 as select current_timestamp() from dual limit 10;desc v1;drop view v1;
+create view v1 as select current_timestamp(3) from dual limit 10;desc v1;drop view v1;
+create view v1 as select sysdate() from dual limit 10;desc v1;drop view v1;
+create view v1 as select sysdate(3) from dual limit 10;desc v1;drop view v1;
+create view v1 as select curdate() from dual limit 10;desc v1;drop view v1;
+create view v1 as select curtime() from dual limit 10;desc v1;drop view v1;
+create view v1 as select current_user() from dual limit 10;desc v1;drop view v1;
+create view v1 as select database() from dual limit 10;desc v1;drop view v1;
+create view v1 as select effective_tenant_id() from dual limit 10;desc v1;drop view v1;
+create view v1 as select effective_tenant() from dual limit 10;desc v1;drop view v1;
+create view v1 as select found_rows() from dual limit 10;desc v1;drop view v1;
+create view v1 as select host_ip() from dual limit 10;desc v1;drop view v1;
+create view v1 as select last_execution_id() from dual limit 10;desc v1;drop view v1;
+create view v1 as select last_trace_id() from dual limit 10;desc v1;drop view v1;
+create view v1 as select mysql_port() from dual limit 10;desc v1;drop view v1;
+create view v1 as select rpc_port() from dual limit 10;desc v1;drop view v1;
+create view v1 as select row_count() from dual limit 10;desc v1;drop view v1;
+create view v1 as select uuid() from dual limit 10;desc v1;drop view v1;
+create view v1 as select user() from dual limit 10;desc v1;drop view v1;
+create view v1 as select version() from dual limit 10;desc v1;drop view v1;
+
+
+connection conn_admin; 
+--sleep 2

@@ -15,13 +15,18 @@
 #include "lib/string/ob_string.h"
 #include "observer/ob_server.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share::schema;
-namespace observer {
+namespace observer
+{
 
-ObShowTenantStatus::ObShowTenantStatus() : ObVirtualTableScannerIterator(), tenant_id_(OB_INVALID_ID)
-{}
+ObShowTenantStatus::ObShowTenantStatus()
+    : ObVirtualTableScannerIterator(),
+      tenant_id_(OB_INVALID_ID)
+{
+}
 
 ObShowTenantStatus::~ObShowTenantStatus()
 {
@@ -34,8 +39,12 @@ void ObShowTenantStatus::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObShowTenantStatus::add_tenant_status(const ObAddr& server_addr, const ObTenantSchema& tenant_schema,
-    const ObSysVariableSchema& sys_variable_schema, ObObj* cells, const int64_t col_count)
+
+int ObShowTenantStatus::add_tenant_status(const ObAddr &server_addr,
+                                          const ObTenantSchema &tenant_schema,
+                                          const ObSysVariableSchema &sys_variable_schema,
+                                          ObObj *cells,
+                                          const int64_t col_count)
 {
   int ret = OB_SUCCESS;
   char ip_buf[common::OB_IP_STR_BUFF];
@@ -46,7 +55,7 @@ int ObShowTenantStatus::add_tenant_status(const ObAddr& server_addr, const ObTen
   int64_t cell_idx = 0;
   for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
     uint64_t col_id = output_column_ids_.at(j);
-    switch (col_id) {
+    switch(col_id) {
       case TENANT_NAME: {
         cells[cell_idx].set_varchar(tenant_schema.get_tenant_name_str());
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -57,7 +66,7 @@ int ObShowTenantStatus::add_tenant_status(const ObAddr& server_addr, const ObTen
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "failed to convert ip to string", K(server_addr), K(ret));
         } else {
-          cells[cell_idx].set_varchar(ObString::make_string(ip_buf));  // host
+          cells[cell_idx].set_varchar(ObString::make_string(ip_buf));//host
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
         break;
@@ -71,12 +80,13 @@ int ObShowTenantStatus::add_tenant_status(const ObAddr& server_addr, const ObTen
         break;
       }
       case PORT: {
-        cells[cell_idx].set_int(server_addr.get_port());  // port
+        cells[cell_idx].set_int(server_addr.get_port());//port
         break;
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(j), K(output_column_ids_), K(col_id));
+        SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                   K(j), K(output_column_ids_), K(col_id));
         break;
       }
     }
@@ -96,19 +106,19 @@ int ObShowTenantStatus::add_all_tenant_status()
 {
   int ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
-  ObObj* cells = NULL;
+  ObObj *cells = NULL;
   if (0 > col_count || col_count > TENANT_STATUS_COLUMN_COUNT) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
   } else if (NULL == (cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
-  } else if (OB_ISNULL(schema_guard_)) {
+  } else if (OB_ISNULL(schema_guard_)){
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "schema manager should not be null", K(ret));
   } else {
-    const ObTenantSchema* tenant_schema = NULL;
-    const ObSysVariableSchema* sys_variable_schema = NULL;
+    const ObTenantSchema *tenant_schema = NULL;
+    const ObSysVariableSchema *sys_variable_schema = NULL;
     if (OB_FAIL(schema_guard_->get_tenant_info(tenant_id_, tenant_schema))) {
       SERVER_LOG(WARN, "get_tenant_info failed", K(ret), K_(tenant_id));
     } else if (OB_ISNULL(tenant_schema)) {
@@ -120,10 +130,10 @@ int ObShowTenantStatus::add_all_tenant_status()
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "sys variable schema is null", K(ret));
     } else {
-      ObServer& server = ObServer::get_instance();
+      ObServer &server = ObServer::get_instance();
       const ObAddr server_ip = server.get_self();
-      if (OB_FAIL(
-              add_tenant_status(server_ip, *tenant_schema, *sys_variable_schema, cells, output_column_ids_.count()))) {
+      if (OB_FAIL(add_tenant_status(server_ip, *tenant_schema, *sys_variable_schema,
+                                    cells, output_column_ids_.count()))) {
         SERVER_LOG(WARN, "failed to add table constraint of Tenant schema!", K(ret));
       } else {
         scanner_it_ = scanner_.begin();
@@ -134,7 +144,7 @@ int ObShowTenantStatus::add_all_tenant_status()
   return ret;
 }
 
-int ObShowTenantStatus::inner_get_next_row(ObNewRow*& row)
+int ObShowTenantStatus::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == allocator_)) {
@@ -165,5 +175,5 @@ int ObShowTenantStatus::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

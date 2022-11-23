@@ -15,12 +15,15 @@
 
 #include "common/object/ob_obj_type.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 // const int => int map, used in compile time
 template <int DEFAULT, int K, int V, int... args>
-struct ObConstIntMapping {
+struct ObConstIntMapping
+{
   // liner search key in args, not efficient, can only be used in compile time.
   static constexpr int liner_search(const int key)
   {
@@ -28,28 +31,31 @@ struct ObConstIntMapping {
   }
 };
 
-template <int DEFAULT, int K, int V>
-struct ObConstIntMapping<DEFAULT, K, V> {
-  static constexpr int liner_search(const int key)
-  {
-    return key == K ? V : DEFAULT;
-  }
+template<int DEFAULT, int K, int V>
+struct ObConstIntMapping<DEFAULT, K, V>
+{
+  static constexpr int liner_search(const int key) { return key == K ? V : DEFAULT; }
 };
 
 #define SELECT_ALL(...) __VA_ARGS__
 #define SELECT_TYPE_TC(arg) SELECT_ALL arg
-typedef ObConstIntMapping<ObMaxTC, LST_DO(SELECT_TYPE_TC, (, ), OBJ_TYPE_TC_PAIRS)> ObObjTypeTCMap;
+typedef ObConstIntMapping<ObMaxTC,
+        LST_DO(SELECT_TYPE_TC, (,), OBJ_TYPE_TC_PAIRS)> ObObjTypeTCMap;
 #undef SELECT_TYPE_TC
 #undef SELECT_ALL
 
 template <ObObjType TYPE>
-struct ObObjTypeTraits {
-  constexpr static ObObjTypeClass tc_ = static_cast<ObObjTypeClass>(ObObjTypeTCMap::liner_search(TYPE));
+struct ObObjTypeTraits
+{
+  constexpr static ObObjTypeClass tc_
+      = static_cast<ObObjTypeClass>(ObObjTypeTCMap::liner_search(TYPE));
 };
 
-static_assert(ObObjTypeTraits<ObMaxType>::tc_ == ObMaxTC &&
-                  ObObjTypeTraits<static_cast<ObObjType>(ObMaxType - 1)>::tc_ != ObMaxTC,
-    "Wrong obj type to type class mapping");
+static_assert(ObObjTypeTraits<ObMaxType>::tc_ == ObMaxTC
+              && ObObjTypeTraits<static_cast<ObObjType>(ObMaxType - 1)>::tc_ != ObMaxTC,
+              "Wrong obj type to type class mapping");
+
+
 
 // Two dimension array initializer:
 //
@@ -59,7 +65,8 @@ static_assert(ObObjTypeTraits<ObMaxType>::tc_ == ObMaxTC &&
 //     }
 //   }
 template <int N, int M, template <int, int> class INITER, int X = 0, int Y = 0>
-struct Ob2DArrayConstIniter {
+struct Ob2DArrayConstIniter
+{
   constexpr static int NEXT_X = X + 1;
   constexpr static int NEXT_Y = Y + 1;
   static bool init()
@@ -78,19 +85,15 @@ struct Ob2DArrayConstIniter {
 };
 
 template <int N, int M, template <int, int> class INITER, int X>
-struct Ob2DArrayConstIniter<N, M, INITER, X, M> {
-  static bool init()
-  {
-    return true;
-  }
+struct Ob2DArrayConstIniter<N, M, INITER, X, M>
+{
+  static bool init() { return true; }
 };
 
 template <int N, int M, template <int, int> class INITER, int Y>
-struct Ob2DArrayConstIniter<N, M, INITER, N, Y> {
-  static bool init()
-  {
-    return true;
-  }
+struct Ob2DArrayConstIniter<N, M, INITER, N, Y>
+{
+  static bool init() { return true; }
 };
 
 // array initializer:
@@ -99,7 +102,8 @@ struct Ob2DArrayConstIniter<N, M, INITER, N, Y> {
 //     INITER<IDX>::init_array()
 //   }
 template <int N, template <int> class INITER, int IDX = 0>
-struct ObArrayConstIniter {
+struct ObArrayConstIniter
+{
   constexpr static int NEXT = IDX + 1;
   static bool init()
   {
@@ -113,14 +117,12 @@ struct ObArrayConstIniter {
 };
 
 template <int N, template <int> class INITER>
-struct ObArrayConstIniter<N, INITER, N> {
-  static bool init()
-  {
-    return true;
-  }
+struct ObArrayConstIniter<N, INITER, N>
+{
+  static bool init() { return true; }
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_DATUM_OB_DATUM_UTIL_H_
+#endif // OCEANBASE_DATUM_OB_DATUM_UTIL_H_

@@ -26,58 +26,60 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
-class TestMergeUnion : public ObMergeUnion {
+class TestMergeUnion : public ObMergeUnion
+{
 public:
-  TestMergeUnion() : ObMergeUnion(alloc_)
-  {}
-  virtual ~TestMergeUnion()
-  {}
+  TestMergeUnion() :ObMergeUnion(alloc_) {}
+  virtual ~TestMergeUnion() {}
 };
 
-class TestMergeUnionTest : public ::testing::Test {
+class TestMergeUnionTest: public ::testing::Test
+{
 public:
   TestMergeUnionTest();
   virtual ~TestMergeUnionTest();
   virtual void SetUp();
   virtual void TearDown();
-
 protected:
 private:
   // disallow copy
-  TestMergeUnionTest(const TestMergeUnionTest& other);
-  TestMergeUnionTest& operator=(const TestMergeUnionTest& other);
-
+  TestMergeUnionTest(const TestMergeUnionTest &other);
+  TestMergeUnionTest& operator=(const TestMergeUnionTest &other);
 private:
   // data members
 };
 TestMergeUnionTest::TestMergeUnionTest()
-{}
+{
+}
 
 TestMergeUnionTest::~TestMergeUnionTest()
-{}
+{
+}
 
 void TestMergeUnionTest::SetUp()
-{}
+{
+}
 
 void TestMergeUnionTest::TearDown()
-{}
+{
+}
 
 TEST_F(TestMergeUnionTest, test_all_get_next_row1)
 {
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, false, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table1, COL(2), COL(3), COL(null), COL("yuming"), COL("oceanbase"));
   ADD_ROW(fake_table2, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
@@ -100,16 +102,17 @@ TEST_F(TestMergeUnionTest, test_all_get_next_row2)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
+
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, false, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
   ADD_ROW(result_table, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
 
@@ -125,10 +128,11 @@ TEST_F(TestMergeUnionTest, test_all_get_next_row3)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   TestMergeUnion merge_union;
+
 
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, false, set_direction);
@@ -144,16 +148,17 @@ TEST_F(TestMergeUnionTest, test_all_get_next_row4)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
 
+
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, false, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table2, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
   ADD_ROW(result_table, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
 
@@ -169,17 +174,18 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row1)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
+
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table1, COL(3), COL(2), COL(null), COL("yuchen.wyc"), COL(null));
@@ -214,17 +220,17 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row2)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1.1), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table1, COL(2), COL(2), COL(1.1), COL("yuchen.wyc"), COL(null));
   ADD_ROW(fake_table1, COL(3), COL(2), COL(1.1), COL("yuchen.wyc"), COL(null));
@@ -248,16 +254,17 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row3)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
+
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
   ADD_ROW(result_table, COL(1), COL(2), COL(1.0), COL("yuchen.wyc"), COL(null));
 
@@ -273,10 +280,11 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row4)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   TestMergeUnion merge_union;
+
 
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, true, set_direction);
@@ -292,16 +300,17 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row5)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
+
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 5, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table2, COL(1), COL(2), COL(1), COL("yuchen.wyc"), COL(null));
   ADD_ROW(result_table, COL(1), COL(2), COL(1), COL("yuchen.wyc"), COL(null));
 
@@ -317,17 +326,17 @@ TEST_F(TestMergeUnionTest, test_distinct_get_next_row6)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
   bool set_direction = false;
   TestSetOperatorFactory::init(ctx, &merge_union, 2, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL("1"), COL("a"));
   ADD_ROW(fake_table1, COL("2"), COL("b"));
   ADD_ROW(fake_table2, COL("a"), COL("1"));
@@ -350,17 +359,17 @@ TEST_F(TestMergeUnionTest, test_distinct_with_direction_get_next_row1)
   int ret = OB_SUCCESS;
   ObExecContext ctx;
   ObSQLSessionInfo my_session;
-  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0, 0, 0, NULL));
+  ASSERT_EQ(OB_SUCCESS, my_session.test_init(0,0,0,NULL));
   ctx.set_my_session(&my_session);
-  ObFakeTable& fake_table1 = TestSetOperatorFactory::get_fake_table1();
-  ObFakeTable& fake_table2 = TestSetOperatorFactory::get_fake_table2();
-  ObFakeTable& result_table = TestSetOperatorFactory::get_result_table();
+  ObFakeTable &fake_table1 = TestSetOperatorFactory::get_fake_table1();
+  ObFakeTable &fake_table2 = TestSetOperatorFactory::get_fake_table2();
+  ObFakeTable &result_table = TestSetOperatorFactory::get_result_table();
   TestMergeUnion merge_union;
   ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN;
 
   bool set_direction = true;
   TestSetOperatorFactory::init(ctx, &merge_union, 2, true, set_direction);
-  // prepare rows, equal in the first row
+  //prepare rows, equal in the first row
   ADD_ROW(fake_table1, COL("1"), COL("a"));
   ADD_ROW(fake_table1, COL("2"), COL("b"));
   ADD_ROW(fake_table2, COL("1"), COL("c"));
@@ -378,11 +387,11 @@ TEST_F(TestMergeUnionTest, test_distinct_with_direction_get_next_row1)
   ASSERT_EQ(OB_SUCCESS, result_table.close(ctx));
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_global_memory_pool();
   init_sql_factories();
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();
   return ret;

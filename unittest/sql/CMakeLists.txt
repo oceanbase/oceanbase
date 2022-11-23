@@ -1,18 +1,15 @@
 add_library(sql_ut_base OBJECT
   test_sql_utils.h
   test_sql_utils.cpp
-  ob_mock_partition_location_cache.h
-  ob_mock_partition_location_cache.cpp
   optimizer/ob_mock_part_mgr.h
   optimizer/test_optimizer_utils.h
   optimizer/test_optimizer_utils.cpp
   )
-target_link_libraries(sql_ut_base PUBLIC oceanbase)
-disable_pch(sql_ut_base)
+target_link_libraries(sql_ut_base PUBLIC oceanbase mockcontainer)
+
 function(sql_unittest case)
   ob_unittest(${ARGV})
   target_link_libraries(${case} PRIVATE sql_ut_base)
-  disable_pch(sql_ut_base)
 endfunction()
 
 add_subdirectory(optimizer)

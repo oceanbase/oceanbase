@@ -17,39 +17,35 @@ using namespace oceanbase;
 using namespace common;
 using namespace hash;
 
-struct PairValue {
+struct PairValue
+{
   int64_t key_;
   int64_t value_;
   LINK(PairValue, hash_link_);
 
-  PairValue() : key_(0), value_(0)
+  PairValue()
+      : key_(0),
+        value_(0)
   {
     memset(&hash_link_, 0, sizeof(hash_link_));
   }
 
-  PairValue(const int64_t key, const int64_t value) : key_(key), value_(value)
+  PairValue(const int64_t key, const int64_t value)
+      : key_(key), value_(value)
   {
     memset(&hash_link_, 0, sizeof(hash_link_));
   }
 };
 
-struct KVHashing {
+struct KVHashing
+{
   typedef int64_t Key;
   typedef PairValue Value;
   typedef ObDLList(PairValue, hash_link_) ListHead;
 
-  static uint64_t hash(Key key)
-  {
-    return do_hash(key);
-  }
-  static Key key(Value const* value)
-  {
-    return value->key_;
-  }
-  static bool equal(Key lhs, Key rhs)
-  {
-    return lhs == rhs;
-  }
+  static uint64_t hash(Key key) { return do_hash(key); }
+  static Key key(Value const* value) { return value->key_; }
+  static bool equal(Key lhs, Key rhs) { return lhs == rhs; }
 };
 
 TEST(TestObBuildInHashMap, basic_test)
@@ -57,7 +53,7 @@ TEST(TestObBuildInHashMap, basic_test)
   ObBuildInHashMap<KVHashing> hashmap;
   PairValue val1(1, 1);
   PairValue val2(2, 2);
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(&val1));
   ASSERT_EQ(OB_HASH_EXIST, hashmap.set_refactored(&val1));
   ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(1, val));
@@ -84,14 +80,14 @@ TEST(TestObPointerHashMap, test_many_items)
   ObBuildInHashMap<KVHashing, 8 * 1024> hashmap;
 
   int64_t pair_count = 90000;
-  PairValue* pairs = new PairValue[pair_count];
+  PairValue *pairs = new PairValue[pair_count];
   memset(pairs, 0, pair_count * sizeof(PairValue));
   for (int64_t i = 0; i < pair_count; ++i) {
     pairs[i].key_ = i;
     pairs[i].value_ = i;
   }
 
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   for (int64_t i = 0; i < pair_count; ++i) {
     ASSERT_EQ(OB_SUCCESS, hashmap.set_refactored(&pairs[i]));
     ASSERT_EQ(OB_SUCCESS, hashmap.get_refactored(pairs[i].key_, val));
@@ -108,15 +104,15 @@ TEST(TestObPointerHashMap, test_many_items)
   }
   ASSERT_EQ(pair_count, count);
 
-  delete[] pairs;
+  delete [] pairs;
 }
 
 TEST(TestObPointerHashMap, test_micro_benchmark)
 {
-  ObBuildInHashMap<KVHashing, 256 * 1024>* hashmap = new ObBuildInHashMap<KVHashing, 256 * 1024>();
+  ObBuildInHashMap<KVHashing, 256 * 1024> *hashmap = new ObBuildInHashMap<KVHashing, 256 * 1024>();
 
   int64_t pair_count = 250000;
-  PairValue* pairs = new PairValue[pair_count];
+  PairValue *pairs = new PairValue[pair_count];
   memset(pairs, 0, pair_count * sizeof(PairValue));
   for (int64_t i = 0; i < pair_count; ++i) {
     pairs[i].key_ = i;
@@ -130,9 +126,9 @@ TEST(TestObPointerHashMap, test_micro_benchmark)
   int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
   int64_t set_time = end_time - start_time;
 
-  PairValue* val = NULL;
+  PairValue *val = NULL;
   start_time = ::oceanbase::common::ObTimeUtility::current_time();
-  for (int64_t j = 0; j < 10; ++j) {
+  for (int64_t j = 0; j < 10; ++ j) {
     for (int64_t i = 0; i < pair_count; ++i) {
       ASSERT_EQ(OB_SUCCESS, hashmap->get_refactored(pairs[i].key_, val));
     }
@@ -142,18 +138,14 @@ TEST(TestObPointerHashMap, test_micro_benchmark)
   int64_t set_count = pair_count;
   printf("hash map set_count=%ld, set_time=%ld, set_rate=%ld, get_count=%ld, "
          "get_time=%ld, get_rate=%ld\n",
-      set_count,
-      set_time,
-      set_count * 1000L * 1000L / set_time,
-      pair_count * 10,
-      get_time,
-      pair_count * 10 * 1000L * 1000L / get_time);
+         set_count, set_time, set_count * 1000L * 1000L / set_time,
+         pair_count * 10, get_time, pair_count * 10 * 1000L * 1000L / get_time);
 
   delete hashmap;
-  delete[] pairs;
+  delete [] pairs;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

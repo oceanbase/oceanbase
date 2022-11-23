@@ -1,0 +1,100 @@
+result_format: 4
+alter system flush plan cache global;
+set ob_enable_plan_cache = 0;
+
+set @var1 = NULL;
+select @var1 from dual;
++-------+
+| @var1 |
++-------+
+| NULL  |
++-------+
+
+set @var1 = 1;
+select @var1 from dual;
++-------+
+| @var1 |
++-------+
+|     1 |
++-------+
+
+drop table if exists t1;
+create table t1 (c1 int);
+insert into t1 values(@var1);
+select * from t1;
++------+
+| c1   |
++------+
+|    1 |
++------+
+
+set @a=0,@b=0;
+select @a:=10,   @b:=1,   @a > @b, @a < @b;
++--------+-------+---------+---------+
+| @a:=10 | @b:=1 | @a > @b | @a < @b |
++--------+-------+---------+---------+
+|     10 |     1 |       1 |       0 |
++--------+-------+---------+---------+
+select @a:="10", @b:="1", @a > @b, @a < @b;
++----------+---------+---------+---------+
+| @a:="10" | @b:="1" | @a > @b | @a < @b |
++----------+---------+---------+---------+
+| 10       | 1       |       1 |       0 |
++----------+---------+---------+---------+
+select @a:=10,   @b:=2,   @a > @b, @a < @b;
++--------+-------+---------+---------+
+| @a:=10 | @b:=2 | @a > @b | @a < @b |
++--------+-------+---------+---------+
+|     10 |     2 |       0 |       1 |
++--------+-------+---------+---------+
+select @a:="10", @b:="2", @a > @b, @a < @b;
++----------+---------+---------+---------+
+| @a:="10" | @b:="2" | @a > @b | @a < @b |
++----------+---------+---------+---------+
+| 10       | 2       |       1 |       0 |
++----------+---------+---------+---------+
+
+drop function if exists f1;
+drop function if exists f2;
+create function f1(v1 int) returns year return v1;
+select f1(05);
++--------+
+| f1(05) |
++--------+
+|   2005 |
++--------+
+set @x = f1(05);
+select @x;
++------+
+| @x   |
++------+
+| 2005 |
++------+
+drop function f1;
+
+create function f2(v1 int) returns time(6) return v1;
+select f2(12345);
++-----------------+
+| f2(12345)       |
++-----------------+
+| 01:23:45.000000 |
++-----------------+
+set @x = f2(12345);
+select @x;
++-----------------+
+| @x              |
++-----------------+
+| 01:23:45.000000 |
++-----------------+
+
+drop table t1;
+drop function f2;
+
+drop table if exists t1,t2,t3;
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+create table t3(c1 int, c2 int);
+set @filterId = 1;
+insert into t1 select distinct c1, @filterId from t2 where c2 not in (select c2 from t3 where c1 = @filterId);
+
+drop table if exists t1,t2,t3;

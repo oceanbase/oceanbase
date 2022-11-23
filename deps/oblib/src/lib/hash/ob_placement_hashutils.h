@@ -17,12 +17,15 @@
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_bit_set.h"
 
-namespace oceanbase {
-namespace common {
-namespace hash {
+namespace oceanbase
+{
+namespace common
+{
+namespace hash
+{
 template <class K, uint64_t N, typename BlockAllocatorT, bool auto_free = false>
-int placement_hash_search(
-    const K keys[N], const ObBitSet<N, BlockAllocatorT, auto_free>& flags, const K& key, uint64_t& pos)
+int placement_hash_search(const K keys[N], const ObBitSet<N, BlockAllocatorT, auto_free> &flags,
+    const K &key, uint64_t &pos)
 {
   int hash_ret = OB_SUCCESS;
 
@@ -38,7 +41,7 @@ int placement_hash_search(
       if (!flags.has_member(static_cast<int64_t>(pos))) {
         hash_ret = OB_HASH_NOT_EXIST;
         break;
-      } else if (do_equal(keys[pos], key)) {
+      } else if (do_equal(keys[pos],  key)) {
         break;
       }
     }
@@ -49,9 +52,9 @@ int placement_hash_search(
   return hash_ret;
 }
 
-template <class K, uint64_t N, typename BlockAllocatorT, bool auto_free>
-int placement_hash_check_pos(
-    const K keys[N], ObBitSet<N, BlockAllocatorT, auto_free>& flags, uint64_t pos, const K& key, int flag, bool& exist)
+  template <class K, uint64_t N, typename BlockAllocatorT, bool auto_free>
+int placement_hash_check_pos(const K keys[N], ObBitSet<N, BlockAllocatorT, auto_free> &flags,
+    uint64_t pos, const K &key, int flag, bool &exist)
 {
   int ret = OB_SUCCESS;
   if (0 == N) {
@@ -73,8 +76,8 @@ int placement_hash_check_pos(
 }
 
 template <class K, uint64_t N, typename BlockAllocatorT, bool auto_free>
-int placement_hash_find_set_pos(
-    const K keys[N], ObBitSet<N, BlockAllocatorT, auto_free>& flags, const K& key, int flag, uint64_t& pos, bool& exist)
+int placement_hash_find_set_pos(const K keys[N], ObBitSet<N, BlockAllocatorT, auto_free> &flags,
+    const K &key, int flag, uint64_t &pos, bool &exist)
 {
   int hash_ret = OB_SUCCESS;
   if (0 == N) {
@@ -98,8 +101,8 @@ int placement_hash_find_set_pos(
   }
   return hash_ret;
 }
-}  // end namespace hash
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace hash
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_PLACEMENT_HASHUTILS_
+#endif // OCEANBASE_COMMON_OB_PLACEMENT_HASHUTILS_

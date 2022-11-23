@@ -14,9 +14,12 @@
 
 #include "common/ob_role.h"
 #include "lib/ob_define.h"
+#include "lib/string/ob_string.h" // ObString
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 bool is_strong_leader(const ObRole role)
 {
@@ -25,12 +28,8 @@ bool is_strong_leader(const ObRole role)
 
 bool is_standby_leader(const ObRole role)
 {
+  // leader of standby cluster or physical restore partition
   return STANDBY_LEADER == role;
-}
-
-bool is_restore_leader(const ObRole role)
-{
-  return RESTORE_LEADER == role;
 }
 
 bool is_follower(const ObRole role)
@@ -45,8 +44,66 @@ bool is_leader_by_election(const ObRole role)
 
 bool is_leader_like(const ObRole role)
 {
-  return is_leader_by_election(role) || is_restore_leader(role);
+  return is_leader_by_election(role);
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+int role_to_string(const ObRole &role, char *role_str, const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  if (LEADER == role) {
+    strncpy(role_str ,"LEADER", str_len);
+  } else if (FOLLOWER == role) {
+    strncpy(role_str ,"FOLLOWER", str_len);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
+}
+
+int string_to_role(const char *role_str, ObRole &role)
+{
+  int ret = OB_SUCCESS;
+
+  if (0 == strcmp("LEADER", role_str)) {
+    role = LEADER;
+  } else if (0 == strcmp("FOLLOWER", role_str)) {
+    role = FOLLOWER;
+  } else {
+    role = INVALID_ROLE;
+    ret = OB_INVALID_ARGUMENT;
+  }
+
+  return ret;
+}
+
+const char *role_to_string(const ObRole &role)
+{
+  #define CHECK_OB_ROLE_STR(x) case(ObRole::x): return #x
+  switch(role)
+  {
+    CHECK_OB_ROLE_STR(LEADER);
+    CHECK_OB_ROLE_STR(FOLLOWER);
+    CHECK_OB_ROLE_STR(STANDBY_LEADER);
+    default:
+      return "INVALID_ROLE";
+  }
+  #undef CHECK_OB_ROLE_STR
+}
+
+int string_to_role(const ObString &role_str, ObRole &role)
+{
+  int ret = OB_SUCCESS;
+  if (0 == role_str.compare("LEADER")) {
+    role = LEADER;
+  } else if (0 == role_str.compare("FOLLOWER")) {
+    role = FOLLOWER;
+  } else {
+    role = INVALID_ROLE;
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
+}
+
+}//end namespace common
+}//end namespace oceanbase
+

@@ -17,88 +17,62 @@
 
 #include <string.h>
 #include "lib/oblog/ob_log.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprChr::ObExprChr(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_CHR, N_CHR, 1)
-{}
+ObExprChr::ObExprChr(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_CHR, N_CHR, 1)
+{
+}
 
 ObExprChr::~ObExprChr()
-{}
+{
+}
 
-inline int ObExprChr::calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const
+inline int ObExprChr::calc_result_type1(ObExprResType &type,
+                                        ObExprResType &text,
+                                        common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = type_ctx.get_session();
+  const ObSQLSessionInfo *session = type_ctx.get_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    if (session->use_static_typing_engine()) {
-      ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
-      OZ(params.push_back(&text));
-      OZ(aggregate_string_type_and_charset_oracle(*session, params, type));
-    } else {
-      type.set_varchar();
-      type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-      type.set_default_collation_type();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    type.set_length(4);
-    type.set_length_semantics(common::LS_BYTE);
+    int64_t mbmaxlen = 0;
     text.set_calc_type(common::ObDoubleType);
-  }
-  return ret;
-}
-
-int ObExprChr::calc(ObObj& result, const ObObj& text, ObIAllocator& alloc)
-{
-  int ret = OB_SUCCESS;
-  if (text.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(text, ObDoubleType);
-    double double_val = text.get_double();
-    ObString str_result;
-    if (OB_FAIL(number2varchar(str_result, double_val, alloc))) {
-      LOG_WARN("fail to convert number 2 varchar", K(ret), K(double_val));
-    } else if (str_result.empty()) {
-      result.set_null();
+    type.set_varchar();
+    type.set_collation_level(common::CS_LEVEL_COERCIBLE);
+    type.set_collation_type(session->get_nls_collation());
+    type.set_length_semantics(session->get_actual_nls_length_semantics());
+    if (LS_BYTE == type.get_length_semantics()) {
+      OZ(ObCharset::get_mbmaxlen_by_coll(type.get_collation_type(), mbmaxlen));
+      OX(type.set_length(mbmaxlen));
     } else {
-      result.set_varchar(str_result);
+      type.set_length(1);
     }
   }
   return ret;
 }
 
-int ObExprChr::calc_result1(ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_FAIL(calc(result, text, *expr_ctx.calc_buf_))) {
-    LOG_WARN("fail to calc", K(ret), K(text));
-  } else if (OB_LIKELY(!result.is_null())) {
-    result.set_collation_type(result_type_.get_collation_type());
-    result.set_collation_level(result_type_.get_collation_level());
-  } else {
-  }
-  return ret;
-}
-
-int ObExprChr::number2varchar(ObString& str_result, const double double_val, ObIAllocator& alloc)
+int ObExprChr::number2varchar(ObString &str_result,
+                              const double double_val,
+                              ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   int64_t int_val = static_cast<int64_t>(double_val);
-  // for chr(n), floor(n) in [0, UINT32_MAX]. If floor(n) not satisfy this scope, raise numeric
-  // overflow. If 0 < n < 1, floor(n) also satisfy the scope, but oracle raise nurmeric overflow.
-  if (floor(double_val) < 0 || floor(double_val) > UINT32_MAX || (double_val > 0 && double_val < 1)) {
+  // 对于chr(n), floor(n) ∈ [0, UINT32_MAX]，如果不在这个范围内会报错numeric overflow。
+  // 奇怪的是当 0 < n < 1时，n也是满足条件的，但是oracle也报了numeric overflow，可能跟
+  // oracle的执行框架有关，这里做了兼容。
+  if (floor(double_val) < 0 ||
+      floor(double_val) > UINT32_MAX ||
+      (double_val > 0 && double_val < 1)) {
     ret = OB_INTEGER_PRECISION_OVERFLOW;
     str_result.reset();
   } else {
@@ -113,8 +87,8 @@ int ObExprChr::number2varchar(ObString& str_result, const double double_val, ObI
     } else {
       length = 1;
     }
-    char* buf = static_cast<char*>(alloc.alloc(length));
-    if (OB_ISNULL(buf)) {
+    char *buf = static_cast<char *>(alloc.alloc(length));
+    if(OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc memory failed", K(ret));
     } else {
@@ -127,10 +101,10 @@ int ObExprChr::number2varchar(ObString& str_result, const double double_val, ObI
   return ret;
 }
 
-int ObExprChr::calc_chr_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int ObExprChr::calc_chr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
@@ -150,7 +124,8 @@ int ObExprChr::calc_chr_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_da
   return ret;
 }
 
-int ObExprChr::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprChr::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -159,5 +134,5 @@ int ObExprChr::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObEx
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} //end namespace sql
+} //end namespace oceanbase

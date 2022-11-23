@@ -1,0 +1,73 @@
+ #owner: peihan.dph
+ #owner group: sql2
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+sleep 2;
+
+connection default;
+
+--disable_warnings
+--error 0,1051
+drop table t11_set;
+--error 0,1051
+drop table t22_set;
+--enable_warnings
+
+create table t11_set(c1 int,c2 int);
+create table t22_set(c1 int,c2 int);
+
+insert into t11_set values(null,null);
+
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+
+insert into t11_set values(12,12);
+insert into t11_set values(12,12);
+
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+
+
+insert into t22_set select * from t11_set;
+
+create index idx_t11_set on t11_set(c1,c2);
+create index idx_t22_set on t22_set(c1,c2);
+
+
+connection syscon;
+sleep 2;
+
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+
+#union: first row left less than right
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+
+#union: first row left is greater than right
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 union select c1,c2 from t22_set;
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 intersect select c1,c2 from t22_set;
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 minus select c1,c2 from t22_set;
+
+#union: left has left row
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 <22;
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 <22;
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 <22;
+
+
+
+connection syscon;
+sleep 2;
+
+connection default;
+drop table t11_set;
+drop table t22_set;
+--sleep 2

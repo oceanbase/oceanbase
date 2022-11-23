@@ -1,0 +1,2 @@
+1. ObMultiTenant是入口类，同时是负责时间片计时的线程。
+2. ObTenantNodeBalancer是负责同租户资源节点间负载均衡的后台线程。

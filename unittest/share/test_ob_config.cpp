@@ -19,13 +19,16 @@ using namespace oceanbase::common;
 using namespace oceanbase;
 /* using namespace oceanbase::common::hash; */
 
-class TestServerConfig : public ::testing::Test, public ObInitConfigContainer {
+class TestServerConfig
+    : public ::testing::Test, public ObInitConfigContainer
+{
 public:
   bool check() const
   {
     bool ret = true;
     ObConfigContainer::const_iterator it = container_.begin();
-    for (; it != container_.end(); it++) {
+    for (; it != container_.end(); it++)
+    {
       ret &= it->second->check();
     }
     return ret;
@@ -34,7 +37,8 @@ public:
   void check_each_true() const
   {
     ObConfigContainer::const_iterator it = container_.begin();
-    for (; it != container_.end(); it++) {
+    for (; it != container_.end(); it++)
+    {
       if (strncmp(it->first.str(), "f_", 2) == 0) {
         EXPECT_FALSE(it->second->check()) << it->first.str() << " not pass checker!";
       } else {
@@ -82,53 +86,55 @@ public:
   DEF_STR(str2, "another string", "info");
 
   DEF_IP(ip1, "1.2.3.4", "some ip description");
-  DEF_IP(ip2, "1.2.3.4", "some ip description");
+  DEF_IP(ip2, "1.2.3.4","some ip description");
   DEF_IP(ip3, "111.2.3.4", "some ip description");
 
   /*
    * The next variables are used for testing the added properties of config_item.
    */
   DEF_INT(num0_e, "-1", "[,0]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
-  DEF_INT(num1_e, "1", "info", CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::NOTEDITABLE));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+  DEF_INT(num1_e, "1", "info",
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::NOTEDITABLE));
   DEF_INT(num2_e, "1", "[1,1]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_INT(num3_e, "1", "[1,1]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_TIME(time1_e, "1h", "[60m,3600]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
   DEF_TIME(time2_e, "1h", "[,3600]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
   DEF_TIME(time3_e, "1h", "[60m,]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_CAP(cap1_e, "10M", "[10m,10m]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
   DEF_CAP(cap2_e, "1M", "[1024k,]", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
-  DEF_BOOL(
-      bool1_e, "True", "info", CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
-  DEF_BOOL(
-      bool2_e, "fALse", "info", CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+
+  DEF_BOOL(bool1_e, "True", "info",
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+  DEF_BOOL(bool2_e, "fALse", "info",
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_STR(str1_e, "some string", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
   DEF_STR(str2_e, "another string", "info",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_IP(ip1_e, "1.2.3.4", "some ip description",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
-  DEF_IP(ip2_e, "1.2.3.4", "some ip description",
-      CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
+  DEF_IP(ip2_e, "1.2.3.4","some ip description",
+          CfgAttr(Section::OBSERVER, Scope::CLUSTER, Source::DFL, EditLevel::EDITABLE_DYNAMIC));
 
   DEF_INT_LIST(test_int_list, "1;2;3", "test list");
   DEF_INT_LIST(test_int_list_2, "1;2;3", "test list");
   DEF_STR_LIST(test_str_list, "str1;str2;str3", "test list");
   DEF_STR_LIST(test_str_list_2, "str1;str2;str3", "test list");
-  DEF_STR(url, "http://a.cc/?name=&pass=fufeng_pass", "test url");
+  DEF_STR(url, "test url", "test url");
 
   DEF_DBL(dbl1, "1.234", "some info");
   DEF_DBL(dbl2, "1.234", "[1.234,5.321]", "some info");
@@ -138,9 +144,11 @@ public:
   DEF_DBL(f_dbl6, "-1", "[,-1)", "some info");
 };
 
+
 TEST_F(TestServerConfig, ALL)
 {
   check_each_true();
+
 
   num2.set_value("11");
   EXPECT_TRUE(num2.check());
@@ -172,7 +180,7 @@ TEST_F(TestServerConfig, ALL)
   EXPECT_EQ(-1, num0_e.get_value());
   num0_e.set_value("2");
   EXPECT_EQ(2, num0_e.get_value());
-
+  
   num1_e.set_section("tenant");
   EXPECT_STREQ("tenant", num1_e.section());
   num1_e.set_scope("tenant");
@@ -216,6 +224,7 @@ TEST_F(TestServerConfig, ALL)
   str1_e.set_value("another string");
   EXPECT_STREQ("another string", str1_e);
 
+
   ip1_e.set_section("RECOURCE");
   EXPECT_STREQ("RECOURCE", ip1_e.section());
   EXPECT_STREQ("1.2.3.4", ip1_e);
@@ -234,7 +243,7 @@ TEST_F(TestServerConfig, ALL)
   ip3.set_value("1234.12.3.4");
   EXPECT_FALSE(ip3.check());
 
-  const int64_t& i = num0;
+  const int64_t &i = num0;
   EXPECT_EQ(-1, i);
   num0 = 2;
   EXPECT_EQ(2, i);
@@ -247,7 +256,7 @@ TEST_F(TestServerConfig, ALL)
   EXPECT_EQ(3, test_str_list_2.size());
   test_str_list_2.get(1, buf_tmp, 32);
   EXPECT_STREQ("str2", buf_tmp);
-
+  
   test_str_list_2.set_value("12;34");
   EXPECT_EQ(2, test_str_list_2.size());
   test_str_list_2.get(0, buf_tmp2, 32);
@@ -282,6 +291,7 @@ TEST_F(TestServerConfig, ALL)
   EXPECT_EQ(OB_INVALID_ARGUMENT, test_str_list.tryget(0, NULL, 0));
   EXPECT_EQ(OB_INVALID_ARGUMENT, test_str_list.tryget(ObConfigStrListItem::MAX_INDEX_SIZE, NULL, 32));
   EXPECT_EQ(OB_ARRAY_OUT_OF_RANGE, test_str_list.tryget(3, buf2, 32));
+
 
   EXPECT_EQ(true, test_int_list_2.valid());
   EXPECT_EQ(3, test_int_list_2.size());
@@ -333,8 +343,7 @@ TEST_F(TestServerConfig, ALL)
   test_str_list.get(1, buf2, 32);
   EXPECT_STREQ("pppp", buf2);
 
-  EXPECT_TRUE(test_str_list.set_value("0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;"
-                                      "0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3"));
+  EXPECT_TRUE(test_str_list.set_value("0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3;4;5;6;7;8;9;0;1;2;3"));
   EXPECT_TRUE(test_str_list.valid());
   EXPECT_EQ(64, test_str_list.size());
   for (int64_t i = 0; i < 64; i = i + 10) {
@@ -365,7 +374,7 @@ TEST_F(TestServerConfig, ALL)
   test_str_list = "123x";
   EXPECT_TRUE(test_int_list.valid());
 
-  EXPECT_STREQ("http://a.cc/?name=&pass=fufeng_pass", url.str());
+  EXPECT_STREQ("test url", url.str());
 
   EXPECT_EQ(1.234, dbl1);
   EXPECT_EQ(1.234, dbl2);
@@ -384,6 +393,7 @@ TEST_F(TestServerConfig, ALL)
   EXPECT_EQ(1.234, dbl1.get());
   EXPECT_FALSE(dbl2.set_value("hello"));
   EXPECT_EQ(1.234, dbl2.get());
+
 }
 
 int main(int argc, char* argv[])

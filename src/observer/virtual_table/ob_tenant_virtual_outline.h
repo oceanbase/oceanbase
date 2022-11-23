@@ -20,60 +20,64 @@
 #include "share/ob_virtual_table_iterator.h"
 
 using oceanbase::common::OB_APP_MIN_COLUMN_ID;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
 
-namespace common {
+namespace common
+{
 class ObNewRow;
 }
-namespace share {
-namespace schema {
+namespace share
+{
+namespace schema
+{
 class ObOutlineInfo;
 }
-}  // namespace share
-namespace observer {
+}
+namespace observer
+{
 
-class ObTenantVirtualOutlineBase : public common::ObVirtualTableIterator {
+class ObTenantVirtualOutlineBase: public common::ObVirtualTableIterator
+{
 protected:
-  struct DBInfo {
+  struct DBInfo
+  {
+    DBInfo() : db_name_(), is_recycle_(false) {}
+
     common::ObString db_name_;
     bool is_recycle_;
   };
-
 public:
-  ObTenantVirtualOutlineBase()
-      : tenant_id_(common::OB_INVALID_TENANT_ID),
-        outline_info_idx_(common::OB_INVALID_INDEX),
-        outline_infos_(),
-        database_infos_()
+  ObTenantVirtualOutlineBase():
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      outline_info_idx_(common::OB_INVALID_INDEX),
+      outline_infos_(),
+      database_infos_()
   {}
-  ~ObTenantVirtualOutlineBase()
-  {}
+  ~ObTenantVirtualOutlineBase() {}
   virtual int inner_open();
   void reset();
-  inline void set_tenant_id(uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
 protected:
-  int is_database_recycle(uint64_t database_id, bool& is_recycle);
-  int set_database_infos_and_get_value(uint64_t database_id, bool& is_recycle);
-
+  int is_database_recycle(uint64_t database_id, bool &is_recycle);
+  int set_database_infos_and_get_value(uint64_t database_id, bool &is_recycle);
 protected:
   uint64_t tenant_id_;
   int64_t outline_info_idx_;
   common::ObSEArray<const share::schema::ObOutlineInfo*, 16> outline_infos_;
   common::hash::ObHashMap<uint64_t, DBInfo> database_infos_;
-
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualOutlineBase);
+   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualOutlineBase);
 };
 
-class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase {
-  enum TENANT_VIRTUAL_OUTLINE_COLUMN {
+class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase
+{
+  enum TENANT_VIRTUAL_OUTLINE_COLUMN
+  {
     TENANT_ID = OB_APP_MIN_COLUMN_ID,
     DATABASE_ID = OB_APP_MIN_COLUMN_ID + 1,
     OUTLINE_ID = OB_APP_MIN_COLUMN_ID + 2,
@@ -83,23 +87,20 @@ class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase {
     SQL_TEXT = OB_APP_MIN_COLUMN_ID + 6,
     OUTLINE_TARGET = OB_APP_MIN_COLUMN_ID + 7,
     OUTLINE_SQL = OB_APP_MIN_COLUMN_ID + 8,
+    SQL_ID = OB_APP_MIN_COLUMN_ID + 9,
+    OUTLINE_CONTENT = OB_APP_MIN_COLUMN_ID + 10,
   };
-
 public:
-  ObTenantVirtualOutline() : ObTenantVirtualOutlineBase()
-  {}
-  ~ObTenantVirtualOutline()
-  {}
+  ObTenantVirtualOutline() : ObTenantVirtualOutlineBase() {}
+  ~ObTenantVirtualOutline() {}
   void reset();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
-  int fill_cells(const share::schema::ObOutlineInfo* outline_info);
-  int is_output_outline(const share::schema::ObOutlineInfo* outline_info, bool& is_output);
-
+  int fill_cells(const share::schema::ObOutlineInfo *outline_info);
+  int is_output_outline(const share::schema::ObOutlineInfo *outline_info, bool &is_output);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualOutline);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_TENANT_VIRTUAL_OUTLINE_ */

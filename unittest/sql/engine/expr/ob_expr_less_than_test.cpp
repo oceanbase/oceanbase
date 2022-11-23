@@ -17,33 +17,36 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-class ObLessThanTest : public ::testing::Test {
-public:
-  ObLessThanTest();
-  virtual ~ObLessThanTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObLessThanTest(const ObLessThanTest& other);
-  ObLessThanTest& operator=(const ObLessThanTest& other);
-
-protected:
-  // data members
+class ObLessThanTest: public ::testing::Test
+{
+  public:
+    ObLessThanTest();
+    virtual ~ObLessThanTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObLessThanTest(const ObLessThanTest &other);
+    ObLessThanTest& operator=(const ObLessThanTest &other);
+  protected:
+    // data members
 };
 
 ObLessThanTest::ObLessThanTest()
-{}
+{
+}
 
 ObLessThanTest::~ObLessThanTest()
-{}
+{
+}
 
 void ObLessThanTest::SetUp()
-{}
+{
+}
 
 void ObLessThanTest::TearDown()
-{}
+{
+}
 
 #define T(t1, v1, t2, v2, res) COMPARE_EXPECT(ObExprLessThan, &buf, calc_result2, t1, v1, t2, v2, res)
 #define T_BIN(t1, v1, t2, v2, res) COMPARE_EXPECT_BIN(ObExprLessThan, &buf, calc_result2, t1, v1, t2, v2, res)
@@ -725,8 +728,8 @@ TEST_F(ObLessThanTest, row2_basic_test)
 }
 */
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

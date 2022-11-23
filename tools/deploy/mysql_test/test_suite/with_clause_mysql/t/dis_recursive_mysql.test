@@ -1,0 +1,1939 @@
+# owner: dachuan.sdc
+# owner group: sql2
+# tags: optimizer
+
+--disable_warnings
+drop database if exists cte_st;
+--enable_warnings
+create database cte_st;
+use cte_st;
+
+--result_format 4
+create table disemp (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30) ,
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+);
+
+INSERT INTO disemp values (7369,'SMITH','CLERK',7902,    str_to_date('1980-11-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO disemp VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-01-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO disemp VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-01-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO disemp VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-04-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO disemp VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO disemp VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-03-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO disemp VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into disemp values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-04-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO disemp VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO disemp VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO disemp VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO disemp VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-11-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO disemp VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-11-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO disemp VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-01-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+);
+
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-06-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+CREATE TABLE emp1 (
+  empno    VARCHAR(4000) NOT NULL,
+  ename    VARCHAR(14),
+  job      VARCHAR(9),
+  mgr      VARCHAR(4000),
+  hiredate DATE,
+  sal      NUMBER(7,2),
+  comm     NUMBER(7,2),
+  deptno   NUMBER(2));
+
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30); 
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (8100, 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8101, 'Eve1', 'MANAGER', 8100, str_to_date('1984-05-01','%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8108, 'Eve8', 'CLERK', 8101, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+create table dsemp (id int, name varchar(20), leaderid int) partition by hash (id) partitions 3;
+insert into dsemp values(1, 'A', '0');
+insert into dsemp values(2, 'AA', '1');
+insert into dsemp values(3, 'AB', '1');
+insert into dsemp values(4, 'ABA', '3');
+insert into dsemp values(5, 'AAA', '2');
+insert into dsemp values(6, 'ABB', '3');
+insert into dsemp values(7, 'AAA', '5');
+insert into dsemp values(8, 'AAA', '7');
+insert into dsemp values(9, 'AAAA', '5');
+insert into dsemp values(10, 'AAAB', '5');
+insert into dsemp values(11, 'AAAC', '5');
+insert into dsemp values(12, 'AAAA', '5');
+
+create table dsemp1 (id int, name varchar(20), leaderid int) partition by hash (leaderid) partitions 3;
+insert into dsemp1 values(1, 'A', '0');
+insert into dsemp1 values(2, 'AA', '1');
+insert into dsemp1 values(3, 'AB', '1');
+insert into dsemp1 values(4, 'ABA', '3');
+insert into dsemp1 values(5, 'AAA', '2');
+insert into dsemp1 values(6, 'ABB', '3');
+insert into dsemp1 values(7, 'AAA', '5');
+insert into dsemp1 values(8, 'AAA', '7');
+insert into dsemp1 values(9, 'AAAA', '5');
+insert into dsemp1 values(10, 'AAAB', '5');
+insert into dsemp1 values(11, 'AAAC', '5');
+insert into dsemp1 values(12, 'AAAA', '5');
+
+
+--enable_warnings
+--result_format 4
+
+
+##############################
+##   section 1  聚合一张表是分布式表（disemp）
+##   section 2  聚合的两表是分布式表（disemp，emp1）
+##   section 3  聚合的两表在join条件上可能形成wise join（disemp，emp1）
+##   section 4  额外添加recursive member变化
+##############################
+
+
+##############################
+##   section 1  聚合一张表是分布式表（disemp）
+##############################
+
+## =======================================================================
+## Test Case 1:
+## - recursive with RECURSIVE Query: Nested Loop Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 2:
+## - recursive with RECURSIVE Query: SORT MERGE Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+## =======================================================================
+## Test Case 3:
+## - recursive with RECURSIVE Query: Hash Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 4:
+## - recursive with RECURSIVE Query: Join in Initialisation Branch
+## 与oracle的结果顺序不一样
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--sorted_result
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 6:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on build side and fits in memory
+## 与oracle顺序不一致
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 7:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on probe side and fits in memory
+## =======================================================================
+
+explain  
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## 测试8-15都是在测试join的顺序或者hint的顺序
+## Test Case 8:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp >< emp1 
+## =======================================================================
+
+explain  
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 9:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump >< emp1 
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 10:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< emp1 >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+
+## =======================================================================
+## Test Case 11:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< disemp >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 12:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 13:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 14:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 15:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< emp1 >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 16:
+## - recursive with RECURSIVE Query: Join Skew handling. No local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 17:
+## - recursive with RECURSIVE Query: Join Skew handling with RECURSIVE an additional local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+##############################
+##   section 2  聚合的两表是分布式表（disemp，emp1）
+##############################
+
+##  
+##  emp1 也进行分布式化
+drop table emp1;
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2)
+);
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30); 
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (8100, 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8101, 'Eve1', 'MANAGER', 8100, str_to_date('1984-05-01','%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8108, 'Eve8', 'CLERK', 8101, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+## =======================================================================
+## Test Case 1:
+## - recursive with RECURSIVE Query: Nested Loop Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 2:
+## - recursive with RECURSIVE Query: SORT MERGE Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+## =======================================================================
+## Test Case 3:
+## - recursive with RECURSIVE Query: Hash Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 4:
+## - recursive with RECURSIVE Query: Join in Initialisation Branch
+## 与oracle的结果顺序不一样
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--sorted_result
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 6:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on build side and fits in memory
+## 与oracle顺序不一致
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 7:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on probe side and fits in memory
+## =======================================================================
+
+explain  
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## 测试8-15都是在测试join的顺序或者hint的顺序
+## Test Case 8:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp >< emp1 
+## =======================================================================
+
+explain  
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 9:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump >< emp1 
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 10:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< emp1 >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+
+## =======================================================================
+## Test Case 11:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< disemp >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+##oracle ok
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 12:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 13:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT /*+log_level(DEBUG)*/ ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 14:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 15:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< emp1 >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 16:
+## - recursive with RECURSIVE Query: Join Skew handling. No local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 17:
+## - recursive with RECURSIVE Query: Join Skew handling with RECURSIVE an additional local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+##############################
+##   section 3  聚合的两表在join条件上可能形成wise join（disemp，emp1）
+##############################
+
+##
+##  emp1 也进行分布式化
+drop table emp1;
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2)
+);
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17', '%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22', '%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02', '%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30); 
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09' , '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23', '%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03', '%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03', '%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23', '%Y-%m-%d'), 1300, null, 10);
+INSERT INTO emp1 values (8100, 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8101, 'Eve1', 'MANAGER', 8100, str_to_date('1984-05-01','%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8108, 'Eve8', 'CLERK', 8101, str_to_date('1984-05-01', '%Y-%m-%d'), 2850, null, 30);
+
+## =======================================================================
+## Test Case 1:
+## - recursive with RECURSIVE Query: Nested Loop Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 2:
+## - recursive with RECURSIVE Query: SORT MERGE Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+## =======================================================================
+## Test Case 3:
+## - recursive with RECURSIVE Query: Hash Join
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT /*+log_level(DEBUG)*/ ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 4:
+## - recursive with RECURSIVE Query: Join in Initialisation Branch
+## 与oracle的结果顺序不一样
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+--sorted_result
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM disemp e, disemp d 
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e, disemp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 6:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on build side and fits in memory
+## 与oracle顺序不一致
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM disemp e, rw r
+    WHERE e.mgr = r.empno 
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 7:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on probe side and fits in memory
+## =======================================================================
+
+explain  
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## 测试8-15都是在测试join的顺序或者hint的顺序
+## Test Case 8:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp >< emp1 
+## =======================================================================
+
+explain  
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, disemp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 9:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump >< emp1 
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 10:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< emp1 >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM disemp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+
+## =======================================================================
+## Test Case 11:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< disemp >< pump  
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 12:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 13:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         disemp >< pump
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  disemp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 14:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         emp1 >< pump >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, disemp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 15:
+## - recursive with RECURSIVE Query: Join Order tests 
+##                         pump >< emp1 >< disemp
+## =======================================================================
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+--error 0,4036
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, disemp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+## =======================================================================
+## Test Case 16:
+## - recursive with RECURSIVE Query: Join Skew handling. No local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+## =======================================================================
+## Test Case 17:
+## - recursive with RECURSIVE Query: Join Skew handling with RECURSIVE an additional local filter
+## =======================================================================
+
+explain 
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM disemp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, disemp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
+
+
+##############################
+##   section 4  额外添加recursive member变化
+##############################
+
+create table t1(c1 int, c2 int, c3 int);
+insert into t1 values(1, 2, 3);
+insert into t1 values(4, 5, 6);
+insert into t1 values(7, 8, 9);
+insert into t1 values(10, 11, 12);
+insert into t1 values(13, 14, 15);
+insert into t1 values(16, 17, 18);
+insert into t1 values(19, 20, 21);
+
+create table disemp1 (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+);
+
+INSERT INTO disemp1 values (7369,'SMITH','CLERK',7902,    str_to_date('1980-11-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO disemp1 VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-01-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO disemp1 VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-01-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO disemp1 VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-04-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO disemp1 VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO disemp1 VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-03-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO disemp1 VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into disemp1 values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-04-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO disemp1 VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO disemp1 VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO disemp1 VALUES (7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO disemp1 VALUES (7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-11-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO disemp1 VALUES (7902, 'FORD','ANALYST',7566,     str_to_date('1981-11-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO disemp1 VALUES (7934,'MILLER','CLERK', 7782,     str_to_date('1982-01-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+##   这个case 测试了subplan filter
+#SELECT *   FROM (SELECT /*+ ORDERED  USE_HASH (r e) */ r.empno, e.mgr, r.iters + 1, r.sal + e.sal   FROM emp1 n, disemp e, (SELECT e.empno as empno, e.mgr as mgr, 1 as iters, e.sal as sal FROM disemp e, emp1 n1, emp1 n2   WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr)r   WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno = e.mgr and e.empno > some (select c1 from t1 group by c2)   )  rw   ORDER BY 1,        3;
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno = e.mgr and e.empno > some (select c1 from t1 group by c1)
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno = e.mgr and e.empno > some (select c1 from t1 group by c1)
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+
+explain 
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno = e.mgr and e.empno > some (select c1 from t1 group by c1) and e.empno in (select e.empno from disemp1)
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM disemp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, disemp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno = e.mgr and e.empno > some (select c1 from t1 group by c1) and e.empno in (select e.empno from disemp1)
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
+
+drop database cte_st;

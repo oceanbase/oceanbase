@@ -17,150 +17,144 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class TestAllocator : public ObIAllocator {
+class TestAllocator: public ObIAllocator
+{
 public:
-  TestAllocator() : label_(ObModIds::TEST)
-  {}
-  virtual ~TestAllocator()
-  {}
-  void* alloc(const int64_t sz)
-  {
+  TestAllocator() :
+      label_(ObModIds::TEST) {}
+  virtual ~TestAllocator() {}
+  void *alloc(const int64_t sz) {
     UNUSED(sz);
     return NULL;
   }
-  void free(void* p)
-  {
+  void free(void *p) {
     UNUSED(p);
   }
-  void freed(const int64_t sz)
-  {
+  void freed(const int64_t sz) {
     UNUSED(sz);
   }
-  void set_label(const char* label)
-  {
+  void set_label(const char *label) {
     label_ = label;
-  };
-
+  }
+  ;
 private:
-  const char* label_;
+  const char *label_;
 };
 
-class ObExprRpadTest : public ::testing::Test {
+
+class ObExprRpadTest : public  ::testing::Test
+{
 public:
   ObExprRpadTest();
   virtual ~ObExprRpadTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
-  ObExprRpadTest(const ObExprRpadTest& other);
-  ObExprRpadTest& operator=(const ObExprRpadTest& other);
+  ObExprRpadTest(const ObExprRpadTest &other);
+  ObExprRpadTest& operator=(const ObExprRpadTest &other);
 };
 ObExprRpadTest::ObExprRpadTest()
-{}
+{
+}
 ObExprRpadTest::~ObExprRpadTest()
-{}
+{
+}
 void ObExprRpadTest::SetUp()
-{}
+{
+}
 void ObExprRpadTest::TearDown()
-{}
+{
+}
 
 #define EXPECT_RESULT3_NULL(str_op_object, str_buf, func, type1, v1, type2, v2, type3, v3, ref_type, ref_value) \
-  {                                                                                                             \
-    UNUSED(ref_value);                                                                                          \
-    ObObj t1;                                                                                                   \
-    ObObj t2;                                                                                                   \
-    ObObj t3;                                                                                                   \
-    ObObj r;                                                                                                    \
-    ObObj ref;                                                                                                  \
-    if (NULL == v1)                                                                                             \
-      t1.set_null();                                                                                            \
-    else                                                                                                        \
-      t1.set_##type1(v1);                                                                                       \
-    t2.set_##type2(v2);                                                                                         \
-    if (NULL == v3)                                                                                             \
-      t3.set_null();                                                                                            \
-    else                                                                                                        \
-      t3.set_##type3(v3);                                                                                       \
-    t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                 \
-    t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                 \
-    t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                 \
-    r.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    ObExprResType res_type;                                                                                     \
-    res_type.set_collation_level(CS_LEVEL_EXPLICIT);                                                            \
-    res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                           \
-    str_op_object.set_result_type(res_type);                                                                    \
-    ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);                                                              \
-    int err = str_op_object.func(r, t1, t2, t3, expr_ctx);                                                      \
-    _OB_LOG(INFO, "respect=%s result=%s", to_cstring(ref), to_cstring(r));                                      \
-    EXPECT_TRUE(OB_SUCCESS == err);                                                                             \
-    EXPECT_TRUE(ref.get_type() == ObNullType);                                                                  \
-  }                                                                                                             \
-  while (0)
+                           {\
+	                        UNUSED(ref_value);  \
+	                        ObObj t1;                 \
+	                        ObObj t2;                 \
+	                        ObObj t3;                 \
+	                        ObObj r;                  \
+	                        ObObj ref;                \
+	                        if(NULL == v1) \
+	                          t1.set_null();           \
+	                        else \
+							             t1.set_##type1(v1);		\
+	                        t2.set_##type2(v2);         \
+	                        if(NULL == v3) \
+	                          t3.set_null();           \
+	                        else \
+	                          t3.set_##type3(v3);		\
+                          t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+	                        t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          r.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          ObExprResType res_type;                                  \
+                          res_type.set_collation_level(CS_LEVEL_EXPLICIT);         \
+                          res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                  \
+                          str_op_object.set_result_type(res_type);  \
+                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
+	                        int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
+	                        _OB_LOG(INFO, "respect=%s result=%s", to_cstring(ref), to_cstring(r)); \
+	                        EXPECT_TRUE(OB_SUCCESS == err); \
+	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
+                           } while(0)
 
 #define EXPECT_RESULT3_NULL2(str_op_object, str_buf, func, type1, v1, type2, v2, type3, v3, ref_type, ref_value) \
-  {                                                                                                              \
-    UNUSED(ref_value);                                                                                           \
-    ObObj t1;                                                                                                    \
-    ObObj t2;                                                                                                    \
-    ObObj t3;                                                                                                    \
-    ObObj r;                                                                                                     \
-    ObObj ref;                                                                                                   \
-    t1.set_##type1(v1);                                                                                          \
-    t2.set_##type2(v2);                                                                                          \
-    t3.set_##type3(v3);                                                                                          \
-    t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    r.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                   \
-    ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);                                                               \
-    ObExprResType res_type;                                                                                      \
-    res_type.set_collation_level(CS_LEVEL_EXPLICIT);                                                             \
-    res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                            \
-    str_op_object.set_result_type(res_type);                                                                     \
-    int err = str_op_object.func(r, t1, t2, t3, expr_ctx);                                                       \
-    ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                 \
-    _OB_LOG(INFO, "respect=%s result=%s, err=%d", to_cstring(ref), to_cstring(r), err);                          \
-    EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err);                                                               \
-    EXPECT_TRUE(ref.get_type() == ObNullType);                                                                   \
-  }                                                                                                              \
-  while (0)
+                           {\
+	                        UNUSED(ref_value);  \
+	                        ObObj t1;                 \
+	                        ObObj t2;                 \
+	                        ObObj t3;                 \
+	                        ObObj r;                  \
+	                        ObObj ref;                \
+	                        t1.set_##type1(v1);		\
+	                        t2.set_##type2(v2);         \
+	                        t3.set_##type3(v3);		\
+	                        t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          r.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
+                          ObExprResType res_type;                                  \
+                          res_type.set_collation_level(CS_LEVEL_EXPLICIT);         \
+                          res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                  \
+                          str_op_object.set_result_type(res_type);  \
+                          int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
+                          ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);  \
+                           _OB_LOG(INFO, "respect=%s result=%s, err=%d", to_cstring(ref), to_cstring(r), err); \
+                          EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err); \
+	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
+                           } while(0)
 
 #define EXPECT_RESULT3_NULL3(str_op_object, str_buf, func, type1, v1, type2, v2, type3, v3, ref_type, ref_value) \
-  {                                                                                                              \
-    UNUSED(ref_value);                                                                                           \
-    ObObj t1;                                                                                                    \
-    ObObj t2;                                                                                                    \
-    ObObj t3;                                                                                                    \
-    ObObj r;                                                                                                     \
-    ObObj ref;                                                                                                   \
-    t1.set_##type1(v1);                                                                                          \
-    t2.set_##type2(v2);                                                                                          \
-    t3.set_##type3(v3);                                                                                          \
-    t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                  \
-    r.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                                   \
-    ObExprResType res_type;                                                                                      \
-    res_type.set_collation_level(CS_LEVEL_EXPLICIT);                                                             \
-    res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                                                            \
-    str_op_object.set_result_type(res_type);                                                                     \
-    ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);                                                               \
-    int err = str_op_object.func(r, t1, t2, t3, expr_ctx);                                                       \
-    _OB_LOG(INFO, "respect=%s result=%s, ret=%d", to_cstring(ref), to_cstring(r), err);                          \
-    EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err);                                                               \
-    EXPECT_TRUE(ref.get_type() == ObNullType);                                                                   \
-  }                                                                                                              \
-  while (0)
+                           {\
+	                        UNUSED(ref_value);  \
+	                        ObObj t1;                 \
+	                        ObObj t2;                 \
+	                        ObObj t3;                 \
+	                        ObObj r;                  \
+	                        ObObj ref;                \
+	                        t1.set_##type1(v1);		\
+	                        t2.set_##type2(v2);         \
+	                        t3.set_##type3(v3);		\
+	                        t1.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          t3.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          r.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
+                          ObExprResType res_type;                                  \
+                          res_type.set_collation_level(CS_LEVEL_EXPLICIT);         \
+                          res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);                  \
+                          str_op_object.set_result_type(res_type);  \
+                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
+                                 int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
+	                        _OB_LOG(INFO, "respect=%s result=%s, ret=%d", to_cstring(ref), to_cstring(r), err); \
+	                        EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err); \
+	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
+                           } while(0)
 
-#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
-#define TN(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3_NULL(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
-#define TN2(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3_NULL2(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
-#define TN3(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) \
-  EXPECT_RESULT3_NULL3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define T(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define TN(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3_NULL(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define TN2(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3_NULL2(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
+#define TN3(obj, t1, v1, t2, v2, t3, v3, ref_type, ref_value) EXPECT_RESULT3_NULL3(obj, &buf, calc_result3, t1, v1, t2, v2, t3, v3, ref_type, ref_value)
 
 TEST_F(ObExprRpadTest, basic_test)
 {
@@ -198,7 +192,7 @@ TEST_F(ObExprRpadTest, fail_test)
   TN3(rpad, varchar, "abcde", int, 10, varchar, "ghi", varchar, "abcdeghigh");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);

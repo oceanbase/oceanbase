@@ -1,0 +1,192 @@
+result_format: 4
+explain_protocol: 0
+
+alter system set enable_async_syslog = false;
+
+
+drop view if exists v1;
+create view v1 as select connection_id() from dual limit 10;
+desc v1;
++-----------------+------------------+------+-----+---------+-------+
+| Field           | Type             | Null | Key | Default | Extra |
++-----------------+------------------+------+-----+---------+-------+
+| connection_id() | int(10) unsigned | NO   |     |         |       |
++-----------------+------------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select utc_timestamp() from dual limit 10;
+desc v1;
++-----------------+----------+------+-----+---------+-------+
+| Field           | Type     | Null | Key | Default | Extra |
++-----------------+----------+------+-----+---------+-------+
+| utc_timestamp() | datetime | NO   |     |         |       |
++-----------------+----------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select utc_timestamp(3) from dual limit 10;
+desc v1;
++------------------+-------------+------+-----+---------+-------+
+| Field            | Type        | Null | Key | Default | Extra |
++------------------+-------------+------+-----+---------+-------+
+| utc_timestamp(3) | datetime(3) | NO   |     |         |       |
++------------------+-------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select current_timestamp() from dual limit 10;
+desc v1;
++---------------------+----------+------+-----+---------+-------+
+| Field               | Type     | Null | Key | Default | Extra |
++---------------------+----------+------+-----+---------+-------+
+| current_timestamp() | datetime | NO   |     |         |       |
++---------------------+----------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select current_timestamp(3) from dual limit 10;
+desc v1;
++----------------------+----------+------+-----+---------+-------+
+| Field                | Type     | Null | Key | Default | Extra |
++----------------------+----------+------+-----+---------+-------+
+| current_timestamp(3) | datetime | NO   |     |         |       |
++----------------------+----------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select sysdate() from dual limit 10;
+desc v1;
++-----------+----------+------+-----+---------+-------+
+| Field     | Type     | Null | Key | Default | Extra |
++-----------+----------+------+-----+---------+-------+
+| sysdate() | datetime | NO   |     |         |       |
++-----------+----------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select sysdate(3) from dual limit 10;
+desc v1;
++------------+----------+------+-----+---------+-------+
+| Field      | Type     | Null | Key | Default | Extra |
++------------+----------+------+-----+---------+-------+
+| sysdate(3) | datetime | NO   |     |         |       |
++------------+----------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select curdate() from dual limit 10;
+desc v1;
++-----------+------+------+-----+---------+-------+
+| Field     | Type | Null | Key | Default | Extra |
++-----------+------+------+-----+---------+-------+
+| curdate() | date | NO   |     |         |       |
++-----------+------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select curtime() from dual limit 10;
+desc v1;
++-----------+------+------+-----+---------+-------+
+| Field     | Type | Null | Key | Default | Extra |
++-----------+------+------+-----+---------+-------+
+| curtime() | time | NO   |     |         |       |
++-----------+------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select current_user() from dual limit 10;
+desc v1;
++----------------+--------------+------+-----+---------+-------+
+| Field          | Type         | Null | Key | Default | Extra |
++----------------+--------------+------+-----+---------+-------+
+| current_user() | varchar(193) | NO   |     |         |       |
++----------------+--------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select database() from dual limit 10;
+desc v1;
++------------+--------------+------+-----+---------+-------+
+| Field      | Type         | Null | Key | Default | Extra |
++------------+--------------+------+-----+---------+-------+
+| database() | varchar(128) | NO   |     |         |       |
++------------+--------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select effective_tenant_id() from dual limit 10;
+desc v1;
++-----------------------+---------------------+------+-----+---------+-------+
+| Field                 | Type                | Null | Key | Default | Extra |
++-----------------------+---------------------+------+-----+---------+-------+
+| effective_tenant_id() | bigint(20) unsigned | NO   |     |         |       |
++-----------------------+---------------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select effective_tenant() from dual limit 10;
+desc v1;
++--------------------+-------------+------+-----+---------+-------+
+| Field              | Type        | Null | Key | Default | Extra |
++--------------------+-------------+------+-----+---------+-------+
+| effective_tenant() | varchar(64) | NO   |     |         |       |
++--------------------+-------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select found_rows() from dual limit 10;
+desc v1;
++--------------+------------+------+-----+---------+-------+
+| Field        | Type       | Null | Key | Default | Extra |
++--------------+------------+------+-----+---------+-------+
+| found_rows() | bigint(20) | NO   |     |         |       |
++--------------+------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select host_ip() from dual limit 10;
+desc v1;
++-----------+-------------+------+-----+---------+-------+
+| Field     | Type        | Null | Key | Default | Extra |
++-----------+-------------+------+-----+---------+-------+
+| host_ip() | varchar(46) | NO   |     |         |       |
++-----------+-------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select last_execution_id() from dual limit 10;
+desc v1;
++---------------------+--------+------+-----+---------+-------+
+| Field               | Type   | Null | Key | Default | Extra |
++---------------------+--------+------+-----+---------+-------+
+| last_execution_id() | bigint | NO   |     |         |       |
++---------------------+--------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select last_trace_id() from dual limit 10;
+desc v1;
++-----------------+--------------+------+-----+---------+-------+
+| Field           | Type         | Null | Key | Default | Extra |
++-----------------+--------------+------+-----+---------+-------+
+| last_trace_id() | varchar(128) | NO   |     |         |       |
++-----------------+--------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select mysql_port() from dual limit 10;
+desc v1;
++--------------+------------+------+-----+---------+-------+
+| Field        | Type       | Null | Key | Default | Extra |
++--------------+------------+------+-----+---------+-------+
+| mysql_port() | bigint(20) | NO   |     |         |       |
++--------------+------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select rpc_port() from dual limit 10;
+desc v1;
++------------+---------+------+-----+---------+-------+
+| Field      | Type    | Null | Key | Default | Extra |
++------------+---------+------+-----+---------+-------+
+| rpc_port() | int(11) | NO   |     |         |       |
++------------+---------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select row_count() from dual limit 10;
+desc v1;
++-------------+------------+------+-----+---------+-------+
+| Field       | Type       | Null | Key | Default | Extra |
++-------------+------------+------+-----+---------+-------+
+| row_count() | bigint(20) | NO   |     |         |       |
++-------------+------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select uuid() from dual limit 10;
+desc v1;
++--------+-------------+------+-----+---------+-------+
+| Field  | Type        | Null | Key | Default | Extra |
++--------+-------------+------+-----+---------+-------+
+| uuid() | varchar(36) | NO   |     |         |       |
++--------+-------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select user() from dual limit 10;
+desc v1;
++--------+--------------+------+-----+---------+-------+
+| Field  | Type         | Null | Key | Default | Extra |
++--------+--------------+------+-----+---------+-------+
+| user() | varchar(193) | NO   |     |         |       |
++--------+--------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select version() from dual limit 10;
+desc v1;
++-----------+---------------+------+-----+---------+-------+
+| Field     | Type          | Null | Key | Default | Extra |
++-----------+---------------+------+-----+---------+-------+
+| version() | varchar(4096) | NO   |     |         |       |
++-----------+---------------+------+-----+---------+-------+
+drop view v1;
+

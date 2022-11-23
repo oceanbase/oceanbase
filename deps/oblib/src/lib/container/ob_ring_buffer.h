@@ -18,50 +18,48 @@
 #include "lib/ob_define.h"
 #include "lib/queue/ob_link.h"
 
-namespace oceanbase {
-namespace common {
-class ObRingBuffer {
+namespace oceanbase
+{
+namespace common
+{
+class ObRingBuffer
+{
 public:
   typedef ObLink Link;
 
-  class Node : public Link {
+  class Node: public Link
+  {
   public:
     static Node* const LOCKED_ADDR;
     friend class ObRingBuffer;
-    Node(int64_t blk_size, int64_t start, int64_t end)
-        : next_purge_child_(0), child_size_((end - start) / (blk_size / sizeof(void*))), start_(start), end_(end)
+    Node(int64_t blk_size, int64_t start, int64_t end) :
+        next_purge_child_(0),
+        child_size_((end - start) / (blk_size / sizeof(void *))),
+        start_(start),
+        end_(end)
     {
       memset(children_, 0, blk_size);
     }
-    ~Node()
-    {}
-    int64_t start() const
+    ~Node() {}
+    int64_t start() const { return start_; }
+    int64_t end() const { return end_; }
+    int64_t size() const { return end_ - start_; }
+    int64_t compare(Node *that)
     {
-      return start_;
-    }
-    int64_t end() const
-    {
-      return end_;
-    }
-    int64_t size() const
-    {
-      return end_ - start_;
-    }
-    int64_t compare(Node* that)
-    {
-      return this->end_ - that->end_;
+      return this->end_  - that->end_;
     }
 
-    void purge(int64_t purge_pos, Link*& purge_list)
+    void purge(int64_t purge_pos, Link *&purge_list)
     {
       if (is_leaf()) {
         // do nothing
       } else {
         // many threads may interleave purge operations on child list
-        for (int64_t idx = ATOMIC_LOAD(&next_purge_child_); get_child_start(idx) < std::min(end_, purge_pos);
+        for (int64_t idx = ATOMIC_LOAD(&next_purge_child_);
+             get_child_start(idx) < std::min(end_, purge_pos);
              idx = std::max(idx + 1, ATOMIC_LOAD(&next_purge_child_))) {
-          Node** pnode = children_ + idx;
-          Node* node = NULL;
+          Node **pnode = children_ + idx;
+          Node *node = NULL;
           if (get_child_end(idx) <= purge_pos) {
             // the whole range can be purged
             if (LOCKED_ADDR == (node = ATOMIC_TAS(pnode, LOCKED_ADDR))) {
@@ -88,21 +86,21 @@ public:
       }
     }
 
-    int get(ObRingBuffer* host, int64_t end, char*& buf)
+    int get(ObRingBuffer *host, int64_t end, char *&buf)
     {
       int ret = OB_SUCCESS;
       if (end <= start_) {
         ret = OB_ERR_OUT_OF_LOWER_BOUND;
       } else if (is_leaf()) {
         // my children_[0] is mapping to byte range:start_ ~ end_
-        buf = ((char*)children_) + (end - start_);
+        buf = ((char *)children_) + (end - start_);
       } else {
         // mutli-level node
         int64_t idx = get_child_idx(end);
         int64_t child_start = get_child_start(idx);
         // pnode repsonses for the wanted byte range
-        Node** pnode = children_ + idx;
-        Node* node = NULL;
+        Node **pnode = children_ + idx;
+        Node *node = NULL;
         if (LOCKED_ADDR == (node = ATOMIC_LOAD(pnode))) {
           // purged, no one response for the range
           node = NULL;
@@ -111,7 +109,8 @@ public:
           // get from this node
         } else if (NULL == host) {
           ret = OB_ENTRY_NOT_EXIST;
-        } else if (OB_UNLIKELY(NULL == (node = host->alloc_node(child_start, child_start + child_size_)))) {
+        } else if (OB_UNLIKELY(NULL == (node = host->alloc_node(child_start,
+                                                                child_start + child_size_)))) {
           // alloc on demand
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else if (!ATOMIC_BCAS(pnode, NULL, node)) {
@@ -130,47 +129,33 @@ public:
       return ret;
     }
 
-    void add_to_purge_list(Link*& purge_list)
+    void add_to_purge_list(Link *&purge_list)
     {
       retire_link_.next_ = purge_list;
       purge_list = &retire_link_;
     }
 
   private:
-    bool is_leaf()
-    {
-      return child_size_ <= (int64_t)sizeof(void*);
-    }
-    int64_t get_child_start(int64_t idx)
-    {
-      return start_ + idx * child_size_;
-    }
-    int64_t get_child_end(int64_t idx)
-    {
-      return start_ + (idx + 1) * child_size_;
-    }
-    int64_t get_child_idx(int64_t end)
-    {
-      return (end - start_ - 1) / child_size_;
-    }
+    bool is_leaf() { return child_size_ <= (int64_t)sizeof(void *); }
+    int64_t get_child_start(int64_t idx) { return start_ + idx * child_size_; }
+    int64_t get_child_end(int64_t idx) { return start_ + (idx + 1) * child_size_; }
+    int64_t get_child_idx(int64_t end) { return (end - start_ - 1) / child_size_; }
 
     Link retire_link_;
     int64_t next_purge_child_;
     int64_t child_size_;
     int64_t start_;
     int64_t end_;
-    Node* children_[0];
+    Node *children_[0];
   };
 
-  ObRingBuffer() : alloc_(NULL), blk_size_(0), start_(0), end_(0), head_(sizeof(void*), -1, -1)
-  {}
-  ~ObRingBuffer()
-  {}
+  ObRingBuffer(): alloc_(NULL), blk_size_(0), start_(0), end_(0), head_(sizeof(void *), -1, -1) {}
+  ~ObRingBuffer() {}
 
-  int init(common::ObIAllocator* alloc, int64_t blk_size)
+  int init(common::ObIAllocator *alloc, int64_t blk_size)
   {
     int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(NULL == alloc) || OB_UNLIKELY(blk_size <= (int64_t)sizeof(void*))) {
+    if (OB_UNLIKELY(NULL == alloc) || OB_UNLIKELY(blk_size <= (int64_t)sizeof(void *))) {
       ret = OB_INVALID_ARGUMENT;
     } else {
       alloc_ = alloc;
@@ -181,11 +166,12 @@ public:
 
   void destroy()
   {
-    Link* del_list = NULL;
+    Link *del_list = NULL;
     int ret = OB_SUCCESS;
     while (OB_EAGAIN == truncate(INT64_MAX))
       ;
-    while (OB_EAGAIN == (ret = purge(del_list)) || OB_SUCCESS == ret)
+    while (OB_EAGAIN == (ret = purge(del_list))
+           || OB_SUCCESS == ret)
       ;
     destroy_list(del_list);
     alloc_ = NULL;
@@ -193,11 +179,11 @@ public:
     end_ = 0;
   }
 
-  void destroy_list(Link* del_list)
+  void destroy_list(Link *del_list)
   {
     if (OB_UNLIKELY(NULL != alloc_)) {
       for (Link *p = del_list, *next = NULL; NULL != p; p = next) {
-        Node* node = CONTAINER_OF(p, Node, retire_link_);
+        Node *node = CONTAINER_OF(p, Node, retire_link_);
         next = link_next(p);
         alloc_->free(node);
         node = NULL;
@@ -205,18 +191,15 @@ public:
     }
   }
 
-  int64_t size() const
-  {
-    return ATOMIC_LOAD(&end_) - ATOMIC_LOAD(&start_);
-  }
-  int purge(Link*& purge_list)
+  int64_t size() const { return ATOMIC_LOAD(&end_) - ATOMIC_LOAD(&start_); }
+  int purge(Link *&purge_list)
   {
     int ret = OB_SUCCESS;
     int64_t garbage_pos = ATOMIC_LOAD(&start_);
-    Node* p = NULL;
+    Node *p = NULL;
     if (OB_UNLIKELY(!is_inited())) {
       ret = OB_NOT_INIT;
-    } else if (NULL == (p = (Node*)link_next((Link*)&head_))) {
+    } else if (NULL == (p = (Node *)link_next((Link *)&head_))) {
       ret = OB_ERR_OUT_OF_LOWER_BOUND;
     } else if (p->start() >= garbage_pos) {
       ret = OB_ERR_OUT_OF_LOWER_BOUND;
@@ -254,7 +237,7 @@ public:
   int extend(int64_t end)
   {
     int ret = OB_SUCCESS;
-    Node* node = NULL;
+    Node *node = NULL;
     int64_t cur_end = ATOMIC_LOAD(&end_);
     if (OB_UNLIKELY(!is_inited())) {
       ret = OB_NOT_INIT;
@@ -275,10 +258,10 @@ public:
     return ret;
   }
 
-  int get(int64_t end, char*& buf, bool for_write)
+  int get(int64_t end, char *&buf, bool for_write)
   {
     int ret = OB_SUCCESS;
-    Node* node = NULL;
+    Node *node = NULL;
     if (OB_UNLIKELY(!is_inited())) {
       ret = OB_NOT_INIT;
     } else if (end <= ATOMIC_LOAD(&start_)) {
@@ -294,32 +277,29 @@ public:
   }
 
 private:
-  bool is_inited()
-  {
-    return NULL != alloc_ && blk_size_ > 0;
-  }
+  bool is_inited() { return NULL != alloc_ && blk_size_ > 0; }
 
   static int64_t calc_node_size(int64_t blk_size, int64_t req_size)
   {
     // raise the size to the node size of some depth,
     int64_t size = blk_size;
     while (size < req_size) {
-      size *= (blk_size / sizeof(void*));
+      size *= (blk_size / sizeof(void *));
     }
     return size;
   }
 
-  Node* alloc_node(int64_t start, int64_t end)
+  Node *alloc_node(int64_t start, int64_t end)
   {
-    Node* p = NULL;
-    if (NULL != (p = (Node*)alloc_->alloc(blk_size_ + sizeof(Node)))) {
+    Node *p = NULL;
+    if (NULL != (p = (Node *)alloc_->alloc(blk_size_ + sizeof(Node)))) {
       int64_t node_size = calc_node_size(blk_size_, end - start);
-      new (p) Node(blk_size_, start, start + node_size);
+      new(p)Node(blk_size_, start, start + node_size);
     }
     return p;
   }
 
-  void free_node(Node* node)
+  void free_node(Node *node)
   {
     if (NULL != alloc_ && NULL != node) {
       alloc_->free(node);
@@ -327,34 +307,33 @@ private:
     }
   }
 
-  Node* search_node(int64_t end)
+  Node *search_node(int64_t end)
   {
-    Node* prev = NULL;
-    Node key(sizeof(void*), end, end);
+    Node *prev = NULL;
+    Node key(sizeof(void *), end, end);
     return ol_search(&head_, &key, prev);
   }
 
-  int insert_node(Node* node)
+  int insert_node(Node *node)
   {
     return ol_insert(&head_, node);
   }
 
-  int del_node(Node* node)
+  int del_node(Node *node)
   {
-    Node* target = NULL;
+    Node *target = NULL;
     return ol_del(&head_, node, target);
   }
-
 private:
-  common::ObIAllocator* alloc_;
+  common::ObIAllocator *alloc_;
   int64_t blk_size_;
   int64_t start_;
   int64_t end_;
-  Node head_;  // sentinel node
+  Node head_; // sentinel node
   DISALLOW_COPY_AND_ASSIGN(ObRingBuffer);
 };
 
-};  // namespace common
-};  // end namespace oceanbase
+}; // end namespace container
+}; // end namespace oceanbase
 
-#endif  // OCEANBASE_LIB_CONTAINER_OB_RING_BUFFER_
+#endif // OCEANBASE_LIB_CONTAINER_OB_RING_BUFFER_

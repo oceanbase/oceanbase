@@ -16,13 +16,15 @@
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
-namespace common {
-
-static const char* zone_type_strs[] = {"ReadWrite", "ReadOnly", "Invalid"};
-const char* zone_type_to_str(ObZoneType zone_type)
+namespace oceanbase
 {
-  const char* zone_type_str = NULL;
+namespace common
+{
+
+static const char *zone_type_strs[] = { "ReadWrite", "ReadOnly", "Encryption", "Invalid" };
+const char *zone_type_to_str(ObZoneType zone_type)
+{
+  const char *zone_type_str = NULL;
   if (zone_type < ObZoneType::ZONE_TYPE_READWRITE || zone_type > ObZoneType::ZONE_TYPE_INVALID) {
     LOG_ERROR("fatal error, unknown zone_type", K(zone_type));
   } else {
@@ -32,7 +34,7 @@ const char* zone_type_to_str(ObZoneType zone_type)
   return zone_type_str;
 }
 
-ObZoneType str_to_zone_type(const char* zone_type_str)
+ObZoneType str_to_zone_type(const char *zone_type_str)
 {
   ObZoneType zone_type = ObZoneType::ZONE_TYPE_INVALID;
   if (NULL == zone_type_str) {
@@ -47,5 +49,6 @@ ObZoneType str_to_zone_type(const char* zone_type_str)
   return zone_type;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase
+

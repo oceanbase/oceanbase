@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner       : nijia.nj
+#owner group : sql2
+#description : test oceanbase.__all_virtual_data_type
+
+use oceanbase;
+
+#basic
+select * from __all_virtual_data_type order by data_type;
+select data_type, data_type_str, data_type_class from __all_virtual_data_type order by data_type;
+select * from __all_virtual_data_type where data_type = 22;
+select a.data_type_str, b.data_type_class_str from __all_virtual_data_type a inner join __all_virtual_data_type_class b on a.data_type_class = b.data_type_class order by a.data_type;
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table __all_virtual_data_type;
+desc __all_virtual_data_type;

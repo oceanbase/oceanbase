@@ -1,0 +1,154 @@
+#owner: peihan.dph
+#tags: optimizer
+
+--result_format 4
+--disable_abort_on_error
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+
+connection default;
+set ob_enable_plan_cache=false;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (tinyint_t tinyint,
+                smallint_t smallint,
+                mediumint_t mediumint,
+                int32_t integer,
+                bigint_t bigint,
+                utinyint_t tinyint unsigned,
+                usmallint_t smallint unsigned,
+                umedium_t mediumint unsigned,
+                uint32_t integer unsigned,
+                ubigint_t bigint unsigned,
+                float_t float,
+                ufloat_t float unsigned,
+                double_t double,
+                udouble_t double unsigned,
+                number_t number,
+                unumber_t number unsigned,
+                datetime_t datetime,
+                timestamp_t timestamp,
+                date_t date,
+                time_t time,
+                year_t year,
+                varchar_t varchar(255),
+                char_t char(255),
+                tinytext_t tinytext,
+                mediumtext_t mediumtext,
+                longtext_t longtext,
+                bit_t bit,
+                enum_t enum('a', 'b', 'c'),
+                set_t set('a', 'b', 'c'));
+
+insert into t values (NULL, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.0, 1.00, 1.000, 1.0000, 1.00000, 1.000000, 
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '1.0', '1.00', '1.000', '1.0000',
+                     '1.00000', 1, 'b', 'b');
+connection conn_admin;
+connection default;
+--explain_protocol 2
+select NULL = tinyint_t from t limit 1;
+select NULL =  smallint_t from t limit 1;
+select NULL =  mediumint_t from t limit 1;
+select NULL =  int32_t from t limit 1;
+select NULL =  bigint_t from t limit 1;
+select NULL = utinyint_t from t limit 1;
+select NULL =  usmallint_t from t limit 1;
+select NULL =  umedium_t from t limit 1;
+select NULL =  uint32_t from t limit 1;
+select NULL =  ubigint_t from t limit 1;
+select NULL = float_t from t limit 1;
+select NULL =  ufloat_t from t limit 1;
+select NULL = double_t from t limit 1;
+select NULL =  udouble_t from t limit 1;
+select NULL = number_t from t limit 1;
+select NULL =  unumber_t from t limit 1;
+select NULL = datetime_t from t limit 1;
+select NULL =  timestamp_t from t limit 1;
+select NULL =  date_t from t limit 1;
+select NULL =  time_t from t limit 1;
+select NULL =  year_t from t limit 1;
+select NULL = varchar_t from t limit 1;
+select NULL =  char_t from t limit 1;
+select NULL =  tinytext_t from t limit 1;
+select NULL =  mediumtext_t from t limit 1;
+select NULL =  longtext_t from t limit 1;
+select NULL = bit_t from t limit 1;
+select NULL =  enum_t from t limit 1;
+select NULL =  set_t from t limit 1;
+
+
+select tinyint_t = tinyint_t from t limit 1;
+select tinyint_t =  smallint_t from t limit 1;
+select tinyint_t =  mediumint_t from t limit 1;
+select tinyint_t =  int32_t from t limit 1;
+select tinyint_t =  bigint_t from t limit 1;
+select tinyint_t = utinyint_t from t limit 1;
+select tinyint_t =  usmallint_t from t limit 1;
+select tinyint_t =  umedium_t from t limit 1;
+select tinyint_t =  uint32_t from t limit 1;
+select tinyint_t =  ubigint_t from t limit 1;
+select tinyint_t = float_t from t limit 1;
+select tinyint_t =  ufloat_t from t limit 1;
+select tinyint_t = double_t from t limit 1;
+select tinyint_t =  udouble_t from t limit 1;
+select tinyint_t = number_t from t limit 1;
+select tinyint_t =  unumber_t from t limit 1;
+select tinyint_t = datetime_t from t limit 1;
+select tinyint_t =  timestamp_t from t limit 1;
+select tinyint_t =  date_t from t limit 1;
+select tinyint_t =  time_t from t limit 1;
+select tinyint_t =  year_t from t limit 1;
+select tinyint_t = varchar_t from t limit 1;
+select tinyint_t =  char_t from t limit 1;
+select tinyint_t =  tinytext_t from t limit 1;
+select tinyint_t =  mediumtext_t from t limit 1;
+select tinyint_t =  longtext_t from t limit 1;
+select tinyint_t = bit_t from t limit 1;
+select tinyint_t =  enum_t from t limit 1;
+select tinyint_t =  set_t from t limit 1;
+
+--echo Row With NULL
+select (1, 1) = (1, null) from dual;
+select (1, 1) = (2, null) from dual;
+
+select (1, 1) < (1, null) from dual;
+select (1, 1) < (2, null) from dual;
+
+select (1, 1) <= (1, null) from dual;
+select (1, 1) <= (2, null) from dual;
+
+select (1, 1) > (1, null) from dual;
+select (1, 1) > (2, null) from dual;
+
+select (1, 1) >= (1, null) from dual;
+select (1, 1) >= (2, null) from dual;
+
+select (1, 1) != (1, null) from dual;
+select (1, 1) != (2, null) from dual;
+
+
+select (1, 1) = (1, tinyint_t) from t limit 1;
+select (1, 1) = (2, tinyint_t) from t limit 1;
+
+select (1, 1) < (1, tinyint_t) from t limit 1;
+select (1, 1) < (2, tinyint_t) from t limit 1;
+
+select (1, 1) <= (1, tinyint_t) from t limit 1;
+select (1, 1) <= (2, tinyint_t) from t limit 1;
+
+select (1, 1) > (1, tinyint_t) from t limit 1;
+select (1, 1) > (2, tinyint_t) from t limit 1;
+
+select (1, 1) >= (1, tinyint_t) from t limit 1;
+select (1, 1) >= (2, tinyint_t) from t limit 1;
+
+select (1, 1) != (1, tinyint_t) from t limit 1;
+select (1, 1) != (2, tinyint_t) from t limit 1;
+
+connection conn_admin;
+--sleep 2

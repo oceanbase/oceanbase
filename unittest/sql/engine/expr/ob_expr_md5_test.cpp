@@ -17,32 +17,35 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprMd5Test : public ::testing::Test {
+class ObExprMd5Test : public ::testing::Test
+{
 public:
   ObExprMd5Test();
   virtual ~ObExprMd5Test();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprMd5Test(const ObExprMd5Test& other);
-  ObExprMd5Test& operator=(const ObExprMd5Test& other);
-
+  ObExprMd5Test(const ObExprMd5Test &other);
+  ObExprMd5Test& operator=(const ObExprMd5Test &other);
 private:
   // data members
 };
 ObExprMd5Test::ObExprMd5Test()
-{}
+{
+}
 
 ObExprMd5Test::~ObExprMd5Test()
-{}
+{
+}
 
 void ObExprMd5Test::SetUp()
-{}
+{
+}
 
 void ObExprMd5Test::TearDown()
-{}
+{
+}
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
 #define F(obj, t1, v1, ref_type, ref_value) EXPECT_FAIL_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -54,7 +57,7 @@ TEST_F(ObExprMd5Test, basic_test)
   ASSERT_EQ(1, md5.get_param_num());
 
   // null
-  // T(md5, null, 0, null, 0);
+  //T(md5, null, 0, null, 0);
   // empty
   T(md5, varchar, "", varchar, "d41d8cd98f00b204e9800998ecf8427e");
   // single char with case sensitive
@@ -66,7 +69,7 @@ TEST_F(ObExprMd5Test, basic_test)
   T(md5, varchar, "#", varchar, "01abfc750a0c942167651c40d088531d");
   T(md5, varchar, " ", varchar, "d41d8cd98f00b204e9800998ecf8427e");
   // normal english word
-  T(md5, varchar, "abcdefg", varchar, "7ac66c0f148de9519b8bd264312c4d64");
+  T(md5, varchar, "abcdefg",  varchar, "7ac66c0f148de9519b8bd264312c4d64");
   T(md5, varchar, "abcdefg ", varchar, "cea1a161b6f38ac9189d204a6ff0e231");
   T(md5, varchar, "Good morning", varchar, "4e44298897ed12cdc10e5302fa781688");
   T(md5, varchar, "Good evening", varchar, "0a28b30e5d84d83d385b6b9afd5661ae");
@@ -91,17 +94,18 @@ TEST_F(ObExprMd5Test, fail_test)
   ObExprStringBuf buf;
   ASSERT_EQ(1, md5.get_param_num());
 
-  //  F(md5, max, 0, null, 0);
-  //  F(md5, min, 0, null, 0);
-  //  F(md5, double, 10.2, null, 0);
-  //  F(md5, bool, true, null, 0);
-  //  F(md5, int, 10, null, 0);
-  //  F(md5, int, 0, null, 0);
+//  F(md5, max, 0, null, 0);
+//  F(md5, min, 0, null, 0);
+//  F(md5, double, 10.2, null, 0);
+//  F(md5, bool, true, null, 0);
+//  F(md5, int, 10, null, 0);
+//  F(md5, int, 0, null, 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+

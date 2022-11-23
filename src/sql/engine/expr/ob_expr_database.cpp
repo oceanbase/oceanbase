@@ -16,16 +16,21 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprDatabase::ObExprDatabase(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_DATABASE, N_DATABASE, 0)
-{}
+ObExprDatabase::ObExprDatabase(ObIAllocator &alloc)
+  : ObStringExprOperator(alloc, T_FUN_SYS_DATABASE, N_DATABASE, 0)
+{
+}
 
 ObExprDatabase::~ObExprDatabase()
-{}
+{
+}
 
-int ObExprDatabase::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprDatabase::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_varchar();
@@ -35,30 +40,12 @@ int ObExprDatabase::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_c
   return OB_SUCCESS;
 }
 
-int ObExprDatabase::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "session info is null");
-  } else {
-    const ObString database_name = session_info->get_database_name();
-    if (database_name.empty()) {
-      result.set_null();
-    } else {
-      result.set_varchar(database_name);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int ObExprDatabase::eval_database(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprDatabase::eval_database(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObBasicSessionInfo* session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session info is null", K(ret));
@@ -73,12 +60,13 @@ int ObExprDatabase::eval_database(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
   return ret;
 }
 
-int ObExprDatabase::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprDatabase::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
   rt_expr.eval_func_ = ObExprDatabase::eval_database;
   return OB_SUCCESS;
 }
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

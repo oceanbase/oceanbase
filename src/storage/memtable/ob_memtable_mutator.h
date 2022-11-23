@@ -16,62 +16,66 @@
 #include "share/ob_define.h"
 
 #include "common/rowkey/ob_rowkey.h"
-#include "common/ob_partition_key.h"
+#include "common/ob_tablet_id.h"
 #include "common/object/ob_object.h"
 
 #include "storage/ob_i_store.h"
 #include "storage/memtable/mvcc/ob_crtp_util.h"
 #include "storage/memtable/mvcc/ob_row_data.h"
+#include "storage/tx/ob_clog_encrypt_info.h"
+#include "storage/tablelock/ob_table_lock_common.h"
 
-namespace oceanbase {
-namespace memtable {
+#include "share/ob_rpc_struct.h"
 
-class RedoDataNode;
+namespace oceanbase
+{
+namespace common
+{
+class ObTabletID;
+};
+// namespace obrpc
+// {
+// class ObBatchCreateTabletArg;
+// class ObBatchRemoveTabletArg;
+// }
+namespace memtable
+{
 
-class ObMemtableMutatorMeta {
-  static const uint64_t MMB_MAGIC = 0x6174756d;  // #muta
-  static const int64_t MIN_META_SIZE = 24;       // sizeof(MutatorMetaV1)
+class ObLsmtMutatorRow;
+struct RedoDataNode;
+struct TableLockRedoDataNode;
+
+class ObMemtableMutatorMeta
+{
+  static const uint64_t MMB_MAGIC = 0x6174756d; // #muta
+  static const int64_t MIN_META_SIZE = 28; // sizeof(MutatorMetaV1)
 public:
   ObMemtableMutatorMeta();
   ~ObMemtableMutatorMeta();
-
 public:
   int inc_row_count();
   int64_t get_row_count() const;
-  int fill_header(const char* buf, const int64_t data_len);
+  int fill_header(const char *buf, const int64_t data_len);
   void generate_new_header();
   int set_flags(const uint8_t row_flag);
-  uint8_t get_flags() const
-  {
-    return flags_;
-  }
-  int check_data_integrity(const char* buf, const int64_t data_len);
-  int64_t get_total_size() const
-  {
-    return meta_size_ + data_size_;
-  }
-  int64_t get_meta_size() const
-  {
-    return meta_size_;
-  }
-  int64_t get_data_size() const
-  {
-    return data_size_;
-  }
+  uint8_t get_flags() const { return flags_; }
+  void add_encrypt_flag();
+  void remove_encrypt_flag();
+  int check_data_integrity(const char *buf, const int64_t data_len);
+  int64_t get_total_size() const { return meta_size_ + data_size_; }
+  int64_t get_meta_size() const { return meta_size_; }
+  int64_t get_data_size() const { return data_size_; }
   bool is_row_start() const;
 
 public:
   int64_t get_serialize_size() const;
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos);
-  int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos);
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
 public:
-  int64_t to_string(char* buffer, const int64_t length) const;
-
+  int64_t to_string(char *buffer, const int64_t length) const;
 private:
   bool check_magic();
   uint32_t calc_meta_crc(const char* buf);
-
 private:
   uint32_t magic_;
   uint32_t meta_crc_;
@@ -81,131 +85,279 @@ private:
   uint32_t data_crc_;
   uint32_t data_size_;
   uint32_t row_count_;
+  uint32_t unused_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMutatorMeta);
 };
 
-class ObMemtableMutatorRow {
+struct ObEncryptRowBuf
+{
+  static const int64_t TMP_ENCRYPT_BUF_LEN = 128;//1k
+  char buf_[TMP_ENCRYPT_BUF_LEN];
+  char *ptr_;
+  ObEncryptRowBuf();
+  ~ObEncryptRowBuf();
+  int alloc(const int64_t size);
+};
+
+enum class MutatorType  
+{
+  MUTATOR_ROW = 0,
+  MUTATOR_TABLE_LOCK = 1,
+};
+
+const char * get_mutator_type_str(MutatorType mutator_type);
+
+struct ObMutatorRowHeader
+{
 public:
-  ObMemtableMutatorRow();
-  ObMemtableMutatorRow(const uint64_t table_id, const common::ObStoreRowkey& rowkey, const int64_t table_version,
-      const ObRowData& new_row, const ObRowData& old_row, const storage::ObRowDml dml_type, const uint32_t modify_count,
-      const uint32_t acc_checksum, const int64_t version, const int32_t sql_no, const int32_t flag);
-  virtual ~ObMemtableMutatorRow();
+  ObMutatorRowHeader() : mutator_type_(MutatorType::MUTATOR_ROW) {}
+  void reset() { mutator_type_ = MutatorType::MUTATOR_ROW; }
+  int serialize(char *buf, const int64_t serialize_size, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos);
+  // this may be equal to the length of mutator row.
+  // so, MAGIC_NUM should bigger than OB_MAX_LOG_ALLOWED_SIZE.
+  // OB_MAX_LOG_ALLOWED_SIZE = 1965056L;
+  // 2147483647-4096=2147479551 0x7FFFEFFF
+  static const int32_t MAGIC_NUM = INT32_MAX - 4096;
+  MutatorType mutator_type_;
+  common::ObTabletID tablet_id_;
+
+  TO_STRING_KV("mutator_type_str_",
+               get_mutator_type_str(mutator_type_),
+               K(mutator_type_),
+               K(tablet_id_));
+};
+
+struct ObMutator
+{
+public:
+  ObMutator();
+  ObMutator(const uint64_t table_id,
+            const ObStoreRowkey &rowkey,
+            const int64_t table_version,
+            const int64_t seq_no);
   void reset();
-  int copy(uint64_t& table_id, common::ObStoreRowkey& rowkey, int64_t& table_version, ObRowData& new_row,
-      ObRowData& old_row, storage::ObRowDml& dml_type, uint32_t& modify_count, uint32_t& acc_checksum, int64_t& version,
-      int32_t& sql_no, int32_t& flag) const;
-
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos);
-  // the deserialize function need to be virtual function so as for
-  // the extended classes to implement their own deserializaation logic
-  virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-  uint64_t get_tenant_id() const
-  {
-    return extract_tenant_id(table_id_);
-  };
-  int try_replace_tenant_id(const uint64_t new_tenant_id);
-
-  TO_STRING_KV(K_(row_size), K_(table_id), K_(rowkey), K_(table_version), K_(dml_type), K_(update_seq), K_(new_row),
-      K_(old_row), K_(acc_checksum), K_(version), K_(sql_no), K_(flag));
-
 public:
   char obj_array_[sizeof(common::ObObj) * common::OB_MAX_ROWKEY_COLUMN_NUMBER];
+  common::ObStoreRowkey rowkey_;
   uint32_t row_size_;
   uint64_t table_id_;
-  common::ObStoreRowkey rowkey_;
   int64_t table_version_;
-  storage::ObRowDml dml_type_;
+  int64_t seq_no_;
+};
+
+class ObMemtableMutatorRow : public ObMutator
+{
+public:
+  ObMemtableMutatorRow();
+  ObMemtableMutatorRow(const uint64_t table_id,
+                       const common::ObStoreRowkey &rowkey,
+                       const int64_t table_version,
+                       const ObRowData &new_row,
+                       const ObRowData &old_row,
+                       const blocksstable::ObDmlFlag dml_flag,
+                       const uint32_t modify_count,
+                       const uint32_t acc_checksum,
+                       const int64_t version,
+                       const int32_t flag,
+                       const int64_t seq_no);
+  virtual ~ObMemtableMutatorRow();
+  void reset();
+  int copy(uint64_t &table_id,
+           common::ObStoreRowkey &rowkey,
+           int64_t &table_version,
+           ObRowData &new_row,
+           ObRowData &old_row,
+           blocksstable::ObDmlFlag &dml_flag,
+           uint32_t &modify_count,
+           uint32_t &acc_checksum,
+           int64_t &version,
+           int32_t &flag,
+           int64_t &seq_no) const;
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos,
+                const transaction::ObCLogEncryptInfo &encrypt_meta,
+                const bool is_big_row = false);
+  // the deserialize function need to be virtual function so as for
+  // the extended classes to implement their own deserializaation logic
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos,
+                          ObEncryptRowBuf &decrypt_buf,
+                          const transaction::ObCLogEncryptInfo &encrypt_info,
+                          const bool need_extract_encrypt_meta,
+                          share::ObEncryptMeta &final_encrypt_meta,
+                          share::ObCLogEncryptStatMap &encrypt_stat_map,
+                          const bool is_big_row = false);
+  uint32_t get_flag() const { return flag_; };
+
+  TO_STRING_KV(K_(row_size),
+               K_(table_id),
+               K_(rowkey),
+               K_(table_version),
+               K_(dml_flag),
+               K_(update_seq),
+               K_(new_row),
+               K_(old_row),
+               K_(acc_checksum),
+               K_(version),
+               K_(flag),
+               K_(seq_no));
+
+public:
+  blocksstable::ObDmlFlag dml_flag_;
   uint32_t update_seq_;
   ObRowData new_row_;
   ObRowData old_row_;
   uint32_t acc_checksum_;
   int64_t version_;
-  int32_t sql_no_;
-  int32_t flag_;
+  int32_t flag_; // currently, unused
+  uint8_t rowid_version_;
 };
 
-class ObMemtableMutatorWriter {
+class ObMutatorTableLock : public ObMutator
+{
 public:
-  ObMemtableMutatorWriter();
-  ~ObMemtableMutatorWriter();
+  ObMutatorTableLock();
+  ObMutatorTableLock(const uint64_t table_id,
+                     const common::ObStoreRowkey &rowkey,
+                     const int64_t table_version,
+                     const transaction::tablelock::ObLockID &lock_id,
+                     const transaction::tablelock::ObTableLockOwnerID owner_id,
+                     const transaction::tablelock::ObTableLockMode lock_mode,
+                     const transaction::tablelock::ObTableLockOpType lock_op_type,
+                     const int64_t seq_no,
+                     const int64_t create_timestamp,
+                     const int64_t create_schema_version);
+  virtual ~ObMutatorTableLock();
+  void reset();
+  int copy(transaction::tablelock::ObLockID &lock_id,
+           transaction::tablelock::ObTableLockOwnerID &owner_id,
+           transaction::tablelock::ObTableLockMode &lock_mode,
+           transaction::tablelock::ObTableLockOpType &lock_op_type,
+           int64_t &seq_no,
+           int64_t &create_timestamp,
+           int64_t &create_schema_version) const;
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos);
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+
+  TO_STRING_KV(K_(row_size),
+               K_(table_id),
+               K_(table_version),
+               K_(lock_id),
+               K_(owner_id),
+               K_(mode),
+               K_(lock_type),
+               K_(seq_no),
+               K_(create_timestamp),
+               K_(create_schema_version));
 
 public:
-  int set_buffer(char* buf, const int64_t buf_len);
-  int append_kv(const uint64_t table_id, const common::ObStoreRowkey& rowkey, const int64_t table_version,
-      const RedoDataNode& redo);
-  int append_row(ObMemtableMutatorRow& row);
-  int serialize(const uint8_t row_flag, int64_t& res_len);
-  ObMemtableMutatorMeta& get_meta()
-  {
-    return meta_;
-  }
+  transaction::tablelock::ObLockID lock_id_;
+  transaction::tablelock::ObTableLockOwnerID owner_id_;
+  transaction::tablelock::ObTableLockMode mode_;
+  transaction::tablelock::ObTableLockOpType lock_type_;
+  int64_t create_timestamp_;
+  int64_t create_schema_version_;
+};
+
+class ObLsmtMutatorRow : public memtable::ObMutator
+{
+public:
+  ObLsmtMutatorRow() {}
+  virtual ~ObLsmtMutatorRow(){};
+  // set the trans data
+  int set(  const uint64_t table_id,
+            const int64_t table_version,
+            const common::ObTabletID primary_row_id,
+            const blocksstable::ObDmlFlag dml_flag,
+            const obrpc::ObBatchCreateTabletArg * create_arg,
+            const obrpc::ObBatchRemoveTabletArg * remove_arg);
+  void reset();
+  // copy the data out of this object
+  int copy(uint64_t &table_id,
+           int64_t &table_version,
+           common::ObTabletID &primary_row_id,
+           blocksstable::ObDmlFlag &dml_flag,
+           obrpc::ObBatchCreateTabletArg &create_arg,
+           obrpc::ObBatchRemoveTabletArg &remove_arg) const;
+  // serialize this object to clog
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos,
+                const bool is_big_row = false);
+  // serialize this object from clog
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos,
+                          const bool is_big_row = false);
+  VIRTUAL_TO_STRING_KV(K(table_id_), K(table_version_), K(primary_row_id_),
+                       K(dml_flag_), K(create_arg_), K(remove_arg_));
+public:
+  common::ObTabletID primary_row_id_;         //record the primary row for the trans
+  blocksstable::ObDmlFlag dml_flag_;                //ObDmlFlag::DF_INSERT:DF_DELETE;
+  obrpc::ObBatchCreateTabletArg create_arg_;  //batch create args  
+  obrpc::ObBatchRemoveTabletArg remove_arg_;  //batch remove args
+};
+
+class ObMutatorWriter
+{
+public:
+  ObMutatorWriter();
+  ~ObMutatorWriter();
+public:
+  int set_buffer(char *buf, const int64_t buf_len);
+  int append_table_lock_kv(
+      const int64_t table_version,
+      const TableLockRedoDataNode &redo);
+  int append_row_kv(
+      const int64_t table_version,
+      const RedoDataNode &redo,
+      const transaction::ObCLogEncryptInfo &clog_encrypt_info,
+      const bool is_big_row = false);
+  int append_row(
+      ObMemtableMutatorRow &row,
+      const transaction::ObCLogEncryptInfo &encrypt_info,
+      const bool is_big_row = false,
+      const bool is_with_head = false);
+  int append_row_buf(const char *buf, const int64_t buf_len);
+  int serialize(const uint8_t row_flag, int64_t &res_len);
+  ObMemtableMutatorMeta& get_meta() { return meta_; }
   int64_t get_serialize_size() const;
-  static int handle_big_row_data(const char* in_buf, const int64_t in_buf_len, int64_t& in_buf_pos, char* out_buf,
-      const int64_t out_buf_len, int64_t& out_buf_pos);
-
 private:
   ObMemtableMutatorMeta meta_;
   common::ObDataBuffer buf_;
 
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableMutatorWriter);
+  DISALLOW_COPY_AND_ASSIGN(ObMutatorWriter);
 };
 
-class ObMemtableMutatorIterator {
+class ObMemtableMutatorIterator
+{
 public:
   ObMemtableMutatorIterator();
   ~ObMemtableMutatorIterator();
   void reset();
-
 public:
-  int set_tenant_id(const uint64_t tenant_id);
-  int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-  // for replay
-  int get_next_row(uint64_t& table_id, common::ObStoreRowkey& rowkey, int64_t& table_version, ObRowData& new_row,
-      storage::ObRowDml& dml_type, uint32_t& modify_count, uint32_t& acc_checksum, int64_t& version, int32_t& sql_no,
-      int32_t& flag);
-  // for fetch_log
-  int get_next_row(ObMemtableMutatorRow& row);
-  bool is_iter_end() const
-  {
-    return buf_.get_remain() <= 0 || (big_row_ && big_row_pos_ < meta_.get_total_size());
-  }
-  const ObMemtableMutatorMeta& get_meta() const
-  {
-    return meta_;
-  }
-  bool is_big_row() const
-  {
-    return big_row_;
-  }
-  int undo_redo_log(const int64_t data_len);
-  uint64_t get_tenant_id() const
-  {
-    return tenant_id_;
-  };
-  int try_replace_tenant_id(const uint64_t new_tenant_id);
-  bool need_undo_redo_log() const
-  {
-    return big_row_ && need_undo_redo_log_;
-  }
-  TO_STRING_KV(K_(meta), K_(big_row), K_(big_row_pos));
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos,
+      const transaction::ObCLogEncryptInfo &encrypt_info);
+  bool is_iter_end() const { return buf_.get_remain() <= 0; }
+  const ObMemtableMutatorMeta &get_meta() const { return meta_; }
 
+  //4.0 new interface for replay
+  int iterate_next_row();
+  const ObMutatorRowHeader &get_row_head();
+  const ObMemtableMutatorRow &get_mutator_row();
+  const ObMutatorTableLock &get_table_lock_row();
+  const ObLsmtMutatorRow &get_ls_mt_row();
+
+  TO_STRING_KV(K_(meta),K(buf_.get_position()),K(buf_.get_limit()));
 private:
-  void reset_big_row_args_();
 
 private:
   ObMemtableMutatorMeta meta_;
   common::ObDataBuffer buf_;
+  ObMutatorRowHeader row_header_;
   ObMemtableMutatorRow row_;
-  bool big_row_;
-  uint64_t tenant_id_;
-  int64_t big_row_pos_;
-  int64_t big_row_last_pos_;
-  bool need_undo_redo_log_;
+  ObMutatorTableLock table_lock_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMutatorIterator);
 };
-}  // namespace memtable
-}  // namespace oceanbase
-#endif  // OCEANBASE_MEMTABLE_OB_MEMTABLE_MUTATOR_
+}//namespace memtable
+}//namespace oceanbase
+#endif //OCEANBASE_MEMTABLE_OB_MEMTABLE_MUTATOR_

@@ -1,0 +1,40 @@
+# owner: xiaoyi.xy
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (sys, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(2000));
+insert into t1 values(hex("ABC")), (hex("123"));
+
+connection sys;
+sleep 2;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select unhex(c1) from t1;
+select unhex("4142") from dual;
+
+--disable_warnings
+drop table if exists t2;
+
+CREATE TABLE t2 (a VARBINARY(2000));
+set sql_mode = STRICT_TRANS_TABLES;
+insert into t2 VALUES (UNHEX('54455354'));
+--error 5342
+insert into t2 VALUES (UNHEX('TEST'));
+select a from t2 where a = UNHEX('TEST');
+select a from t2 where a = UNHEX('54455354');
+set sql_mode = "";
+insert into t2 VALUES (UNHEX('54455354'));
+insert into t2 VALUES (UNHEX('TEST'));
+select a from t2 where a = UNHEX('TEST');
+select a from t2 where a = UNHEX('54455354');
+
+connection sys;
+
+--sleep 2

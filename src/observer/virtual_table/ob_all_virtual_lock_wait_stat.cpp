@@ -15,13 +15,16 @@
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
 using namespace oceanbase::storage;
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 void ObAllVirtualLockWaitStat::reset()
 {
@@ -29,22 +32,47 @@ void ObAllVirtualLockWaitStat::reset()
   node_iter_ = NULL;
 }
 
+
 int ObAllVirtualLockWaitStat::inner_open()
 {
   int ret = OB_SUCCESS;
   node_iter_ = NULL;
+  all_tenant_ids_.reset();
+  GCTX.omt_->get_mtl_tenant_ids(all_tenant_ids_);
+  cur_tenant_index_ = 0;
   return ret;
 }
 
-int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!start_to_read_ && OB_FAIL(make_this_ready_to_read())) {
     SERVER_LOG(WARN, "fail to make_this_ready_to_read", K(ret), K(start_to_read_));
+  } else if (cur_tenant_index_ >= all_tenant_ids_.count()) {
+    ret = OB_ITER_END;
   } else {
-    if (NULL == (node_iter_ = memtable::get_global_lock_wait_mgr().next(node_iter_, &cur_node_))) {
-      ret = OB_ITER_END;
-    } else {
+    // find a valid tenant and fetch a LockWaitNode
+    uint64_t tenant_id = 0;
+    do {
+      tenant_id = all_tenant_ids_[cur_tenant_index_];
+      MTL_SWITCH(tenant_id) {
+        if (OB_ISNULL(MTL(memtable::ObLockWaitMgr*))) {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "lockWaitMgr is null for tenant", K(ret), K(tenant_id));
+        } else if (OB_ISNULL(node_iter_ = MTL(memtable::ObLockWaitMgr*)
+                           ->next(node_iter_, &cur_node_))) {
+          ret = OB_ITER_END;
+        }
+      }
+      if ((OB_TENANT_NOT_IN_SERVER == ret || OB_ITER_END == ret) &&
+          cur_tenant_index_ + 1 < all_tenant_ids_.count()) {
+        // prepare for retry
+        node_iter_ = NULL;
+        cur_tenant_index_ += 1;
+        ret = OB_SUCCESS;
+      }
+    } while (OB_SUCC(ret) && OB_ISNULL(node_iter_));
+    if (OB_SUCC(ret)) {
       const int64_t col_count = output_column_ids_.count();
       ObString ipstr;
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -63,22 +91,27 @@ int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow*& row)
           }
           // svr_port
           case SVR_PORT: {
-            cur_row_.cells_[i].set_int(GCTX.self_addr_.get_port());
+            cur_row_.cells_[i].set_int(GCTX.self_addr().get_port());
             break;
           }
-          case TABLE_ID:
-            cur_row_.cells_[i].set_int(node_iter_->table_id_);
+          case TENANT_ID: {
+            cur_row_.cells_[i].set_int(tenant_id);
             break;
-          case ROWKEY: {
-            ObString rowkey;
-            if (OB_FAIL(ob_write_string(*allocator_, node_iter_->key_, rowkey))) {
-              SERVER_LOG(WARN, "fail to deep copy rowkey", K(*node_iter_), K(ret));
-            } else {
-              cur_row_.cells_[i].set_varchar(rowkey);
-              cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          case TABLET_ID:
+            cur_row_.cells_[i].set_int(node_iter_->tablet_id_);
+            break;
+          case ROWKEY:
+            {
+              ObString rowkey;
+              if (OB_FAIL(ob_write_string(*allocator_, node_iter_->key_, rowkey))) {
+                SERVER_LOG(WARN, "fail to deep copy rowkey", K(*node_iter_), K(ret));
+              } else {
+                cur_row_.cells_[i].set_varchar(rowkey);
+                cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              }
+              break;
             }
-            break;
-          }
           case ADDR:
             cur_row_.cells_[i].set_uint64((uint64_t)node_iter_->addr_);
             break;
@@ -97,11 +130,12 @@ int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow*& row)
           case TRY_LOCK_TIMES:
             cur_row_.cells_[i].set_int(node_iter_->try_lock_times_);
             break;
-          case TIME_AFTER_RECV: {
-            int64_t cur_ts = ObTimeUtility::current_time();
-            cur_row_.cells_[i].set_int(cur_ts - node_iter_->recv_ts_);
-            break;
-          }
+          case TIME_AFTER_RECV:
+            {
+              int64_t cur_ts = ObTimeUtility::current_time();
+              cur_row_.cells_[i].set_int(cur_ts - node_iter_->recv_ts_);
+              break;
+            }
           case SESSION_ID:
             cur_row_.cells_[i].set_int(node_iter_->sessid_);
             break;
@@ -113,6 +147,9 @@ int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow*& row)
             break;
           case LMODE:
             cur_row_.cells_[i].set_int(0);
+            break;
+          case LAST_COMPACT_CNT:
+            cur_row_.cells_[i].set_int(node_iter_->last_compact_cnt_);
             break;
           case TOTAL_UPDATE_CNT:
             cur_row_.cells_[i].set_int(node_iter_->total_update_cnt_);
@@ -134,7 +171,7 @@ int ObAllVirtualLockWaitStat::inner_get_next_row(ObNewRow*& row)
 int ObAllVirtualLockWaitStat::make_this_ready_to_read()
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = NULL;
+  ObObj *cells = NULL;
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "invalid allocator is NULL", K(allocator_), K(ret));
@@ -147,5 +184,5 @@ int ObAllVirtualLockWaitStat::make_this_ready_to_read()
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

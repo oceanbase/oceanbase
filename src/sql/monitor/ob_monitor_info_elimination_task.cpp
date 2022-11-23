@@ -12,9 +12,11 @@
 
 #include "sql/monitor/ob_monitor_info_elimination_task.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
-namespace oceanbase {
-namespace sql {
-int ObMonitorInfoEliminationTask::init(ObMonitorInfoManager* info)
+namespace oceanbase
+{
+namespace sql
+{
+int ObMonitorInfoEliminationTask::init(ObMonitorInfoManager *info)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -34,5 +36,7 @@ void ObMonitorInfoEliminationTask::runTimerTask()
     monitor_info_->gc();
   }
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
+
+

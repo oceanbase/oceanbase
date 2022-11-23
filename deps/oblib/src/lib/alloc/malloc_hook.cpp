@@ -79,7 +79,8 @@ void *ob_malloc_hook(size_t size, const void *)
     tmp_ptr = ob_malloc_retry(real_size);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
-    auto *header = new (tmp_ptr) Header(size, from_mmap);
+    abort_unless(size <= INT32_MAX);
+    auto *header = new (tmp_ptr) Header((int32_t)size, from_mmap);
     ptr = header->data_;
   }
   return ptr;
@@ -121,7 +122,8 @@ void *ob_realloc_hook(void *ptr, size_t size, const void *caller)
     tmp_ptr = ob_malloc_retry(real_size);
   }
   if (OB_LIKELY(tmp_ptr != nullptr)) {
-    auto *header = new (tmp_ptr) Header(size, from_mmap);
+    abort_unless(size <= INT32_MAX);
+    auto *header = new (tmp_ptr) Header((int32_t)size, from_mmap);
     nptr = header->data_;
     if (ptr != nullptr) {
       auto *old_header = Header::ptr2header(ptr);
@@ -163,8 +165,9 @@ void *ob_memalign_hook(size_t alignment, size_t size, const void *)
       char *align_ptr = (char *)up_align(reinterpret_cast<int64_t>(start), alignment);
       char *pheader = align_ptr - Header::SIZE;
       size_t offset = pheader - (char*)tmp_ptr;
-      auto *header = new (pheader) Header(size, from_mmap);
-      header->offset_ = offset;
+      abort_unless(size <= INT32_MAX);
+      auto *header = new (pheader) Header((int32_t)size, from_mmap);
+      header->offset_ = (uint32_t)offset;
       ptr = header->data_;
     }
   }
@@ -177,11 +180,24 @@ void *ob_memalign_hook(size_t alignment, size_t size, const void *)
 #define MALLOC_HOOK_MAYBE_VOLATILE __MALLOC_HOOK_VOLATILE
 #endif
 
-extern "C" {
+EXTERN_C_BEGIN
+
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __malloc_hook)(size_t, const void *) = ob_malloc_hook;
 __attribute__((visibility("default"))) void (*MALLOC_HOOK_MAYBE_VOLATILE __free_hook)(void *, const void *) = ob_free_hook;
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __realloc_hook)(void *, size_t, const void *) = ob_realloc_hook;
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __memalign_hook)(size_t, size_t, const void *) = ob_memalign_hook;
+
+size_t malloc_usable_size(void *ptr)
+{
+  size_t ret = 0;
+  if (OB_LIKELY(ptr != nullptr)) {
+    auto *header = Header::ptr2header(ptr);
+    abort_unless(header->check_magic_code());
+    ret = header->data_size_;
+  }
+  return ret;
 }
+
+EXTERN_C_END
 
 void init_malloc_hook() {}

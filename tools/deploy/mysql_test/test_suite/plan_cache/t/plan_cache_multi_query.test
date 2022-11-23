@@ -1,0 +1,41 @@
+## owner: xiaoyi.xy
+# owner group: sql1
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+--sleep 3
+connection default;
+--disable_warnings
+--disable_query_log
+drop table if exists proxy_mock_table_for_pc;
+create table proxy_mock_table_for_pc(a int);
+--enable_query_log
+--enable_warnings
+
+--echo
+--echo // test multi query hit plan
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int);
+begin;
+--source mysql_test/include/proxy_route_to_c.inc
+delimiter //;
+--disable_result_log
+select * from t1 where c1 = 1;select * from t1 where c1 = 1;select * from t1 where c1 = 1;//
+delimiter ;//
+commit;
+--echo // expected hit_count 2
+--enable_result_log
+--disable_warnings
+select  hit_count from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where c1 = ?;";
+--enable_warnings
+
+drop table t1;
+

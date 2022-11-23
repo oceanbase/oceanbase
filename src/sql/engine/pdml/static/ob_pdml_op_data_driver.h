@@ -10,84 +10,97 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_SQL_ENGINE_PDML_OP_PDML_DATA_DRIVER_H_
-#define _OB_SQL_ENGINE_PDML_OP_PDML_DATA_DRIVER_H_
+#ifndef _OB_SQL_ENGINE_PDML_PDML_DATA_DRIVER_H_
+#define _OB_SQL_ENGINE_PDML_PDML_DATA_DRIVER_H_
 
 #include "sql/engine/pdml/static/ob_pdml_op_batch_row_cache.h"
 #include "sql/engine/pdml/static/ob_px_multi_part_modify_op.h"
 
-namespace oceanbase {
-namespace common {
-class ObPartitionKey;
+namespace oceanbase
+{
+namespace common
+{
 class ObNewRow;
-}  // namespace common
+}
 
-namespace sql {
+namespace sql
+{
 
 class ObExecContext;
+struct ObDMLBaseRtDef;
 class ObDMLOpTableDesc;
 
-// The core classes that operate ObBatchRowCache and the storage layer
-class ObPDMLOpDataDriver {
+// 操作 ObBatchRowCache 和存储层的核心类
+class ObPDMLOpDataDriver
+{
 public:
-  ObPDMLOpDataDriver(ObEvalCtx* eval_ctx, ObIAllocator& allocator, ObMonitorNode& op_monitor_info)
-      : returning_ctx_(),
-        op_monitor_info_(op_monitor_info),
-        cache_(eval_ctx),
-        reader_(nullptr),
-        writer_(nullptr),
-        state_(FILL_CACHE),
-        eval_ctx_(eval_ctx),
-        last_row_(allocator),
-        last_row_part_id_(common::OB_INVALID_ID),
-        last_row_expr_(nullptr),
-        op_id_(common::OB_INVALID_ID),
-        with_barrier_(false),
-        dfo_id_(OB_INVALID_ID)
-  {}
+  ObPDMLOpDataDriver(ObEvalCtx *eval_ctx, ObIAllocator &allocator, ObMonitorNode &op_monitor_info):
+      returning_ctx_(),
+      op_monitor_info_(op_monitor_info),
+      cache_(eval_ctx, op_monitor_info),
+      reader_(nullptr),
+      writer_(nullptr),
+      uniq_checker_(nullptr),
+      dml_rtdef_(nullptr),
+      state_(FILL_CACHE),
+      eval_ctx_(eval_ctx),
+      last_row_(allocator),
+      last_row_tablet_id_(),
+      last_row_expr_(nullptr),
+      op_id_(common::OB_INVALID_ID),
+      is_heap_table_insert_(false),
+      with_barrier_(false),
+      dfo_id_(OB_INVALID_ID)
+  {
+  }
 
   ~ObPDMLOpDataDriver();
 
-  int init(common::ObIAllocator& allocator, const ObDMLOpTableDesc& tdesc, ObDMLOpDataReader* reader,
-      ObDMLOpDataWriter* writer);
+  int init(const ObTableModifySpec &spec,
+           common::ObIAllocator &allocator,
+           ObDMLBaseRtDef &dml_rtdef,
+           ObDMLOpDataReader *reader,
+           ObDMLOpDataWriter *writer,
+           ObDMLOpUniqueRowChecker *uniq_checker,
+           const bool is_heap_table_insert,
+           const bool with_barrier = false);
 
   int destroy();
 
-  int set_with_barrier(uint64_t op_id, const ObPxMultiPartModifyOpInput* modify_input);
+  int set_with_barrier(uint64_t op_id, const ObPxMultiPartModifyOpInput *modify_input);
 
-  int get_next_row(ObExecContext& ctx, const ObExprPtrIArray& row);
-
+  int get_next_row(ObExecContext &ctx, const ObExprPtrIArray &row);
 private:
-  int fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext& ctx);
+  int fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext &ctx);
   inline int try_write_last_pending_row();
-  int switch_to_returning_state(ObExecContext& ctx);
+  int switch_to_returning_state(ObExecContext &ctx);
   int switch_row_iter_to_next_partition();
-  int barrier(ObExecContext& ctx);
-  int next_row_from_cache(const ObExprPtrIArray& row);
-  int write_partitions(ObExecContext& ctx);
+  int barrier(ObExecContext &ctx);
+  int next_row_from_cache_for_returning(const ObExprPtrIArray &row);
+  int write_partitions(ObExecContext &ctx);
+  int set_heap_table_hidden_pk(const ObExprPtrIArray *&row, common::ObTabletID &tablet_id);
 
 private:
-  // Because the data of multiple partitions will be cached in the cache, it is necessary in the process of iteration
-  // Record the current status of which partition it is iterated to, which row in the partition it is iterated to, etc.
-  // So, introduce ReturningCtx
-  // Used to record the row of which partition is currently being returned to support repeated get_next_row
+  // 因为 cache 中会缓存多个分区的数据，迭代的过程中需要
+  // 记录当前迭代到哪个分区、迭代到分区中的哪一行等状态
+  // 所以，引入 ReturningCtx
+  // 用于记录当前正在返回哪个分区的行，以支持反复 get_next_row
   struct ReturningCtx {
-    ReturningCtx() : next_idx_(0), row_iter_(nullptr)
-    {}
+    ReturningCtx() : next_idx_(0), row_iter_(nullptr) {}
     ~ReturningCtx() = default;
     void reset()
     {
-      part_id_array_.reset();
+      tablet_id_array_.reset();
       next_idx_ = 0;
       row_iter_ = NULL;
     }
 
-    PartitionIdArray part_id_array_;
-    int64_t next_idx_;
-    ObPDMLOpRowIterator* row_iter_;
+    ObTabletIDArray tablet_id_array_; // 所有要读的分区索引
+    int64_t next_idx_; // 下一个要读的分区索引，0 if not started
+    ObPDMLOpRowIterator *row_iter_; // 当前在读分区的行迭代器
   };
 
-  /* State transition diagram:
+  /* 状态转移图：
    *
    *           start
    *             |
@@ -108,40 +121,42 @@ private:
    *    |(4);
    *    +-----> end
    *
-   *  (0); Begin;
-   *  (1); Read in data from PDMLDataReader to fill the cache;
-   *  (2); Spit up data, because it is a pull data model, so it will be done multiple times state (2);
-   *  (3); All the cached data is spit out, the cache is filled again, back into state (1);
-   *  (4); No data fills the cache, and the cache is empty, end
+   *  (0); 开始
+   *  (1); 从 PDMLDataReader 读入数据填充缓存
+   *  (2); 向上吐出数据，因为是拉数据模型，所以会多次做，在状态(2);
+   *  (3); 缓存数据全部吐出，再次开始填充缓存，进入状态(1);
+   *  (4); 无数据填充缓存，且缓存为空，结束
    *
    */
   enum DriverState {
-    FILL_CACHE,   /* When the cache is filled, and the cache is full,
-                     it will automatically write to the disk synchronously and enter the ROW_RETURNING state */
-    ROW_RETURNING /* Return rows to the upper layer,
-                     and automatically switch to the state of filling cache after all rows are returned*/
+    FILL_CACHE,  /* 填充 cache、cache 满后同步自动写盘，并转入 ROW_RETURNING 状态 */
+    ROW_RETURNING /* 返回行给上层，行全部返回后自动转入填充 cache 状态 */
   };
 
-private:
-  ReturningCtx returning_ctx_;
-  ObMonitorNode& op_monitor_info_;
-  ObPDMLOpBatchRowCache cache_;  // cache data
-  ObDMLOpDataReader* reader_;
-  ObDMLOpDataWriter* writer_;
-  ObDMLOpTableDesc tdesc_;
-  DriverState state_;  // Driver current state
 
-  ObEvalCtx* eval_ctx_;
-  ObChunkDatumStore::LastStoredRow<> last_row_;
-  int64_t last_row_part_id_;
-  const ObExprPtrIArray* last_row_expr_;
-  int64_t op_id_;
-  bool with_barrier_;
-  uint64_t dfo_id_;
-  DISALLOW_COPY_AND_ASSIGN(ObPDMLOpDataDriver);
-  ;
+private:
+  ReturningCtx returning_ctx_; // returning类型会使用到，目前还未使用
+  ObMonitorNode &op_monitor_info_;
+  ObPDMLOpBatchRowCache cache_; // 用于缓存数据，需要在init函数中初始化，并且分配alloctor
+  ObDMLOpDataReader *reader_;
+  ObDMLOpDataWriter *writer_;
+  ObDMLOpUniqueRowChecker *uniq_checker_;
+  ObDMLBaseRtDef *dml_rtdef_;
+  DriverState state_; // Driver 当前状态：读写数据状态、向上返回数据状态
+
+  ObEvalCtx *eval_ctx_; // 用于存储 last_row 做入参
+  ObChunkDatumStore::LastStoredRow last_row_; //缓存已从child读出但还没写入cache的行
+  common::ObTabletID last_row_tablet_id_; // 缓存已经从child读取出来还没有写入到cache的行的part id
+  const ObExprPtrIArray *last_row_expr_; // 指向表达式，用于把 row 数据恢复到表达式中
+  int64_t op_id_; // 当前操作这个 driver 的算子 id，用于 barrier 场景下发消息传参
+  bool is_heap_table_insert_;
+  bool with_barrier_; // 当前算子需要支持 barrier，即：没有写完之前不可以对外吐出数据
+                      // 这是针对 row-movement 场景下避免 insert、delete 并发写同一行
+  uint64_t dfo_id_;   // with_barrier_等于true的情况下需要知道barrier对应的DFO
+  DISALLOW_COPY_AND_ASSIGN(ObPDMLOpDataDriver);;
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_SQL_ENGINE_PDML_OP_PDML_DATA_DRIVER_H_ */
+}
+}
+#endif /* _OB_SQL_ENGINE_PDML_PDML_DATA_DRIVER_H_ */
 //// end of header file
+

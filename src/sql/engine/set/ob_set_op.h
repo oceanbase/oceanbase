@@ -16,14 +16,16 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObSetSpec : public ObOpSpec {
-  OB_UNIS_VERSION_V(1);
-
+class ObSetSpec : public ObOpSpec
+{
+OB_UNIS_VERSION_V(1);
 public:
-  ObSetSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
+  ObSetSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(is_distinct), K_(sort_collations));
   bool is_distinct_;
@@ -32,6 +34,9 @@ public:
   ObSortFuncs sort_cmp_funs_;
 };
 
+/**
+ * MergeSet和HashSet没有什么公用部分，所以这里暂不弄一个ObSetOp
+ **/
 // class ObSetOp : public ObOperator
 // {
 // public:
@@ -41,7 +46,7 @@ public:
 //   virtual ~ObSetOp() = 0;
 // };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_BASIC_OB_SET_OB_SET_OP_H_
+#endif // OCEANBASE_BASIC_OB_SET_OB_SET_OP_H_

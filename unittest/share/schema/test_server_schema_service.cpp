@@ -20,19 +20,23 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 using namespace common;
-class TestServerSchemaService : public ::testing::Test {
+class TestServerSchemaService : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
+  virtual void TearDown() {}
 };
 
 void TestServerSchemaService::SetUp()
-{}
+{
+}
 
 using ::testing::_;
 using ::testing::Invoke;
@@ -131,14 +135,14 @@ TEST_F(TestServerSchemaService, table_priv_equal_to)
   ASSERT_TRUE(table_priv_equal_to(key1, key2));
 }
 
-}  // end namespace schema
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace schema
+}//end namespace share
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

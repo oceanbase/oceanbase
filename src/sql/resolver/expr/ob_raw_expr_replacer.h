@@ -14,25 +14,32 @@
 #define _OB_RAW_EXPR_REPLACER_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace sql {
-class ObRawExprReplacer : public ObRawExprVisitor {
+namespace oceanbase
+{
+namespace sql
+{
+class ObRawExprReplacer: public ObRawExprVisitor
+{
 public:
-  ObRawExprReplacer(ObRawExpr* old_expr, ObRawExpr* new_expr);
+  ObRawExprReplacer(ObRawExpr *old_expr, ObRawExpr *new_expr);
   virtual ~ObRawExprReplacer();
 
-  int replace(ObRawExpr& expr);
-  virtual int visit(ObConstRawExpr& expr);
-  virtual int visit(ObVarRawExpr& expr);
-  virtual int visit(ObQueryRefRawExpr& expr);
-  virtual int visit(ObColumnRefRawExpr& expr);
-  virtual int visit(ObOpRawExpr& expr);
-  virtual int visit(ObCaseOpRawExpr& expr);
-  virtual int visit(ObAggFunRawExpr& expr);
-  virtual int visit(ObSysFunRawExpr& expr);
-  virtual int visit(ObSetOpRawExpr& expr);
-  virtual int visit(ObWinFunRawExpr& expr);
+  int replace(ObRawExpr &expr);
+  virtual int visit(ObConstRawExpr &expr);
+  virtual int visit(ObExecParamRawExpr &expr);
+  virtual int visit(ObVarRawExpr &expr);
+  virtual int visit(ObOpPseudoColumnRawExpr &expr);
+  virtual int visit(ObQueryRefRawExpr &expr);
+  virtual int visit(ObColumnRefRawExpr &expr);
+  virtual int visit(ObOpRawExpr &expr);
+  virtual int visit(ObCaseOpRawExpr &expr);
+  virtual int visit(ObAggFunRawExpr &expr);
+  virtual int visit(ObSysFunRawExpr &expr);
+  virtual int visit(ObSetOpRawExpr &expr);
+  virtual int visit(ObWinFunRawExpr &expr);
+  virtual int visit(ObPlQueryRefRawExpr &expr);
 
+  virtual bool skip_child(ObRawExpr &expr) override;
 private:
   // types and constants
 private:
@@ -40,11 +47,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprReplacer);
   // function members
 private:
-  ObRawExpr* old_expr_;
-  ObRawExpr* new_expr_;
+  ObRawExpr *old_expr_;
+  ObRawExpr *new_expr_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_RAW_EXPR_REPLACER_H */

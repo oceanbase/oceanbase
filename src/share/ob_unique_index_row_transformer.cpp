@@ -13,18 +13,21 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_unique_index_row_transformer.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 
-int ObUniqueIndexRowTransformer::check_need_shadow_columns(const common::ObNewRow& row,
-    const common::ObCompatibilityMode sql_mode, const int64_t unique_key_cnt,
-    const common::ObIArray<int64_t>* projector, bool& need_shadow_columns)
+int ObUniqueIndexRowTransformer::check_need_shadow_columns(
+    const common::ObNewRow &row,
+    const common::ObCompatibilityMode sql_mode,
+    const int64_t unique_key_cnt,
+    const common::ObIArray<int64_t> *projector,
+    bool &need_shadow_columns)
 {
   int ret = OB_SUCCESS;
   need_shadow_columns = false;
-  if (OB_UNLIKELY(!row.is_valid() || sql_mode > ORACLE_MODE || unique_key_cnt <= 0 || unique_key_cnt > row.count_)) {
+  if (OB_UNLIKELY(!row.is_valid() || sql_mode > ORACLE_MODE
+      || unique_key_cnt <= 0 || unique_key_cnt > row.count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(row), K(sql_mode), K(unique_key_cnt));
   } else {
@@ -41,8 +44,11 @@ int ObUniqueIndexRowTransformer::check_need_shadow_columns(const common::ObNewRo
   return ret;
 }
 
-int ObUniqueIndexRowTransformer::check_oracle_need_shadow_columns(const common::ObNewRow& row,
-    const int64_t unique_key_cnt, const common::ObIArray<int64_t>* projector, bool& need_shadow_columns)
+int ObUniqueIndexRowTransformer::check_oracle_need_shadow_columns(
+    const common::ObNewRow &row,
+    const int64_t unique_key_cnt,
+    const common::ObIArray<int64_t> *projector,
+    bool &need_shadow_columns)
 {
   int ret = OB_SUCCESS;
   need_shadow_columns = false;
@@ -66,8 +72,11 @@ int ObUniqueIndexRowTransformer::check_oracle_need_shadow_columns(const common::
   return ret;
 }
 
-int ObUniqueIndexRowTransformer::check_mysql_need_shadow_columns(const common::ObNewRow& row,
-    const int64_t unique_key_cnt, const common::ObIArray<int64_t>* projector, bool& need_shadow_columns)
+int ObUniqueIndexRowTransformer::check_mysql_need_shadow_columns(
+    const common::ObNewRow &row,
+    const int64_t unique_key_cnt,
+    const common::ObIArray<int64_t> *projector,
+    bool &need_shadow_columns)
 {
   int ret = OB_SUCCESS;
   need_shadow_columns = false;
@@ -91,14 +100,20 @@ int ObUniqueIndexRowTransformer::check_mysql_need_shadow_columns(const common::O
   return ret;
 }
 
-int ObUniqueIndexRowTransformer::convert_to_unique_index_row(const common::ObNewRow& row,
-    const common::ObCompatibilityMode sql_mode, const int64_t unique_key_cnt, const int64_t shadow_column_cnt,
-    const ObIArray<int64_t>* projector, bool& need_shadow_columns, common::ObNewRow& result_row,
+int ObUniqueIndexRowTransformer::convert_to_unique_index_row(
+    const common::ObNewRow &row,
+    const common::ObCompatibilityMode sql_mode,
+    const int64_t unique_key_cnt,
+    const int64_t shadow_column_cnt,
+    const ObIArray<int64_t> *projector,
+    bool &need_shadow_columns,
+    common::ObNewRow &result_row,
     const bool need_copy_cell)
 {
   int ret = OB_SUCCESS;
   need_shadow_columns = false;
-  if (OB_UNLIKELY(!row.is_valid() || sql_mode > ORACLE_MODE || unique_key_cnt <= 0 || shadow_column_cnt <= 0)) {
+  if (OB_UNLIKELY(!row.is_valid() || sql_mode > ORACLE_MODE || unique_key_cnt <= 0
+        || shadow_column_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(row), K(sql_mode), K(unique_key_cnt), K(shadow_column_cnt));
   } else if (OB_FAIL(check_need_shadow_columns(row, sql_mode, unique_key_cnt, projector, need_shadow_columns))) {
@@ -146,20 +161,18 @@ int ObUniqueIndexRowTransformer::convert_to_unique_index_row(const common::ObNew
   return ret;
 }
 
-int ObUniqueIndexRowTransformer::convert_to_unique_index_row(const common::ObNewRow& row,
-    const common::ObCompatibilityMode sql_mode, const int64_t unique_key_cnt, const int64_t shadow_column_cnt,
-    const ObIArray<int64_t>* projector, common::ObNewRow& result_row, const bool need_copy_cell)
+int ObUniqueIndexRowTransformer::convert_to_unique_index_row(
+    const common::ObNewRow &row,
+    const common::ObCompatibilityMode sql_mode,
+    const int64_t unique_key_cnt,
+    const int64_t shadow_column_cnt,
+    const ObIArray<int64_t> *projector,
+    common::ObNewRow &result_row,
+    const bool need_copy_cell)
 {
   int ret = OB_SUCCESS;
   bool need_shadow_columns = false;
-  if (OB_FAIL(convert_to_unique_index_row(row,
-          sql_mode,
-          unique_key_cnt,
-          shadow_column_cnt,
-          projector,
-          need_shadow_columns,
-          result_row,
-          need_copy_cell))) {
+  if (OB_FAIL(convert_to_unique_index_row(row, sql_mode, unique_key_cnt, shadow_column_cnt, projector, need_shadow_columns, result_row, need_copy_cell))) {
     LOG_WARN("fail to convert to unique index row", K(ret));
   }
   return ret;

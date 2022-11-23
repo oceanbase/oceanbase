@@ -12,34 +12,42 @@
 
 #ifndef _OCEANBASE_SQL_OB_EXPR_TIME_STMAP_ADD_H_
 #define _OCEANBASE_SQL_OB_EXPR_TIME_STMAP_ADD_H_
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 #include "lib/ob_name_def.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
-namespace oceanbase {
-namespace common {
-class ObTimeConvertCtx;
+namespace oceanbase
+{
+namespace common
+{
+struct ObTimeConvertCtx;
 }
-namespace sql {
-class ObExprTimeStampAdd : public ObFuncExprOperator {
+namespace sql
+{
+class ObExprTimeStampAdd : public ObFuncExprOperator
+{
 public:
-  explicit ObExprTimeStampAdd(common::ObIAllocator& alloc);
+  explicit  ObExprTimeStampAdd(common::ObIAllocator &alloc);
   virtual ~ObExprTimeStampAdd();
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& unit, ObExprResType& interval,
-      ObExprResType& timestamp, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result3(common::ObObj& result, const common::ObObj& unit, const common::ObObj& interval,
-      const common::ObObj& timestamp, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static void check_reset_status(const common::ObCastMode cast_mode, int& ret, common::ObObj& result);
-  static int calc(const int64_t unit_value, common::ObTime& ot, const int64_t ts,
-      const common::ObTimeConvertCtx& cvrt_ctx, int64_t interval, int64_t& delta);
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &unit,
+                                ObExprResType &interval,
+                                ObExprResType &timestamp,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                ObExpr &rt_expr) const override;
+  static void check_reset_status(const common::ObCastMode cast_mode,
+                                 int &ret, common::ObObj &result);
+  static int calc(const int64_t unit_value, common::ObTime &ot, const int64_t ts,
+                  const common::ObTimeConvertCtx &cvrt_ctx, int64_t interval,
+                  int64_t &delta);
 
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeStampAdd);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  //_OCEANBASE_SQL_OB_EXPR_TIME_STMAP_ADD_H_
+} //sql
+} //oceanbase
+#endif //_OCEANBASE_SQL_OB_EXPR_TIME_STMAP_ADD_H_

@@ -18,7 +18,6 @@
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/queue/ob_link_queue.h"
 #include "lib/time/ob_time_utility.h"
-#include "lib/lock/ob_seq_sem.h"
 #include "lib/utility/ob_print_utils.h"
 #include "sql/dtl/ob_dtl_channel.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
@@ -27,34 +26,34 @@
 #include "sql/dtl/ob_dtl_rpc_proxy.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
 #include "sql/dtl/ob_dtl.h"
+#include "ob_dtl_interm_result_manager.h"
 
 namespace oceanbase {
 namespace sql {
 namespace dtl {
 
-class ObDtlLocalChannel : public ObDtlBasicChannel {
+class ObDtlLocalChannel : public ObDtlBasicChannel
+{
 public:
-  explicit ObDtlLocalChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
+  explicit ObDtlLocalChannel(const uint64_t tenant_id,
+     const uint64_t id, const common::ObAddr &peer);
+  explicit ObDtlLocalChannel(const uint64_t tenant_id,
+     const uint64_t id, const common::ObAddr &peer, const int64_t hash_val);
   virtual ~ObDtlLocalChannel();
 
-  virtual DtlChannelType get_channel_type() override
-  {
-    return DtlChannelType::LOCAL_CHANNEL;
-  }
+  virtual DtlChannelType get_channel_type() { return DtlChannelType::LOCAL_CHANNEL; }
 
   virtual int init() override;
   virtual void destroy();
-
-  virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int send_message(ObDtlLinkedBuffer*& buf) override;
-
+  
+  virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
+  virtual int send_message(ObDtlLinkedBuffer *&buf);
 private:
-  int send_shared_message(ObDtlLinkedBuffer*& buf);
-  int process_interm_result(ObDtlLinkedBuffer* buffer);
+  int send_shared_message(ObDtlLinkedBuffer *&buf);
 };
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase
 
 #endif /* OB_DTL_LOCAL_CHANNEL_H */

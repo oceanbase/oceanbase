@@ -15,19 +15,21 @@
 
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
-namespace oceanbase {
-namespace sql {
-class ObDropRoleResolver : public ObDCLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObDropRoleResolver: public ObDCLResolver
+{
 public:
-  explicit ObDropRoleResolver(ObResolverParams& params);
+  explicit ObDropRoleResolver(ObResolverParams &params);
   virtual ~ObDropRoleResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDropRoleResolver);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase
 #endif

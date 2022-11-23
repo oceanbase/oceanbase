@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_utils.h"
 #include <endian.h>  // be64toh

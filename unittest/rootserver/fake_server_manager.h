@@ -16,35 +16,32 @@
 #include "lib/container/ob_array_iterator.h"
 #include "share/ob_server_status.h"
 #include "rootserver/ob_zone_manager.h"
-namespace oceanbase {
-namespace rootserver {
-class FakeServerMgr : public ObServerManager {
-public:
-  FakeServerMgr() : server_id_(0)
-  {}
-  ~FakeServerMgr()
-  {}
-  void fake_init(ObZoneManager* zone_mgr)
+namespace oceanbase
+{
+namespace rootserver
+{
+class FakeServerMgr :  public ObServerManager
   {
-    inited_ = true;
-    zone_mgr_ = zone_mgr;
-  }
-  int add_server(const common::ObAddr& server, const ObZone& zone);
-  virtual int get_server_statuses(
-      const common::ObZone& zone, common::ObArray<share::ObServerStatus>& server_statuses) const
-  {
-    UNUSED(zone);  // always get all zone
-    return server_statuses.assign(server_statuses_);
-  }
+  public:
+    FakeServerMgr() : server_id_(0) {}
+    ~FakeServerMgr() {}
+    void fake_init(ObZoneManager *zone_mgr) { inited_ = true; zone_mgr_ = zone_mgr; }
+    int add_server(const common::ObAddr &server, const ObZone &zone);
+    virtual int get_server_statuses(const common::ObZone &zone,
+                                    common::ObArray<share::ObServerStatus> &server_statuses) const
+    {
+      UNUSED(zone); // always get all zone
+      return server_statuses.assign(server_statuses_);
+    }
 
-private:
-  int64_t server_id_;
-  ObZoneManager* zone_mgr_;
-};
-int FakeServerMgr::add_server(const common::ObAddr& server, const ObZone& zone)
+  private:
+    int64_t server_id_;
+    ObZoneManager * zone_mgr_;
+  };
+int FakeServerMgr::add_server(const common::ObAddr &server, const ObZone &zone)
 {
   int ret = common::OB_SUCCESS;
-  share::ObServerStatus* server_status = NULL;
+  share::ObServerStatus *server_status = NULL;
   if (!server.is_valid() || OB_ISNULL(zone_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     RS_LOG(WARN, "invalid server", K(server), K(zone_mgr_), K(ret));
@@ -90,20 +87,20 @@ int FakeServerMgr::add_server(const common::ObAddr& server, const ObZone& zone)
   return ret;
 }
 
-class FakeServerManager : public ObServerManager {
+class FakeServerManager : public ObServerManager
+{
 public:
   void set_is_inited(bool is_inited)
   {
     UNUSED(is_inited);
-    // inited_ = is_inited;
+    //inited_ = is_inited;
   }
 
-  void set(const common::ObZone& zone, const common::ObAddr& addr,
+  void set(const common::ObZone &zone, const common::ObAddr &addr,
       share::ObServerStatus::DisplayStatus stat = share::ObServerStatus::OB_SERVER_ACTIVE)
   {
-    share::ObServerStatus* server = NULL;
-    FOREACH(s, all_)
-    {
+    share::ObServerStatus *server = NULL;
+    FOREACH(s, all_) {
       if (s->server_ == addr) {
         server = &(*s);
       }
@@ -128,12 +125,11 @@ public:
     }
   }
 
-  virtual int check_server_alive(const common::ObAddr& server, bool& alive) const
+  virtual int check_server_alive(const common::ObAddr &server, bool &alive) const
   {
     int ret = common::OB_SUCCESS;
     alive = false;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         alive = s->is_alive();
         break;
@@ -142,11 +138,10 @@ public:
     return ret;
   }
 
-  int set_server_version(const common::ObAddr& server, const char* version)
+  int set_server_version(const common::ObAddr &server, const char *version)
   {
     int ret = common::OB_SUCCESS;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         MEMCPY(s->build_version_, version, common::OB_SERVER_VERSION_LENGTH);
         break;
@@ -159,10 +154,9 @@ public:
     int ret = OB_SUCCESS;
     ObClusterVersion version_parser;
     uint64_t cur_min_version = UINT64_MAX;
-    FOREACH(s, all_)
-    {
-      char* saveptr = NULL;
-      char* version = STRTOK_R(s->build_version_, "_", &saveptr);
+    FOREACH(s, all_) {
+      char *saveptr = NULL;
+      char *version = STRTOK_R(s->build_version_, "_", &saveptr);
       if (NULL == version || strlen(version) + 1 > OB_SERVER_VERSION_LENGTH) {
         ret = OB_INVALID_ARGUMENT;
         RS_LOG(WARN, "invalid build version format", "build_version", s->build_version_);
@@ -180,12 +174,11 @@ public:
     return ret;
   }
 
-  virtual int check_server_active(const common::ObAddr& server, bool& active) const
+  virtual int check_server_active(const common::ObAddr &server, bool &active) const
   {
     int ret = common::OB_SUCCESS;
     active = false;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         active = s->is_active();
         break;
@@ -194,13 +187,12 @@ public:
     return ret;
   }
 
-  virtual int check_in_service(const common::ObAddr& server, bool& in_service) const
+  virtual int check_in_service(const common::ObAddr &server, bool &in_service) const
   {
     int ret = common::OB_SUCCESS;
     bool exist = false;
     in_service = false;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         in_service = s->in_service();
         exist = true;
@@ -213,13 +205,12 @@ public:
     return ret;
   }
 
-  virtual int check_migrate_in_blocked(const common::ObAddr& server, bool& blocked) const
+  virtual int check_migrate_in_blocked(const common::ObAddr &server, bool &blocked) const
   {
     int ret = common::OB_SUCCESS;
     bool exist = false;
     blocked = false;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         blocked = s->is_migrate_in_blocked();
         exist = true;
@@ -232,17 +223,17 @@ public:
     return ret;
   }
 
-  virtual int get_server_statuses(
-      const common::ObZone& zone, common::ObArray<share::ObServerStatus>& server_statuses) const
+  virtual int get_server_statuses(const common::ObZone &zone,
+      common::ObArray<share::ObServerStatus> &server_statuses) const
   {
-    UNUSED(zone);  // always get all zone
+    UNUSED(zone); // always get all zone
     return server_statuses.assign(all_);
   }
-  int get_servers_of_zone(const common::ObZone& zone, ObServerManager::ObServerArray& server_list) const
+  int get_servers_of_zone(const common::ObZone &zone,
+      ObServerManager::ObServerArray &server_list) const
   {
     int ret = common::OB_SUCCESS;
-    FOREACH_X(s, all_, common::OB_SUCCESS == ret)
-    {
+    FOREACH_X(s, all_, common::OB_SUCCESS == ret) {
       if (zone.is_empty() || zone == s->zone_) {
         if (OB_FAIL(server_list.push_back(s->server_))) {
           RS_LOG(WARN, "add server failed", K(ret));
@@ -252,11 +243,11 @@ public:
     return ret;
   }
 
-  virtual int get_server_status(const common::ObAddr& server, share::ObServerStatus& server_status)
+  virtual int get_server_status(const common::ObAddr &server,
+      share::ObServerStatus &server_status)
   {
     int ret = common::OB_ENTRY_NOT_EXIST;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         server_status = *s;
         ret = common::OB_SUCCESS;
@@ -265,11 +256,11 @@ public:
     return ret;
   }
 
-  int get_alive_servers(const common::ObZone& zone, ObServerManager::ObIServerArray& server_list) const
+  int get_alive_servers(const common::ObZone &zone,
+      ObServerManager::ObIServerArray &server_list) const
   {
     int ret = common::OB_SUCCESS;
-    FOREACH_X(s, all_, common::OB_SUCCESS == ret)
-    {
+    FOREACH_X(s, all_, common::OB_SUCCESS == ret) {
       if (!s->is_alive()) {
         continue;
       }
@@ -281,11 +272,10 @@ public:
     }
     return ret;
   }
-  int get_server_zone(const common::ObAddr& addr, common::ObZone& zone) const
+  int get_server_zone(const common::ObAddr &addr, common::ObZone &zone) const
   {
     int ret = common::OB_ENTRY_NOT_EXIST;
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == addr) {
         zone = s->zone_;
         ret = common::OB_SUCCESS;
@@ -294,11 +284,10 @@ public:
     return ret;
   }
 
-  share::ObServerStatus* get(const common::ObAddr& addr)
+  share::ObServerStatus *get(const common::ObAddr &addr)
   {
-    share::ObServerStatus* stat = NULL;
-    FOREACH(s, all_)
-    {
+    share::ObServerStatus *stat = NULL;
+    FOREACH(s, all_) {
       if (s->server_ == addr) {
         stat = &(*s);
       }
@@ -306,12 +295,11 @@ public:
     return stat;
   }
 
-  int delete_server(const common::ObAddr& server, const common::ObZone& zone)
+  int delete_server(const common::ObAddr &server, const common::ObZone &zone)
   {
     int ret = common::OB_SUCCESS;
     UNUSED(zone);
-    FOREACH(s, all_)
-    {
+    FOREACH(s, all_) {
       if (s->server_ == server) {
         s->admin_status_ = share::ObServerStatus::OB_SERVER_ADMIN_DELETING;
         break;
@@ -320,7 +308,8 @@ public:
     return ret;
   }
 
-  int end_delete_server(const common::ObAddr& server, const common::ObZone& zone, const bool commit)
+  int end_delete_server(const common::ObAddr &server, const common::ObZone &zone,
+                        const bool commit)
   {
     int ret = common::OB_SUCCESS;
     UNUSED(zone);
@@ -342,13 +331,13 @@ public:
     return ret;
   }
 
-  int set_with_partition(const common::ObAddr& server)
+  int set_with_partition(const common::ObAddr &server)
   {
     UNUSED(server);
     return common::OB_SUCCESS;
   }
 
-  int set_force_stop_hb(const common::ObAddr& server, const bool& force_stop_hb)
+  int set_force_stop_hb(const common::ObAddr &server, const bool &force_stop_hb)
   {
     int ret = common::OB_SUCCESS;
     int64_t index = -1;
@@ -369,11 +358,10 @@ public:
   {
     inited_ = inited;
   }
-
 public:
   common::ObArray<share::ObServerStatus> all_;
 };
 
-}  // end namespace rootserver
-}  // end namespace oceanbase
+} // end namespace rootserver
+} // end namespace oceanbase
 #endif

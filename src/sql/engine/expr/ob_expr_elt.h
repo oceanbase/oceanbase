@@ -16,30 +16,32 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprElt : public ObExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprElt : public ObExprOperator
+{
 public:
-  explicit ObExprElt(common::ObIAllocator& alloc);
-  virtual ~ObExprElt(){};
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* type_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+  explicit  ObExprElt(common::ObIAllocator &alloc);
+  virtual ~ObExprElt() {};
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* obj_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *type_stack,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  static int calc(common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx,
-      common::ObCollationType c_type);
-
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-  static int eval_elt(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int eval_elt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprElt);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
 
 #endif /* OB_EXPR_ELT_H_ */

@@ -16,31 +16,31 @@
 #include "sql/resolver/ddl/ob_alter_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_tablegroup_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObAlterTablegroupResolver : public ObTableGroupResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObAlterTablegroupResolver : public ObTableGroupResolver
+{
   static const int TG_NAME = 0;
   static const int TABLE_LIST = 1;
-
 public:
-  explicit ObAlterTablegroupResolver(ObResolverParams& params);
+  explicit ObAlterTablegroupResolver(ObResolverParams &params);
   virtual ~ObAlterTablegroupResolver();
-  virtual int resolve(const ParseNode& parse_tree);
-  ObAlterTablegroupStmt* get_alter_tablegroup_stmt()
-  {
-    return static_cast<ObAlterTablegroupStmt*>(stmt_);
-  };
+  virtual int resolve(const ParseNode &parse_tree);
+  ObAlterTablegroupStmt *get_alter_tablegroup_stmt() { return static_cast<ObAlterTablegroupStmt*>(stmt_); };
 
 private:
-  int resolve_partition_options(const ParseNode& node);
-  int resolve_add_partition(const ParseNode& node);
-  int resolve_drop_partition(const ParseNode& node);
-  int resolve_reorganize_partition(const ParseNode& node);
-  int resolve_split_partition(const ParseNode& node);
+  int resolve_partition_options(const ParseNode &node);
+  int resolve_add_partition(const ParseNode &node);
+  int resolve_drop_partition(const ParseNode &node);
+  int resolve_reorganize_partition(const ParseNode &node);
+  int resolve_split_partition(const ParseNode &node);
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_ALTER_TABLEGROUP_RESOLVER_
+} //end namespace sql
+} //end namespace oceanbase
+
+#endif // OCEANBASE_SQL_OB_ALTER_TABLEGROUP_RESOLVER_

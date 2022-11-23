@@ -15,33 +15,31 @@
 
 #include "sql/executor/ob_task_spliter.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObPhysicalPlan;
 class ObTaskInfo;
 
-// This class is only used when only one local task is generated.
-// In the executor phase, if it is judged that the split type is ObTaskSpliter::LOCAL_IDENTITY_SPLIT,
-// it will be directly optimized without the process of splitting the job,
-// which is equivalent to the size of this class. Some functions will not be called
-class ObLocalIdentityTaskSpliter : public ObTaskSpliter {
+// 该类仅用于只生成一个本地task的情况，而在executor阶段如果判断到
+// 切分类型为ObTaskSpliter::LOCAL_IDENTITY_SPLIT则会直接优化掉，不走切分job的流程，
+// 相当于这个类的大部分函数都不会被调用到
+class ObLocalIdentityTaskSpliter : public ObTaskSpliter
+{
 public:
   ObLocalIdentityTaskSpliter();
   virtual ~ObLocalIdentityTaskSpliter();
-  virtual int get_next_task(ObTaskInfo*& task);
-  inline virtual TaskSplitType get_type() const
-  {
-    return ObTaskSpliter::LOCAL_IDENTITY_SPLIT;
-  }
-
+  virtual int get_next_task(ObTaskInfo *&task);
+  inline virtual TaskSplitType get_type() const { return ObTaskSpliter::LOCAL_IDENTITY_SPLIT; }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLocalIdentityTaskSpliter);
-
 private:
-  ObTaskInfo* task_;
+  ObTaskInfo *task_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_LOCAL_IDENTITY_TASK_SPLITER_ */
 //// end of header file
+

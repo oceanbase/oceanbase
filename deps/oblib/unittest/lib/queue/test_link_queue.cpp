@@ -22,12 +22,10 @@ ObTCCounter push_count, pop_count;
 
 volatile bool g_stop CACHE_ALIGNED;
 #define MAGIC 12345678
-void before_push(int64_t* p)
-{
+void before_push(int64_t* p) {
   *p = MAGIC;
 }
-void after_pop(int64_t* p)
-{
+void after_pop(int64_t* p) {
   if (MAGIC != *p) {
     fprintf(stderr, "pop error\n");
     abort();
@@ -35,71 +33,59 @@ void after_pop(int64_t* p)
   *p = 0;
 }
 
-struct QI {
+struct QI
+{
   virtual int push(void* p) = 0;
   virtual void* pop(int64_t timeout) = 0;
 };
 
-struct SLinkQueueWrapper : public QI {
-  int push(void* p)
-  {
-    q_.push((ObLink*)p);
-    return 0;
-  }
-  void* pop(int64_t timeout)
-  {
-    UNUSED(timeout);
-    return (void*)q_.pop();
-  }
+struct SLinkQueueWrapper: public QI
+{
+  int push(void* p) { q_.push((ObLink*)p); return 0; }
+  void* pop(int64_t timeout) { UNUSED(timeout); return (void*)q_.pop(); }
   ObSpScLinkQueue q_;
 };
 
-struct LightyQueueWrapper : public QI {
-  LightyQueueWrapper()
-  {
-    q_.init(1 << 20);
+struct ObLightyQueueWrapper: public QI
+{
+  ObLightyQueueWrapper() {
+    q_.init(1<<20);
   }
-  int push(void* p)
-  {
-    return q_.push(p);
-  }
-  void* pop(int64_t timeout)
-  {
+  int push(void* p) { return q_.push(p); }
+  void* pop(int64_t timeout) {
     void* p = NULL;
     q_.pop(p, timeout);
     return p;
   }
-  ObLightyQueue q_;
+  ObLightyQueue  q_;
 };
-void do_push(QI* q)
-{
+void do_push(QI* q) {
   void* p = malloc(16);
   before_push((int64_t*)p + 1);
-  while (0 != q->push(p))
+  while(0 != q->push(p))
     ;
 }
 
-void do_pop(QI* q)
-{
+void do_pop(QI* q) {
   void* p = NULL;
   int64_t timeout = 100 * 1000;
-  while (NULL == (p = q->pop(timeout)))
+  while(NULL == (p = q->pop(timeout)) && !g_stop)
     ;
-  after_pop((int64_t*)p + 1);
-  free(p);
+  if (p) {
+    after_pop((int64_t*)p + 1);
+    free(p);
+  }
 }
 
-void* pop_loop(QI* q)
-{
-  while (!g_stop) {
+void* pop_loop(QI* q) {
+  while(!g_stop) {
     do_pop(q);
     pop_count.inc(1);
   }
   return NULL;
 }
-void* push_loop(QI* q)
-{
-  while (!g_stop) {
+void* push_loop(QI* q) {
+  while(!g_stop) {
     do_push(q);
     usleep(100);
     push_count.inc(1);
@@ -107,22 +93,21 @@ void* push_loop(QI* q)
   return NULL;
 }
 
-#define cfgi(k, d) atoi(getenv(k) ?: #d)
+#define cfgi(k, d) atoi(getenv(k)?:#d)
 typedef void* handler_t(void*);
-void do_perf(QI* qi)
-{
+void do_perf(QI* qi) {
   int n_sec = cfgi("n_sec", 1);
   int n_thread = cfgi("n_thread", 2);
   pthread_t thread[256];
   g_stop = false;
-  for (int i = 0; i < n_thread; i++) {
-    handler_t* handler = (handler_t*)((i % 2) ? push_loop : pop_loop);
+  for(int i = 0; i < n_thread; i++) {
+    handler_t* handler = (handler_t*)((i % 2)? push_loop: pop_loop);
     pthread_create(thread + i, NULL, handler, qi);
   }
   sleep(1);
   int64_t last_push = push_count.value();
   int64_t last_pop = pop_count.value();
-  while (n_sec--) {
+  while(n_sec--) {
     sleep(1);
     int64_t cur_push = push_count.value();
     int64_t cur_pop = pop_count.value();
@@ -131,24 +116,19 @@ void do_perf(QI* qi)
     last_pop = cur_pop;
   }
   g_stop = true;
-  for (int i = 0; i < n_thread; i++) {
+  for(int i = 0; i < n_thread; i++) {
     pthread_join(thread[i], NULL);
   }
 }
 
-// int64_t get_us() { return ObTimeUtility::current_time(); }
-#define PERF(x)               \
-  {                           \
-    fprintf(stderr, #x "\n"); \
-    x##Wrapper qi;            \
-    do_perf(&qi);             \
-  }
+//int64_t get_us() { return ObTimeUtility::current_time(); }
+#define PERF(x) {fprintf(stderr, #x "\n"); x ## Wrapper qi; do_perf(&qi); }
 
 #include <locale.h>
 int main()
 {
   setlocale(LC_ALL, "");
-  // PERF(SLinkQueue);
-  PERF(LightyQueue);
+  //PERF(SLinkQueue);
+  PERF(ObLightyQueue);
   return 0;
 }

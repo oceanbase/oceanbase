@@ -17,11 +17,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-namespace oceanbase {
-namespace common {
 #include <sys/types.h>
 #include <stdarg.h>
+#include "lib/utility/ob_macro_utils.h"
+
+EXTERN_C_BEGIN
 
 /**
    A (very) limited version of snprintf.
@@ -34,13 +34,15 @@ namespace common {
    Does not support any width/precision.
    Implemented with simplicity, and async-signal-safety in mind.
 */
-int _safe_vsnprintf(char* to, size_t size, const char* format, va_list ap);
-int _safe_snprintf(char* to, size_t n, const char* fmt, ...);
+int _safe_vsnprintf(char *to, size_t size, const char *format, va_list ap);
+int _safe_snprintf(char *to, size_t n, const char *fmt, ...);
 
-#define safe_snprintf(_s, _n, ...) _safe_snprintf((char*)(_s), (size_t)(_n), __VA_ARGS__)
+#define safe_snprintf(_s, _n, ...)                            \
+  _safe_snprintf((char *)(_s), (size_t)(_n), __VA_ARGS__)
 
-#define safe_vsnprintf(_s, _n, _f, _a) _safe_vsnprintf((char*)(_s), (size_t)(_n), _f, _a)
+#define safe_vsnprintf(_s, _n, _f, _a)                \
+  _safe_vsnprintf((char *)(_s), (size_t)(_n), _f, _a)
 
-}  // namespace common
-}  // namespace oceanbase
-#endif  // OCEANBASE_SAFE_SNPRINTF_H_
+EXTERN_C_END
+
+#endif // OCEANBASE_SAFE_SNPRINTF_H_

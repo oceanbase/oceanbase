@@ -214,6 +214,12 @@ void ObTableEntityFactory<T>::free_all()
   }
 }
 
+enum class ObQueryOperationType : int { 
+  QUERY_START = 0, 
+  QUERY_NEXT = 1,
+  QUERY_MAX
+};
+
 /// Table Operation Type
 struct ObTableOperationType
 {
@@ -793,6 +799,20 @@ public:
   // In the case of delete and insert_or_update, return the old rows before modified.
   // In the case of increment and append, return the new rows after modified.
   ObTableQueryResult affected_entity_;
+};
+
+class ObTableQuerySyncResult: public ObTableQueryResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQuerySyncResult()
+    : is_end_(false),
+      query_session_id_(0) 
+  {}
+  virtual ~ObTableQuerySyncResult() {}
+public:
+  bool     is_end_;
+  uint64_t  query_session_id_; // from server gen
 };
 
 

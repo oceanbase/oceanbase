@@ -14,28 +14,36 @@
 #include <string.h>
 #include "sql/engine/expr/ob_expr_to_blob.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprToBlob::ObExprToBlob(ObIAllocator& alloc) : ObStringExprOperator(alloc, T_FUN_SYS_TO_BLOB, N_TO_BLOB, 1)
-{}
+ObExprToBlob::ObExprToBlob(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TO_BLOB, N_TO_BLOB, 1)
+{
+}
 
 ObExprToBlob::~ObExprToBlob()
-{}
+{
+}
 
-int ObExprToBlob::calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const
+int ObExprToBlob::calc_result_type1(ObExprResType &type,
+                                    ObExprResType &text,
+                                    common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
 
   if (ob_is_null(text.get_type())) {
     type.set_null();
-  } else if (ob_is_blob(text.get_type(), text.get_collation_type()) || ob_is_raw(text.get_type()) ||
-             ob_is_string_tc(text.get_type())) {
+  } else if (ob_is_blob(text.get_type(), text.get_collation_type())
+             || ob_is_raw(text.get_type())
+             || ob_is_string_tc(text.get_type())) {
     type.set_blob();
     type.set_collation_type(CS_TYPE_BINARY);
     if (ob_is_string_tc(text.get_type())) {
@@ -49,30 +57,10 @@ int ObExprToBlob::calc_result_type1(ObExprResType& type, ObExprResType& text, co
   return ret;
 }
 
-int ObExprToBlob::calc_result1(common::ObObj& result, const ObObj& text, ObExprCtx& expr_ctx) const
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-
-  if (text.is_null()) {
-    result.set_null();
-  } else if (text.is_raw() || ob_is_blob(text.get_type(), text.get_collation_type())) {
-    ObString temp_str = text.get_string();
-    result.set_lob_value(ObLongTextType, temp_str.ptr(), temp_str.length());
-    result.set_collation_type(CS_TYPE_BINARY);
-  } else {
-    // won't come here
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("wrong type of argument in function to_blob", K(ret), K(text.get_type()), K(text));
-  }
-
-  return ret;
-}
-
-int ObExprToBlob::eval_to_blob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprToBlob::eval_to_blob(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_UNLIKELY(1 != expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg cnt or arg res type", K(ret), K(expr.arg_cnt_));
@@ -86,7 +74,8 @@ int ObExprToBlob::eval_to_blob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
   return ret;
 }
 
-int ObExprToBlob::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprToBlob::cg_expr(
+    ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -95,5 +84,5 @@ int ObExprToBlob::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // end of sql
+} // end of oceanbase

@@ -1,0 +1,282 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#define USING_LOG_PREFIX RS
+
+#include "rootserver/freeze/ob_freeze_info_detector.h"
+
+#include "rootserver/freeze/ob_freeze_info_manager.h"
+#include "rootserver/ob_root_utils.h"
+#include "lib/profile/ob_trace_id.h"
+#include "share/config/ob_server_config.h"
+#include "share/ob_global_stat_proxy.h"
+#include "observer/ob_server_struct.h"
+#include "share/rc/ob_tenant_base.h"
+#include "rootserver/ob_thread_idling.h"
+#include "share/ob_rpc_struct.h"
+
+namespace oceanbase
+{
+using namespace common;
+using namespace share;
+namespace rootserver
+{
+ObFreezeInfoDetector::ObFreezeInfoDetector()
+  : ObFreezeReentrantThread(), is_inited_(false),
+    is_gc_ts_inited_(false), last_gc_timestamp_(0),
+    freeze_info_mgr_(nullptr), major_scheduler_idling_(nullptr)
+{}
+
+int ObFreezeInfoDetector::init(
+    const uint64_t tenant_id,
+    ObMySQLProxy &sql_proxy,
+    ObFreezeInfoManager &freeze_info_manager,
+    ObThreadIdling &major_scheduler_idling)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret), K_(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    last_gc_timestamp_ = ObTimeUtility::current_time();
+    sql_proxy_ = &sql_proxy;
+    freeze_info_mgr_ = &freeze_info_manager;
+    major_scheduler_idling_ = &major_scheduler_idling;
+    is_inited_ = true;
+    LOG_INFO("freeze info detector init succ", K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::start()
+{
+  int ret = OB_SUCCESS;
+  lib::Threads::set_run_wrapper(MTL_CTX());
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObFreezeInfoDetector not init", K(ret));
+  } else if (OB_FAIL(create(FREEZE_INFO_DETECTOR_THREAD_CNT, "FrzInfoDet"))) {
+    LOG_WARN("fail to create thread", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObRsReentrantThread::start())) {
+    LOG_WARN("fail to start thread", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("ObFreezeInfoDetector start succ", K_(tenant_id));
+  }
+  return ret;
+}
+
+void ObFreezeInfoDetector::run3()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("start freeze_info_detector", K_(tenant_id));
+    ObThreadCondGuard guard(get_cond());
+    while (!stop_) {
+      update_last_run_timestamp();
+      ObCurTraceId::init(GCONF.self_addr_);
+      LOG_TRACE("run freeze info detector", K_(tenant_id));
+
+      bool can_work = false;
+      int64_t proposal_id = 0;
+      ObRole role = ObRole::INVALID_ROLE;
+
+      if (OB_FAIL(obtain_proposal_id_from_ls(proposal_id, role))) {
+        LOG_WARN("fail to obtain proposal_id from ls", KR(ret));
+      } else if (OB_FAIL(can_start_work(can_work))) {
+        LOG_WARN("fail to judge can start work", KR(ret),K_(tenant_id));
+      } else if (can_work) {
+        // In freeze_info_mgr, we use 'select snapshot_gc_ts for update' to execute sequentially, 
+        // avoiding multi-writing when switch-role.
+        if (OB_FAIL(try_renew_snapshot_gc_ts())) {
+          LOG_WARN("fail to renew gc snapshot", KR(ret), K_(tenant_id));
+        }
+        // TODO oushen, consider STANDBY_TENANT later
+
+        bool need_broadcast = false;
+        ret = OB_SUCCESS; // ignore ret
+        if (OB_FAIL(check_need_broadcast(need_broadcast))) {
+          LOG_WARN("fail to check need broadcast", KR(ret), K_(tenant_id));
+        }
+
+        if (need_broadcast) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(try_minor_freeze())) {
+            LOG_WARN("fail to try minor freeze", KR(ret), K_(tenant_id));
+          }
+
+          ret = OB_SUCCESS;
+          if (OB_FAIL(try_broadcast_freeze_info(proposal_id))) {
+            LOG_WARN("fail to broadcast freeze info", KR(ret), K_(tenant_id), K(proposal_id));
+          }
+        }
+
+        ret = OB_SUCCESS;
+        if (OB_FAIL(freeze_info_mgr_->check_snapshot_gc_ts())) {
+          LOG_WARN("fail to check_snapshot_gc_ts", KR(ret), K_(tenant_id));
+        }
+        
+        ret = OB_SUCCESS;
+        if (OB_FAIL(try_update_zone_info(proposal_id))) {
+          LOG_WARN("fail to try update zone info", KR(ret), K_(tenant_id), K(proposal_id));
+        }
+      }
+
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_idle(get_schedule_interval(), ret))) {
+        LOG_WARN("fail to try_idle", KR(ret), KR(tmp_ret));
+      }
+    }
+  }
+  LOG_INFO("stop freeze_info_detector", K_(tenant_id));
+}
+
+int ObFreezeInfoDetector::check_need_broadcast(bool &need_broadcast)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(freeze_info_mgr_->check_need_broadcast(need_broadcast))) {
+    LOG_WARN("fail to check need broadcast", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::try_broadcast_freeze_info(const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(freeze_info_mgr_->broadcast_freeze_info(expected_epoch))) {
+    LOG_WARN("fail to broadcast_frozen_info", KR(ret), K_(tenant_id), K(expected_epoch));
+  } else {
+    major_scheduler_idling_->wakeup();
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::try_renew_snapshot_gc_ts()
+{
+  int ret = OB_SUCCESS;
+  int64_t now = ObTimeUtility::current_time();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if ((now - last_gc_timestamp_) < MODIFY_GC_SNAPSHOT_INTERVAL) {
+    // nothing
+  } else if (OB_FAIL(freeze_info_mgr_->renew_snapshot_gc_ts())) {
+    LOG_WARN("fail to renew snapshot gc ts", KR(ret), K_(tenant_id));
+  } else {
+    last_gc_timestamp_ = now;
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::try_minor_freeze()
+{
+  int ret = OB_SUCCESS;
+  ObAddr rs_addr;
+  obrpc::ObRootMinorFreezeArg arg;
+  if (OB_FAIL(arg.tenant_ids_.push_back(tenant_id_))) {
+    LOG_WARN("fail to push back tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid global context", KR(ret));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("get rootservice address failed", K(ret));
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).timeout(GCONF.rpc_timeout)
+                     .root_minor_freeze(arg))) {
+    LOG_WARN("fail to execute root_minor_freeze rpc", KR(ret), K(arg));
+  } else {
+    LOG_INFO("succ to execute root_minor_freeze rpc", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::try_update_zone_info(const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(freeze_info_mgr_->try_update_zone_info(expected_epoch))) {
+    LOG_WARN("fail to try update zone info", KR(ret), K_(tenant_id), K(expected_epoch));
+  }
+  return ret;
+}
+
+int ObFreezeInfoDetector::can_start_work(bool &can_work)
+{
+  int ret = OB_SUCCESS;
+  can_work = true;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const ObSimpleTenantSchema *tenant_schema = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is nullptr", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+    LOG_WARN("fail to get simple tenant schema", KR(ret));
+
+  // 1. only normal state tenant schema need refresh freeze_info;
+  // 2. common tenant(except sys tenant) init snapshot_gc_ts complete(in set_tenant_init_global_stat), 
+  //    when tenant schema is noraml state, so can start work directly;
+  } else if ((nullptr == tenant_schema) || !tenant_schema->is_normal()) {
+    LOG_INFO("tenant is not normal status, no need detect now", K_(tenant_id), KPC(tenant_schema));
+    can_work = false;
+  } else if (is_sys_tenant(tenant_id_)) {
+    // 3. sys tenant init global stat(snpshot_gc_ts) in ObBootstrap(ObBootstrap::init_global_stat()), 
+    //    after tenant_state set to normal; 
+    //    in order to avoid racing, detector will wait, until global_stat init complete;
+    if (is_gc_ts_inited_) {
+      // ...
+    } else {
+      int64_t snapshot_gc_scn = 0;
+      ObGlobalStatProxy global_stat_proxy(*sql_proxy_, tenant_id_);
+      if (OB_FAIL(global_stat_proxy.get_snapshot_gc_scn(snapshot_gc_scn))) {
+        LOG_WARN("can not get snapshot gc ts", KR(ret), K_(tenant_id));
+        ret = OB_SUCCESS;
+        can_work = false;
+      } else {
+        LOG_INFO("snapshot_gc_scn init succ", K(snapshot_gc_scn), K_(tenant_id));
+        is_gc_ts_inited_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObFreezeInfoDetector::get_schedule_interval() const
+{
+  return UPDATER_INTERVAL_US;
+}
+
+int ObFreezeInfoDetector::signal()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_cond().signal())) {
+    LOG_WARN("fail to signal", KR(ret));
+  }
+  return ret;
+}
+
+} //end rootserver
+} //end oceanbase

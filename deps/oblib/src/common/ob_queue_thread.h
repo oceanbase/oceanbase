@@ -10,40 +10,40 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_COMMON_QUEUE_THREAD_H_
-#define OCEANBASE_COMMON_QUEUE_THREAD_H_
+#ifndef  OCEANBASE_COMMON_QUEUE_THREAD_H_
+#define  OCEANBASE_COMMON_QUEUE_THREAD_H_
 #include <sys/epoll.h>
 #include "lib/ob_define.h"
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/lock/ob_drw_lock.h"
-#include "lib/queue/ob_seq_queue.h"
 #include "lib/net/ob_addr.h"
 #include "lib/metrics/ob_counter.h"
 #include "common/ob_balance_filter.h"
 #include "common/server_framework/ob_priority_scheduler.h"
 
-namespace oceanbase {
-namespace common {
-enum PacketPriority {
+namespace oceanbase
+{
+namespace common
+{
+enum PacketPriority
+{
   HIGH_PRIV = -1,
   NORMAL_PRIV = 0,
   LOW_PRIV = 1,
 };
 
-class ObCond {
+class ObCond
+{
   static const int64_t SPIN_WAIT_NUM = 0;
   static const int64_t BUSY_INTERVAL = 1000;
-
 public:
   explicit ObCond(const int64_t spin_wait_num = SPIN_WAIT_NUM);
   ~ObCond();
-
 public:
   void signal();
   int timedwait(const int64_t time_us);
   int wait();
-
 private:
   const int64_t spin_wait_num_;
   volatile bool bcond_;
@@ -53,8 +53,10 @@ private:
 } __attribute__((aligned(64)));
 
 typedef ObCond S2MCond;
-class S2MQueueThread {
-  struct ThreadConf {
+class S2MQueueThread
+{
+  struct ThreadConf
+  {
     pthread_t pd;
     uint64_t index;
     volatile bool run_flag;
@@ -67,18 +69,19 @@ class S2MQueueThread {
     ObFixedQueue<void> comm_task_queue;
     ObFixedQueue<void> low_prio_task_queue;
     ObPriorityScheduler scheduler_;
-    S2MQueueThread* host;
-    ThreadConf()
-        : pd(0),
-          index(0),
-          run_flag(true),
-          stop_flag(false),
-          queue_cond(),
-          using_flag(false),
-          last_active_time(0),
-          spec_task_queue(),
-          comm_task_queue(),
-          host(NULL){};
+    S2MQueueThread *host;
+    ThreadConf() : pd(0),
+               index(0),
+               run_flag(true),
+               stop_flag(false),
+               queue_cond(),
+               using_flag(false),
+               last_active_time(0),
+               spec_task_queue(),
+               comm_task_queue(),
+               host(NULL)
+    {
+    };
   } CACHE_ALIGNED;
   static const int64_t THREAD_BUSY_TIME_LIMIT = 10 * 1000;
   static const int64_t QUEUE_WAIT_TIME = 100 * 1000;
@@ -88,60 +91,43 @@ class S2MQueueThread {
   typedef DRWLock::RDLockGuard RDLockGuard;
   typedef DRWLock::WRLockGuard WRLockGuard;
   typedef ObTCCounter Counter;
-
 public:
-  enum { HIGH_PRIO_QUEUE = 0, HOTSPOT_QUEUE = 1, NORMAL_PRIO_QUEUE = 2, LOW_PRIO_QUEUE = 3, QUEUE_COUNT = 4 };
-
+  enum {HIGH_PRIO_QUEUE = 0, HOTSPOT_QUEUE = 1, NORMAL_PRIO_QUEUE = 2, LOW_PRIO_QUEUE = 3, QUEUE_COUNT = 4};
 public:
   S2MQueueThread();
   virtual ~S2MQueueThread();
-
 public:
-  int init(
-      const int64_t thread_num, const int64_t task_num_limit, const bool queue_rebalance, const bool dynamic_rebalance);
-  int set_prio_quota(v4si& quota);
+  int init(const int64_t thread_num, const int64_t task_num_limit, const bool queue_rebalance,
+           const bool dynamic_rebalance);
+  int set_prio_quota(v4si &quota);
   void destroy();
   int64_t get_queued_num() const;
-  int64_t get_each_queued_num(int queue_id) const
-  {
-    return (queue_id >= 0 && queue_id < QUEUE_COUNT) ? each_queue_len_[queue_id].value() : 0;
-  }
+  int64_t get_each_queued_num(int queue_id) const { return (queue_id >= 0 && queue_id < QUEUE_COUNT) ? each_queue_len_[queue_id].value() : 0; }
   int add_thread(const int64_t thread_num, const int64_t task_num_limit);
   int sub_thread(const int64_t thread_num);
-  int64_t get_thread_num() const
-  {
-    return thread_num_;
-  };
+  int64_t get_thread_num() const {return thread_num_;};
   int wakeup();
-
 public:
-  int push(void* task, const int64_t prio = NORMAL_PRIV);
-  int push(void* task, const uint64_t task_sign, const int64_t prio);
-  int push_low_prio(void* task);
-  int64_t& thread_index();
+  int push(void *task, const int64_t prio = NORMAL_PRIV);
+  int push(void *task, const uint64_t task_sign, const int64_t prio);
+  int push_low_prio(void *task);
+  OB_INLINE int64_t &thread_index()
+  {
+    // Note: debug only right now
+    RLOCAL_INLINE(int64_t, index);
+    return index;
+  }
   int64_t get_thread_index() const;
-  virtual void on_iter()
-  {}
-  virtual void handle(void* task, void* pdata) = 0;
-  virtual void handle_with_stopflag(void* task, void* pdata, volatile bool& stop_flag)
-  {
-    handle(task, pdata);
-    if (stop_flag) {}
-  };
-  virtual void* on_begin()
-  {
-    return NULL;
-  };
-  virtual void on_end(void* ptr)
-  {
-    UNUSED(ptr);
-  };
-
+  virtual void on_iter() {}
+  virtual void handle(void *task, void *pdata) = 0;
+  virtual void handle_with_stopflag(void *task, void *pdata, volatile bool &stop_flag)
+  {handle(task, pdata); if (stop_flag) {}};
+  virtual void *on_begin() {return NULL;};
+  virtual void on_end(void *ptr) {UNUSED(ptr);};
 private:
-  void* rebalance_(int64_t& idx, const ThreadConf& cur_thread);
+  void *rebalance_(int64_t &idx, const ThreadConf &cur_thread);
   int launch_thread_(const int64_t thread_num, const int64_t task_num_limit);
-  static void* thread_func_(void* data);
-
+  static void *thread_func_(void *data);
 private:
   int64_t thread_num_;
   volatile uint64_t thread_conf_iter_;
@@ -154,34 +140,25 @@ private:
 };
 
 typedef S2MCond M2SCond;
-class M2SQueueThread {
+class M2SQueueThread
+{
   static const int64_t QUEUE_WAIT_TIME;
-
 public:
   M2SQueueThread();
   virtual ~M2SQueueThread();
-
 public:
-  int init(const int64_t task_num_limit, const int64_t idle_interval);
+  int init(const int64_t task_num_limit,
+           const int64_t idle_interval);
   void destroy();
-
 public:
-  int push(void* task);
+  int push(void *task);
   int64_t get_queued_num() const;
-  virtual void handle(void* task, void* pdata) = 0;
-  virtual void* on_begin()
-  {
-    return NULL;
-  };
-  virtual void on_end(void* ptr)
-  {
-    UNUSED(ptr);
-  };
-  virtual void on_idle(){};
-
+  virtual void handle(void *task, void *pdata) = 0;
+  virtual void *on_begin() {return NULL;};
+  virtual void on_end(void *ptr) {UNUSED(ptr);};
+  virtual void on_idle() {};
 private:
-  static void* thread_func_(void* data);
-
+  static void *thread_func_(void *data);
 private:
   bool inited_;
   pthread_t pd_;
@@ -192,50 +169,8 @@ private:
   int64_t last_idle_time_;
 } CACHE_ALIGNED;
 
-class SeqQueueThread {
-  static const int64_t QUEUE_WAIT_TIME = 10 * 1000;
 
-public:
-  SeqQueueThread();
-  virtual ~SeqQueueThread();
+}
+}
 
-public:
-  int init(const int64_t task_num_limit, const int64_t idle_interval);
-  void destroy();
-
-public:
-  virtual int push(void* task);
-  int64_t get_queued_num() const;
-  virtual void handle(void* task, void* pdata) = 0;
-  virtual void on_push_fail(void* ptr)
-  {
-    UNUSED(ptr);
-  };
-  virtual void* on_begin()
-  {
-    return NULL;
-  };
-  virtual void on_end(void* ptr)
-  {
-    UNUSED(ptr);
-  };
-  virtual void on_idle(){};
-  virtual int64_t get_seq(void* task) = 0;
-
-private:
-  static void* thread_func_(void* data);
-
-protected:
-  ObSeqQueue task_queue_;
-
-private:
-  bool inited_;
-  pthread_t pd_;
-  volatile bool run_flag_;
-  int64_t idle_interval_;
-  int64_t last_idle_time_;
-} CACHE_ALIGNED;
-}  // namespace common
-}  // namespace oceanbase
-
-#endif  // OCEANBASE_COMMON_QUEUE_THREAD_H_
+#endif //OCEANBASE_COMMON_QUEUE_THREAD_H_

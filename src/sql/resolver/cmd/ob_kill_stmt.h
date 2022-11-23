@@ -14,38 +14,32 @@
 #define OB_KILL_STMT_H_
 
 #include "sql/resolver/cmd/ob_cmd_stmt.h"
-namespace oceanbase {
-namespace sql {
-class ObKillStmt : public ObCMDStmt {
+namespace oceanbase
+{
+namespace sql
+{
+class ObKillStmt : public ObCMDStmt
+{
 public:
-  ObKillStmt() : ObCMDStmt(stmt::T_KILL), is_query_(false), value_expr_(NULL)
-  {}
+  ObKillStmt():ObCMDStmt(stmt::T_KILL),
+               is_query_(false),
+               value_expr_(NULL)
+  {
+  }
   virtual ~ObKillStmt()
-  {}
-
-  inline void set_is_query(bool is_query)
   {
-    is_query_ = is_query;
-  }
-  inline void set_value_expr(ObRawExpr* value_expr)
-  {
-    value_expr_ = value_expr;
-  }
-  inline ObRawExpr* get_value_expr() const
-  {
-    return value_expr_;
-  }
-  inline bool is_query() const
-  {
-    return is_query_;
   }
 
+  inline void set_is_query(bool is_query) { is_query_ = is_query; }
+  inline void set_value_expr(ObRawExpr *value_expr) { value_expr_ = value_expr; }
+  inline ObRawExpr *get_value_expr() const { return value_expr_; }
+  inline bool is_query() const { return is_query_; }
 private:
   bool is_query_;
-  ObRawExpr* value_expr_;
+  ObRawExpr *value_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObKillStmt);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // oceanbase
 #endif

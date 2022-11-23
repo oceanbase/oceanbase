@@ -17,22 +17,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
-const ObString ObPlanDirective::INTERNAL_GROUP_NAME[ObPlanDirective::INTERNAL_GROUP_NAME_COUNT] = {
-    "OTHER_GROUPS", "SYS_GROUP"};
-
-bool ObPlanDirective::is_internal_group_name(const ObString& name)
-{
-  bool bret = false;
-  for (int64_t i = 0; i < INTERNAL_GROUP_NAME_COUNT; ++i) {
-    if (0 == INTERNAL_GROUP_NAME[i].compare(name)) {
-      bret = true;
-      break;
-    }
-  }
-  return bret;
-}
-
-int ObPlanDirective::assign(const ObPlanDirective& other)
+int ObPlanDirective::assign(const ObPlanDirective &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
@@ -43,7 +28,7 @@ int ObPlanDirective::assign(const ObPlanDirective& other)
   return ret;
 }
 
-int ObResourceMappingRule::assign(const ObResourceMappingRule& other)
+int ObResourceMappingRule::assign(const ObResourceMappingRule &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
@@ -53,7 +38,7 @@ int ObResourceMappingRule::assign(const ObResourceMappingRule& other)
   return ret;
 }
 
-int ObResourceUserMappingRule::assign(const ObResourceUserMappingRule& other)
+int ObResourceUserMappingRule::assign(const ObResourceUserMappingRule &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
@@ -62,3 +47,4 @@ int ObResourceUserMappingRule::assign(const ObResourceUserMappingRule& other)
   ret = group_name_.assign(other.group_name_);
   return ret;
 }
+

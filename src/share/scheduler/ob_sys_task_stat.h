@@ -17,37 +17,45 @@
 #include "lib/profile/ob_trace_id.h"
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 static const int64_t DEFAULT_SYS_TASK_STATUS_COUNT = 1024;
 
-class ObSysTaskStat;
+struct ObSysTaskStat;
 
-typedef common::ObSimpleIterator<ObSysTaskStat, common::ObModIds::OB_SYS_TASK_STATUS, DEFAULT_SYS_TASK_STATUS_COUNT>
-    ObSysStatMgrIter;
+typedef common::ObSimpleIterator<ObSysTaskStat,
+    common::ObModIds::OB_SYS_TASK_STATUS,
+    DEFAULT_SYS_TASK_STATUS_COUNT> ObSysStatMgrIter;
 
-enum ObSysTaskType {
-  UT_TASK = 0,
-  GROUP_PARTITION_MIGRATION_TASK = 1,
-  PARTITION_MIGRATION_TASK = 2,
-  CREATE_INDEX_TASK = 3,
-  SSTABLE_MINOR_MERGE_TASK = 4,
-  SSTABLE_MAJOR_MERGE_TASK = 5,
-  PARTITION_SPLIT_TASK = 6,
-  MAJOR_MERGE_FINISH_TASK = 7,
-  SSTABLE_MINI_MERGE_TASK = 8,
-  TRANS_TABLE_MERGE_TASK = 9,
-  FAST_RECOVERY_TASK = 10,
-  PARTITION_BACKUP_TASK = 11,
-  BACKUP_VALIDATION_TASK = 12,
-  BACKUP_BACKUPSET_TASK = 13,
-  BACKUP_ARCHIVELOG_TASK = 14,
+enum ObSysTaskType
+{
+  GROUP_MIGRATION_TASK = 0,
+  MIGRATION_TASK,
+  DDL_TASK,
+  SSTABLE_MINI_MERGE_TASK,
+  SPECIAL_TABLE_MERGE_TASK,
+  SSTABLE_MINOR_MERGE_TASK,
+  SSTABLE_MAJOR_MERGE_TASK,
+  WRITE_CKPT_TASK,
+  BACKUP_TASK,
+  BACKUP_VALIDATION_TASK,
+  BACKUP_BACKUPSET_TASK,
+  BACKUP_ARCHIVELOG_TASK,
+  DDL_KV_MERGE_TASK,
+  COMPLEMENT_DATA_TASK,
+  RESTORE_TASK,
+  BACKUP_CLEAN_TASK,
+  BACKFILL_TX_TASK,
+  REMOVE_MEMBER_TASK,
   MAX_SYS_TASK_TYPE
 };
 
-const char* sys_task_type_to_str(const ObSysTaskType& type);
+const char *sys_task_type_to_str(const ObSysTaskType &type);
 
-struct ObSysTaskStat {
+struct ObSysTaskStat
+{
   ObSysTaskStat();
   int64_t start_time_;
   ObTaskId task_id_;
@@ -60,21 +68,22 @@ struct ObSysTaskStat {
   TO_STRING_KV(K_(start_time), K_(task_id), K_(task_type), K_(svr_ip), K_(tenant_id), K_(is_cancel), K_(comment));
 };
 
-class ObSysTaskStatMgr {
+class ObSysTaskStatMgr
+{
 public:
   ObSysTaskStatMgr();
   virtual ~ObSysTaskStatMgr();
 
-  static ObSysTaskStatMgr& get_instance();
+  static ObSysTaskStatMgr &get_instance();
 
-  int add_task(ObSysTaskStat& status);
-  int get_iter(ObSysStatMgrIter& iter);
-  int del_task(const ObTaskId& task_id);
+  int add_task(ObSysTaskStat &status);
+  int get_iter(ObSysStatMgrIter &iter);
+  int del_task(const ObTaskId &task_id);
+  int update_task(const ObTaskId &task_id, const char *msg, const int64_t msg_len);
   int set_self_addr(const common::ObAddr addr);
-  int task_exist(const ObTaskId& task_id, bool& is_exist);
-  int cancel_task(const ObTaskId& task_id);
-  int is_task_cancel(const ObTaskId& task_id, bool& is_cancel);
-
+  int task_exist(const ObTaskId &task_id, bool &is_exist);
+  int cancel_task(const ObTaskId &task_id);
+  int is_task_cancel(const ObTaskId &task_id, bool &is_cancel);
 private:
   common::SpinRWLock lock_;
   common::ObArray<ObSysTaskStat> task_array_;
@@ -82,8 +91,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSysTaskStatMgr);
 };
 
-}  // namespace share
-}  // namespace oceanbase
+}//share
+}//oceanbase
 
 #define SYS_TASK_STATUS_MGR (::oceanbase::share::ObSysTaskStatMgr::get_instance())
 

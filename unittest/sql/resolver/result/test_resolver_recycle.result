@@ -1,4 +1,86 @@
 ***************   Case 1   ***************
+flashback table t1 to before drop;
+{
+  "stmt_type":131,
+  "flashback_table_arg": {
+    "tenant_id":1,
+    "origin_table_name":"t1",
+    "new_db_name":"",
+    "new_table_name":""
+  }
+}
+***************   Case 2   ***************
+flashback table t1 to before drop rename to t2;
+{
+  "stmt_type":131,
+  "flashback_table_arg": {
+    "tenant_id":1,
+    "origin_table_name":"t1",
+    "new_db_name":"rongxuan",
+    "new_table_name":"t2"
+  }
+}
+***************   Case 3   ***************
+flashback database db1 to before drop;
+{
+  "stmt_type":130,
+  "flashback_db_arg": {
+    "tenant_id":1,
+    "origin_db_name":"db1",
+    "new_db_name":""
+  }
+}
+***************   Case 4   ***************
+flashback database db1 to before drop rename to db2;
+{
+  "stmt_type":130,
+  "flashback_db_arg": {
+    "tenant_id":1,
+    "origin_db_name":"db1",
+    "new_db_name":"db2"
+  }
+}
+***************   Case 5   ***************
+flashback schema db1 to before drop;
+{
+  "stmt_type":130,
+  "flashback_db_arg": {
+    "tenant_id":1,
+    "origin_db_name":"db1",
+    "new_db_name":""
+  }
+}
+***************   Case 6   ***************
+flashback schema db1 to before drop rename to db2;
+{
+  "stmt_type":130,
+  "flashback_db_arg": {
+    "tenant_id":1,
+    "origin_db_name":"db1",
+    "new_db_name":"db2"
+  }
+}
+***************   Case 7   ***************
+flashback tenant tenant1 to before drop;
+{
+  "stmt_type":129,
+  "flashback_tenant_arg": {
+    "tenant_id":1,
+    "origin_tenant_name":"tenant1",
+    "new_tenant_name":""
+  }
+}
+***************   Case 8   ***************
+flashback tenant tenant1 to before drop rename to tenant2;
+{
+  "stmt_type":129,
+  "flashback_tenant_arg": {
+    "tenant_id":1,
+    "origin_tenant_name":"tenant1",
+    "new_tenant_name":"tenant2"
+  }
+}
+***************   Case 9   ***************
 purge table t1;
 {
   "stmt_type":136,
@@ -7,7 +89,7 @@ purge table t1;
     "table_name":"t1"
   }
 }
-***************   Case 2   ***************
+***************   Case 10   ***************
 purge database db1;
 {
   "stmt_type":135,
@@ -16,7 +98,7 @@ purge database db1;
     "db_name":"db1"
   }
 }
-***************   Case 3   ***************
+***************   Case 11   ***************
 purge schema db1;
 {
   "stmt_type":135,
@@ -25,7 +107,7 @@ purge schema db1;
     "db_name":"db1"
   }
 }
-***************   Case 4   ***************
+***************   Case 12   ***************
 purge tenant tenant1;
 {
   "stmt_type":134,

@@ -46,6 +46,8 @@ static ObObjType NEG_RESULT_TYPE[ObMaxType] =
     ObMaxType,         /*ObNVarchar2Type  */
     ObMaxType,         /*ObNCharType  */
     ObMaxType,         /* ObURowIDType */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
 };
 
 static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
@@ -93,7 +95,7 @@ static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
     ObMaxType,         /*ObIntervalYMType  */
     ObMaxType,         /*ObIntervalDSType  */
     ObNumberType,         /*ObNumberFloatType  */
-    ObMaxType,         /*ObNVarchar2Type  */
-    ObMaxType,         /*ObNCharType  */
+    ObNumberType,         /*ObNVarchar2Type  */
+    ObNumberType,         /*ObNCharType  */
     ObMaxType,         /* ObURowIDType */
 };

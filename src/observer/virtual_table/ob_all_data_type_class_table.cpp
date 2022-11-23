@@ -12,18 +12,23 @@
 
 #include "observer/virtual_table/ob_all_data_type_class_table.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 
-namespace observer {
+namespace observer
+{
 
-ObAllDataTypeClassTable::ObAllDataTypeClassTable() : ObVirtualTableScannerIterator()
-{}
+ObAllDataTypeClassTable::ObAllDataTypeClassTable() :
+    ObVirtualTableScannerIterator()
+{
+}
 
 ObAllDataTypeClassTable::~ObAllDataTypeClassTable()
-{}
+{
+}
 
-int ObAllDataTypeClassTable::inner_get_next_row(common::ObNewRow*& row)
+int ObAllDataTypeClassTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
@@ -32,21 +37,24 @@ int ObAllDataTypeClassTable::inner_get_next_row(common::ObNewRow*& row)
     SERVER_LOG(WARN, "allocator is NULL", K(ret));
   } else {
     if (!start_to_read_) {
-      ObObj* cells = NULL;
+      ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
       if (OB_ISNULL(cells = cur_row_.cells_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-      } else if (OB_UNLIKELY(col_count < 1 || col_count > DATA_TYPE_CLASS_COLUMN_COUNT)) {
+      } else if (OB_UNLIKELY(col_count < 0 ||
+                             col_count > DATA_TYPE_CLASS_COLUMN_COUNT)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
       } else if (OB_UNLIKELY(col_count > reserved_column_cnt_)) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count), K(reserved_column_cnt_));
+        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count),
+                   K(reserved_column_cnt_));
       } else {
-        for (ObObjTypeClass tc = ObNullTC; OB_SUCC(ret) && tc < ObMaxTC; tc = static_cast<ObObjTypeClass>(tc + 1)) {
+        for (ObObjTypeClass tc = ObNullTC; OB_SUCC(ret) && tc < ObMaxTC;
+            tc = static_cast<ObObjTypeClass>(tc + 1)) {
           if (ObEnumSetInnerTC == tc) {
-            // do nothing: enumsetinner is inner tc
+            //do nothing: enumsetinner is inner tc
           } else {
             uint64_t cell_idx = 0;
             for (int64_t k = 0; OB_SUCC(ret) && k < col_count; ++k) {
@@ -58,13 +66,14 @@ int ObAllDataTypeClassTable::inner_get_next_row(common::ObNewRow*& row)
                 }
                 case DATA_TYPE_CLASS_STR: {
                   cells[cell_idx].set_varchar(ob_obj_tc_str(tc));
-                  cells[cell_idx].set_collation_type(
-                      ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                  cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                          ObCharset::get_default_charset()));
                   break;
                 }
                 default: {
                   ret = OB_ERR_UNEXPECTED;
-                  SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+                  SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                             K(output_column_ids_), K(col_id));
                   break;
                 }
               }
@@ -99,5 +108,5 @@ int ObAllDataTypeClassTable::inner_get_next_row(common::ObNewRow*& row)
 
   return ret;
 }
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase

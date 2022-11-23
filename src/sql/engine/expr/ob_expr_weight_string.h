@@ -24,10 +24,6 @@ class ObExprWeightString : public ObStringExprOperator
 public:
   explicit ObExprWeightString(common::ObIAllocator &alloc);
   virtual ~ObExprWeightString() override;
-  virtual int calc_resultN(common::ObObj &result,
-                           const common::ObObj *objs,
-                           int64_t param_num,
-                           common::ObExprCtx &expr_ctx) const override;
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
                                 int64_t param_num,

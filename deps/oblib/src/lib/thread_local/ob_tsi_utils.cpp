@@ -13,8 +13,13 @@
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
+#ifdef COMPILE_DLL_MODE
+TLOCAL(int64_t, Itid::tid_) = INVALID_ITID;
+#endif
 volatile int64_t max_itid = INVALID_ITID;
 volatile int64_t max_used_itid = INVALID_ITID;
 
@@ -22,14 +27,12 @@ volatile int64_t max_used_itid = INVALID_ITID;
 // when thread exits.
 class FreeItid {
   static pthread_key_t the_key;
-
 public:
-  FreeItid()
-  {
-    int ret = pthread_key_create(&the_key, [](void* arg) {
+  FreeItid() {
+    int ret = pthread_key_create(&the_key, [](void *arg) {
       int64_t itid_plus_1 = reinterpret_cast<int64_t>(arg);
       if (itid_plus_1 != INVALID_ITID) {
-        free_itid(itid_plus_1 - 1);
+        free_itid(itid_plus_1-1);
       }
     });
     if (ret != 0) {
@@ -44,12 +47,11 @@ public:
       pthread_key_delete(the_key);
     }
   }
-  int set_itid(int64_t itid)
-  {
+  int set_itid(int64_t itid) {
     int ret = ret_;
     if (OB_SUCC(ret)) {
       if (itid != INVALID_ITID) {
-        pthread_setspecific(the_key, (void*)(itid + 1));
+        pthread_setspecific(the_key, (void*)(itid+1));
       } else {
         pthread_setspecific(the_key, (void*)(INVALID_ITID));
       }
@@ -84,7 +86,8 @@ int64_t alloc_itid()
   if (OB_UNLIKELY(idx < 0)) {
     ob_abort();
   }
-  while (!ATOMIC_BCAS(&itid_lock, 0, 1)) {}
+  while (!ATOMIC_BCAS(&itid_lock, 0, 1)) {
+  }
   max_itid = std::max(idx, ATOMIC_LOAD(&max_itid));
   if (idx > ATOMIC_LOAD(&max_used_itid)) {
     ATOMIC_STORE(&max_used_itid, idx);
@@ -94,7 +97,7 @@ int64_t alloc_itid()
   return idx;
 }
 
-void defer_free_itid(int64_t& itid)
+void defer_free_itid(int64_t &itid)
 {
   static FreeItid free;
   if (itid != INVALID_ITID) {
@@ -109,12 +112,13 @@ void defer_free_itid(int64_t& itid)
 void free_itid(int64_t itid)
 {
   while (true) {
-    uint64_t slot = ATOMIC_LOAD(&itid_slots[itid / 64]);
-    if (ATOMIC_BCAS(&itid_slots[itid / 64], slot, slot & ~(1UL << itid % 64))) {
+    uint64_t slot = ATOMIC_LOAD(&itid_slots[itid/64]);
+    if (ATOMIC_BCAS(&itid_slots[itid/64], slot, slot & ~(1UL << itid%64))) {
       break;
     }
   }
-  while (!ATOMIC_BCAS(&itid_lock, 0, 1)) {}
+  while (!ATOMIC_BCAS(&itid_lock, 0, 1)) {
+  }
   if (itid >= ATOMIC_LOAD(&max_itid)) {
     max_itid = detect_max_itid();
   }
@@ -135,5 +139,5 @@ int64_t detect_max_itid()
   return idx;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase

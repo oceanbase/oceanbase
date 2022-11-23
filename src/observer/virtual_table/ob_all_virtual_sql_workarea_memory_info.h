@@ -18,63 +18,60 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/row/ob_row.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObSqlWorkareaMemoryInfoIterator {
+class ObSqlWorkareaMemoryInfoIterator
+{
 public:
   ObSqlWorkareaMemoryInfoIterator();
-  ~ObSqlWorkareaMemoryInfoIterator()
-  {
-    destroy();
-  }
-
+  ~ObSqlWorkareaMemoryInfoIterator() { destroy(); }
 public:
   void destroy();
   void reset();
-  int init();
-  int get_next_wa_memory_info(sql::ObSqlWorkareaCurrentMemoryInfo*& wa_stat, uint64_t& tenant_id);
-
+  int init(const uint64_t effective_tenant_id);
+  int get_next_wa_memory_info(sql::ObSqlWorkareaCurrentMemoryInfo *&wa_stat, uint64_t &tenant_id);
 private:
   int get_next_batch_wa_memory_info();
-
 private:
   sql::ObSqlWorkareaCurrentMemoryInfo memory_info_;
   common::ObSEArray<uint64_t, 16> tenant_ids_;
   int64_t cur_nth_tenant_;
 };
 
-class ObSqlWorkareaMemoryInfo : public common::ObVirtualTableScannerIterator {
+class ObSqlWorkareaMemoryInfo : public common::ObVirtualTableScannerIterator
+{
 public:
   ObSqlWorkareaMemoryInfo();
-  virtual ~ObSqlWorkareaMemoryInfo()
-  {
-    destroy();
-  }
+  virtual ~ObSqlWorkareaMemoryInfo() { destroy(); }
 
 public:
   void destroy();
   void reset();
-  int inner_get_next_row(common::ObNewRow*& row);
-
+  int inner_get_next_row(common::ObNewRow *&row);
 private:
-  enum STORAGE_COLUMN {
+  enum STORAGE_COLUMN
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     MAX_WORKAREA_SIZE,
     WORKAREA_HOLD_SIZE,
     MAX_AUTO_WORKAREA_SIZE,
-    MEM_TARGET,  // OB_APP_MIN_COLUMN_ID + 5
+    MEM_TARGET, // OB_APP_MIN_COLUMN_ID + 5
     TOTAL_MEM_USED,
     GLOBAL_MEM_BOUND,
     DRIFT_SIZE,
     WORKAREA_COUNT,
-    MANUAL_CALC_COUNT,  // OB_APP_MIN_COLUMN_ID + 10
-    TENAND_ID,          // OB_APP_MIN_COLUMN_ID + 11
+    MANUAL_CALC_COUNT,      // OB_APP_MIN_COLUMN_ID + 10
+    TENAND_ID,         // OB_APP_MIN_COLUMN_ID + 11
   };
   int get_server_ip_and_port();
-  int fill_row(uint64_t tenant_id, sql::ObSqlWorkareaCurrentMemoryInfo& memory_info, common::ObNewRow*& row);
-
+  int fill_row(
+    uint64_t tenant_id,
+    sql::ObSqlWorkareaCurrentMemoryInfo &memory_info,
+    common::ObNewRow *&row);
 private:
   common::ObString ipstr_;
   int32_t port_;

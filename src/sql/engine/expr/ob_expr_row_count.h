@@ -15,21 +15,25 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprRowCount : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprRowCount : public ObFuncExprOperator
+{
 public:
-  explicit ObExprRowCount(common::ObIAllocator& alloc);
+  explicit  ObExprRowCount(common::ObIAllocator &alloc);
   virtual ~ObExprRowCount();
-  virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
-  static int eval_row_count(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  static int eval_row_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRowCount);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* _OB_SQL_EXPR_ROW_COUNT_H_ */

@@ -13,24 +13,22 @@
 #ifndef OB_MICRO_BLOCK_ROW_LOCK_CHECKER_H_
 #define OB_MICRO_BLOCK_ROW_LOCK_CHECKER_H_
 
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_imicro_block_reader.h"
-#include "storage/blocksstable/ob_micro_block_row_getter.h"
+#include "storage/blocksstable/ob_micro_block_row_scanner.h"
 
 namespace oceanbase {
 namespace blocksstable {
 
-class ObMicroBlockRowLockChecker : public ObIMicroBlockRowFetcher {
+class ObMicroBlockRowLockChecker : public ObMicroBlockRowScanner {
 public:
-  ObMicroBlockRowLockChecker();
+  ObMicroBlockRowLockChecker(common::ObIAllocator &allocator);
   virtual ~ObMicroBlockRowLockChecker();
-  int check_row_locked(const transaction::ObTransStateTableGuard& trans_table_guard,
-      const transaction::ObTransID& trans_id, const common::ObStoreRowkey& rowkey,
-      const ObFullMacroBlockMeta& macro_meta, const ObMicroBlockData& block_data,
-      const storage::ObSSTableRowkeyHelper* rowkey_helper, storage::ObStoreRowLockState& lock_state);
+  virtual int get_next_row(const ObDatumRow *&row) override;
+  OB_INLINE void set_lock_state(ObStoreRowLockState *lock_state)
+  { lock_state_ = lock_state; }
+private:
+  ObStoreRowLockState *lock_state_;
 };
 
-}  // namespace blocksstable
-}  // namespace oceanbase
-
-#endif /* OB_MICRO_BLOCK_ROW_EXISTER_H_ */
+}
+}
+#endif /* OB_MICRO_BLOCK_ROW_LOCK_CHECKER_H_ */

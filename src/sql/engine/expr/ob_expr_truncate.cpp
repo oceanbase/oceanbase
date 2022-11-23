@@ -14,32 +14,40 @@
 
 #include "sql/engine/expr/ob_expr_truncate.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 
-#define GET_SCALE_FOR_CALC(scale) \
-  (scale < 0 ? max((-1) * OB_MAX_DECIMAL_PRECISION, scale) : min(OB_MAX_DECIMAL_SCALE, scale))
+#define GET_SCALE_FOR_CALC(scale) (scale < 0 ? max((-1) * OB_MAX_DECIMAL_PRECISION, scale) : \
+                                   min(OB_MAX_DECIMAL_SCALE, scale))
 
-#define GET_SCALE_FOR_CALC_ORACLE(scale) \
-  (scale < 0 ? max((-1) * OB_MAX_NUMBER_PRECISION, scale) : min(OB_MAX_NUMBER_SCALE, scale))
+#define GET_SCALE_FOR_CALC_ORACLE(scale) (scale < 0 ? max((-1) * OB_MAX_NUMBER_PRECISION, scale) : \
+                                   min(OB_MAX_NUMBER_SCALE, scale))
 
 #define GET_SCALE_FOR_DEDUCE(scale) (scale < 0 ? 0 : min(OB_MAX_DECIMAL_SCALE, scale))
 #define GET_SCALE_FOR_DEDUCE_ORACLE(scale) (scale < 0 ? 0 : min(OB_MAX_NUMBER_SCALE, scale))
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 using namespace common;
 
-ObExprTruncate::ObExprTruncate(common::ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TRUNCATE, N_TRUNCATE, 2, NOT_ROW_DIMENSION)
-{}
+ObExprTruncate::ObExprTruncate(common::ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc,
+                       T_FUN_SYS_TRUNCATE,
+                       N_TRUNCATE,
+                       2,
+                       NOT_ROW_DIMENSION) {}
 
-int ObExprTruncate::calc_result_type2(
-    ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const
+int ObExprTruncate::calc_result_type2(ObExprResType &type,
+                                      ObExprResType &type1,
+                                      ObExprResType &type2,
+                                      common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
+  const ObSQLSessionInfo *session =
+    dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cast basic session to sql session failed", K(ret));
@@ -49,46 +57,53 @@ int ObExprTruncate::calc_result_type2(
     bool not_int_flag = true;
     if (type2.is_literal()) {
       ObObjTypeClass target_tc = type1.get_type_class();
-      switch (target_tc) {
-        case ObIntTC: {
-          type.set_int();
-          type.set_scale(type1.get_scale());
-          not_int_flag = false;
-          break;
+      switch(target_tc) {
+      case ObIntTC: {
+        type.set_int();
+        type.set_scale(type1.get_scale());
+        not_int_flag = false;
+        break;
+      }
+      case ObUIntTC:
+      case ObBitTC:
+      case ObYearTC: {
+        type.set_uint64();
+        type.set_scale(type1.get_scale());
+        not_int_flag = false;
+        break;
+      }
+      case ObNumberTC: {
+        if (type1.is_unumber()) {
+          type.set_unumber();
+        } else {
+          type.set_number();
         }
-        case ObUIntTC:
-        case ObBitTC:
-        case ObYearTC: {
-          type.set_uint64();
-          type.set_scale(type1.get_scale());
-          not_int_flag = false;
-          break;
+        break;
+      }
+      default: {
+        if (type1.is_ufloat() || type1.is_udouble()) {
+          type.set_udouble();
+        } else {
+          type.set_double();
         }
-        case ObNumberTC: {
-          if (type1.is_unumber()) {
-            type.set_unumber();
-          } else {
-            type.set_number();
-          }
-          break;
-        }
-        default: {
-          if (type1.is_ufloat() || type1.is_udouble()) {
-            type.set_udouble();
-          } else {
-            type.set_double();
-          }
-          break;
-        }
+        break;
+      }
       }
 
       const ObObj& obj2 = type2.get_param();
       ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC);
       ObCastMode cast_mode = CM_NONE;
       ObCollationType cast_coll_type = type_ctx.get_coll_type();
-      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-      ObCastCtx cast_ctx(&oballocator, &dtc_params, 0, cast_mode, cast_coll_type);
-
+      const ObDataTypeCastParams dtc_params =
+            ObBasicSessionInfo::create_dtc_params(session);
+      if (FAILEDx(ObSQLUtils::get_default_cast_mode(session, cast_mode))) {
+        LOG_WARN("failed to get default cast mode", K(ret));
+      }
+      ObCastCtx cast_ctx(&oballocator,
+                         &dtc_params,
+                         0,
+                         cast_mode,
+                         cast_coll_type);
       int64_t scale_val = 0;
       EXPR_GET_INT64_V2(obj2, scale_val);
 
@@ -100,13 +115,14 @@ int ObExprTruncate::calc_result_type2(
             } else {
               type.set_scale(static_cast<int16_t>(GET_SCALE_FOR_DEDUCE(scale_val)));
             }
-            ObPrecision precision = static_cast<ObPrecision>(type1.get_precision() - type1.get_scale() + scale_val + 1);
-            // Defense may occur without setting precision decimal or scale_val is a negative number
+            ObPrecision precision = static_cast<ObPrecision>
+              (type1.get_precision() - type1.get_scale() + scale_val + 1);
+            //防御可能出现的没有设置precision的decimal 或者scale_val 为负数
             precision = std::max(static_cast<int16_t>(-1), precision);
             type.set_precision(precision);
-          } else { /* do nothing */
-          }
-        } else if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD || ret == OB_ERR_DATA_TRUNCATED) {
+          } else { /* do nothing */}
+        } else if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD ||
+            ret == OB_ERR_DATA_TRUNCATED){
           // cast obj2 to int failed, just set scale to SCALE_UNKNOWN_YET
           type.set_scale(SCALE_UNKNOWN_YET);
           type.set_precision(PRECISION_UNKNOWN_YET);
@@ -124,8 +140,8 @@ int ObExprTruncate::calc_result_type2(
       if (ObNumberType == expr1_ty || ObUNumberType == expr1_ty) {
         type.set_type(expr1_ty);
       } else if ((expr1_ty >= ObUTinyIntType && expr1_ty <= ObUInt64Type) ||
-                 (expr1_ty >= ObUFloatType && expr1_ty <= ObUDoubleType) ||
-                 (expr1_ty == ObYearType || expr1_ty == ObBitType)) {
+          (expr1_ty >= ObUFloatType && expr1_ty <= ObUDoubleType) ||
+          (expr1_ty == ObYearType || expr1_ty == ObBitType)) {
         type.set_udouble();
       } else {
         type.set_double();
@@ -137,130 +153,99 @@ int ObExprTruncate::calc_result_type2(
         type.set_scale(SCALE_UNKNOWN_YET);
       }
     }
-    if (session->use_static_typing_engine()) {
-      type1.set_calc_type(type.get_type());
-      type2.set_calc_type(ObIntType);
-    } else {
-      type1.set_calc_type(ObNumberType);
-      type2.set_calc_type(ObIntType);
-    }
+    type1.set_calc_type(type.get_type());
+    type2.set_calc_type(ObIntType);
 
     ObExprOperator::calc_result_flag2(type, type1, type2);
   }
   return ret;
 }
 
-int ObExprTruncate::calc_result2(
-    common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(expr_ctx.my_session_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer or session not init", K(ret), K(expr_ctx.my_session_));
-  } else if (obj1.is_null() || obj2.is_null()) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(obj1, ObNumberType);
-    TYPE_CHECK(obj2, ObIntType);
-
-    number::ObNumber target_num = obj1.get_number();
-    number::ObNumber nmb;
-    int64_t scale_val = obj2.get_int();
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(nmb.from(target_num, *expr_ctx.calc_buf_))) {
-      LOG_WARN("copy number failed.", K(ret), K(target_num));
-    } else if (OB_FAIL(nmb.trunc(
-                   lib::is_oracle_mode() ? GET_SCALE_FOR_CALC_ORACLE(scale_val) : GET_SCALE_FOR_CALC(scale_val)))) {
-      LOG_WARN("truncate number failed.", K(ret), K(nmb.format()), K(scale_val));
-    } else {
-      ret = set_trunc_val(result, nmb, expr_ctx, result_type_.get_type());
-    }
-  }
-  return ret;
-}
-
-int ObExprTruncate::set_trunc_val(
-    common::ObObj& result, common::number::ObNumber& nmb, ObExprCtx& expr_ctx, ObObjType res_type)
+int ObExprTruncate::set_trunc_val(common::ObObj &result,
+                                  common::number::ObNumber &nmb,
+                                  ObExprCtx &expr_ctx,
+                                  ObObjType res_type)
 {
   int ret = OB_SUCCESS;
   ObObj tmp_obj;
   tmp_obj.set_number(nmb);
   EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE)
-  switch (res_type) {
-    case ObIntType: {
-      int64_t ival = 0;
-      EXPR_GET_INT64_V2(tmp_obj, ival);
-      if (OB_SUCC(ret)) {
-        result.set_int(ival);
-      }
-      break;
+  switch(res_type) {
+  case ObIntType: {
+    int64_t ival = 0;
+    EXPR_GET_INT64_V2(tmp_obj, ival);
+    if (OB_SUCC(ret)) {
+      result.set_int(ival);
     }
-    case ObUInt64Type: {
-      uint64_t uval = 0;
-      EXPR_GET_UINT64_V2(tmp_obj, uval);
-      if (OB_SUCC(ret)) {
-        result.set_uint64(uval);
-      }
-      break;
+    break;
+  }
+  case ObUInt64Type: {
+    uint64_t uval = 0;
+    EXPR_GET_UINT64_V2(tmp_obj, uval);
+    if (OB_SUCC(ret)) {
+      result.set_uint64(uval);
     }
-    case ObFloatType: {
-      float fval = 0.0;
-      EXPR_GET_FLOAT_V2(tmp_obj, fval);
-      if (OB_SUCC(ret)) {
-        result.set_float(fval);
-      }
-      break;
+    break;
+  }
+  case ObFloatType: {
+    float fval = 0.0;
+    EXPR_GET_FLOAT_V2(tmp_obj, fval);
+    if (OB_SUCC(ret)) {
+      result.set_float(fval);
     }
-    case ObUFloatType: {
-      float fval = 0.0;
-      EXPR_GET_FLOAT_V2(tmp_obj, fval);
-      if (OB_SUCC(ret)) {
-        result.set_ufloat(fval);
-      }
-      break;
+    break;
+  }
+  case ObUFloatType: {
+    float fval = 0.0;
+    EXPR_GET_FLOAT_V2(tmp_obj, fval);
+    if (OB_SUCC(ret)) {
+      result.set_ufloat(fval);
     }
-    case ObDoubleType: {
-      double dval = 0.0;
-      EXPR_GET_DOUBLE_V2(tmp_obj, dval);
-      if (OB_SUCC(ret)) {
-        result.set_double(dval);
-      }
-      break;
+    break;
+  }
+  case ObDoubleType: {
+    double dval = 0.0;
+    EXPR_GET_DOUBLE_V2(tmp_obj, dval);
+    if (OB_SUCC(ret)) {
+      result.set_double(dval);
     }
-    case ObUDoubleType: {
-      double dval = 0.0;
-      EXPR_GET_DOUBLE_V2(tmp_obj, dval);
-      if (OB_SUCC(ret)) {
-        result.set_udouble(dval);
-      }
-      break;
+    break;
+  }
+  case ObUDoubleType: {
+    double dval = 0.0;
+    EXPR_GET_DOUBLE_V2(tmp_obj, dval);
+    if (OB_SUCC(ret)) {
+      result.set_udouble(dval);
     }
-    case ObNumberType: {
-      result.set_number(nmb);
-      break;
-    }
-    case ObUNumberType: {
-      result.set_unumber(nmb);
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected result type", K(ret), K(res_type));
-      break;
-    }
+    break;
+  }
+  case ObNumberType: {
+    result.set_number(nmb);
+    break;
+  }
+  case ObUNumberType: {
+    result.set_unumber(nmb);
+    break;
+  }
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected result type", K(ret), K(res_type));
+    break;
+  }
   }
   return ret;
 }
 
-int calc_truncate_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
+int calc_truncate_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
   const ObObjType res_type = expr.datum_meta_.type_;
   const ObObjType arg_type = expr.args_[0]->datum_meta_.type_;
   // truncate(x, d)
-  ObDatum* x_datum = NULL;
-  ObDatum* d_datum = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, x_datum)) || OB_FAIL(expr.args_[1]->eval(ctx, d_datum))) {
+  ObDatum *x_datum = NULL;
+  ObDatum *d_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, x_datum)) ||
+      OB_FAIL(expr.args_[1]->eval(ctx, d_datum))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (x_datum->is_null() || d_datum->is_null()) {
     res_datum.set_null();
@@ -290,8 +275,9 @@ int calc_truncate_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
         number::ObNumber res_nmb;
         if (OB_FAIL(res_nmb.from(arg_nmb, tmp_alloc))) {
           LOG_WARN("get nmb from arg failed", K(ret), K(arg_nmb));
-        } else if (OB_FAIL(res_nmb.trunc(
-                       lib::is_oracle_mode() ? GET_SCALE_FOR_CALC_ORACLE(scale) : GET_SCALE_FOR_CALC(scale)))) {
+        } else if (OB_FAIL(res_nmb.trunc(lib::is_oracle_mode()
+                                ? GET_SCALE_FOR_CALC_ORACLE(scale)
+                                : GET_SCALE_FOR_CALC(scale)))) {
           LOG_WARN("trunc number failed", K(ret), K(res_nmb), K(scale));
         } else {
           res_datum.set_number(res_nmb);
@@ -308,7 +294,8 @@ int calc_truncate_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
   return ret;
 }
 
-int ObExprTruncate::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprTruncate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                            ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -316,5 +303,10 @@ int ObExprTruncate::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr,
   rt_expr.eval_func_ = calc_truncate_expr;
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
+
+#undef GET_SCALE_FOR_CALC
+#undef GET_SCALE_FOR_CALC_ORACLE
+#undef GET_SCALE_FOR_DEDUCE
+#undef GET_SCALE_FOR_DEDUCE_ORACLE

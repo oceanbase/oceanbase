@@ -10,9 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "tools/ob_error/src/ob_error.h"
+#include <gtest/gtest.h>
 
-#include "gtest/gtest.h"
+#include "tools/ob_error/src/ob_error.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {

@@ -16,57 +16,170 @@
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/rewrite/ob_stmt_comparer.h"
+#include "common/ob_smart_call.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 struct ObStmtMapInfo;
-class ObTransformWinMagic : public ObTransformRule {
+class ObTransformWinMagic : public ObTransformRule
+{
 public:
-  ObTransformWinMagic(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
+  ObTransformWinMagic(ObTransformerCtx *ctx)
+    : ObTransformRule(ctx, TransMethod::POST_ORDER, T_WIN_MAGIC)
   {}
 
-  virtual ~ObTransformWinMagic()
-  {}
-
-  virtual int transform_one_stmt(
-      common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
-
+  virtual ~ObTransformWinMagic() {}
+  virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
+  virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                 ObDMLStmt *&stmt,
+                                 bool &trans_happened) override;
 protected:
-  virtual int adjust_transform_types(uint64_t& transform_types) override;
-
+  virtual int adjust_transform_types(uint64_t &transform_types) override;
 private:
-  int check_subquery_validity(ObDMLStmt* stmt, ObQueryRefRawExpr* query_ref, ObStmtMapInfo& map_info, bool& is_valid);
 
-  int check_aggr_expr_validity(ObSelectStmt& subquery, bool& is_valid);
+  int check_hint_valid(ObDMLStmt &stmt, TableItem &subquery, bool &is_valid);
+  int check_aggr_expr_validity(ObSelectStmt &subquery,
+                               bool &is_valid);
 
-  int check_lossess_join(
-      ObSelectStmt& subquery, ObIArray<FromItem>& from_items, ObIArray<ObRawExpr*>& conditions, bool& is_valid);
+  int check_lossess_join(ObSelectStmt &subquery,
+                         ObIArray<FromItem> &from_items,
+                         ObIArray<ObRawExpr *> &conditions,
+                         bool &is_valid);
 
-  int do_transform(ObDMLStmt* stmt, int64_t query_ref_expr_id, ObStmtMapInfo& map_info, ObDMLStmt*& trans_stmt);
+  int create_window_function(ObAggFunRawExpr *agg_expr,
+                             ObIArray<ObRawExpr *> &partition_exprs,
+                             ObWinFunRawExpr *&win_expr);
 
-  int compute_push_down_items(ObDMLStmt& stmt, ObStmtMapInfo& map_info, ObSqlBitSet<>& push_down_table_ids,
-      ObSqlBitSet<>& push_down_from_ids, ObSqlBitSet<>& push_down_filter_ids);
+  int do_transform(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                   ObDMLStmt *&stmt,
+                   int64_t drill_down_idx,
+                   int64_t roll_up_idx,
+                   ObStmtMapInfo &map_info,
+                   ObStmtCompareContext &context,
+                   bool &trans_happened,
+                   ObIArray<TableItem *> &trans_tables);
 
-  int transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& subquery, ObStmtMapInfo& map_info,
-      ObSqlBitSet<>& push_down_table_ids, ObSqlBitSet<>& push_down_from_ids, ObSqlBitSet<>& push_down_filter_ids);
+  int do_transform_from_type(ObDMLStmt *&stmt, 
+                            const int64_t drill_down_idx,
+                            const int64_t roll_up_idx, 
+                            ObStmtCompareContext &context,
+                            ObStmtMapInfo &map_info);
 
-  int transform_upper_stmt(ObDMLStmt& stmt, ObQueryRefRawExpr* query_ref, ObSqlBitSet<>& push_down_table_ids,
-      ObSqlBitSet<>& push_down_from_ids, ObSqlBitSet<>& push_down_cond_ids);
+  int check_select_expr_validity(ObSelectStmt &subquery, 
+                                 bool &is_valid);
 
-  int transform_aggr_to_winfunc(
-      ObSelectStmt& subquery, ObDMLStmt& stmt, ObStmtMapInfo& map_info, ObSqlBitSet<>& bit_set);
+  int check_view_table_basic(ObSelectStmt *stmt, 
+                             bool &is_valid);
 
-  int create_window_function(
-      ObAggFunRawExpr* agg_expr, ObIArray<ObRawExpr*>& partition_exprs, ObWinFunRawExpr*& win_expr);
+  int get_view_to_trans(ObDMLStmt *&stmt, 
+                        int64_t &drill_down_idx,
+                        int64_t &roll_up_idx, 
+                        ObStmtCompareContext &context,
+                        ObStmtMapInfo &map_info,
+                        ObIArray<TableItem *> &trans_tables);
 
-  int wrap_case_when_if_necessary(ObDMLStmt* stmt, ObAggFunRawExpr& aggr_expr, ObIArray<ObRawExpr*>& nullable_exprs);
+  int sanity_check_and_init(ObDMLStmt *stmt, 
+                            ObDMLStmt *view, 
+                            ObStmtMapInfo &map_info, 
+                            ObStmtCompareContext &context);
 
-  int is_simple_from_item(ObDMLStmt& stmt, uint64_t table_id, int64_t& from_index);
+  int check_stmt_and_view(ObDMLStmt *main_stmt, 
+                          TableItem *rewrite_table, 
+                          ObStmtMapInfo &map_info,
+                          bool &is_valid,
+                          ObIArray<TableItem *> &trans_tables);
 
-  int use_given_tables(const ObRawExpr* expr, const ObIArray<uint64_t>& table_ids, bool& is_valid);
+  int check_view_and_view(ObDMLStmt *main_stmt,
+                          TableItem *drill_down_table, 
+                          TableItem *roll_up_table, 
+                          ObStmtMapInfo &map_info, 
+                          bool &is_valid,
+                          ObIArray<TableItem *> &trans_tables);
+  
+  int check_view_valid_to_trans(ObSelectStmt *view, 
+                                ObStmtMapInfo &map_info, 
+                                bool &is_valid);
+
+  int check_outer_stmt_conditions(ObDMLStmt *stmt, 
+                                  ObIArray<ObRawExpr *> &roll_group_exprs,
+                                  ObIArray<ObRawExpr *> &drill_group_exprs, 
+                                  ObIArray<int64_t> &map,
+                                  bool &is_valid);
+
+  int create_aggr_expr(ObItemType type,
+                       ObAggFunRawExpr *&agg_expr,
+                       ObRawExpr *child_expr);
+
+  int adjust_agg_to_win(ObSelectStmt *view_stmt);
+
+  int adjust_view_for_trans(ObDMLStmt *main_stmt, 
+                            TableItem *&drill_down_table, 
+                            TableItem *roll_up_table,
+                            TableItem *&adjust_view_for_trans,
+                            ObIArray<ObRawExpr *> &new_transed_output,
+                            ObStmtCompareContext &context,
+                            ObStmtMapInfo &map_info);
+
+  int adjust_win_after_group_by(ObDMLStmt *main_stmt,
+                      TableItem *view_table, 
+                      TableItem *matched_table,
+                      TableItem *transed_view_table,
+                      ObIArray<ObRawExpr *> &new_transed_output,
+                      ObStmtCompareContext &context,
+                      ObStmtMapInfo &map_info);
+
+  int remove_dup_condition(ObDMLStmt *stmt);
+
+  int adjust_column_and_table(ObDMLStmt *main_stmt,
+                              TableItem *view_table,
+                              ObStmtMapInfo &map_info);
+
+  int change_agg_to_win_func(ObDMLStmt *main_stmt, 
+                             ObSelectStmt *matched_stmt, 
+                             ObSelectStmt *view_stmt, 
+                             TableItem *transed_view_table, 
+                             ObStmtMapInfo &map_info, 
+                             ObStmtCompareContext &context, 
+                             ObIArray<ObRawExpr *> &old_agg,
+                             ObIArray<ObRawExpr *> &new_win);
+
+  int simple_check_group_by(ObIArray<ObRawExpr *> &sel_exprs,
+                            ObIArray<ObRawExpr *> &group_exprs, 
+                            bool &is_valid);
+
+  int check_expr_in_group(ObRawExpr *expr, ObIArray<ObRawExpr *> &group_exprs, bool &is_valid);
+
+  int try_to_push_down_join(ObDMLStmt *&main_stmt);
+
+  int push_down_join(ObDMLStmt *main_stmt, 
+                     TableItem *view_table, 
+                     TableItem *push_down_table, 
+                     ObIArray<ObRawExpr *> &cond_to_push_down);
+
+  int check_join_push_down(ObDMLStmt *main_stmt, 
+                           TableItem *view_table, 
+                           TableItem *push_down_table, 
+                           ObIArray<ObRawExpr *> &cond_to_push_down, 
+                           bool &is_valid);
+
+  int get_reverse_map(ObIArray<int64_t> &map, ObIArray<int64_t> &reverse_map, int64_t size);
+
+  int check_mode_and_agg_type(ObSelectStmt *stmt, bool &is_valid);
+
+  int construct_trans_table(const ObDMLStmt *stmt,
+                            const TableItem *table,
+                            ObIArray<ObSEArray<TableItem *, 4>> &trans_basic_tables);
+
+  int construct_trans_tables(const ObDMLStmt *stmt,
+                             const ObDMLStmt *trans_stmt,
+                             ObIArray<ObSEArray<TableItem *, 4>> &trans_basic_tables,
+                             ObIArray<TableItem *> &trans_tables);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif  // OB_TRANSFORM_WIN_MAGIC_H
+#endif // OB_TRANSFORM_WIN_MAGIC_H

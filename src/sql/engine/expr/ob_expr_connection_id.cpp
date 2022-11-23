@@ -17,17 +17,22 @@
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprConnectionId::ObExprConnectionId(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CONNECTION_ID, N_CONNECTION_ID, 0, NOT_ROW_DIMENSION)
-{}
+
+ObExprConnectionId::ObExprConnectionId(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_CONNECTION_ID, N_CONNECTION_ID, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprConnectionId::~ObExprConnectionId()
-{}
+{
+}
 
-int ObExprConnectionId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprConnectionId::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_uint32();
@@ -36,24 +41,12 @@ int ObExprConnectionId::calc_result_type0(ObExprResType& type, ObExprTypeCtx& ty
   return OB_SUCCESS;
 }
 
-int ObExprConnectionId::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObSQLSessionInfo is NULL", K(ret));
-  } else {
-    result.set_uint32(session_info->get_sessid());
-  }
-  return OB_SUCCESS;
-}
-
-int ObExprConnectionId::eval_connection_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprConnectionId::eval_connection_id(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObSQLSessionInfo* session_info = NULL;
+  const ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -63,7 +56,8 @@ int ObExprConnectionId::eval_connection_id(const ObExpr& expr, ObEvalCtx& ctx, O
   return ret;
 }
 
-int ObExprConnectionId::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprConnectionId::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -71,5 +65,6 @@ int ObExprConnectionId::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_exp
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}/* ns sql*/
+}/* ns oceanbase */

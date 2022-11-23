@@ -17,21 +17,23 @@
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 
-// FIXME::here we use hard code to avoid security flaw from AliYun. In fact, ob do not use any mysql code
-const char* OMPKHandshake::SERVER_VERSION_STR = "5.7.25";
-const char* OMPKHandshake::AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
-const char* OMPKHandshake::AUTH_PLUGIN_MYSQL_OLD_PASSWORD = "mysql_old_password";
-const char* OMPKHandshake::AUTH_PLUGIN_MYSQL_CLEAR_PASSWORD = "mysql_clear_password";
-const char* OMPKHandshake::AUTH_PLUGIN_AUTHENTICATION_WINDOWS_CLIENT = "authentication_windows_client";
+//FIXME::here we use hard code to avoid security flaw from AliYun. In fact, ob do not use any mysql code
+const char *OMPKHandshake::SERVER_VERSION_STR = "5.7.25";
+const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
+const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_OLD_PASSWORD = "mysql_old_password";
+const char *OMPKHandshake::AUTH_PLUGIN_MYSQL_CLEAR_PASSWORD = "mysql_clear_password";
+const char *OMPKHandshake::AUTH_PLUGIN_AUTHENTICATION_WINDOWS_CLIENT = "authentication_windows_client";
 
-OMPKHandshake::OMPKHandshake() : auth_plugin_data2_(), terminated_(0)
+OMPKHandshake::OMPKHandshake()
+    : auth_plugin_data2_(),
+      terminated_(0)
 {
-  protocol_version_ = 10;  // Protocol::HandshakeV10
+  protocol_version_ = 10; // Protocol::HandshakeV10
   server_version_ = ObString::make_string(SERVER_VERSION_STR);
   thread_id_ = 1;
   memset(scramble_buff_, 'a', 8);
   filler_ = 0;
-  // 0xF7DF, a combination of multiple flags, in which the flag supporting the 4.1 protocol is set to 1,
+  //0xF7DF, a combination of multiple flags, in which the flag supporting the 4.1 protocol is set to 1,
   server_capabilities_lower_.capability_ = 0;
   server_capabilities_lower_.capability_flag_.OB_SERVER_LONG_PASSWORD = 1;
   server_capabilities_lower_.capability_flag_.OB_SERVER_FOUND_ROWS = 1;
@@ -56,12 +58,13 @@ OMPKHandshake::OMPKHandshake() : auth_plugin_data2_(), terminated_(0)
   server_capabilities_upper_.capability_flag_.OB_SERVER_CONNECT_ATTRS = 1;
   server_capabilities_upper_.capability_flag_.OB_SERVER_USE_LOB_LOCATOR = 1;
   server_capabilities_upper_.capability_flag_.OB_SERVER_RETURN_HIDDEN_ROWID = 1;
+  server_capabilities_upper_.capability_flag_.OB_SERVER_PS_MULTIPLE_RESULTS = 1;
 
   if (server_capabilities_upper_.capability_flag_.OB_SERVER_PLUGIN_AUTH != 0) {
     auth_plugin_name_ = AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD;
     auth_plugin_data_len_ = DEFAULT_AUTH_PLUGIN_DATA_LEN;
   } else {
-    auth_plugin_name_ = NULL;
+    auth_plugin_name_  = NULL;
     auth_plugin_data_len_ = 0;
   }
 
@@ -73,49 +76,50 @@ OMPKHandshake::OMPKHandshake() : auth_plugin_data2_(), terminated_(0)
 }
 
 OMPKHandshake::~OMPKHandshake()
-{}
+{
+}
 
-// seq of handshake is 0
-int OMPKHandshake::serialize(char* buffer, int64_t len, int64_t& pos) const
+//seq of handshake is 0
+int OMPKHandshake::serialize(char *buffer, int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
 
   if (NULL == buffer || 0 >= len || pos < 0 || len - pos < get_serialize_size()) {
-    LOG_WARN("invalid argument", K(buffer), K(len), K(pos), "need_size", get_serialize_size());
+    LOG_WARN("invalid argument", KP(buffer), K(len), K(pos), "need_size", get_serialize_size());
     ret = OB_INVALID_ARGUMENT;
   } else {
     // buffer is definitely enough
     if (OB_FAIL(ObMySQLUtil::store_int1(buffer, len, protocol_version_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(len), K(protocol_version_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(len), K(protocol_version_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, len, server_version_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(len), K(server_version_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(len), K(server_version_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int4(buffer, len, thread_id_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(len), K(thread_id_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(len), K(thread_id_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, len, scramble_buff_, SCRAMBLE_SIZE, pos))) {
-      LOG_WARN("store fail", K(buffer), K(len), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(len), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int1(buffer, len, filler_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(filler_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(filler_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, len, server_capabilities_lower_.capability_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(server_capabilities_lower_.capability_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(server_capabilities_lower_.capability_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int1(buffer, len, server_language_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(server_language_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(server_language_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, len, server_status_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(server_status_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(server_status_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, len, server_capabilities_upper_.capability_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(server_capabilities_upper_.capability_), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(server_capabilities_upper_.capability_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_int1(buffer, len, auth_plugin_data_len_, pos))) {
-      LOG_WARN("store fail", K(buffer), K(auth_plugin_data_len_), K(pos));
-    } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, len, reserved_, sizeof(reserved_), pos))) {
-      LOG_WARN("store fail", K(buffer), K(pos));
-    } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, len, auth_plugin_data2_, sizeof(auth_plugin_data2_), pos))) {
-      LOG_WARN("store fail", K(buffer), K(pos));
+      LOG_WARN("store fail", KP(buffer), K(auth_plugin_data_len_), K(pos));
+    } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, len, reserved_, sizeof (reserved_), pos))) {
+      LOG_WARN("store fail", KP(buffer), K(pos));
+    } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buffer, len, auth_plugin_data2_, sizeof (auth_plugin_data2_), pos))) {
+      LOG_WARN("store fail", KP(buffer), K(pos));
     }
 
     if (OB_SUCC(ret)) {
       if (server_capabilities_upper_.capability_flag_.OB_SERVER_PLUGIN_AUTH) {
         // auth-plugin name, NULL terminated
         if (OB_FAIL(ObMySQLUtil::store_obstr_zt(buffer, len, auth_plugin_name_, pos))) {
-          LOG_WARN("store fail", K(buffer), K(pos));
+          LOG_WARN("store fail", KP(buffer), K(pos));
         }
       }
     }
@@ -124,14 +128,14 @@ int OMPKHandshake::serialize(char* buffer, int64_t len, int64_t& pos) const
   return ret;
 }
 
-int OMPKHandshake::set_server_version(ObString& version)
+int OMPKHandshake::set_server_version(ObString &version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(version.ptr()) || version.length() < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid args", K(version.ptr()), K(version.length()));
+    LOG_ERROR("invalid args", KP(version.ptr()), K(version.length()));
   } else {
-    // OB_ASSERT(version.ptr() && version.length() >= 0);
+    //OB_ASSERT(version.ptr() && version.length() >= 0);
     server_version_ = version;
   }
   return ret;
@@ -139,18 +143,19 @@ int OMPKHandshake::set_server_version(ObString& version)
 
 int64_t OMPKHandshake::get_serialize_size() const
 {
-  int64_t len = 1                               // protocol version
-                + server_version_.length() + 1  // server_version [NULL terminated]
-                + 4                             // thread id
-                + 8                             // auth plugin data part 1
-                + 1                             // filler
-                + 2                             // lower capability flags
-                + 1                             // character set
-                + 2                             // status flags
-                + 2                             // upper capability flags
-                + 1                             // auth plugin data len
-                + 10                            // zero reserved
-                + 13                            // auth plugin data part 2
+  int64_t len =
+      1                           // protocol version
+      + server_version_.length() + 1 // server_version [NULL terminated]
+      + 4                         // thread id
+      + 8                         // auth plugin data part 1
+      + 1                         // filler
+      + 2                         // lower capability flags
+      + 1                         // character set
+      + 2                         // status flags
+      + 2                         // upper capability flags
+      + 1                         // auth plugin data len
+      + 10                        // zero reserved
+      + 13                        // auth plugin data part 2
       ;
 
   if (!!server_capabilities_upper_.capability_flag_.OB_SERVER_PLUGIN_AUTH) {
@@ -166,10 +171,10 @@ int64_t OMPKHandshake::get_serialize_size() const
 int OMPKHandshake::decode()
 {
   int ret = OB_SUCCESS;
-  const char* buf = cdata_;
-  const char* pos = cdata_;
+  const char *buf = cdata_;
+  const char *pos = cdata_;
   const int64_t len = hdr_.len_;
-  const char* end = buf + len;
+  const char *end = buf + len;
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("null input", KP(buf), K(len), K(ret));
@@ -177,7 +182,8 @@ int OMPKHandshake::decode()
     ObMySQLUtil::get_uint1(pos, protocol_version_);
 
     int64_t sv_len = strlen(pos);
-    server_version_.assign_ptr(SERVER_VERSION_STR, static_cast<ObString::obstr_size_t>(strlen(SERVER_VERSION_STR)));
+    server_version_.assign_ptr(SERVER_VERSION_STR,
+        static_cast<ObString::obstr_size_t>(strlen(SERVER_VERSION_STR)));
     pos += sv_len + 1;
 
     ObMySQLUtil::get_uint4(pos, thread_id_);
@@ -197,7 +203,7 @@ int OMPKHandshake::decode()
 
     uint16_t server_capabilities_upper = 0;
     ObMySQLUtil::get_uint2(pos, server_capabilities_upper);
-    server_capabilities_upper_.capability_ = server_capabilities_upper;
+    server_capabilities_upper_.capability_ =  server_capabilities_upper;
 
     ObMySQLUtil::get_uint1(pos, auth_plugin_data_len_);
 
@@ -223,13 +229,14 @@ int OMPKHandshake::decode()
       //      CLIENT_SECURE_CONNECTION are not set.
       // 2. The method used is Secure Password Authentication if both CLIENT_PROTOCOL_41
       //    and CLIENT_SECURE_CONNECTION are set but CLIENT_PLUGIN_AUTH is not set.
-      if (server_capabilities_lower_.capability_flag_.OB_SERVER_SECURE_CONNECTION &&
-          server_capabilities_lower_.capability_flag_.OB_SERVER_PROTOCOL_41) {
+      if (server_capabilities_lower_.capability_flag_.OB_SERVER_SECURE_CONNECTION
+          && server_capabilities_lower_.capability_flag_.OB_SERVER_PROTOCOL_41) {
         auth_plugin_name_ = AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD;
       } else {
         auth_plugin_name_ = AUTH_PLUGIN_MYSQL_OLD_PASSWORD;
       }
     }
+
 
     if (OB_SUCC(ret)) {
       if (pos > end) {
@@ -242,9 +249,9 @@ int OMPKHandshake::decode()
   return ret;
 }
 
-const char* OMPKHandshake::get_handshake_inner_pulgin_name(const ObString outer_string) const
+const char *OMPKHandshake::get_handshake_inner_pulgin_name(const ObString outer_string) const
 {
-  const char* name = NULL;
+  const char *name = NULL;
   if (!!outer_string.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
     name = AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD;
   } else if (!!outer_string.case_compare(AUTH_PLUGIN_MYSQL_OLD_PASSWORD)) {
@@ -260,11 +267,11 @@ const char* OMPKHandshake::get_handshake_inner_pulgin_name(const ObString outer_
   return name;
 }
 
-int OMPKHandshake::get_scramble(char* buffer, const int64_t len, int64_t& copy_len)
+int OMPKHandshake::get_scramble(char *buffer, const int64_t len, int64_t &copy_len)
 {
   int ret = OB_SUCCESS;
   int64_t part1_len = sizeof(scramble_buff_);
-  int64_t part2_len = (sizeof(auth_plugin_data2_) - 1);
+  int64_t part2_len = (sizeof (auth_plugin_data2_) - 1);
   if (OB_ISNULL(buffer) || OB_UNLIKELY(len < (part1_len + part2_len))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input value", KP(buffer), K(len), K(part1_len), K(part2_len), K(ret));
@@ -282,11 +289,11 @@ int OMPKHandshake::get_scramble(char* buffer, const int64_t len, int64_t& copy_l
   return ret;
 }
 
-int OMPKHandshake::set_scramble(char* buffer, const int64_t len)
+int OMPKHandshake::set_scramble(char *buffer, const int64_t len)
 {
   int ret = OB_SUCCESS;
   int64_t part1_len = sizeof(scramble_buff_);
-  int64_t part2_len = (sizeof(auth_plugin_data2_) - 1);
+  int64_t part2_len = (sizeof (auth_plugin_data2_) - 1);
   if (OB_ISNULL(buffer) || OB_UNLIKELY(len < (part1_len + part2_len))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input value", KP(buffer), K(len), K(part1_len), K(part2_len), K(ret));

@@ -15,15 +15,17 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "lib/rc/context.h"
 
-namespace oceanbase {
-namespace observer {
-class ObAllVirtualMemoryContextStat : public common::ObVirtualTableScannerIterator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualMemoryContextStat : public common::ObVirtualTableScannerIterator
+{
 public:
   ObAllVirtualMemoryContextStat();
   virtual ~ObAllVirtualMemoryContextStat();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char entity_buf_[32];

@@ -15,113 +15,92 @@
 
 #include "common/row/ob_row.h"
 #include "share/ob_scanner.h"
+#include "sql/engine/ob_operator.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObPhyOperator;
 class ObOperator;
 class ObOpSpec;
 
-class ObIExecuteResult {
+class ObIExecuteResult
+{
 public:
-  virtual ~ObIExecuteResult()
-  {}
+  virtual ~ObIExecuteResult() {}
 
-  virtual int open(ObExecContext& ctx) = 0;
-  virtual int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) = 0;
-  virtual int close(ObExecContext& ctx) = 0;
+  virtual int open(ObExecContext &ctx) = 0;
+  virtual int get_next_row(ObExecContext &ctx, const common::ObNewRow *&row) = 0;
+  virtual int close(ObExecContext &ctx) = 0;
 };
 
-class ObExecuteResult : public ObIExecuteResult {
+class ObExecuteResult : public ObIExecuteResult
+{
   friend class ObLocalTaskExecutor;
   friend class ObExecutor;
-
 public:
-  ObExecuteResult();
-  virtual ~ObExecuteResult()
-  {}
+  ObExecuteResult()
+    : err_code_(OB_ERR_UNEXPECTED),
+      static_engine_root_(NULL) {}
+  virtual ~ObExecuteResult() {}
 
-  virtual int open(ObExecContext& ctx) override;
-  virtual int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) override;
-  virtual int close(ObExecContext& ctx) override;
+  virtual int open(ObExecContext &ctx) override;
+  virtual int get_next_row(ObExecContext &ctx, const common::ObNewRow *&row) override;
+  virtual int close(ObExecContext &ctx) override;
 
-  inline const ObPhyOperator* get_root_op() const
-  {
-    return root_op_;
-  }
-  inline int get_err_code()
-  {
-    return err_code_;
-  }
+  inline int get_err_code() { return err_code_; }
 
   // interface for static typing engine
   int open() const;
   int get_next_row() const;
   int close() const;
-  const ObOperator* get_static_engine_root() const
-  {
-    return static_engine_root_;
-  }
-  void set_static_engine_root(ObOperator* op)
+  const ObOperator *get_static_engine_root() const { return static_engine_root_; }
+  void set_static_engine_root(ObOperator *op)
   {
     static_engine_root_ = op;
-  }
-
-  inline void set_root_op(ObPhyOperator* root_op)
-  {
-    root_op_ = root_op;
+    br_it_.set_operator(op);
   }
 
 private:
   int err_code_;
-  ObPhyOperator* root_op_;
-  ObOperator* static_engine_root_;
-  // TODO : temporary code.
+  ObOperator *static_engine_root_;
   // row used to adapt old get_next_row interface.
   mutable common::ObNewRow row_;
-
+  mutable ObBatchRowIter br_it_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecuteResult);
 };
 
-class ObAsyncExecuteResult : public ObIExecuteResult {
+class ObAsyncExecuteResult : public ObIExecuteResult
+{
 public:
   ObAsyncExecuteResult();
-  virtual ~ObAsyncExecuteResult()
-  {}
+  virtual ~ObAsyncExecuteResult() { }
 
-  void set_result_stream(common::ObScanner* scanner, int64_t field_count)
+  void set_result_stream(common::ObScanner *scanner, int64_t field_count)
   {
     scanner_ = scanner;
     field_count_ = field_count;
   }
-  virtual int open(ObExecContext& ctx) override;
-  virtual int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) override;
-  virtual int close(ObExecContext& ctx) override
-  {
-    UNUSED(ctx);
-    return common::OB_SUCCESS;
-  }
+  virtual int open(ObExecContext &ctx) override;
+  virtual int get_next_row(ObExecContext &ctx, const common::ObNewRow *&row) override;
+  virtual int close(ObExecContext &ctx) override;
   // interface for static typing engine
-  const ObOpSpec* get_static_engine_spec() const
-  {
-    return spec_;
-  }
-  void set_static_engine_spec(const ObOpSpec* spec)
-  {
-    spec_ = spec;
-  }
+  const ObOpSpec* get_static_engine_spec() const { return spec_; }
+  void set_static_engine_spec(const ObOpSpec *spec) { spec_ = spec; }
 
 private:
   int64_t field_count_;
-  common::ObScanner* scanner_;
-  common::ObNewRow* cur_row_;
+  common::ObScanner *scanner_;
+  common::ObNewRow *cur_row_;
   common::ObScanner::Iterator row_iter_;
   // used for static engine
-  const ObOpSpec* spec_;
+  const ObOpSpec *spec_;
   ObChunkDatumStore::Iterator datum_iter_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_EXECUTE_RESULT_ */
+

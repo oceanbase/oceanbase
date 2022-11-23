@@ -15,47 +15,70 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprMod : public ObArithExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprMod: public ObArithExprOperator
+{
 public:
   ObExprMod();
-  explicit ObExprMod(common::ObIAllocator& alloc);
-  virtual ~ObExprMod(){};
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result2(common::ObObj& res, const common::ObObj& ojb1, const common::ObObj& obj2,
-      common::ObExprCtx& expr_ctx) const override;
-  static int calc(common::ObObj& res, const common::ObObj& ojb1, const common::ObObj& obj2,
-      common::ObIAllocator* allocator, common::ObScale scale);
+  explicit  ObExprMod(common::ObIAllocator &alloc);
+  virtual ~ObExprMod() {};
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int calc(common::ObObj &res,
+                  const common::ObObj &ojb1,
+                  const common::ObObj &obj2,
+                  common::ObIAllocator *allocator,
+                  common::ObScale scale);
 
-  static int mod_int_int(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_int_uint(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_uint_int(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_uint_uint(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_float(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_double(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-  static int mod_number(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int mod_int_int(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_int_uint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_uint_int(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_uint_uint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_float(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_double(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int mod_number(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   // temporary used, remove after all expr converted
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 
 private:
-  OB_INLINE static int mod_int(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
-      common::ObIAllocator* allocator, common::ObScale scale);
-  OB_INLINE static int mod_uint(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
-      common::ObIAllocator* allocator, common::ObScale scale);
-  static int mod_float(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
-      common::ObIAllocator* allocator, common::ObScale scale);
-  static int mod_double(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
-      common::ObIAllocator* allocator, common::ObScale scale);
-  static int mod_number(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
-      common::ObIAllocator* allocator, common::ObScale scale);
+  OB_INLINE static int mod_int(common::ObObj &res,
+                     const common::ObObj &left,
+                     const common::ObObj &right,
+                     common::ObIAllocator *allocator,
+                     common::ObScale scale);
+  OB_INLINE static int mod_uint(common::ObObj &res,
+                      const common::ObObj &left,
+                      const common::ObObj &right,
+                      common::ObIAllocator *allocator,
+                      common::ObScale scale);
+  static int mod_float(common::ObObj &res,
+                        const common::ObObj &left,
+                        const common::ObObj &right,
+                        common::ObIAllocator *allocator,
+                        common::ObScale scale);
+  static int mod_double(common::ObObj &res,
+                        const common::ObObj &left,
+                        const common::ObObj &right,
+                        common::ObIAllocator *allocator,
+                        common::ObScale scale);
+  static int mod_number(common::ObObj &res,
+                        const common::ObObj &left,
+                        const common::ObObj &right,
+                        common::ObIAllocator *allocator,
+                        common::ObScale scale);
   DISALLOW_COPY_AND_ASSIGN(ObExprMod);
-
 private:
   static ObArithFunc mod_funcs_[common::ObMaxTC];
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
-#endif /* _OB_EXPR_MOD_H_ */
+
+#endif  /* _OB_EXPR_MOD_H_ */

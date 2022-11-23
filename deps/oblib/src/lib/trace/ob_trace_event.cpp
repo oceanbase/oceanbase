@@ -12,6 +12,10 @@
 
 #include "lib/trace/ob_trace_event.h"
 
-namespace oceanbase {
-namespace common {}  // end namespace common
-}  // end namespace oceanbase
+namespace oceanbase
+{
+namespace common
+{
+
+} // end namespace common
+} // end namespace oceanbase

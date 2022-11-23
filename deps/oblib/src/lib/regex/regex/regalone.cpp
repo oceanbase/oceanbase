@@ -1,19 +1,9 @@
-/**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
-
 #ifdef REGEX_WCHAR
 
 #include "regcustom.h"
 
+
+
 /*
  *----------------------------------------------------------------------
  *
@@ -32,13 +22,16 @@
  *----------------------------------------------------------------------
  */
 
-void Ob_DStringInit(Ob_DString* dsPtr) /* Pointer to structure for dynamic string. */
+void
+Ob_DStringInit(
+    Ob_DString *dsPtr)		/* Pointer to structure for dynamic string. */
 {
-  dsPtr->string = dsPtr->staticSpace;
-  dsPtr->length = 0;
-  dsPtr->spaceAvl = OB_DSTRING_STATIC_SIZE;
-  dsPtr->staticSpace[0] = '\0';
+    dsPtr->string = dsPtr->staticSpace;
+    dsPtr->length = 0;
+    dsPtr->spaceAvl = OB_DSTRING_STATIC_SIZE;
+    dsPtr->staticSpace[0] = '\0';
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -59,45 +52,49 @@ void Ob_DStringInit(Ob_DString* dsPtr) /* Pointer to structure for dynamic strin
  *----------------------------------------------------------------------
  */
 
-void Ob_DStringSetLength(Ob_DString* dsPtr, /* Structure describing dynamic string. */
-    int length)                             /* New length for dynamic string. */
+void
+Ob_DStringSetLength(
+    Ob_DString *dsPtr,		/* Structure describing dynamic string. */
+    int length)			/* New length for dynamic string. */
 {
-  int newsize;
+    int newsize;
 
-  if (length < 0) {
-    length = 0;
-  }
-  if (length >= dsPtr->spaceAvl) {
-    /*
-     * There are two interesting cases here. In the first case, the user
-     * may be trying to allocate a large buffer of a specific size. It
-     * would be wasteful to overallocate that buffer, so we just allocate
-     * enough for the requested size plus the trailing null byte. In the
-     * second case, we are growing the buffer incrementally, so we need
-     * behavior similar to Ob_DStringAppend. The requested length will
-     * usually be a small delta above the current spaceAvl, so we'll end
-     * up doubling the old size. This won't grow the buffer quite as
-     * quickly, but it should be close enough.
-     */
-
-    newsize = dsPtr->spaceAvl * 2;
-    if (length < newsize) {
-      dsPtr->spaceAvl = newsize;
-    } else {
-      dsPtr->spaceAvl = length + 1;
+    if (length < 0) {
+	length = 0;
     }
-    if (dsPtr->string == dsPtr->staticSpace) {
-      char* newString = (char*)ckalloc((unsigned)dsPtr->spaceAvl);
+    if (length >= dsPtr->spaceAvl) {
+	/*
+	 * There are two interesting cases here. In the first case, the user
+	 * may be trying to allocate a large buffer of a specific size. It
+	 * would be wasteful to overallocate that buffer, so we just allocate
+	 * enough for the requested size plus the trailing null byte. In the
+	 * second case, we are growing the buffer incrementally, so we need
+	 * behavior similar to Ob_DStringAppend. The requested length will
+	 * usually be a small delta above the current spaceAvl, so we'll end
+	 * up doubling the old size. This won't grow the buffer quite as
+	 * quickly, but it should be close enough.
+	 */
 
-      memcpy(newString, dsPtr->string, (size_t)dsPtr->length);
-      dsPtr->string = newString;
-    } else {
-      dsPtr->string = (char*)ckrealloc((void*)dsPtr->string, (size_t)dsPtr->spaceAvl);
+	newsize = dsPtr->spaceAvl * 2;
+	if (length < newsize) {
+	    dsPtr->spaceAvl = newsize;
+	} else {
+	    dsPtr->spaceAvl = length + 1;
+	}
+	if (dsPtr->string == dsPtr->staticSpace) {
+	    char *newString = (char *) ckalloc((unsigned) dsPtr->spaceAvl);
+
+	    memcpy(newString, dsPtr->string, (size_t) dsPtr->length);
+	    dsPtr->string = newString;
+	} else {
+	    dsPtr->string = (char *) ckrealloc((void *) dsPtr->string,
+		    (size_t) dsPtr->spaceAvl);
+	}
     }
-  }
-  dsPtr->length = length;
-  dsPtr->string[length] = 0;
+    dsPtr->length = length;
+    dsPtr->string[length] = 0;
 }
+
 
 /*
  *----------------------------------------------------------------------
@@ -117,23 +114,28 @@ void Ob_DStringSetLength(Ob_DString* dsPtr, /* Structure describing dynamic stri
  *----------------------------------------------------------------------
  */
 
-void Ob_DStringFree(Ob_DString* dsPtr) /* Structure describing dynamic string. */
+void
+Ob_DStringFree(
+    Ob_DString *dsPtr)		/* Structure describing dynamic string. */
 {
-  if (dsPtr->string != dsPtr->staticSpace) {
-    ckfree(dsPtr->string);
-  }
-  dsPtr->string = dsPtr->staticSpace;
-  dsPtr->length = 0;
-  dsPtr->spaceAvl = OB_DSTRING_STATIC_SIZE;
-  dsPtr->staticSpace[0] = '\0';
+    if (dsPtr->string != dsPtr->staticSpace) {
+	ckfree(dsPtr->string);
+    }
+    dsPtr->string = dsPtr->staticSpace;
+    dsPtr->length = 0;
+    dsPtr->spaceAvl = OB_DSTRING_STATIC_SIZE;
+    dsPtr->staticSpace[0] = '\0';
 }
+
+
 
 /*
  * Unicode characters less than this value are represented by themselves in
  * UTF-8 strings.
  */
 
-#define UNICODE_SELF 0x80
+#define UNICODE_SELF	0x80
+
 
 /*
  *---------------------------------------------------------------------------
@@ -153,63 +155,64 @@ void Ob_DStringFree(Ob_DString* dsPtr) /* Structure describing dynamic string. *
  *---------------------------------------------------------------------------
  */
 
-INLINE int Ob_UniCharToUtf(int ch, /* The Ob_UniChar to be stored in the
-                                    * buffer. */
-    char* buf)                     /* Buffer in which the UTF-8 representation of
-                                    * the Ob_UniChar is stored. Buffer must be
-                                    * large enough to hold the UTF-8 character
-                                    * (at most Ob_UTF_MAX bytes). */
+INLINE int Ob_UniCharToUtf(
+    int ch,			/* The Ob_UniChar to be stored in the
+				 * buffer. */
+    char *buf)			/* Buffer in which the UTF-8 representation of
+				 * the Ob_UniChar is stored. Buffer must be
+				 * large enough to hold the UTF-8 character
+				 * (at most Ob_UTF_MAX bytes). */
 {
-  if ((ch > 0) && (ch < UNICODE_SELF)) {
-    buf[0] = (char)ch;
-    return 1;
-  }
-  if (ch >= 0) {
-    if (ch <= 0x7FF) {
-      buf[1] = (char)((ch | 0x80) & 0xBF);
-      buf[0] = (char)((ch >> 6) | 0xC0);
-      return 2;
+    if ((ch > 0) && (ch < UNICODE_SELF)) {
+	buf[0] = (char) ch;
+	return 1;
     }
-    if (ch <= 0xFFFF) {
-    three:
-      buf[2] = (char)((ch | 0x80) & 0xBF);
-      buf[1] = (char)(((ch >> 6) | 0x80) & 0xBF);
-      buf[0] = (char)((ch >> 12) | 0xE0);
-      return 3;
-    }
+    if (ch >= 0) {
+	if (ch <= 0x7FF) {
+	    buf[1] = (char) ((ch | 0x80) & 0xBF);
+	    buf[0] = (char) ((ch >> 6) | 0xC0);
+	    return 2;
+	}
+	if (ch <= 0xFFFF) {
+	three:
+	    buf[2] = (char) ((ch | 0x80) & 0xBF);
+	    buf[1] = (char) (((ch >> 6) | 0x80) & 0xBF);
+	    buf[0] = (char) ((ch >> 12) | 0xE0);
+	    return 3;
+	}
 
 #if Ob_UTF_MAX > 3
-    if (ch <= 0x1FFFFF) {
-      buf[3] = (char)((ch | 0x80) & 0xBF);
-      buf[2] = (char)(((ch >> 6) | 0x80) & 0xBF);
-      buf[1] = (char)(((ch >> 12) | 0x80) & 0xBF);
-      buf[0] = (char)((ch >> 18) | 0xF0);
-      return 4;
-    }
-    if (ch <= 0x3FFFFFF) {
-      buf[4] = (char)((ch | 0x80) & 0xBF);
-      buf[3] = (char)(((ch >> 6) | 0x80) & 0xBF);
-      buf[2] = (char)(((ch >> 12) | 0x80) & 0xBF);
-      buf[1] = (char)(((ch >> 18) | 0x80) & 0xBF);
-      buf[0] = (char)((ch >> 24) | 0xF8);
-      return 5;
-    }
-    if (ch <= 0x7FFFFFFF) {
-      buf[5] = (char)((ch | 0x80) & 0xBF);
-      buf[4] = (char)(((ch >> 6) | 0x80) & 0xBF);
-      buf[3] = (char)(((ch >> 12) | 0x80) & 0xBF);
-      buf[2] = (char)(((ch >> 18) | 0x80) & 0xBF);
-      buf[1] = (char)(((ch >> 24) | 0x80) & 0xBF);
-      buf[0] = (char)((ch >> 30) | 0xFC);
-      return 6;
-    }
+	if (ch <= 0x1FFFFF) {
+	    buf[3] = (char) ((ch | 0x80) & 0xBF);
+	    buf[2] = (char) (((ch >> 6) | 0x80) & 0xBF);
+	    buf[1] = (char) (((ch >> 12) | 0x80) & 0xBF);
+	    buf[0] = (char) ((ch >> 18) | 0xF0);
+	    return 4;
+	}
+	if (ch <= 0x3FFFFFF) {
+	    buf[4] = (char) ((ch | 0x80) & 0xBF);
+	    buf[3] = (char) (((ch >> 6) | 0x80) & 0xBF);
+	    buf[2] = (char) (((ch >> 12) | 0x80) & 0xBF);
+	    buf[1] = (char) (((ch >> 18) | 0x80) & 0xBF);
+	    buf[0] = (char) ((ch >> 24) | 0xF8);
+	    return 5;
+	}
+	if (ch <= 0x7FFFFFFF) {
+	    buf[5] = (char) ((ch | 0x80) & 0xBF);
+	    buf[4] = (char) (((ch >> 6) | 0x80) & 0xBF);
+	    buf[3] = (char) (((ch >> 12) | 0x80) & 0xBF);
+	    buf[2] = (char) (((ch >> 18) | 0x80) & 0xBF);
+	    buf[1] = (char) (((ch >> 24) | 0x80) & 0xBF);
+	    buf[0] = (char) ((ch >> 30) | 0xFC);
+	    return 6;
+	}
 #endif
-  }
+    }
 
-  ch = 0xFFFD;
-  goto three;
+    ch = 0xFFFD;
+    goto three;
 }
-
+
 /*
  *---------------------------------------------------------------------------
  *
@@ -228,34 +231,35 @@ INLINE int Ob_UniCharToUtf(int ch, /* The Ob_UniChar to be stored in the
  *---------------------------------------------------------------------------
  */
 
-char* Ob_UniCharToUtfDString(const Ob_UniChar* uniStr, /* Unicode string to convert to UTF-8. */
-    int uniLength,                                     /* Length of Unicode string in Ob_UniChars
-                                                        * (must be >= 0). */
-    Ob_DString* dsPtr)                                 /* UTF-8 representation of string is appended
-                                                        * to this previously initialized DString. */
+char * Ob_UniCharToUtfDString(
+    const Ob_UniChar *uniStr,	/* Unicode string to convert to UTF-8. */
+    int uniLength,		/* Length of Unicode string in Ob_UniChars
+				 * (must be >= 0). */
+ Ob_DString *dsPtr)		/* UTF-8 representation of string is appended
+				 * to this previously initialized DString. */
 {
-  const Ob_UniChar *w, *wEnd;
-  char *p, *string;
-  int oldLength;
+    const Ob_UniChar *w, *wEnd;
+    char *p, *string;
+    int oldLength;
 
-  /*
-   * UTF-8 string length in bytes will be <= Unicode string length *
-   * Ob_UTF_MAX.
-   */
+    /*
+     * UTF-8 string length in bytes will be <= Unicode string length *
+     * Ob_UTF_MAX.
+     */
 
-  oldLength = Ob_DStringLength(dsPtr);
-  Ob_DStringSetLength(dsPtr, (oldLength + uniLength + 1) * Ob_UTF_MAX);
-  string = Ob_DStringValue(dsPtr) + oldLength;
+    oldLength = Ob_DStringLength(dsPtr);
+ Ob_DStringSetLength(dsPtr, (oldLength + uniLength + 1) * Ob_UTF_MAX);
+    string = Ob_DStringValue(dsPtr) + oldLength;
 
-  p = string;
-  wEnd = uniStr + uniLength;
-  for (w = uniStr; w < wEnd;) {
-    p += Ob_UniCharToUtf(*w, p);
-    w++;
-  }
-  Ob_DStringSetLength(dsPtr, oldLength + (p - string));
+    p = string;
+    wEnd = uniStr + uniLength;
+    for (w = uniStr; w < wEnd; ) {
+	p += Ob_UniCharToUtf(*w, p);
+	w++;
+    }
+ Ob_DStringSetLength(dsPtr, oldLength + (p - string));
 
-  return string;
+    return string;
 }
 
-#endif /* REGEX_WCHAR	*/
+#endif		/* REGEX_WCHAR	*/

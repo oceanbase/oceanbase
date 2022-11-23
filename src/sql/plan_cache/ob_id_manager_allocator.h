@@ -18,39 +18,41 @@
 #include "lib/allocator/ob_small_allocator.h"
 #include "lib/alloc/alloc_struct.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 // ObIdManagerAllocator is used for small-size memory allocation.
 // Use ObSmallAllocator for size less than object_size_, else use ObMalloc.
 // ALLOC_MAGIC is used to mark and check the memory allocated.
-class ObIdManagerAllocator : public common::ObIAllocator {
+class ObIdManagerAllocator : public common::ObIAllocator
+{
 public:
   ObIdManagerAllocator();
   ~ObIdManagerAllocator();
 
-  int init(const int64_t obj_size, const char* label, uint64_t tenant_id_);
+  int init(const int64_t obj_size, const char *label, const uint64_t tenant_id_);
 
-  void* alloc(int64_t sz)
+  void *alloc(const int64_t sz) override { return alloc_(sz); }
+  void* alloc(const int64_t size, const ObMemAttr &attr) override
   {
-    return alloc_(sz);
+    UNUSED(attr);
+    return alloc(size);
   }
-  void free(void* ptr)
-  {
-    free_(ptr);
-  }
+  void free(void *ptr) override { free_(ptr); }
   void reset();
 
 private:
-  void* alloc_(int64_t sz);
-  void free_(void* ptr);
+  void *alloc_(const int64_t sz);
+  void free_(void *ptr);
 
 private:
   const static int64_t ALLOC_MAGIC = 0x1A4420844B;
   const static int64_t SMALL_ALLOC_SYMBOL = 0x38;
   const static int64_t M_ALLOC_SYMBOL = 0x7;
   const static int EXTEND_SIZE = sizeof(int64_t) * 2;
-  const static int64_t BLOCK_SIZE = 16 * 1024;  // 16K
+  const static int64_t BLOCK_SIZE = 16 * 1024; //16K
 
   common::ObSmallAllocator small_alloc_;
   common::ObMalloc m_alloc_;
@@ -62,7 +64,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObIdManagerAllocator);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_PLAN_CACHE_OB_ID_MANAGER_ALLOCATOR_
+#endif // OCEANBASE_SQL_PLAN_CACHE_OB_ID_MANAGER_ALLOCATOR_

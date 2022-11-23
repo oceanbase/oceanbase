@@ -12,12 +12,26 @@
 
 #include "share/diagnosis/ob_sql_monitor_statname.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
+
+namespace sql_monitor_statname {
+enum MONITOR_STAT_TYPE {
+  INVALID,
+  INT,
+  CAPACITY,
+  TIMESTAMP
+};
+}
+
 const ObMonitorStat OB_MONITOR_STATS[] = {
-#define SQL_MONITOR_STATNAME_DEF(def, name, desc) {name, desc},
+#define SQL_MONITOR_STATNAME_DEF(def, type, name, desc) \
+  {type, name, desc},
 #include "share/diagnosis/ob_sql_monitor_statname.h"
 #undef SQL_MONITOR_STATNAME_DEF
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+

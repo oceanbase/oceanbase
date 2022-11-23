@@ -13,13 +13,13 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_sample_rate_limiter.h"
 
-using namespace ::oblib;
+ //using namespace ::oblib;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 TEST(TestSampleRateLimiter, Basic)
 {
-  ObSampleRateLimiter rl(1, 3, 1000000 /*1s*/);
+  ObSampleRateLimiter rl(1, 3, 1000000/*1s*/);
   ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
   ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
   ASSERT_EQ(OB_EAGAIN, rl.try_acquire());
@@ -36,7 +36,7 @@ TEST(TestSampleRateLimiter, Basic)
   ASSERT_EQ(OB_SUCCESS, rl.try_acquire());
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

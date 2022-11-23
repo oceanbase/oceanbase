@@ -28,20 +28,29 @@ using namespace common;
 int ObAllVirtualPsStat::inner_open()
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-  if (OB_UNLIKELY(OB_ISNULL(pcm_))) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-  } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
-    SERVER_LOG(WARN, "failed to traverse pcm", K(ret));
+  // sys tenant show all tenant infos
+  if (is_sys_tenant(effective_tenant_id_)) {
+    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
+    if (OB_UNLIKELY(OB_ISNULL(pcm_))) {
+      ret = OB_NOT_INIT;
+      SERVER_LOG(WARN, "pcm_ is NULL", KR(ret), K(pcm_));
+    } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
+      SERVER_LOG(WARN, "failed to traverse pcm", K(ret));
+    }
+  } else {
+    // user tenant show self tenant infos
+    if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
+      SERVER_LOG(WARN, "failed to push back tenant id", KR(ret), K(effective_tenant_id_),
+          K(tenant_id_array_));
+    }
   }
   return ret;
 }
 
-int ObAllVirtualPsStat::fill_cells(ObPsCache& ps_cache, uint64_t tenant_id)
+int ObAllVirtualPsStat::fill_cells(ObPsCache &ps_cache, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   int64_t col_count = output_column_ids_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
@@ -56,16 +65,17 @@ int ObAllVirtualPsStat::fill_cells(ObPsCache& ps_cache, uint64_t tenant_id)
           SERVER_LOG(WARN, "get server ip failed", K(ret));
         } else {
           cells[i].set_varchar(ipstr);
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
         }
         break;
       }
       case share::ALL_VIRTUAL_PS_STAT_CDE::SVR_PORT: {
-        cells[i].set_int(GCTX.self_addr_.get_port());
+        cells[i].set_int(GCTX.self_addr().get_port());
         break;
       }
       case share::ALL_VIRTUAL_PS_STAT_CDE::STMT_COUNT: {
-        // set up ps_cache size as stmt_id_map sise
+        // @shaoge 以stmt_id_map的大小作为ps_cache的大小
         cells[i].set_int(ps_cache.get_stmt_id_map_size());
         break;
       }
@@ -110,9 +120,10 @@ int ObAllVirtualPsStat::inner_get_next_row()
   } else {
     uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
     ++tenant_id_array_idx_;
-    ObPsCache* ps_cache = pcm_->get_ps_cache(tenant_id);
+    ObPsCache *ps_cache = pcm_->get_ps_cache(tenant_id);
     if (OB_ISNULL(ps_cache)) {
-      SERVER_LOG(DEBUG, "ps_cache is NULL, ignore this", K(ret));
+      SERVER_LOG(DEBUG, "ps_cache is NULL, ignore this", K(ret), K(tenant_id),
+          K(effective_tenant_id_));
     } else if (false == ps_cache->is_inited()) {
       SERVER_LOG(DEBUG, "ps_cache is not init, ignore this", K(ret));
     } else if (false == ps_cache->is_valid()) {
@@ -120,7 +131,8 @@ int ObAllVirtualPsStat::inner_get_next_row()
     } else if (OB_FAIL(fill_cells(*ps_cache, tenant_id))) {
       SERVER_LOG(WARN, "fill_cells failed", K(ret), K(tenant_id));
     } else {
-      SERVER_LOG(DEBUG, "fill_cells succeed");
+      SERVER_LOG(DEBUG, "fill_cells succeed", K(tenant_id), K(effective_tenant_id_),
+          K(tenant_id_array_), K(tenant_id_array_idx_));
       ps_cache->dec_ref_count();
     }
   }

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #ifndef _OB_HTABLE_UTILS_H
 #define _OB_HTABLE_UTILS_H 1
 #include "common/row/ob_row.h"

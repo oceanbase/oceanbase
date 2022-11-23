@@ -15,31 +15,25 @@
 
 #include "sql/optimizer/ob_logical_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObLogMaterial : public ObLogicalOperator {
-public:
-  ObLogMaterial(ObLogPlan& plan) : ObLogicalOperator(plan)
-  {}
-  virtual ~ObLogMaterial()
-  {}
-  virtual int copy_without_child(ObLogicalOperator*& out) override
+namespace oceanbase
+{
+namespace sql
+{
+  class ObLogMaterial : public ObLogicalOperator
   {
-    return clone(out);
-  }
-  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
-  virtual int est_cost() override;
-  virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual bool is_block_op() const override
-  {
-    return true;
-  }
+  public:
+    ObLogMaterial(ObLogPlan &plan) : ObLogicalOperator(plan)
+    {}
+    virtual ~ObLogMaterial() {}
+    virtual int est_cost() override;
+    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    virtual bool is_block_op() const override { return true; }
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);
+  };
+}
+}
 
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);
-};
-}  // namespace sql
-}  // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_OB_LOG_MATERIAL_H_
+
+#endif // OCEANBASE_SQL_OB_LOG_MATERIAL_H_

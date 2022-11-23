@@ -1,0 +1,67 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner:jiangxiu.wt
+#owner group: sql1
+# tags: optimizer
+#this file test default optimizer selectivity
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+                index k1(c1), 
+                index k2(c1,c2),
+                index k3(c1,c2,c3),
+                index k4(c1,c2,c3,c4),
+                index k5(c1,c2,c3,c4,c5));
+               
+create table t2(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+                primary key(c1, c6, c7),
+                index k1(c1), 
+                index k2(c1,c2),
+                index k3(c1,c2,c3),
+                index k4(c1,c2,c3,c4),
+                index k5(c1,c2,c3,c4,c5)); 
+                
+                
+create table t3(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+                primary key(c1, c2, c6),
+                index k1(c1), 
+                index k2(c1,c2),
+                index k3(c1,c2,c3),
+                index k4(c1,c2,c3,c4),
+                index k5(c1,c2,c3,c4,c5));               
+
+## test cases to choose different index                                           
+explain select count(*) from t1;
+explain select * from t1 where c1 = 1;               
+explain select * from t1 where c1 < 1;
+explain select * from t1 where c1 > 1;
+explain select * from t1 where c1 > 1 and c1 < 10;
+explain select * from t1 where c1 = 1 and c2 < 1;
+explain select * from t1 where c1 = 1 and c2 = 1;
+explain select * from t1 where c1 = 1 and c2 = 1 and c3 < 1;
+explain select * from t1 where c1 = 1 and c2 = 1 and c3 = 1;
+ 
+## test cases to choose primary key and index
+explain select count(*) from t2;
+explain select * from t2 where c1 = 1;               
+explain select * from t2 where c1 < 1;
+explain select * from t2 where c1 > 1;
+explain select * from t2 where c1 > 1 and c1 < 10;
+explain select * from t2 where c1 = 1 and c2 < 1;
+explain select * from t2 where c1 = 1 and c2 = 1;
+explain select * from t2 where c1 = 1 and c2 = 1 and c3 < 1;
+explain select * from t2 where c1 = 1 and c2 = 1 and c3 = 1;
+
+## test cases to choose primary key and index
+explain select count(*) from t3;
+explain select * from t3 where c1 = 1;               
+explain select * from t3 where c1 < 1;
+explain select * from t3 where c1 > 1;
+explain select * from t3 where c1 > 1 and c1 < 10;
+explain select * from t3 where c1 = 1 and c2 < 1;
+explain select * from t3 where c1 = 1 and c2 = 1;
+explain select * from t3 where c1 = 1 and c2 = 1 and c3 < 1;
+explain select * from t3 where c1 = 1 and c2 = 1 and c3 = 1;

@@ -16,14 +16,14 @@
 
 using namespace oceanbase::common;
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   int err = OB_SUCCESS;
   setlocale(LC_ALL, "");
-  oceanbase::common::ObLogger::get_logger().set_log_level(getenv("log_level") ?: "INFO");
+  oceanbase::common::ObLogger::get_logger().set_log_level(getenv("log_level") ? : "INFO");
   oceanbase::unittest::init_tenant_mgr();
-  return err;
-}
-::testing::InitGoogleTest(&argc, argv);
-return RUN_ALL_TESTS();
+    return err;
+  }
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

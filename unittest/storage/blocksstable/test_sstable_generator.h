@@ -16,26 +16,28 @@
 #include "storage/blocksstable/slog/ob_base_storage_logger.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/blocksstable/ob_macro_block_marker.h"
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace blocksstable {
+namespace blocksstable
+{
 class ObDataFile;
 }
-namespace unittest {
-class TestSSTableGenerator {
+namespace unittest
+{
+class TestSSTableGenerator
+{
 public:
   TestSSTableGenerator();
-  int open(blocksstable::ObDataStoreDesc& desc, const char* path, const int64_t row_count);
+  int open(
+      blocksstable::ObDataStoreDesc &desc,
+      const char *path,
+      const int64_t row_count);
   int generate();
   int close();
-  blocksstable::ObDataFile* get_data_file()
-  {
-    return &data_file_;
-  }
-
+  blocksstable::ObDataFile *get_data_file() { return &data_file_; }
 private:
   int generate_row(const int64_t index);
-
 private:
   char path_[OB_MAX_FILE_NAME_LENGTH];
   blocksstable::ObDataStoreDesc desc_;
@@ -49,6 +51,6 @@ private:
   common::ModulePageAllocator mod_;
   common::ModuleArena arena_;
 };
-}  // end namespace unittest
-}  // end namespace oceanbase
+}//end namespace unittest
+}//end namespace oceanbase
 #endif

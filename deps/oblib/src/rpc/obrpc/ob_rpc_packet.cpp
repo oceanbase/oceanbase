@@ -15,22 +15,29 @@
 #include "lib/utility/utility.h"
 #include "lib/ob_define.h"
 #include "lib/coro/co_var.h"
+#include "common/storage/ob_sequence.h"
+#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 using namespace oceanbase::common::serialization;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+
+namespace obrpc
+{
 
 ObRpcPacketSet ObRpcPacketSet::instance_;
 
-DEFINE_SERIALIZE(ObRpcPacketHeader)
+int ObRpcPacketHeader::serialize(char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   if (buf_len - pos >= get_encoded_size()) {
+    seq_no_ = ObSequence::get_max_seq_no();
+    LOG_DEBUG("rpc send seq_no ", K_(seq_no));
     if (OB_FAIL(encode_i32(buf, buf_len, pos, pcode_))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
-    } else if (OB_FAIL(encode_i8(buf, buf_len, pos, static_cast<int8_t>(get_encoded_size())))) {
+    } else if (OB_FAIL(encode_i8(buf, buf_len, pos, static_cast<int8_t> (get_encoded_size())))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else if (OB_FAIL(encode_i8(buf, buf_len, pos, priority_))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
@@ -70,8 +77,14 @@ DEFINE_SERIALIZE(ObRpcPacketHeader)
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else if (OB_FAIL(encode_i32(buf, buf_len, pos, group_id_))) {
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
+    } else if (OB_FAIL(encode_i64(buf, buf_len, pos, trace_id_[2]))) {
+      LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
+    } else if (OB_FAIL(encode_i64(buf, buf_len, pos, trace_id_[3]))) {
+      LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
+    } else if (OB_FAIL(encode_i64(buf, buf_len, pos, cluster_name_hash_))) {
+      LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else {
-      // do nothing
+      //do nothing
     }
   } else {
     ret = OB_BUF_NOT_ENOUGH;
@@ -80,7 +93,7 @@ DEFINE_SERIALIZE(ObRpcPacketHeader)
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObRpcPacketHeader)
+int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   if (data_len - pos >= HEADER_SIZE) {
@@ -120,19 +133,24 @@ DEFINE_DESERIALIZE(ObRpcPacketHeader)
     src_cluster_id_ = common::INVALID_CLUSTER_ID;
     unis_version_ = 0;
     request_level_ = 0;
+    seq_no_ = 0;
     group_id_ = 0;
 
     if (hlen_ > pos && OB_FAIL(cost_time_.deserialize(buf, hlen_, pos))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, &dst_cluster_id_))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
-    } else if (hlen_ > pos && OB_FAIL(decode_i32(buf, hlen_, pos, reinterpret_cast<int32_t*>(&compressor_type_)))) {
+    } else if (hlen_ > pos &&
+               OB_FAIL(decode_i32(buf, hlen_, pos,
+                                  reinterpret_cast<int32_t*>(&compressor_type_)))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i32(buf, hlen_, pos, &original_len_))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, &src_cluster_id_))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
-    } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&unis_version_)))) {
+    } else if (hlen_ > pos &&
+               OB_FAIL(decode_i64(buf, hlen_, pos,
+                                  reinterpret_cast<int64_t*>(&unis_version_))) ){
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i32(buf, hlen_, pos, &request_level_))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
@@ -140,21 +158,35 @@ DEFINE_DESERIALIZE(ObRpcPacketHeader)
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else if (hlen_ > pos && OB_FAIL(decode_i32(buf, hlen_, pos, &group_id_))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
+    } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&trace_id_[2])))) {
+      LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
+    } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&trace_id_[3])))) {
+      LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
+    } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&cluster_name_hash_)))) {
+      LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else {
-      // success
     }
+    ObSequence::update_max_seq_no(seq_no_);
+    LOG_DEBUG("rpc receive seq_no ", K_(seq_no), K(ObSequence::get_max_seq_no()));
   }
 
   return ret;
 }
 
+const uint8_t ObRpcPacket::MAGIC_HEADER_FLAG[4] =
+{ ObRpcPacket::API_VERSION, 0xDB, 0xDB, 0xCE };
+const uint8_t ObRpcPacket::MAGIC_COMPRESS_HEADER_FLAG[4] =
+{ ObRpcPacket::API_VERSION, 0xDB, 0xDB, 0xCC };
+
 uint32_t ObRpcPacket::global_chid = 0;
+uint64_t ObRpcPacket::INVALID_CLUSTER_NAME_HASH = 0;
 
 ObRpcPacket::ObRpcPacket()
-    : cdata_(NULL), clen_(0), chid_(0), receive_ts_(0L), assemble_(false), msg_count_(0), payload_(0)
+    : cdata_(NULL), clen_(0), chid_(0), receive_ts_(0L),
+      assemble_(false), msg_count_(0), payload_(0)
 {
   easy_list_init(&list_);
-  memset(&hdr_, 0, sizeof(hdr_));
+  memset(&hdr_, 0, sizeof (hdr_));
   set_dst_cluster_id(common::INVALID_CLUSTER_ID);
   set_compressor_type(INVALID_COMPRESSOR);
   set_original_len(0);
@@ -162,11 +194,38 @@ ObRpcPacket::ObRpcPacket()
 }
 
 ObRpcPacket::~ObRpcPacket()
-{}
+{
+}
 
-RLOCAL(int, g_pcode);
+int ObRpcPacket::encode_ez_header(char *buf, int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  uint32_t ez_payload_size = static_cast<uint32_t>(get_encoded_size());
+
+  MEMCPY(buf, ObRpcPacket::MAGIC_HEADER_FLAG, 4);
+  pos += 4;
+
+  if (OB_FAIL(encode_i32(buf, len, pos, ez_payload_size))) { // next 4 for packet content length
+    LOG_WARN("failed to encode ez_payload_size", K(ret));
+  } else if (OB_FAIL(encode_i32(buf, len, pos, chid_))) {
+    // next 4 for channel id
+    LOG_WARN("failed to encode chid", K(ret));
+  } else if (OB_FAIL(encode_i32(buf, len, pos, 0))) {//skip 4 bytes for reserved
+    LOG_WARN("failed to encode reserved", K(ret));
+  }
+
+  return ret;
+}
+
+uint64_t ObRpcPacket::get_self_cluster_name_hash()
+{
+  return oceanbase::obrpc::ObRpcNetHandler::CLUSTER_NAME_HASH;
+}
+
+
+_RLOCAL(int, g_pcode);
 
 ObRpcCheckSumCheckLevel g_rpc_checksum_check_level = ObRpcCheckSumCheckLevel::FORCE;
 
-}  // namespace obrpc
-}  // namespace oceanbase
+} // ends of namespace obrpc
+} // ends of namespace oceanbase

@@ -15,26 +15,30 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprPrior : public ObExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprPrior : public ObExprOperator
+{
   typedef common::ObExprStringBuf IAllocator;
-
 public:
-  explicit ObExprPrior(common::ObIAllocator& alloc);
-  virtual ~ObExprPrior(){};
+  explicit  ObExprPrior(common::ObIAllocator &alloc);
+  virtual ~ObExprPrior() {};
 
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
-  static int calc_prior_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const;
+  static int calc_prior_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 private:
   //  static int calc_(const common::ObObj &param, common::ObObj &res, common::ObCastCtx &cast_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPrior) const;
+
 };
-}  // namespace sql
-}  // namespace oceanbase
-#endif /* _OB_EXPR_NEG_H_ */
+}
+}
+#endif  /* _OB_EXPR_NEG_H_ */

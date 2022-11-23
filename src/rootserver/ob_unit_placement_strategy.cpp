@@ -13,8 +13,33 @@
 #define USING_LOG_PREFIX RS
 #include "ob_unit_placement_strategy.h"
 #include "lib/charset/ob_mysql_global.h"  // for DBL_MAX
+#include "ob_root_utils.h"                // resource_type_to_str
+
 using namespace oceanbase::common;
 using namespace oceanbase::rootserver;
+
+DEF_TO_STRING(ObUnitPlacementStrategy::ObServerResource)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr));
+  // CPU
+  (void)databuff_printf(buf, buf_len, pos,
+      ", cpu_capacity:%.6g, cpu_assigned:%.6g, cpu_assigned_max:%.6g, ",
+      capacity_[RES_CPU], assigned_[RES_CPU], max_assigned_[RES_CPU]);
+
+  // MEM
+  (void)databuff_printf(buf, buf_len, pos,
+      "mem_capacity:\"%.9gGB\", mem_assigned:\"%.9gGB\", ",
+      capacity_[RES_MEM]/1024/1024/1024, assigned_[RES_MEM]/1024/1024/1024);
+
+  // LOG_DISK
+  (void)databuff_printf(buf, buf_len, pos,
+      "log_disk_capacity:\"%.9gGB\", log_disk_assigned:\"%.9gGB\"",
+      capacity_[RES_LOG_DISK]/1024/1024/1024, assigned_[RES_LOG_DISK]/1024/1024/1024);
+  J_OBJ_END();
+  return pos;
+}
 
 double ObUnitPlacementStrategy::ObServerResource::get_assigned(ObResourceType resource_type) const
 {
@@ -43,191 +68,91 @@ double ObUnitPlacementStrategy::ObServerResource::get_capacity(ObResourceType re
   return ret;
 }
 
-int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::ObServerResource>& servers,
-    const share::ObUnitConfig& unit_config, common::ObAddr& server, const common::ObZone& zone, int64_t& found_idx)
+int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::ObServerResource> &servers,
+                                             const share::ObUnitResource &demand_resource,
+                                             const char *module,
+                                             common::ObAddr &server)
 {
   int ret = OB_SUCCESS;
   ObArray<double> all_dot_product;
   double dot_product = 0.0;
-  double demands[RES_MAX];    // scaled demands
+  double demands[RES_MAX];  // scaled demands
   double remaining[RES_MAX];  // scaled remaining
   double weight[RES_MAX];
   double max_dot_product = -1.0;
-  found_idx = -1;
+  int64_t found_idx = -1;
   if (servers.count() > 0) {
     if (OB_FAIL(ObResourceUtils::calc_server_resource_weight(servers, weight, RES_MAX))) {
       LOG_WARN("failed to calc the resource weight", K(ret));
     }
   }
-  ARRAY_FOREACH(servers, i)
-  {
-    const ObServerResource& server_resource = servers.at(i);
-    LOG_DEBUG("consider this server", K(i), K(server_resource), K_(hard_limit));
-    if (0 == i) {
-      // demand vector
-      demands[RES_CPU] = unit_config.min_cpu_ / server_resource.capacity_[RES_CPU];
-      demands[RES_MEM] = static_cast<double>(unit_config.min_memory_) / server_resource.capacity_[RES_MEM];
-      if (static_cast<double>(unit_config.max_disk_size_) <= 0) {
-        demands[RES_DISK] = 0.0;
+  ARRAY_FOREACH(servers, i) {
+    const ObServerResource &server_resource = servers.at(i);
+    LOG_DEBUG("consider this server", K(i), K(server_resource));
+    for (int j = RES_CPU; j < RES_MAX; ++j) {
+      const double capacity = server_resource.capacity_[j];
+      const double remain = capacity - server_resource.assigned_[j];
+      double demand = 0;
+
+      switch (j) {
+        case RES_CPU: { demand = demand_resource.min_cpu(); break; }
+        case RES_MEM: { demand = static_cast<double>(demand_resource.memory_size()); break; }
+        case RES_LOG_DISK: { demand = static_cast<double>(demand_resource.log_disk_size()); break; }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknown resource type", KR(ret), K(j));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      }
+      // NOTE: input servers should have enough resource
+      else if (capacity <= 0 || remain <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("server resource not enough, invalid server resource is invalid", K(server_resource),
+            "resource_type", resource_type_to_str((ObResourceType)j), K(i), K(j), K(remain));
       } else {
-        demands[RES_DISK] = static_cast<double>(unit_config.max_disk_size_) / server_resource.capacity_[RES_DISK];
+        // compute demands[] vector
+        // NOTE: this algorithm assumes that: all servers' capacity are same.
+        //       demands[] vector should keep same for all server to calculate dot_product.
+        //       so compute demands[] vector by first server resource
+        if (0 == i) {
+          demands[j] = demand / capacity;
+        }
+
+        // compute remaining[] vector
+        remaining[j] = remain / capacity;
       }
     }
-    if (have_enough_resource(server_resource, unit_config)) {
-      // remaining vector
-      for (int j = RES_CPU; j < RES_MAX; ++j) {
-        if (server_resource.capacity_[j] <= 0) {
-          remaining[j] = 0;
-        } else {
-          remaining[j] = (server_resource.capacity_[j] - server_resource.assigned_[j]) / server_resource.capacity_[j];
-        }
-        if (remaining[j] < 0) {
-          // Disk allocation may exceed its capacity
-          remaining[j] = 0.0;
-        }
-      }
+
+    if (OB_SUCCESS == ret) {
       dot_product = 0;
       for (int j = RES_CPU; j < RES_MAX; ++j) {
-        LOG_DEBUG("calc dot-product", K(j), "w", weight[j], "d", demands[j], "r", remaining[j]);
-        dot_product += weight[j] * demands[j] * remaining[j];
+        double dp = weight[j] * demands[j] * remaining[j];
+        dot_product += dp;
+        _LOG_INFO("[%s] [CHOOSE_SERVER_FOR_UNIT] calc dot-product: server=%s, resource=%s, "
+            "demands=%.6g, remain=%.6g, weight=%.6g, dp=%.6g sum=%.6g",
+            module,
+            to_cstring(server_resource.get_server()),
+            resource_type_to_str((ObResourceType)j),
+            demands[j], remaining[j], weight[j], dp, dot_product);
       }
       if (dot_product > max_dot_product) {
         found_idx = i;
         max_dot_product = dot_product;
       }
-    } else {
-      // skip the server
-      LOG_DEBUG("server does not have enough resource", K(server_resource), K(unit_config));
     }
   }
+
   if (OB_SUCC(ret)) {
+    // It must be valid
     if (OB_UNLIKELY(found_idx == -1)) {
-      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone));
-      LOG_WARN("no server has enough resource to hold the unit", K(ret), K(unit_config), K(servers));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("not found valid server for unit, unexpected", KR(ret), K(found_idx),
+          K(max_dot_product), K(servers), K(demand_resource));
     } else {
       server = servers[found_idx].addr_;
-    }
-  }
-  return ret;
-}
-
-bool ObUnitPlacementDPStrategy::have_enough_resource(
-    const ObServerResource& server, const share::ObUnitConfig& unit_config)
-{
-  bool is_enough = true;
-  if (unit_config.min_cpu_ + server.assigned_[RES_CPU] > server.capacity_[RES_CPU] ||
-      unit_config.max_cpu_ + server.max_assigned_[RES_CPU] > server.capacity_[RES_CPU] * hard_limit_ ||
-      static_cast<double>(unit_config.max_memory_) + server.max_assigned_[RES_MEM] >
-          server.capacity_[RES_MEM] * hard_limit_ ||
-      static_cast<double>(unit_config.min_memory_) + server.assigned_[RES_MEM] > server.capacity_[RES_MEM]) {
-    is_enough = false;
-  }
-  return is_enough;
-}
-
-////////////////////////////////////////////////////////////////
-bool ObUnitPlacementBestFitStrategy::have_enough_resource(
-    const ObServerResource& server, const share::ObUnitConfig& unit_config)
-{
-  bool is_enough = true;
-  // (unit_config.max_cpu_ + server.assigned_[RES_CPU]) / server.capacity_[RES_CPU] > soft_limit_
-  if (unit_config.max_cpu_ > server.capacity_[RES_CPU] * soft_limit_ - server.assigned_[RES_CPU]) {
-    is_enough = false;
-  }
-  return is_enough;
-}
-
-// Only consider cpu resource
-int ObUnitPlacementBestFitStrategy::choose_server(common::ObArray<ObServerResource>& servers,
-    const share::ObUnitConfig& unit_config, common::ObAddr& server, const common::ObZone& zone, int64_t& found_idx)
-{
-  int ret = OB_SUCCESS;
-  double min_resource_diff = DBL_MAX;
-  double remaining = 0;
-  found_idx = -1;
-  server.reset();
-  ARRAY_FOREACH(servers, i)
-  {
-    const ObServerResource& server_resource = servers.at(i);
-    if (have_enough_resource(server_resource, unit_config)) {
-      remaining = server_resource.capacity_[RES_CPU] - server_resource.assigned_[RES_CPU];
-      if (remaining - unit_config.max_cpu_ < min_resource_diff) {
-        found_idx = i;
-        min_resource_diff = remaining - unit_config.max_cpu_;
-      }
-    } else {
-      // skip the server
-      LOG_DEBUG("server does not have enough resource", K(server_resource), K(unit_config));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(found_idx == -1)) {
-      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone));
-      LOG_WARN("no server has enough resource to hold the unit", K(unit_config), K(ret));
-    } else {
-      server = servers[found_idx].addr_;
-    }
-  }
-  return ret;
-}
-
-////////////////////////////////////////////////////////////////
-bool ObUnitPlacementFFDStrategy::have_enough_resource(
-    const ObServerResource& server, const share::ObUnitConfig& unit_config)
-{
-  bool is_enough = true;
-  // (unit_config.max_cpu_ + server.assigned_[RES_CPU]) / server.capacity_[RES_CPU] > hard_limit_
-  if (unit_config.max_cpu_ > server.capacity_[RES_CPU] * hard_limit_ - server.assigned_[RES_CPU]) {
-    is_enough = false;
-  }
-  return is_enough;
-}
-
-int ObUnitPlacementFFDStrategy::choose_server(common::ObArray<ObServerResource>& servers,
-    const share::ObUnitConfig& unit_config, common::ObAddr& server, const common::ObZone& zone, int64_t& found_idx)
-{
-  int ret = OB_SUCCESS;
-  server.reset();
-  double min_load = hard_limit_;
-  double new_load = 0;
-  found_idx = -1;
-  ARRAY_FOREACH(servers, i)
-  {
-    const ObServerResource& server_resource = servers.at(i);
-    if (have_enough_resource(server_resource, unit_config)) {
-      new_load = (server_resource.assigned_[RES_CPU] + unit_config.max_cpu_) / server_resource.capacity_[RES_CPU];
-      if (new_load <= min_load) {
-        found_idx = i;
-        new_load = min_load;
-      }
-    } else {
-      // skip the server
-      LOG_DEBUG("server does not have enough resource", K(server_resource), K(unit_config));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(found_idx == -1)) {
-      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone));
-      LOG_WARN("no server has enough resource to hold the unit", K(unit_config), K(ret));
-    } else {
-      server = servers[found_idx].addr_;
-    }
-  }
-  return ret;
-}
-
-////////////////////////////////////////////////////////////////
-int ObUnitPlacementHybridStrategy::choose_server(common::ObArray<ObServerResource>& servers,
-    const share::ObUnitConfig& unit_config, common::ObAddr& server, const common::ObZone& zone, int64_t& found_idx)
-{
-  int ret = OB_SUCCESS;
-  found_idx = -1;
-  if (OB_SUCCESS != (ret = best_fit_first_.choose_server(servers, unit_config, server, zone, found_idx))) {
-    if (OB_MACHINE_RESOURCE_NOT_ENOUGH == ret) {
-      ret = least_load_first_.choose_server(servers, unit_config, server, zone, found_idx);
+      LOG_INFO("[CHOOSE_SERVER_FOR_UNIT] choose server succ", K(module), K(server), K(demand_resource), "server_resource", servers[found_idx]);
     }
   }
   return ret;

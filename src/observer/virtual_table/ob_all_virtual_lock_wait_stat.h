@@ -15,31 +15,30 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "rpc/ob_request.h"
+#include "observer/omt/ob_multi_tenant.h"
 
-namespace oceanbase {
-namespace observer {
-class ObAllVirtualLockWaitStat : public common::ObVirtualTableScannerIterator {
+namespace oceanbase
+{
+namespace observer
+{
+class ObAllVirtualLockWaitStat : public common::ObVirtualTableScannerIterator
+{
 public:
-  ObAllVirtualLockWaitStat() : node_iter_(NULL)
-  {}
-  virtual ~ObAllVirtualLockWaitStat()
-  {
-    reset();
-  }
-
+  ObAllVirtualLockWaitStat() : node_iter_(NULL), cur_tenant_index_(0) {}
+  virtual ~ObAllVirtualLockWaitStat() {reset();}
 public:
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-
 private:
   int make_this_ready_to_read();
-
 private:
-  enum {
+  enum
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
-    TABLE_ID,
+    TENANT_ID,
+    TABLET_ID,
     ROWKEY,
     ADDR,
     NEED_WAIT,
@@ -52,15 +51,17 @@ private:
     BLOCK_SESSION_ID,
     TYPE,
     LMODE,
+    LAST_COMPACT_CNT,
     TOTAL_UPDATE_CNT,
   };
   rpc::ObLockWaitNode cur_node_;
-  rpc::ObLockWaitNode* node_iter_;
-
+  rpc::ObLockWaitNode *node_iter_;
+  ObSEArray<uint64_t, 16> all_tenant_ids_;
+  int cur_tenant_index_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLockWaitStat);
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OB_ALL_VIRTUAL_LOCK_WAIT_STAT_H */

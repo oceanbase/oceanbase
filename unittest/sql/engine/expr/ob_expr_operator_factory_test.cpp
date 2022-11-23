@@ -16,17 +16,16 @@
 #include "sql/engine/expr/ob_expr_operator_factory.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-class TestExprFactory : public ::testing::Test {
+class TestExprFactory: public ::testing::Test
+{
 public:
   TestExprFactory();
   virtual ~TestExprFactory();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestExprFactory);
-
 protected:
   // function members
 protected:
@@ -34,16 +33,20 @@ protected:
 };
 
 TestExprFactory::TestExprFactory()
-{}
+{
+}
 
 TestExprFactory::~TestExprFactory()
-{}
+{
+}
 
 void TestExprFactory::SetUp()
-{}
+{
+}
 
 void TestExprFactory::TearDown()
-{}
+{
+}
 
 TEST_F(TestExprFactory, oracle_expr_names)
 {
@@ -56,8 +59,9 @@ TEST_F(TestExprFactory, oracle_expr_names)
     if (factory.NAME_TYPES_ORCL[i].type_ <= T_MIN_OP || factory.NAME_TYPES_ORCL[i].type_ >= T_MAX_OP) {
       break;
     }
-    std::cout << factory.NAME_TYPES_ORCL[i].name_ << std::endl;
+    std::cout<< factory.NAME_TYPES_ORCL[i].name_ <<std::endl;
   }
+
 }
 
 TEST_F(TestExprFactory, mysql_expr_names)
@@ -71,13 +75,13 @@ TEST_F(TestExprFactory, mysql_expr_names)
     if (factory.NAME_TYPES[i].type_ <= T_MIN_OP || factory.NAME_TYPES[i].type_ >= T_MAX_OP) {
       break;
     }
-    std::cout << factory.NAME_TYPES[i].name_ << std::endl;
+    std::cout<< factory.NAME_TYPES[i].name_ <<std::endl;
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("test_expr_operator_factory.log", true);
   return RUN_ALL_TESTS();

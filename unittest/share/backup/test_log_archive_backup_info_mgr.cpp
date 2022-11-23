@@ -20,7 +20,7 @@ using namespace oceanbase;
 using namespace common;
 using namespace share;
 
-void init_piece(const int64_t round_id, const int64_t piece_id, const int64_t copy_id, ObBackupPieceInfo& piece)
+void init_piece(const int64_t round_id, const int64_t piece_id, const int64_t copy_id, ObBackupPieceInfo &piece)
 {
   piece.reset();
   piece.key_.incarnation_ = OB_START_INCARNATION;
@@ -39,7 +39,7 @@ void init_piece(const int64_t round_id, const int64_t piece_id, const int64_t co
   piece.start_piece_id_ = 1;
 }
 
-int check_piece(ObArray<share::ObBackupPieceInfo>& result, ObArray<share::ObBackupPieceInfo>& expect)
+int check_piece(ObArray<share::ObBackupPieceInfo> &result, ObArray<share::ObBackupPieceInfo> &expect)
 {
   int ret = OB_SUCCESS;
   if (result.count() != expect.count()) {
@@ -68,67 +68,7 @@ int check_piece(ObArray<share::ObBackupPieceInfo>& result, ObArray<share::ObBack
   return ret;
 }
 
-TEST(ObExternalBackupPieceInfo, update)
-{
-  ObExternalBackupPieceInfo external_info;
-  share::ObBackupPieceInfo piece1_1;
-  share::ObBackupPieceInfo piece1_2;
-  share::ObBackupPieceInfo piece2_1;
-  ObArray<share::ObBackupPieceInfo> expect_array;
-  ObArray<share::ObBackupPieceInfo> result_array;
-
-  // normal seq
-  init_piece(1, 1, 0, piece1_1);
-  init_piece(1, 2, 0, piece1_2);
-  init_piece(2, 1, 0, piece2_1);
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece1_1));
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece2_1));
-  ASSERT_EQ(OB_SUCCESS, external_info.get_piece_array(result_array));
-  expect_array.reset();
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_1));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece2_1));
-  ASSERT_EQ(OB_SUCCESS, check_piece(result_array, expect_array));
-
-  // update same copy and piece
-  init_piece(1, 2, 0, piece1_2);
-  piece1_2.max_ts_ = 100;
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, external_info.get_piece_array(result_array));
-  expect_array.reset();
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_1));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece2_1));
-  ASSERT_EQ(OB_SUCCESS, check_piece(result_array, expect_array));
-
-  // insert 1_3
-  share::ObBackupPieceInfo piece1_3;
-  init_piece(1, 3, 0, piece1_3);
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece1_3));
-  ASSERT_EQ(OB_SUCCESS, external_info.get_piece_array(result_array));
-  expect_array.reset();
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_1));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_3));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece2_1));
-  ASSERT_EQ(OB_SUCCESS, check_piece(result_array, expect_array));
-
-  // insert same piece with diff copy
-  share::ObBackupPieceInfo piece1_2_1;
-  init_piece(1, 2, 1, piece1_2_1);
-  ASSERT_EQ(OB_SUCCESS, external_info.update(piece1_2_1));
-  ASSERT_EQ(OB_SUCCESS, external_info.get_piece_array(result_array));
-  expect_array.reset();
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_1));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_2));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_2_1));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece1_3));
-  ASSERT_EQ(OB_SUCCESS, expect_array.push_back(piece2_1));
-  ASSERT_EQ(OB_SUCCESS, check_piece(result_array, expect_array));
-}
-
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
