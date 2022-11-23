@@ -80,7 +80,6 @@ int RowDesc::add_column(ObRawExpr *raw_expr)
       SQL_CG_LOG(WARN, "failed to get hashmap", K(ret));
     }
   }
-
   if (OB_SUCC(ret) && !raw_expr->has_flag(IS_COLUMNLIZED)
       && OB_FAIL(raw_expr->add_flag(IS_COLUMNLIZED))) {
     SQL_CG_LOG(WARN, "failed to add flag", K(ret));
