@@ -416,6 +416,7 @@ size_t ob_gcvt_opt(double x, ob_gcvt_arg_type type, int width, char* to, ob_bool
 size_t ob_gcvt_strict(double x, ob_gcvt_arg_type type, int width, char* to, ob_bool* error, ob_bool use_oracle_mode,
     ob_bool use_force_e_format)
 {
+  int width_check = width;
   int decpt, sign, len, exp_len;
   char *res, *src, *end, *dst = to, *dend = dst + width;
   char buf[DTOA_BUF_MAX_SIZE];
@@ -529,7 +530,11 @@ size_t ob_gcvt_strict(double x, ob_gcvt_arg_type type, int width, char* to, ob_b
         use_oracle_mode);
   }
   dtoa_free(res, buf, sizeof(buf));
-  *dst = '\0';
+  if (dst - to < width_check) {
+    *dst = '\0';
+  } else {
+    return 0;
+  }
   return dst - to;
 }
 
