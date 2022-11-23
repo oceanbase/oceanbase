@@ -639,7 +639,9 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
       } else if (table->get_key() == param.table_key_) {
         const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
         found = true;
-        need_copy = false;
+        need_copy = true;
+        //TODO(muwei.ym) Fix it in 4.1.
+        //Need copy should be false and reuse local minor sstable.
       }
     }
 
