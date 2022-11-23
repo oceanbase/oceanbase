@@ -2119,7 +2119,7 @@ int ObDMLStmt::remove_useless_sharable_expr()
     } else if (OB_FAIL(column_items_.remove(i))) {
       LOG_WARN("failed to remove column item", K(ret));
     } else {
-      LOG_TRACE("succeed to remove column items", K(*expr), K(lbt()));
+      LOG_TRACE("succeed to remove column items", K(expr), K(lbt()));
     }
   }
   for (int64_t i = subquery_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
